@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 
 import type { NewsItem } from '../../../../types/dashboard.ts';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- keyword lists for naive sentiment classification ---
 const POSITIVE_KEYWORDS = [
@@ -68,9 +69,12 @@ export function SentimentStatsBar({ news }: SentimentStatsBarProps) {
         >
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-xs text-fin-muted">{card.label}</span>
-            <span className={`text-sm font-semibold ${card.color}`}>
-              {news.length === 0 ? '--' : `${card.value}%`}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-semibold ${card.color}`}>
+                {news.length === 0 ? '--' : `${card.value}%`}
+              </span>
+              <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
+            </div>
           </div>
           <div className="h-1.5 bg-fin-border rounded-full overflow-hidden">
             <div

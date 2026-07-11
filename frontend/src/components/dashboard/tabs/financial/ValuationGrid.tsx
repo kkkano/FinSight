@@ -5,6 +5,7 @@
  * Data sourced from dashboardData.valuation.
  */
 import type { ValuationData } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -50,7 +51,10 @@ export function ValuationGrid({ valuation }: ValuationGridProps) {
 
   return (
     <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">估值指标</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">估值指标</div>
+        <DashboardSourceBadge metaKey="valuation" />
+      </div>
 
       <div className="grid grid-cols-3 gap-3">
         {metrics.map((m) => (

@@ -15,6 +15,7 @@ import { RevenueGrowthChart } from './peers/RevenueGrowthChart.tsx';
 import { AiPeerSummary } from './peers/AiPeerSummary.tsx';
 import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
+import { DashboardSourceBadge } from '../DashboardSourceBadge';
 import type { SelectionItem } from '../../../types/dashboard';
 
 export function PeersTab() {
@@ -114,7 +115,10 @@ export function PeersTab() {
 
       {/* Full comparison table */}
       <div className="bg-fin-card border border-fin-border rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-fin-text mb-3">详细对比</h4>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-fin-text">详细对比</h4>
+          <DashboardSourceBadge metaKey="peers" />
+        </div>
         <PeerComparisonTable peers={peers} subjectSymbol={subjectSymbol} />
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
+import { SourceBadge } from '../../../ui/SourceBadge';
 import { asRecord } from '../../../../utils/record';
 
 type AgentStatusKind = 'success' | 'fallback' | 'error' | 'not_run' | 'unknown';
@@ -314,7 +315,10 @@ export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
             testId="agent-status-overview-tip"
           />
         </span>
-        <span className="text-2xs text-fin-muted">{rows.length} agents</span>
+        <div className="flex items-center gap-2">
+          <span className="text-2xs text-fin-muted">{rows.length} agents</span>
+          <SourceBadge source="report archive" />
+        </div>
       </div>
 
       <div className="space-y-2">

@@ -10,7 +10,7 @@ import ReactECharts from 'echarts-for-react';
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
 import type { AnalystTargets, RecommendationsSummary } from '../../../../types/dashboard';
-import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { DashboardSourceBadges } from '../../DashboardSourceBadges';
 
 // --- Props ---
 
@@ -134,9 +134,12 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
   if (!option && !recBar) {
     return (
       <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-        <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
-          分析师目标价
-          <CardInfoTip content="来源：yfinance 分析师目标价预测 + 评级分布" />
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-1 text-xs font-medium text-fin-muted">
+            分析师目标价
+            <CardInfoTip content="来源：yfinance 分析师目标价预测 + 评级分布" />
+          </div>
+          <DashboardSourceBadges items={[{ metaKey: 'analyst_targets', fallbackSource: 'yfinance' }, { metaKey: 'recommendations', fallbackSource: 'yfinance' }]} />
         </div>
         <div className="text-sm text-fin-muted">暂无分析师数据</div>
       </div>
@@ -150,7 +153,7 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
           分析师目标价
           <CardInfoTip content="来源：yfinance 分析师目标价预测 + 评级分布" />
         </div>
-        <DashboardSourceBadge metaKey="analyst_targets" fallbackSource="yfinance" />
+        <DashboardSourceBadges items={[{ metaKey: 'analyst_targets', fallbackSource: 'yfinance' }, { metaKey: 'recommendations', fallbackSource: 'yfinance' }]} />
       </div>
 
       {option && (

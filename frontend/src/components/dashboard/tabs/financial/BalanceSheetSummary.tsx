@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 
 import type { FinancialStatement } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -94,7 +95,10 @@ export function BalanceSheetSummary({ financials }: BalanceSheetSummaryProps) {
 
   return (
     <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">资产负债概要</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">资产负债概要</div>
+        <DashboardSourceBadge metaKey="financials" />
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         {items.map((item) => (

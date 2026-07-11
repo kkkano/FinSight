@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
 import type { MacroSnapshotData } from '../../../../types/dashboard';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 import { asRecord } from '../../../../utils/record';
 
 interface FearGreedGaugeProps {
@@ -179,7 +180,10 @@ export function FearGreedGauge({ reportData, macroSnapshot }: FearGreedGaugeProp
           市场情绪（Fear &amp; Greed）
           <CardInfoTip content="来源：macro_agent 摘要 > 置信度近似 > macro_snapshot API" />
         </span>
-        <span className="text-xs font-semibold text-fin-text">{fearGreed.label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-fin-text">{fearGreed.label}</span>
+          <DashboardSourceBadge metaKey="macro_snapshot" fallbackSource="macro_tools" />
+        </div>
       </div>
 
       <div className="mt-2 flex items-end gap-2">

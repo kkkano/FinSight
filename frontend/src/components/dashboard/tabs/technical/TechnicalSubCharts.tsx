@@ -156,7 +156,10 @@ export function TechnicalSubCharts({ indicatorSeries }: TechnicalSubChartsProps)
   if (!rsiOption && !macdOption) {
     return (
       <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-        <div className="text-xs font-medium text-fin-muted mb-3">RSI / MACD</div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-xs font-medium text-fin-muted">RSI / MACD</div>
+          <DashboardSourceBadge metaKey="indicator_series" fallbackSource="market_data" />
+        </div>
         <div className="text-sm text-fin-muted">暂无技术指标时间序列数据</div>
       </div>
     );
@@ -172,7 +175,7 @@ export function TechnicalSubCharts({ indicatorSeries }: TechnicalSubChartsProps)
               RSI (14)
               <span className="ml-2 text-2xs text-fin-border">70 超买 / 30 超卖</span>
             </div>
-            <DashboardSourceBadge metaKey="indicator_series" fallbackSource="yfinance" />
+            <DashboardSourceBadge metaKey="indicator_series" fallbackSource="market_data" />
           </div>
           <ReactECharts
             option={rsiOption}
@@ -189,7 +192,7 @@ export function TechnicalSubCharts({ indicatorSeries }: TechnicalSubChartsProps)
         <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="text-xs font-medium text-fin-muted">MACD (12, 26, 9)</div>
-            <DashboardSourceBadge metaKey="indicator_series" fallbackSource="yfinance" />
+            <DashboardSourceBadge metaKey="indicator_series" fallbackSource="market_data" />
           </div>
           <ReactECharts
             option={macdOption}

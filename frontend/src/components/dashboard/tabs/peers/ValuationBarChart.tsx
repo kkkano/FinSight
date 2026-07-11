@@ -90,8 +90,9 @@ export function ValuationBarChart({ peers, subjectSymbol }: ValuationBarChartPro
 
   if (!option) {
     return (
-      <div className="flex items-center justify-center h-32 text-fin-muted text-sm">
-        暂无市盈率数据
+      <div className="flex h-32 flex-col items-center justify-center gap-2 text-fin-muted text-sm">
+        <DashboardSourceBadge metaKey="peers" />
+        <span>暂无市盈率数据</span>
       </div>
     );
   }

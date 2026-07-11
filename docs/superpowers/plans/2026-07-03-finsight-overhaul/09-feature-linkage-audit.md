@@ -48,9 +48,9 @@
 
 ### A-3: Dashboard 数据来源审计（一次性盘点 + 补标注）
 
-- [ ] Step 1【盘点】: 逐 tab（Overview/Financial/Technical/News/Research/Peers）追一条数据链：组件 → hook → `/api/dashboard/*` → 后端 service → 数据源；把结论写进 `docs/superpowers/plans/2026-07-03-finsight-overhaul/notes-dashboard-data-sources.md`（表：tab | 数据 | 真实来源 | 降级路径 | 是否已标注）。
-- [ ] Step 2: 据表给每个数据卡/图表补 `<SourceBadge/>`（大概率全是真数据，问题只是"没标"，标注即可消除"假数据感"）；AI 洞察卡片统一标注「AI 评分 · 基于 {n} 项真实指标 · 置信度 {x}%」（字段从 `/api/dashboard/insights` 响应取，`grep -n "confidence" backend/dashboard` 对齐）。
-- [ ] Commit: `feat(dashboard): provenance badges on every data card, insight cards disclose basis and confidence`
+- [x] Step 1【盘点】: 逐 tab（Overview/Financial/Technical/News/Research/Peers）追一条数据链：组件 → hook → `/api/dashboard/*` → 后端 service → 数据源；把结论写进 `docs/superpowers/plans/2026-07-03-finsight-overhaul/notes-dashboard-data-sources.md`（表：tab | 数据 | 真实来源 | 降级路径 | 是否已标注）。
+- [x] Step 2: 据表给每个数据卡/图表补 `<SourceBadge/>`（大概率全是真数据，问题只是"没标"，标注即可消除"假数据感"）；AI 洞察卡片统一标注「AI 评分 · 基于 {n} 项真实指标 · 置信度 {x}%」（字段从 `/api/dashboard/insights` 响应取，`grep -n "confidence" backend/dashboard` 对齐）。
+- [x] Commit: `feat(dashboard): provenance badges on every data card, insight cards disclose basis and confidence`
 
 ### A-4: 真实行情基底与 AI prediction 覆盖层严格分离
 

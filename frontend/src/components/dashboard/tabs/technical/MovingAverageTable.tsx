@@ -5,6 +5,7 @@
  * Columns: Value + Signal (Buy/Sell based on close vs MA)
  */
 import type { TechnicalData } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -65,7 +66,10 @@ export function MovingAverageTable({ technicals }: MovingAverageTableProps) {
   if (rows.length === 0) {
     return (
       <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-        <div className="text-xs font-medium text-fin-muted mb-3">均线指标</div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-xs font-medium text-fin-muted">均线指标</div>
+          <DashboardSourceBadge metaKey="technicals" />
+        </div>
         <div className="text-sm text-fin-muted">--</div>
       </div>
     );
@@ -75,11 +79,14 @@ export function MovingAverageTable({ technicals }: MovingAverageTableProps) {
     <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-fin-muted">均线指标</span>
-        {close != null && (
-          <span className="text-2xs text-fin-text-secondary">
-            当前价: <span className="text-fin-text font-medium tabular-nums">{fmtPrice(close)}</span>
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {close != null && (
+            <span className="text-2xs text-fin-text-secondary">
+              当前价: <span className="text-fin-text font-medium tabular-nums">{fmtPrice(close)}</span>
+            </span>
+          )}
+          <DashboardSourceBadge metaKey="technicals" />
+        </div>
       </div>
 
       {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}

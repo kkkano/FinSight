@@ -5,6 +5,7 @@
  * If no report, shows a placeholder prompt.
  */
 import type { LatestReportData } from '../../../../hooks/useLatestReport.ts';
+import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface AiPeerSummaryProps {
   reportData: LatestReportData | null;
@@ -46,7 +47,10 @@ export function AiPeerSummary({ reportData, loading }: AiPeerSummaryProps) {
 
   return (
     <div className="bg-fin-card border border-fin-border rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-fin-text mb-2">AI 同行分析</h4>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-fin-text">AI 同行分析</h4>
+        <SourceBadge source="report archive" />
+      </div>
       {summary ? (
         <p className="text-sm text-fin-text-secondary leading-relaxed whitespace-pre-wrap">
           {summary}

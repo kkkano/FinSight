@@ -1,4 +1,5 @@
 import type { ReportIR } from '../../../../types';
+import { SourceBadge } from '../../../ui/SourceBadge';
 import { ConflictMatrix } from './ConflictMatrix';
 import {
   extractConflictDisclosure,
@@ -57,14 +58,17 @@ export function ConflictPanel({ report }: ConflictPanelProps) {
 
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-fin-text">
-        观点冲突
-        {hasAnyConflict && (
-          <span className="ml-2 text-xs text-fin-warning font-normal">
-            (已检测)
-          </span>
-        )}
-      </h4>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-fin-text">
+          观点冲突
+          {hasAnyConflict && (
+            <span className="ml-2 text-xs text-fin-warning font-normal">
+              (已检测)
+            </span>
+          )}
+        </h4>
+        <SourceBadge source="report archive" />
+      </div>
 
       <ConflictMatrix rows={matrixRows} />
 

@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 
 import type { TechnicalData } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -132,7 +133,10 @@ export function TechnicalSummaryCard({ technicals }: TechnicalSummaryCardProps) 
 
   return (
     <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">技术面综合评估</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">技术面综合评估</div>
+        <DashboardSourceBadge metaKey="technicals" />
+      </div>
 
       <div className="flex items-center gap-4 mb-4">
         <div className={`px-4 py-2 rounded-lg text-lg font-bold ${style.bg} ${style.text}`}>

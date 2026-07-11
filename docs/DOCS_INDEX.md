@@ -1,6 +1,6 @@
 # FinSight 文档索引
 
-更新时间：2026-05-25
+更新时间：2026-07-12
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
@@ -50,6 +50,7 @@
 ## 前端与 Dashboard
 
 - `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`：Dashboard/Workbench 开发指南。
+- `docs/superpowers/plans/2026-07-03-finsight-overhaul/`：当前 FinSight overhaul 的 00-10 spec、唯一进度账本与执行盘点；Dashboard 六标签来源审计见 `notes-dashboard-data-sources.md`。
 - `docs/design/`：视觉方案与品牌资产。
 - `docs/prototype/`：静态原型。
 - `docs/ux/`：信息架构和交互提案。

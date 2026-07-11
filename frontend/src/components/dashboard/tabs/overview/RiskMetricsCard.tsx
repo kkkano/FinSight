@@ -4,6 +4,7 @@ import type { LatestReportData } from '../../../../hooks/useLatestReport';
 import type { ValuationData } from '../../../../types/dashboard';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
 import { asRecord } from '../../../../utils/record';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 type RiskLevel = 'low' | 'medium' | 'high';
 type RiskItemKind = 'financial' | 'diagnostic';
@@ -185,9 +186,12 @@ export function RiskMetricsCard({ valuation, reportData }: RiskMetricsCardProps)
           风险概览
           <CardInfoTip content="仅展示金融风险指标（Beta、52 周波动、估值压力等）" />
         </span>
-        <span className={`text-2xs font-semibold px-2 py-0.5 rounded ${overallStyle.text} ${overallStyle.badge}`}>
-          整体风险：{overallStyle.label}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-2xs font-semibold px-2 py-0.5 rounded ${overallStyle.text} ${overallStyle.badge}`}>
+            整体风险：{overallStyle.label}
+          </span>
+          <DashboardSourceBadge metaKey="valuation" />
+        </div>
       </div>
 
       {diagnosticCount > 0 && (

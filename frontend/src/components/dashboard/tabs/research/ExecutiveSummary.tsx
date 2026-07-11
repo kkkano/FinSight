@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface ExecutiveSummaryProps {
   report: Record<string, unknown> | null;
@@ -52,7 +53,10 @@ export function ExecutiveSummary({ report }: ExecutiveSummaryProps) {
 
   return (
     <div className="bg-fin-card border border-fin-border rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-fin-text mb-2">摘要总结</h4>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-fin-text">摘要总结</h4>
+        <SourceBadge source="report archive" />
+      </div>
       <div className="text-sm text-fin-text-secondary leading-relaxed prose prose-sm prose-slate dark:prose-invert max-w-none">
         <ReactMarkdown remarkPlugins={remarkPlugins}>{displayText}</ReactMarkdown>
       </div>

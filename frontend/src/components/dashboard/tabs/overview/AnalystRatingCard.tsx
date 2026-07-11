@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import type { TechnicalData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -130,9 +131,12 @@ export function AnalystRatingCard({ technicals, reportData }: AnalystRatingCardP
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
-      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
-        综合信号
-        <CardInfoTip content="基于 MA 交叉、RSI、MACD 信号综合判断多空共识" />
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1 text-xs font-medium text-fin-muted">
+          综合信号
+          <CardInfoTip content="基于 MA 交叉、RSI、MACD 信号综合判断多空共识" />
+        </div>
+        <DashboardSourceBadge metaKey="technicals" />
       </div>
 
       {/* Main rating badge */}

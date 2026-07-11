@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { NewsItem, TechnicalData, ValuationData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
+import { DashboardSourceBadges } from '../../DashboardSourceBadges';
 
 interface DimensionRadarProps {
   valuation?: ValuationData | null;
@@ -211,9 +212,12 @@ export function DimensionRadar({
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
-      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
-        分析维度覆盖
-        <CardInfoTip content="未执行与失败会单独标注，不再与 0% 混淆。" />
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-1 text-xs font-medium text-fin-muted">
+          分析维度覆盖
+          <CardInfoTip content="未执行与失败会单独标注，不再与 0% 混淆。" />
+        </div>
+        <DashboardSourceBadges items={[{ metaKey: 'valuation' }, { metaKey: 'technicals' }, { metaKey: 'news_market' }, { metaKey: 'macro_snapshot' }]} />
       </div>
 
       <div className="space-y-2.5">

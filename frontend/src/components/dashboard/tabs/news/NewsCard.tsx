@@ -14,6 +14,7 @@ import { ExternalLink, Loader2, MessageCircleQuestion, Sparkles } from 'lucide-r
 import type { NewsItem, SelectionItem } from '../../../../types/dashboard';
 import { generateNewsId } from '../../../../utils/hash';
 import { computeNewsTags, deriveImpactLevel, formatNewsTime } from '../../../../utils/news';
+import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface NewsCardProps {
   news: NewsItem;
@@ -130,14 +131,10 @@ export function NewsCard({
         </div>
 
         {/* Source + reliability */}
-        {news.source && (
-          <span className={`shrink-0 text-2xs font-medium ${reliabilityTier.className}`}>
-            {news.source}
-            {reliabilityTier.label && (
-              <span className="ml-1 opacity-60">({reliabilityTier.label})</span>
-            )}
-          </span>
-        )}
+        <div className={`shrink-0 flex items-center gap-1 ${reliabilityTier.className}`}>
+          <SourceBadge source={news.source || 'hybrid_news'} asOf={news.ts} />
+          {reliabilityTier.label && <span className="text-2xs opacity-60">({reliabilityTier.label})</span>}
+        </div>
       </div>
 
       {/* Row 2: Checkbox + Title */}

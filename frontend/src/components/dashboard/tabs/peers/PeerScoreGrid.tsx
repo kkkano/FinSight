@@ -6,6 +6,7 @@
 import { useMemo } from 'react';
 
 import type { PeerMetrics } from '../../../../types/dashboard.ts';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 interface PeerScoreGridProps {
   peers: PeerMetrics[];
@@ -80,6 +81,7 @@ export function PeerScoreGrid({ peers, subjectSymbol }: PeerScoreGridProps) {
                 style={{ width: `${Math.min(peer.score ?? 0, 100)}%` }}
               />
             </div>
+            <DashboardSourceBadge metaKey="peers" className="mt-2" />
           </div>
         );
       })}

@@ -18,6 +18,7 @@ import { InsightScoreRing } from './InsightScoreRing';
 import { InsightSkeleton } from './InsightSkeleton';
 import { SourceTrustBadge } from '../../../source/SourceTrustBadge';
 import { confidenceColorClass, formatAsOf } from './aiInsightFormat';
+import { formatInsightBasis } from './insightBasis';
 
 // --- Tab display config ---
 
@@ -285,7 +286,7 @@ export function AiInsightCard({
               {insight.score_label}
             </span>
             <span className="text-2xs text-t-text3 bg-t-elevated px-1.5 py-0.5 rounded">
-              {insight.model_generated ? 'AI 评分' : '规则评分'} · 置信度 {Math.round(insight.confidence * 100)}%
+              {formatInsightBasis(insight)}
             </span>
           </div>
         </div>

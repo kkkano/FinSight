@@ -24,6 +24,7 @@ import { CoreFindings } from './research/CoreFindings.tsx';
 import { ConflictPanel } from './research/ConflictPanel.tsx';
 import { ReferenceList } from './research/ReferenceList.tsx';
 import { ScoreExplainDrawer } from './research/ScoreExplainDrawer.tsx';
+import { SourceBadge } from '../../ui/SourceBadge';
 
 const REPORT_SYNC_MAX_RETRIES = 12;
 const REPORT_SYNC_RETRY_DELAY_MS = 1000;
@@ -676,6 +677,7 @@ export function ResearchTab() {
           <span className="flex items-center gap-2">
             <span>📚</span>
             完整研究报告
+            <SourceBadge source="report archive" />
           </span>
           <span
             className={`text-fin-muted transition-transform duration-200 ${

@@ -6,6 +6,7 @@
  */
 import type { InsightCard } from '../../../../types/dashboard';
 import { InsightScoreRing } from '../shared/InsightScoreRing';
+import { formatInsightBasis } from '../shared/insightBasis';
 
 // ==================== Props ====================
 
@@ -81,6 +82,9 @@ export function ResearchOverviewBar({
           <p className="text-xs text-fin-text/80 leading-relaxed line-clamp-3">
             {overview.summary}
           </p>
+          <div className="mt-1 text-2xs text-fin-muted">
+            {formatInsightBasis(overview)}
+          </div>
 
           {/* 关键指标条 */}
           {overview.key_metrics && overview.key_metrics.length > 0 && (

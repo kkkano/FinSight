@@ -5,6 +5,7 @@
  * extracted from the latest report data.
  */
 import type { LatestReportData } from '../../../../hooks/useLatestReport.ts';
+import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface ResearchMetadataProps {
   reportData: LatestReportData | null;
@@ -233,6 +234,7 @@ export function ResearchMetadata({ reportData, loading }: ResearchMetadataProps)
           {metric.subLabel ? (
             <div className="text-2xs text-fin-muted mt-0.5">{metric.subLabel}</div>
           ) : null}
+          <SourceBadge source="report archive" className="mt-1" />
         </div>
       ))}
     </div>

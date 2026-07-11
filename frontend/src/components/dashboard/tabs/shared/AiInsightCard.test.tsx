@@ -15,6 +15,10 @@ const baseInsight: InsightCard = {
   summary: 'RSI 55，趋势信号混合。',
   key_points: ['RSI 处于中性区间'],
   risks: ['上方阻力仍需确认'],
+  key_metrics: [
+    { label: 'RSI', value: '55' },
+    { label: 'MACD', value: '0.18' },
+  ],
   confidence: 0.8,
   as_of: '2026-05-31T00:00:00+00:00',
   model_generated: true,
@@ -30,6 +34,7 @@ describe('AiInsightCard honesty labels', () => {
     expect(html).toContain('AI 技术分析');
     // 诚实标签：快速评分（model_generated=true）
     expect(html).toContain('快速评分');
+    expect(html).toContain('AI 评分 · 基于 2 项真实指标 · 置信度 80%');
     // 不得伪装成自主 Agent
     expect(html).not.toContain('Digest Agent');
     expect(html).not.toContain('AI Agent');

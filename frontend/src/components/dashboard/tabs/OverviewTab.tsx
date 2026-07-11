@@ -21,6 +21,7 @@ import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { asRecord } from '../../../utils/record';
+import { DashboardSourceBadge } from '../DashboardSourceBadge';
 
 interface ActionSuggestion {
   action: string;
@@ -118,7 +119,10 @@ function NewsHighlightCard({ news }: { news: NewsItem[] }) {
   if (items.length === 0) return null;
   return (
     <div className="bg-fin-card rounded-lg border border-fin-border p-4">
-      <div className="text-xs font-medium text-fin-muted mb-2.5">近期新闻</div>
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">近期新闻</div>
+        <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
+      </div>
       <ul className="space-y-2">
         {items.map((item, i) => (
           <li key={i} className="flex items-start gap-2">
@@ -164,7 +168,10 @@ function PeerSnapshotCard({ peers, subjectSymbol }: { peers: PeerMetrics[]; subj
   if (items.length === 0) return null;
   return (
     <div className="bg-fin-card rounded-lg border border-fin-border p-4">
-      <div className="text-xs font-medium text-fin-muted mb-2.5">同行对比</div>
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">同行对比</div>
+        <DashboardSourceBadge metaKey="peers" />
+      </div>
       {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}
       <div className="overflow-x-auto scrollbar-hide">
         <table className="w-full text-xs">

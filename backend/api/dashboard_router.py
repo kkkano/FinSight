@@ -596,7 +596,16 @@ async def get_dashboard(
                 calc_window=calc_window,
             )
 
+        g2_started_map = {key: time.perf_counter() for key in g2_fetch_config}
+        g2_meta_info: dict[str, tuple[str, str, str]] = {
+            "earnings_history": ("yfinance", "earnings", "latest"),
+            "analyst_targets": ("yfinance", "analyst_consensus", "latest"),
+            "recommendations": ("yfinance", "analyst_consensus", "latest"),
+            "indicator_series": ("market_data", "technical_timeseries", "120d"),
+        }
         g2_payload_map: dict[str, object] = {}
+        g2_reason_map: dict[str, str | None] = {}
+        g2_source_map: dict[str, str] = {}
         g2_tasks: dict[str, asyncio.Task[Any]] = {}
         for key, cfg in g2_fetch_config.items():
             cached = dashboard_cache.get(symbol, key)
@@ -605,8 +614,12 @@ async def get_dashboard(
                     fallback_reason = _failure_reason_from_marker(cached) or f"{key}_unavailable"
                     fallback_reasons.append(fallback_reason)
                     g2_payload_map[key] = None
+                    g2_reason_map[key] = fallback_reason
+                    g2_source_map[key] = "failure_cache"
                 else:
                     g2_payload_map[key] = cached
+                    g2_reason_map[key] = None
+                    g2_source_map[key] = "cache"
                     state.debug["cache"][key] = True
                 continue
 
@@ -634,6 +647,8 @@ async def get_dashboard(
                     fallback_reason = f"{key}_error: {result}"
                     fallback_reasons.append(fallback_reason)
                     g2_payload_map[key] = None
+                    g2_reason_map[key] = fallback_reason
+                    g2_source_map[key] = "error"
                     dashboard_cache.set(
                         symbol,
                         key,
@@ -646,6 +661,8 @@ async def get_dashboard(
                     fallback_reason = f"{key}_unavailable"
                     fallback_reasons.append(fallback_reason)
                     g2_payload_map[key] = None
+                    g2_reason_map[key] = fallback_reason
+                    g2_source_map[key] = "miss"
                     dashboard_cache.set(
                         symbol,
                         key,
@@ -655,12 +672,35 @@ async def get_dashboard(
                     continue
 
                 g2_payload_map[key] = result
+                g2_reason_map[key] = None
+                g2_source_map[key] = "live"
                 dashboard_cache.set(
                     symbol,
                     key,
                     result,
                     ttl=int(cfg["ttl"]),
                 )
+
+        for key in g2_fetch_config:
+            payload = g2_payload_map.get(key)
+            fallback_reason = g2_reason_map.get(key)
+            source_kind = g2_source_map.get(key, "miss")
+            provider, live_source_type, calc_window = g2_meta_info[key]
+            source_type = live_source_type
+            if source_kind == "cache":
+                source_type = "cache"
+            elif source_kind == "failure_cache":
+                source_type = "failure_cache"
+            _set_meta(
+                key,
+                provider=provider,
+                source_type=source_type,
+                payload=payload if isinstance(payload, (dict, list)) else {},
+                started_at=g2_started_map[key],
+                fallback_reason=fallback_reason,
+                currency="USD",
+                calc_window=calc_window,
+            )
 
         g2_earnings_history = g2_payload_map.get("earnings_history")
         g2_analyst_targets = g2_payload_map.get("analyst_targets")

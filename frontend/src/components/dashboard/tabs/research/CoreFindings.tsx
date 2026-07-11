@@ -6,6 +6,7 @@
  */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface ReportSection {
   title?: string;
@@ -83,7 +84,10 @@ export function CoreFindings({ report }: CoreFindingsProps) {
 
   return (
     <div className="space-y-4">
-      <h4 className="text-sm font-semibold text-fin-text">核心发现</h4>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-fin-text">核心发现</h4>
+        <SourceBadge source="report archive" />
+      </div>
       {sections.map((section, idx) => (
         <div
           key={`${section.title ?? ''}-${idx}`}

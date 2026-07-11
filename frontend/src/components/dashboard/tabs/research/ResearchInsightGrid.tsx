@@ -10,6 +10,7 @@
 import type { InsightCard } from '../../../../types/dashboard';
 import { InsightScoreRing } from '../shared/InsightScoreRing';
 import { InsightSkeleton } from '../shared/InsightSkeleton';
+import { formatInsightBasis } from '../shared/insightBasis';
 
 // ==================== 卡片配置 ====================
 
@@ -148,7 +149,7 @@ function ResearchCard({
       {/* 来源标签 */}
       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-fin-border/20">
         <span className="text-2xs text-fin-muted">
-          {insight.model_generated ? 'AI 分析' : '规则评分'}
+          {formatInsightBasis(insight)}
         </span>
         <div className="flex items-center gap-2">
           <button

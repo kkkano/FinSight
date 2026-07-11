@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import type { ValuationData, TechnicalData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
+import { DashboardSourceBadges } from '../../DashboardSourceBadges';
 
 // --- Props ---
 
@@ -94,6 +95,10 @@ export function ScoreRing({ valuation, technicals, reportData, insightScore }: S
         综合评分
         <CardInfoTip content="优先级：AI 洞察 > 研报评分 > 规则计算（PE + 趋势 + RSI + Beta）" />
       </div>
+      <DashboardSourceBadges
+        items={[{ metaKey: 'valuation' }, { metaKey: 'technicals' }]}
+        className="mb-2"
+      />
       <div className="relative w-32 h-32">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
           {/* Background ring */}

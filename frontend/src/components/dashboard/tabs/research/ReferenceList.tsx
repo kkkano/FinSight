@@ -7,6 +7,7 @@
  * 3) 通过 focusHint + focusToken 一键定位“对应证据片段”。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface ReferenceItem {
   source: string;
@@ -192,14 +193,17 @@ export function ReferenceList({
           参考来源
           <span className="ml-2 text-xs text-fin-muted font-normal">({citations.length})</span>
         </h4>
-        <button
-          type="button"
-          className="text-2xs text-fin-primary hover:text-fin-primary/80 transition-colors"
-          onClick={() => setShowSnippets((prev) => !prev)}
-          data-testid="research-reference-toggle"
-        >
-          {showSnippets ? '收起片段' : '展开引用片段'}
-        </button>
+        <div className="flex items-center gap-2">
+          <SourceBadge source="report citations" />
+          <button
+            type="button"
+            className="text-2xs text-fin-primary hover:text-fin-primary/80 transition-colors"
+            onClick={() => setShowSnippets((prev) => !prev)}
+            data-testid="research-reference-toggle"
+          >
+            {showSnippets ? '收起片段' : '展开引用片段'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-fin-card border border-fin-border rounded-lg divide-y divide-fin-border">

@@ -170,7 +170,10 @@ export function ProfitabilityChart({ financials }: ProfitabilityChartProps) {
   if (!option) {
     return (
       <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-        <div className="text-xs font-medium text-fin-muted mb-3">盈利能力趋势</div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-xs font-medium text-fin-muted">盈利能力趋势</div>
+          <DashboardSourceBadge metaKey="financials" />
+        </div>
         <div className="text-sm text-fin-muted">--</div>
       </div>
     );

@@ -5,6 +5,7 @@
  * Volume comparison: average vs today.
  */
 import type { TechnicalData } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -66,7 +67,10 @@ export function BollingerVolumeCard({ technicals }: BollingerVolumeCardProps) {
 
   return (
     <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">布林带 & 成交量</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">布林带 & 成交量</div>
+        <DashboardSourceBadge metaKey="technicals" />
+      </div>
 
       {/* Bollinger Bands */}
       <div className="mb-4">
