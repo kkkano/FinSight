@@ -30,14 +30,21 @@ def _init_default_user_config() -> None:
     persists across container restarts via the named volume.
     """
     import json as _json
-    from backend.llm_config import DEFAULT_OPENAI_COMPATIBLE_MODEL, USER_CONFIG_PATH
+    from backend.llm_config import USER_CONFIG_PATH
 
     if os.path.exists(USER_CONFIG_PATH):
         return
 
-    _DEFAULT_API_BASE = os.getenv("OPENAI_COMPATIBLE_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1")
+    _DEFAULT_API_BASE = os.getenv("OPENAI_COMPATIBLE_API_BASE", "").strip()
     _DEFAULT_API_KEY  = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
-    _DEFAULT_MODEL    = os.getenv("OPENAI_COMPATIBLE_MODEL", DEFAULT_OPENAI_COMPATIBLE_MODEL)
+    _DEFAULT_MODEL    = os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip()
+
+    if not (_DEFAULT_API_BASE and _DEFAULT_API_KEY and _DEFAULT_MODEL):
+        logger.warning(
+            "跳过首启 LLM 配置：请在 .env.server 显式设置 OPENAI_COMPATIBLE_API_BASE、"
+            "OPENAI_COMPATIBLE_MODEL 和 OPENAI_COMPATIBLE_API_KEY"
+        )
+        return
 
     default_cfg = {
         "llm_provider": "openai_compatible",

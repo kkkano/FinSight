@@ -52,7 +52,8 @@
 git clone https://github.com/kkkano/FinSight.git
 cd FinSight
 cp .env.server.example .env.server
-# Edit .env.server — minimum: set OPENAI_COMPATIBLE_API_KEY
+# Edit .env.server — set OPENAI_COMPATIBLE_API_KEY, OPENAI_COMPATIBLE_API_BASE,
+# and OPENAI_COMPATIBLE_MODEL
 docker compose --env-file .env.server up -d --build
 ```
 
@@ -63,8 +64,9 @@ Open **http://localhost:5173** (frontend) · API at **http://localhost:8000**
 
 | Key | Required? | Purpose |
 |-----|-----------|---------|
-| `OPENAI_COMPATIBLE_API_KEY` | **Yes** | Default LLM endpoint |
+| `OPENAI_COMPATIBLE_API_KEY` | **Yes** | LLM API credential |
 | `OPENAI_COMPATIBLE_API_BASE` | **Yes** | LLM base URL |
+| `OPENAI_COMPATIBLE_MODEL` | **Yes** | Model name exposed by the endpoint |
 | `FMP_API_KEY` | Recommended | Financial data (fallback: yfinance) |
 | `FINNHUB_API_KEY` | Optional | Real-time quotes & news |
 | `TAVILY_API_KEY` | Optional | Web search (fallback: DuckDuckGo) |

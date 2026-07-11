@@ -102,10 +102,6 @@ def _mask(value: str | None) -> str:
     return f"{raw[:3]}***{raw[-3:]}"
 
 
-DEFAULT_OPENAI_COMPATIBLE_API_BASE = "https://token-plan-cn.xiaomimimo.com/v1"
-DEFAULT_OPENAI_COMPATIBLE_MODEL = "mimo-v2.5-pro"
-
-
 # Compatibility map for modules that still import LLM_CONFIGS directly.
 LLM_CONFIGS = {
     "openai_compatible": {
@@ -113,12 +109,15 @@ LLM_CONFIGS = {
         "api_base": _normalize_api_base(
             os.getenv("OPENAI_COMPATIBLE_API_BASE")
             or os.getenv("GEMINI_PROXY_API_BASE")
-            or DEFAULT_OPENAI_COMPATIBLE_API_BASE
         ),
         "models": [
-            os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip() or DEFAULT_OPENAI_COMPATIBLE_MODEL,
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
+            item
+            for item in (
+                os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip(),
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+            )
+            if item
         ],
     },
     "gemini_proxy": {
@@ -242,6 +241,14 @@ def _safe_endpoint_name(value: Any, default_name: str) -> str:
     return text or default_name
 
 
+def _endpoint_config_error() -> RuntimeError:
+    return RuntimeError(
+        "LLM endpoint not configured: set OPENAI_COMPATIBLE_API_BASE / "
+        "OPENAI_COMPATIBLE_MODEL (and OPENAI_COMPATIBLE_API_KEY) in .env.server "
+        "- see .env.server.example"
+    )
+
+
 def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -> list[EndpointConfig]:
     endpoints: list[EndpointConfig] = []
     default_cooldown = _env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90)
@@ -257,9 +264,9 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
 
             endpoint_provider = _canonical_provider(raw.get("provider") or provider)
             api_key = str(raw.get("api_key") or "").strip()
+            if not api_key:
+                continue
             raw_api_base = str(raw.get("api_base") or "").strip()
-            if not raw_api_base and endpoint_provider == "openai_compatible":
-                raw_api_base = DEFAULT_OPENAI_COMPATIBLE_API_BASE
             is_raw_url = bool(raw.get("raw_url", False)) or _looks_full_chat_completions_url(raw_api_base)
             api_base = _normalize_api_base(raw_api_base, raw=is_raw_url)
             raw_model = str(raw.get("model") or "").strip()
@@ -268,16 +275,9 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
             elif model:
                 endpoint_model = str(model).strip()
             else:
-                endpoint_model = DEFAULT_OPENAI_COMPATIBLE_MODEL
-                logger.warning(
-                    "[LLM Config] endpoint '%s' has empty model field, falling back to '%s'. "
-                    "Please set the model name in Settings → Endpoint Pool.",
-                    _safe_endpoint_name(raw.get("name"), f"ep-{idx+1}"),
-                    endpoint_model,
-                )
-            if not api_key:
-                continue
-
+                raise _endpoint_config_error()
+            if endpoint_provider == "openai_compatible" and not raw_api_base:
+                raise _endpoint_config_error()
             endpoints.append(
                 EndpointConfig(
                     name=_safe_endpoint_name(raw.get("name"), f"ep-{idx+1}"),
@@ -300,17 +300,10 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
     if legacy_key:
         legacy_api_base = str(user_config.get("llm_api_base") or "").strip()
         legacy_provider = _canonical_provider(user_config.get("llm_provider") or provider)
-        if not legacy_api_base and legacy_provider == "openai_compatible":
-            legacy_api_base = DEFAULT_OPENAI_COMPATIBLE_API_BASE
         legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
         legacy_model = str(user_config.get("llm_model") or "").strip() or (str(model).strip() if model else "")
-        if not legacy_model:
-            legacy_model = DEFAULT_OPENAI_COMPATIBLE_MODEL
-            logger.warning(
-                "[LLM Config] legacy endpoint has empty llm_model, falling back to '%s'. "
-                "Please set the model name in Settings.",
-                legacy_model,
-            )
+        if not legacy_model or (legacy_provider == "openai_compatible" and not legacy_api_base):
+            raise _endpoint_config_error()
         endpoints.append(
             EndpointConfig(
                 name="legacy-single",
@@ -345,15 +338,19 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
         raw_api_base = str(os.getenv(base_env, "") or "").strip() if base_env else ""
         if not raw_api_base and fallback_base:
             raw_api_base = fallback_base
+        resolved_provider = _canonical_provider(provider_name)
+        resolved_model = endpoint_model or fallback_model
+        if resolved_provider == "openai_compatible" and (not raw_api_base or not resolved_model):
+            return
         is_raw_url = _looks_full_chat_completions_url(raw_api_base)
         api_base = _normalize_api_base(raw_api_base, raw=is_raw_url) if base_env else None
         endpoints.append(
             EndpointConfig(
                 name=name,
-                provider=_canonical_provider(provider_name),
+                provider=resolved_provider,
                 api_base=api_base,
                 api_key=api_key,
-                model=endpoint_model or fallback_model,
+                model=resolved_model,
                 weight=1,
                 enabled=True,
                 cooldown_sec=_env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90),
@@ -363,15 +360,13 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
 
     canonical = _canonical_provider(provider)
     if canonical == "openai_compatible":
-        # Read OPENAI_COMPATIBLE_MODEL env var; fall back to the production default.
-        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or DEFAULT_OPENAI_COMPATIBLE_MODEL
+        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip()
         _try_add(
             "openai-compatible-primary",
             "openai_compatible",
             "OPENAI_COMPATIBLE_API_KEY",
             "OPENAI_COMPATIBLE_API_BASE",
             _oc_model,
-            DEFAULT_OPENAI_COMPATIBLE_API_BASE,
         )
         _try_add("gemini-proxy", "openai_compatible", "GEMINI_PROXY_API_KEY", "GEMINI_PROXY_API_BASE", "gemini-2.5-flash")
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
@@ -394,10 +389,7 @@ def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]
     if env_endpoints:
         return env_endpoints
 
-    raise ValueError(
-        "No LLM endpoint configured. Provide user_config.llm_endpoints[] or llm_api_key/llm_api_base, "
-        "or set OPENAI_COMPATIBLE_API_KEY / GEMINI_PROXY_API_KEY."
-    )
+    raise _endpoint_config_error()
 
 
 def load_user_endpoints(provider: str | None = None, model: str | None = None) -> list[EndpointConfig]:

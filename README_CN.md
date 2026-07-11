@@ -52,7 +52,8 @@
 git clone https://github.com/kkkano/FinSight.git
 cd FinSight
 cp .env.server.example .env.server
-# 编辑 .env.server — 最少配置 OPENAI_COMPATIBLE_API_KEY
+# 编辑 .env.server — 配置 OPENAI_COMPATIBLE_API_KEY、OPENAI_COMPATIBLE_API_BASE
+# 和 OPENAI_COMPATIBLE_MODEL
 docker compose --env-file .env.server up -d --build
 ```
 
@@ -63,8 +64,9 @@ docker compose --env-file .env.server up -d --build
 
 | Key | 是否必填 | 用途 |
 |-----|---------|------|
-| `OPENAI_COMPATIBLE_API_KEY` | **必填** | 默认 LLM 端点 |
+| `OPENAI_COMPATIBLE_API_KEY` | **必填** | LLM API 凭据 |
 | `OPENAI_COMPATIBLE_API_BASE` | **必填** | LLM base URL |
+| `OPENAI_COMPATIBLE_MODEL` | **必填** | 端点提供的模型名称 |
 | `FMP_API_KEY` | 推荐 | 财务数据（回退：yfinance） |
 | `FINNHUB_API_KEY` | 选填 | 实时行情与新闻 |
 | `TAVILY_API_KEY` | 选填 | 网页搜索（回退：DuckDuckGo） |

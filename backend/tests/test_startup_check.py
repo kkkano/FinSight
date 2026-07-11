@@ -32,13 +32,13 @@ class TestLLMEndpointCheck:
     def test_llm_unavailable_when_no_endpoint_configured(self):
         with patch(
             "backend.llm_config.load_user_endpoints",
-            side_effect=ValueError("No LLM endpoint configured"),
+            side_effect=RuntimeError("LLM endpoint not configured: set OPENAI_COMPATIBLE_API_BASE"),
         ):
             result = run_startup_checks()
 
         assert result.llm_available is False
         assert result.llm_error is not None
-        assert "No LLM endpoint" in result.llm_error
+        assert "OPENAI_COMPATIBLE_API_BASE" in result.llm_error
 
     def test_llm_available_when_endpoint_configured(self):
         fake_endpoint = object()

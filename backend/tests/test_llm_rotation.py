@@ -167,9 +167,9 @@ def test_get_llm_config_raises_when_all_sources_empty(monkeypatch):
     monkeypatch.setattr(llm_config, '_load_user_config', lambda: {})
     monkeypatch.setattr(llm_config, '_parse_env_endpoints', lambda provider, model: [])
 
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(RuntimeError) as exc:
         llm_config.get_llm_config(provider='openai_compatible', model=None)
-    assert 'No LLM endpoint configured' in str(exc.value)
+    assert 'OPENAI_COMPATIBLE_API_BASE' in str(exc.value)
 
 
 def test_retry_helper_reports_failure_and_success(monkeypatch):
