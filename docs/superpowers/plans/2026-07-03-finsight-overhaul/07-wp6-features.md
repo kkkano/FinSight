@@ -144,11 +144,11 @@ class ReplayBuffer:
 **前端契约:** `sse.ts` 的 `withStreamGuards` 扩展：`onError`/读超时后自动执行至多 2 次指数退避（1s/4s）的 `GET /api/chat/stream/{runId}?after_seq={lastSeq}` 续传；续传也失败才把错误抛给 UI，同时 UI 文案区分"已断线，正在重连…" / "连接中断，内容可能不完整 [重试]"（替换 `synthetic_done` 伪完成——`grep -n "synthetic_done" frontend/src` 改为发出 `connection_lost` 状态）。
 
 **Tasks:**
-- [ ] T1: ReplayBuffer TDD（append/replay/TTL/LRU 四用例）。
-- [ ] T2: chat_router 事件包 seq + 写缓冲（对既有前端零破坏：多一个字段）。
-- [ ] T3: 续传端点 TDD（testclient：先消费一半 → 带 after_seq 续传 → 事件不重不漏）。
-- [ ] T4: 前端自动重连 + 文案改造；手工验收：开发者工具断网 5s 再恢复 → 回答续上不重发；彻底断网 → 明示"内容可能不完整 + 重试"。
-- [ ] Commit: `feat(stream): seq-tagged SSE with replay buffer and client auto-resume; honest connection-lost state`
+- [x] T1: ReplayBuffer TDD（append/replay/TTL/LRU 四用例）。
+- [x] T2: chat_router 事件包 seq + 写缓冲（对既有前端零破坏：多一个字段）。
+- [x] T3: 续传端点 TDD（testclient：先消费一半 → 带 after_seq 续传 → 事件不重不漏）。
+- [x] T4: 前端自动重连 + 文案改造；手工验收：开发者工具断网 5s 再恢复 → 回答续上不重发；彻底断网 → 明示"内容可能不完整 + 重试"。
+- [x] Commit: `feat(stream): seq-tagged SSE with replay buffer and client auto-resume; honest connection-lost state`
 
 ---
 
