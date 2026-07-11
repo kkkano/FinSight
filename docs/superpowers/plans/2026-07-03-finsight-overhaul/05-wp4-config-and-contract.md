@@ -252,10 +252,10 @@ export function useChatStream(sessionId: string): UseChatStreamResult
 ```
 
 **Steps:**
-- [ ] Step 1: hook 骨架 + 把 handleSend 逻辑分七块注释锚点逐块搬运（每块搬完 `pnpm test:unit` 一次）。
-- [ ] Step 2: Retry 切换：`ChatList` 的 `handleRetry` 改为 `chatStream.retry(message.id)`（带 sessionId、带 history，修复 FE-10）。
-- [ ] Step 3: 删除 ChatInput 内两套假进度中的本地一套（保留 executionStore 的 `PIPELINE_STAGE_BASE_PROGRESS`）。
-- [ ] Step 4: 手工冒烟：发送/停止/重试/断流回捞/执行台联动。Commit：
+- [x] Step 1: hook 骨架 + 把 handleSend 逻辑分七块注释锚点逐块搬运（每块搬完 `pnpm test:unit` 一次）。
+- [x] Step 2: Retry 切换：`ChatList` 的 `handleRetry` 改为 `chatStream.retry(message.id)`（带 sessionId、带 history，修复 FE-10）。
+- [x] Step 3: 删除 ChatInput 内两套假进度中的本地一套（保留 executionStore 的 `PIPELINE_STAGE_BASE_PROGRESS`）。
+- [x] Step 4: 手工冒烟：发送/停止/重试/断流回捞/执行台联动。Commit：
 
 ```bash
 git commit -am "refactor(chat): useChatStream hook unifies send/retry/stop pipelines; single progress source"

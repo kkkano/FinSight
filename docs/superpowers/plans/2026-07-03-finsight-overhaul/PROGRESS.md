@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4-Task7 useChatStream 统一发送/重试/停止 | c039b43 | `useChatStream` 以七块注释锚点统一模糊查询守卫、ticker/history、SSE/store 桥接、报告回捞、图表补挂与会话收尾；Retry 改为同一 SSE 管线并原位更新。`ChatInput.tsx` 由约 930 行降至 249 行，组件内 `handleSend` 5 行；本地假进度映射和 ChatList 非流式 Retry 清零。前端 40 files/234 tests passed，生产 build 成功；真实 Vite + Chromium 冒烟覆盖发送、重试、停止、断流回捞与执行台联动，全部通过且控制台 0 error；本任务四文件定向 lint 0 问题，全仓 lint 仍仅为未改动文件既有 2 errors/3 warnings。 |
 | 2026-07-11 | WP4-Task6 ticker/图表工具归一 | 7ac4719 | `utils/ticker.ts` 收口 ticker 提取/过滤/去重，`utils/chartIntent.ts` 收口 API 检测、关键词回退、Inline/SmartChart 分流与 `[CHART]` 去重注入；ChatInput/ChatList 本地重复定义扫描 0 命中，净删 98 行。新增 AAPL K 线、NVDA 趋势图、普通介绍反例、渲染能力和最多三标的注入测试；前端 39 files/232 tests passed，生产 build 成功；全仓 lint 仍仅为未改动文件既有 2 errors/3 warnings。 |
 | 2026-07-11 | WP4-Task5 API client 分域、类型收口与统一 SSE guard | 814178a | 旧/新 `apiClient` 经 TypeScript AST 对拍均为同一组 78 个方法，拆入 11 个领域模块，兼容出口由 1715 行收至 28 行；`Promise<any>` 扫描 0 命中；新增终态去重与 token idle synthetic-done 测试，前端 38 files/227 tests passed，生产 build 成功；真实 Vite + Chromium mock API/SSE 冒烟覆盖聊天、报告领域、执行流和工作台，控制台 0 error。全仓 lint 仅余未改动 `SettingsModal.tsx` 的 2 个既有声明顺序错误及 3 个既有 warning，本任务新增 lint 错误为 0。 |
 | 2026-07-11 | WP4-Task4 OpenAPI 快照桥 | 637a084 | 后端 OpenAPI 快照测试重复运行均 1 passed；`openapi-typescript` 7.13.0 生成 `schema.d.ts`，CI 同款重新生成后零 diff；前端 38 files/225 tests passed，生产 build 成功；快照测试 F821 通过。CI 后端全量已覆盖快照测试，frontend build job 新增生成类型漂移守护；npm/pnpm 双锁文件同步。 |
@@ -54,6 +55,7 @@
 ## Installed Dependencies
 
 ## Deviations
+- 2026-07-11 | WP4-T7 | spec 以旧版 `handleSend` 543 行估算组件收缩目标；实际任务开始时 `ChatInput.tsx` 约 930 行。完成后组件为 249 行，但真正的组件内 `handleSend` 仅 5 行，全部流式职责已迁入 478 行的 `useChatStream`；hook 作为单一管线保留七块职责锚点，不为追求文件行数再做无契约收益的拆分。
 - 2026-07-11 | WP4-T6 | ChatInput 与 ChatList 的关键词集合和普通 ticker 长度规则存在漂移：统一实现取语义并集，保留 `趋势`/`k线` 两个关键词和 ChatList 的单字母 ticker 能力，同时继续用停用词过滤 A/I 等误报。既有 `components/chatChartIntent.ts` 未物理删除，改为指向 `utils/chartIntent.ts` 的薄兼容出口，公共逻辑只有一份。
 - 2026-07-11 | WP4-T5 | spec 估算原 `apiClient` 为 60+/76 个方法、`sendMessageStream` 有 13 个调用点；AST 与全仓调用扫描确认实际为 78 个方法、3 个调用点（ChatInput、MiniChat、SSE 测试），迁移地图按代码事实记录。11 个领域模块共享同一公共合同/SSE 层，拆分中间态不能独立通过 build，故按 Task 5 整体一次提交，而非机械制造 11 个不可独立验证的 commit；最终用旧/新 AST 方法集合完全相等守护无遗漏。
 - 2026-07-09 | WP3-T6 | ①main 288行未达spec≤120：bootstrap工具导入块+测试兼容再导出shim为必要占位（T8删shim后可达标）。②spec未列的 session_context.py 为会话/trace helper 新增归置文件；ROUTER_FACTORIES 草表的 AppDeps 统一签名未采纳（24个create_*签名异构，保持原构造顺序整体入create_app）。③三轮测试patch目标随迁：rag_observability_auth(get_rag_observability_store→app_factory；_fetch_supabase_user_identity/_rate_limiter→security_gate)、security_gate_auth_rate_limit(reload需重载security_gate+补善后恢复段——该测试此前就遗留1/min限流器污染，恰无人踩中)。④ingestion切割踩两坑：函数间模块级import不随AST函数块走(user_profile_memory)→memory_scope延迟导入破graph饿加载环；_env_int经_host_env_int延迟取宿主。36个测试文件execute_plan_stub/render_stub全局随迁新名。
