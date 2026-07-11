@@ -215,7 +215,14 @@ git commit -am "refactor(api-client): domain modules + typed responses + unified
 - Modify: `frontend/src/components/ChatInput.tsx:22-135`、`frontend/src/components/ChatList.tsx:16-144`（删本地副本改 import）
 - Test: `frontend/src/utils/chartIntent.test.ts`（正例：`"画一下 AAPL 的k线"`、`"NVDA 趋势图"`；反例：`"介绍下苹果公司"`）
 
-**Steps:** 常规四步（测试→实现→替换→验证），Commit：
+**Steps:**
+
+- [x] Step 1: 先写 `chartIntent.test.ts`，覆盖 AAPL K 线、NVDA 趋势图、普通公司介绍反例、渲染能力与标记去重。
+- [x] Step 2: 扩展 `utils/ticker.ts`，合并 ticker 提取、过滤、去重与最多三个候选的语义并集。
+- [x] Step 3: 新建 `utils/chartIntent.ts`，统一 API 检测、关键词回退、Inline/SmartChart 分流和图表标记注入；ChatInput/ChatList 删除本地副本改为 import。
+- [x] Step 4: 前端全量单测 39 files/232 tests passed，生产 build 成功，重复定义扫描为空；Commit（`7ac4719`）。
+
+Commit：
 
 ```bash
 git commit -am "refactor(frontend): single-source ticker & chart-intent utils, kill 130-line drift between ChatInput/ChatList"
