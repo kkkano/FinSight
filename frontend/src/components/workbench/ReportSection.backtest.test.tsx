@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { ReportSection } from './ReportSection';
 
-describe('ReportSection 报告回测联动', () => {
-  it('为历史报告提供回测此观点入口', () => {
+describe('ReportSection 报告行动入口', () => {
+  it('为历史报告提供继续追问与回测入口', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <ReportSection
@@ -23,5 +23,13 @@ describe('ReportSection 报告回测联动', () => {
 
     expect(html).toContain('回测此观点');
     expect(html).toContain('workbench-report-backtest-rpt-1');
+    expect(html).toContain('继续追问');
+    expect(html).toContain('workbench-report-follow-up-rpt-1');
+
+    const anchor = html.match(/<a[^>]*data-testid="workbench-report-follow-up-rpt-1"[^>]*>/)?.[0];
+    const href = anchor?.match(/href="([^"]+)"/)?.[1];
+    expect(href).toBeTruthy();
+    const params = new URLSearchParams(String(href).split('?')[1].replaceAll('&amp;', '&'));
+    expect(params.get('prompt')).toBe('基于报告《Apple research》，');
   });
 });

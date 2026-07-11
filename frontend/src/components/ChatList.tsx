@@ -34,6 +34,7 @@ import { EmptyState } from './ui/EmptyState';
 import { extractTickers } from '../utils/ticker';
 import { createTickerLinkPlugin, tickerFromDashboardHref } from '../utils/tickerMarkdown';
 import { TickerLink } from './common/TickerLink';
+import { ReportArchiveLink } from './common/ReportArchiveLink';
 
 // ── Shared sub-components ──
 
@@ -199,7 +200,10 @@ const AssistantContent: React.FC<{
         </div>
       )
     ) : msg.report ? (
-      <ReportView report={msg.report} />
+      <>
+        <ReportView report={msg.report} />
+        <ReportArchiveLink reportId={msg.report.report_id} />
+      </>
     ) : (
       <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
     )}

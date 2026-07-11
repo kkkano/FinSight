@@ -41,12 +41,14 @@ function ChatRoute() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const reportId = searchParams.get('report_id') || null;
+  const initialDraft = searchParams.get('prompt') || null;
 
   return (
     <WorkspaceShell
       view="chat"
       dashboardSymbol={null}
       initialReportId={reportId}
+      initialChatDraft={initialDraft}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
       navigateToWorkbench={() => navigate('/workbench')}

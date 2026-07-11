@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, GitCompareArrows,
   FlaskConical, Inbox, Library, Search,
@@ -11,6 +11,7 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { EmptyState } from '../ui/EmptyState';
 import { ReportCompare } from './ReportCompare';
+import { buildReportFollowUpHref } from '../../utils/reportLinkage';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -155,6 +156,12 @@ function TimelineGroup({
 }: TimelineGroupProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
+  useEffect(() => {
+    if (selectedReportId && group.items.some((item) => item.report_id === selectedReportId)) {
+      setExpanded(true);
+    }
+  }, [group.items, selectedReportId]);
+
   return (
     <div>
       <button
@@ -256,7 +263,14 @@ function TimelineGroup({
                   </button>
                 </div>
                 {!compareMode && (
-                  <div className="mt-1.5 flex justify-end">
+                  <div className="mt-1.5 flex flex-wrap justify-end gap-1">
+                    <Link
+                      to={buildReportFollowUpHref(item.title || '', item.report_id)}
+                      className="inline-flex min-h-11 items-center rounded px-2 text-2xs text-fin-muted transition-colors hover:bg-fin-primary/10 hover:text-fin-primary"
+                      data-testid={`workbench-report-follow-up-${item.report_id}`}
+                    >
+                      继续追问
+                    </Link>
                     <button
                       type="button"
                       onClick={() => onBacktestReport(item.report_id)}

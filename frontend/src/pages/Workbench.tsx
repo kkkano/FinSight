@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, FileText, Newspaper } from 'lucide-react';
 
 import { useStore } from '../store/useStore';
@@ -39,6 +39,8 @@ export function Workbench({
   onNavigateToChat,
 }: WorkbenchProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedReportId = searchParams.get('report')?.trim() || null;
   const { sessionId, setDraft } = useStore();
   const portfolioSummary = usePortfolioSummary(sessionId);
 
@@ -50,7 +52,14 @@ export function Workbench({
     selectedReport,
     loadingSelectedReport,
     selectedReportError,
-  } = useWorkbenchReport(sessionId, symbol);
+  } = useWorkbenchReport(sessionId, symbol, requestedReportId);
+
+  const handleSelectReport = useCallback((reportId: string) => {
+    setSelectedReportId(reportId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('report', reportId);
+    setSearchParams(nextParams);
+  }, [searchParams, setSearchParams, setSelectedReportId]);
 
   const {
     qualityReasons,
@@ -236,7 +245,7 @@ export function Workbench({
             reports={latestReports}
             loading={loadingReports}
             selectedReportId={selectedReportId}
-            onSelectReport={setSelectedReportId}
+            onSelectReport={handleSelectReport}
           />
         </div>
       </div>

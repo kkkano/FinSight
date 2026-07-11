@@ -23,6 +23,7 @@ type WorkspaceShellProps = {
   view: WorkspaceView;
   dashboardSymbol: string | null;
   initialReportId?: string | null;
+  initialChatDraft?: string | null;
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
   navigateToWorkbench: () => void;
@@ -53,6 +54,7 @@ export function WorkspaceShell({
   view,
   dashboardSymbol,
   initialReportId,
+  initialChatDraft,
   navigateToChat,
   navigateToDashboard,
   navigateToWorkbench,
@@ -265,6 +267,7 @@ export function WorkspaceShell({
               contextPanel={contextPanelProps}
               marketQuotes={marketQuotes}
               initialReportId={initialReportId}
+              initialDraft={initialChatDraft}
             />
           )}
         </div>

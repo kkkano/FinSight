@@ -28,6 +28,7 @@ type ChatWorkspaceProps = {
   };
   marketQuotes: MarketQuote[];
   initialReportId?: string | null;
+  initialDraft?: string | null;
 };
 
 const formatChangePct = (value?: number) => {
@@ -63,6 +64,7 @@ export function ChatWorkspace({
   contextPanel,
   marketQuotes,
   initialReportId,
+  initialDraft,
 }: ChatWorkspaceProps) {
   const [developerMode] = useDeveloperMode();
   const chatStyle = useStore((state) => state.chatStyle);
@@ -73,6 +75,16 @@ export function ChatWorkspace({
   const deleteConversation = useStore((state) => state.deleteConversation);
   const startNewChat = useStore((state) => state.startNewChat);
   const clearConversationContext = useStore((state) => state.clearConversationContext);
+  const setDraft = useStore((state) => state.setDraft);
+
+  const loadedDraftRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const nextDraft = initialDraft?.trim();
+    if (!nextDraft || loadedDraftRef.current === nextDraft) return;
+    loadedDraftRef.current = nextDraft;
+    setDraft(nextDraft);
+  }, [initialDraft, setDraft]);
 
   // --- P0-2: report_id replay ---
   const replayLoadedRef = useRef<string | null>(null);

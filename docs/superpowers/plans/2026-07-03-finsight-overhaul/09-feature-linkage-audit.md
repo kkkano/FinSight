@@ -122,10 +122,10 @@ type PredictionOverlay = {
 
 **Files:** Modify ChatList（报告消息尾部）、`frontend/src/components/workbench/ReportSection.tsx`
 
-- [ ] Step 1【盘点】: 确认 chat 深度报告落库路径：`grep -rn "report_index\|save_report" backend/api/chat_router.py backend/graph` → 找到 report_id 在 SSE done 事件或响应里的字段名。
-- [ ] Step 2: 报告消息 done 后尾部渲染一行 `已归档 · 在工作台查看 →`（拿 Step 1 的 report_id 跳 `/workbench?report={id}`）；Workbench 读该参数自动展开对应报告。
-- [ ] Step 3: 反向：ReportSection 每条报告加「继续追问」→ 跳 `/chat` 并预填 `基于报告《{title}》，`（thread 上下文里 report 已可被 RAG 召回，零后端改动）。
-- [ ] Commit: `feat(linkage): chat reports link to workbench archive and back`
+- [x] Step 1【盘点】: 确认 chat 深度报告落库路径：`grep -rn "report_index\|save_report" backend/api/chat_router.py backend/graph` → 找到 report_id 在 SSE done 事件或响应里的字段名。
+- [x] Step 2: 报告消息 done 后尾部渲染一行 `已归档 · 在工作台查看 →`（拿 Step 1 的 report_id 跳 `/workbench?report={id}`）；Workbench 读该参数自动展开对应报告。
+- [x] Step 3: 反向：ReportSection 每条报告加「继续追问」→ 跳 `/chat` 并预填 `基于报告《{title}》，`（thread 上下文里 report 已可被 RAG 召回，零后端改动）。
+- [x] Commit: `feat(linkage): chat reports link to workbench archive and back`
 
 ### B-4: 发现卡上下文完整化
 

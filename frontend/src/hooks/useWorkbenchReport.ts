@@ -77,6 +77,7 @@ export interface UseWorkbenchReportReturn {
 export function useWorkbenchReport(
   sessionId: string,
   symbol: string,
+  preferredReportId?: string | null,
 ): UseWorkbenchReportReturn {
   const [latestReports, setLatestReports] = useState<ReportIndexItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
@@ -132,6 +133,14 @@ export function useWorkbenchReport(
 
   // Effect 2: 根据活跃 ticker 自动对齐选中报告
   useEffect(() => {
+    const requestedReportId = String(preferredReportId || '').trim();
+    if (requestedReportId) {
+      if (selectedReportId !== requestedReportId) {
+        setSelectedReportId(requestedReportId);
+      }
+      return;
+    }
+
     if (latestReports.length === 0) {
       setSelectedReportId(null);
       setSelectedReport(null);
@@ -157,7 +166,7 @@ export function useWorkbenchReport(
     }
 
     setSelectedReportId(latestReports[0]?.report_id ?? null);
-  }, [latestReports, selectedReportId, symbol]);
+  }, [latestReports, preferredReportId, selectedReportId, symbol]);
 
   // Effect 3: 加载选中报告的完整内容
   useEffect(() => {
