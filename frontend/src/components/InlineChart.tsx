@@ -1,11 +1,12 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Loader2 } from 'lucide-react';
+import { ChartNoAxesCombined, Loader2 } from 'lucide-react';
 
 import { apiClient } from '../api/client';
 import { useChartTheme } from '../hooks/useChartTheme';
 import type { ChartType, KlineData } from '../types';
 import { SourceBadge } from './ui/SourceBadge';
+import { EmptyState } from './ui/EmptyState';
 
 interface InlineChartProps {
   ticker: string;
@@ -180,6 +181,8 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   const [dataSource, setDataSource] = useState<string | null>(null);
   const [dataAsOf, setDataAsOf] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const onDataReadyRef = useRef(onDataReady);
   const lastSummaryRef = useRef<string>('');
 
@@ -191,6 +194,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     let active = true;
     const loadData = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const interval = period === '1y' || period === '2y' ? '1d' : period === '5y' ? '1wk' : '1d';
         const res = await apiClient.fetchKline(ticker, period, interval);
@@ -213,6 +217,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         }
       } catch (err) {
         console.error('Inline chart load failed:', err);
+        if (active) setLoadError(true);
       } finally {
         if (active) {
           setLoading(false);
@@ -224,7 +229,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     return () => {
       active = false;
     };
-  }, [ticker, period]);
+  }, [ticker, period, retryKey]);
 
   if (loading) {
     return (
@@ -236,7 +241,15 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   }
 
   if (data.length === 0) {
-    return null;
+    return (
+      <div className="my-4 rounded-lg border border-fin-border bg-fin-panel px-4">
+        <EmptyState
+          icon={ChartNoAxesCombined}
+          message={loadError ? '行情图暂不可用，请稍后重试。' : '行情图暂不可用：数据源没有返回有效行情。'}
+          action={{ label: '重试', onClick: () => setRetryKey((value) => value + 1) }}
+        />
+      </div>
+    );
   }
 
   // 合成占位数据：后端全源失败后用最新价生成的等值序列，非真实行情，必须显著标注

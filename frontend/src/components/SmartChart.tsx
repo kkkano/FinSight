@@ -48,6 +48,10 @@ export interface SmartChartBlock {
   mode: 'inline' | 'ref';
   type: SmartChartType;
   title: string;
+  /** 价格语义 inline 会被强制切换到真实行情通道，禁止消费模型数组。 */
+  priceLike?: boolean;
+  /** inline 图表可显式声明标的；也兼容 ticker 属性。 */
+  symbol?: string;
   /** For inline mode: raw JSON string */
   dataJson?: string;
   /** For ref mode */
@@ -107,6 +111,20 @@ const VALID_TYPES = [
   'drawdown',
   'scenario',
 ] as const satisfies readonly SmartChartType[];
+
+const PRICE_LIKE_INLINE_TYPES = new Set<SmartChartType>([
+  'candlestick',
+  'price_volume',
+  'rs_line',
+  'valuation_band',
+  'drawdown',
+]);
+
+const PRICE_TYPE_ALIASES: Record<string, SmartChartType> = {
+  kline: 'candlestick',
+  ohlc: 'candlestick',
+  line_price: 'line',
+};
 
 const FINANCIAL_NUMERIC_FIELDS = [
   'revenue',
@@ -196,21 +214,30 @@ export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
   for (const match of content.matchAll(inlineRegex)) {
     const attrs = match[1];
     const json = match[2].trim();
-    const type = extractAttr(attrs, 'type');
+    const rawType = extractAttr(attrs, 'type');
+    const type = normalizeSmartChartType(rawType);
     const title = extractAttr(attrs, 'title') ?? '';
-    if (!isSmartChartType(type)) continue;
-    blocks.push({ mode: 'inline', type, title, dataJson: json });
+    if (!type) continue;
+    const symbol = extractAttr(attrs, 'symbol') ?? extractAttr(attrs, 'ticker') ?? extractInlineSymbol(json);
+    blocks.push({
+      mode: 'inline',
+      type,
+      title,
+      dataJson: json,
+      priceLike: rawType === 'line_price' || PRICE_LIKE_INLINE_TYPES.has(type),
+      ...(symbol ? { symbol: symbol.trim().toUpperCase() } : {}),
+    });
   }
 
   // Match <chart_ref type="..." source="..." fields="..." title="..."/>
   const refRegex = /<chart_ref\s+([^>]*?)\/>/g;
   for (const match of content.matchAll(refRegex)) {
     const attrs = match[1];
-    const type = extractAttr(attrs, 'type');
+    const type = normalizeSmartChartType(extractAttr(attrs, 'type'));
     const title = extractAttr(attrs, 'title') ?? '';
     const source = extractAttr(attrs, 'source') ?? '';
     const fields = extractAttr(attrs, 'fields') ?? '';
-    if (!isSmartChartType(type)) continue;
+    if (!type) continue;
     const asOf = extractAttr(attrs, 'as_of') ?? extractAttr(attrs, 'asOf');
     blocks.push({ mode: 'ref', type, title, source, fields, asOf });
   }
@@ -245,6 +272,57 @@ function extractAttr(attrs: string, name: string): string | undefined {
 
 function isSmartChartType(value: string | undefined): value is SmartChartType {
   return typeof value === 'string' && (VALID_TYPES as readonly string[]).includes(value);
+}
+
+function normalizeSmartChartType(value: string | undefined): SmartChartType | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (isSmartChartType(normalized)) return normalized;
+  return PRICE_TYPE_ALIASES[normalized] ?? null;
+}
+
+function extractInlineSymbol(json: string): string | undefined {
+  try {
+    const value: unknown = JSON.parse(json);
+    if (!isRecord(value)) return undefined;
+    const symbol = value.symbol ?? value.ticker;
+    return typeof symbol === 'string' && symbol.trim() ? symbol : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- shared rendering policy for ChatList and tests
+export function isPriceLikeInlineBlock(block: SmartChartBlock): boolean {
+  return block.mode === 'inline' && (block.priceLike === true || PRICE_LIKE_INLINE_TYPES.has(block.type));
+}
+
+export interface RealPriceChartRequest {
+  ticker: string;
+  chartType: 'candlestick' | 'line';
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure policy helper
+export function resolveRealPriceChartRequest(
+  block: SmartChartBlock,
+  tickerCandidates: string[],
+): RealPriceChartRequest | null {
+  if (!isPriceLikeInlineBlock(block)) return null;
+  const ticker = String(block.symbol || tickerCandidates[0] || '').trim().toUpperCase();
+  if (!ticker) return null;
+  return {
+    ticker,
+    chartType: block.type === 'candlestick' || block.type === 'price_volume' ? 'candlestick' : 'line',
+  };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- provenance contract is unit-tested
+export function getSmartChartProvenance(block: SmartChartBlock) {
+  return {
+    synthetic: block.mode === 'inline',
+    source: block.mode === 'ref' ? block.source : undefined,
+    asOf: block.asOf,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1651,6 +1729,8 @@ export function SmartChartRenderer({ block }: SmartChartRendererProps) {
   const dashboardData = useDashboardStore((s) => s.dashboardData);
 
   const chart = useMemo(() => {
+    // 防御性边界：即使调用方忘了分流，模型生成的价格数组也绝不进入 ECharts。
+    if (isPriceLikeInlineBlock(block)) return null;
     let data: SmartChartData | null = null;
 
     if (block.mode === 'inline' && block.dataJson) {
@@ -1672,6 +1752,7 @@ export function SmartChartRenderer({ block }: SmartChartRendererProps) {
   if (!chart) return null;
 
   const height = block.type === 'gauge' ? 200 : block.type === 'pie' ? 220 : 200;
+  const provenance = getSmartChartProvenance(block);
   const sourceMeta = block.mode === 'ref' && block.source
     ? dashboardData?.meta?.[block.source]
     : undefined;
@@ -1680,9 +1761,9 @@ export function SmartChartRenderer({ block }: SmartChartRendererProps) {
     <div className="relative my-3 p-3 bg-fin-card rounded-lg border border-fin-border">
       <SourceBadge
         className="absolute right-3 top-2 z-10"
-        synthetic={block.mode === 'inline'}
-        source={sourceMeta?.provider ?? (block.mode === 'ref' ? block.source : undefined)}
-        asOf={block.asOf ?? sourceMeta?.as_of}
+        synthetic={provenance.synthetic}
+        source={sourceMeta?.provider ?? provenance.source}
+        asOf={provenance.asOf ?? sourceMeta?.as_of}
         degraded={sourceMeta?.fallback_used}
       />
       <ReactECharts

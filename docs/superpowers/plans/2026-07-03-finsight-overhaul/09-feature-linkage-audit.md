@@ -32,10 +32,10 @@
 **Files:**
 - Modify: `frontend/src/components/ChatList.tsx`（图表块渲染分支）、`frontend/src/utils/chartIntent.ts`（WP4 T6 产物；若未做 WP4，改 ChatList 内联逻辑）
 
-- [ ] Step 1: 渲染层规则——解析出的 chart block 若 `mode === 'inline'` 且 `type` 属于 `{candlestick, kline, line_price, ohlc}`（价格语义类，对照 SmartChart 的 type 枚举 `grep -n "type ===" SmartChart.tsx` 列全）：**不渲染该 inline 块**，改为触发现有的真数据通道（`detectChartType + getChartData` 流程，ChatInput onDone 已有该管线）用同一 ticker 重取重画；取不到真数据则显示 EmptyState「行情图暂不可用」+ 重试按钮。
-- [ ] Step 2: 非价格类 inline（概念占比饼图、流程示意等）允许渲染，但**必挂** `<SourceBadge synthetic={true}/>`（「AI示意」黄标，08 Task 2/6 已定义）。
-- [ ] Step 3: vitest：inline candlestick block → 断言不渲染 ECharts 且触发真数据回调；inline pie → 渲染且含「AI示意」文案。
-- [ ] Commit: `fix(charts): price-like inline charts must use real data channel; synthetic badge on AI-generated illustrations`
+- [x] Step 1: 渲染层规则——解析出的 chart block 若 `mode === 'inline'` 且 `type` 属于 `{candlestick, kline, line_price, ohlc}`（价格语义类，对照 SmartChart 的 type 枚举 `grep -n "type ===" SmartChart.tsx` 列全）：**不渲染该 inline 块**，改为触发现有的真数据通道（`detectChartType + getChartData` 流程，ChatInput onDone 已有该管线）用同一 ticker 重取重画；取不到真数据则显示 EmptyState「行情图暂不可用」+ 重试按钮。
+- [x] Step 2: 非价格类 inline（概念占比饼图、流程示意等）允许渲染，但**必挂** `<SourceBadge synthetic={true}/>`（「AI示意」黄标，08 Task 2/6 已定义）。
+- [x] Step 3: vitest：inline candlestick block → 断言不渲染 ECharts 且触发真数据回调；inline pie → 渲染且含「AI示意」文案。
+- [x] Commit: `fix(charts): price-like inline charts must use real data channel; synthetic badge on AI-generated illustrations`
 
 ### A-2: 后端图表指令改为 chart_ref 优先
 

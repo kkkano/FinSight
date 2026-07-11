@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { getRenderableMessageContent, getSmartChartRenderer, parseSmartChartBlocks } from './SmartChart';
+import {
+  getRenderableMessageContent,
+  getSmartChartProvenance,
+  getSmartChartRenderer,
+  isPriceLikeInlineBlock,
+  parseSmartChartBlocks,
+  resolveRealPriceChartRequest,
+} from './SmartChart';
 
 describe('parseSmartChartBlocks', () => {
   it('accepts extended chart types and caps smart charts at four per message', () => {
@@ -29,6 +36,33 @@ describe('parseSmartChartBlocks', () => {
     );
 
     expect(block).toMatchObject({ mode: 'ref', source: 'market_chart', asOf: '2026-07-12' });
+  });
+
+  it('routes inline price semantics to the real market-data channel', () => {
+    const [block] = parseSmartChartBlocks(
+      '<chart type="candlestick" symbol="AAPL" title="Price">{"labels":["D1"],"ohlc":[[1,2,0.5,2.5]]}</chart>',
+    );
+
+    expect(isPriceLikeInlineBlock(block)).toBe(true);
+    expect(resolveRealPriceChartRequest(block, [])).toEqual({ ticker: 'AAPL', chartType: 'candlestick' });
+  });
+
+  it('normalizes price aliases and never trusts their inline arrays', () => {
+    const [block] = parseSmartChartBlocks(
+      '<chart type="line_price" ticker="NVDA" title="Price">{"labels":["D1"],"values":[999999]}</chart>',
+    );
+
+    expect(block).toMatchObject({ type: 'line', priceLike: true, symbol: 'NVDA' });
+    expect(resolveRealPriceChartRequest(block, ['AAPL'])).toEqual({ ticker: 'NVDA', chartType: 'line' });
+  });
+
+  it('keeps conceptual inline charts but marks their provenance as synthetic', () => {
+    const [block] = parseSmartChartBlocks(
+      '<chart type="pie" title="Concept">{"labels":["A"],"values":[1]}</chart>',
+    );
+
+    expect(isPriceLikeInlineBlock(block)).toBe(false);
+    expect(getSmartChartProvenance(block)).toMatchObject({ synthetic: true, source: undefined });
   });
 });
 

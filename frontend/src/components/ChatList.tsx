@@ -1,11 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
+import { Bot, User, Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2, ChartNoAxesCombined } from 'lucide-react';
 import { normalizeMarkdown } from '../utils/markdown';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
-import { SmartChartRenderer, getRenderableMessageContent, parseSmartChartBlocks } from './SmartChart';
+import {
+  SmartChartRenderer,
+  getRenderableMessageContent,
+  isPriceLikeInlineBlock,
+  parseSmartChartBlocks,
+  resolveRealPriceChartRequest,
+} from './SmartChart';
 import { ThinkingProcess } from './thinking';
 import { ReportView } from './report';
 import { apiClient } from '../api/client';
@@ -24,6 +30,8 @@ import type { ExecutionRun, PipelineStage } from '../types/execution';
 import { getAgentDisplayName } from '../utils/userMessageMapper';
 import { StageStepper, type StageStepperProps, type StageStatus } from './execution/StageStepper';
 import { AgentWorkLog } from './execution/AgentWorkLog';
+import { EmptyState } from './ui/EmptyState';
+import { extractTickers } from '../utils/ticker';
 
 // ── Shared sub-components ──
 
@@ -182,7 +190,7 @@ const AssistantContent: React.FC<{
   <>
     {msg.isLoading ? (
       msg.content ? (
-        <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} />
+        <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
       ) : (
         <div className="py-4 flex items-center justify-start">
           <LoadingDots />
@@ -191,7 +199,7 @@ const AssistantContent: React.FC<{
     ) : msg.report ? (
       <ReportView report={msg.report} />
     ) : (
-      <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} />
+      <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
     )}
     {msg.evidence_pool && msg.evidence_pool.length > 0 && (
       <EvidenceSection evidence_pool={msg.evidence_pool} />
@@ -484,7 +492,7 @@ export const ChatList: React.FC = () => {
 
 const EMPTY_SMART_CHART_BLOCKS: ReturnType<typeof parseSmartChartBlocks> = [];
 
-const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean }> = ({ content, isStreaming }) => {
+const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRetry: () => void }> = ({ content, isStreaming, onRetry }) => {
   const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
 
   // FE-03b：流式中间态跳过全文图表正则解析（每 token 一次太贵），落定后一次解析
@@ -492,6 +500,7 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean }> = (
     () => (isStreaming ? EMPTY_SMART_CHART_BLOCKS : parseSmartChartBlocks(content)),
     [content, isStreaming],
   );
+  const tickerCandidates = useMemo(() => extractTickers(content), [content]);
 
   useEffect(() => {
     if (isStreaming) return; // CHART 标记由收尾阶段注入，流式期间无需扫描
@@ -556,9 +565,32 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean }> = (
           onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
         />
       ))}
-      {smartChartBlocks.map((block, idx) => (
-        <SmartChartRenderer key={`smart-${idx}-${block.type}-${block.title}`} block={block} />
-      ))}
+      {smartChartBlocks.map((block, idx) => {
+        const key = `smart-${idx}-${block.type}-${block.title}`;
+        const realPriceRequest = resolveRealPriceChartRequest(block, tickerCandidates);
+        if (realPriceRequest) {
+          return (
+            <InlineChart
+              key={key}
+              ticker={realPriceRequest.ticker}
+              chartType={realPriceRequest.chartType}
+              onDataReady={(_data, summary) => handleChartDataReady(realPriceRequest.ticker, summary)}
+            />
+          );
+        }
+        if (isPriceLikeInlineBlock(block)) {
+          return (
+            <div key={key} className="my-4 rounded-lg border border-fin-border bg-fin-panel px-4">
+              <EmptyState
+                icon={ChartNoAxesCombined}
+                message="行情图暂不可用：未识别到可查询的标的。"
+                action={{ label: '重新生成', onClick: onRetry }}
+              />
+            </div>
+          );
+        }
+        return <SmartChartRenderer key={key} block={block} />;
+      })}
     </div>
   );
 };
