@@ -11,6 +11,7 @@ import { useStore } from '../store/useStore';
 import { TICKER_PATTERN } from '../utils/ticker';
 import { AgentMention } from './AgentMention';
 import { AiDisclaimer } from './common/AiDisclaimer';
+import { buildChatSuggestions } from './chatSuggestions';
 import { SkillAutocomplete } from './SkillAutocomplete';
 import { SkillLibraryDrawer } from './SkillLibraryDrawer';
 
@@ -49,7 +50,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const setDraft = useStore((state) => state.setDraft);
   const currentTicker = useStore((state) => state.currentTicker);
   const sessionId = useStore((state) => state.sessionId);
-  const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
+  const { activeAsset, activeSelections, clearSelection, watchlist } = useDashboardStore();
+  const suggestions = buildChatSuggestions(watchlist);
   const chatStream = useChatStream(sessionId);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSessionIdRef = useRef(sessionId);
@@ -219,37 +221,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       <div className="text-center mt-2">
         <AiDisclaimer variant="compact" />
         <div className="mt-2 flex flex-wrap justify-center gap-2 text-[11px]">
-          <button
-            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => setComposerText(zh.chat.suggestions.nvdaPrompt)}
-            disabled={isChatLoading}
-          >
-            {zh.chat.suggestions.nvdaLabel}
-          </button>
-          <button
-            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => setComposerText(zh.chat.suggestions.comparePrompt)}
-            disabled={isChatLoading}
-          >
-            {zh.chat.suggestions.compareLabel}
-          </button>
-          <button
-            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => setComposerText(zh.chat.suggestions.teslaPrompt)}
-            disabled={isChatLoading}
-          >
-            {zh.chat.suggestions.teslaLabel}
-          </button>
-          <button
-            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => {
-              setOutputMode('investment_report');
-              setComposerText(zh.chat.suggestions.reportPrompt);
-            }}
-            disabled={isChatLoading}
-          >
-            {zh.chat.suggestions.reportLabel}
-          </button>
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.label}
+              className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
+              onClick={() => {
+                if (suggestion.report) setOutputMode('investment_report');
+                setComposerText(suggestion.prompt);
+              }}
+              disabled={isChatLoading}
+            >
+              {suggestion.label}
+            </button>
+          ))}
         </div>
       </div>
     </div>

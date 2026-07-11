@@ -20,7 +20,7 @@ import type {
 } from '../types/dashboard';
 import { STORAGE_KEYS } from '../types/dashboard';
 import { apiClient } from '../api/client';
-import { deriveUserIdFromSessionId, useStore } from './useStore';
+import { useStore } from './useStore';
 import {
   buildDashboardOverlayKey,
   type DashboardAgentOverlay,
@@ -145,8 +145,6 @@ const normalizeLayoutPrefs = (value: unknown): LayoutPrefs => {
     order,
   };
 };
-
-const resolveCurrentUserId = (): string => deriveUserIdFromSessionId(useStore.getState().sessionId);
 
 // === Store 实例 ===
 export const useDashboardStore = create<DashboardStore>((set, get) => ({
@@ -366,34 +364,27 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 
   initWatchlist: async () => {
-    const userId = resolveCurrentUserId();
+    const ownerId = useStore.getState().authIdentity?.userId || 'public';
     const { _isWatchlistLoaded, _isWatchlistLoading, _watchlistOwnerId } = get();
     if (_isWatchlistLoading) return;
-    if (_isWatchlistLoaded && _watchlistOwnerId === userId) return;
+    if (_isWatchlistLoaded && _watchlistOwnerId === ownerId) return;
 
     set({ _isWatchlistLoading: true });
 
     try {
-      const response = await apiClient.getUserProfile(userId);
-      if (!response?.success) {
-        throw new Error(response?.error || '加载自选列表失败');
-      }
-      const profile = response?.profile;
-      const list: string[] = Array.isArray(profile?.watchlist)
-        ? profile.watchlist
-        : [];
-
-      const watchItems: WatchItem[] = list.map((ticker: string) => ({
-        symbol: ticker.toUpperCase(),
+      const response = await apiClient.getWatchlist();
+      const items = Array.isArray(response?.items) ? response.items : [];
+      const watchItems: WatchItem[] = items.map((item) => ({
+        symbol: item.ticker.toUpperCase(),
         type: 'equity',
-        name: ticker.toUpperCase(),
+        name: item.note || item.ticker.toUpperCase(),
       }));
 
       set({
         watchlist: watchItems,
         _isWatchlistLoaded: true,
         _isWatchlistLoading: false,
-        _watchlistOwnerId: userId,
+        _watchlistOwnerId: ownerId,
       });
     } catch {
       set({ _isWatchlistLoading: false });
@@ -401,24 +392,17 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   },
 
   addWatchItemApi: async (ticker: string) => {
-    const userId = resolveCurrentUserId();
-    const response = await apiClient.addWatchlist({ user_id: userId, ticker });
-    if (!response?.success) {
-      throw new Error(response?.error || '添加自选失败');
-    }
+    const response = await apiClient.addWatchlistItem({ ticker });
+    const normalized = response.item.ticker;
     get().addWatchItem({
-      symbol: ticker.toUpperCase(),
+      symbol: normalized,
       type: 'equity',
-      name: ticker.toUpperCase(),
+      name: response.item.note || normalized,
     });
   },
 
   removeWatchItemApi: async (ticker: string) => {
-    const userId = resolveCurrentUserId();
-    const response = await apiClient.removeWatchlist({ user_id: userId, ticker });
-    if (!response?.success) {
-      throw new Error(response?.error || '移除自选失败');
-    }
+    await apiClient.removeWatchlistItem(ticker);
     get().removeWatchItem(ticker);
   },
 }));

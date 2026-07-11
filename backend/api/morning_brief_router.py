@@ -42,6 +42,7 @@ class MorningBriefRouterDeps:
     get_portfolio_positions: Callable[[str, str], list[dict[str, Any]]]
     get_stock_price: Callable[[str], Any]
     get_company_news: Callable[[str, int], Any]
+    get_watchlist: Callable[[str], list[dict[str, Any]]] | None = None
     # P1: Graph Pipeline support (optional, fallback to direct fetch when None)
     get_graph_runner: Optional[Callable[[], Any]] = None
 
@@ -201,13 +202,14 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        # 合并 tickers：请求参数 + 持仓中的 tickers
+        # 标的优先级：显式请求 > 用户自选 > 持仓。
         request_tickers = {t.strip().upper() for t in request.tickers if t.strip()}
+        user_id = getattr(http_request.state, "user_id", "public")
 
         try:
             stored_positions = deps.get_portfolio_positions(
                 normalized_session,
-                getattr(http_request.state, "user_id", "public"),
+                user_id,
             ) or []
         except Exception as exc:
             logger.warning("[MorningBrief] get_portfolio_positions failed: %s", exc)
@@ -219,18 +221,29 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
             if str(pos.get("ticker", "")).strip()
         }
 
-        all_tickers = sorted(request_tickers | position_tickers)
+        watchlist_tickers: set[str] = set()
+        if deps.get_watchlist is not None:
+            try:
+                watchlist_tickers = {
+                    str(item.get("ticker", "")).strip().upper()
+                    for item in (deps.get_watchlist(user_id) or [])
+                    if str(item.get("ticker", "")).strip()
+                }
+            except Exception as exc:
+                logger.warning("[MorningBrief] get_watchlist failed: %s", exc)
+
+        all_tickers = sorted(request_tickers or watchlist_tickers or position_tickers)
 
         if not all_tickers:
             return {
                 "success": True,
                 "brief": {
                     "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                    "summary": "当前无持仓，请先添加持仓后再生成晨报。",
+                    "summary": "当前无自选或持仓，请先添加关注标的后再生成晨报。",
                     "highlights": [],
                     "market_mood": "neutral",
                     "market_mood_cn": "中性",
-                    "action_items": ["请先在工作台添加持仓标的"],
+                    "action_items": ["请先添加自选股或持仓标的"],
                 },
             }
 
@@ -238,7 +251,7 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
         cache_k = _cache_key(
             normalized_session,
             all_tickers,
-            user_id=getattr(http_request.state, "user_id", "public"),
+            user_id=user_id,
         )
         cached = dashboard_cache.get("__morning_brief__", cache_k)
         if cached is not None:

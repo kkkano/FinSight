@@ -45,6 +45,7 @@ from backend.services.portfolio_store import (
     list_session_ids,  # 兼容旧测试/扩展注入点；现役调度使用 list_user_sessions
     list_user_sessions,
 )
+from backend.services.watchlist_store import list_watchlist
 from backend.services.session_price import fetch_session_aware_price_snapshot
 from backend.tools import get_event_calendar, get_news_sentiment_score
 
@@ -705,6 +706,32 @@ async def run_l1_scan(
     store = get_monitor_store()
     positions = _get_positions_for_user(session_id, user_id)
     targets = store.list_targets(session_id, user_id=user_id)
+    try:
+        watchlist_targets = [
+            {
+                "id": f"watchlist:{item['ticker']}",
+                "session_id": session_id,
+                "type": "watchlist",
+                "ticker": item["ticker"],
+                "config": {},
+                "enabled": True,
+            }
+            for item in list_watchlist(user_id=user_id)
+            if item.get("ticker")
+        ]
+    except Exception as exc:
+        logger.warning("[MonitorEngine] watchlist load failed for %s: %s", user_id, exc)
+        watchlist_targets = []
+    explicit_tickers = {
+        str(target.get("ticker") or "").strip().upper()
+        for target in targets
+        if target.get("ticker")
+    }
+    targets.extend(
+        target
+        for target in watchlist_targets
+        if str(target["ticker"]).strip().upper() not in explicit_tickers
+    )
 
     # 无持仓且无盯盘标的 -> 直接返回
     if not positions and not targets:

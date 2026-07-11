@@ -46,6 +46,27 @@
         "title": "ActiveAsset",
         "type": "object"
       },
+      "AddWatchlistRequest": {
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "ticker": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "title": "AddWatchlistRequest",
+        "type": "object"
+      },
       "AnalystTargets": {
         "description": "分析师目标价",
         "properties": {
@@ -7144,6 +7165,97 @@
         "summary": "Remove Watchlist",
         "tags": [
           "User"
+        ]
+      }
+    },
+    "/api/watchlist": {
+      "get": {
+        "operationId": "get_watchlist_api_watchlist_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Watchlist",
+        "tags": [
+          "Watchlist"
+        ]
+      },
+      "post": {
+        "operationId": "add_watchlist_item_api_watchlist_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWatchlistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Watchlist Item",
+        "tags": [
+          "Watchlist"
+        ]
+      }
+    },
+    "/api/watchlist/{ticker}": {
+      "delete": {
+        "operationId": "remove_watchlist_item_api_watchlist__ticker__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "title": "Ticker",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Watchlist Item",
+        "tags": [
+          "Watchlist"
         ]
       }
     },

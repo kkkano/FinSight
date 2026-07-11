@@ -48,6 +48,8 @@ from backend.api.tools_router import create_tools_router
 from backend.api.skills_router import create_skills_router
 from backend.api.agents_router import AgentsRouterDeps, create_agents_router
 from backend.api.user_router import UserRouterDeps, create_user_router
+from backend.api.watchlist_router import WatchlistRouterDeps, create_watchlist_router
+from backend.services.watchlist_store import get_watchlist_store
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
@@ -290,6 +292,9 @@ def create_app() -> FastAPI:
             user_profile_cls=UserProfile,
         )
     )
+    watchlist_router = create_watchlist_router(
+        WatchlistRouterDeps(get_store=get_watchlist_store)
+    )
 
     market_router = create_market_router(
         MarketRouterDeps(
@@ -360,6 +365,7 @@ def create_app() -> FastAPI:
             ),
             get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
             get_company_news=globals().get("get_company_news") or (lambda _ticker, _limit=5: []),
+            get_watchlist=lambda user_id: get_watchlist_store().list_items(user_id=user_id),
             get_graph_runner=lambda: aget_graph_runner(),
         )
     )
@@ -408,6 +414,7 @@ def create_app() -> FastAPI:
 
     app.include_router(system_router)
     app.include_router(user_router)
+    app.include_router(watchlist_router)
     app.include_router(conversation_router)
     app.include_router(chat_router)
     app.include_router(market_router)
