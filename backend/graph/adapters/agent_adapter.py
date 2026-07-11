@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from backend.utils.env import env_float as _env_float
-from backend.utils.env import env_int as _env_int
-
 import asyncio
 from dataclasses import asdict, is_dataclass
 import logging
-import os
 import time
 from typing import Any, Iterable, Mapping
 
@@ -16,6 +12,7 @@ from backend.graph.event_bus import emit_event
 from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.research.claim_extractor import extract_claims_from_agent_output
 from backend.graph.intent.frame import AgentBrief
+from backend.config.settings import agent_settings, executor_settings
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +294,7 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
     try:  # pragma: no cover - runtime dependency path
         from backend.llm_config import create_llm
 
-        llm = create_llm(temperature=float(os.getenv("LANGGRAPH_AGENT_TEMPERATURE", "0.2")))
+        llm = create_llm(temperature=agent_settings().temperature)
     except Exception:
         llm = None
 
@@ -352,17 +349,20 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
 
     invokers: dict[str, Any] = {}
     preferred_timeout = timeout_seconds_from_state(state)
+    execution_settings = executor_settings()
     timeout_seconds = max(
         15.0,
         preferred_timeout
         if preferred_timeout is not None
-        else _env_float("LANGGRAPH_AGENT_INVOKER_TIMEOUT_SECONDS", 180.0),
+        else execution_settings.agent_invoker_timeout_seconds,
     )
     deep_search_timeout_seconds = max(
         timeout_seconds,
-        _env_float("LANGGRAPH_DEEP_SEARCH_AGENT_TIMEOUT_SECONDS", timeout_seconds),
+        execution_settings.deep_search_agent_timeout_seconds
+        if execution_settings.deep_search_agent_timeout_seconds is not None
+        else timeout_seconds,
     )
-    max_attempts = max(1, _env_int("LANGGRAPH_AGENT_INVOKER_RETRY_ATTEMPTS", 2))
+    max_attempts = max(1, execution_settings.agent_invoker_retry_attempts)
 
     for name in names:
         agent = agents.get(name)
@@ -416,7 +416,7 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                         default_ticker=default_ticker,
                         output_mode=str(state.get("output_mode") or "chat"),
                     )
-                    use_brief = os.getenv("FINSIGHT_AGENT_BRIEF", "off").strip().lower() == "on"
+                    use_brief = agent_settings().brief_enabled
                     result = await asyncio.wait_for(
                         _agent.research(query=query or "N/A", ticker=ticker, brief=brief if use_brief else None),
                         timeout=invoke_timeout,

@@ -11,6 +11,7 @@ from backend.services.circuit_breaker import CircuitBreaker
 from backend.orchestration.trace_schema import create_trace_event
 from backend.orchestration.trace_emitter import get_trace_emitter
 from backend.graph.intent.frame import AgentBrief
+from backend.config.settings import agent_settings
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +86,11 @@ class BaseFinancialAgent:
         self._llm_analyze_enabled_override: Optional[bool] = None
         self._llm_analyze_timeout_override: Optional[float] = None
         self._llm_analyze_call_timeout_override: Optional[float] = None
-        try:
-            self.max_reflections = max(
-                0,
-                int(os.getenv("BASE_AGENT_MAX_REFLECTIONS", str(self.MAX_REFLECTIONS))),
-            )
-        except Exception:
-            self.max_reflections = max(0, self.MAX_REFLECTIONS)
+        configured_reflections = agent_settings().base_max_reflections
+        self.max_reflections = max(
+            0,
+            self.MAX_REFLECTIONS if configured_reflections is None else configured_reflections,
+        )
 
     @property
     def _current_query(self) -> Optional[str]:
@@ -138,10 +137,7 @@ class BaseFinancialAgent:
         override = self._llm_analyze_timeout_override
         if override is not None and override > 0:
             return override
-        try:
-            return max(3.0, float(os.getenv("BASE_AGENT_REFLECTION_TOKEN_TIMEOUT_SECONDS", "12")))
-        except Exception:
-            return 12.0
+        return max(3.0, agent_settings().reflection_token_timeout_seconds)
 
     def _llm_analyze_timeout(self) -> float:
         override = self._llm_analyze_timeout_override
@@ -149,7 +145,7 @@ class BaseFinancialAgent:
             return override
         env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_TIMEOUT_SECONDS"
         try:
-            return max(1.0, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "8"))))
+            return max(1.0, float(os.getenv(env_key, str(agent_settings().llm_analyze_timeout_seconds))))
         except Exception:
             return 8.0
 
@@ -159,7 +155,7 @@ class BaseFinancialAgent:
             return override
         env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_CALL_TIMEOUT_SECONDS"
         try:
-            return max(0.05, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "8"))))
+            return max(0.05, float(os.getenv(env_key, str(agent_settings().llm_analyze_call_timeout_seconds))))
         except Exception:
             return 8.0
 
@@ -213,7 +209,7 @@ class BaseFinancialAgent:
             enabled = bool(override)
         else:
             agent_enabled = os.getenv(f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_ENABLED")
-            enabled_raw = agent_enabled if agent_enabled is not None else os.getenv("AGENT_LLM_ANALYZE_ENABLED", "false")
+            enabled_raw = agent_enabled if agent_enabled is not None else agent_settings().llm_analyze_enabled
             enabled = str(enabled_raw).lower() in (
                 "true", "1", "yes", "on",
             )

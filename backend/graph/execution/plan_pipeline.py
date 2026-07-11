@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
+from backend.config.settings import executor_settings
 from backend.graph.adapters import (
     build_agent_invokers as _build_agent_invokers,
     build_tool_invokers as _build_tool_invokers,
@@ -150,7 +150,8 @@ async def execute_plan_node(state: GraphState) -> dict:
     """Run the plan scheduler and assemble execution-scoped artifacts."""
     trace = state.get("trace") or {}
     plan_ir = state.get("plan_ir") or {}
-    live_tools = os.getenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false").lower() in ("true", "1", "yes", "on")
+    settings = executor_settings()
+    live_tools = settings.live_tools
 
     tool_invokers = None
     agent_invokers = None
@@ -161,9 +162,9 @@ async def execute_plan_node(state: GraphState) -> dict:
         tool_invokers = build_tool_invokers(list(allowed_tools or []))
         agent_invokers = build_agent_invokers(list(allowed_agents or []), state)
 
-    if os.getenv("FINSIGHT_DAG_EXECUTOR", "off").strip().lower() == "on":
+    if settings.dag_executor:
         context_bus: dict[str, str] | None = (
-            {} if os.getenv("FINSIGHT_EVIDENCE_BUS", "off").strip().lower() == "on" else None
+            {} if settings.evidence_bus else None
         )
         artifacts, exec_events = await execute_plan_dag(
             plan_ir,
@@ -196,7 +197,7 @@ async def execute_plan_node(state: GraphState) -> dict:
         evidence_input_count=evidence_input_count,
     )
 
-    if str(os.getenv("RESEARCH_LEDGER_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "on"}:
+    if settings.research_ledger_enabled:
         try:
             from backend.research.ledger_builder import build_ledger_from_artifacts
 

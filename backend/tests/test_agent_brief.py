@@ -23,6 +23,8 @@ async def test_brief_reaches_llm_analyze_prompt(monkeypatch):
 
     agent = BaseFinancialAgent(FakeLLM(), cache=None)
     monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
+    from backend.config.settings import agent_settings
+    agent_settings.cache_clear()
     agent._current_brief = AgentBrief(query="q", ticker="AAPL", objective="earnings_impact",
                                       context_digest="price_agent: AAPL $200, +3% on earnings beat")
     await agent._llm_analyze("data summary", role="analyst", focus="f")

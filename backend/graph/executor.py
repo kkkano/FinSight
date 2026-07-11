@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import os
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from backend.graph.cancellation import get_cancel_event
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
+from backend.config.settings import executor_settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def _as_async_invoker(fn: Callable[[dict[str, Any]], Any]) -> AsyncInvoker:
 
 def _execution_progress_heartbeat_seconds() -> float:
     try:
-        return max(0.0, float(os.getenv("LANGGRAPH_EXECUTION_PROGRESS_HEARTBEAT_SECONDS", "2.5")))
+        return max(0.0, executor_settings().progress_heartbeat_seconds)
     except Exception:
         return 2.5
 

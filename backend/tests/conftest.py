@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from backend.config.settings import clear_settings_caches
+
 # Windows sandbox may deny pytest's default AppData temp base. Keep pytest
 # temp files inside the repo-local ignored tmp/ directory for deterministic CI.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +47,9 @@ def _force_langgraph_deterministic_defaults(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("ENABLE_LANGSMITH", "false")
+    clear_settings_caches()
+    yield
+    clear_settings_caches()
 
 
 @pytest.fixture(autouse=True)

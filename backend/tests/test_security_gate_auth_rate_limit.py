@@ -62,11 +62,14 @@ def test_security_gate_dashboard_requires_auth_by_default(monkeypatch):
 
 def test_allowlisted_paths_can_be_configured_via_env(monkeypatch):
     from backend.api import security_gate
+    from backend.config.settings import security_settings
 
     monkeypatch.delenv("API_PUBLIC_PATHS", raising=False)
+    security_settings.cache_clear()
     assert security_gate._is_allowlisted_path("/api/dashboard") is False
 
     monkeypatch.setenv("API_PUBLIC_PATHS", "/health,/api/dashboard")
+    security_settings.cache_clear()
     assert security_gate._is_allowlisted_path("/api/dashboard") is True
     assert security_gate._is_allowlisted_path("/api/dashboard/sub") is False
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
+from backend.config.settings import executor_settings
 from backend.graph.execution.evidence_tools import append_tool_evidence
 from backend.graph.request_task_contract import build_tool_diagnostic, output_is_error_like
 from backend.graph.state import GraphState
@@ -159,7 +159,7 @@ def normalize_execution_evidence(
             result.insert(0, single)
         return result
 
-    jina_enrich_enabled = str(os.getenv("JINA_ENRICH_EVIDENCE", "true")).strip().lower() in {"1", "true", "yes", "on"}
+    jina_enrich_enabled = executor_settings().jina_enrich_evidence
 
     def _maybe_enrich_snippet_from_jina(url: str | None, snippet: Any) -> Any:
         if not jina_enrich_enabled:

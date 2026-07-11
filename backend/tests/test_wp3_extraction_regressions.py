@@ -65,6 +65,7 @@ def load_dotenv(*args, **kwargs):
     return True
 
 dotenv.load_dotenv = load_dotenv
+dotenv.dotenv_values = lambda *args, **kwargs: {}
 sys.modules["dotenv"] = dotenv
 
 from backend.api import security_gate

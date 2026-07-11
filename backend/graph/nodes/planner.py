@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from backend.utils.env import env_bool as _env_bool
-from backend.utils.env import env_int as _env_int
-from backend.utils.env import env_str as _env_str
-
 import hashlib
 import logging
-import os
 import threading
 import time
 from typing import Any
@@ -54,6 +49,7 @@ from backend.graph.planning.policy_enforcement import (
 )
 from backend.graph.planning.rule_planner import rule_based_planner
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
+from backend.config.settings import planner_settings
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +87,7 @@ __all__ = [
 
 
 def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
+    settings = planner_settings()
     output_mode = str(state.get("output_mode") or "chat").strip().lower()
     ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
     analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
@@ -98,10 +95,10 @@ def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
 
     if is_deep:
         limits: dict[str, float | int] = {
-            "request_timeout": _env_int("LANGGRAPH_PLANNER_REPORT_TIMEOUT_SEC", 240),
-            "max_tokens": _env_int("LANGGRAPH_PLANNER_REPORT_MAX_TOKENS", 6000),
-            "max_attempts": _env_int("LANGGRAPH_PLANNER_REPORT_MAX_ATTEMPTS", 3),
-            "acquire_timeout": float(_env_int("LANGGRAPH_PLANNER_REPORT_ACQUIRE_TIMEOUT_SEC", 180)),
+            "request_timeout": settings.report_timeout_sec,
+            "max_tokens": settings.report_max_tokens,
+            "max_attempts": settings.report_max_attempts,
+            "acquire_timeout": float(settings.report_acquire_timeout_sec),
             "sleep_seconds": 2.0,
             "jitter_seconds": 1.0,
         }
@@ -112,10 +109,10 @@ def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
         return limits
 
     limits = {
-        "request_timeout": _env_int("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", 150),
-        "max_tokens": _env_int("LANGGRAPH_PLANNER_CHAT_MAX_TOKENS", 3000),
-        "max_attempts": _env_int("LANGGRAPH_PLANNER_CHAT_MAX_ATTEMPTS", 2),
-        "acquire_timeout": float(_env_int("LANGGRAPH_PLANNER_CHAT_ACQUIRE_TIMEOUT_SEC", 120)),
+        "request_timeout": settings.chat_timeout_sec,
+        "max_tokens": settings.chat_max_tokens,
+        "max_attempts": settings.chat_max_attempts,
+        "acquire_timeout": float(settings.chat_acquire_timeout_sec),
         "sleep_seconds": 1.0,
         "jitter_seconds": 0.5,
     }
@@ -134,11 +131,12 @@ def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str
 
 
 def _resolve_planner_variant(state: GraphState) -> str:
-    if not _env_bool("LANGGRAPH_PLANNER_AB_ENABLED", False):
+    settings = planner_settings()
+    if not settings.ab_enabled:
         return "A"
 
-    split_percent = max(0, min(100, _env_int("LANGGRAPH_PLANNER_AB_SPLIT", 50)))
-    salt = _env_str("LANGGRAPH_PLANNER_AB_SALT", "planner-ab-v1")
+    split_percent = max(0, min(100, settings.ab_split))
+    salt = settings.ab_salt
     thread_id = str(
         state.get("thread_id")
         or state.get("session_id")
@@ -169,8 +167,9 @@ def _record_planner_ab_metrics(*, variant: str, fallback: bool, retry_attempts: 
 
 
 def get_planner_ab_metrics() -> dict[str, Any]:
-    split_percent = max(0, min(100, _env_int("LANGGRAPH_PLANNER_AB_SPLIT", 50)))
-    enabled = _env_bool("LANGGRAPH_PLANNER_AB_ENABLED", False)
+    settings = planner_settings()
+    split_percent = max(0, min(100, settings.ab_split))
+    enabled = settings.ab_enabled
     with _PLANNER_AB_LOCK:
         by_variant: dict[str, Any] = {}
         totals = {"requests": 0, "fallbacks": 0, "retry_attempts": 0, "steps_total": 0}
@@ -293,7 +292,8 @@ async def planner(state: GraphState) -> dict:
     - LANGGRAPH_PLANNER_MODE=stub (default): deterministic plan (no network)
     - LANGGRAPH_PLANNER_MODE=llm: ask LLM for PlanIR JSON; validate + enforce policy; fallback to stub
     """
-    mode = _env_str("LANGGRAPH_PLANNER_MODE", "llm").lower()
+    settings = planner_settings()
+    mode = settings.mode.lower()
     llm_limits = _planner_llm_limits(state)
     trace = state.get("trace") or {}
     planner_variant = _resolve_planner_variant(state)
@@ -386,7 +386,7 @@ async def planner(state: GraphState) -> dict:
     try:
         from backend.llm_config import create_llm
 
-        _planner_temp = float(os.getenv("LANGGRAPH_PLANNER_TEMPERATURE", "0.2"))
+        _planner_temp = settings.temperature
         llm = create_llm(
             temperature=_planner_temp,
             max_tokens=int(llm_limits["max_tokens"]),
@@ -505,7 +505,7 @@ async def planner(state: GraphState) -> dict:
             )
             current_error = parse_error_info
             current_invalid_output = raw_text
-            max_json_repairs = max(1, min(_env_int("LANGGRAPH_PLANNER_JSON_REPAIR_ATTEMPTS", 2), 3))
+            max_json_repairs = max(1, min(settings.json_repair_attempts, 3))
             for repair_attempt in range(1, max_json_repairs + 1):
                 repair_prompt = _build_json_retry_prompt(
                     base_prompt=prompt,

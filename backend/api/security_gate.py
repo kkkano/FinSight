@@ -7,12 +7,12 @@ API key / Supabase / RAG 观测台鉴权全家（身份缓存含锁）。
 """
 from __future__ import annotations
 
-from backend.utils.env import env_bool as _env_bool
-from backend.utils.env import env_int as _env_int
+from backend.utils.env import env_bool as _env_bool  # noqa: F401 - 兼容旧 API 再导出
+from backend.utils.env import env_int as _env_int  # noqa: F401 - 兼容旧 API 再导出
+from backend.utils.env import env_str
 
 import json
 import logging
-import os
 import time
 from collections import deque
 from threading import Lock
@@ -25,12 +25,14 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
+from backend.config.settings import security_settings
 
 logger = logging.getLogger(__name__)
 
 # 本模块在 app_factory/main 调用 load_dotenv 前即被导入，限流器又在导入期构造。
 # 因此必须先加载项目环境，避免实例永久固化为代码默认值。
 load_dotenv()
+security_settings.cache_clear()
 
 _AUTH_IDENTITY_CACHE_SENTINEL = object()
 
@@ -38,13 +40,18 @@ _auth_identity_cache: Dict[str, tuple[float, Optional[Dict[str, Any]]]] = {}
 
 _auth_identity_lock = Lock()
 
-def _parse_csv_env(key: str, default: str) -> list[str]:
-    raw = os.getenv(key, default)
+def _parse_csv(raw: str) -> list[str]:
     values = [item.strip() for item in str(raw or "").split(",") if item.strip()]
     return values
 
+def _parse_csv_env(key: str, default: str) -> list[str]:
+    """兼容旧测试再导出；安全域现役路径由 SecuritySettings 提供。"""
+    raw = security_settings().api_public_paths if key == "API_PUBLIC_PATHS" else env_str(key, default)
+    return _parse_csv(raw or default)
+
 def _parse_api_keys() -> set[str]:
-    raw = os.getenv("API_AUTH_KEYS") or os.getenv("API_AUTH_KEY") or ""
+    settings = security_settings()
+    raw = settings.api_auth_keys or settings.api_auth_key
     return {item.strip() for item in raw.split(",") if item.strip()}
 
 def _extract_api_key(request: Request) -> Optional[str]:
@@ -63,8 +70,11 @@ def _extract_bearer_token(request: Request) -> Optional[str]:
     return None
 
 def _resolve_supabase_auth_config() -> tuple[str, str]:
-    supabase_url = str(os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL") or "").strip().rstrip("/")
-    publishable_key = str(os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("VITE_SUPABASE_PUBLISHABLE_KEY") or "").strip()
+    settings = security_settings()
+    supabase_url = str(settings.supabase_url or settings.vite_supabase_url).strip().rstrip("/")
+    publishable_key = str(
+        settings.supabase_publishable_key or settings.vite_supabase_publishable_key
+    ).strip()
     return supabase_url, publishable_key
 
 def _is_supabase_auth_configured() -> bool:
@@ -72,14 +82,15 @@ def _is_supabase_auth_configured() -> bool:
     return bool(supabase_url and publishable_key)
 
 def _resolve_rag_observability_dev_auth_config() -> tuple[str, str, Optional[str]]:
-    token = str(os.getenv("RAG_OBSERVABILITY_DEV_ACCESS_TOKEN") or "").strip()
-    user_id = str(os.getenv("RAG_OBSERVABILITY_DEV_USER_ID") or "local-rag-inspector").strip() or "local-rag-inspector"
-    email_raw = str(os.getenv("RAG_OBSERVABILITY_DEV_EMAIL") or "local-rag@example.com").strip()
+    settings = security_settings()
+    token = settings.rag_dev_access_token.strip()
+    user_id = settings.rag_dev_user_id.strip() or "local-rag-inspector"
+    email_raw = settings.rag_dev_email.strip()
     return token, user_id, email_raw or None
 
 def _is_rag_observability_dev_auth_enabled() -> bool:
     token, _, _ = _resolve_rag_observability_dev_auth_config()
-    return _env_bool("RAG_OBSERVABILITY_DEV_AUTH_ENABLED", False) and bool(token)
+    return security_settings().rag_dev_auth_enabled and bool(token)
 
 def _resolve_rag_observability_dev_user_identity(token: str) -> Optional[Dict[str, Any]]:
     normalized = str(token or "").strip()
@@ -102,12 +113,7 @@ def _is_internal_api_key_authorized(request: Request) -> bool:
     return bool(api_key and api_key in _parse_api_keys())
 
 def _auth_identity_cache_ttl_seconds() -> int:
-    raw = str(os.getenv("RAG_OBSERVABILITY_AUTH_CACHE_SECONDS", "60") or "60").strip()
-    try:
-        value = int(raw)
-    except Exception:
-        value = 60
-    return max(5, min(600, value))
+    return max(5, min(600, security_settings().rag_auth_cache_seconds))
 
 def _fetch_supabase_user_identity(token: str) -> Optional[Dict[str, Any]]:
     normalized = str(token or "").strip()
@@ -203,7 +209,7 @@ def _require_rag_mutation_access(request: Request) -> Dict[str, Any]:
 
 def _is_allowlisted_path(path: str) -> bool:
     defaults = "/health,/docs,/openapi.json,/redoc"
-    configured = _parse_csv_env("API_PUBLIC_PATHS", defaults)
+    configured = _parse_csv(security_settings().api_public_paths or defaults)
     exact_paths: set[str] = set()
     prefix_paths: list[str] = []
 
@@ -244,11 +250,12 @@ class SimpleRateLimiter:
 
     @classmethod
     def from_env(cls) -> "SimpleRateLimiter":
-        enabled = _env_bool("RATE_LIMIT_ENABLED", True)  # P0-7: 公网产品限流默认开启
+        settings = security_settings()
+        enabled = settings.rate_limit_enabled  # P0-7: 公网产品限流默认开启
         # 默认 300/分钟：Dashboard/A股页一次加载就有 10-20 个数据请求 + 轮询，
         # 120 对单个真实用户太紧（修复真实 IP 识别后限流桶已按用户隔离）
-        limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "300"))
-        window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+        limit = settings.rate_limit_per_minute
+        window_seconds = settings.rate_limit_window_seconds
         return cls(limit_per_window=limit, window_seconds=window_seconds, enabled=enabled)
 
     def allow(self, key: str) -> tuple[bool, Optional[int]]:
@@ -278,7 +285,7 @@ def _trust_proxy_headers() -> bool:
     默认 true：保持线上 Cloudflare 部署行为不变（向后兼容）。
     直连公网部署应显式设置 TRUST_PROXY_HEADERS=false。
     """
-    return _env_bool("TRUST_PROXY_HEADERS", True)
+    return security_settings().trust_proxy_headers
 
 def _resolve_client_ip(request: Request) -> str:
     """解析真实客户端 IP（Cloudflare Tunnel / 反向代理感知）。
@@ -311,7 +318,7 @@ async def security_gate(request: Request, call_next):
         return await call_next(request)
 
     api_key = None
-    if _env_bool("API_AUTH_ENABLED", False):
+    if security_settings().api_auth_enabled:
         keys = _parse_api_keys()
         if not keys:
             return JSONResponse(status_code=503, content={"detail": "API auth enabled but no keys configured"})

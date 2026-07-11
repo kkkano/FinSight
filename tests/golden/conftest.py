@@ -39,9 +39,13 @@ if sys.platform.startswith("win") and hasattr(asyncio, "WindowsSelectorEventLoop
 
 @pytest.fixture()
 def deterministic_env(monkeypatch):
+    from backend.config.settings import clear_settings_caches
+
     for key, value in DETERMINISTIC_ENV.items():
         monkeypatch.setenv(key, value)
+    clear_settings_caches()
     yield
+    clear_settings_caches()
 
 
 def _stable_slice(final_state: dict) -> dict:
