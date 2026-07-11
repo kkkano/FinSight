@@ -696,6 +696,8 @@ export const useStore = create<AppState>((set) => ({
       const baseMessages = isActiveSession
         ? state.messages
         : loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
+      // 异步补挂可能晚于会话删除返回；目标消息已不存在时不得重建会话摘要或本地存储。
+      if (!baseMessages.some((message) => message.id === id)) return {};
       const next = patchMessageForSession(baseMessages, id, patch);
       const finalized = patch.isLoading === false;
       if (!finalized && isActiveSession) {

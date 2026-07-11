@@ -227,6 +227,13 @@ export function stripSmartChartTags(content: string): string {
     .trim();
 }
 
+/** 流式阶段直接返回原文；图表正则只在消息落定后执行一次。 */
+// eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
+export function getRenderableMessageContent(content: string, isStreaming: boolean = false): string {
+  if (isStreaming) return content;
+  return stripSmartChartTags(content.replace(/\[CHART:[^\]]+\]/g, ''));
+}
+
 function extractAttr(attrs: string, name: string): string | undefined {
   const regex = new RegExp(`${name}=["']([^"']*)["']`);
   const match = attrs.match(regex);

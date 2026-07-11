@@ -197,6 +197,31 @@ describe('useStore conversation lifecycle', () => {
     expect(next.conversationSummaries.some((item) => item.sessionId === originalSession)).toBe(false);
   });
 
+  it('ignores a late async message patch after its conversation was deleted', () => {
+    const state = useStore.getState();
+    const deletedSession = state.sessionId;
+    state.addMessage({ id: 'user-late', role: 'user', content: 'AAPL 图表', timestamp: 10 });
+    state.addMessageToSession(deletedSession, {
+      id: 'ai-late',
+      role: 'assistant',
+      content: 'Final answer',
+      timestamp: 11,
+      isLoading: false,
+    });
+    state.startNewChat();
+
+    useStore.getState().deleteConversation(deletedSession);
+    useStore.getState().updateMessageInSession(deletedSession, 'ai-late', {
+      content: 'Final answer\n\n[CHART:AAPL:line]',
+    });
+
+    const next = useStore.getState();
+    expect(next.conversationSummaries.some((item) => item.sessionId === deletedSession)).toBe(false);
+    if (typeof window !== 'undefined') {
+      expect(window.localStorage.getItem(`finsight-messages:${deletedSession}`)).toBeNull();
+    }
+  });
+
   it('marks chat stream as stopped when cancelling active generation', () => {
     const state = useStore.getState();
     const controller = new AbortController();

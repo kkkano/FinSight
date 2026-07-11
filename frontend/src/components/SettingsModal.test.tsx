@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { SettingsModal } from './SettingsModal';
+import { requireSuccessfulConfigSave } from './settingsSaveResult';
 import { ToastProvider } from './ui/Toast';
 
 const renderModal = () =>
@@ -26,5 +27,10 @@ describe('SettingsModal', () => {
     expect(text).not.toContain('仅存储在浏览器本地');
     expect(text).toContain('保存到服务端配置文件');
     expect(text).toContain('只显示掩码');
+  });
+
+  it('treats an HTTP 200 response with success=false as a save failure', () => {
+    expect(() => requireSuccessfulConfigSave({ success: true })).not.toThrow();
+    expect(() => requireSuccessfulConfigSave({ success: false, error: 'write failed' })).toThrow('write failed');
   });
 });

@@ -6,12 +6,20 @@ import { normalizeMarkdown } from '../utils/markdown';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
-import { SmartChartRenderer, parseSmartChartBlocks, stripSmartChartTags } from './SmartChart';
+import { SmartChartRenderer, getRenderableMessageContent, parseSmartChartBlocks } from './SmartChart';
 import { ThinkingProcess } from './thinking';
 import { ReportView } from './report';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
+import { useToast } from './ui/Toast';
+import {
+  MESSAGE_ACTION_LABELS,
+  canRetryMessage,
+  copyTextWithFeedback,
+  messageActionContainerClass,
+} from './chatMessageActions';
+import { createChatRetryScope } from './chatRetryScope';
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
@@ -346,10 +354,7 @@ export const ChatList: React.FC = () => {
     currentStep,
     removeMessage,
     setStatus,
-    setLoading,
     setTicker,
-    addMessage,
-    updateMessage,
     chatStyle,
   } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -408,24 +413,28 @@ export const ChatList: React.FC = () => {
   };
 
   const handleRetry = async (messageId: string) => {
-    if (isChatLoading) return;
+    if (!canRetryMessage(useStore.getState)) return;
+    const requestSessionId = useStore.getState().sessionId;
+    const scope = createChatRetryScope(requestSessionId, useStore);
 
     const idx = messages.findIndex((m) => m.id === messageId);
     if (idx === -1) return;
     const originalMsg = messages[idx];
     const query = findNearestUserQuery(idx);
     if (!query) {
-      setStatus('No user query found to retry');
-      setTimeout(() => setStatus(null), 1500);
+      if (scope.isActive()) setStatus('No user query found to retry');
+      setTimeout(() => {
+        if (scope.isActive()) setStatus(null);
+      }, 1500);
       return;
     }
 
-    setLoading(true);
-    setStatus('Retrying request...');
-    updateMessage(messageId, { isLoading: true, content: '' });
+    scope.setLoading(true);
+    if (scope.isActive()) setStatus('Retrying request...');
+    scope.updateMessage(messageId, { isLoading: true, content: '' });
 
     try {
-      const response = await apiClient.sendMessage(query, undefined, {
+      const response = await apiClient.sendMessage(query, requestSessionId, {
         output_mode: 'chat',
         confirmation_mode: 'skip',
       });
@@ -454,7 +463,7 @@ export const ChatList: React.FC = () => {
         }
       }
 
-      updateMessage(messageId, {
+      scope.updateMessage(messageId, {
         content: responseContent,
         timestamp: Date.now(),
         intent: response.intent,
@@ -471,23 +480,25 @@ export const ChatList: React.FC = () => {
 
       const elapsedSeconds =
         (response.thinking_elapsed_seconds ?? (response.response_time_ms != null ? response.response_time_ms / 1000 : 0)).toFixed(1);
-      setStatus(`Completed in ${elapsedSeconds}s`);
+      if (scope.isActive()) setStatus(`Completed in ${elapsedSeconds}s`);
 
-      if (response.current_focus || tickerToChart) {
+      if (scope.isActive() && (response.current_focus || tickerToChart)) {
         setTicker(response.current_focus || tickerToChart);
       }
     } catch {
-      updateMessage(messageId, { content: originalMsg.content, isLoading: false });
-      addMessage({
+      scope.updateMessage(messageId, { content: originalMsg.content, isLoading: false });
+      scope.addMessage({
         id: uuidv4(),
         role: 'system',
         content: 'Retry failed. Please confirm the backend service is running.',
         timestamp: Date.now(),
       });
-      setStatus('Retry failed');
+      if (scope.isActive()) setStatus('Retry failed');
     } finally {
-      setLoading(false);
-      setTimeout(() => setStatus(null), 2000);
+      scope.setLoading(false);
+      setTimeout(() => {
+        if (scope.isActive()) setStatus(null);
+      }, 2000);
     }
   };
 
@@ -629,9 +640,7 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean }> = (
     }
   };
 
-  const textContent = stripSmartChartTags(
-    content.replace(/\[CHART:[^\]]+\]/g, '')
-  );
+  const textContent = getRenderableMessageContent(content, Boolean(isStreaming));
 
   return (
     <div className="prose prose-invert prose-sm max-w-none prose-terminal">
@@ -717,6 +726,7 @@ const MessageActions: React.FC<{
   onDelete: () => void;
   inline?: boolean;
 }> = ({ content, thinking, report, onRetry, onDelete, inline }) => {
+  const { toast } = useToast();
   const buildTraceMarkdown = () => {
     const lines: string[] = [];
 
@@ -767,13 +777,18 @@ const MessageActions: React.FC<{
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch (e) {
-      console.error('Copy failed', e);
-    }
+    await copyTextWithFeedback(
+      content,
+      (text) => navigator.clipboard.writeText(text),
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      (error) => {
+        console.error('Copy failed', error);
+        toast({ type: 'error', title: '复制失败', message: '浏览器未允许访问剪贴板，请检查权限后重试。' });
+      },
+    );
   };
 
   const handleExport = () => {
@@ -790,12 +805,7 @@ const MessageActions: React.FC<{
   const btnClass = "p-1.5 rounded-md hover:bg-fin-hover hover:text-fin-text transition-colors";
 
   return (
-    <div className={clsx(
-      "flex items-center gap-1 text-fin-muted pointer-events-auto",
-      inline
-        ? "mt-4 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200"
-        : "absolute bottom-0 right-2 translate-y-full"
-    )}>
+    <div className={messageActionContainerClass(Boolean(inline))}>
       <button
         className={clsx(btnClass, copied && 'text-fin-success')}
         title={copied ? '已复制' : '复制'}
@@ -804,13 +814,13 @@ const MessageActions: React.FC<{
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
-      <button className={btnClass} title="重试" onClick={onRetry}>
+      <button className={btnClass} title="重试" aria-label={MESSAGE_ACTION_LABELS.retry} onClick={onRetry}>
         <RefreshCcw size={14} />
       </button>
-      <button className={btnClass} title="导出" onClick={handleExport}>
+      <button className={btnClass} title="导出" aria-label={MESSAGE_ACTION_LABELS.export} onClick={handleExport}>
         <Download size={14} />
       </button>
-      <button className={btnClass} title="删除" onClick={onDelete}>
+      <button className={btnClass} title="删除" aria-label={MESSAGE_ACTION_LABELS.delete} onClick={onDelete}>
         <Trash2 size={14} />
       </button>
     </div>

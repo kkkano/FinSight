@@ -184,6 +184,8 @@ export function ChatWorkspace({
             type="button"
             onClick={onToggleTheme}
             className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            title={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
+            aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
@@ -264,7 +266,7 @@ export function ChatWorkspace({
                   </button>
                   <button
                     type="button"
-                    className="shrink-0 self-start mt-1.5 mr-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded-md text-fin-muted hover:text-red-300 hover:bg-red-500/10 transition"
+                    className="shrink-0 self-start mt-1.5 mr-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 max-lg:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 p-1 rounded-md text-fin-muted hover:text-red-300 hover:bg-red-500/10 transition"
                     title="删除会话"
                     aria-label="删除会话"
                     data-testid="conversation-delete"

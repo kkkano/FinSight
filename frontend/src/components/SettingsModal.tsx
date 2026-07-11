@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
@@ -8,6 +8,7 @@ import { Input } from './ui/Input';
 import { Card } from './ui/Card';
 import { Dialog } from './ui/Dialog';
 import { useToast } from './ui/Toast';
+import { requireSuccessfulConfigSave } from './settingsSaveResult';
 import { AgentControlPanel } from './settings/AgentControlPanel';
 
 interface SettingsModalProps {
@@ -194,6 +195,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [showLegacyApiKey, setShowLegacyApiKey] = useState(false);
   const [showEndpointApiKeys, setShowEndpointApiKeys] = useState<Record<number, boolean>>({});
   const [activeLayer, setActiveLayer] = useState<SettingsLayer>('basic');
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveAttemptRef = useRef(0);
+
+  const clearCloseTimer = useCallback(() => {
+    if (!closeTimerRef.current) return;
+    clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  }, []);
+
+  const handleClose = useCallback(() => {
+    saveAttemptRef.current += 1;
+    clearCloseTimer();
+    setSaved(false);
+    setLoading(false);
+    onClose();
+  }, [clearCloseTimer, onClose]);
+
+  useEffect(() => () => {
+    saveAttemptRef.current += 1;
+    clearCloseTimer();
+  }, [clearCloseTimer]);
+
+  useEffect(() => {
+    if (isOpen) return;
+    saveAttemptRef.current += 1;
+    clearCloseTimer();
+    setSaved(false);
+    setLoading(false);
+  }, [clearCloseTimer, isOpen]);
 
   const {
     theme,
@@ -325,6 +355,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   const handleSave = async () => {
+    const attempt = saveAttemptRef.current + 1;
+    saveAttemptRef.current = attempt;
+    clearCloseTimer();
+    setSaved(false);
     setLoading(true);
     try {
       const legacyProvider = String(config.llm_provider || '').trim();
@@ -357,14 +391,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         llm_api_key: legacyApiKey,
       };
 
-      await apiClient.saveConfig(payload);
+      const response = await apiClient.saveConfig(payload);
+      requireSuccessfulConfigSave(response);
+      if (saveAttemptRef.current !== attempt) return;
       setSaved(true);
       toast({ type: 'success', title: '配置已保存' });
-      setTimeout(() => {
+      closeTimerRef.current = setTimeout(() => {
+        if (saveAttemptRef.current !== attempt) return;
+        closeTimerRef.current = null;
+        saveAttemptRef.current += 1;
         setSaved(false);
         onClose();
       }, 1500);
     } catch (error) {
+      if (saveAttemptRef.current !== attempt) return;
       console.error('保存配置失败:', error);
       toast({
         type: 'error',
@@ -372,14 +412,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         message: '配置未生效，请检查网络或管理员令牌后重试。',
       });
     } finally {
-      setLoading(false);
+      if (saveAttemptRef.current === attempt) setLoading(false);
     }
   };
 
   return (
     <Dialog
       open={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       labelledBy="settings-modal-title"
       panelClassName="bg-fin-panel border border-fin-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
     >
@@ -393,7 +433,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <Button
             variant="ghost"
             size="sm"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="关闭设置"
             className="p-1"
           >
@@ -874,7 +914,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             variant="ghost"
             size="md"
             data-testid="settings-cancel-btn"
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 text-fin-muted hover:text-fin-text"
           >
             取消

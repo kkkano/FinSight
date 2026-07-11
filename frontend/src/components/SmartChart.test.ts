@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseSmartChartBlocks } from './SmartChart';
+import { getRenderableMessageContent, parseSmartChartBlocks } from './SmartChart';
 
 describe('parseSmartChartBlocks', () => {
   it('accepts extended chart types and caps smart charts at four per message', () => {
@@ -21,5 +21,21 @@ describe('parseSmartChartBlocks', () => {
       'scenario',
       'heatmap',
     ]);
+  });
+});
+
+describe('getRenderableMessageContent', () => {
+  const content = [
+    'streaming text',
+    '[CHART:AAPL:line]',
+    '<chart type="bar" title="Revenue">{"labels":["Q1"],"values":[1]}</chart>',
+  ].join('\n');
+
+  it('returns streaming content untouched so chart stripping is skipped per token', () => {
+    expect(getRenderableMessageContent(content, true)).toBe(content);
+  });
+
+  it('removes chart markers after the message is finalized', () => {
+    expect(getRenderableMessageContent(content, false)).toBe('streaming text');
   });
 });
