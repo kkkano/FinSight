@@ -57,10 +57,10 @@ def _fetch_with_akshare_hist(ticker: str, period: str = "1y") -> dict | None:
 ```
 
 **Tasks:**
-- [ ] T1: 失败测试（mock akshare 模块——`sys.modules` 注入 fake，断言 A 股级联顺序为 `[_fetch_with_akshare_spot, _fetch_with_yfinance, _fetch_yahoo_api_v8, _search_for_price]`，以及 akshare 成功时返回格式含价格）。akshare 为**惰性导入**（函数体内 import，未安装时函数返回 None 并 debug 日志，不炸整个模块）。
-- [ ] T2: 实现两个 fetcher；`get_stock_price` 的 `is_china` 分支与 `get_stock_historical_data` 的 A 股路径插入为首选。
+- [x] T1: 失败测试（mock akshare 模块——`sys.modules` 注入 fake，断言 A 股级联顺序为 `[_fetch_with_akshare_spot, _fetch_with_yfinance, _fetch_yahoo_api_v8, _search_for_price]`，以及 akshare 成功时返回格式含价格）。akshare 为**惰性导入**（函数体内 import，未安装时函数返回 None 并 debug 日志，不炸整个模块）。
+- [x] T2: 实现两个 fetcher；`get_stock_price` 的 `is_china` 分支与 `get_stock_historical_data` 的 A 股路径插入为首选。
 - [ ] T3: 联网冒烟脚本（不进 CI）：`python -c "from backend.tools.price import get_stock_price; print(get_stock_price('600036'))"` 交易时段人工跑一次，输出贴 PR。
-- [ ] Commit: `feat(cn-market): akshare as primary A-share price/history source with lazy import fallback`
+- [x] Commit: `feat(cn-market): akshare as primary A-share price/history source with lazy import fallback`
 
 ---
 

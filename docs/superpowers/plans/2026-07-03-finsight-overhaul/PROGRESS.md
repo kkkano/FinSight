@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | WP6-F1 A 股 akshare 首选数据源（T1/T2） | 700430b | `akshare==1.*` 已装入仓库 `.venv` 并登记依赖；实时与历史 fetcher 均惰性导入，A 股级联调整为 akshare → yfinance → Yahoo API v8 → search，历史数据优先前复权日线。mock 覆盖格式、级联顺序、中文字段映射、历史优先级与未安装回退；价格聚焦回归 `27 passed`，此前含 golden 的扩展回归 `54 passed`。T3 联网脚本已执行，但本机访问 Eastmoney/Yahoo 被外部代理层 `ProxyError/RemoteDisconnected` 阻断，已登记 BLOCKED，生产门禁重试。 |
 | 2026-07-12 | WP6-F0 Phase Labs 收编与一级导航 | 4e61f29 | 原面板清单为 ScreenerResultPanel、CNMarketPanel、BacktestPanel；选股与回测复用原组件提升为 `/screener`、`/backtest` 一级页面，A 股沿用既有 `/cn-market`，旧 `/phase-labs` 兼容跳转到选股。Sidebar 使用 Filter/FlaskConical 新增两入口，既有订阅管理补稳定测试标识。页面单测 2 passed，完整前端 42 files/237 tests passed，定向 ESLint 0 问题，生产 build 成功；真实 Vite + Chromium 验证三入口、跳转与页面渲染，控制台 0 error，QA 进程已清理。 |
 | 2026-07-12 | WP5 完成门禁 | 72e8222 | 完整后端 `1979 passed/8 skipped`；认证、JWT、多用户隔离与配额聚焦矩阵 `31 passed`。覆盖 auth optional 匿名 `public` 兼容、auth required 业务 401/health 200、双用户三类 store 隔离、成本按用户与 UTC 日界隔离、聊天/执行超限 429、关闭配额与 admin 豁免。双浏览器真实 security_gate/API 隔离证据沿用 WP5-Task3；全程使用本地不可达测试 LLM endpoint。 |
 | 2026-07-12 | WP5-Task5 多用户部署说明与数据层校准 | 47915f6 | Runbook 新增个人自用、公开演示、多用户三种环境变量组合，明确匿名 `public` 数据共享告示、UTC 配额恢复、429 行为、双账号终验与 secret 管理；中英文 README 同步校准为 PostgreSQL/SQLite 可选 LangGraph checkpoint 与 pgvector、SQLite/JSON 承载业务数据。Markdown diff 校验通过，旧“PostgreSQL 承载报告/持仓”声明扫描 0 命中。 |
