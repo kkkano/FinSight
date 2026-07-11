@@ -20,136 +20,10 @@ import {
   messageActionContainerClass,
 } from './chatMessageActions';
 import { createChatRetryScope } from './chatRetryScope';
+import { injectChartMarkers, shouldGenerateChart } from '../utils/chartIntent';
+import { extractTickers } from '../utils/ticker';
 
-const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
-
-// InlineChart 唯一数据源是 K 线（fetchKline），只能真实渲染以下类型。
-// 其余类型（pie/bar/radar/gauge/scatter...）若强行注入会被画成股价折线，
-// 造成"标题说营收构成、图画股价"的错配，因此诚实跳过。
-const INLINE_RENDERABLE_TYPES = new Set(['line', 'candlestick', 'area']);
-// 仅 K 线 / 技术取数方式能被 InlineChart 真出图。
-const INLINE_RENDERABLE_DATA_KINDS = new Set(['kline', 'technical']);
-
-// 决定 chart_type + data_kind 是否能被 InlineChart 诚实地真出图。
-const isInlineChartRenderable = (
-  chartType: string | null,
-  dataKind: string | null,
-): boolean => {
-  if (!chartType) return false;
-  if (!INLINE_RENDERABLE_TYPES.has(chartType)) return false;
-  // data_kind 缺省（如旧后端 / 关键词回退未给）时，按类型保守放行 line/candlestick/area。
-  if (!dataKind) return true;
-  return INLINE_RENDERABLE_DATA_KINDS.has(dataKind);
-};
-
-const shouldGenerateChart = async (
-  query: string,
-  currentTicker?: string | null,
-): Promise<{ tickers: string[]; chartType: string | null }> => {
-  try {
-    const response = await apiClient.detectChartType(query, currentTicker || undefined);
-    const apiCandidates = Array.isArray(response?.ticker_candidates)
-      ? response.ticker_candidates.map((value: unknown) => String(value))
-      : [];
-    const resolvedTicker = typeof response?.resolved_ticker === 'string' && response.resolved_ticker.trim()
-      ? [response.resolved_ticker]
-      : [];
-    const localCandidates = extractTickers(query);
-    const contextual = currentTicker ? [currentTicker] : [];
-    const merged = mergeTickerCandidates(apiCandidates, resolvedTicker, localCandidates, contextual);
-
-    if (response.success && response.should_generate) {
-      const chartType = response.chart_type || 'line';
-      const dataKind = typeof response.data_kind === 'string' ? response.data_kind : null;
-      // 诚实原则：只在 InlineChart 能真出图时注入图表标记，否则跳过（chartType=null）。
-      if (isInlineChartRenderable(chartType, dataKind)) {
-        return { tickers: merged, chartType };
-      }
-      return { tickers: merged, chartType: null };
-    }
-  } catch {
-    console.error('Chart detection failed');
-  }
-
-  const lowerQuery = query.toLowerCase();
-  const hasChartKeyword = chartKeywords.some((keyword) => lowerQuery.includes(keyword));
-  if (!hasChartKeyword) return { tickers: [], chartType: null };
-
-  const localCandidates = extractTickers(query);
-  const contextual = currentTicker ? [currentTicker] : [];
-  return { tickers: mergeTickerCandidates(localCandidates, contextual), chartType: 'line' };
-};
-
-const TICKER_STOPWORDS = new Set([
-  'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
-  'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
-  'WITH', 'VIEW', 'FROM', 'FOR', 'OVER', 'NEWS', 'WHAT', 'WHEN', 'WHERE',
-  'WHY', 'THIS', 'THAT', 'THE', 'AND', 'ARE', 'WAS', 'WERE',
-]);
-
-const MAX_AUTO_CHART_TICKERS = 3;
-const TICKER_PATTERN = /^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/;
-
-const mergeTickerCandidates = (...sources: Array<string[] | undefined>): string[] => {
-  const merged: string[] = [];
-  const seen = new Set<string>();
-  for (const source of sources) {
-    for (const raw of source ?? []) {
-      const ticker = String(raw || '').trim().toUpperCase();
-      if (!ticker || seen.has(ticker)) continue;
-      if (TICKER_STOPWORDS.has(ticker)) continue;
-      if (!TICKER_PATTERN.test(ticker)) continue;
-      seen.add(ticker);
-      merged.push(ticker);
-      if (merged.length >= MAX_AUTO_CHART_TICKERS) return merged;
-    }
-  }
-  return merged;
-};
-
-const extractTickers = (text: string): string[] => {
-  if (!text || !text.trim()) return [];
-
-  const seen = new Set<string>();
-  const tickers: string[] = [];
-  const addTicker = (raw: string) => {
-    const symbol = String(raw || '').trim().toUpperCase();
-    if (!symbol || seen.has(symbol)) return;
-    if (symbol.length > 20 || /\s/.test(symbol)) return;
-    seen.add(symbol);
-    tickers.push(symbol);
-  };
-
-  for (const match of text.matchAll(/\^([A-Za-z]{1,8})\b/g)) {
-    addTicker(`^${match[1]}`);
-  }
-  for (const match of text.matchAll(/\b(\d{5,6}\.(?:SS|SZ|BJ|HK))\b/gi)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\b([A-Za-z]{1,8}-[A-Za-z]{2,5})\b/g)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\b([A-Za-z]{1,4}=F)\b/g)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\$([A-Za-z]{1,6})\b/g)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\b([A-Za-z]{1,6}[.-][A-Za-z]{1,4})\b/g)) {
-    addTicker(match[1]);
-  }
-
-  const alphaTokens = text.match(/\b[A-Za-z]{1,6}\b/g) ?? [];
-  for (const token of alphaTokens) {
-    if (token !== token.toUpperCase()) continue;
-    const upper = token.toUpperCase();
-    if (TICKER_STOPWORDS.has(upper)) continue;
-    addTicker(upper);
-  }
-
-  return tickers.slice(0, MAX_AUTO_CHART_TICKERS);
-};
 
 // ── Shared sub-components ──
 
@@ -446,22 +320,8 @@ export const ChatList: React.FC = () => {
       let responseContent = typeof response.response === 'string'
         ? response.response
         : JSON.stringify(response.response, null, 2);
-      const markerRegex = /\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g;
-      const existingTickers = new Set(
-        Array.from(responseContent.matchAll(markerRegex)).map((match) => match[1])
-      );
       const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(query);
-      const forceMulti = tickers.length > 1;
-      if (chartInfo.chartType || forceMulti) {
-        const targetTickers = tickers.slice(0, MAX_AUTO_CHART_TICKERS);
-        const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
-        if (missingTickers.length > 0) {
-          const chartType = forceMulti ? 'line' : (chartInfo.chartType || 'line');
-          missingTickers.forEach((ticker) => {
-            responseContent += `\n\n[CHART:${ticker}:${chartType}]`;
-          });
-        }
-      }
+      responseContent = injectChartMarkers(responseContent, tickers, chartInfo.chartType);
 
       scope.updateMessage(messageId, {
         content: responseContent,
