@@ -229,6 +229,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const {
     theme,
     setTheme,
+    colorConvention,
+    setColorConvention,
     setLayoutMode,
     traceRawEnabled,
     setTraceRawEnabled,
@@ -751,6 +753,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               >
                 <Moon size={16} /> 深色
               </button>
+            </div>
+            <div className="mt-4 border-t border-t-border pt-4">
+              <div className="mb-2 text-xs text-t-text2">涨跌配色</div>
+              <div className="flex flex-wrap gap-4 text-sm text-t-text">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="color-convention"
+                    checked={colorConvention === 'intl'}
+                    onChange={() => setColorConvention('intl')}
+                    className="accent-fin-primary"
+                  />
+                  国际（绿涨红跌）
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="color-convention"
+                    checked={colorConvention === 'cn'}
+                    onChange={() => setColorConvention('cn')}
+                    className="accent-fin-primary"
+                  />
+                  A股（红涨绿跌）
+                </label>
+              </div>
             </div>
           </Card>
           ) : null}

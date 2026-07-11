@@ -305,7 +305,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
                 {[...tickerTapeItems, ...tickerTapeItems].map((item, idx) => (
                   <span key={`${item.key}-${idx}`} className="whitespace-nowrap">
                     <span className="text-slate-400 mr-1">{item.label}</span>
-                    <span className={item.up ? 'text-emerald-400' : 'text-red-400'}>{item.text.replace(`${item.label} `, '')}</span>
+                    <span className={item.up ? 'text-t-up' : 'text-t-down'}>{item.text.replace(`${item.label} `, '')}</span>
                   </span>
                 ))}
               </div>

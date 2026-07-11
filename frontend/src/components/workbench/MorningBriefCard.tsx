@@ -23,13 +23,13 @@ function MoodBadge({ mood, label }: { mood: string; label: string }) {
   const style = useMemo(() => {
     switch (mood) {
       case 'bullish':
-        return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+        return 'border-t-up/30 bg-t-up/15 text-t-up';
       case 'cautiously_optimistic':
-        return 'bg-green-500/15 text-green-400 border-green-500/30';
+        return 'border-t-up/30 bg-t-up/15 text-t-up';
       case 'cautiously_pessimistic':
         return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
       case 'bearish':
-        return 'bg-red-500/15 text-red-400 border-red-500/30';
+        return 'border-t-down/30 bg-t-down/15 text-t-down';
       default:
         return 'bg-fin-border/30 text-fin-muted border-fin-border';
     }
@@ -55,10 +55,10 @@ function TrendIcon({ trend, pct }: { trend: string; pct: number | null }) {
     return <Minus className="w-3.5 h-3.5 text-fin-muted" />;
   }
   if (trend === 'strong_up' || trend === 'up') {
-    return <ArrowUp className="w-3.5 h-3.5 text-emerald-400" />;
+    return <ArrowUp className="w-3.5 h-3.5 text-t-up" />;
   }
   if (trend === 'strong_down' || trend === 'down') {
-    return <ArrowDown className="w-3.5 h-3.5 text-red-400" />;
+    return <ArrowDown className="w-3.5 h-3.5 text-t-down" />;
   }
   return <Minus className="w-3.5 h-3.5 text-fin-muted" />;
 }
@@ -66,8 +66,8 @@ function TrendIcon({ trend, pct }: { trend: string; pct: number | null }) {
 /** 涨跌幅颜色 */
 function pctColorClass(pct: number | null): string {
   if (pct === null) return 'text-fin-muted';
-  if (pct > 0) return 'text-emerald-400';
-  if (pct < 0) return 'text-red-400';
+  if (pct > 0) return 'text-t-up';
+  if (pct < 0) return 'text-t-down';
   return 'text-fin-muted';
 }
 

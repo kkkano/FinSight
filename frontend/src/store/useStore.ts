@@ -5,6 +5,7 @@ import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
 
 type Theme = 'dark' | 'light';
+export type ColorConvention = 'intl' | 'cn';
 type LayoutMode = 'centered' | 'full';
 type ChatStyle = 'bubble' | 'flat';
 export type EntryMode = 'pending' | 'anonymous' | 'authenticated';
@@ -54,6 +55,11 @@ const getInitialTheme = (): Theme => {
   if (stored === 'light' || stored === 'dark') return stored;
   const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
   return prefersDark ? 'dark' : 'light';
+};
+
+const getInitialColorConvention = (): ColorConvention => {
+  if (typeof window === 'undefined') return 'intl';
+  return window.localStorage.getItem('finsight-color-convention') === 'cn' ? 'cn' : 'intl';
 };
 
 const getInitialSubscriptionEmail = (): string => {
@@ -144,7 +150,13 @@ const applyThemeClass = (theme: Theme) => {
   root.classList.toggle('dark', theme === 'dark');
 };
 
+export const applyColorConventionClass = (colorConvention: ColorConvention) => {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle('cn-colors', colorConvention === 'cn');
+};
+
 const initialTheme = getInitialTheme();
+const initialColorConvention = getInitialColorConvention();
 const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
 const initialEntryMode = getInitialEntryMode();
@@ -153,6 +165,7 @@ const initialTraceRawEnabled = getInitialTraceRawEnabled();
 const initialTraceViewMode = getInitialTraceViewMode();
 const initialTraceRawShowRawJson = getInitialTraceRawShowRawJson();
 applyThemeClass(initialTheme);
+applyColorConventionClass(initialColorConvention);
 
 interface AppState {
   messages: Message[];
@@ -188,6 +201,8 @@ interface AppState {
   setTicker: (ticker: string | null) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  colorConvention: ColorConvention;
+  setColorConvention: (colorConvention: ColorConvention) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
   chatStyle: ChatStyle;
@@ -611,6 +626,7 @@ export const useStore = create<AppState>((set) => ({
   draft: '',
   draftBySession: {},
   theme: initialTheme,
+  colorConvention: initialColorConvention,
   layoutMode: initialLayout,
   chatStyle: getInitialChatStyle(),
   subscriptionEmail: initialSubscriptionEmail,
@@ -963,6 +979,14 @@ export const useStore = create<AppState>((set) => ({
     applyThemeClass(theme);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('finsight-theme', theme);
+    }
+  },
+
+  setColorConvention: (colorConvention) => {
+    set({ colorConvention });
+    applyColorConventionClass(colorConvention);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('finsight-color-convention', colorConvention);
     }
   },
 

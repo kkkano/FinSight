@@ -21,6 +21,13 @@ describe('SettingsModal', () => {
     expect(text).toContain('运行诊断');
   });
 
+  it('offers international and A-share up/down color conventions', () => {
+    const text = renderModal();
+
+    expect(text).toContain('国际（绿涨红跌）');
+    expect(text).toContain('A股（红涨绿跌）');
+  });
+
   it('UX-01: 隐私声明必须与实际行为一致（key 存服务端），禁止再出现"仅存储在浏览器本地"', () => {
     const text = renderModal();
 

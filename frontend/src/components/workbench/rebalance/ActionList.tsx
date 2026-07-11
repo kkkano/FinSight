@@ -128,8 +128,8 @@ function ActionRow({
   onSetDecision,
 }: ActionRowProps) {
   const deltaClass = action.delta_weight >= 0
-    ? 'text-emerald-500'
-    : 'text-red-400';
+    ? 'text-t-up'
+    : 'text-t-down';
 
   const rowOpacity = decision === 'rejected' ? 'opacity-40' : '';
   const colSpanCount = hasWorkflow ? 9 : 8;

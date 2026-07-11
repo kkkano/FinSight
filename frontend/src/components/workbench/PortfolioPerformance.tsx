@@ -4,7 +4,7 @@
  * Columns: ticker, current price, day change %, unrealised P&L %, unrealised P&L $,
  * market value. Footer row aggregates totals.
  *
- * Colour convention: gains = emerald / green, losses = red.
+ * 涨跌色读取 TERMINAL token，并随用户选择的市场习惯切换。
  */
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, TrendingDown, TrendingUp } from 'lucide-react';
@@ -64,7 +64,7 @@ function formatPnlCurrency(value: number | null | undefined): string {
 
 function pnlColor(value: number | null | undefined): string {
   if (value === null || value === undefined || value === 0) return 'text-fin-muted';
-  return value > 0 ? 'text-emerald-400' : 'text-red-400';
+  return value > 0 ? 'text-t-up' : 'text-t-down';
 }
 
 // --- Sub-components ---

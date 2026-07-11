@@ -124,5 +124,10 @@ export function buildTerminalChartTheme(isDark: boolean): ChartTheme {
 
 export const useChartTheme = (): ChartTheme => {
   const theme = useStore((state) => state.theme);
-  return useMemo(() => buildTerminalChartTheme(theme === 'dark'), [theme]);
+  const colorConvention = useStore((state) => state.colorConvention);
+  return useMemo(() => {
+    // 配色习惯切换后重新读取 documentElement 上的 --t-up/--t-down。
+    void colorConvention;
+    return buildTerminalChartTheme(theme === 'dark');
+  }, [colorConvention, theme]);
 };

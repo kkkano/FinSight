@@ -413,9 +413,9 @@ export const terminalChartTheme = {
 **Files:**
 - Modify: `frontend/src/components/SettingsModal.tsx`（外观区）、`frontend/src/store/useStore.ts`（persist `colorConvention: 'intl' | 'cn'`）
 
-- [ ] Step 1: 设置外观区加单选「涨跌配色: 国际(绿涨) / A股(红涨)」，写 store 并 `document.documentElement.classList.toggle('cn-colors', v === 'cn')`（应用启动初始化时同步一次）。
-- [ ] Step 2: 全站涨跌色改经 `text-t-up/text-t-down`：`grep -rn "text-green-\|text-red-\|text-emerald-\|trend-up\|trend-down" frontend/src --include="*.tsx" | grep -v test` 逐个替换；ECharts K线经 Task 6 candle token 自动生效。
-- [ ] Step 3: vitest：切换 convention 后 documentElement class 断言。Commit: `feat(ui): configurable up/down color convention (intl green-up vs CN red-up)`
+- [x] Step 1: 设置外观区加单选「涨跌配色: 国际(绿涨) / A股(红涨)」，写 store 并 `document.documentElement.classList.toggle('cn-colors', v === 'cn')`（应用启动初始化时同步一次）。
+- [x] Step 2: 全站涨跌色改经 `text-t-up/text-t-down`：`grep -rn "text-green-\|text-red-\|text-emerald-\|trend-up\|trend-down" frontend/src --include="*.tsx" | grep -v test` 逐个审计；价格、收益、仓位变化与多空趋势改用 token，成功/失败/告警等非涨跌状态色保持固定；ECharts K线经 Task 6 candle token 自动生效。
+- [x] Step 3: vitest：切换 convention 后 documentElement class 断言。Commit: `feat(ui): configurable up/down color convention (intl green-up vs CN red-up)`
 
 ---
 

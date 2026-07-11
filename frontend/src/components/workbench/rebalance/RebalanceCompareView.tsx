@@ -218,9 +218,9 @@ export function RebalanceCompareView({
                 <td
                   className={`py-1.5 px-2 text-right font-medium ${
                     row.delta > 0
-                      ? 'text-emerald-500'
+                      ? 'text-t-up'
                       : row.delta < 0
-                        ? 'text-red-400'
+                        ? 'text-t-down'
                         : 'text-fin-muted'
                   }`}
                 >
