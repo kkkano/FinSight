@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { getPredictionIdFromSearch } from './chatChartIntent';
 import { shouldUseSmartChartData } from '../utils/chartIntent';
 
 // shouldUseSmartChartData 决定某 (chartType, dataKind) 是否走 SmartChart 数据路径
@@ -32,5 +33,16 @@ describe('shouldUseSmartChartData', () => {
     expect(shouldUseSmartChartData('scatter', 'composition')).toBe(false);
     expect(shouldUseSmartChartData('pie', 'financial')).toBe(false);
     expect(shouldUseSmartChartData('radar', 'financial')).toBe(false);
+  });
+});
+
+describe('prediction deep-link contract', () => {
+  it('reads only predictionId from the analysis query parameter', () => {
+    expect(getPredictionIdFromSearch('?analysis=pred-123&entry=999999&data=%5B999999%5D')).toBe('pred-123');
+  });
+
+  it('rejects missing or oversized ids', () => {
+    expect(getPredictionIdFromSearch('?entry=100')).toBeNull();
+    expect(getPredictionIdFromSearch(`?analysis=${'x'.repeat(161)}`)).toBeNull();
   });
 });

@@ -77,12 +77,12 @@ type PredictionOverlay = {
 }
 ```
 
-- [ ] Step 1: 写失败测试，构造同一份真实 OHLC 响应与两份不同 prediction，断言 candle/line series 的 `data` 逐项完全相同，只有 overlay 的 `markLine/markPoint/markArea` 改变；prediction 中即使夹带 `bars/series/data` 字段也必须被解析层丢弃。
-- [ ] Step 2: `SmartChart` 明确拆成 `marketSeries` 与 `predictionOverlay` 两个输入。`marketSeries` 只接受现有 `getChartData` 返回；`PredictionOverlay` 只产出 ECharts 标注：anchor=`markPoint` + 锚点 bar 背景 `markArea`，entry/stop/T1/T2=`markLine`，neutral range/zones=`markArea`。状态为 invalidated/resolved 时只改变线型、颜色和 label 后缀，不改历史行情。
-- [ ] Step 3: `chart_ref`/URL 深链只传 `predictionId`，前端通过受鉴权 API 读取 09 D-0 已校验归档的 prediction；禁止把完整 prediction 或行情数组塞进 URL。加载失败时仍渲染真实行情，并显示「AI 标注暂不可用」。
-- [ ] Step 4: vitest 覆盖 anchor 精确落在对应时间点、四类价位 label、neutral range、越权/404 prediction 降级，以及「AI 标注」与真实数据 SourceBadge 同时可辨识。
-- [ ] 验收: 浏览器 Network 中行情请求与 prediction 请求可独立观察；关闭 AI overlay 后 OHLC 图不重取、不变形；诱导模型生成伪 K 线数组不能改变 ECharts 行情 series。
-- [ ] Commit: `feat(charts): render validated AI predictions as overlays on immutable real market series`
+- [x] Step 1: 写失败测试，构造同一份真实 OHLC 响应与两份不同 prediction，断言 candle/line series 的 `data` 逐项完全相同，只有 overlay 的 `markLine/markPoint/markArea` 改变；prediction 中即使夹带 `bars/series/data` 字段也必须被解析层丢弃。
+- [x] Step 2: `SmartChart` 明确拆成 `marketSeries` 与 `predictionOverlay` 两个输入。`marketSeries` 只接受现有 `getChartData` 返回；`PredictionOverlay` 只产出 ECharts 标注：anchor=`markPoint` + 锚点 bar 背景 `markArea`，entry/stop/T1/T2=`markLine`，neutral range/zones=`markArea`。状态为 invalidated/resolved 时只改变线型、颜色和 label 后缀，不改历史行情。
+- [x] Step 3: `chart_ref`/URL 深链只传 `predictionId`，前端通过受鉴权 API 读取 09 D-0 已校验归档的 prediction；禁止把完整 prediction 或行情数组塞进 URL。加载失败时仍渲染真实行情，并显示「AI 标注暂不可用」。
+- [x] Step 4: vitest 覆盖 anchor 精确落在对应时间点、四类价位 label、neutral range、越权/404 prediction 降级，以及「AI 标注」与真实数据 SourceBadge 同时可辨识。
+- [x] 验收: 浏览器 Network 中行情请求与 prediction 请求可独立观察；关闭 AI overlay 后 OHLC 图不重取、不变形；诱导模型生成伪 K 线数组不能改变 ECharts 行情 series。
+- [x] Commit: `feat(charts): render validated AI predictions as overlays on immutable real market series`
 
 ---
 

@@ -9,12 +9,18 @@
  *
  * Graceful degradation: JSON parse failures or missing data → silent skip.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
+import { apiClient } from '../api/client';
 import { useChartTheme, type ChartTheme } from '../hooks/useChartTheme';
 import { useDashboardStore } from '../store/dashboardStore';
+import { applyPredictionOverlay } from './charts/PredictionOverlay';
 import { SourceBadge } from './ui/SourceBadge';
+import {
+  loadPredictionOverlay,
+  type PredictionOverlay,
+} from '../types/chartPrediction';
 import type {
   ChartPoint,
   DashboardData,
@@ -1697,6 +1703,12 @@ function buildOption(
 
 interface SmartChartRendererProps {
   block: SmartChartBlock;
+  /** 真实行情输入；传入时优先于 store 中的 ref 数据。 */
+  marketSeries?: SmartChartData;
+  /** 已由调用方取得并白名单解析的 AI 标注。 */
+  predictionOverlay?: PredictionOverlay | null;
+  /** 深链只携带 id；组件通过受鉴权 API 读取完整标注。 */
+  predictionId?: string | null;
 }
 
 const DENSE_SERIES_TYPES = new Set<SmartChartType>([
@@ -1724,9 +1736,43 @@ export function getSmartChartRenderer(type: SmartChartType, data: SmartChartData
   return DENSE_SERIES_TYPES.has(type) && getSmartChartPointCount(data) > 200 ? 'canvas' : 'svg';
 }
 
-export function SmartChartRenderer({ block }: SmartChartRendererProps) {
+export function SmartChartRenderer({
+  block,
+  marketSeries,
+  predictionOverlay,
+  predictionId,
+}: SmartChartRendererProps) {
   const theme = useChartTheme();
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const [remotePrediction, setRemotePrediction] = useState<PredictionOverlay | null>(null);
+  const [predictionUnavailable, setPredictionUnavailable] = useState(false);
+  const [overlayEnabled, setOverlayEnabled] = useState(true);
+
+  useEffect(() => {
+    setOverlayEnabled(true);
+    setPredictionUnavailable(false);
+    setRemotePrediction(null);
+    if (!predictionId || predictionOverlay) return;
+
+    let cancelled = false;
+    loadPredictionOverlay(predictionId, block.symbol, apiClient.getPrediction)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'unavailable') {
+          setPredictionUnavailable(true);
+          return;
+        }
+        setRemotePrediction(result.overlay);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [block.symbol, predictionId, predictionOverlay]);
+
+  const effectivePrediction = overlayEnabled
+    ? (predictionOverlay ?? remotePrediction)
+    : null;
 
   const chart = useMemo(() => {
     // 防御性边界：即使调用方忘了分流，模型生成的价格数组也绝不进入 ECharts。
@@ -1736,18 +1782,21 @@ export function SmartChartRenderer({ block }: SmartChartRendererProps) {
     if (block.mode === 'inline' && block.dataJson) {
       data = parseInlineData(block.dataJson);
     } else if (block.mode === 'ref') {
-      data = resolveRefData(
-        block.source ?? '',
-        block.fields ?? '',
-        dashboardData,
-      );
+      data = marketSeries ?? resolveRefData(
+          block.source ?? '',
+          block.fields ?? '',
+          dashboardData,
+        );
     }
 
     if (!data) return null;
-    const option = buildOption(block.type, data, block.title, theme);
-    if (!option) return null;
+    const marketOption = buildOption(block.type, data, block.title, theme);
+    if (!marketOption) return null;
+    const option = block.mode === 'ref'
+      ? applyPredictionOverlay(marketOption, effectivePrediction, data.labels)
+      : marketOption;
     return { option, renderer: getSmartChartRenderer(block.type, data) };
-  }, [block, dashboardData, theme]);
+  }, [block, dashboardData, effectivePrediction, marketSeries, theme]);
 
   if (!chart) return null;
 
@@ -1759,13 +1808,36 @@ export function SmartChartRenderer({ block }: SmartChartRendererProps) {
 
   return (
     <div className="relative my-3 p-3 bg-fin-card rounded-lg border border-fin-border">
-      <SourceBadge
-        className="absolute right-3 top-2 z-10"
-        synthetic={provenance.synthetic}
-        source={sourceMeta?.provider ?? provenance.source}
-        asOf={provenance.asOf ?? sourceMeta?.as_of}
-        degraded={sourceMeta?.fallback_used}
-      />
+      <div className="absolute right-3 top-2 z-10 flex items-center gap-2">
+        <SourceBadge
+          synthetic={provenance.synthetic}
+          source={sourceMeta?.provider ?? provenance.source}
+          asOf={provenance.asOf ?? sourceMeta?.as_of}
+          degraded={sourceMeta?.fallback_used}
+        />
+        {effectivePrediction && (
+          <button
+            type="button"
+            className="inline-flex items-center rounded border border-t-warning/50 px-1 text-2xs font-mono text-t-warning hover:bg-t-warning/10"
+            onClick={() => setOverlayEnabled(false)}
+            title="关闭 AI 标注；真实行情不会重新请求或改变"
+          >
+            AI标注 · 关闭
+          </button>
+        )}
+        {!effectivePrediction && (remotePrediction || predictionOverlay) && (
+          <button
+            type="button"
+            className="inline-flex items-center rounded border border-t-border px-1 text-2xs font-mono text-t-text3 hover:text-t-text1"
+            onClick={() => setOverlayEnabled(true)}
+          >
+            AI标注 · 开启
+          </button>
+        )}
+        {predictionUnavailable && (
+          <span className="text-2xs font-mono text-t-warning">AI 标注暂不可用</span>
+        )}
+      </div>
       <ReactECharts
         option={chart.option}
         style={{ width: '100%', height }}

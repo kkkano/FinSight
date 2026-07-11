@@ -8,6 +8,12 @@ import {
   parseSmartChartBlocks,
   resolveRealPriceChartRequest,
 } from './SmartChart';
+import { applyPredictionOverlay, buildPredictionAnnotations } from './charts/PredictionOverlay';
+import {
+  loadPredictionOverlay,
+  normalizePredictionOverlay,
+  type PredictionOverlay,
+} from '../types/chartPrediction';
 
 describe('parseSmartChartBlocks', () => {
   it('accepts extended chart types and caps smart charts at four per message', () => {
@@ -94,5 +100,91 @@ describe('getRenderableMessageContent', () => {
 
   it('removes chart markers after the message is finalized', () => {
     expect(getRenderableMessageContent(content, false)).toBe('streaming text');
+  });
+});
+
+describe('prediction overlay isolation', () => {
+  const rawPrediction = {
+    prediction_id: 'pred-1',
+    symbol: 'AAPL',
+    direction: 'long',
+    anchor: { timeframe: '1d', time: '2026-07-10', price: 103 },
+    entry: 104,
+    stop: 98,
+    target1: 112,
+    target2: 118,
+    status: 'open',
+    bars: [{ close: 999999 }],
+    series: [{ data: [999999] }],
+    data: [999999],
+  };
+
+  it('drops prediction-provided market arrays and keeps every real series data item immutable', () => {
+    const first = normalizePredictionOverlay(rawPrediction, 'AAPL');
+    const second = normalizePredictionOverlay({ ...rawPrediction, prediction_id: 'pred-2', entry: 106 }, 'AAPL');
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(first).not.toHaveProperty('bars');
+    expect(first).not.toHaveProperty('series');
+    expect(first).not.toHaveProperty('data');
+
+    const candleData = [[100, 101, 99, 102], [101, 103, 100, 104]];
+    const volumeData = [1000, 1200];
+    const marketOption = {
+      series: [
+        { name: '真实 K 线', type: 'candlestick', data: candleData },
+        { name: '真实成交量', type: 'bar', data: volumeData },
+      ],
+    };
+    const labels = ['2026-07-09', '2026-07-10'];
+    const firstOption = applyPredictionOverlay(marketOption, first, labels);
+    const secondOption = applyPredictionOverlay(marketOption, second, labels);
+
+    expect(firstOption.series?.map((series) => series.data)).toEqual([candleData, volumeData]);
+    expect(secondOption.series?.map((series) => series.data)).toEqual([candleData, volumeData]);
+    expect(firstOption.series?.[0]?.data).toBe(candleData);
+    expect(secondOption.series?.[0]?.data).toBe(candleData);
+    expect(firstOption.series?.[0]?.markLine).not.toEqual(secondOption.series?.[0]?.markLine);
+  });
+
+  it('anchors exactly by time and emits price lines plus neutral/zones areas', () => {
+    const prediction: PredictionOverlay = {
+      predictionId: 'pred-neutral',
+      symbol: 'AAPL',
+      direction: 'neutral',
+      anchor: { timeframe: '1d', time: '2026-07-10', price: 103 },
+      entry: 104,
+      stop: 98,
+      target1: 112,
+      target2: 118,
+      range: { low: 99, high: 108 },
+      zones: [{ low: 101, high: 102, label: '观察区' }],
+      status: 'invalidated',
+    };
+    const annotations = buildPredictionAnnotations(prediction, ['7/9/2026', '7/10/2026', '7/11/2026']);
+    const markPoint = annotations.markPoint as { data: Array<{ coord: [string, number] }> };
+    const markLine = annotations.markLine as { data: Array<{ label: { formatter: string }; lineStyle: { type: string } }> };
+    const markArea = annotations.markArea as { data: unknown[] };
+
+    expect(markPoint.data[0]?.coord).toEqual(['7/10/2026', 103]);
+    expect(markLine.data.map((line) => line.label.formatter)).toEqual([
+      '入场 104 · 已失效',
+      '止损 98 · 已失效',
+      'T1 112 · 已失效',
+      'T2 118 · 已失效',
+    ]);
+    expect(markLine.data.every((line) => line.lineStyle.type === 'dashed')).toBe(true);
+    expect(markArea.data).toHaveLength(3);
+  });
+
+  it('degrades 404, unauthorized and symbol-mismatch responses without an overlay', async () => {
+    await expect(loadPredictionOverlay('missing', 'AAPL', async () => {
+      throw new Error('404');
+    })).resolves.toEqual({ status: 'unavailable', overlay: null });
+
+    await expect(loadPredictionOverlay('other-user', 'AAPL', async () => ({
+      ...rawPrediction,
+      symbol: 'MSFT',
+    }))).resolves.toEqual({ status: 'unavailable', overlay: null });
   });
 });

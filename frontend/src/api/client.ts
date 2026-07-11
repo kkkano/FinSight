@@ -14,6 +14,7 @@ import { backtestApi } from './domains/backtest';
 import { configApi } from './domains/config';
 import { systemApi } from './domains/system';
 import { ragApi } from './domains/rag';
+import { predictionsApi } from './domains/predictions';
 
 export const apiClient = {
   ...chatApi,
@@ -27,4 +28,5 @@ export const apiClient = {
   ...configApi,
   ...systemApi,
   ...ragApi,
+  ...predictionsApi,
 };

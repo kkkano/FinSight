@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useDashboardInsights } from '../hooks/useDashboardInsights';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -20,6 +21,8 @@ import { DataSourceTrace } from '../components/dashboard/DataSourceTrace';
 import { useStore } from '../store/useStore';
 import { useToast } from '../components/ui';
 import { useMarketQuotes } from '../hooks/useMarketQuotes';
+import { SmartChartRenderer, type SmartChartBlock } from '../components/SmartChart';
+import { getPredictionIdFromSearch } from '../components/chatChartIntent';
 
 interface DashboardProps {
   initialSymbol?: string;
@@ -39,7 +42,9 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   const { theme, setTheme, entryMode, authIdentity } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const lastErrorRef = useRef<string | null>(null);
+  const predictionId = getPredictionIdFromSearch(searchParams.toString());
 
   const [clock, setClock] = useState<string>(formatClock());
   const [currentSymbol, setCurrentSymbol] = useState<string>(
@@ -104,6 +109,14 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   const snapshot = dashboardData?.snapshot ?? {};
   const charts = dashboardData?.charts ?? {};
   const valuation = dashboardData?.valuation ?? null;
+  const predictionChartBlock = useMemo<SmartChartBlock>(() => ({
+    mode: 'ref',
+    type: 'line',
+    title: `${currentSymbol} 真实行情与 AI 标注`,
+    symbol: currentSymbol,
+    source: 'market_chart',
+    fields: 'close',
+  }), [currentSymbol]);
 
   const isTerminalStyle = theme === 'dark';
   const sessionText = authIdentity?.email || (entryMode === 'anonymous' ? 'ANON' : 'GUEST');
@@ -296,6 +309,15 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
             ticker={activeAsset?.symbol || currentSymbol}
             loading={isLoading && !dashboardData}
           />
+
+          {predictionId && (
+            <div className="shrink-0 px-5 max-lg:px-3">
+              <SmartChartRenderer
+                block={predictionChartBlock}
+                predictionId={predictionId}
+              />
+            </div>
+          )}
 
           <DashboardTabs />
 
