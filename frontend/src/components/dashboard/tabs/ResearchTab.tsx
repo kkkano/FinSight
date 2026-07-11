@@ -473,7 +473,7 @@ export function ResearchTab() {
         />
 
         <div
-          className="rounded-xl border border-fin-border bg-fin-card px-4 py-4"
+          className="rounded-lg border border-fin-border bg-fin-card px-4 py-4"
           data-testid="research-empty-state"
           data-state={runningState ? 'running' : blockedState ? 'blocked' : 'empty'}
         >
@@ -567,7 +567,7 @@ export function ResearchTab() {
         </div>
 
         <div
-          className="rounded-xl border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
+          className="rounded-lg border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
           data-testid="research-ticker-mismatch"
         >
           <div className="text-sm font-semibold text-fin-danger">
@@ -587,7 +587,7 @@ export function ResearchTab() {
         </div>
 
         <div
-          className="rounded-xl border border-fin-border bg-fin-card/60 px-4 py-6 text-sm text-fin-muted"
+          className="rounded-lg border border-fin-border bg-fin-card/60 px-4 py-6 text-sm text-fin-muted"
           data-testid="research-conclusion-disabled"
         >
           结论区已禁用：请先修复串票后再查看“综合评估 / 完整研究报告”。
@@ -615,7 +615,7 @@ export function ResearchTab() {
 
       {showLowGroundingBanner && (
         <div
-          className="rounded-xl border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100"
+          className="rounded-lg border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100"
           data-testid="research-grounding-warning"
         >
           <div className="font-medium">⚠ 证据溯源率偏低（{groundingRateText}）</div>
@@ -627,7 +627,7 @@ export function ResearchTab() {
 
       {qualityMissing.length > 0 && (
         <div
-          className="rounded-xl border border-fin-warning/40 bg-fin-warning/10 px-4 py-3"
+          className="rounded-lg border border-fin-warning/40 bg-fin-warning/10 px-4 py-3"
           data-testid="research-empty-state"
           data-state="quality-gap"
         >
@@ -667,7 +667,7 @@ export function ResearchTab() {
         onOpenScoreExplain={handleOpenScoreExplain}
       />
 
-      <div className="bg-fin-card rounded-xl border border-fin-border overflow-hidden">
+      <div className="bg-fin-card rounded-lg border border-fin-border overflow-hidden">
         <button
           type="button"
           onClick={() => setReportExpanded((prev) => !prev)}

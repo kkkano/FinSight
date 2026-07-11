@@ -168,9 +168,9 @@ export function FindingCard({
       }}
       data-testid="finding-card"
       data-status={finding.status}
-      className={`relative text-left w-full overflow-hidden rounded-xl border bg-fin-card pl-[15px] pr-4 py-3 transition-all cursor-pointer hover:shadow-md ${
+      className={`relative text-left w-full overflow-hidden rounded-lg border bg-fin-card pl-[15px] pr-4 py-3 transition-all cursor-pointer hover:border-t-accent/40 ${
         isNew
-          ? 'border-fin-primary/40 hover:border-fin-primary/60 shadow-sm'
+          ? 'border-fin-primary/40 hover:border-fin-primary/60'
           : 'border-fin-border hover:border-fin-primary/30'
       }`}
     >

@@ -7,13 +7,14 @@
  * - 挂载时加载 + 手动刷新
  * - kind badge：macro=紫 / earnings=琥珀 / dividend=绿
  * - 空 / 加载 / 错误态均简洁处理
- * - 样式与工作台其它卡片一致（bg-fin-card rounded-xl border border-fin-border）
+ * - 样式与工作台其它卡片一致（bg-fin-card rounded-lg border border-fin-border）
  */
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, RefreshCw } from 'lucide-react';
 
 import { apiClient } from '../../api/client';
 import type { MacroCalendarEvent } from '../../types/monitor';
+import { EmptyState } from '../ui';
 import { KIND_VISUAL, describeDaysUntil, groupByDate } from './macroCalendarHelpers';
 
 interface MacroCalendarPanelProps {
@@ -94,7 +95,7 @@ export function MacroCalendarPanel({ sessionId }: MacroCalendarPanelProps) {
   }, [load]);
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-fin-card border border-fin-border rounded-lg overflow-hidden">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-gradient-to-r from-purple-500/5 to-transparent">
         <div className="flex items-center gap-2">
@@ -127,9 +128,12 @@ export function MacroCalendarPanel({ sessionId }: MacroCalendarPanelProps) {
       {loading && events.length === 0 ? (
         <div className="py-6 text-center text-xs text-fin-muted">正在加载宏观日历...</div>
       ) : events.length === 0 ? (
-        <div className="py-6 text-center text-xs text-fin-muted px-4">
-          未来 {DAYS_AHEAD} 天暂无已确认日期的重要事件
-        </div>
+        <EmptyState
+          icon={CalendarClock}
+          message={`未来 ${DAYS_AHEAD} 天暂无已确认日期的重要事件`}
+          action={{ label: '刷新日历', onClick: () => void load() }}
+          className="px-4"
+        />
       ) : (
         <MacroEventTimeline events={events} />
       )}

@@ -118,7 +118,7 @@ export function AttributionPanel({ data, loading }: AttributionPanelProps) {
   );
 
   return (
-    <Card className="p-4 space-y-3 shadow-sm" data-testid="attribution-panel">
+    <Card className="p-4 space-y-3" data-testid="attribution-panel">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-fin-text">组合归因</div>

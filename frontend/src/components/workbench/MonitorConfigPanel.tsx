@@ -9,7 +9,7 @@ import { useState, type KeyboardEvent } from 'react';
 import { Pencil, Plus, Radio, Trash2, X } from 'lucide-react';
 
 import { useMonitorTargets } from '../../hooks/useMonitorTargets';
-import { useToast } from '../ui';
+import { EmptyState, useToast } from '../ui';
 import type { MonitorTarget, MonitorTargetType } from '../../types/monitor';
 import { ThresholdEditForm } from './ThresholdEditForm';
 import { NotificationSettings } from './NotificationSettings';
@@ -99,7 +99,7 @@ export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
     'min-w-0 px-2 py-1 text-xs rounded-lg border border-fin-border bg-fin-bg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary focus:ring-1 focus:ring-fin-primary/30';
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-fin-card border border-fin-border rounded-lg overflow-hidden">
       {/* 头部 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-gradient-to-r from-fin-primary/5 to-transparent">
         <div className="flex items-center gap-2">
@@ -182,9 +182,12 @@ export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
         {loading && targets.length === 0 ? (
           <div className="py-6 text-center text-xs text-fin-muted">正在加载监控配置...</div>
         ) : targets.length === 0 && !adding ? (
-          <div className="py-6 text-center text-xs text-fin-muted px-4">
-            暂无自定义监控，点击上方「添加监控」。
-          </div>
+          <EmptyState
+            icon={Radio}
+            message="暂无自定义监控；持仓标的仍会按默认规则自动监控。"
+            action={{ label: '添加监控', onClick: () => setAdding(true) }}
+            className="px-4"
+          />
         ) : (
           targets.map((target: MonitorTarget) => (
             <div key={target.id} data-testid={`monitor-target-${target.id}`}>

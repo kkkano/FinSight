@@ -106,7 +106,7 @@ export function OscillatorTable({ technicals }: OscillatorTableProps) {
 
   if (rows.length === 0) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
         <div className="text-xs font-medium text-fin-muted mb-3">震荡指标</div>
         <div className="text-sm text-fin-muted">--</div>
       </div>
@@ -114,7 +114,7 @@ export function OscillatorTable({ technicals }: OscillatorTableProps) {
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-3">震荡指标</div>
 
       {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}

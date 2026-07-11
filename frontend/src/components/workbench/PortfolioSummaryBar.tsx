@@ -41,7 +41,7 @@ export function PortfolioSummaryBar() {
   }, [data]);
 
   return (
-    <div className="flex items-center gap-6 px-4 py-2.5 bg-fin-card border border-fin-border rounded-xl overflow-x-auto scrollbar-hide">
+    <div className="flex items-center gap-6 px-4 py-2.5 bg-fin-card border border-fin-border rounded-lg overflow-x-auto scrollbar-hide">
       {metrics.map((metric) => (
         <div key={metric.label} className="flex items-center gap-2 whitespace-nowrap">
           <span className="text-fin-text-secondary">{metric.icon}</span>

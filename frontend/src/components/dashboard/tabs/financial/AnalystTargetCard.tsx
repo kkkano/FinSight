@@ -133,7 +133,7 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
 
   if (!option && !recBar) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
         <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
           分析师目标价
           <CardInfoTip content="来源：yfinance 分析师目标价预测 + 评级分布" />

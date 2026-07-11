@@ -9,7 +9,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, TrendingDown, TrendingUp } from 'lucide-react';
 
-import { Skeleton } from '../ui';
+import { EmptyState, Skeleton } from '../ui';
 import { formatCurrency } from '../../utils/format';
 import {
   usePortfolioPerformance,
@@ -23,6 +23,7 @@ import type { PortfolioSummaryResponse } from '../../api/client';
 interface PortfolioPerformanceProps {
   data: PortfolioSummaryResponse | null;
   loading: boolean;
+  onAddPosition?: () => void;
 }
 
 // --- Sort helpers ---
@@ -138,15 +139,6 @@ function SummaryFooter({ summary }: { summary: PerformanceSummary }) {
   );
 }
 
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-8 gap-2">
-      <TrendingUp size={28} className="text-fin-muted/40" />
-      <div className="text-xs text-fin-muted">暂无持仓数据，请先添加持仓</div>
-    </div>
-  );
-}
-
 function LoadingSkeleton() {
   return (
     <div className="space-y-2 p-4">
@@ -159,7 +151,7 @@ function LoadingSkeleton() {
 
 // --- Main component ---
 
-export function PortfolioPerformance({ data, loading }: PortfolioPerformanceProps) {
+export function PortfolioPerformance({ data, loading, onAddPosition }: PortfolioPerformanceProps) {
   const { rows, summary, isEmpty } = usePortfolioPerformance(data);
 
   const [sortKey, setSortKey] = useState<SortKey>('marketValue');
@@ -177,7 +169,7 @@ export function PortfolioPerformance({ data, loading }: PortfolioPerformanceProp
   const sorted = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden">
+    <div className="bg-fin-card border border-fin-border rounded-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border">
         <div className="flex items-center gap-2">
@@ -210,7 +202,13 @@ export function PortfolioPerformance({ data, loading }: PortfolioPerformanceProp
       {/* Body */}
       {loading && <LoadingSkeleton />}
 
-      {!loading && isEmpty && <EmptyState />}
+      {!loading && isEmpty && (
+        <EmptyState
+          icon={TrendingUp}
+          message="暂无持仓数据，请先录入持仓后查看收益。"
+          action={onAddPosition ? { label: '添加持仓', onClick: onAddPosition } : null}
+        />
+      )}
 
       {!loading && !isEmpty && (
         <div className="overflow-x-auto scrollbar-hide">

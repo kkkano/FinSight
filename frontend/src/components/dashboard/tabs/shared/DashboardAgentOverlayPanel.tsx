@@ -38,7 +38,7 @@ export function DashboardAgentOverlayPanel({
   return (
     <div className={`space-y-3 ${className}`}>
       <div
-        className={`rounded-xl border p-4 ${
+        className={`rounded-lg border p-4 ${
           isError
             ? 'border-fin-danger/40 bg-fin-danger/10'
             : 'border-fin-primary/30 bg-fin-primary/5'

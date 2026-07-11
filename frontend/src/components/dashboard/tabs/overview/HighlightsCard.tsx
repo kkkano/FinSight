@@ -111,7 +111,7 @@ export function HighlightsCard({ valuation, technicals, reportData }: Highlights
   }, [valuation, technicals, reportData]);
 
   return (
-    <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         多空亮点
         <CardInfoTip content="基于均线、RSI、MACD 等技术指标自动判别多空因子" />

@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import { Loader2, RadarIcon, RefreshCw } from 'lucide-react';
 
 import { useFindings } from '../../hooks/useFindings';
+import { EmptyState } from '../ui';
 import { FindingCard } from './FindingCard';
 
 interface FindingsFeedProps {
@@ -41,7 +42,7 @@ export function FindingsFeed({
   );
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-fin-card border border-fin-border rounded-lg overflow-hidden">
       {/* 头部 */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-fin-border bg-gradient-to-r from-fin-primary/5 to-transparent flex-wrap">
         <div className="flex items-center gap-2">
@@ -120,17 +121,16 @@ export function FindingsFeed({
             正在加载发现流...
           </div>
         ) : visibleFindings.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center py-10 gap-2 text-center"
-            data-testid="findings-empty"
-          >
-            <RadarIcon size={28} className="text-fin-muted/40" />
-            <div className="text-xs text-fin-muted max-w-xs leading-relaxed">
-              {filter === 'unread'
-                ? '没有未读发现，agent 盯盘正常。'
-                : 'Agent 正在盯盘中，暂无异常发现。持仓有价格异动 / 集中度风险时会在这里提醒你。'}
-            </div>
-          </div>
+          <EmptyState
+            icon={RadarIcon}
+            message={filter === 'unread'
+              ? '没有未读发现，Agent 盯盘正常。'
+              : 'Agent 正在盯盘，当前没有价格异动或集中度风险。'}
+            action={filter === 'unread'
+              ? { label: '查看全部发现', onClick: () => setFilter('all') }
+              : { label: '立即扫描', onClick: () => void scan() }}
+            className="py-10"
+          />
         ) : (
           visibleFindings.map((finding) => (
             <FindingCard

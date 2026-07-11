@@ -305,7 +305,7 @@ export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
   const diagnostics = useMemo(() => buildDiagnostics(rows, reportData), [rows, reportData]);
 
   return (
-    <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-fin-muted flex items-center gap-1">
           Agent 执行总览

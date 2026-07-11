@@ -25,7 +25,7 @@ export function ResearchOverviewBar({
   // 加载中骨架
   if (loading && !overview) {
     return (
-      <div className="bg-fin-card rounded-xl border border-fin-border p-5 animate-pulse">
+      <div className="bg-fin-card rounded-lg border border-fin-border p-5 animate-pulse">
         <div className="flex items-center gap-5">
           <div className="w-16 h-16 rounded-full bg-fin-border" />
           <div className="flex-1 space-y-2">
@@ -48,7 +48,7 @@ export function ResearchOverviewBar({
         : 'text-fin-danger';
 
   return (
-    <div className="bg-fin-card rounded-xl border border-fin-border p-5">
+    <div className="bg-fin-card rounded-lg border border-fin-border p-5">
       <div className="flex items-center gap-5">
         {/* 大号评分环 */}
         <InsightScoreRing score={overview.score} size={64} />

@@ -107,7 +107,7 @@ export function PortfolioPieChart({ positions, totalValue }: PortfolioPieChartPr
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-2">持仓分布</div>
       <ReactECharts
         option={option}

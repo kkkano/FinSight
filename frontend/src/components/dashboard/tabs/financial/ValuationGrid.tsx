@@ -49,7 +49,7 @@ export function ValuationGrid({ valuation }: ValuationGridProps) {
   const metrics = buildMetrics(valuation);
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-3">估值指标</div>
 
       <div className="grid grid-cols-3 gap-3">

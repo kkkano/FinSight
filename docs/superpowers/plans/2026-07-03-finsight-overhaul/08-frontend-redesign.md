@@ -424,10 +424,10 @@ export const terminalChartTheme = {
 **Files:**
 - Modify: `frontend/src/pages/Dashboard.tsx` + `components/dashboard/tabs/*.tsx`、`frontend/src/pages/Workbench.tsx` + `components/workbench/*.tsx`
 
-- [ ] Step 1: 全部卡片换 Task 2 Card 规格（`grep -rn "rounded-xl\|shadow-lg\|shadow-md" src/pages src/components/dashboard src/components/workbench` 清零）；数值展示全部换 Stat 组件（自动获得 tabular-nums 与 ▲▼）。
-- [ ] Step 2: Dashboard 顶栏改"终端行情条"：symbol + 现价（`num text-2xl`）+ 涨跌 Stat + SourceBadge 一行排布，右侧 tab 切换；AI 洞察评分环颜色走 t token，卡片标注「AI 评分 · 置信度 xx%」。
-- [ ] Step 3: Workbench 卡片同规格；空态全部换 EmptyState（带动作，如晨报空 →「生成今日晨报」按钮）——信息架构重排在 09 文档 C-11，此处只换皮肤。
-- [ ] Step 4: 每 tab 截图。Commit: `feat(pages): dashboard & workbench on TERMINAL card/stat spec, actionable empty states`
+- [x] Step 1: 全部卡片换 Task 2 Card 规格（`grep -rn "rounded-xl\|shadow-lg\|shadow-md" src/pages src/components/dashboard src/components/workbench` 清零）；数值展示全部换 Stat 组件（自动获得 tabular-nums 与 ▲▼）。
+- [x] Step 2: Dashboard 顶栏改"终端行情条"：symbol + 现价（`num text-2xl`）+ 涨跌 Stat + SourceBadge 一行排布，右侧 tab 切换；AI 洞察评分环颜色走 t token，卡片标注「AI 评分 · 置信度 xx%」。
+- [x] Step 3: Workbench 卡片同规格；空态全部换 EmptyState（带动作，如晨报空 →「生成今日晨报」按钮）——信息架构重排在 09 文档 C-11，此处只换皮肤。
+- [x] Step 4: 每 tab 截图。Commit: `feat(pages): dashboard & workbench on TERMINAL card/stat spec, actionable empty states`
 
 ---
 

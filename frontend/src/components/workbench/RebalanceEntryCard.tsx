@@ -68,7 +68,7 @@ export function RebalanceEntryCard() {
   if (!suggestion && !showDetails) {
     return (
       <div className="space-y-3">
-        <Card className="p-4 shadow-sm">
+        <Card className="p-4">
           <div className="flex items-center gap-2 mb-3 text-fin-text font-semibold text-sm">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-fin-primary/10 text-fin-primary">
               <Scale size={15} />
@@ -107,7 +107,7 @@ export function RebalanceEntryCard() {
   // Suggestion exists — show summary preview or full details
   if (suggestion && !showDetails) {
     return (
-      <Card className="p-4 space-y-3 shadow-sm">
+      <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2 text-fin-text font-semibold text-sm">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-fin-primary/10 text-fin-primary">
             <Scale size={15} />

@@ -129,7 +129,7 @@ export function AnalystRatingCard({ technicals, reportData }: AnalystRatingCardP
   const style = SIGNAL_STYLES[rating.signal];
 
   return (
-    <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         综合信号
         <CardInfoTip content="基于 MA 交叉、RSI、MACD 信号综合判断多空共识" />

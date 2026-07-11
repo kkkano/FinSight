@@ -5,7 +5,7 @@
  */
 export function InsightSkeleton() {
   return (
-    <div className="bg-fin-card rounded-xl border border-fin-border p-4 animate-pulse">
+    <div className="bg-fin-card rounded-lg border border-fin-border p-4 animate-pulse">
       {/* Header row */}
       <div className="flex items-center gap-3 mb-3">
         <div className="w-10 h-10 rounded-full bg-fin-border" />

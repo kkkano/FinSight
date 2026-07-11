@@ -28,7 +28,7 @@ export function NewsTimeRange({ activeRange, onRangeChange }: NewsTimeRangeProps
             onClick={() => onRangeChange(key)}
             className={`px-2 py-0.5 rounded text-2xs font-medium transition-colors ${
               isActive
-                ? 'bg-fin-card text-fin-text shadow-sm'
+                ? 'bg-fin-card text-fin-text'
                 : 'text-fin-muted hover:text-fin-text'
             }`}
           >

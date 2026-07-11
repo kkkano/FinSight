@@ -173,7 +173,7 @@ export function FearGreedGauge({ reportData, macroSnapshot }: FearGreedGaugeProp
   const summaryText = fearGreed.summary || '暂无 macro_agent 摘要';
 
   return (
-    <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-fin-muted flex items-center gap-1">
           市场情绪（Fear &amp; Greed）

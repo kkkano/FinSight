@@ -65,7 +65,7 @@ export function BollingerVolumeCard({ technicals }: BollingerVolumeCardProps) {
   const { position, pct } = getBollingerPosition(close, upper, lower);
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-3">布林带 & 成交量</div>
 
       {/* Bollinger Bands */}

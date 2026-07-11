@@ -109,7 +109,7 @@ export function KeyInsightsCard({ valuation, technicals, news, reportData, insig
   }, [valuation, technicals, news, reportData, insightPoints]);
 
   return (
-    <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         关键洞察
         <CardInfoTip content="优先级：AI 洞察 > 研报核心观点 > 规则自动生成" />

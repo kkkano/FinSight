@@ -176,7 +176,7 @@ export function SupportResistanceChart({ technicals, marketChart }: SupportResis
 
   if (!option) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
         <div className="text-xs font-medium text-fin-muted mb-3">支撑/阻力位</div>
         <div className="text-sm text-fin-muted">暂无K线数据</div>
       </div>

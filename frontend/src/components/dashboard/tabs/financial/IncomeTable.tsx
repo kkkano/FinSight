@@ -68,7 +68,7 @@ export function IncomeTable({ financials }: IncomeTableProps) {
 
   if (!financials || periods.length === 0) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
         <div className="text-xs font-medium text-fin-muted mb-3">利润表</div>
         <div className="text-sm text-fin-muted">--</div>
       </div>
@@ -76,7 +76,7 @@ export function IncomeTable({ financials }: IncomeTableProps) {
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border overflow-x-auto">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border overflow-x-auto">
       <div className="text-xs font-medium text-fin-muted mb-3">利润表</div>
 
       <table className="w-full text-2xs">

@@ -513,7 +513,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
       {/* 右键菜单 */}
       {contextMenu && (
         <div
-          className="fixed z-50 bg-fin-card border border-fin-border rounded-lg shadow-lg py-1 min-w-[140px]"
+          className="fixed z-50 bg-fin-card border border-fin-border rounded-lg shadow-[var(--t-shadow-card)] py-1 min-w-[140px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <Button

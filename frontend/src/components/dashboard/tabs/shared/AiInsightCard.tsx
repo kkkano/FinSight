@@ -199,7 +199,7 @@ export function AiInsightCard({
   // Error state (no cached insight available)
   if (error && !insight) {
     return (
-      <div className="bg-fin-card rounded-xl border border-fin-border p-4">
+      <div className="bg-fin-card rounded-lg border border-fin-border p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-fin-muted text-sm">
             <span>{icon}</span>
@@ -219,7 +219,7 @@ export function AiInsightCard({
   if (!insight) {
     if (!onDeepDive) return null;
     return (
-      <div className="bg-fin-card rounded-xl border border-fin-border p-4">
+      <div className="bg-fin-card rounded-lg border border-fin-border p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-fin-muted text-sm">
             <span>{icon}</span>
@@ -257,7 +257,7 @@ export function AiInsightCard({
 
   return (
     <div
-      className={`bg-fin-card rounded-xl border p-4 transition-all duration-300 ${
+      className={`bg-fin-card rounded-lg border p-4 transition-all duration-300 ${
         stale ? 'border-fin-border/50 opacity-90' : 'border-fin-border'
       }`}
     >
@@ -284,8 +284,8 @@ export function AiInsightCard({
             >
               {insight.score_label}
             </span>
-            <span className="text-2xs text-fin-muted bg-fin-border/30 px-1.5 py-0.5 rounded">
-              {insight.model_generated ? '快速评分' : '规则评分'}
+            <span className="text-2xs text-t-text3 bg-t-elevated px-1.5 py-0.5 rounded">
+              {insight.model_generated ? 'AI 评分' : '规则评分'} · 置信度 {Math.round(insight.confidence * 100)}%
             </span>
           </div>
         </div>

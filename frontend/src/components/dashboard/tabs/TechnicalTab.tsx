@@ -65,7 +65,7 @@ export function TechnicalTab() {
 
       {/* K-line chart with support/resistance — full width */}
       {!technicals && technicalsFallbackReason && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
           <div className="text-xs font-semibold text-amber-200">技术面数据暂不可用</div>
           <div className="mt-1 text-2xs text-amber-100/90">原因：{technicalsFallbackReason}</div>
           <div className="mt-1 text-2xs text-amber-100/80">

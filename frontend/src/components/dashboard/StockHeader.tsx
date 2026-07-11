@@ -11,7 +11,8 @@ import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
 import { formatMarketCapForMarket, formatPriceForMarket } from '../../utils/format';
-import { useToast } from '../ui';
+import { Stat, useToast } from '../ui';
+import { DashboardSourceBadge } from './DashboardSourceBadge';
 import { MiniPriceChart } from './tabs/overview/MiniPriceChart';
 
 // --- Props ---
@@ -34,6 +35,16 @@ const getLastClose = (charts: Record<string, ChartPoint[]>): number | null => {
   if (!Array.isArray(marketChart) || marketChart.length === 0) return null;
   const last = marketChart[marketChart.length - 1];
   return last?.close ?? last?.value ?? null;
+};
+
+const getPriceChange = (charts: Record<string, ChartPoint[]>): { value: number; text: string } | null => {
+  const points = charts?.market_chart;
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const current = points[points.length - 1]?.close ?? points[points.length - 1]?.value;
+  const previous = points[points.length - 2]?.close ?? points[points.length - 2]?.value;
+  if (typeof current !== 'number' || typeof previous !== 'number' || previous === 0) return null;
+  const percent = ((current - previous) / previous) * 100;
+  return { value: percent, text: `${Math.abs(percent).toFixed(2)}%` };
 };
 
 // --- Component ---
@@ -108,15 +119,16 @@ export function StockHeader({
   // Derive price from snapshot or chart fallback
   const closePrice = snapshot?.index_level ?? snapshot?.nav ?? getLastClose(charts);
   const marketCap = valuation?.market_cap ?? null;
+  const priceChange = getPriceChange(charts);
 
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-3 bg-fin-card border-b border-fin-border shrink-0 max-lg:px-3 max-lg:flex-wrap max-lg:gap-2">
+    <div className="flex items-center justify-between gap-4 border-b border-t-border bg-t-surface px-5 py-3 shrink-0 max-lg:px-3 max-lg:flex-wrap max-lg:gap-2">
       {/* Left: Symbol info + Price */}
       <div className="flex items-center gap-4 min-w-0 max-lg:gap-2">
         {/* Symbol + Name */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-lg font-bold text-fin-text truncate">{displayName || ticker}</span>
-          <span className="text-2xs text-fin-muted bg-fin-bg-secondary px-2 py-0.5 rounded shrink-0 uppercase">
+          <span className="text-sm font-semibold text-t-text truncate">{displayName || ticker}</span>
+          <span className="text-2xs text-t-text3 bg-t-elevated px-2 py-0.5 rounded shrink-0 uppercase">
             {assetType}
           </span>
         </div>
@@ -127,15 +139,20 @@ export function StockHeader({
         ) : (
           <div className="flex items-center gap-3 shrink-0">
             {closePrice !== null && (
-              <span className="text-lg font-semibold text-fin-text tabular-nums">
-                {formatPriceForMarket(closePrice, ticker)}
-              </span>
+              <Stat
+                label={ticker}
+                value={formatPriceForMarket(closePrice, ticker)}
+                change={priceChange?.value}
+                changeText={priceChange?.text}
+                className="min-w-[92px]"
+              />
             )}
             {marketCap !== null && (
-              <span className="text-xs text-fin-muted">
+              <span className="num text-xs text-t-text3">
                 {formatMarketCapForMarket(marketCap, ticker)}
               </span>
             )}
+            <DashboardSourceBadge metaKey="market_chart" fallbackSource="yfinance" />
             {/* Mini sparkline */}
             {charts?.market_chart && charts.market_chart.length > 0 && (
               <MiniPriceChart data={charts.market_chart} />
@@ -189,7 +206,7 @@ export function StockHeader({
           type="button"
           onClick={handleDeepAnalysis}
           disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:border-t-accent/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRunning && runId ? (
             <Loader2 size={12} className="animate-spin" />

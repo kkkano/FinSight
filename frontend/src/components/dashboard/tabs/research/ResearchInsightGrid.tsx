@@ -71,7 +71,7 @@ function ResearchCard({
 
   return (
     <div
-      className={`bg-fin-card rounded-xl border p-4 flex flex-col transition-all duration-300 hover:border-fin-primary/30 ${
+      className={`bg-fin-card rounded-lg border p-4 flex flex-col transition-all duration-300 hover:border-fin-primary/30 ${
         stale ? 'border-fin-border/50 opacity-90' : 'border-fin-border'
       }`}
     >
@@ -193,7 +193,7 @@ export function ResearchInsightGrid({
   // 错误态
   if (error && !insights) {
     return (
-      <div className="bg-fin-card rounded-xl border border-fin-border p-6 text-center">
+      <div className="bg-fin-card rounded-lg border border-fin-border p-6 text-center">
         <p className="text-sm text-fin-muted">AI 洞察暂不可用</p>
         <p className="text-xs text-fin-muted/60 mt-1">{error}</p>
       </div>

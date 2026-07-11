@@ -131,7 +131,7 @@ export function TechnicalSummaryCard({ technicals }: TechnicalSummaryCardProps) 
   const style = VERDICT_STYLES[summary.verdict];
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-3">技术面综合评估</div>
 
       <div className="flex items-center gap-4 mb-4">

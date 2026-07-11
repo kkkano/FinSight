@@ -131,7 +131,7 @@ export function Workbench({
   return (
     <div className="space-y-4">
       {/* Breadcrumb / navigation bar */}
-      <Card className="px-4 py-3 shadow-sm">
+      <Card className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs text-fin-muted">
             {fromDashboard
@@ -160,7 +160,7 @@ export function Workbench({
         <div className="lg:col-span-2 space-y-4">
           {/* 晨报融入发现流：默认折叠，点击展开（DailyDigest 化） */}
           <details
-            className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden shadow-sm"
+            className="group rounded-lg border border-fin-border bg-fin-card overflow-hidden"
             data-testid="morning-brief-details"
           >
             <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-medium text-fin-text bg-gradient-to-r from-amber-500/5 to-transparent hover:bg-fin-hover/40 transition-colors">
@@ -209,7 +209,7 @@ export function Workbench({
           <div
             id="rebalance-card"
             data-testid="rebalance-card-anchor"
-            className={`rounded-xl transition-shadow duration-300 ${
+            className={`rounded-lg transition-shadow duration-300 ${
               rebalanceHighlight ? 'ring-2 ring-fin-primary ring-offset-2 ring-offset-fin-bg' : ''
             }`}
           >
@@ -219,6 +219,7 @@ export function Workbench({
           <PortfolioPerformance
             data={portfolioSummary.data}
             loading={portfolioSummary.loading}
+            onAddPosition={() => document.getElementById('portfolio-editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
           />
           <AttributionPanel
             data={portfolioSummary.data}
@@ -240,7 +241,7 @@ export function Workbench({
         </div>
       </div>
 
-      <Card className="p-4 space-y-3 shadow-sm" data-testid="workbench-report-view">
+      <Card className="p-4 space-y-3" data-testid="workbench-report-view">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fin-primary/10 text-fin-primary">
@@ -296,7 +297,7 @@ export function Workbench({
           <>
             {hasTickerMismatch && (
               <div
-                className="rounded-xl border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
+                className="rounded-lg border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
                 data-testid="workbench-report-ticker-mismatch"
               >
                 <div className="text-sm font-semibold text-fin-danger">
@@ -310,7 +311,7 @@ export function Workbench({
 
             {showQualityBlockedBanner && (
               <div
-                className="rounded-xl border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
+                className="rounded-lg border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
                 data-testid="workbench-report-quality-blocked"
               >
                 <div className="text-sm font-semibold text-fin-danger">
@@ -339,7 +340,7 @@ export function Workbench({
 
             {showLowGroundingBanner && (
               <div
-                className="rounded-xl border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100"
+                className="rounded-lg border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100"
                 data-testid="workbench-report-grounding-warning"
               >
                 <div className="font-medium">⚠ 证据溯源率偏低（{groundingRateText}）</div>
@@ -351,7 +352,7 @@ export function Workbench({
 
             {qualityMissing.length > 0 && (
               <div
-                className="rounded-xl border border-fin-warning/40 bg-fin-warning/10 px-4 py-3"
+                className="rounded-lg border border-fin-warning/40 bg-fin-warning/10 px-4 py-3"
                 data-testid="workbench-report-quality-gap"
               >
                 <div className="text-sm font-semibold text-fin-warning">证据不足（质量门槛未满足）</div>
@@ -379,7 +380,7 @@ export function Workbench({
 
             {verifierClaims.length > 0 && (
               <div
-                className="rounded-xl border border-fin-danger/40 bg-fin-danger/10 px-4 py-3"
+                className="rounded-lg border border-fin-danger/40 bg-fin-danger/10 px-4 py-3"
                 data-testid="workbench-report-verifier-gap"
               >
                 <div className="text-sm font-semibold text-fin-danger">
@@ -393,7 +394,7 @@ export function Workbench({
 
             {hasTickerMismatch ? (
               <div
-                className="rounded-xl border border-fin-border bg-fin-card/60 px-4 py-6 text-sm text-fin-muted"
+                className="rounded-lg border border-fin-border bg-fin-card/60 px-4 py-6 text-sm text-fin-muted"
                 data-testid="workbench-report-conclusion-disabled"
               >
                 结论区已禁用：请先修复串票后再查看完整深度报告。

@@ -89,7 +89,7 @@ export function ScoreRing({ valuation, technicals, reportData, insightScore }: S
     score >= 7 ? 'text-fin-success' : score >= 4 ? 'text-fin-warning' : 'text-fin-danger';
 
   return (
-    <div className="flex flex-col items-center justify-center p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col items-center justify-center p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         综合评分
         <CardInfoTip content="优先级：AI 洞察 > 研报评分 > 规则计算（PE + 趋势 + RSI + Beta）" />

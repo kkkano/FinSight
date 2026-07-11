@@ -22,10 +22,10 @@ export function InsightScoreRing({ score, size = 44 }: InsightScoreRingProps) {
     const p = clamped / 10;
     const c =
       clamped >= 7
-        ? 'text-fin-success'
+        ? 'text-t-up'
         : clamped >= 4
-          ? 'text-fin-warning'
-          : 'text-fin-danger';
+          ? 'text-t-warning'
+          : 'text-t-down';
     return { progress: p, color: c };
   }, [score]);
 

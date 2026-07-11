@@ -117,7 +117,7 @@ function NewsHighlightCard({ news }: { news: NewsItem[] }) {
   const items = news.slice(0, 4);
   if (items.length === 0) return null;
   return (
-    <div className="bg-fin-card rounded-xl border border-fin-border p-4">
+    <div className="bg-fin-card rounded-lg border border-fin-border p-4">
       <div className="text-xs font-medium text-fin-muted mb-2.5">近期新闻</div>
       <ul className="space-y-2">
         {items.map((item, i) => (
@@ -163,7 +163,7 @@ function PeerSnapshotCard({ peers, subjectSymbol }: { peers: PeerMetrics[]; subj
   const items = peers.slice(0, 4);
   if (items.length === 0) return null;
   return (
-    <div className="bg-fin-card rounded-xl border border-fin-border p-4">
+    <div className="bg-fin-card rounded-lg border border-fin-border p-4">
       <div className="text-xs font-medium text-fin-muted mb-2.5">同行对比</div>
       {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}
       <div className="overflow-x-auto scrollbar-hide">
@@ -237,7 +237,7 @@ export function OverviewTab() {
         onClick={() => deepDive.startDeepDive(
           '今天为什么涨/跌？请从①价格行为(涨跌幅/量价配合/动量) ②新闻催化事件 ③大盘与行业联动 ④技术面信号 ⑤资金流向 五个维度归因，按重要性排序，并附关键证据与置信度。',
         )}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-fin-primary/30 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/15 disabled:opacity-50 disabled:cursor-wait"
+        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border border-fin-primary/30 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/15 disabled:opacity-50 disabled:cursor-wait"
       >
         <span>📉</span>
         <span>{deepDive.isRunning ? '归因分析中…' : '今天为何涨跌？一键 Agent 归因'}</span>

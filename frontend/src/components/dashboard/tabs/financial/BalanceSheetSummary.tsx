@@ -93,7 +93,7 @@ export function BalanceSheetSummary({ financials }: BalanceSheetSummaryProps) {
   const items = useMemo(() => buildItems(financials), [financials]);
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-3">资产负债概要</div>
 
       <div className="grid grid-cols-2 gap-4">

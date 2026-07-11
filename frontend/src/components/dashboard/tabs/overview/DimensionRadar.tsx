@@ -210,7 +210,7 @@ export function DimensionRadar({
   );
 
   return (
-    <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="flex flex-col p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         分析维度覆盖
         <CardInfoTip content="未执行与失败会单独标注，不再与 0% 混淆。" />

@@ -64,7 +64,7 @@ export function MovingAverageTable({ technicals }: MovingAverageTableProps) {
 
   if (rows.length === 0) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
         <div className="text-xs font-medium text-fin-muted mb-3">均线指标</div>
         <div className="text-sm text-fin-muted">--</div>
       </div>
@@ -72,7 +72,7 @@ export function MovingAverageTable({ technicals }: MovingAverageTableProps) {
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-fin-muted">均线指标</span>
         {close != null && (

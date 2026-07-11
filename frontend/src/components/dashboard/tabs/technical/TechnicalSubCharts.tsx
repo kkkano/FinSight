@@ -155,7 +155,7 @@ export function TechnicalSubCharts({ indicatorSeries }: TechnicalSubChartsProps)
 
   if (!rsiOption && !macdOption) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
         <div className="text-xs font-medium text-fin-muted mb-3">RSI / MACD</div>
         <div className="text-sm text-fin-muted">暂无技术指标时间序列数据</div>
       </div>

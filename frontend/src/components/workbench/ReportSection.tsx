@@ -9,6 +9,7 @@ import type { ReportIndexItem } from '../../api/client';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
+import { EmptyState } from '../ui/EmptyState';
 import { ReportCompare } from './ReportCompare';
 
 /* ------------------------------------------------------------------ */
@@ -109,15 +110,6 @@ function ReportSkeleton() {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-6 text-fin-muted gap-2">
-      <Inbox size={28} strokeWidth={1.5} />
-      <span className="text-xs">暂无已收录研报</span>
     </div>
   );
 }
@@ -462,7 +454,16 @@ function ReportSection({ reports, loading, selectedReportId, onSelectReport }: R
       <div className="space-y-2 max-h-80 overflow-y-auto">
         {loading && <ReportSkeleton />}
 
-        {!loading && filtered.length === 0 && <EmptyState />}
+        {!loading && filtered.length === 0 && (
+          <EmptyState
+            icon={Inbox}
+            message={filter ? '没有匹配的研报' : '暂无已收录研报'}
+            action={filter
+              ? { label: '清除搜索', onClick: () => setFilter('') }
+              : { label: '去生成研报', onClick: () => navigate('/chat') }}
+            className="py-6"
+          />
+        )}
 
         {!loading &&
           groups.map((group) => (
