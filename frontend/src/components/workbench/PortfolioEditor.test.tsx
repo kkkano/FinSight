@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ToastProvider } from '../ui';
 import { PortfolioEditor } from './PortfolioEditor';
@@ -13,8 +14,14 @@ vi.mock('../../api/client', () => ({
   },
 }));
 
+const withProviders = (node: React.ReactElement) => (
+  <QueryClientProvider client={new QueryClient()}>
+    <ToastProvider>{node}</ToastProvider>
+  </QueryClientProvider>
+);
+
 const renderText = (node: React.ReactElement) =>
-  renderToStaticMarkup(<ToastProvider>{node}</ToastProvider>).replace(/\s+/g, ' ');
+  renderToStaticMarkup(withProviders(node)).replace(/\s+/g, ' ');
 
 function makeSummary(): PortfolioSummaryResponse {
   return {
@@ -70,9 +77,7 @@ describe('PortfolioEditor', () => {
 
   it('shows the header add button', () => {
     const html = renderToStaticMarkup(
-      <ToastProvider>
-        <PortfolioEditor data={makeSummary()} loading={false} onChanged={() => undefined} />
-      </ToastProvider>,
+      withProviders(<PortfolioEditor data={makeSummary()} loading={false} onChanged={() => undefined} />),
     );
     expect(html).toContain('portfolio-add-button');
     expect(html).toContain('添加持仓');

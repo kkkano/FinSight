@@ -200,7 +200,7 @@ export function Workbench({
           <PortfolioEditor
             data={portfolioSummary.data}
             loading={portfolioSummary.loading}
-            onChanged={() => void portfolioSummary.refresh()}
+            onChanged={portfolioSummary.refresh}
           />
           <MonitorConfigPanel sessionId={sessionId} />
           {/* 宏观日历：未来 14 天财报/分红/宏观事件时间线 */}

@@ -8,11 +8,16 @@
  * - 操作后刷新 summary
  */
 import { useCallback, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 
 import { apiClient, type PortfolioSummaryPosition, type PortfolioSummaryResponse } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../ui';
+import {
+  removePortfolioSummaryPosition,
+  upsertPortfolioSummaryPosition,
+} from './portfolioSummaryCache';
 import { formatCurrency } from '../../utils/format';
 import { PositionEditRow } from './PositionEditRow';
 
@@ -20,7 +25,7 @@ interface PortfolioEditorProps {
   data: PortfolioSummaryResponse | null;
   loading: boolean;
   /** 持仓变更后刷新 summary */
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
 }
 
 /** 盈亏配色 */
@@ -37,6 +42,7 @@ function formatPnl(value: number | null | undefined): string {
 
 export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorProps) {
   const sessionId = useStore((s) => s.sessionId);
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [adding, setAdding] = useState(false);
@@ -57,9 +63,13 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
       setSaving(true);
       try {
         await apiClient.updatePortfolioPosition(sessionId, normalized, shares, avgCost);
+        queryClient.setQueryData<PortfolioSummaryResponse>(
+          ['portfolio-summary', sessionId],
+          (current) => upsertPortfolioSummaryPosition(current, normalized, shares, avgCost),
+        );
         setAdding(false);
         setEditingTicker(null);
-        onChanged();
+        await onChanged();
       } catch (err) {
         const message = err instanceof Error ? err.message : '保存失败，请稍后重试';
         toast({ type: 'error', title: '保存持仓失败', message });
@@ -67,7 +77,7 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
         setSaving(false);
       }
     },
-    [sessionId, toast, onChanged],
+    [sessionId, toast, onChanged, queryClient],
   );
 
   /** 删除单条持仓 */
@@ -76,8 +86,12 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
       setSaving(true);
       try {
         await apiClient.deletePortfolioPosition(sessionId, ticker);
+        queryClient.setQueryData<PortfolioSummaryResponse>(
+          ['portfolio-summary', sessionId],
+          (current) => removePortfolioSummaryPosition(current, ticker),
+        );
         if (editingTicker === ticker) setEditingTicker(null);
-        onChanged();
+        await onChanged();
       } catch (err) {
         const message = err instanceof Error ? err.message : '删除失败，请稍后重试';
         toast({ type: 'error', title: '删除持仓失败', message });
@@ -85,7 +99,7 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
         setSaving(false);
       }
     },
-    [sessionId, toast, onChanged, editingTicker],
+    [sessionId, toast, onChanged, editingTicker, queryClient],
   );
 
   return (
