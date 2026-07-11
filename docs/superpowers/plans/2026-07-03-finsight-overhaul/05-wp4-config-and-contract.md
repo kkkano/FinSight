@@ -80,10 +80,10 @@ def planner_settings() -> PlannerSettings: return PlannerSettings()
 # executor_settings/agent_settings/security_settings 同型；测试用 cache_clear() 重置
 ```
 
-- [ ] **Step 1:** 为四域各写一个"env 覆盖生效 + 默认值正确"的测试（monkeypatch env → cache_clear → 断言字段）。
-- [ ] **Step 2:** 实现四个 Settings 类：**先 grep 收集该域全部 os.getenv/env_* 调用点及其默认值列成表**（写入 notes-settings-map.md），逐一映射为字段；调用点改为 `planner_settings().report_timeout_sec` 形式。
-- [ ] **Step 3:** 全量 + 金样零 diff（金样 conftest 里 monkeypatch 的 env 变量在 Settings 化后仍必须生效——测试里加 `cache_clear` 钩子到 `deterministic_env` fixture）。
-- [ ] **Step 4: Commit**
+- [x] **Step 1:** 为四域各写一个"env 覆盖生效 + 默认值正确"的测试（monkeypatch env → cache_clear → 断言字段）。
+- [x] **Step 2:** 实现四个 Settings 类：**先 grep 收集该域全部 os.getenv/env_* 调用点及其默认值列成表**（写入 notes-settings-map.md），逐一映射为字段；调用点改为 `planner_settings().report_timeout_sec` 形式。
+- [x] **Step 3:** 全量 + 金样零 diff（金样 conftest 里 monkeypatch 的 env 变量在 Settings 化后仍必须生效——测试里加 `cache_clear` 钩子到 `deterministic_env` fixture）。
+- [x] **Step 4: Commit**（`94e48ee`）
 
 ```bash
 git commit -am "feat(config): typed pydantic-settings for planner/executor/agent/security domains"
