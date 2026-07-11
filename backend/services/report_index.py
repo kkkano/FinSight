@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -148,6 +149,11 @@ class ReportIndexStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_quality_state ON report_index(quality_state)")
         if self._column_exists(conn, "report_index", "publishable"):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_publishable ON report_index(publishable)")
+        if self._column_exists(conn, "report_index", "share_token"):
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_report_index_share_token "
+                "ON report_index(share_token) WHERE share_token IS NOT NULL"
+            )
 
     def _ensure_citation_indexes(self, conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_report ON citation_index(report_id)")
@@ -176,6 +182,8 @@ class ReportIndexStore:
                     source_type TEXT NOT NULL DEFAULT 'ai_generated',
                     filing_type TEXT,
                     publisher TEXT,
+                    share_token TEXT,
+                    shared_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -199,6 +207,8 @@ class ReportIndexStore:
             self._ensure_column(conn, "report_index", "quality_state", "TEXT NOT NULL DEFAULT 'pass'")
             self._ensure_column(conn, "report_index", "publishable", "INTEGER NOT NULL DEFAULT 1")
             self._ensure_column(conn, "report_index", "quality_reasons_json", "TEXT")
+            self._ensure_column(conn, "report_index", "share_token", "TEXT")
+            self._ensure_column(conn, "report_index", "shared_at", "TEXT")
             self._ensure_report_indexes(conn)
             self._ensure_citation_indexes(conn)
 
@@ -559,6 +569,57 @@ class ReportIndexStore:
                     (1 if is_favorite else 0, _now_iso(), session_id, report_id),
                 )
                 return cur.rowcount > 0
+
+    def create_share(self, *, report_id: str) -> str | None:
+        """为可发布报告创建幂等分享 token。"""
+        with self._lock:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT share_token FROM report_index WHERE report_id = ? AND publishable = 1",
+                    (report_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                existing = str(row["share_token"] or "").strip()
+                if existing:
+                    return existing
+                for _attempt in range(3):
+                    token = secrets.token_urlsafe(24)
+                    try:
+                        now = _now_iso()
+                        conn.execute(
+                            "UPDATE report_index SET share_token = ?, shared_at = ?, updated_at = ? "
+                            "WHERE report_id = ? AND publishable = 1",
+                            (token, now, now, report_id),
+                        )
+                        return token
+                    except sqlite3.IntegrityError:
+                        continue
+        raise RuntimeError("failed to allocate unique share token")
+
+    def revoke_share(self, *, report_id: str) -> bool:
+        with self._lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    "UPDATE report_index SET share_token = NULL, shared_at = NULL, updated_at = ? "
+                    "WHERE report_id = ?",
+                    (_now_iso(), report_id),
+                )
+                return cursor.rowcount > 0
+
+    def get_shared_report(self, *, token: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT report_json FROM report_index WHERE share_token = ? AND publishable = 1",
+                (token,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row["report_json"])
+        except Exception:
+            return None
+        return payload if isinstance(payload, dict) else None
 
     def delete_session(self, *, session_id: str) -> dict[str, int]:
         normalized = str(session_id or "").strip()

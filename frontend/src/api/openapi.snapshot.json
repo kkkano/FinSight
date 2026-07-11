@@ -6165,6 +6165,46 @@
         ]
       }
     },
+    "/api/reports/shared/{token}": {
+      "get": {
+        "operationId": "get_shared_report_api_reports_shared__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Shared Report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
     "/api/reports/{report_id}/favorite": {
       "post": {
         "operationId": "set_report_favorite_api_reports__report_id__favorite_post",
@@ -6212,6 +6252,79 @@
           }
         },
         "summary": "Set Report Favorite",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/reports/{report_id}/share": {
+      "delete": {
+        "operationId": "revoke_report_share_api_reports__report_id__share_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Report Share",
+        "tags": [
+          "Reports"
+        ]
+      },
+      "post": {
+        "operationId": "share_report_api_reports__report_id__share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share Report",
         "tags": [
           "Reports"
         ]

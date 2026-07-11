@@ -209,7 +209,7 @@ def _require_rag_mutation_access(request: Request) -> Dict[str, Any]:
     raise HTTPException(status_code=403, detail="RAG diagnostics is read-only for logged-in users; mutation requires internal API key")
 
 def _is_allowlisted_path(path: str) -> bool:
-    defaults = "/health,/docs,/openapi.json,/redoc"
+    defaults = "/health,/docs,/openapi.json,/redoc,/api/reports/shared/*"
     configured = _parse_csv(security_settings().api_public_paths or defaults)
     exact_paths: set[str] = set()
     prefix_paths: list[str] = []

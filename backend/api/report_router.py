@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 # 防御性校验: report_id 仅允许安全字符
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{1,128}$")
@@ -19,6 +19,54 @@ def _validate_report_id(report_id: str) -> str:
     if not report_id or not _SAFE_ID_PATTERN.fullmatch(report_id):
         raise HTTPException(status_code=422, detail="report_id format invalid")
     return report_id
+
+
+_SHARED_REPORT_KEYS = {
+    "report_id",
+    "ticker",
+    "company_name",
+    "title",
+    "summary",
+    "sentiment",
+    "confidence_score",
+    "generated_at",
+    "synthesis_report",
+    "core_viewpoints",
+    "sections",
+    "citations",
+    "risks",
+    "recommendation",
+    "tags",
+    "report_quality",
+    "report_hints",
+    "evidence_ledger",
+    "debate",
+    "holdings_insight",
+    "query_coverage",
+    "conflict_disclosure",
+    "fact_check",
+}
+_SENSITIVE_SHARED_KEYS = {"trace", "cost", "tool_diagnostics", "agent_diagnostics"}
+
+
+def _strip_shared_sensitive(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_shared_sensitive(item)
+            for key, item in value.items()
+            if key not in _SENSITIVE_SHARED_KEYS
+        }
+    if isinstance(value, list):
+        return [_strip_shared_sensitive(item) for item in value]
+    return value
+
+
+def _sanitize_shared_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: _strip_shared_sensitive(report[key])
+        for key in _SHARED_REPORT_KEYS
+        if key in report
+    }
 
 
 def _parse_report_generated_at(value: Optional[str]) -> Optional[datetime]:
@@ -180,6 +228,31 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             "report_id": report_id,
             "is_favorite": is_favorite,
         }
+
+    @router.post("/api/reports/{report_id}/share")
+    async def share_report(report_id: str):
+        report_id = _validate_report_id(report_id)
+        token = deps.get_report_index_store().create_share(report_id=report_id)
+        if not token:
+            raise HTTPException(status_code=404, detail="report not found")
+        return {"share_url": f"/share/r/{token}"}
+
+    @router.delete("/api/reports/{report_id}/share", status_code=204)
+    async def revoke_report_share(report_id: str):
+        report_id = _validate_report_id(report_id)
+        ok = deps.get_report_index_store().revoke_share(report_id=report_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="report not found")
+        return Response(status_code=204)
+
+    @router.get("/api/reports/shared/{token}")
+    async def get_shared_report(token: str):
+        if not token or len(token) > 128:
+            raise HTTPException(status_code=404, detail="shared report not found")
+        report = deps.get_report_index_store().get_shared_report(token=token)
+        if not report:
+            raise HTTPException(status_code=404, detail="shared report not found")
+        return {"report": _sanitize_shared_report(report)}
 
     # ------------------------------------------------------------------
     # GET /api/reports/compare — structural diff between two reports

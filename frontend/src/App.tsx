@@ -12,6 +12,7 @@ import { RagInspectorPage } from './pages/RagInspectorPage';
 import { CostAuditPage } from './pages/CostAuditPage';
 import { BacktestPage } from './pages/BacktestPage';
 import { ScreenerPage } from './pages/ScreenerPage';
+import { SharedReportPage } from './pages/SharedReportPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
@@ -248,6 +249,7 @@ function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/welcome" element={<WelcomeRoute />} />
+        <Route path="/share/r/:token" element={<SharedReportPage />} />
         <Route path="/chat" element={<EntryGuard><ChatRoute /></EntryGuard>} />
         <Route path="/workbench" element={<EntryGuard><WorkbenchRoute /></EntryGuard>} />
         <Route path="/cn-market" element={<EntryGuard><CnMarketRoute /></EntryGuard>} />

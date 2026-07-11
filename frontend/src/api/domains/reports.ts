@@ -2,7 +2,21 @@ import { api } from '../http';
 import type * as Contracts from '../contracts';
 
 export const reportsApi = {
-async listReportIndex(params: {
+  async createReportShare(reportId: string): Promise<{ share_url: string }> {
+    const response = await api.post(`/api/reports/${encodeURIComponent(reportId)}/share`);
+    return response.data;
+  },
+
+  async revokeReportShare(reportId: string): Promise<void> {
+    await api.delete(`/api/reports/${encodeURIComponent(reportId)}/share`);
+  },
+
+  async getSharedReport(token: string): Promise<{ report: Contracts.ReportIR }> {
+    const response = await api.get(`/api/reports/shared/${encodeURIComponent(token)}`);
+    return response.data;
+  },
+
+  async listReportIndex(params: {
     sessionId: string;
     ticker?: string;
     query?: string;

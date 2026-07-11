@@ -62,10 +62,17 @@ def test_report_index_store_upgrades_legacy_schema_before_creating_quality_index
 
     with sqlite3.connect(sqlite_path) as conn:
         report_cols = {row[1] for row in conn.execute("PRAGMA table_info(report_index)").fetchall()}
-        assert {"quality_state", "publishable", "quality_reasons_json"}.issubset(report_cols)
+        assert {
+            "quality_state",
+            "publishable",
+            "quality_reasons_json",
+            "share_token",
+            "shared_at",
+        }.issubset(report_cols)
 
         index_names = {row[1] for row in conn.execute("PRAGMA index_list(report_index)").fetchall()}
         assert "idx_report_index_quality_state" in index_names
         assert "idx_report_index_publishable" in index_names
+        assert "idx_report_index_share_token" in index_names
 
     assert store.list_reports(session_id="tenant:user:thread", limit=5) == []

@@ -6,9 +6,10 @@ import type {
   QueryCoverage,
   ReportIR,
 } from '../../types/index';
-import { AlertTriangle, Maximize2, X } from 'lucide-react';
+import { AlertTriangle, Link2Off, Maximize2, Share2, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
+import { useDashboardStore } from '../../store/dashboardStore';
+import { useStore } from '../../store/useStore';
 import {
   normalizeAnchor,
   buildSourceSummary,
@@ -32,6 +33,7 @@ import { useToast } from '../ui';
 
 export interface ReportViewProps {
   report: ReportIR;
+  readOnly?: boolean;
 }
 
 const readObject = (value: unknown): Record<string, any> | null => {
@@ -74,10 +76,13 @@ const formatCoverageTarget = (target: string | Record<string, unknown>): string 
   return String(candidate);
 };
 
-export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
-  const { subscriptionEmail, sessionId } = useStore();
+export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false }) => {
+  const { subscriptionEmail } = useStore();
+  const watchlist = useDashboardStore((state) => state.watchlist);
+  const initWatchlist = useDashboardStore((state) => state.initWatchlist);
+  const addWatchItemApi = useDashboardStore((state) => state.addWatchItemApi);
+  const removeWatchItemApi = useDashboardStore((state) => state.removeWatchItemApi);
   const { toast } = useToast();
-  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   /* ---------------------------------------------------------------- */
   /*  State                                                            */
@@ -88,10 +93,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     synthesis: true,
   });
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
-  const [watchlisted, setWatchlisted] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
-  const [actionState, setActionState] = useState({ exporting: false, watchlist: false, subscribe: false });
+  const [actionState, setActionState] = useState({
+    exporting: false,
+    watchlist: false,
+    subscribe: false,
+    share: false,
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   /* ---------------------------------------------------------------- */
   /*  Derived / memoized values                                        */
@@ -185,6 +195,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     researchArtifacts.debateArtifact ||
     researchArtifacts.holdingsInsight,
   );
+  const watchlisted = useMemo(
+    () => watchlist.some((item) => item.symbol.toUpperCase() === report.ticker?.toUpperCase()),
+    [report.ticker, watchlist],
+  );
 
   const { classifiedErrors, warningText, shouldShowWarning, formattedErrors } = useMemo(
     () => normalizeReportErrors(report),
@@ -242,22 +256,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   /* ---------------------------------------------------------------- */
 
   useEffect(() => {
+    if (readOnly) return undefined;
+
     let mounted = true;
 
-    setWatchlisted(false);
     setSubscribed(false);
     setActiveCitation(null);
 
-    apiClient
-      .getUserProfile(userId)
-      .then((response) => {
-        if (!mounted || !response?.success) return;
-        const list = response.profile?.watchlist || [];
-        if (Array.isArray(list) && list.includes(report.ticker)) {
-          setWatchlisted(true);
-        }
-      })
-      .catch(() => undefined);
+    void initWatchlist();
 
     if (subscriptionEmail) {
       apiClient
@@ -277,7 +283,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     return () => {
       mounted = false;
     };
-  }, [report.ticker, report.report_id, subscriptionEmail, userId]);
+  }, [initWatchlist, readOnly, report.ticker, report.report_id, subscriptionEmail]);
 
   useEffect(() => {
     if (isFullscreen) {
@@ -321,20 +327,49 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     if (actionState.watchlist) return;
     setActionState((prev) => ({ ...prev, watchlist: true }));
     try {
-      const payload = { user_id: userId, ticker: report.ticker };
       if (watchlisted) {
-        await apiClient.removeWatchlist(payload);
-        setWatchlisted(false);
+        await removeWatchItemApi(report.ticker);
         toast({ type: 'info', title: '已移除自选' });
       } else {
-        await apiClient.addWatchlist(payload);
-        setWatchlisted(true);
+        await addWatchItemApi(report.ticker);
         toast({ type: 'success', title: '已加入自选' });
       }
     } catch {
       toast({ type: 'error', title: '自选更新失败' });
     } finally {
       setActionState((prev) => ({ ...prev, watchlist: false }));
+    }
+  };
+
+  const handleShare = async () => {
+    if (actionState.share) return;
+    setActionState((prev) => ({ ...prev, share: true }));
+    try {
+      const response = shareUrl
+        ? { share_url: shareUrl }
+        : await apiClient.createReportShare(report.report_id);
+      const absoluteUrl = new URL(response.share_url, window.location.origin).toString();
+      await navigator.clipboard.writeText(absoluteUrl);
+      setShareUrl(absoluteUrl);
+      toast({ type: 'success', title: '分享链接已复制' });
+    } catch {
+      toast({ type: 'error', title: '分享链接创建或复制失败' });
+    } finally {
+      setActionState((prev) => ({ ...prev, share: false }));
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    if (actionState.share) return;
+    setActionState((prev) => ({ ...prev, share: true }));
+    try {
+      await apiClient.revokeReportShare(report.report_id);
+      setShareUrl(null);
+      toast({ type: 'info', title: '分享链接已撤销' });
+    } catch {
+      toast({ type: 'error', title: '撤销分享失败' });
+    } finally {
+      setActionState((prev) => ({ ...prev, share: false }));
     }
   };
 
@@ -405,11 +440,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
 
             {/* P2-12 质量徽章 + P2-11 价差提示（全屏模式） */}
             {report.report_quality && <QualityBadge quality={report.report_quality} />}
-            <PriceDriftBanner
-              ticker={report.ticker}
-              reportPrice={reportPrice}
-              reportGeneratedAt={report.generated_at}
-            />
+            {!readOnly && (
+              <PriceDriftBanner
+                ticker={report.ticker}
+                reportPrice={reportPrice}
+                reportGeneratedAt={report.generated_at}
+              />
+            )}
 
             {queryCoverageWarningNode}
 
@@ -454,13 +491,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   return (
     <div className="bg-fin-panel rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,23,42,0.45)] border border-fin-border overflow-hidden max-w-4xl mx-auto my-4 relative">
       {/* Fullscreen button */}
-      <button
-        onClick={() => setIsFullscreen(true)}
-        className="absolute bottom-4 right-4 z-10 p-2 bg-fin-bg-secondary rounded-lg hover:bg-fin-hover transition-colors shadow-sm border border-fin-border"
-        title="全屏查看报告"
-      >
-        <Maximize2 size={16} className="text-fin-text-secondary" />
-      </button>
+      {!readOnly && (
+        <button
+          onClick={() => setIsFullscreen(true)}
+          className="absolute bottom-4 right-4 z-10 p-2 bg-fin-bg-secondary rounded-lg hover:bg-fin-hover transition-colors shadow-sm border border-fin-border"
+          title="全屏查看报告"
+        >
+          <Maximize2 size={16} className="text-fin-text-secondary" />
+        </button>
+      )}
 
       {/* ===== 方案A 紧凑指挥台主体 ===== */}
       <div className="p-6">
@@ -479,13 +518,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
         )}
 
         {/* P2-11 价差提示：报告渲染后异步检查实时价，显著时显示琥珀 banner */}
-        <div className="mt-3">
-          <PriceDriftBanner
-            ticker={report.ticker}
-            reportPrice={reportPrice}
-            reportGeneratedAt={report.generated_at}
-          />
-        </div>
+        {!readOnly && (
+          <div className="mt-3">
+            <PriceDriftBanner
+              ticker={report.ticker}
+              reportPrice={reportPrice}
+              reportGeneratedAt={report.generated_at}
+            />
+          </div>
+        )}
 
         {queryCoverageWarningNode && <div className="mt-4">{queryCoverageWarningNode}</div>}
         {warningNode && <div className="mt-4">{warningNode}</div>}
@@ -514,36 +555,58 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 bg-fin-bg-secondary border-t border-fin-border flex flex-wrap items-center justify-between gap-3 text-[11px] text-fin-muted">
-        <span>Generated by FinSight AI ? Deep Research Engine</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            disabled={actionState.exporting}
-            className="px-3 py-1 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary text-[11px] hover:border-fin-primary hover:text-fin-primary transition disabled:opacity-60"
-          >
-            {actionState.exporting ? 'Exporting...' : 'Export PDF'}
-          </button>
-          <button
-            type="button"
-            onClick={handleWatchlist}
-            disabled={actionState.watchlist}
-            className="px-3 py-1 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary text-[11px] hover:border-fin-primary hover:text-fin-primary transition disabled:opacity-60"
-          >
-            {watchlisted ? 'Remove Watchlist' : 'Save to Watchlist'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSubscribe}
-            disabled={actionState.subscribe}
-            className="px-3 py-1 rounded-full border border-fin-primary/30 bg-fin-primary/10 text-fin-primary text-[11px] hover:opacity-90 transition disabled:opacity-60"
-          >
-            {subscribed ? 'Subscribed' : 'Subscribe Alerts'}
-          </button>
-          <span className="text-2xs text-fin-muted">ID: {report.report_id}</span>
+      {!readOnly && (
+        <div className="px-6 py-4 bg-fin-bg-secondary border-t border-fin-border flex flex-wrap items-center justify-between gap-3 text-[11px] text-fin-muted">
+          <span>Generated by FinSight AI ? Deep Research Engine</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={actionState.exporting}
+              className="px-3 py-1 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary text-[11px] hover:border-fin-primary hover:text-fin-primary transition disabled:opacity-60"
+            >
+              {actionState.exporting ? 'Exporting...' : 'Export PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={handleWatchlist}
+              disabled={actionState.watchlist}
+              className="px-3 py-1 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary text-[11px] hover:border-fin-primary hover:text-fin-primary transition disabled:opacity-60"
+            >
+              {watchlisted ? 'Remove Watchlist' : 'Save to Watchlist'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={actionState.subscribe}
+              className="px-3 py-1 rounded-full border border-fin-primary/30 bg-fin-primary/10 text-fin-primary text-[11px] hover:opacity-90 transition disabled:opacity-60"
+            >
+              {subscribed ? 'Subscribed' : 'Subscribe Alerts'}
+            </button>
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={actionState.share}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-fin-primary/30 bg-fin-primary/10 text-fin-primary text-[11px] hover:opacity-90 transition disabled:opacity-60"
+            >
+              <Share2 size={12} />
+              {actionState.share ? '处理中…' : shareUrl ? '复制分享链接' : '分享链接'}
+            </button>
+            {shareUrl && (
+              <button
+                type="button"
+                onClick={handleRevokeShare}
+                disabled={actionState.share}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-fin-danger/30 bg-fin-danger/10 text-fin-danger text-[11px] hover:opacity-90 transition disabled:opacity-60"
+              >
+                <Link2Off size={12} />
+                撤销分享
+              </button>
+            )}
+            <span className="text-2xs text-fin-muted">ID: {report.report_id}</span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
