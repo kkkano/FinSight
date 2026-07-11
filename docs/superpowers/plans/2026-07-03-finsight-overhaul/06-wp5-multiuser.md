@@ -130,7 +130,7 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -
 # 所有 SELECT/UPDATE/DELETE 追加 "AND user_id = ?"，所有 INSERT 写入 user_id。
 ```
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 def test_portfolio_isolated_between_users(tmp_path, monkeypatch):
@@ -144,10 +144,10 @@ def test_portfolio_isolated_between_users(tmp_path, monkeypatch):
 ```
 
 （函数名以 store 实际公开面为准——先 `grep -n "^def " backend/services/portfolio_store.py` 列全，测试覆盖 list/save/delete 三类。conversation/monitor 各写同型测试。）
-- [ ] **Step 2: 实现**：迁移助手 → 三 store 的 `_ensure_tables` 里 `ensure_column(conn, t, "user_id", "user_id TEXT NOT NULL DEFAULT 'public'")` + 建索引 `CREATE INDEX IF NOT EXISTS idx_{t}_user ON {t}(user_id)` → 全函数加参改 SQL。
-- [ ] **Step 3: router 透传**：三个 router 每个 endpoint 加 `request: Request` 形参（已有则复用），调用 store 时传 `user_id=getattr(request.state, "user_id", "public")`。
-- [ ] **Step 4:** 隔离测试绿 + 全量绿 + 手工验证：两个浏览器（一个登录一个匿名）互看不到对方持仓/会话。
-- [ ] **Step 5: Commit**
+- [x] **Step 2: 实现**：迁移助手 → 三 store 的 `_ensure_tables` 里 `ensure_column(conn, t, "user_id", "user_id TEXT NOT NULL DEFAULT 'public'")` + 建索引 `CREATE INDEX IF NOT EXISTS idx_{t}_user ON {t}(user_id)` → 全函数加参改 SQL。
+- [x] **Step 3: router 透传**：三个 router 每个 endpoint 加 `request: Request` 形参（已有则复用），调用 store 时传 `user_id=getattr(request.state, "user_id", "public")`。
+- [x] **Step 4:** 隔离测试绿 + 全量绿 + 手工验证：两个浏览器（一个登录一个匿名）互看不到对方持仓/会话。
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(multiuser): user_id isolation for portfolio/conversation/monitor stores with idempotent sqlite migration"

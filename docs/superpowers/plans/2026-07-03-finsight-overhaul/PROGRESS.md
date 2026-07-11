@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | WP5-Task3 portfolio/conversation/monitor 多用户隔离 | e8e4ca9 | 新增 SQLite 幂等加列与复合用户主键迁移，旧 SQLite/JSON 数据无损归 `public`；三 store 全公开 CRUD 末尾新增默认 `user_id`，三主 router 及调仓、晨报、每日任务、宏观日历、后台盯盘旁路同步透传，缓存与调度均纳入用户维度。隔离/老库迁移/真实 Router 测试 7 passed；完整后端 `1970 passed/8 skipped`。使用两个独立 Chromium context 经真实 security_gate/API 验证同 session 的 Alice 与匿名用户持仓、会话、盯盘目标互不可见，QA 进程已清理。 |
 | 2026-07-11 | WP5-Task2 security_gate 用户身份接入 | 450e412 | API key 检查后解析 Supabase JWT，写入 `request.state.user_id/user_email`；可选强制登录模式对非白名单返回中文 401，默认匿名保持 `public`；已登录用户使用独立限流/并发桶，RAG 既有身份回退保留。新增 5 项身份中间件测试；认证/安全/RAG 定向回归 43 passed，金样 12 passed 零漂移。 |
 | 2026-07-11 | WP5-Task1 Supabase JWT 校验 | 7595d56 | 新增 HS256 secret 与 RS256/ES256 JWKS 自动探测校验、30 秒时钟偏移、10 分钟 JWKS 缓存及刷新失败旧缓存回退；Bearer 请求解析失败安全返回匿名。离线覆盖有效、过期、错密钥、缺 `sub`、缺配置、Bearer 异常、JWKS 缓存/回退共 12 passed；未访问真实 Supabase 或 LLM。 |
 | 2026-07-11 | WP4 完成门禁 | a0e71fa | 使用仓库 `.venv` 锁定 FastAPI 0.122.0/Pydantic 2.12.3，并注入不联网的测试专用兼容端点；修正 datetime SSE 测试的旧 `main.aget_graph_runner` patch 目标与列表式 trace 断言后，后端 + 金样 `1960 passed/8 skipped`，OpenAPI 快照通过。前端重新生成 API 类型零漂移，41 files/235 tests passed，生产 build 成功；`_env_int` 重复和 `Promise<any>` 均为 0。真实 Vite + Chromium 验证聊天发送/重试、设置保存成功且控制台 0 error；仓库 Playwright 仪表盘路由与 MiniChat 2/2 通过。 |
