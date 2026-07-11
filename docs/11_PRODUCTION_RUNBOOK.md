@@ -190,6 +190,23 @@ BASE_AGENT_MAX_REFLECTIONS=0
 
 按需开启调度，默认建议先关闭，待核心链路稳定后再开启。
 
+### 3.4 多用户与每日成本配额
+
+业务数据当前由 SQLite/JSON store 持久化并按 `user_id` 隔离；PostgreSQL 仅作为可选的 LangGraph checkpointer 与 RAG/pgvector 后端，不承载持仓、会话、监控目标等业务表。存量和匿名请求统一进入 `public` 用户桶。
+
+| 部署模式 | 关键环境变量 | 数据与成本边界 |
+|----------|--------------|----------------|
+| 个人自用（兼容旧行为） | `SUPABASE_AUTH_REQUIRED=false`<br/>`USER_DAILY_COST_LIMIT_USD=0` | 不强制登录，所有请求归 `public`；关闭每日成本配额，继续依赖 API key、IP 限流与单请求 token 预算。 |
+| 公开演示 | `SUPABASE_AUTH_REQUIRED=false`<br/>`USER_DAILY_COST_LIMIT_USD=0.5` | 匿名访问共享 `public` 数据与成本桶；必须在页面显著告知“匿名数据全站共享，请勿录入敏感持仓或会话”，并同时启用 IP 限流和总量告警。 |
+| 多用户 | `SUPABASE_AUTH_REQUIRED=true`<br/>`SUPABASE_URL=https://<project>.supabase.co`<br/>`SUPABASE_JWT_SECRET=<legacy HS256 only>`<br/>`USER_DAILY_COST_LIMIT_USD=1.0` | 后端校验 Supabase JWT，持仓、会话、监控和 LLM 成本按用户隔离；JWKS 项目通常只配 `SUPABASE_URL`，legacy HS256 项目才配置 secret。 |
+
+补充规则：
+
+- `USER_DAILY_COST_LIMIT_USD` 按 UTC 自然日计算；`0` 或负数表示关闭，`admin` 用户不受该上限约束。
+- 配额只阻止新的聊天/执行生成，不影响 `/health` 等公开运维接口；达到上限返回 HTTP 429 和中文提示，下一 UTC 自然日自动恢复。
+- `.env.server` 是服务器本地 secret 文件，Supabase secret 与 LLM key 不得写入仓库、镜像层、发布证据或命令行历史。
+- 多用户模式上线前必须用两个真实账号验证同一 `session_id` 下持仓、会话和监控目标互不可见，并分别验证成本桶。
+
 ---
 
 ## 4. 部署步骤

@@ -184,7 +184,8 @@ graph TB
 
     subgraph "数据层"
         RAG[混合 RAG<br/>bge-m3 · bge-reranker-v2-m3]
-        DB[(SQLite / PostgreSQL<br/>检查点 · 报告 · 持仓)]
+        CHECKPOINT[(PostgreSQL 或 SQLite<br/>LangGraph 检查点)]
+        BUSINESS[(SQLite / JSON<br/>报告 · 持仓 · 会话)]
     end
 
     subgraph "外部服务"
@@ -196,6 +197,8 @@ graph TB
     UI --> API_CLIENT --> ROUTER
     API_CLIENT -.->|SSE trace| STORE --> CONSOLE
     ROUTER --> UNDERSTAND --> FRAME --> POLICY --> PLANNER --> EXEC
+    ROUTER --> BUSINESS
+    UNDERSTAND --> CHECKPOINT
     EXEC --> SYNTH --> RENDER
     EXEC --> AGENTS --> TOOLS
     TOOLS --> YFINANCE & FMP & FINNHUB & TAVILY & FRED & SEC
@@ -306,7 +309,7 @@ RAG Quality V2：三层评估（Mock → 真实检索 → 端到端），**12/12
 | **后端** | Python 3.11 · FastAPI · LangGraph · LangChain · Langfuse · APScheduler · Pydantic |
 | **前端** | React 19 · Vite 6 · TypeScript 5 · Zustand 5 · ECharts 5 · TailwindCSS 4 |
 | **模型** | 可配置 LLM（OpenAI / Gemini / DeepSeek / Anthropic）· bge-m3（1024d）· bge-reranker-v2-m3 |
-| **数据** | PostgreSQL + pgvector · SQLite · JSON 文件存储 |
+| **数据** | PostgreSQL（可选 LangGraph 检查点 / pgvector）· SQLite + JSON（业务数据） |
 | **基础设施** | Docker Compose · Cloudflare Tunnel · Nginx |
 
 ---

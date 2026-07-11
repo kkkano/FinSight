@@ -184,7 +184,8 @@ graph TB
 
     subgraph "Data Layer"
         RAG[Hybrid RAG<br/>bge-m3 · bge-reranker-v2-m3]
-        DB[(SQLite / PostgreSQL<br/>Checkpoints · Reports · Portfolio)]
+        CHECKPOINT[(PostgreSQL or SQLite<br/>LangGraph checkpoints)]
+        BUSINESS[(SQLite / JSON<br/>Reports · Portfolio · Conversations)]
     end
 
     subgraph "External"
@@ -196,6 +197,8 @@ graph TB
     UI --> API_CLIENT --> ROUTER
     API_CLIENT -.->|SSE trace| STORE --> CONSOLE
     ROUTER --> UNDERSTAND --> FRAME --> POLICY --> PLANNER --> EXEC
+    ROUTER --> BUSINESS
+    UNDERSTAND --> CHECKPOINT
     EXEC --> SYNTH --> RENDER
     EXEC --> AGENTS --> TOOLS
     TOOLS --> YFINANCE & FMP & FINNHUB & TAVILY & FRED & SEC
@@ -306,7 +309,7 @@ RAG Quality V2: 3-layer eval (Mock → Real Retrieval → E2E), **12/12 PASS**, 
 | **Backend** | Python 3.11 · FastAPI · LangGraph · LangChain · Langfuse · APScheduler · Pydantic |
 | **Frontend** | React 19 · Vite 6 · TypeScript 5 · Zustand 5 · ECharts 5 · TailwindCSS 4 |
 | **Models** | Configurable LLM (OpenAI / Gemini / DeepSeek / Anthropic) · bge-m3 (1024d) · bge-reranker-v2-m3 |
-| **Data** | PostgreSQL + pgvector · SQLite · JSON file stores |
+| **Data** | PostgreSQL (optional LangGraph checkpoints / pgvector) · SQLite + JSON (business data) |
 | **Infra** | Docker Compose · Cloudflare Tunnel · Nginx |
 
 ---
