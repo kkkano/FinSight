@@ -109,10 +109,10 @@ GET  /api/reports/shared/{token}           → 报告只读 JSON（脱敏：剥�
 `GET /api/reports/shared/*` 加入 `API_PUBLIC_PATHS` 白名单语义（security_gate 白名单机制已支持前缀通配：配置 `API_PUBLIC_PATHS` 默认值追加 `/api/reports/shared/*`）。
 
 **Tasks:**
-- [ ] T1: TDD：创建分享→匿名可读；撤销→404；脱敏断言（响应 JSON 不含 `trace`/`cost`/`tool_diagnostics` 键）。
-- [ ] T2: 前端路由 `/share/r/:token`（不进 EntryGuard），复用现有报告渲染组件的只读态；报告页加"分享"按钮（复制链接 + 撤销入口）。
-- [ ] 验收：无痕窗口打开分享链接可读、撤销后 404；分享页无任何操作按钮。
-- [ ] Commit: `feat(report): shareable read-only report links with revocation and field whitelisting`
+- [x] T1: TDD：创建分享→匿名可读；撤销→404；脱敏断言（响应 JSON 不含 `trace`/`cost`/`tool_diagnostics` 键）。
+- [x] T2: 前端路由 `/share/r/:token`（不进 EntryGuard），复用现有报告渲染组件的只读态；报告页加"分享"按钮（复制链接 + 撤销入口）。
+- [x] 验收：无痕窗口打开分享链接可读、撤销后 404；分享页无任何操作按钮。
+- [x] Commit: `feat(report): shareable read-only report links with revocation and field whitelisting`
 
 ---
 
