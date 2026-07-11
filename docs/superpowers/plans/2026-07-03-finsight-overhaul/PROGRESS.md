@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP5-Task2 security_gate 用户身份接入 | 450e412 | API key 检查后解析 Supabase JWT，写入 `request.state.user_id/user_email`；可选强制登录模式对非白名单返回中文 401，默认匿名保持 `public`；已登录用户使用独立限流/并发桶，RAG 既有身份回退保留。新增 5 项身份中间件测试；认证/安全/RAG 定向回归 43 passed，金样 12 passed 零漂移。 |
 | 2026-07-11 | WP5-Task1 Supabase JWT 校验 | 7595d56 | 新增 HS256 secret 与 RS256/ES256 JWKS 自动探测校验、30 秒时钟偏移、10 分钟 JWKS 缓存及刷新失败旧缓存回退；Bearer 请求解析失败安全返回匿名。离线覆盖有效、过期、错密钥、缺 `sub`、缺配置、Bearer 异常、JWKS 缓存/回退共 12 passed；未访问真实 Supabase 或 LLM。 |
 | 2026-07-11 | WP4 完成门禁 | a0e71fa | 使用仓库 `.venv` 锁定 FastAPI 0.122.0/Pydantic 2.12.3，并注入不联网的测试专用兼容端点；修正 datetime SSE 测试的旧 `main.aget_graph_runner` patch 目标与列表式 trace 断言后，后端 + 金样 `1960 passed/8 skipped`，OpenAPI 快照通过。前端重新生成 API 类型零漂移，41 files/235 tests passed，生产 build 成功；`_env_int` 重复和 `Promise<any>` 均为 0。真实 Vite + Chromium 验证聊天发送/重试、设置保存成功且控制台 0 error；仓库 Playwright 仪表盘路由与 MiniChat 2/2 通过。 |
 | 2026-07-11 | WP4-Task9 中文文案常量表 | c204ea9 | 新建纯常量 `locales/zh.ts`，集中聊天输入、消息列表、会话状态和执行状态的用户可见文案，混合英文状态统一为中文；Task 7 已迁出的流式职责同步接入 `useChatStream`，避免形成第二文案源。停止状态与质量门禁测试引用同一常量；定向 lint 0 问题，相关 21 tests passed，完整前端 41 files/235 tests passed，生产 build 成功。 |

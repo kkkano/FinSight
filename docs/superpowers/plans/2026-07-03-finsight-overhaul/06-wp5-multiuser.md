@@ -92,8 +92,8 @@ git commit -am "feat(auth): supabase JWT verification module (HS256 secret / JWK
 - Modify: `.env.server.example`
 - Test: `backend/tests/test_security_gate_user.py`
 
-- [ ] **Step 1: 写失败测试**（`fastapi.testclient`：带有效 JWT 的请求 → 下游能读到 `request.state.user_id`；`SUPABASE_AUTH_REQUIRED=true` 时无 token 的非白名单请求 → 401；`=false` 时无 token → `user_id == "public"`）。
-- [ ] **Step 2: 实现**——`security_gate` 在现有 API key 检查之后插入：
+- [x] **Step 1: 写失败测试**（`fastapi.testclient`：带有效 JWT 的请求 → 下游能读到 `request.state.user_id`；`SUPABASE_AUTH_REQUIRED=true` 时无 token 的非白名单请求 → 401；`=false` 时无 token → `user_id == "public"`）。
+- [x] **Step 2: 实现**——`security_gate` 在现有 API key 检查之后插入：
 
 ```python
     user = resolve_request_user(request)
@@ -104,7 +104,7 @@ git commit -am "feat(auth): supabase JWT verification module (HS256 secret / JWK
 ```
 
 限流 `client_id` 优先用 `f"user:{request.state.user_id}"`（非 public 时），public 保持按 IP。`.env.server.example` 登记 `SUPABASE_AUTH_REQUIRED/SUPABASE_JWT_SECRET/SUPABASE_URL`。
-- [ ] **Step 3:** 测试绿 + 金样零 diff + Commit：
+- [x] **Step 3:** 测试绿 + 金样零 diff + Commit：
 
 ```bash
 git commit -am "feat(auth): security_gate resolves supabase user; per-user rate bucket; optional auth-required mode"
