@@ -3,15 +3,18 @@
 > **For agentic workers:** 本文档 = 审计结论 + 处置任务。每个条目自带证据（文件:行号）、处置决定与验收标准，按编号执行，每条一次 commit。执行者无需重新判断"该不该做"——处置决定已做出；只有标注【盘点】的条目需要先跑盘点步骤再按分支执行。
 
 **基线 commit:** `4a1c055`
-**Goal:** 解决三个"感觉"问题的根源：①"图表不是真实数据"→ 图表真实性治理；②"功能之间没联动"→ 打通八条数据流；③"工作台不知道干嘛/一堆摆设"→ 逐件处置（打通/收纳/删除）+ 工作台信息架构重做。
+**Goal:** 解决四个根因：①"图表不是真实数据"→ 图表真实性治理；②"功能之间没联动"→ 打通八条数据流；③"工作台不知道干嘛/一堆摆设"→ 逐件处置（打通/收纳/删除）+ 工作台信息架构重做；④实时监控只有离散 finding、没有从触发到图表复盘的闭环 → 落地 Kansoku 启发的最小实时链路。
 
-**Architecture:** Part A 图表真实性（最高优先）→ Part B 联动矩阵（八条打通线）→ Part C 摆设处置清单（12 件）。依赖：Part A 的徽标依赖 08 文档 Task 2 的 SourceBadge；Part B 部分条目依赖 WP6 F2 watchlist。
+**Architecture:** Part A 图表真实性（最高优先）→ Part B 联动矩阵（八条打通线）→ Part C 摆设处置清单（12 件）→ Part D 实时联动最小闭环（最小 prediction 基座 → 纯代码触发/心跳 → 页面 lease → 点评流 → 图表深链）。依赖：Part A 的徽标依赖 08 文档 Task 2 的 SourceBadge；Part B 部分条目依赖 WP6 F2 watchlist。09 D-0 自己交付闭环所需的最小 prediction contract/store/submit，10 只在其上扩展 Agent 记忆、战绩与成本，因此保持既定 `09 → 10` 顺序无循环依赖。
 
 ## Global Constraints
 
 - 删除组件前必须 `grep -rn "组件名" frontend/src backend --include="*.ts*"` 确认零引用（测试文件除外，随组件一起删）。
 - 所有"打通"新增的跳转必须双向可回（浏览器返回键正常），带上下文的跳转用 URL 参数而非仅内存状态（可分享、可刷新）。
-- 每条目完成跑 `cd frontend && pnpm test --run && pnpm build`；涉及后端的加 `python -m pytest backend/tests -x -q`。
+- 每条目完成跑 `cd frontend && pnpm test:unit && pnpm build`；涉及后端的加 `python -m pytest backend/tests -x -q`。
+- Kansoku 只作为交互与闭环参考：后端继续使用 **FastAPI + LangGraph + PostgreSQL**，图表继续使用 **ECharts**。不得引入 Longbridge、`pi-agent-core`、单用户 SQLite 新表、Fastify 内嵌 Vite 或 `lightweight-charts`。
+- 行情序列与 AI 判断必须是两个独立数据面：K 线/报价/指标只能来自现有行情 API 与确定性计算；AI 只能提交 `prediction` 覆盖层，禁止把 AI 数值数组拼进真实行情 series。
+- Part D 新增持久化表必须带 `user_id`，由服务端鉴权身份注入并落 PostgreSQL；客户端提交的 `user_id` 不可信且不得作为租户边界。
 
 ---
 
@@ -48,6 +51,38 @@
 - [ ] Step 1【盘点】: 逐 tab（Overview/Financial/Technical/News/Research/Peers）追一条数据链：组件 → hook → `/api/dashboard/*` → 后端 service → 数据源；把结论写进 `docs/superpowers/plans/2026-07-03-finsight-overhaul/notes-dashboard-data-sources.md`（表：tab | 数据 | 真实来源 | 降级路径 | 是否已标注）。
 - [ ] Step 2: 据表给每个数据卡/图表补 `<SourceBadge/>`（大概率全是真数据，问题只是"没标"，标注即可消除"假数据感"）；AI 洞察卡片统一标注「AI 评分 · 基于 {n} 项真实指标 · 置信度 {x}%」（字段从 `/api/dashboard/insights` 响应取，`grep -n "confidence" backend/dashboard` 对齐）。
 - [ ] Commit: `feat(dashboard): provenance badges on every data card, insight cards disclose basis and confidence`
+
+### A-4: 真实行情基底与 AI prediction 覆盖层严格分离
+
+**Files:**
+- Create: `frontend/src/types/chartPrediction.ts`、`frontend/src/components/charts/PredictionOverlay.ts`
+- Modify: `frontend/src/components/SmartChart.tsx`、`frontend/src/components/chatChartIntent.ts`
+- Test: `frontend/src/components/SmartChart.test.ts`、`frontend/src/components/ChatInput.smartchart.test.ts`
+
+**契约:**
+
+```ts
+type PredictionOverlay = {
+  predictionId: string
+  symbol: string
+  direction: 'long' | 'short' | 'neutral'
+  anchor: { timeframe: string; time: string; price: number }
+  entry?: number
+  stop?: number
+  target1?: number
+  target2?: number
+  range?: { low: number; high: number }
+  zones?: Array<{ low: number; high: number; label: string }>
+  status: 'waiting' | 'open' | 'triggered' | 'invalidated' | 'hit_target' | 'hit_stop' | 'held_range' | 'broke_range'
+}
+```
+
+- [ ] Step 1: 写失败测试，构造同一份真实 OHLC 响应与两份不同 prediction，断言 candle/line series 的 `data` 逐项完全相同，只有 overlay 的 `markLine/markPoint/markArea` 改变；prediction 中即使夹带 `bars/series/data` 字段也必须被解析层丢弃。
+- [ ] Step 2: `SmartChart` 明确拆成 `marketSeries` 与 `predictionOverlay` 两个输入。`marketSeries` 只接受现有 `getChartData` 返回；`PredictionOverlay` 只产出 ECharts 标注：anchor=`markPoint` + 锚点 bar 背景 `markArea`，entry/stop/T1/T2=`markLine`，neutral range/zones=`markArea`。状态为 invalidated/resolved 时只改变线型、颜色和 label 后缀，不改历史行情。
+- [ ] Step 3: `chart_ref`/URL 深链只传 `predictionId`，前端通过受鉴权 API 读取 09 D-0 已校验归档的 prediction；禁止把完整 prediction 或行情数组塞进 URL。加载失败时仍渲染真实行情，并显示「AI 标注暂不可用」。
+- [ ] Step 4: vitest 覆盖 anchor 精确落在对应时间点、四类价位 label、neutral range、越权/404 prediction 降级，以及「AI 标注」与真实数据 SourceBadge 同时可辨识。
+- [ ] 验收: 浏览器 Network 中行情请求与 prediction 请求可独立观察；关闭 AI overlay 后 OHLC 图不重取、不变形；诱导模型生成伪 K 线数组不能改变 ECharts 行情 series。
+- [ ] Commit: `feat(charts): render validated AI predictions as overlays on immutable real market series`
 
 ---
 
@@ -212,9 +247,98 @@
 
 ---
 
+## Part D: Kansoku 启发的实时联动最小闭环
+
+**范围:** 只做「真实数据 → 纯代码触发 → 有 lease 才运行高频点评 → PostgreSQL 点评流水 → 图表 prediction 深链」。第一期不做持久 Agent 会话、不做模型分层路由重构，也不替换现有 L1 monitor/邮件提醒。
+
+### D-0: 最小 prediction contract / store / submit 基座
+
+**Files:**
+- Create: `backend/agents/prediction_contract.py`、`backend/agents/prediction_submit.py`、`backend/services/agent_prediction_store.py`
+- Modify: `backend/api/agents_router.py`
+- Test: `backend/tests/test_prediction_contract.py`、`backend/tests/test_prediction_submit.py`、`backend/tests/test_agent_prediction_store.py`
+
+**最小合同:** prediction 只允许 `symbol/agent/direction/confidence/thesis/anchor/entry_type/entry/stop/target1/target2/invalidation_price/range_low/range_high`；`extra="forbid"`，严禁 `bars/candles/series/ohlc/data`。`entry_type` 固定为 `market | limit | stop`；long/short 必须有数值 `entry/stop/target1/invalidation_price`，neutral 必须只有包含 anchor 的 range。服务端用现有真实 K 线覆盖最终 anchor time/price，并覆盖 `symbol/agent/user_id/run_id`。
+
+**PostgreSQL:** `agent_predictions` 必须带 `UNIQUE(id, user_id)`，所有读取带 `user_id`；不新增 SQLite。09 只存最小可校验字段，10 Task 5/6 在同表/关联表上扩展 scenarios、历史记忆、outcome 与成本。
+
+- [ ] Step 1: TDD 覆盖 extra 行情字段拒绝、long/short/neutral 字段关系、entry_type、数值 invalidation、RR、伪造 symbol/anchor/user_id 以及跨租户读写隔离。
+- [ ] Step 2: 实现 PostgreSQL store 与受鉴权 `GET /api/agents/predictions/{id}`；数据库不可用或无权限时 fail closed，A-4 仍只显示真实行情。
+- [ ] Step 3: 实现服务端 `submit_prediction` 校验；仅 concrete ticker 且 operation 属于 `investment_opinion/technical/earnings_impact/report_generation` 的可计分 agent step 暴露工具。首次非法可纠正一次，第二次仍非法则不落库；其他 agent/tool/qa/macro step 允许零提交且不得被迫造价位。
+- [ ] Step 4: 固化逐 bar 入场规则：market 从 anchor 后首根完整 bar 入场；limit 仅在 bar 区间触及 entry 时入场；stop 仅在顺方向穿越 entry 时入场；入场前触及 `invalidation_price` 为 invalidated；跳空按首个可交易 bar 的 open 保守成交。同 bar 入场并同时触及 stop/target 时判 hit_stop。
+- [ ] 验收: 09 不依赖 10 即可创建、校验、鉴权读取 prediction 并供 ECharts overlay/monitor 使用；非法 prediction 和 AI 行情数组均无法入库。
+- [ ] Commit: `feat(prediction): minimal server-validated postgres prediction foundation`
+
+### D-1: 纯代码触发库 + 心跳判定
+
+**Files:**
+- Create: `backend/services/monitor_signals.py`
+- Modify: `backend/services/monitor_engine.py`
+- Test: `backend/tests/test_monitor_signals.py`、`backend/tests/test_monitor_engine.py`
+
+**接口:**
+
+```python
+@dataclass(frozen=True)
+class MonitorTrigger:
+    kind: str          # level_break | zone_break | day_level_break | macd_cross | flow_flip | volume_spike | heartbeat
+    detail: str        # 同时进入点评 prompt 与前端「触发」行
+    observed_at: str
+    severity: str      # info | warn | alert
+
+def detect_triggers(*, previous: MarketSnapshot, current: MarketSnapshot,
+                    prediction: AgentPrediction | None) -> list[MonitorTrigger]: ...  # AgentPrediction 来自 D-0
+def heartbeat_due(*, last_comment_at: datetime | None, now: datetime,
+                  interval_seconds: int = 300) -> bool: ...
+```
+
+- [ ] Step 1: TDD 覆盖价位上/下穿、zone 进入/离开、MACD 柱符号翻转、资金流零轴抖动抑制（末值绝对值小于峰值 5% 不触发）、量能大于前 20 根均量 3 倍，以及 5 分钟心跳边界。所有测试使用固定行情 fixture，禁止 mock LLM。
+- [ ] Step 2: 实现无 I/O 的纯函数触发库；所有价格、指标和 prediction 都作为显式参数传入。`detail` 必须包含触发前值、触发后值和命中的命名价位，供日志、prompt、点评流复用。
+- [ ] Step 3: 在 `monitor_engine` 增加无调度副作用的 `evaluate_realtime_snapshot(previous, current, prediction, last_comment_at, now)`，只返回 triggers（显式信号优先，只有无显式信号且心跳到期时才返回 heartbeat），不得直接调用 LLM 或写库。
+- [ ] Step 4: 盘前/休市等市场时段沿用 FinSight 现有 market-hours 与市场映射，不写死 ET、不接 Longbridge。行情缺字段时返回可诊断的 data-gap 结果，不把缺数据伪装成 heartbeat 成功。
+- [ ] 验收: 固定输入的 trigger 输出逐字节稳定；重复调用纯函数无外部副作用；heartbeat 在第 299 秒为 false、第 300 秒为 true，且显式 trigger 与 heartbeat 不重复发两条。
+- [ ] Commit: `feat(monitor): deterministic trigger library and heartbeat policy`
+
+### D-2: 页面 lease 门控（没人看，不跑高频 AI）
+
+**Files:**
+- Create: `backend/services/monitor_lease_store.py`、`frontend/src/hooks/useMonitorLease.ts`
+- Modify: `backend/api/monitor_router.py`、`backend/services/monitor_engine.py`、`backend/api/lifespan.py`、`frontend/src/pages/Dashboard.tsx`
+- Test: `backend/tests/test_monitor_lease_store.py`、`backend/tests/test_monitor_router.py`、`frontend/src/hooks/useMonitorLease.test.ts`
+
+**PostgreSQL 表:** `monitor_page_leases(id UUID, user_id TEXT, session_id TEXT, symbol TEXT, lease_token_hash TEXT, expires_at TIMESTAMPTZ, updated_at TIMESTAMPTZ)`；唯一约束为 `(user_id, lease_token_hash)`，并建 `(user_id, session_id, symbol, expires_at)` 查询索引，允许同一用户的两个页面实例各持一个 lease。默认 TTL 90 秒，只存 token hash，不存明文 lease token。
+
+- [ ] Step 1: TDD 覆盖 acquire/renew/release/过期清理、不同 user 同 symbol 隔离、伪造 user_id 无效，以及两个页面实例分别持有 lease 时关闭一个不会误释放另一个。
+- [ ] Step 2: FastAPI 增加 `POST /api/monitor/leases`、`PUT /api/monitor/leases/{id}`、`DELETE /api/monitor/leases/{id}`；user_id 从鉴权上下文取得，renew/release 同时校验 lease token 与租户。数据库或鉴权不可用时 fail closed，不启动高频 AI。
+- [ ] Step 3: `useMonitorLease(symbol)` 在 Dashboard/技术图表可见且页面非 hidden 时 acquire，每 30 秒 renew；`visibilitychange`、symbol 变化和 unmount 时 release。网络瞬断允许服务端 TTL 自然回收，前端不得无限重试。
+- [ ] Step 4: 在现有 lifespan scheduler 装配 60 秒实时 tick，并用 PostgreSQL advisory lock 保证多 worker 只有一个 tick 执行。每个未过期 lease 自身创建一个临时高频 target；若同 symbol 已有持久 monitor target 则继承其阈值，否则用只读默认阈值。仅有 trigger/heartbeat 才进入 LangGraph L2/点评调用；原有低频持仓扫描/邮件提醒不受 lease 影响。
+- [ ] 验收: 打开两个 symbol 页面即只运行对应两个临时高频目标（无需预建 monitor target）；关闭后 90 秒内停止；直接伪造请求不能为其他用户续租；PostgreSQL 中无永不过期 lease；连续运行 10 分钟 60 秒 tick 无重入、无活跃 lease 时 LLM 调用为 0、heartbeat 每 symbol 最多 5 分钟一次。
+- [ ] Commit: `feat(monitor): tenant-safe page leases gate high-frequency AI monitoring`
+
+### D-3: 点评流 + prediction 图表深链
+
+**Files:**
+- Create: `backend/services/monitor_comment_store.py`、`frontend/src/hooks/useMonitorCommentFeed.ts`、`frontend/src/components/workbench/MonitorCommentFeed.tsx`
+- Modify: `backend/api/monitor_router.py`、`backend/services/monitor_engine.py`、`frontend/src/components/workbench/FindingsFeed.tsx`、`frontend/src/components/SmartChart.tsx`
+- Test: `backend/tests/test_monitor_comment_store.py`、`backend/tests/test_monitor_router.py`、`frontend/src/components/workbench/MonitorCommentFeed.test.tsx`
+
+**PostgreSQL 表:** `monitor_comments(id UUID, user_id TEXT, session_id TEXT, symbol TEXT, ts TIMESTAMPTZ, level TEXT, text TEXT, trigger_kind TEXT, trigger_detail TEXT, source TEXT, escalated BOOLEAN, prediction_id UUID NULL)`；`FOREIGN KEY(prediction_id, user_id) REFERENCES agent_predictions(id, user_id)`，数据库层阻止跨租户错误关联。服务端根据 id 生成 `/dashboard/{symbol}?analysis={prediction_id}`，数据库不存前端 URL。
+
+- [ ] Step 1: TDD 固化点评合同 `{ts,symbol,level,text,trigger,source,escalated,prediction_id}`，验证租户隔离、时间倒序、日期筛选、分页游标和相同 trigger 指纹去重。点评必须能追溯到 D-1 的 trigger；heartbeat 使用 info，异常使用 error。
+- [ ] Step 2: 补生产者 TDD：D-2 scheduler 把 trigger + 真实 snapshot + 可选 prediction 交给 bounded LangGraph commentator，服务端校验 `{level,text,source,escalated,prediction_id}` 后绑定原 trigger 并写 `monitor_comments`；模型失败/非法输出写一条去重的 `source=system, level=error` 诊断，禁止静默丢失或写入别人的 prediction_id。
+- [ ] Step 3: FastAPI 提供 `GET /api/monitor/comments` 与项目现有 SSE/事件通道的 comment 增量事件；订阅先返回当日快照，再发增量。断线重连按 `last_event_id` 补发并去重，不引入 Fastify/独立 WebSocket 服务。
+- [ ] Step 4: `MonitorCommentFeed` 渲染倒序时间流、level 徽标、触发原因、agent/system 署名、升级状态；连续 heartbeat info 折叠为「HH:mm-HH:mm 无事 xN」，alert 未读数复用现有 workbench 状态。
+- [ ] Step 5: 有 `prediction_id` 的点评显示「查看图表」深链；Dashboard 解析 `analysis` 参数，鉴权读取 prediction 后交给 A-4 overlay，并把视窗定位到 anchor 时间。无权限/已删除 prediction 返回 404，页面保留真实行情且不给出来源泄露提示。
+- [ ] 验收: 从一条 level_break 点评可一键进入同 symbol 图表并看到 anchor/entry/stop/target；刷新深链仍可恢复；心跳折叠后 alert 不被折叠；两个用户不能互读点评或 prediction。
+- [ ] Commit: `feat(monitor): attributable comment feed with replay and prediction chart deep-links`
+
+---
+
 ## 09 完成门禁
 
 - [ ] Part A: 让模型回答"画一下 AAPL 最近走势"→ 出的是真数据图（有来源徽标）；诱导模型输出内联价格图 → 不渲染或带「AI示意」标
 - [ ] Part B: 八条联动逐条手工走通（B-8 由 WP6 验收）；每条录一段 5 秒操作视频贴 PR
 - [ ] Part C: 12 条处置全部落地或按分支归档结论到 notes；`grep -rn "ResearchCard\|StockChart" frontend/src` → 0
+- [ ] Part D: 固定行情回放触发结果确定；无 lease 时高频 LLM 调用为 0；有 lease 时 heartbeat/trigger 点评可重放并深链到同一 prediction anchor
+- [ ] 技术栈反例: 依赖清单无 Longbridge、`pi-agent-core`、Fastify、`lightweight-charts`；新增 lease/comment/prediction 数据只落 PostgreSQL，不新增 SQLite 文件
 - [ ] 综合场景验收（模拟新用户 10 分钟）: 欢迎页进入 → 问一只票 → 点 ticker 进看板 → 看板问 AI → 加自选 → 工作台看晨报点深入 → 全程无死链、无"这是什么"时刻

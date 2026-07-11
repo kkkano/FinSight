@@ -19,7 +19,7 @@
 - **绝不执行 `git commit` / `git push` 以外主人未批准的 git 操作**；每个任务末尾的 commit 步骤须以约定式提交格式书写（feat/fix/refactor/test/chore/perf）。
 - Python 代码风格与现有代码一致：中文 docstring/注释可用；类型注解必须完整；禁止裸 `except:`；新增 `except Exception` 必须至少 `logger.debug` 留痕。
 - 前端遵守不可变更新（禁止直接 mutate state）；新文件 ≤400 行、既有文件不因新增内容超过 800 行（超了先拆）。
-- 所有新增/修改行为必须先写失败测试（TDD），后端 `pytest`、前端 `pnpm vitest run`（若项目使用其他 runner，以 `frontend/package.json` 的 `test` script 为准）。
+- 所有新增/修改行为必须先写失败测试（TDD），后端 `pytest`、前端 `pnpm test:unit`（以 `frontend/package.json` 的 `test:unit` script 为准）。
 - 每个任务保持"独立可回滚"：一个任务 = 一次 commit。
 - 环境变量新增时必须同步登记到 `.env.server.example`（带注释与默认值）。
 - 禁止引入新的重量级依赖，允许清单见各 WP 的 Global Constraints。
@@ -134,7 +134,7 @@
 # 1. 后端全量测试
 python -m pytest backend/tests -x -q
 # 2. 前端测试 + 构建
-cd frontend && pnpm test --run && pnpm build && cd ..
+cd frontend && pnpm test:unit && pnpm build && cd ..
 # 3. 金样快照（WP3 Task 0 建立后适用）
 python -m pytest tests/golden -x -q
 # 4. 启动冒烟（两终端或 docker compose）

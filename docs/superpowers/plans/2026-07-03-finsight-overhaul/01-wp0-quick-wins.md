@@ -223,7 +223,7 @@ it("保存失败时显示错误提示而不是静默", async () => {
 
 - [x] **Step 4: 运行确认失败**
 
-Run: `cd frontend && pnpm test --run SettingsModal`
+Run: `cd frontend && pnpm test:unit -- SettingsModal`
 Expected: 新用例 FAIL（找不到 "保存失败" 文案）。
 
 - [x] **Step 5: 实现**
@@ -241,7 +241,7 @@ Expected: 新用例 FAIL（找不到 "保存失败" 文案）。
 
 - [x] **Step 6: 运行确认通过**
 
-Run: `cd frontend && pnpm test --run SettingsModal`
+Run: `cd frontend && pnpm test:unit -- SettingsModal`
 Expected: PASS。
 
 - [x] **Step 7: Commit**
@@ -334,7 +334,7 @@ Run: `grep -n "response.clone()" frontend/src/api/client.ts`
 
 - [x] **Step 4: 验证**
 
-Run: `cd frontend && pnpm test --run && pnpm build`
+Run: `cd frontend && pnpm test:unit && pnpm build`
 手工冒烟：登录态发消息，DevTools Network 确认 `/api/chat` 请求头携带 `Authorization: Bearer …`。
 
 - [x] **Step 5: Commit**
@@ -453,5 +453,5 @@ git commit -m "fix(security): gate release-drill subprocess behind explicit env 
 ## WP0 完成门禁
 
 - [x] `python -m pytest backend/tests -x -q`（修订门禁：无新增失败，19 项基线固有失败清单见 tests/baseline-failures-4a1c055.txt）
-- [x] `cd frontend && pnpm test --run && pnpm build` 全绿（215 passed + build 1.5s）
-- [ ] 手工冒烟：聊天一轮、设置保存成功/失败各一次、登录后请求带 Authorization
+- [x] `cd frontend && pnpm test:unit && pnpm build` 全绿（215 passed + build 1.5s）
+- [x] 手工冒烟：聊天一轮、设置保存成功/失败各一次、登录后请求带 Authorization

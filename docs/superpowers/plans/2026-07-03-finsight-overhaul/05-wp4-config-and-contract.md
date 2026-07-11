@@ -198,7 +198,7 @@ export function withStreamGuards(cb: SSECallbacks, opts: { idleDoneMs?: number }
 ```
 
 `sendMessageStream` 改签名 `(body: SendMessageBody, callbacks: SSECallbacks, opts?: StreamOpts)`；原 13 位置参数的调用点（ChatInput）同步改写。
-- [ ] Step 4: `pnpm test --run && pnpm build` + 手工冒烟聊天/报告/执行台。
+- [ ] Step 4: `pnpm test:unit && pnpm build` + 手工冒烟聊天/报告/执行台。
 - [ ] Step 5: Commit
 
 ```bash
@@ -245,7 +245,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult
 ```
 
 **Steps:**
-- [ ] Step 1: hook 骨架 + 把 handleSend 逻辑分七块注释锚点逐块搬运（每块搬完 `pnpm test --run` 一次）。
+- [ ] Step 1: hook 骨架 + 把 handleSend 逻辑分七块注释锚点逐块搬运（每块搬完 `pnpm test:unit` 一次）。
 - [ ] Step 2: Retry 切换：`ChatList` 的 `handleRetry` 改为 `chatStream.retry(message.id)`（带 sessionId、带 history，修复 FE-10）。
 - [ ] Step 3: 删除 ChatInput 内两套假进度中的本地一套（保留 executionStore 的 `PIPELINE_STAGE_BASE_PROGRESS`）。
 - [ ] Step 4: 手工冒烟：发送/停止/重试/断流回捞/执行台联动。Commit：
@@ -288,7 +288,7 @@ export const zh = {
 } as const
 ```
 
-**Steps:** grep 上述四文件中全部用户可见硬编码串 → 挪入常量表 → 引用替换 → `pnpm test --run`（涉及断言文案的测试同步改）→ Commit：
+**Steps:** grep 上述四文件中全部用户可见硬编码串 → 挪入常量表 → 引用替换 → `pnpm test:unit`（涉及断言文案的测试同步改）→ Commit：
 
 ```bash
 git commit -am "refactor(i18n): user-facing copy centralized in locales/zh.ts, mixed-language strings unified to Chinese"
@@ -299,7 +299,7 @@ git commit -am "refactor(i18n): user-facing copy centralized in locales/zh.ts, m
 ## WP4 完成门禁
 
 - [ ] `python -m pytest backend/tests tests/golden -x -q` 全绿（含 openapi 快照测试）
-- [ ] `cd frontend && pnpm gen:api && git diff --exit-code src/api/schema.d.ts && pnpm test --run && pnpm build`
+- [ ] `cd frontend && pnpm gen:api && git diff --exit-code src/api/schema.d.ts && pnpm test:unit && pnpm build`
 - [ ] `grep -rn "def _env_int" backend --include="*.py" | grep -v utils/env.py` → 空
 - [ ] `grep -n "Promise<any>" frontend/src/api` → 0 处
 - [ ] 手工冒烟：聊天全链路 + 设置保存 + 仪表盘

@@ -2,6 +2,9 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP3-Task8 收尾实现与完成门禁 | defa0ce | shim/旧 router 清理、silent pass 治理与 execution/policy/synthesis 拆分完成；全量 1898 passed/26 failed/13 errors 后定位 20 个新增结果均为测试 patch 目标未迁移，修正后受影响 26 passed；剩余 19 项与固化环境基线一致；本次提交前关键回归 62 passed；nodes 最大 799 行、main 42 行、生产 `_stub.py` 为 0；假 Agent 演练为新实现文件 + 3 个既有接线点。 |
+| 2026-07-11 | WP2 任务级隔离纠偏复审 | defa0ce | 显式空依赖、全局 barrier、无 URL 去重、跨 task 可变别名、selection evidence、共享 source scope、embedded claim scope 共 7 passed；全仓 ruff F821 通过。 |
+| 2026-07-11 | WP0/WP1 手工与前端完成门禁 | e453959 | mock SSE 聊天/Authorization/设置成功失败/生成中输入/停靠滚动/复制/重试/删除确认通过；3231 字、373 帧，P95 16.8ms、最大 33.4ms、0 long task；当前 `pnpm test:unit` 38 files/225 passed，`pnpm build` 成功。 |
 | 2026-07-09 | WP3-Task7 rebalance schema下沉+分层守护 | c821b96 | test_layering 1 passed（五下层包零 backend.api import）；rebalance回归5 passed；金样12零diff；main import冒烟OK |
 | 2026-07-09 | WP3-Task6 api/main拆分+*_stub节点改名 | 987e466 | 全量1887 passed/19 failed=基线一致；金样12零diff；uvicorn /health=200；main 1355→288行(security_gate/lifespan/app_factory/session_context四件套)，execute_plan_node/render_node改名+shim，RAG ingestion 12函数迁backend/rag/ingestion.py |
 | 2026-07-09 | WP3-Task5 report_builder四域拆分+formatter注册表 | d4371a2 | report域回归149 passed（4失败=基线report项）+金样12零diff；全量1887 passed/19 failed=基线一致；report_builder 2693→1825行壳，citations/grounding/quality_hints/agent_formatters/util 五模块 |

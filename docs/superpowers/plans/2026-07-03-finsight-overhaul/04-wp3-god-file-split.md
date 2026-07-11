@@ -272,8 +272,8 @@ assert not _missing, f"agents missing display meta: {_missing}"
 - Modify: 顺手治理 BE-03 中"本 WP 碰过的文件"里的 `except: pass` → 全部补 `logger.debug(..., exc_info=True)`（只加日志，不改控制流）。
 
 **Steps:**
-- [ ] Step 1-3: 依次执行上述三组；每组全量 + 金样验证。
-- [ ] Step 4: Commit
+- [x] Step 1-3: 依次执行上述三组；每组全量 + 金样验证。
+- [x] Step 4: Commit
 
 ```bash
 git commit -am "refactor(cleanup): remove WP3 shims, merge agents routers, annotate silent excepts in touched files"
@@ -283,7 +283,7 @@ git commit -am "refactor(cleanup): remove WP3 shims, merge agents routers, annot
 
 ## WP3 完成门禁
 
-- [ ] `python -m pytest backend/tests tests/golden -x -q` 全绿，金样全程零 diff
-- [ ] `wc -l` 抽查：`nodes/` 与 `api/main.py` 无 >900 行文件；仓库不再有 `*_stub` 命名的生产模块
-- [ ] `python -m pytest backend/tests/test_layering.py -x -q` 绿（依赖方向守护生效）
-- [ ] 新增 agent 演练（文档验证）：按 `docs/AGENTS_GUIDE.md` 走一遍"加一个假 agent"，确认改动点 ≤3 处（capability_registry + adapter 映射 + display meta 同文件）——把演练结果写进 PR 描述
+- [x] `python -m pytest backend/tests tests/golden -x -q` 全绿，金样全程零 diff
+- [x] `wc -l` 抽查：`nodes/` 与 `api/main.py` 无 >900 行文件；仓库不再有 `*_stub` 命名的生产模块
+- [x] `python -m pytest backend/tests/test_layering.py -x -q` 绿（依赖方向守护生效）
+- [x] 新增 agent 演练（文档验证）：按 `docs/AGENTS_GUIDE.md` 走一遍"加一个假 agent"，确认改动点 ≤3 处（capability_registry + adapter 映射 + display meta 同文件）——把演练结果写进 PR 描述

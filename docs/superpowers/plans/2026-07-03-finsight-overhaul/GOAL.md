@@ -7,7 +7,7 @@
 1. **单一事实源**：任务定义、代码、验收标准一律以 spec 文件为准，禁止自由发挥、禁止"顺手优化"spec 之外的东西。执行顺序：**WP0 → WP1 → 08(Task1-3) → WP2 → WP3 → WP4 → WP5 → WP6 → 08(Task4-11) → 09 → 10**。
 2. **进度账本**：`docs/superpowers/plans/2026-07-03-finsight-overhaul/PROGRESS.md` 是唯一进度事实源。每完成一个任务：①把 spec 里对应 checkbox 从 `- [ ]` 改 `- [x]`；②PROGRESS.md 追加一行 `日期 | 文档-任务号 | commit hash | 测试结果`。**每次会话开始的第一件事：读 PROGRESS.md + `git log --oneline -15` 定位断点，从下一个未完成任务继续，绝不重做已完成任务。**
 3. **任务纪律**：一个任务 = 先写 spec 给的失败测试 → 实现 → 测试绿 → 用 spec 给的 commit message 提交一次。同一任务失败重试最多 2 次，仍失败 → 写入 `BLOCKED.md`（任务号/失败原因/尝试记录），跳过它继续不受阻塞的任务，所在 WP 收尾时回头再试一次。
-4. **硬门禁（不过不得进入下一个 WP）**：`python -m pytest backend/tests tests/golden -x -q` 全绿；`cd frontend && pnpm test --run && pnpm build` 全绿；标注 [MECHANICAL] 的任务金样快照零 diff（禁止用 GOLDEN_UPDATE 掩盖非预期 diff）。
+4. **硬门禁（不过不得进入下一个 WP）**：`python -m pytest backend/tests tests/golden -x -q` 全绿；`cd frontend && pnpm test:unit && pnpm build` 全绿；标注 [MECHANICAL] 的任务金样快照零 diff（禁止用 GOLDEN_UPDATE 掩盖非预期 diff）。
 5. **git 纪律**：所有工作在分支 `overhaul/main`（首次启动时从当前 HEAD 创建并切换）。只 commit，**绝不 push、绝不碰 main、绝不 force 操作**。
 6. **依赖白名单（已预先批准，除此之外一律不装）**：`pydantic-settings`、`PyJWT[crypto]`、`akshare`、`openapi-typescript`、`@fontsource-variable/jetbrains-mono`、`vite-plugin-pwa`、`@tanstack/react-query`、`virtua`。每装一个在 PROGRESS.md 登记。
 7. **偏差处理**：spec 行号漂移/结构不符 → 按 spec 的 grep 锚点自行适配，偏差记入 PROGRESS.md 的 `## Deviations` 段；语义级冲突（照做会破坏行为或做不了）→ 记 BLOCKED.md 跳过，**不许擅自改设计**。

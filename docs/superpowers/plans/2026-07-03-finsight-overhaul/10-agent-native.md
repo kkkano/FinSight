@@ -5,7 +5,9 @@
 **基线 commit:** `4a1c055`
 **Goal:** 把"7 个智能体"从聊天管线里的匿名执行单元，提升为产品的一等公民：有组织（分工/质询/委托）、有身份（档案/记忆/战绩）、有存在感（tab 驻场、署名、随处可召唤）。
 
-**Architecture:** 三层递进——组织学（后端协作协议，Part 1）→ 身份系统（档案/记忆/战绩，Part 2）→ 感知层（评分器合一、驻场、署名，Part 3）。Part 1 依赖 WP2 的 DAG 执行器与证据黑板；Part 2/3 可与 WP2 并行。
+**Architecture:** 三层递进——组织学（后端协作协议，Part 1）→ 身份系统（档案/记忆/锚定预测/战绩与成本，Part 2）→ 感知层（评分器合一、驻场、署名，Part 3）。Part 1 依赖 WP2 的 DAG 执行器与证据黑板；Part 2 在 09 D-0 的最小 prediction contract/store/submit 上扩展，不反向阻塞 09；Part 3 消费前两层。Kansoku 只提供「submit 校验、锚点、确定性对账、成本归档」的闭环范式，运行时仍采用现有 FastAPI + LangGraph + PostgreSQL，图表消费端仍为 ECharts。
+
+**Kansoku 适配硬边界:** 不引入 Longbridge、`pi-agent-core`、单用户 SQLite 新表、Fastify 内嵌 Vite 或 `lightweight-charts`。模型不生成行情、不直接写数据库；所有 prediction 经服务端 Pydantic + 业务规则校验后，由受信任服务写入带 `user_id` 的 PostgreSQL 表。
 
 ---
 
@@ -112,7 +114,7 @@ def lead_agent_for_operation(operation: str) -> str:
 
 **Files:**
 - Modify: `backend/agents/base_agent.py`（AgentOutput 增加 `requests: list[dict]` 字段，反思循环允许产出 `{"type": "delegate", "evidence": "peer_tickers", "reason": …}`）
-- Modify: `backend/graph/dag_executor.py`（WP2 产物）：agent step 完成后若 output.requests 非空且 `FINSIGHT_AGENT_DELEGATION=on` → 查 `DELEGATION_CATALOG` 追加**最多 1 个**动态 tool step（depends_on 空，产出写黑板供后续 agent 与 synthesize 读取）
+- Modify: `backend/graph/dag_executor.py`（WP2 产物）：agent step 完成后若 output.requests 非空且 `FINSIGHT_AGENT_DELEGATION=on` → 查 `DELEGATION_CATALOG` 追加**最多 1 个**动态 tool step；动态 step 必须 `depends_on=[requesting_agent_step_id]`、继承其 `task_ids`，同 task 的后续 agent/synthesize barrier 必须等待该 step，产出只写对应 task 黑板。
 - Create: `backend/graph/planning/delegation.py`：
 
 ```python
@@ -125,74 +127,149 @@ DELEGATION_CATALOG: dict[str, dict] = {
 LIMITS = {"max_dynamic_steps_per_run": 2}
 ```
 
-- [ ] Step 1: TDD（agent 输出 requests → executor 追加白名单内 step 且全局不超 2 个；白名单外忽略并记 trace）。
-- [ ] Step 2: 实现（flag 默认 off；executor 侧改动 ≤40 行——只是"读 requests → 查表 → append step"，DAG 调度器天然支持动态加节点则直接加，否则在组间隙插入）。
+- [ ] Step 1: TDD（agent 输出 requests → executor 追加白名单内 step 且全局不超 2 个；断言 depends_on/requesting task_ids/barrier 正确，另一 task 看不到其证据；白名单外忽略并记 trace）。
+- [ ] Step 2: 实现（flag 默认 off；在当前调度批次结束后、同 task 下一阶段前插入受控 step，不允许运行中追加无依赖 root）。
 - [ ] Commit: `feat(agents): bounded delegation — agents may request whitelisted supplementary evidence steps`
 
 ---
 
 ## Part 2: 身份系统——记忆与战绩
 
-### Task 5: Agent 观点档案（stance ledger）
+### Task 5: Agent 观点与预测锚点档案（stance + prediction ledger）
 
 **Files:**
-- Create: `backend/services/stance_store.py`、`backend/tests/test_stance_store.py`
-- Modify: `backend/graph/report_builder.py`（报告落库时同步写观点）、`backend/graph/adapters/agent_adapter.py`（AgentBrief.context_digest 注入历史观点）
+- Modify: `backend/agents/prediction_contract.py`、`backend/services/agent_prediction_store.py`（09 D-0 产物）
+- Test: `backend/tests/test_prediction_contract.py`、`backend/tests/test_agent_prediction_store.py`
+- Modify: `backend/graph/report_builder.py`（报告落库时同步写已校验观点）、`backend/graph/adapters/agent_adapter.py`（AgentBrief.context_digest 注入历史观点）
 
-**存储（SQLite，模式对齐 portfolio_store；WP5 后自带 user_id）:**
+**Pydantic 合同（行情与判断分离）:**
+
+```python
+class PredictionAnchor(BaseModel):
+    timeframe: str
+    time: datetime
+    price: Decimal
+
+class PredictionScenario(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    probability: int = Field(ge=0, le=100)
+    invalidation: str = Field(min_length=1, max_length=200)
+
+class AgentPrediction(BaseModel):
+    symbol: str
+    agent: str
+    direction: Literal["long", "short", "neutral"]
+    confidence: float = Field(ge=0, le=1)
+    thesis: str = Field(min_length=1, max_length=400)
+    anchor: PredictionAnchor
+    entry_type: Literal["market", "limit", "stop"] | None = None
+    entry: Decimal | None = None
+    stop: Decimal | None = None
+    target1: Decimal | None = None
+    target2: Decimal | None = None
+    invalidation_price: Decimal | None = None
+    range_low: Decimal | None = None
+    range_high: Decimal | None = None
+    scenarios: list[PredictionScenario] = Field(min_length=2, max_length=4)
+```
+
+`AgentPrediction` 只表达判断和价位，不允许 `bars/candles/series/ohlc` 字段（`extra="forbid"`）。long/short 必须有 entry_type/entry/stop/target1/invalidation_price；neutral 必须无 entry/stop/target 且有 range_low/range_high。anchor 的最终时间和价格由服务端用现有真实 quote/K 线校准，不接受模型伪造行情。逐 bar 入场/跳空/同 bar 冲突规则沿用 09 D-0，不在 10 另造第二套语义。
+
+**PostgreSQL 存储（新表不落 SQLite）:**
 
 ```sql
-CREATE TABLE IF NOT EXISTS agent_stances (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE IF NOT EXISTS agent_predictions (
+  id UUID PRIMARY KEY,
+  user_id TEXT NOT NULL,
   agent TEXT NOT NULL,            -- "technical_agent"
   ticker TEXT NOT NULL,
-  stance TEXT NOT NULL,           -- bullish | bearish | neutral
-  confidence REAL,
-  thesis TEXT NOT NULL,           -- ≤200字 观点摘要
-  price_at_stance REAL,           -- 表态时价格（评估战绩用）
+  direction TEXT NOT NULL,        -- long | short | neutral
+  confidence DOUBLE PRECISION NOT NULL,
+  thesis TEXT NOT NULL,
+  timeframe TEXT NOT NULL,
+  anchor_time TIMESTAMPTZ NOT NULL,
+  anchor_price NUMERIC NOT NULL,
+  entry_type TEXT,
+  entry_price NUMERIC,
+  stop_price NUMERIC,
+  target1_price NUMERIC,
+  target2_price NUMERIC,
+  invalidation_price NUMERIC,
+  range_low NUMERIC,
+  range_high NUMERIC,
+  scenarios JSONB NOT NULL,
   report_id TEXT,
-  created_at TEXT NOT NULL,
-  user_id TEXT NOT NULL DEFAULT 'public'
+  run_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (direction IN ('long', 'short', 'neutral')),
+  UNIQUE (id, user_id)
 );
-CREATE INDEX IF NOT EXISTS idx_stances_agent_ticker ON agent_stances(agent, ticker, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_predictions_owner_ticker
+  ON agent_predictions(user_id, ticker, created_at DESC);
 ```
 
 **接口:**
 
 ```python
-def record_stance(*, agent: str, ticker: str, stance: str, confidence: float | None,
-                  thesis: str, price_at_stance: float | None, report_id: str | None,
-                  user_id: str = "public") -> None
-def latest_stances(*, ticker: str, limit_per_agent: int = 1, user_id: str = "public") -> list[dict]
-def stance_history(*, agent: str, ticker: str, limit: int = 5, user_id: str = "public") -> list[dict]
+def record_prediction(*, prediction: AgentPrediction, user_id: str,
+                      run_id: str, report_id: str | None) -> UUID: ...
+def latest_predictions(*, ticker: str, user_id: str,
+                       limit_per_agent: int = 1) -> list[dict]: ...
+def prediction_history(*, agent: str, ticker: str, user_id: str,
+                       limit: int = 5) -> list[dict]: ...
 ```
 
-**提取来源:** 报告构建时各 agent 的 summary 已含方向性判断——`grep -n "stance\|bullish\|看多\|看空" backend/graph/report_builder.py backend/graph/nodes/synthesize.py` 找现有 stance 字段（架构报告确认 report 有 stance 概念）；若 agent 级 stance 不存在，则用确定性规则从 summary 提取（关键词表：看多/买入/bullish→bullish 等），提取不出记 neutral。
+- [ ] Step 1: 在 09 D-0 测试上扩展 scenarios/历史合同：long/short 缺 entry_type/entry/stop/target1/invalidation_price 拒绝；neutral 带 entry 或 range 不含 anchor 拒绝；scenario 概率和不在 90-110 拒绝。
+- [ ] Step 2: 用项目 PostgreSQL 连接/迁移机制实现 store；user_id 只从服务端身份传入，所有读写 SQL 必须同时约束 user_id。测试使用事务隔离的 PostgreSQL fixture，不以临时 SQLite 代替。
+- [ ] Step 3: 报告完成时仅归档通过 Task 5A 校验的 prediction；没有结构化 prediction 时保留原报告但不从 summary 关键词猜价位、不伪造 anchor，并记录 `prediction_missing` 诊断。
+- [ ] Step 4: 回忆注入——agent_adapter 构造 AgentBrief 时读取同 user/agent/ticker 最近一条 prediction，在 context_digest 前追加 `你上次({anchor_time})对{ticker}判断 {direction}：{thesis前60字}；锚点 {anchor_price}，entry/stop/T1={...}，当前 outcome={...}`。历史观点只作上下文，不自动继承为本轮结论。
+- [ ] 验收: 每条可计分观点都有可信 anchor 与 entry/stop/target（neutral 为 range）；数据库无 `user_id='public'` 默认；AI payload 无法写入任何行情 series。
+- [ ] Commit: `feat(agents): postgres prediction ledger with trusted anchors and actionable levels`
 
-- [ ] Step 1: TDD（record→latest 读回；同 agent 同 ticker 多条按时间取最新；隔离 user_id）。
-- [ ] Step 2: 实现 store + report_builder 落库钩子（investment_report 完成时逐 agent 写一条）。
-- [ ] Step 3: 回忆注入——agent_adapter 构造 AgentBrief 时（WP2 T6 产物）：`stance_history(agent, ticker, limit=1)` 非空则在 context_digest 前追加一行 `你上次({date})对{ticker}的判断: {stance}({thesis前60字})，当时价格 {price}，现价 {now}`。**这一行就是"上次说超买，现在回调了"的来源**——agent 的 LLM 分析自然会呼应它。
-- [ ] Commit: `feat(agents): stance ledger — agents remember and revisit their own prior calls`
-
-### Task 6: 战绩追踪（事后验证，纯确定性）
+### Task 5A: `submit_prediction` 工具 + 服务端校验回路
 
 **Files:**
-- Create: `backend/services/stance_scoreboard.py`、`backend/tests/test_stance_scoreboard.py`
+- Create: `backend/agents/prediction_submit.py`
+- Modify: `backend/agents/base_agent.py`、`backend/graph/adapters/agent_adapter.py`、`backend/graph/dag_executor.py`
+- Test: `backend/tests/test_prediction_submit.py`、`backend/tests/test_agent_adapter_resilience.py`
+
+**协议:** 扩展 09 D-0 的 `submit_prediction`。仅 `prediction_eligible=true`（concrete ticker + `investment_opinion/technical/earnings_impact/report_generation` + 可计分 agent）的 LangGraph agent step 暴露终结工具，并要求恰好一次**成功的**终结提交；macro/news/qa/document/无 ticker step 不暴露工具且允许零提交。首次非法提交允许纠正一次。工具先做 Pydantic 校验，再从现有行情工具读取受信任 symbol/最新 bar 校准 anchor，最后执行领域规则：long 为 `stop < entry < target1`、short 为 `target1 < entry < stop`、T1 风险收益比 `abs(target1-entry) / abs(entry-stop) >= 1`、target2 比 target1 更远、neutral range 包含 anchor、scenario 概率和 `100±10`。不得信任模型提供的 user_id、agent、run_id 或 anchor quote。
+
+- [ ] Step 1: TDD 构造「eligible step 第一次 stop 方向错误 → 工具返回 `{ok:false,issues:[...]}` → 同一 agent step 修正后第二次通过」；断言只有最终通过值落库；另测 macro/news/qa/无 ticker step 不暴露工具、不产生 `prediction_missing` 失败。
+- [ ] Step 2: 实现结构化 issues（字段、规则、当前值、期望关系），通过 LangGraph tool result 原样回送模型；每个 agent step 最多 2 次提交，第二次仍失败则返回 `prediction_validation_failed`，主摘要可继续但不得落档或计入战绩。
+- [ ] Step 3: 服务端覆盖 `symbol/agent/user_id/run_id`；模型 anchor time 必须落在最新完整 bar 的一个 timeframe 内，anchor price 与服务端 bar close 偏差不得超过 0.5%，通过后以服务端 time/close 作为最终 anchor。行情不可用时 fail closed，不允许模型自报价格绕过。
+- [ ] Step 4: 记录 validation attempts、issues 和最终状态到 trace，但在用户输出/日志中脱敏；不引入 `pi-agent-core` 或开放式 agent loop。
+- [ ] 验收: 非法 RR、反向 stop、伪造 ticker/anchor、概率和错误都无法入库；一次纠错可成功；超过两次不会形成无限循环或重复计费。
+- [ ] Commit: `feat(agents): server-validated submit_prediction loop for LangGraph agents`
+
+### Task 6: 确定性 Outcome / 战绩与成本归档
+
+**Files:**
+- Create: `backend/services/prediction_outcomes.py`、`backend/services/agent_run_archive.py`
+- Test: `backend/tests/test_prediction_outcomes.py`、`backend/tests/test_agent_run_archive.py`
 - Modify: `backend/api/agents_router.py`（GET /api/agents 响应附带战绩摘要）
-- Modify: 调度器装配（`grep -n "start_interval_scheduler" backend/api/main.py`）加一个日更任务
+- Modify: `backend/services/llm_usage.py`、调度器装配（`backend/api/lifespan.py`）
 
 **规则（写死，不搞花活）:**
 
 ```
-每日一次: 对 30 天内的 bullish/bearish stance，取现价与 price_at_stance 比较:
-  bullish 且涨幅 > +3% → hit；bearish 且跌幅 < -3% → hit；反向越阈 → miss；±3% 内且不满 14 天 → pending
-agent 战绩 = 近 90 天 hit / (hit + miss)，样本 < 5 时显示"样本不足"而非百分比。
-存储: agent_stances 加列 outcome TEXT (pending|hit|miss)、evaluated_at TEXT（ensure_column 幂等迁移）。
+long/short: 从 anchor_time 后第一根完整 K 线开始扫描；先判 entry 是否触发，触发后按时间顺序判 target1/stop。
+  同一根 OHLC 同时穿 target 与 stop 时采用保守规则 hit_stop，并记 resolution_reason=same_bar_conservative。
+neutral: 固定 10 个交易日观察窗；窗口内收盘越出 range → broke_range，到期仍在 range → held_range。
+未到终点: open；入场前穿越失效价: invalidated。Outcome 计算只读真实 K 线，零 LLM 调用，可重复执行且幂等。
+agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算 hit，hit_stop/broke_range 算 miss；
+  invalidated 单独展示、不混入命中率；有效样本 <5 显示"样本不足"。
 ```
 
-- [ ] Step 1: TDD（构造已知价格路径 → 断言 hit/miss/pending 三态；样本不足逻辑）。
-- [ ] Step 2: 实现评估函数 + 日更调度（价格取现有 `fetch_price_snapshot` 通道，失败跳过当日）；agents_router 响应加 `{"track_record": {"window_days": 90, "hits": 7, "misses": 3, "hit_rate": 0.7}}`。
-- [ ] Commit: `feat(agents): deterministic track record — daily outcome evaluation of past stances`
+**PostgreSQL 归档:** `agent_prediction_outcomes(prediction_id UUID, user_id TEXT, status TEXT, resolved_at TIMESTAMPTZ, pct_since_anchor DOUBLE PRECISION, resolution_reason TEXT, evaluated_through TIMESTAMPTZ, updated_at TIMESTAMPTZ, PRIMARY KEY(prediction_id, user_id), FOREIGN KEY(prediction_id,user_id) REFERENCES agent_predictions(id,user_id))`，索引 `(user_id, status, updated_at)`；`agent_run_archive(..., user_id TEXT, prediction_id UUID NULL, ..., FOREIGN KEY(prediction_id,user_id) REFERENCES agent_predictions(id,user_id))`，索引 `(user_id, agent, created_at)`。数据库层必须拒绝跨租户 prediction 关联；成本从现有 LLM usage/cost trace 归集，不再新建 agent SQLite 库。
+
+- [ ] Step 1: TDD 用固定 OHLC fixture 覆盖 waiting/triggered/hit_target/hit_stop/held_range/broke_range/invalidated/open，以及同 bar 双穿的保守判定；重复执行结果与数据库行完全一致。
+- [ ] Step 2: 实现纯函数 resolver + PostgreSQL upsert；日更调度批量评估未决 prediction，行情缺口只推进 `evaluated_through` 到最后可信 bar，不把缺数据判 miss。
+- [ ] Step 3: 把每次 agent/monitor commentator/analyst 调用的 token、成本、耗时、状态按 `run_id + agent + layer` 归档，并可关联 prediction_id；失败/校验重试同样记成本，避免只统计成功调用。
+- [ ] Step 4: `/api/agents` 增加 `track_record` 与 `cost_summary`：90 天 hits/misses/invalidated/hit_rate、样本数、最近评估时间，以及 7/30 天 tokens/cost/run_count。所有聚合限定当前 user；管理员全局聚合走独立权限端点。
+- [ ] Step 5: Agent 档案页展示方向分桶战绩与成本趋势；成本高但无有效 prediction 的 run 单独计为 `unscored_runs`，不粉饰命中率。
+- [ ] 验收: outcome resolver 在断网、无模型环境仍可全量运行；同 fixture 在任意时区/重复执行结果一致；用户只能看到自己的战绩与成本；数据库可从 prediction 追到 run/cost/outcome 完整链路。
+- [ ] Commit: `feat(agents): deterministic prediction outcomes with postgres track-record and cost archive`
 
 ---
 
@@ -259,18 +336,26 @@ agent 战绩 = 近 90 天 hit / (hit + miss)，样本 < 5 时显示"样本不足
 
 - **不做自由多轮 agent 对话/AutoGPT 式自主循环**——挑战轮固定单轮、委托封顶 2 步，成本与时延可控。
 - **不做拟人化人设**（名字/头像照片/口头禅）——glyph + 职责 + 战绩就是金融产品该有的"人格"。
-- **不做 agent 间私聊记忆**——黑板 + stance ledger 已覆盖需求；跨 agent 共享记忆等于回到全局状态泥潭。
+- **不做 agent 间私聊记忆**——黑板 + prediction ledger 已覆盖需求；跨 agent 共享记忆等于回到全局状态泥潭。
 - **不做用户自建 agent**——7 个专家是产品定义的一部分，不是平台功能。
+- **不接 Longbridge，也不写死美股 ET 时段**——复用 FinSight 现有多市场行情与 market-hours 映射。
+- **不引入 `pi-agent-core`**——submit 工具与纠错回路直接落在现有 LangGraph agent step。
+- **不新增单用户 SQLite 档案库**——prediction/outcome/cost 全部使用带 user_id 的 PostgreSQL 表。
+- **不换 `lightweight-charts`**——图表锚点与价位层由现有 ECharts `markPoint/markLine/markArea` 消费（具体落地见 09 A-4）。
 
 ---
 
 ## 10 完成门禁
 
 - [ ] `python -m pytest backend/tests tests/golden -x -q` 全绿（金样按各 Task 说明处理署名 diff）
+- [ ] Prediction 合同验收：long/short 每条可计分观点都有可信 anchor + entry/stop/T1，neutral 有包含 anchor 的 range；非法 submit 经服务端 issues 回路最多纠正一次，仍非法不入库
+- [ ] Outcome/归档验收：固定 OHLC 回放的 outcome 逐字节稳定；`prediction -> outcome -> run -> agent cost` 可在 PostgreSQL 按同一 user_id 完整追溯，跨用户查询为空
 - [ ] 端到端叙事验收（模拟用户视角走一遍，录屏）：
   1. 打开技术 tab → 看到「技术面分析师 驻场 · 近90天命中率 xx%」→ 洞察卡署名同一人
   2. 点「深入分析」→ AgentWorkLog 里看到技术面分析师工作 → 结果署名一致
   3. 生成一份投资报告 → 各章节署名 + lead 领衔结论 + 「风险质询」小节（风险分析师对某家观点的具体质疑）
   4. 一周后再问同一只票 → 回答里出现"我上次判断…现在…"的观点回访
-  5. GET /api/agents → 7 个 profile 完整（身份/职责/战绩），前后端无一处硬编码 agent 中文名
+  5. 点一条历史 prediction → ECharts 定位到 anchor，并显示 entry/stop/target；战绩 outcome 与同一段真实 K 线一致
+  6. GET /api/agents → 7 个 profile 完整（身份/职责/战绩/成本），前后端无一处硬编码 agent 中文名
 - [ ] 关键反例检查：关闭 `DEBATE_GRAPH_ENABLED` 与 `FINSIGHT_AGENT_DELEGATION` 后主链路行为与今日一致（全部增强可独立降级）
+- [ ] 技术栈反例检查：依赖与 lockfile 无 Longbridge、`pi-agent-core`、`lightweight-charts`；仓库未新增 agent/prediction/outcome SQLite 文件

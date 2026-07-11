@@ -61,7 +61,7 @@ describe("persist debounce", () => {
 
 - [x] **Step 2: 运行确认失败**
 
-Run: `cd frontend && pnpm test --run persistDebounce`
+Run: `cd frontend && pnpm test:unit -- persistDebounce`
 Expected: FAIL（当前每次 update 都 setItem，调用数 ≈100）。
 
 - [x] **Step 3: 实现**
@@ -111,7 +111,7 @@ if (typeof window !== "undefined") {
 
 - [x] **Step 4: 运行确认通过**
 
-Run: `cd frontend && pnpm test --run persistDebounce && pnpm test --run`
+Run: `cd frontend && pnpm test:unit -- persistDebounce && pnpm test:unit`
 Expected: 新测试 PASS，全量无回归。
 
 - [x] **Step 5: Commit**
@@ -218,7 +218,7 @@ const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual)
 - [x] **Step 2: 验证**
 
 React DevTools Profiler：流式期间只有最后一条消息重渲染，历史消息 render 次数为 0。
-Run: `cd frontend && pnpm test --run && pnpm build`
+Run: `cd frontend && pnpm test:unit && pnpm build`
 
 - [x] **Step 3: Commit**
 
@@ -272,7 +272,7 @@ const updateMessageInSession = useStore((s) => s.updateMessageInSession)
 
 规则：**actions 用单独 selector 取（引用稳定），数据字段逐一取，禁止对象解构整个 store**。
 
-- [x] **Step 2: 验证**：Profiler 确认流式期间 ChatInput 不再每 token 重渲染。`pnpm test --run` 无回归。
+- [x] **Step 2: 验证**：Profiler 确认流式期间 ChatInput 不再每 token 重渲染。`pnpm test:unit` 无回归。
 
 - [x] **Step 3: Commit**
 
@@ -382,6 +382,6 @@ git commit -am "fix(ux): copy feedback state + confirm before conversation delet
 
 ## WP1 完成门禁
 
-- [ ] `cd frontend && pnpm test --run && pnpm build` 全绿
-- [ ] Profiler 实测：3000+ token 长回复流式期间无掉帧（对比录像/火焰图留档到 PR）
-- [ ] 手工清单：回看不被拽底 / 输入框可打字 / 复制有反馈 / 删除有确认 / 图表照常渲染
+- [x] `cd frontend && pnpm test:unit && pnpm build` 全绿
+- [x] Profiler 实测：3000+ token 长回复流式期间无掉帧（对比录像/火焰图留档到 PR）
+- [x] 手工清单：回看不被拽底 / 输入框可打字 / 复制有反馈 / 删除有确认 / 图表照常渲染

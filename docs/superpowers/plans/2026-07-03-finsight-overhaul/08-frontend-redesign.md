@@ -16,7 +16,7 @@
 
 - 允许的新依赖（需主人批准一次）：`@fontsource-variable/jetbrains-mono`（自托管等宽字体）。不批准则用系统 mono 栈回退，任务照常执行。
 - **纯表现层重构**：不改任何 API 调用与业务逻辑；与 WP1/WP4 同文件冲突时先做逻辑 WP 再做本文档。
-- 每个 Task 结束跑 `cd frontend && pnpm test --run && pnpm build`；视觉 Task 附截图到 PR。
+- 每个 Task 结束跑 `cd frontend && pnpm test:unit && pnpm build`；视觉 Task 附截图到 PR。
 - 旧 `--fin-*` 变量经 Task 1 别名后仍有效，允许渐进迁移；但每个 Task 完成后，其负责区域内**禁用清单必须清零**。
 
 **禁用清单（grep 可查的"廉价感"来源）:**
@@ -256,7 +256,7 @@ Commit: `feat(ui): TERMINAL design tokens — unified palette, tabular numerals,
 
 - [x] **Step 7: 输入框**：容器 `rounded-lg border border-t-border bg-t-surface focus-within:border-t-accent/70 focus-within:ring-1 focus-within:ring-t-accent/30`；发送按钮 primary 规格；@agent 与 /skill 弹层统一 `bg-t-elevated border border-t-border rounded-md`。
 
-- [x] **Step 8:** 改前/改后截图 + `pnpm test --run`（类名断言的测试同步改）。
+- [x] **Step 8:** 改前/改后截图 + `pnpm test:unit`（类名断言的测试同步改）。
 Commit: `feat(chat): document-flow AI replies, terminal caret, real-action loading — kill bubble-template look`
 
 ---
@@ -442,14 +442,14 @@ grep -rn "rounded-xl" src/components/ChatList.tsx src/components/ChatInput.tsx s
 ```
 
 - [ ] Step 2: 浅色模式全站过一遍（重点查对比度：正文 ≥4.5:1，devtools 抽查 5 处）。
-- [ ] Step 3: `pnpm test --run && pnpm build`；对话/看板/工作台/欢迎四张截图贴 PR。
+- [ ] Step 3: `pnpm test:unit && pnpm build`；对话/看板/工作台/欢迎四张截图贴 PR。
 - [ ] Step 4: Commit: `chore(ui): sweep banned patterns, light-mode contrast pass`
 
 ---
 
 ## 08 完成门禁
 
-- [ ] 禁用清单 grep 全零；`pnpm test --run && pnpm build` 全绿
+- [ ] 禁用清单 grep 全零；`pnpm test:unit && pnpm build` 全绿
 - [ ] 走查清单（逐条截图/录屏）：
   - 欢迎页 → 应用内：同一设计语言，无"换产品"感
   - 对话：AI 回答无气泡无渐变头像；流式尾部是闪烁光标；进度是阶段步进器而非百分比；表格数字等宽右对齐
