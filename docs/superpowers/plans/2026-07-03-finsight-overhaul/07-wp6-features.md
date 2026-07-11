@@ -83,11 +83,11 @@ DELETE /api/watchlist/{ticker}       → 204
 **存储:** SQLite 表 `watchlist(user_id TEXT NOT NULL DEFAULT 'public', ticker TEXT NOT NULL, note TEXT DEFAULT '', added_at TEXT NOT NULL, PRIMARY KEY(user_id, ticker))`，store 写法对齐 `portfolio_store` 现有模式。
 
 **Tasks:**
-- [ ] T1: store + router TDD（增/删/幂等/隔离四用例）→ 注册 router → OpenAPI 快照同步。
-- [ ] T2: 前端：Sidebar "自选" 区块（列表 + 快速跳 dashboard）；dashboard 股票页加 ☆ 收藏切换；ChatInput 底部快捷建议改为 `watchlist 前 4 只生成`（空则回退现有硬编码 4 条）。
-- [ ] T3: 联动：晨报生成入参与 monitor 默认标的列表接 watchlist（`grep -rn "morning_brief" backend/services` 找到标的来源处，watchlist 非空则优先）。
-- [ ] 验收：加两只票 → 快捷建议/晨报/监控默认值全部跟着变；匿名与登录态数据隔离。
-- [ ] Commit: `feat(watchlist): user watchlist store/api/ui wired into suggestions, morning brief and monitor defaults`
+- [x] T1: store + router TDD（增/删/幂等/隔离四用例）→ 注册 router → OpenAPI 快照同步。
+- [x] T2: 前端：Sidebar "自选" 区块（列表 + 快速跳 dashboard）；dashboard 股票页加 ☆ 收藏切换；ChatInput 底部快捷建议改为 `watchlist 前 4 只生成`（空则回退现有硬编码 4 条）。
+- [x] T3: 联动：晨报生成入参与 monitor 默认标的列表接 watchlist（`grep -rn "morning_brief" backend/services` 找到标的来源处，watchlist 非空则优先）。
+- [x] 验收：加两只票 → 快捷建议/晨报/监控默认值全部跟着变；匿名与登录态数据隔离。
+- [x] Commit: `feat(watchlist): user watchlist store/api/ui wired into suggestions, morning brief and monitor defaults`
 
 ---
 
