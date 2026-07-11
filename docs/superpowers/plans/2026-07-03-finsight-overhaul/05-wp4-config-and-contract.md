@@ -267,6 +267,12 @@ git commit -am "refactor(chat): useChatStream hook unifies send/retry/stop pipel
 
 范围：先迁 5 个最热 hook（`useDashboardData/useMarketQuotes/useMorningBrief/useFindings/usePortfolio`——以 `ls frontend/src/hooks` 实际为准）为 `useQuery` 包装；`QueryClientProvider` 挂 App 根；staleTime 默认 30s、行情类 5s。其余 20 个 hook 留待后续按需迁移。**未批准依赖前跳过。**
 
+**Steps:**
+- [x] Step 1: 安装 `@tanstack/react-query`，同步 npm/pnpm 双锁文件，并在应用根挂载 `QueryClientProvider`。
+- [x] Step 2: 迁移 `useDashboardData/useMarketQuotes/useMorningBrief/useFindings/usePortfolioSummary`，保持既有 hook 返回合同。
+- [x] Step 3: 默认 `staleTime=30s`、行情 `staleTime=5s`，保留发现流/行情/持仓的 60s 轮询与乐观更新语义。
+- [x] Step 4: 更新 Provider 相关测试，运行定向 lint、`pnpm test:unit` 与 `pnpm build`。
+
 ---
 
 ### Task 9: 中文文案常量表（UX-07 第一步）
