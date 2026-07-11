@@ -227,8 +227,8 @@ POST /api/backtest/prefill-from-report {"report_id": "…"}
 
 ## WP6 完成门禁
 
-- [ ] 每个 F 独立满足自己的验收行；全量 `pytest` + `pnpm test:unit && pnpm build` 绿
-- [ ] OpenAPI 快照与 TS 类型同步（WP4 门禁复跑）
+- [ ] 每个 F 独立满足自己的验收行；全量 `pytest` + `pnpm test:unit && pnpm build` 绿（本地全量已绿；F1 T3 等生产网络重试）
+- [x] OpenAPI 快照与 TS 类型同步（WP4 门禁复跑）
 - [ ] 手机 + 桌面各过一遍核心流程录屏留档
 
 ---
