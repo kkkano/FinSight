@@ -215,7 +215,7 @@ export interface CNMarketListResponse {
 
 export interface BacktestRunRequest {
   ticker: string;
-  strategy?: 'ma_cross' | 'macd' | 'rsi_mean_reversion';
+  strategy?: 'buy_and_hold' | 'ma_cross' | 'macd' | 'rsi_mean_reversion';
   params?: Record<string, unknown>;
   start_date?: string;
   end_date?: string;
@@ -234,6 +234,19 @@ export interface BacktestRunResponse {
   trades?: Array<Record<string, unknown>>;
   equity_curve?: Array<Record<string, unknown>>;
   error?: string;
+}
+
+export interface BacktestPrefillConfig {
+  tickers: string[];
+  strategy: 'buy_and_hold' | 'ma_cross';
+  start: string;
+  end: string;
+  rationale: string;
+}
+
+export interface BacktestPrefillResponse {
+  config: BacktestPrefillConfig;
+  warnings: string[];
 }
 
 export interface ToolCapability {

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, GitCompareArrows,
-  Inbox, Library, Search,
+  FlaskConical, Inbox, Library, Search,
 } from 'lucide-react';
 
 import type { ReportIndexItem } from '../../api/client';
@@ -148,6 +148,7 @@ interface TimelineGroupProps {
   compareMode: boolean;
   onToggleCompare: (id: string) => void;
   onViewReport: (reportId: string) => void;
+  onBacktestReport: (reportId: string) => void;
 }
 
 function TimelineGroup({
@@ -158,6 +159,7 @@ function TimelineGroup({
   compareMode,
   onToggleCompare,
   onViewReport,
+  onBacktestReport,
 }: TimelineGroupProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -261,6 +263,19 @@ function TimelineGroup({
                     )}
                   </button>
                 </div>
+                {!compareMode && (
+                  <div className="mt-1.5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onBacktestReport(item.report_id)}
+                      className="inline-flex min-h-11 items-center gap-1 rounded px-2 text-2xs text-fin-muted transition-colors hover:bg-fin-primary/10 hover:text-fin-primary"
+                      data-testid={`workbench-report-backtest-${item.report_id}`}
+                    >
+                      <FlaskConical size={12} />
+                      回测此观点
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -346,6 +361,13 @@ function ReportSection({ reports, loading, selectedReportId, onSelectReport }: R
       navigate(`/chat?report_id=${encodeURIComponent(reportId)}`);
     },
     [navigate, onSelectReport],
+  );
+
+  const handleBacktestReport = useCallback(
+    (reportId: string) => {
+      navigate(`/backtest?prefill=${encodeURIComponent(reportId)}`);
+    },
+    [navigate],
   );
 
   const compareArray = useMemo(() => Array.from(compareIds), [compareIds]);
@@ -458,6 +480,7 @@ function ReportSection({ reports, loading, selectedReportId, onSelectReport }: R
               compareMode={compareMode}
               onToggleCompare={handleToggleCompare}
               onViewReport={handleViewReport}
+              onBacktestReport={handleBacktestReport}
             />
           ))}
       </div>

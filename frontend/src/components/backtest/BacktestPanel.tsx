@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import type { BacktestPrefillConfig } from '../../api/contracts';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { BacktestEquityChart } from './BacktestEquityChart';
 import { BacktestTradesTable } from './BacktestTradesTable';
 
 const STRATEGY_OPTIONS: Array<{ value: BacktestStrategy; label: string }> = [
+  { value: 'buy_and_hold', label: 'Buy & Hold 买入并持有' },
   { value: 'ma_cross', label: 'MA Cross 双均线' },
   { value: 'macd', label: 'MACD' },
   { value: 'rsi_mean_reversion', label: 'RSI 均值回归' },
 ];
 
-type BacktestStrategy = 'ma_cross' | 'macd' | 'rsi_mean_reversion';
+type BacktestStrategy = 'buy_and_hold' | 'ma_cross' | 'macd' | 'rsi_mean_reversion';
+
+interface BacktestPanelProps {
+  initialConfig?: BacktestPrefillConfig | null;
+}
 
 /** 数值型指标格式化：百分比补 %，大额净值用本地千分位。 */
 function fmtMetric(value: unknown, suffix = ''): string {
@@ -21,12 +27,24 @@ function fmtMetric(value: unknown, suffix = ''): string {
   return `${rounded}${suffix}`;
 }
 
-export const BacktestPanel: React.FC = () => {
+export const BacktestPanel: React.FC<BacktestPanelProps> = ({ initialConfig = null }) => {
   const [ticker, setTicker] = useState('AAPL');
   const [strategy, setStrategy] = useState<BacktestStrategy>('ma_cross');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    if (!initialConfig) return;
+    setTicker(initialConfig.tickers[0] || 'AAPL');
+    setStrategy(initialConfig.strategy);
+    setStartDate(initialConfig.start);
+    setEndDate(initialConfig.end);
+    setResult(null);
+    setError(null);
+  }, [initialConfig]);
 
   const run = async () => {
     setLoading(true);
@@ -35,6 +53,8 @@ export const BacktestPanel: React.FC = () => {
       const payload = await apiClient.runBacktest({
         ticker: ticker.trim().toUpperCase(),
         strategy,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
         initial_cash: 100000,
         t_plus_one: true,
       });
@@ -61,6 +81,15 @@ export const BacktestPanel: React.FC = () => {
 
   return (
     <section className="rounded-xl border border-fin-border bg-fin-card p-4">
+      {initialConfig?.rationale && (
+        <div className="mb-3 rounded-lg border border-fin-primary/30 bg-fin-primary/5 px-3 py-2 text-xs text-fin-text-secondary">
+          <span className="font-medium text-fin-primary">报告预填：</span>
+          {initialConfig.rationale}
+          {initialConfig.tickers.length > 1 && (
+            <span className="ml-1 text-fin-muted">当前回测引擎为单标的，已选用 {initialConfig.tickers[0]}。</span>
+          )}
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <Input label="Ticker" value={ticker} onChange={(event) => setTicker(event.target.value)} className="min-w-[160px]" />
         <div>
@@ -77,6 +106,8 @@ export const BacktestPanel: React.FC = () => {
             ))}
           </select>
         </div>
+        <Input label="开始日期" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+        <Input label="结束日期" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
         <Button variant="primary" onClick={run} disabled={loading}>
           {loading ? '回测中...' : '运行回测'}
         </Button>

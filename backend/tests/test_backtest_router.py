@@ -61,3 +61,34 @@ def test_backtest_router_run(monkeypatch):
     assert payload["success"] is True
     assert payload["ticker"] == "AAPL"
     assert payload["metrics"]["total_return_pct"] == 12.3
+
+
+def test_backtest_router_prefill_from_report(monkeypatch):
+    class _Store:
+        def get_report_by_id(self, *, report_id):
+            assert report_id == "rpt-1"
+            return {
+                "report_id": report_id,
+                "title": "Apple research",
+                "ticker": "AAPL",
+                "generated_at": "2026-07-11T08:30:00Z",
+                "recommendation": "BUY",
+            }
+
+    monkeypatch.setattr(backtest_router_module, "get_report_index_store", lambda: _Store())
+    response = _build_client().post("/api/backtest/prefill-from-report", json={"report_id": "rpt-1"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["config"]["strategy"] == "buy_and_hold"
+    assert payload["config"]["tickers"] == ["AAPL"]
+
+
+def test_backtest_router_prefill_handles_missing_report(monkeypatch):
+    class _Store:
+        def get_report_by_id(self, *, report_id):
+            return None
+
+    monkeypatch.setattr(backtest_router_module, "get_report_index_store", lambda: _Store())
+    response = _build_client().post("/api/backtest/prefill-from-report", json={"report_id": "missing"})
+    assert response.status_code == 404

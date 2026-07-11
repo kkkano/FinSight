@@ -73,6 +73,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/backtest/prefill-from-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prefill Backtest From Report */
+        post: operations["prefill_backtest_from_report_api_backtest_prefill_from_report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/backtest/run": {
         parameters: {
             query?: never;
@@ -1823,6 +1840,14 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
+        /** BacktestPrefillRequest */
+        BacktestPrefillRequest: {
+            /**
+             * Report Id
+             * @description report id
+             */
+            report_id: string;
+        };
         /** BacktestRequest */
         BacktestRequest: {
             /**
@@ -1869,7 +1894,7 @@ export interface components {
              * @default ma_cross
              * @enum {string}
              */
-            strategy: "ma_cross" | "macd" | "rsi_mean_reversion";
+            strategy: "buy_and_hold" | "ma_cross" | "macd" | "rsi_mean_reversion";
             /**
              * T Plus One
              * @description enable T+1 sell restriction
@@ -3503,6 +3528,39 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prefill_backtest_from_report_api_backtest_prefill_from_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacktestPrefillRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

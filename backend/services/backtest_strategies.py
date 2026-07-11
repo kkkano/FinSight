@@ -3,6 +3,14 @@
 from typing import Any
 
 
+def buy_and_hold_signals(closes: list[float]) -> dict[str, Any]:
+    return {
+        "name": "buy_and_hold",
+        "signals": [1 for _ in closes],
+        "params": {},
+    }
+
+
 def _ema(values: list[float], period: int) -> list[float]:
     if not values:
         return []
@@ -108,6 +116,9 @@ def build_strategy_signals(strategy: str, closes: list[float], params: dict[str,
     strategy_norm = str(strategy or "").strip().lower()
     cfg = params if isinstance(params, dict) else {}
 
+    if strategy_norm in {"buy_and_hold", "buy-hold", "hold"}:
+        return buy_and_hold_signals(closes)
+
     if strategy_norm in {"macd", "macd_strategy"}:
         return macd_signals(
             closes,
@@ -133,6 +144,12 @@ def build_strategy_signals(strategy: str, closes: list[float], params: dict[str,
 
 SUPPORTED_STRATEGIES = [
     {
+        "id": "buy_and_hold",
+        "name": "Buy and Hold",
+        "description": "首个交易日买入并持有至回测结束",
+        "default_params": {},
+    },
+    {
         "id": "ma_cross",
         "name": "MA Cross",
         "description": "短均线上穿长均线买入，下穿卖出",
@@ -155,6 +172,7 @@ SUPPORTED_STRATEGIES = [
 
 __all__ = [
     "SUPPORTED_STRATEGIES",
+    "buy_and_hold_signals",
     "build_strategy_signals",
     "ma_cross_signals",
     "macd_signals",

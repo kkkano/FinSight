@@ -178,7 +178,7 @@ class CNMarketQueryRequest(BaseModel):
 
 class BacktestRequest(BaseModel):
     ticker: str = Field(..., min_length=1, description="ticker")
-    strategy: Literal["ma_cross", "macd", "rsi_mean_reversion"] = Field(
+    strategy: Literal["buy_and_hold", "ma_cross", "macd", "rsi_mean_reversion"] = Field(
         "ma_cross",
         description="strategy id",
     )
@@ -190,6 +190,10 @@ class BacktestRequest(BaseModel):
     slippage_bps: Optional[float] = Field(None, ge=0, description="slippage basis points")
     t_plus_one: bool = Field(True, description="enable T+1 sell restriction")
     market: Optional[Literal["US", "CN", "HK"]] = Field(None, description="market hint")
+
+
+class BacktestPrefillRequest(BaseModel):
+    report_id: str = Field(..., min_length=1, max_length=200, description="report id")
 
 
 class UnsubscribeRequest(BaseModel):

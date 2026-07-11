@@ -222,6 +222,22 @@
         "title": "AttributionResponse",
         "type": "object"
       },
+      "BacktestPrefillRequest": {
+        "properties": {
+          "report_id": {
+            "description": "report id",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "BacktestPrefillRequest",
+        "type": "object"
+      },
       "BacktestRequest": {
         "properties": {
           "end_date": {
@@ -308,6 +324,7 @@
             "default": "ma_cross",
             "description": "strategy id",
             "enum": [
+              "buy_and_hold",
               "ma_cross",
               "macd",
               "rsi_mean_reversion"
@@ -3876,6 +3893,45 @@
         "summary": "Get Alert Feed",
         "tags": [
           "Alerts"
+        ]
+      }
+    },
+    "/api/backtest/prefill-from-report": {
+      "post": {
+        "operationId": "prefill_backtest_from_report_api_backtest_prefill_from_report_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestPrefillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prefill Backtest From Report",
+        "tags": [
+          "Backtest"
         ]
       }
     },

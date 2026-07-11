@@ -489,6 +489,24 @@ class ReportIndexStore:
             "citations": citation_items,
         }
 
+    def get_report_by_id(self, *, report_id: str, include_blocked: bool = False) -> dict[str, Any] | None:
+        """按全局唯一 report_id 读取完整报告，供同一受保护 API 内部联动使用。"""
+        where_clause = "WHERE report_id = ?"
+        if not include_blocked:
+            where_clause += " AND publishable = 1"
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT report_json FROM report_index " + where_clause,
+                (report_id,),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            payload = json.loads(row["report_json"])
+        except Exception:
+            return None
+        return payload if isinstance(payload, dict) else None
+
     def list_citations(
         self,
         *,

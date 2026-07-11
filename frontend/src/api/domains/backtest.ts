@@ -9,7 +9,14 @@ export const backtestApi = {
     return response.data;
   },
 
-async listBacktestStrategies(): Promise<{
+  async prefillBacktestFromReport(reportId: string): Promise<Contracts.BacktestPrefillResponse> {
+    const response = await api.post<Contracts.BacktestPrefillResponse>('/api/backtest/prefill-from-report', {
+      report_id: reportId,
+    });
+    return response.data;
+  },
+
+  async listBacktestStrategies(): Promise<{
     success: boolean;
     strategies: Array<Record<string, unknown>>;
   }> {
