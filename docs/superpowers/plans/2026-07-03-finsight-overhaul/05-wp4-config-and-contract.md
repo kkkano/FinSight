@@ -316,8 +316,8 @@ git commit -am "refactor(i18n): user-facing copy centralized in locales/zh.ts, m
 
 ## WP4 完成门禁
 
-- [ ] `python -m pytest backend/tests tests/golden -x -q` 全绿（含 openapi 快照测试）
-- [ ] `cd frontend && pnpm gen:api && git diff --exit-code src/api/schema.d.ts && pnpm test:unit && pnpm build`
-- [ ] `grep -rn "def _env_int" backend --include="*.py" | grep -v utils/env.py` → 空
-- [ ] `grep -n "Promise<any>" frontend/src/api` → 0 处
-- [ ] 手工冒烟：聊天全链路 + 设置保存 + 仪表盘
+- [x] `python -m pytest backend/tests tests/golden -x -q` 全绿（含 openapi 快照测试）
+- [x] `cd frontend && pnpm gen:api && git diff --exit-code src/api/schema.d.ts && pnpm test:unit && pnpm build`
+- [x] `grep -rn "def _env_int" backend --include="*.py" | grep -v utils/env.py` → 空
+- [x] `grep -n "Promise<any>" frontend/src/api` → 0 处
+- [x] 手工冒烟：聊天全链路 + 设置保存 + 仪表盘

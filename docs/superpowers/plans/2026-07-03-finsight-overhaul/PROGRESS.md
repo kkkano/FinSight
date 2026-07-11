@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4 完成门禁 | a0e71fa | 使用仓库 `.venv` 锁定 FastAPI 0.122.0/Pydantic 2.12.3，并注入不联网的测试专用兼容端点；修正 datetime SSE 测试的旧 `main.aget_graph_runner` patch 目标与列表式 trace 断言后，后端 + 金样 `1960 passed/8 skipped`，OpenAPI 快照通过。前端重新生成 API 类型零漂移，41 files/235 tests passed，生产 build 成功；`_env_int` 重复和 `Promise<any>` 均为 0。真实 Vite + Chromium 验证聊天发送/重试、设置保存成功且控制台 0 error；仓库 Playwright 仪表盘路由与 MiniChat 2/2 通过。 |
 | 2026-07-11 | WP4-Task9 中文文案常量表 | c204ea9 | 新建纯常量 `locales/zh.ts`，集中聊天输入、消息列表、会话状态和执行状态的用户可见文案，混合英文状态统一为中文；Task 7 已迁出的流式职责同步接入 `useChatStream`，避免形成第二文案源。停止状态与质量门禁测试引用同一常量；定向 lint 0 问题，相关 21 tests passed，完整前端 41 files/235 tests passed，生产 build 成功。 |
 | 2026-07-11 | WP4-Task8 React Query 热数据 hook 收敛 | 6132519 | 新增根级 `QueryClientProvider`，默认 staleTime 30s、行情 5s，关闭自动重试与窗口聚焦刷新以保持原语义；`useDashboardData/useMarketQuotes/useMorningBrief/useFindings/usePortfolioSummary` 迁入统一 query/mutation 缓存，保留 60s 轮询、晨报 localStorage 当日 TTL、发现流乐观更新和既有返回合同。删除持仓汇总 100+ 行自建缓存/订阅/定时器。npm/pnpm 双锁同步；41 files/235 tests passed，生产 build 成功，改动文件定向 lint 0 问题。 |
 | 2026-07-11 | WP4-Task7 useChatStream 统一发送/重试/停止 | c039b43 | `useChatStream` 以七块注释锚点统一模糊查询守卫、ticker/history、SSE/store 桥接、报告回捞、图表补挂与会话收尾；Retry 改为同一 SSE 管线并原位更新。`ChatInput.tsx` 由约 930 行降至 249 行，组件内 `handleSend` 5 行；本地假进度映射和 ChatList 非流式 Retry 清零。前端 40 files/234 tests passed，生产 build 成功；真实 Vite + Chromium 冒烟覆盖发送、重试、停止、断流回捞与执行台联动，全部通过且控制台 0 error；本任务四文件定向 lint 0 问题，全仓 lint 仍仅为未改动文件既有 2 errors/3 warnings。 |
@@ -55,9 +56,11 @@
 | 2026-07-03 | WP0-Task1 price.py级联bug | 79ffdfd | 新测2 passed(旧实现复验FAIL)+回归22 passed |
 
 ## Installed Dependencies
+- 2026-07-11 | `.venv playwright==1.61.0` | 仅用于 WP4 浏览器门禁的本地 QA 运行，不写入项目 requirements/前端锁文件；Chromium 复用主机 Chrome 可执行文件。
 - 2026-07-11 | `@tanstack/react-query@5.101.2` | WP4-Task8 经主人对完整 Goal 所需依赖的授权安装；用于高频数据 hook 的请求去重、缓存、轮询与 mutation 状态收敛，npm/pnpm 双锁文件已同步。
 
 ## Deviations
+- 2026-07-11 | WP4-Gate | 系统 Python 的 FastAPI 0.135.3/Pydantic 2.12.5 会令 `ValidationError` schema 多出 `ctx/input`，与仓库锁定快照不一致；门禁改用现有 `.venv` 中 requirements 锁定的 0.122.0/2.12.3，快照随即通过，未误写生成物。为避免测试调用真实 LLM 或消耗额度，测试进程只注入本地不可达兼容端点满足启动解析，所有真实密钥均未读取或回显。浏览器仪表盘自写文本 locator 受内部滚动与重复 DOM 干扰，最终采用仓库稳定 Playwright 场景完成路由和 MiniChat 验收。
 - 2026-07-11 | WP4-T9 | spec 按 Task 9 编写时只列出 `ChatInput/ChatList/executionStore/useStore`；Task 7 已将发送、重试、停止和 SSE 状态从组件迁入 `useChatStream`。为保持文案单一事实源，本任务将该 hook 一并纳入替换范围，未引入 i18n 框架。
 - 2026-07-11 | WP4-T8 | spec 按候选名写 `usePortfolio`，仓库实际不存在该 hook；按“以 hooks 目录实际为准”迁移被 Workbench、Sidebar、Watchlist、右侧栏共同高频消费的 `usePortfolioSummary`。晨报生成是写操作，采用 `useMutation` 负责生成、`useQuery` 负责按会话读取当日 localStorage 缓存，而非把 POST 伪装成 query。
 - 2026-07-11 | WP4-T7 | spec 以旧版 `handleSend` 543 行估算组件收缩目标；实际任务开始时 `ChatInput.tsx` 约 930 行。完成后组件为 249 行，但真正的组件内 `handleSend` 仅 5 行，全部流式职责已迁入 478 行的 `useChatStream`；hook 作为单一管线保留七块职责锚点，不为追求文件行数再做无契约收益的拆分。
