@@ -197,9 +197,9 @@ type PredictionOverlay = {
 ### C-6: StockChart vs SmartChart vs InlineChart 三套图表组件 —— 合并
 
 **证据:** StockChart 仅 RightPanelChartTab 引用；InlineChart 与 SmartChart 的 line/candle builder 重复。
-- [ ] Step 1: RightPanelChartTab 改用 SmartChart 的 ref 模式（传 symbol + 真数据 fields）；`git rm` StockChart。
-- [ ] Step 2: InlineChart 的 buildLineOption/buildCandleOption 与 SmartChart 对应 builder 合并到一处（08 Task 6 的主题重写时顺路做，放 `charts/builders` 或先合入 SmartChart）。
-- [ ] Commit: `refactor(charts): one chart component family — StockChart removed, builders deduped`
+- [x] Step 1: RightPanelChartTab 改用 SmartChart 的 ref 模式（传 symbol + 真数据 fields）；`git rm` StockChart。
+- [x] Step 2: InlineChart 的 buildLineOption/buildCandleOption 与 SmartChart 对应 builder 合并到一处（08 Task 6 的主题重写时顺路做，放 `charts/builders` 或先合入 SmartChart）。
+- [x] Commit: `refactor(charts): one chart component family — StockChart removed, builders deduped`
 
 ### C-7: rag-inspector / cost-audit —— 移出主导航，收进设置
 

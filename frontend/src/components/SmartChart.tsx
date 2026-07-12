@@ -30,6 +30,7 @@ import type {
   TechnicalData,
   ValuationData,
 } from '../types/dashboard';
+import type { KlineData } from '../types';
 
 // --- Types ---
 
@@ -96,6 +97,27 @@ export interface SmartChartData {
   volume?: number[];
   bands?: SmartChartBand[];
   events?: SmartChartEvent[];
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- shared real-market adapter for InlineChart/right panel
+export function buildKlineSmartChartData(
+  rows: KlineData[],
+  valueMode: 'close' | 'return' = 'close',
+): SmartChartData {
+  const base = rows[0]?.close ?? 0;
+  const values = rows.map((row) => {
+    if (valueMode === 'return') {
+      return base === 0 ? 0 : ((row.close - base) / base) * 100;
+    }
+    return row.close;
+  });
+  return {
+    labels: rows.map((row) => row.time),
+    values,
+    ...(valueMode === 'return' ? { unit: '%' } : {}),
+    ohlc: rows.map((row) => [row.open, row.close, row.low, row.high]),
+    volume: rows.map((row) => row.volume ?? 0),
+  };
 }
 
 // --- Helpers ---
@@ -519,7 +541,13 @@ function buildBarOption(data: SmartChartData, title: string, theme: ChartTheme) 
   };
 }
 
-function buildLineOption(data: SmartChartData, title: string, theme: ChartTheme) {
+// eslint-disable-next-line react-refresh/only-export-components -- shared by InlineChart
+export function buildLineOption(
+  data: SmartChartData,
+  title: string,
+  theme: ChartTheme,
+  fillArea = true,
+) {
   return {
     tooltip: {
       trigger: 'axis' as const,
@@ -552,7 +580,7 @@ function buildLineOption(data: SmartChartData, title: string, theme: ChartTheme)
       symbolSize: 5,
       lineStyle: { color: theme.primary, width: 2 },
       itemStyle: { color: theme.primary },
-      areaStyle: { opacity: 0.1 },
+      areaStyle: fillArea ? { opacity: 0.1 } : undefined,
     }],
   };
 }
@@ -826,7 +854,8 @@ function buildEventMarkPoints(
     : undefined;
 }
 
-function buildCandlestickOption(data: SmartChartData, title: string, theme: ChartTheme) {
+// eslint-disable-next-line react-refresh/only-export-components -- shared by InlineChart
+export function buildCandlestickOption(data: SmartChartData, title: string, theme: ChartTheme) {
   if (!data.ohlc?.length || data.ohlc.length !== data.labels.length) return null;
 
   const closeValues = data.ohlc.map((row) => row[1]);

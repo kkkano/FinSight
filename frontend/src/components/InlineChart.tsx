@@ -5,6 +5,11 @@ import { ChartNoAxesCombined, Loader2 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useChartTheme } from '../hooks/useChartTheme';
 import type { ChartType, KlineData } from '../types';
+import {
+  buildCandlestickOption,
+  buildKlineSmartChartData,
+  buildLineOption,
+} from './SmartChart';
 import { SourceBadge } from './ui/SourceBadge';
 import { EmptyState } from './ui/EmptyState';
 
@@ -25,126 +30,6 @@ const chartLabels: Partial<Record<ChartType, string>> = {
   heatmap: 'Heat map',
   tree: 'Hierarchy',
 };
-
-const buildLineOption = (data: KlineData[], chartTheme: ReturnType<typeof useChartTheme>, fillArea = false) => {
-  const returns = data.map((item, idx) => {
-    const firstClose = data[0].close;
-    const value = ((item.close - firstClose) / firstClose) * 100;
-    return { time: item.time, value, idx };
-  });
-
-  return {
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-      backgroundColor: chartTheme.tooltipBackground,
-      borderColor: chartTheme.tooltipBorder,
-      textStyle: { color: chartTheme.tooltipText },
-      formatter: (params: any) => {
-        const point = params[0];
-        const sign = point.value >= 0 ? '+' : '';
-        return `${point.axisValue}<br/>Return: <span style="color: ${point.value >= 0 ? chartTheme.success : chartTheme.danger}">${sign}${point.value.toFixed(2)}%</span>`;
-      },
-    },
-    grid: { left: '10%', right: '10%', bottom: '15%', top: '10%' },
-    xAxis: {
-      type: 'category',
-      data: returns.map((item) => item.time),
-      axisLine: { lineStyle: { color: chartTheme.border } },
-      axisLabel: {
-        color: chartTheme.muted,
-        fontSize: 10,
-        rotate: 0,
-        hideOverlap: true,
-        interval: 'auto',
-        formatter: (value: string) => {
-          // 优先显示日期部分（MM-DD），而非时间
-          if (!value) return '';
-          // 如果包含空格（如 "2024-01-15 00:00:00"），取日期部分
-          const datePart = value.includes(' ') ? value.split(' ')[0] : value;
-          // 如果是 YYYY-MM-DD 格式，返回 MM-DD
-          if (datePart.includes('-') && datePart.length >= 10) {
-            return datePart.slice(5); // MM-DD
-          }
-          // 如果是短日期格式，直接返回
-          if (datePart.includes('-')) return datePart.slice(5);
-          return datePart;
-        }
-      },
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { show: false },
-      splitLine: { lineStyle: { color: chartTheme.grid } },
-      axisLabel: {
-        color: chartTheme.textSecondary,
-        fontSize: 10,
-        formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`,
-      },
-    },
-    series: [
-      {
-        type: 'line',
-        data: returns.map((item) => item.value),
-        smooth: true,
-        lineStyle: { color: chartTheme.primary, width: 2 },
-        areaStyle: fillArea
-          ? {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: chartTheme.primarySoft },
-                { offset: 1, color: chartTheme.primaryFaint },
-              ],
-            },
-          }
-          : undefined,
-        itemStyle: { color: chartTheme.primary },
-      },
-    ],
-  };
-};
-
-const buildCandleOption = (data: KlineData[], chartTheme: ReturnType<typeof useChartTheme>) => ({
-  backgroundColor: 'transparent',
-  tooltip: {
-    trigger: 'axis',
-    axisPointer: { type: 'cross' },
-    backgroundColor: chartTheme.tooltipBackground,
-    borderColor: chartTheme.tooltipBorder,
-    textStyle: { color: chartTheme.tooltipText },
-  },
-  grid: { left: '10%', right: '10%', bottom: '15%', top: '10%' },
-  xAxis: {
-    type: 'category',
-    data: data.map((item) => item.time),
-    axisLine: { lineStyle: { color: chartTheme.border } },
-    axisLabel: { color: chartTheme.textSecondary, fontSize: 10, rotate: 45 },
-  },
-  yAxis: {
-    scale: true,
-    axisLine: { show: false },
-    splitLine: { lineStyle: { color: chartTheme.grid } },
-    axisLabel: { color: chartTheme.textSecondary, fontSize: 10 },
-  },
-  series: [
-    {
-      type: 'candlestick',
-      data: data.map((item) => [item.open, item.close, item.low, item.high]),
-      itemStyle: {
-        color: chartTheme.success,
-        color0: chartTheme.danger,
-        borderColor: chartTheme.success,
-        borderColor0: chartTheme.danger,
-      },
-    },
-  ],
-});
 
 const generateDataSummary = (ticker: string, data: KlineData[]): string => {
   if (!data.length) return '';
@@ -255,9 +140,14 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   // 合成占位数据：后端全源失败后用最新价生成的等值序列，非真实行情，必须显著标注
   const isSynthetic = typeof dataSource === 'string' && dataSource.startsWith('price_fallback');
 
+  const smartData = buildKlineSmartChartData(
+    data,
+    chartType === 'candlestick' ? 'close' : 'return',
+  );
+  const title = `${ticker} ${chartLabels[chartType] || 'Chart'} (${period})`;
   const option = chartType === 'candlestick'
-    ? buildCandleOption(data, chartTheme)
-    : buildLineOption(data, chartTheme, chartType === 'area');
+    ? buildCandlestickOption(smartData, title, chartTheme)
+    : buildLineOption(smartData, title, chartTheme, chartType === 'area');
 
   return (
     <div className="my-4 p-4 bg-fin-panel rounded-lg border border-fin-border">

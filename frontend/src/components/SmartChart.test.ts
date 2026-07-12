@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildKlineSmartChartData,
   getRenderableMessageContent,
   getSmartChartProvenance,
   getSmartChartRenderer,
@@ -84,6 +85,23 @@ describe('getSmartChartRenderer', () => {
     expect(getSmartChartRenderer('line', { labels: ['a'], values: [1] })).toBe('svg');
     expect(getSmartChartRenderer('bar', denseData)).toBe('svg');
     expect(getSmartChartRenderer('pie', denseData)).toBe('svg');
+  });
+});
+
+describe('shared real-market chart adapter', () => {
+  const rows = [
+    { time: '2026-07-10', open: 100, close: 102, low: 99, high: 103, volume: 10 },
+    { time: '2026-07-11', open: 102, close: 105, low: 101, high: 106, volume: 20 },
+  ];
+
+  it('feeds the same labels/OHLC contract to inline and SmartChart renderers', () => {
+    expect(buildKlineSmartChartData(rows)).toEqual({
+      labels: ['2026-07-10', '2026-07-11'],
+      values: [102, 105],
+      ohlc: [[100, 102, 99, 103], [102, 105, 101, 106]],
+      volume: [10, 20],
+    });
+    expect(buildKlineSmartChartData(rows, 'return').values[1]).toBeCloseTo(2.941176, 5);
   });
 });
 
