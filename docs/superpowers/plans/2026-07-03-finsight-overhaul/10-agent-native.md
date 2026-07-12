@@ -317,9 +317,9 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 - Modify: `frontend/src/components/workbench/FindingCard.tsx`：监控发现卡片标注来源 `由{name_zh}规则发现`（monitor_engine 的 finding 数据带上 agent/规则域字段——`grep -n "source\|rule" backend/services/monitor_engine.py` 对齐；若 finding 无 agent 概念则标注规则名，不硬凑）
 - Modify: 晨报 `MorningBriefCard`：要点若来自某 agent 产出（morning_brief 后端组装时已知），附 short_zh chip
 
-- [ ] Step 1【盘点】: monitor/morning_brief 数据结构里 agent 归属字段是否存在，写 notes；不存在的仅做规则名标注，不改后端。
-- [ ] Step 2: 三处接线 + vitest。
-- [ ] Commit: `feat(attribution): analyst signatures across work log, findings and morning brief`
+- [x] Step 1【盘点】: monitor/morning_brief 数据结构里 agent 归属字段是否存在，写 notes；不存在的仅做规则名标注，不改后端。
+- [x] Step 2: 三处接线 + vitest。
+- [x] Commit: `feat(attribution): analyst signatures across work log, findings and morning brief`
 
 ### Task 10: "找专家"召唤统一（@agent 体验升级）
 

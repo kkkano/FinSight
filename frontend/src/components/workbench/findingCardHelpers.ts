@@ -189,24 +189,6 @@ export function resolveActionTarget(
   return { kind: 'none' };
 }
 
-/** agent 标识 → 中文展示名 */
-export function resolveAgentLabel(agent: string): string {
-  switch (agent) {
-    case 'technical_agent':
-      return '技术分析';
-    case 'risk_agent':
-      return '风险评估';
-    case 'news_agent':
-      return '舆情分析';
-    case 'deep_search_agent':
-      return '深度研究';
-    case 'macro_agent':
-      return '宏观分析';
-    default:
-      return agent || 'AI';
-  }
-}
-
 /**
  * 置信度展示：number → 百分比字符串；null → "未评估"（诚实原则，不编造数值）。
  * 兼容 0~1 小数与 0~100 整数两种输入。

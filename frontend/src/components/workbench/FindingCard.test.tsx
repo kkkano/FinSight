@@ -7,12 +7,25 @@ import {
   formatConfidence,
   isActionEnabled,
   resolveActionTarget,
-  resolveAgentLabel,
   resolveSessionBadge,
   resolveTriggerVisual,
 } from './findingCardHelpers';
 import { extractMarketSession } from '../../types/monitor';
 import type { AgentAnalysis, Finding } from '../../types/monitor';
+import type { AgentProfileMap } from '../../types/agents';
+
+const profiles: AgentProfileMap = {
+  technical_agent: {
+    name: 'technical_agent', display_name: '技术面分析师', short_zh: '技术面',
+    description: '技术面分析', glyph: 'T', color_token: 't-predict',
+    mandate: '趋势与关键价位', insert_text: '@technical_agent ',
+  },
+  risk_agent: {
+    name: 'risk_agent', display_name: '风险分析师', short_zh: '风险',
+    description: '风险分析', glyph: 'R', color_token: 't-down',
+    mandate: '风险暴露与回撤', insert_text: '@risk_agent ',
+  },
+};
 
 /** 把 JSX 渲染为压缩空白后的静态 HTML 字符串 */
 const renderText = (node: React.ReactElement) =>
@@ -88,6 +101,7 @@ describe('FindingCard', () => {
     expect(text).toContain('TSLA 单日下跌 5.2%');
     expect(text).toContain('特斯拉今日大幅下挫');
     expect(text).toContain('价格异动');
+    expect(text).toContain('由价格异动规则发现');
     expect(text).toContain('看完整简报');
   });
 
@@ -256,20 +270,6 @@ function makeAnalysis(overrides: Partial<AgentAnalysis> = {}): AgentAnalysis {
   };
 }
 
-describe('resolveAgentLabel', () => {
-  it('maps agent ids to Chinese labels', () => {
-    expect(resolveAgentLabel('technical_agent')).toBe('技术分析');
-    expect(resolveAgentLabel('risk_agent')).toBe('风险评估');
-    expect(resolveAgentLabel('unknown_agent')).toBe('unknown_agent');
-  });
-
-  it('maps the three new agent ids (news / deep_search / macro)', () => {
-    expect(resolveAgentLabel('news_agent')).toBe('舆情分析');
-    expect(resolveAgentLabel('deep_search_agent')).toBe('深度研究');
-    expect(resolveAgentLabel('macro_agent')).toBe('宏观分析');
-  });
-});
-
 describe('formatConfidence', () => {
   it('formats fractional confidence as percentage', () => {
     expect(formatConfidence(0.85)).toBe('85%');
@@ -287,10 +287,10 @@ describe('formatConfidence', () => {
 describe('FindingCard agent_analysis (Phase 2)', () => {
   it('renders the AI analysis block when agent_analysis exists', () => {
     const finding = makeFinding({ agent_analysis: makeAnalysis() });
-    const html = renderToStaticMarkup(<FindingCard finding={finding} />);
+    const html = renderToStaticMarkup(<FindingCard finding={finding} profiles={profiles} />);
     expect(html).toContain('data-testid="finding-agent-analysis"');
     expect(html).toContain('AI 分析');
-    expect(html).toContain('技术分析');
+    expect(html).toContain('T 技术面分析师');
     expect(html).toContain('置信度 85%');
     // 数据来源 tag
     expect(html).toContain('data-testid="finding-agent-source"');
@@ -315,8 +315,8 @@ describe('FindingCard agent_analysis (Phase 2)', () => {
       target: 'PORTFOLIO',
       agent_analysis: makeAnalysis({ agent: 'risk_agent', summary: 'NVDA 风险评分 70/100。' }),
     });
-    const html = renderToStaticMarkup(<FindingCard finding={finding} />);
-    expect(html).toContain('风险评估');
+    const html = renderToStaticMarkup(<FindingCard finding={finding} profiles={profiles} />);
+    expect(html).toContain('R 风险分析师');
     expect(html).toContain('NVDA 风险评分');
   });
 });

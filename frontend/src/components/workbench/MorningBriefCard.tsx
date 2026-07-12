@@ -93,6 +93,16 @@ function HighlightRow({ item }: { item: MorningBriefHighlight }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-fin-text">{item.ticker}</span>
+          {item.analyst && (
+            <span
+              className="inline-flex items-center gap-1 rounded border border-current/25 px-1 py-0.5 text-[9px]"
+              style={{ color: `var(--${item.analyst.color_token})` }}
+              data-testid={`morning-brief-analyst-${item.ticker}`}
+            >
+              <span className="font-mono">{item.analyst.glyph}</span>
+              {item.analyst.short_zh}
+            </span>
+          )}
           {item.price !== null && (
             <span className="text-2xs text-fin-muted">${item.price.toFixed(2)}</span>
           )}

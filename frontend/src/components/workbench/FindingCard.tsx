@@ -14,6 +14,8 @@
 import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
+import { useAgentProfiles } from '../../hooks/useAgentProfiles';
+import type { AgentProfileMap, AgentProfileView } from '../../types/agents';
 import {
   extractMarketSession,
   type AgentAnalysis,
@@ -24,7 +26,6 @@ import {
   buildFindingChatPrompt,
   isActionEnabled,
   resolveActionTarget,
-  resolveAgentLabel,
   resolveSessionBadge,
   resolveTriggerVisual,
 } from './findingCardHelpers';
@@ -37,6 +38,8 @@ interface FindingCardProps {
   onNavigateToChat?: (ticker: string, prompt: string) => void;
   /** 行动按钮：联动到调仓卡片（滚动 + 高亮） */
   onNavigateToRebalance?: () => void;
+  /** 测试/服务端渲染可注入；运行时默认读取 /api/agents 缓存 */
+  profiles?: AgentProfileMap;
 }
 
 /** 格式化相对时间（简化版，避免引入额外依赖） */
@@ -57,7 +60,13 @@ function formatRelativeTime(iso: string): string {
  * AI 分析区块（Phase 2）：agent badge + summary（默认折叠 4 行）+ 置信度 + 数据来源 tag。
  * summary 超过约 4 行时提供「展开全部 / 收起」切换。
  */
-function AgentAnalysisBlock({ analysis }: { analysis: AgentAnalysis }) {
+function AgentAnalysisBlock({
+  analysis,
+  profile,
+}: {
+  analysis: AgentAnalysis;
+  profile?: AgentProfileView;
+}) {
   const [expanded, setExpanded] = useState(false);
   const summary = analysis.summary?.trim() ?? '';
   // 用字符长度粗略判断是否可能超 4 行（避免依赖布局测量）
@@ -74,8 +83,11 @@ function AgentAnalysisBlock({ analysis }: { analysis: AgentAnalysis }) {
           <Sparkles size={13} />
           <span className="text-2xs font-semibold">AI 分析</span>
         </span>
-        <span className="px-1.5 py-0.5 rounded text-2xs font-medium bg-fin-primary/10 text-fin-primary">
-          {resolveAgentLabel(analysis.agent)}
+        <span
+          className="px-1.5 py-0.5 rounded text-2xs font-medium bg-fin-primary/10 text-fin-primary"
+          style={profile ? { color: `var(--${profile.color_token})` } : undefined}
+        >
+          {profile ? `${profile.glyph} ${profile.display_name}` : analysis.agent}
         </span>
         <span
           data-testid="finding-agent-confidence"
@@ -130,7 +142,10 @@ export function FindingCard({
   onView,
   onNavigateToChat,
   onNavigateToRebalance,
+  profiles: providedProfiles,
 }: FindingCardProps) {
+  const { profilesByName } = useAgentProfiles();
+  const profiles = providedProfiles ?? profilesByName;
   const visual = resolveTriggerVisual(finding.trigger_type, finding.trigger_detail);
   const { Icon } = visual;
   const isNew = finding.status === 'new';
@@ -216,12 +231,20 @@ export function FindingCard({
               <span className="mr-2 font-medium text-fin-muted">{finding.target}</span>
             )}
             <span>{formatRelativeTime(finding.created_at)}</span>
+            <span className="ml-2" data-testid="finding-rule-source">
+              由{visual.label}规则发现
+            </span>
           </div>
         </div>
       </div>
 
       {/* AI 分析区块（Phase 2，agent_analysis 存在时渲染） */}
-      {finding.agent_analysis && <AgentAnalysisBlock analysis={finding.agent_analysis} />}
+      {finding.agent_analysis && (
+        <AgentAnalysisBlock
+          analysis={finding.agent_analysis}
+          profile={profiles[finding.agent_analysis.agent]}
+        />
+      )}
 
       {/* 行动按钮组 */}
       {finding.actions.length > 0 && (

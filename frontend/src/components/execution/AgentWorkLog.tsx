@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bot, Check, Loader2, Minus, X } from 'lucide-react';
 
+import { useAgentProfiles } from '../../hooks/useAgentProfiles';
+import type { AgentProfileMap, AgentProfileView } from '../../types/agents';
 import type { AgentRunInfo, ExecutionRun, TimelineEvent } from '../../types/execution';
-import { getAgentDisplayName, normalizeAgentName } from '../../utils/userMessageMapper';
+import { normalizeAgentName } from '../../utils/userMessageMapper';
 
 type AgentWorkLogProps = {
   run: ExecutionRun;
   className?: string;
+  profiles?: AgentProfileMap;
 };
 
 type WorkLogRow = {
@@ -15,12 +18,13 @@ type WorkLogRow = {
   info: AgentRunInfo;
   action: string;
   timestamp: number;
+  profile?: AgentProfileView;
 };
 
 const TERMINAL_AGENT_STATUSES = new Set<AgentRunInfo['status']>(['done', 'error', 'skipped']);
 
 function shortAgentName(name: string): string {
-  return getAgentDisplayName(name).replace(/分析师$/, '').replace(/研究员$/, '研究');
+  return name.replace(/_agent$/, '').replaceAll('_', ' ');
 }
 
 function eventAgentName(event: TimelineEvent): string | undefined {
@@ -74,8 +78,10 @@ function StatusIcon({ status }: { status: AgentRunInfo['status'] }) {
   return <Minus aria-label={status === 'skipped' ? '已跳过' : '等待中'} size={14} className="shrink-0 text-t-text3" />;
 }
 
-export function AgentWorkLog({ run, className = '' }: AgentWorkLogProps) {
+export function AgentWorkLog({ run, className = '', profiles: providedProfiles }: AgentWorkLogProps) {
   const [now, setNow] = useState(() => Date.now());
+  const { profilesByName } = useAgentProfiles();
+  const profiles = providedProfiles ?? profilesByName;
 
   useEffect(() => {
     if (run.status !== 'running') return;
@@ -96,10 +102,11 @@ export function AgentWorkLog({ run, className = '' }: AgentWorkLogProps) {
       const timestamp = Date.parse(info.lastEventAt || info.startedAt || run.startedAt);
       const row = {
         key: normalized,
-        displayName: shortAgentName(normalized),
+        displayName: profiles[normalized]?.short_zh || shortAgentName(normalized),
         info,
         action,
         timestamp: Number.isFinite(timestamp) ? timestamp : 0,
+        profile: profiles[normalized],
       };
       const existing = deduped.get(normalized);
       if (!existing || row.timestamp >= existing.timestamp || TERMINAL_AGENT_STATUSES.has(info.status)) {
@@ -107,7 +114,7 @@ export function AgentWorkLog({ run, className = '' }: AgentWorkLogProps) {
       }
     }
     return [...deduped.values()].sort((a, b) => b.timestamp - a.timestamp);
-  }, [run.agentStatuses, run.selectedAgents, run.startedAt, run.timeline]);
+  }, [profiles, run.agentStatuses, run.selectedAgents, run.startedAt, run.timeline]);
 
   if (rows.length === 0) return null;
 
@@ -127,7 +134,17 @@ export function AgentWorkLog({ run, className = '' }: AgentWorkLogProps) {
     <div className={`mt-2 border-t border-t-divider pt-1 ${className}`}>
       {rows.slice(0, 6).map((row) => (
         <div key={row.key} className="flex h-7 items-center gap-2 text-xs">
-          <Bot size={16} className="shrink-0 text-t-text3" />
+          {row.profile ? (
+            <span
+              className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded border border-current/30 px-0.5 font-mono text-[9px]"
+              style={{ color: `var(--${row.profile.color_token})` }}
+              title={row.profile.display_name}
+            >
+              {row.profile.glyph}
+            </span>
+          ) : (
+            <Bot size={16} className="shrink-0 text-t-text3" />
+          )}
           <span className="w-14 shrink-0 truncate font-medium text-t-text2">{row.displayName}</span>
           <span className="flex-1 truncate text-t-text3">{row.action}</span>
           <span className="num shrink-0 text-2xs text-t-text3">{formatDuration(durationMs(row.info, now))}</span>

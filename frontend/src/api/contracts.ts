@@ -165,6 +165,14 @@ export interface MorningBriefHighlight {
   price_change_pct: number | null;
   trend: 'strong_up' | 'up' | 'neutral' | 'down' | 'strong_down';
   key_event: string;
+  /** 仅当该要点确实来自 Agent 产出时由后端附带；确定性工具聚合保持缺省。 */
+  analyst?: {
+    name: string;
+    display_name: string;
+    short_zh: string;
+    glyph: string;
+    color_token: string;
+  };
 }
 
 /** 晨报数据 */

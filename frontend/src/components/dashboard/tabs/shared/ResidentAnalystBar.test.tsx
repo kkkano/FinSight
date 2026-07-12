@@ -13,6 +13,7 @@ import {
 
 const profile: ResidentAnalystProfile = {
   name: 'technical_agent', display_name: '技术面分析师', short_zh: '技术面', glyph: 'T',
+  description: '技术面分析', insert_text: '@technical_agent ',
   color_token: 't-predict', mandate: 'RSI、MACD、均线、形态与交易信号研判',
   scorer_key: 'technical', dashboard_tabs: ['technical', 'overview'],
   track_record: { hit_rate: 0.7, sample_state: 'sufficient' },

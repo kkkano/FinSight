@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
-import { apiClient } from '../../../../api/client';
+import { useAgentProfiles } from '../../../../hooks/useAgentProfiles';
 import {
   openResidentAnalystChat,
   selectResidentAnalyst,
@@ -15,19 +15,6 @@ interface ResidentAnalystBarProps {
   profile?: ResidentAnalystProfile | null;
 }
 
-function isResidentProfile(
-  value: unknown,
-): value is ResidentAnalystProfile & Record<string, unknown> {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as Record<string, unknown>;
-  return typeof item.name === 'string'
-    && typeof item.display_name === 'string'
-    && typeof item.short_zh === 'string'
-    && typeof item.glyph === 'string'
-    && typeof item.color_token === 'string'
-    && typeof item.mandate === 'string';
-}
-
 export function ResidentAnalystBar({
   tab,
   onDeepDive,
@@ -35,17 +22,7 @@ export function ResidentAnalystBar({
   onAsk,
   profile: providedProfile,
 }: ResidentAnalystBarProps) {
-  const [profiles, setProfiles] = useState<ResidentAnalystProfile[]>([]);
-
-  useEffect(() => {
-    if (providedProfile) return undefined;
-    let cancelled = false;
-    void apiClient.listAgents(undefined, 50).then((response) => {
-      if (cancelled || !response?.success || !Array.isArray(response.items)) return;
-      setProfiles(response.items.filter(isResidentProfile));
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [providedProfile]);
+  const { profiles } = useAgentProfiles();
 
   const profile = useMemo(
     () => providedProfile ?? selectResidentAnalyst(tab, profiles),

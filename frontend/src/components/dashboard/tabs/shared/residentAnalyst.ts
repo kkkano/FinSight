@@ -1,16 +1,7 @@
 import { useStore } from '../../../../store/useStore';
+import type { AgentProfileView } from '../../../../types/agents';
 
-export interface ResidentAnalystProfile {
-  name: string;
-  display_name: string;
-  short_zh: string;
-  glyph: string;
-  color_token: string;
-  mandate: string;
-  scorer_key?: string | null;
-  dashboard_tabs?: string[];
-  track_record?: { hit_rate?: number | null; sample_state?: string };
-}
+export type ResidentAnalystProfile = AgentProfileView;
 
 export function selectResidentAnalyst(
   tab: string,
