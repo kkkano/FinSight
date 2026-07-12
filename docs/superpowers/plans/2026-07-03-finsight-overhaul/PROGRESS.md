@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | 09-C3 CommandPalette 可见性登记与命令补齐 | 本提交 | 确认 08-Task7 的 Sidebar“搜索/命令… ⌘K”可见入口仍在；命令面板在既有对话/看板/工作台/问 AI/主题命令基础上补齐 A股市场、筛选器、回测导航，以及会持久化并即时更新根节点 class 的涨跌色切换。定向 ESLint/tsc 通过；完整前端 `59 files/283 tests`、生产 build 成功。真实 Chromium 验证入口与新增命令可见、国际→A股涨跌色即时切换并写入 localStorage、筛选器导航成功，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |
 | 2026-07-12 | 09-C2 MiniChat 全局“随处问”命令 | 本提交 | CommandPalette 新增“问 AI（带当前页面上下文）”：Dashboard 从 URL 优先解析 symbol 与当前 tab，预填对应问题并打开右栏；Workbench 打开 MiniChat 但显式不注入旧 ticker，其他页面回到主 Chat。MiniChat 的 symbol 上下文改为路由约束，避免 Dashboard 状态泄漏到 Workbench。新增 3 项路由上下文测试，定向 ESLint/tsc 通过；完整前端 `59 files/283 tests`、生产 build 成功。真实 Chromium 用 Ctrl+K 验证 Dashboard AAPL 技术面草稿与 context pill，再 SPA 切到 Workbench 验证输入清空且无 AAPL pill，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |
 | 2026-07-12 | 09-C1 删除死 ResearchCard | 本提交 | 全仓复核确认顶层 `frontend/src/components/ResearchCard.tsx` 除自身外零引用；Dashboard research 内同名函数是局部组件，不受影响。删除该死文件后完整前端 `58 files/280 tests` 通过，生产 build 成功。 |
 | 2026-07-12 | 09-B8 自选股联动登记 | WP6-F2 `e0a91fc` | 对照代码、WP6 spec 与既有验收账本确认：自选股已进入 ChatInput 前 4 项快捷建议，晨报按显式请求 > 自选 > 持仓选标的，monitor 在未显式给 targets 时注入用户自选默认标的；本项按 09 约定仅登记、不重复实现。当前 `backend/tests/test_watchlist.py` 5 passed。 |

@@ -176,7 +176,7 @@ type PredictionOverlay = {
 
 ### C-3: CommandPalette —— 保留，可见性已由 08 Task 7 解决
 
-- [ ] 登记项：确认 08 Task 7 的 ⌘K 假输入框已实装；本条无独立代码。补充命令清单：导航到各页 / 问 AI / 切主题 / 切涨跌色（`grep -n "commands\|items" frontend/src/components/CommandPalette.tsx` 对齐其命令注册结构后追加）。
+- [x] 登记项：确认 08 Task 7 的 ⌘K 假输入框已实装；补充命令清单：导航到各页 / 问 AI / 切主题 / 切涨跌色（`grep -n "commands\|items" frontend/src/components/CommandPalette.tsx` 对齐其命令注册结构后追加）。
 
 ### C-4: Skills 三件套（SkillAutocomplete / SkillLibraryDrawer / skills_router）——【盘点】
 

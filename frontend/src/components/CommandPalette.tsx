@@ -3,9 +3,13 @@ import type { FC, KeyboardEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Bot,
+  ArrowUpDown,
+  Filter,
+  FlaskConical,
   Gauge,
   GitCompare,
   LayoutDashboard,
+  LineChart,
   MessageSquarePlus,
   MessageCircleQuestion,
   Moon,
@@ -36,7 +40,15 @@ interface CommandPaletteProps {
 export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme, setTheme, setDraft, currentTicker, setShowRightPanel } = useStore();
+  const {
+    theme,
+    setTheme,
+    colorConvention,
+    setColorConvention,
+    setDraft,
+    currentTicker,
+    setShowRightPanel,
+  } = useStore();
   const activeAsset = useDashboardStore((state) => state.activeAsset);
 
   const [query, setQuery] = useState('');
@@ -97,6 +109,36 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         },
       },
       {
+        id: 'open-cn-market',
+        label: '打开 A股市场',
+        icon: LineChart,
+        keywords: ['cn', 'china', 'a股', '市场'],
+        execute: () => {
+          navigate('/cn-market');
+          onClose();
+        },
+      },
+      {
+        id: 'open-screener',
+        label: '打开筛选器',
+        icon: Filter,
+        keywords: ['screener', 'filter', '筛选'],
+        execute: () => {
+          navigate('/screener');
+          onClose();
+        },
+      },
+      {
+        id: 'open-backtest',
+        label: '打开回测',
+        icon: FlaskConical,
+        keywords: ['backtest', '回测'],
+        execute: () => {
+          navigate('/backtest');
+          onClose();
+        },
+      },
+      {
         id: 'cmd-analyze',
         label: '/analyze 快速分析',
         icon: Sparkles,
@@ -140,15 +182,27 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
           onClose();
         },
       },
+      {
+        id: 'toggle-color-convention',
+        label: `切换涨跌色（当前：${colorConvention === 'cn' ? 'A股' : '国际'}）`,
+        icon: ArrowUpDown,
+        keywords: ['color', 'red', 'green', '涨跌色', '红绿'],
+        execute: () => {
+          setColorConvention(colorConvention === 'cn' ? 'intl' : 'cn');
+          onClose();
+        },
+      },
     ],
     [
       activeAsset?.symbol,
+      colorConvention,
       currentTicker,
       location.pathname,
       location.search,
       navigate,
       onClose,
       setDraft,
+      setColorConvention,
       setShowRightPanel,
       setTheme,
       theme,
