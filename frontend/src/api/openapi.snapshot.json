@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "AcquireLeaseRequest": {
+        "properties": {
+          "session_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "symbol": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9^][A-Za-z0-9._:^=-]{0,31}$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "symbol"
+        ],
+        "title": "AcquireLeaseRequest",
+        "type": "object"
+      },
       "ActionType": {
         "enum": [
           "buy",
@@ -2011,6 +2035,21 @@
         "title": "LayoutPrefs",
         "type": "object"
       },
+      "LeaseTokenRequest": {
+        "properties": {
+          "lease_token": {
+            "maxLength": 256,
+            "minLength": 20,
+            "title": "Lease Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lease_token"
+        ],
+        "title": "LeaseTokenRequest",
+        "type": "object"
+      },
       "MacroSnapshotData": {
         "description": "Macro snapshot for dashboard first paint (P1).",
         "properties": {
@@ -3733,6 +3772,50 @@
         ]
       }
     },
+    "/api/agents/predictions/{prediction_id}": {
+      "get": {
+        "operationId": "get_prediction_api_agents_predictions__prediction_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prediction_id",
+            "required": true,
+            "schema": {
+              "title": "Prediction Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Prediction Api Agents Predictions  Prediction Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Prediction",
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
     "/api/agents/preferences": {
       "get": {
         "operationId": "get_agent_preferences_api_agents_preferences_get",
@@ -5066,6 +5149,145 @@
         ]
       }
     },
+    "/api/monitor/comments": {
+      "get": {
+        "operationId": "list_monitor_comments_api_monitor_comments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Monitor Comments",
+        "tags": [
+          "Monitor"
+        ]
+      }
+    },
+    "/api/monitor/comments/stream": {
+      "get": {
+        "operationId": "stream_monitor_comments_api_monitor_comments_stream_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "last_event_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Monitor Comments",
+        "tags": [
+          "Monitor"
+        ]
+      }
+    },
     "/api/monitor/findings": {
       "get": {
         "description": "返回 session 的盯盘发现（按时间倒序，可按状态过滤）。",
@@ -5188,6 +5410,145 @@
           }
         },
         "summary": "Update Finding Endpoint",
+        "tags": [
+          "Monitor"
+        ]
+      }
+    },
+    "/api/monitor/leases": {
+      "post": {
+        "operationId": "acquire_monitor_lease_api_monitor_leases_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcquireLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Acquire Monitor Lease",
+        "tags": [
+          "Monitor"
+        ]
+      }
+    },
+    "/api/monitor/leases/{lease_id}": {
+      "delete": {
+        "operationId": "release_monitor_lease_api_monitor_leases__lease_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lease Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaseTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Release Monitor Lease",
+        "tags": [
+          "Monitor"
+        ]
+      },
+      "put": {
+        "operationId": "renew_monitor_lease_api_monitor_leases__lease_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Lease Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaseTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renew Monitor Lease",
         "tags": [
           "Monitor"
         ]

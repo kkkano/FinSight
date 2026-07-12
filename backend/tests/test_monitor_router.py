@@ -9,6 +9,7 @@ SQLite 落到 tmp_path，避免污染 data/monitor.db。
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, Request
@@ -122,6 +123,41 @@ def test_monitor_lease_api_fails_closed_when_store_unavailable(monkeypatch):
         "/api/monitor/leases", json={"session_id": "s1", "symbol": "AAPL"},
     )
     assert response.status_code == 503
+
+
+def test_monitor_comments_api_is_tenant_scoped_and_builds_server_deep_link(monkeypatch):
+    calls = []
+    comment = SimpleNamespace(model_dump=lambda mode=None: {
+        "id": str(uuid.uuid4()), "session_id": "s1", "symbol": "AAPL",
+        "ts": "2026-07-11T00:00:00Z", "level": "alert", "text": "突破",
+        "trigger": {"kind": "level_break", "detail": "突破", "observed_at": "now"},
+        "source": "agent", "escalated": True,
+        "prediction_id": "11111111-1111-1111-1111-111111111111",
+    })
+
+    class Store:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return [comment], "next"
+
+    monkeypatch.setattr(mr, "get_monitor_comment_store", lambda: Store())
+    comment_app = FastAPI()
+
+    @comment_app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = request.headers.get("x-test-user", "public")
+        return await call_next(request)
+
+    comment_app.include_router(mr.monitor_router)
+    comment_client = TestClient(comment_app)
+    assert comment_client.get("/api/monitor/comments?session_id=s1").status_code == 401
+    response = comment_client.get(
+        "/api/monitor/comments?session_id=s1&day=2026-07-11&limit=20",
+        headers={"x-test-user": "alice"},
+    )
+    assert response.status_code == 200
+    assert calls[0]["user_id"] == "alice"
+    assert response.json()["comments"][0]["chart_url"] == "/dashboard/AAPL?analysis=11111111-1111-1111-1111-111111111111"
 
 
 # ── targets CRUD ──────────────────────────────────────────────

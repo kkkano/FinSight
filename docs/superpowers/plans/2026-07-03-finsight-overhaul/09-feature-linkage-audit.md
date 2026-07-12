@@ -328,15 +328,15 @@ def heartbeat_due(*, last_comment_at: datetime | None, now: datetime,
 - Modify: `backend/api/monitor_router.py`、`backend/services/monitor_engine.py`、`frontend/src/components/workbench/FindingsFeed.tsx`、`frontend/src/components/SmartChart.tsx`
 - Test: `backend/tests/test_monitor_comment_store.py`、`backend/tests/test_monitor_router.py`、`frontend/src/components/workbench/MonitorCommentFeed.test.tsx`
 
-**PostgreSQL 表:** `monitor_comments(id UUID, user_id TEXT, session_id TEXT, symbol TEXT, ts TIMESTAMPTZ, level TEXT, text TEXT, trigger_kind TEXT, trigger_detail TEXT, source TEXT, escalated BOOLEAN, prediction_id UUID NULL)`；`FOREIGN KEY(prediction_id, user_id) REFERENCES agent_predictions(id, user_id)`，数据库层阻止跨租户错误关联。服务端根据 id 生成 `/dashboard/{symbol}?analysis={prediction_id}`，数据库不存前端 URL。
+**PostgreSQL 表:** `monitor_comments(id UUID, user_id TEXT, session_id TEXT, symbol TEXT, ts TIMESTAMPTZ, level TEXT, text TEXT, trigger_kind TEXT, trigger_detail TEXT, trigger_observed_at TEXT, trigger_fingerprint TEXT, source TEXT, escalated BOOLEAN, prediction_id UUID NULL)`；`UNIQUE(user_id, session_id, trigger_fingerprint)` 去重完全相同的 trigger 重放，`FOREIGN KEY(prediction_id, user_id) REFERENCES agent_predictions(id, user_id)` 在数据库层阻止跨租户错误关联。服务端根据 id 生成 `/dashboard/{symbol}?analysis={prediction_id}`，数据库不存前端 URL。
 
-- [ ] Step 1: TDD 固化点评合同 `{ts,symbol,level,text,trigger,source,escalated,prediction_id}`，验证租户隔离、时间倒序、日期筛选、分页游标和相同 trigger 指纹去重。点评必须能追溯到 D-1 的 trigger；heartbeat 使用 info，异常使用 error。
-- [ ] Step 2: 补生产者 TDD：D-2 scheduler 把 trigger + 真实 snapshot + 可选 prediction 交给 bounded LangGraph commentator，服务端校验 `{level,text,source,escalated,prediction_id}` 后绑定原 trigger 并写 `monitor_comments`；模型失败/非法输出写一条去重的 `source=system, level=error` 诊断，禁止静默丢失或写入别人的 prediction_id。
-- [ ] Step 3: FastAPI 提供 `GET /api/monitor/comments` 与项目现有 SSE/事件通道的 comment 增量事件；订阅先返回当日快照，再发增量。断线重连按 `last_event_id` 补发并去重，不引入 Fastify/独立 WebSocket 服务。
-- [ ] Step 4: `MonitorCommentFeed` 渲染倒序时间流、level 徽标、触发原因、agent/system 署名、升级状态；连续 heartbeat info 折叠为「HH:mm-HH:mm 无事 xN」，alert 未读数复用现有 workbench 状态。
-- [ ] Step 5: 有 `prediction_id` 的点评显示「查看图表」深链；Dashboard 解析 `analysis` 参数，鉴权读取 prediction 后交给 A-4 overlay，并把视窗定位到 anchor 时间。无权限/已删除 prediction 返回 404，页面保留真实行情且不给出来源泄露提示。
-- [ ] 验收: 从一条 level_break 点评可一键进入同 symbol 图表并看到 anchor/entry/stop/target；刷新深链仍可恢复；心跳折叠后 alert 不被折叠；两个用户不能互读点评或 prediction。
-- [ ] Commit: `feat(monitor): attributable comment feed with replay and prediction chart deep-links`
+- [x] Step 1: TDD 固化点评合同 `{ts,symbol,level,text,trigger,source,escalated,prediction_id}`，验证租户隔离、时间倒序、日期筛选、分页游标和相同 trigger 指纹去重。点评必须能追溯到 D-1 的 trigger；heartbeat 使用 info，异常使用 error。
+- [x] Step 2: 补生产者 TDD：D-2 scheduler 把 trigger + 真实 snapshot + 可选 prediction 交给 bounded LangGraph commentator，服务端校验 `{level,text,source,escalated,prediction_id}` 后绑定原 trigger 并写 `monitor_comments`；模型失败/非法输出写一条去重的 `source=system, level=error` 诊断，禁止静默丢失或写入别人的 prediction_id。
+- [x] Step 3: FastAPI 提供 `GET /api/monitor/comments` 与项目现有 SSE/事件通道的 comment 增量事件；订阅先返回当日快照，再发增量。断线重连按 `last_event_id` 补发并去重，不引入 Fastify/独立 WebSocket 服务。
+- [x] Step 4: `MonitorCommentFeed` 渲染倒序时间流、level 徽标、触发原因、agent/system 署名、升级状态；连续 heartbeat info 折叠为「HH:mm-HH:mm 无事 xN」，alert 未读数复用现有 workbench 状态。
+- [x] Step 5: 有 `prediction_id` 的点评显示「查看图表」深链；Dashboard 解析 `analysis` 参数，鉴权读取 prediction 后交给 A-4 overlay，并把视窗定位到 anchor 时间。无权限/已删除 prediction 返回 404，页面保留真实行情且不给出来源泄露提示。
+- [x] 验收: 从一条 level_break 点评可一键进入同 symbol 图表并看到 anchor/entry/stop/target；刷新深链仍可恢复；心跳折叠后 alert 不被折叠；两个用户不能互读点评或 prediction。
+- [x] Commit: `feat(monitor): attributable comment feed with replay and prediction chart deep-links`
 
 ---
 

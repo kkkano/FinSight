@@ -84,7 +84,7 @@ def test_get_always_filters_by_prediction_id_and_user_id():
     store = AgentPredictionStore(engine=engine)
     result = store.get("pred-1", user_id="alice")
     select_sql, params = [call for call in engine.conn.calls if call[0].lstrip().upper().startswith("SELECT")][-1]
-    assert "id = :id AND user_id = :user_id" in select_sql
+    assert "id = CAST(:id AS uuid) AND user_id = :user_id" in select_sql
     assert params == {"id": "pred-1", "user_id": "alice"}
     assert result and result.user_id == "alice"
 

@@ -11,17 +11,21 @@ from __future__ import annotations
 import logging
 import os
 import re
+import asyncio
+import json
 import time as _time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.services.monitor_engine import run_l1_scan
 from backend.services.monitor_store import get_monitor_store
 from backend.services.monitor_lease_store import get_monitor_lease_store
+from backend.services.monitor_comment_store import get_monitor_comment_store
 from backend.services.portfolio_store import get_positions
 from backend.tools import get_event_calendar
 
@@ -179,6 +183,81 @@ async def release_monitor_lease(lease_id: uuid.UUID, payload: LeaseTokenRequest,
     if not released:
         raise HTTPException(status_code=404, detail="monitor lease not found")
     return {"success": True}
+
+
+def _public_comment(comment) -> dict[str, Any]:
+    payload = comment.model_dump(mode="json")
+    prediction_id = payload.get("prediction_id")
+    payload["chart_url"] = (
+        f"/dashboard/{payload['symbol']}?analysis={prediction_id}" if prediction_id else None
+    )
+    return payload
+
+
+@monitor_router.get("/api/monitor/comments")
+async def list_monitor_comments(
+    request: Request, session_id: str, day: date | None = None,
+    cursor: str | None = None, limit: int = 50,
+):
+    user_id = _authenticated_user_id(request)
+    try:
+        items, next_cursor = get_monitor_comment_store().list(
+            user_id=user_id, session_id=session_id, day=day, cursor=cursor, limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="monitor comment store unavailable") from exc
+    return {"comments": [_public_comment(item) for item in items], "next_cursor": next_cursor}
+
+
+@monitor_router.get("/api/monitor/comments/stream")
+async def stream_monitor_comments(request: Request, session_id: str, last_event_id: str | None = None):
+    user_id = _authenticated_user_id(request)
+    resume_id = last_event_id or request.headers.get("last-event-id")
+    store = get_monitor_comment_store()
+
+    async def events():
+        current_id = resume_id
+        try:
+            if current_id:
+                backlog = store.list_after(user_id=user_id, session_id=session_id, last_event_id=current_id)
+                for item in backlog:
+                    current_id = item.id
+                    yield f"id: {item.id}\nevent: comment\ndata: {json.dumps(_public_comment(item), ensure_ascii=False)}\n\n"
+            else:
+                snapshot, _ = store.list(
+                    user_id=user_id, session_id=session_id,
+                    day=datetime.now(timezone.utc).date(), limit=100,
+                )
+                if snapshot:
+                    current_id = snapshot[0].id
+                yield "event: snapshot\ndata: " + json.dumps(
+                    [_public_comment(item) for item in snapshot], ensure_ascii=False,
+                ) + "\n\n"
+            idle = 0
+            while not await request.is_disconnected():
+                await asyncio.sleep(2)
+                if current_id:
+                    fresh = store.list_after(
+                        user_id=user_id, session_id=session_id, last_event_id=current_id,
+                    )
+                else:
+                    recent, _ = store.list(user_id=user_id, session_id=session_id, limit=100)
+                    fresh = list(reversed(recent))
+                for item in fresh:
+                    current_id = item.id
+                    yield f"id: {item.id}\nevent: comment\ndata: {json.dumps(_public_comment(item), ensure_ascii=False)}\n\n"
+                idle += 2
+                if idle >= 8:
+                    idle = 0
+                    yield "event: heartbeat\ndata: {}\n\n"
+        except Exception:
+            yield 'event: error\ndata: {"message":"monitor comment stream unavailable"}\n\n'
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no",
+    })
 
 
 # ── Findings ──────────────────────────────────────────────────

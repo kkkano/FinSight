@@ -73,7 +73,7 @@ def test_duplicate_page_instances_share_one_symbol_tick(monkeypatch):
     result = monitor_engine.run_realtime_monitor_cycle(
         now=now,
         snapshot_fetcher=lambda target, observed: MarketSnapshot(target.symbol, observed.isoformat(), 100.0),
-        trigger_consumer=lambda target, snapshot, triggers: calls.append((target, snapshot, triggers)) or True,
+        trigger_consumer=lambda target, snapshot, triggers, _prediction: calls.append((target, snapshot, triggers)) or True,
     )
 
     assert result == 1
@@ -123,7 +123,7 @@ def test_two_symbols_ten_minute_replay_dispatches_heartbeat_at_most_every_five_m
         monitor_engine.run_realtime_monitor_cycle(
             now=start + timedelta(minutes=minute),
             snapshot_fetcher=lambda target, observed: MarketSnapshot(target.symbol, observed.isoformat(), 100.0),
-            trigger_consumer=lambda target, _snapshot, triggers: calls.append((target.symbol, triggers[0].kind)) or True,
+            trigger_consumer=lambda target, _snapshot, triggers, _prediction: calls.append((target.symbol, triggers[0].kind)) or True,
         )
 
     assert calls == [

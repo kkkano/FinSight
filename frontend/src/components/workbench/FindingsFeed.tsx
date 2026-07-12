@@ -12,6 +12,7 @@ import { Loader2, RadarIcon, RefreshCw } from 'lucide-react';
 import { useFindings } from '../../hooks/useFindings';
 import { EmptyState } from '../ui';
 import { FindingCard } from './FindingCard';
+import { MonitorCommentFeed } from './MonitorCommentFeed';
 
 interface FindingsFeedProps {
   sessionId: string | null | undefined;
@@ -106,6 +107,8 @@ export function FindingsFeed({
           </button>
         </div>
       </div>
+
+      <MonitorCommentFeed sessionId={sessionId} />
 
       {/* 错误提示 */}
       {error && (

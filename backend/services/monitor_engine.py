@@ -41,6 +41,7 @@ from backend.services.market_hours import (
 from backend.services.email_service import get_email_service
 from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
 from backend.services.monitor_lease_store import get_monitor_lease_store
+from backend.services.agent_prediction_store import get_agent_prediction_store
 from backend.services.monitor_store import get_monitor_store
 from backend.services.monitor_signals import (
     MarketSnapshot,
@@ -98,10 +99,11 @@ def dispatch_realtime_triggers(
     target: RealtimeMonitorTarget,
     snapshot: MarketSnapshot,
     triggers: list[MonitorTrigger],
+    prediction=None,
 ) -> bool:
-    """D3 点评生产者的装配边界；D2 默认不调用 LLM、不写库。"""
-    del target, snapshot, triggers
-    return False
+    """把确定性 trigger 交给受限 LangGraph 点评生产者。"""
+    from backend.services.monitor_commentator import produce_monitor_comments_sync
+    return produce_monitor_comments_sync(target, snapshot, triggers, prediction)
 
 
 def _realtime_target_from_lease(lease: dict[str, Any]) -> RealtimeMonitorTarget:
@@ -141,7 +143,7 @@ def run_realtime_monitor_cycle(
     *,
     now: datetime | None = None,
     snapshot_fetcher: Callable[[RealtimeMonitorTarget, datetime], MarketSnapshot] | None = None,
-    trigger_consumer: Callable[[RealtimeMonitorTarget, MarketSnapshot, list[MonitorTrigger]], bool] | None = None,
+    trigger_consumer: Callable[[RealtimeMonitorTarget, MarketSnapshot, list[MonitorTrigger], Any], bool] | None = None,
 ) -> int:
     """每 60 秒执行的页面高频监控 tick，返回交给点评边界的目标数。"""
     tick_at = now or datetime.now(timezone.utc)
@@ -187,17 +189,23 @@ def run_realtime_monitor_cycle(
                     target = _realtime_target_from_lease(lease)
                     current = fetcher(target, tick_at)
                     previous = _realtime_snapshots.get(key, current)
+                    try:
+                        prediction = get_agent_prediction_store().get_latest(
+                            user_id=target.user_id, symbol=target.symbol,
+                        )
+                    except Exception:
+                        prediction = None
                     triggers = evaluate_realtime_snapshot(
                         previous=previous,
                         current=current,
-                        prediction=None,
+                        prediction=prediction,
                         last_comment_at=_realtime_last_comment_at.get(key),
                         now=tick_at,
                     )
                     _realtime_snapshots[key] = current
                     if not triggers:
                         continue
-                    consumer(target, current, triggers)
+                    consumer(target, current, triggers, prediction)
                     # D3 将把这里的交付替换为 PostgreSQL comment 时间；D2 先保证心跳不超过 5 分钟一次。
                     _realtime_last_comment_at[key] = tick_at
                     dispatched += 1

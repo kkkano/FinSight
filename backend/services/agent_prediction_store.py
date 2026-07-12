@@ -28,6 +28,9 @@ class UnavailableAgentPredictionStore:
     def get(self, prediction_id: str, *, user_id: str) -> AgentPrediction | None:
         raise PredictionStoreUnavailable(self.reason)
 
+    def get_latest(self, *, user_id: str, symbol: str) -> AgentPrediction | None:
+        raise PredictionStoreUnavailable(self.reason)
+
 
 class AgentPredictionStore:
     def __init__(self, *, dsn: str | None = None, engine: Any | None = None) -> None:
@@ -49,7 +52,7 @@ class AgentPredictionStore:
             with self._engine.begin() as conn:
                 conn.execute(text(
                     "CREATE TABLE IF NOT EXISTS agent_predictions ("
-                    "id TEXT NOT NULL, user_id TEXT NOT NULL, run_id TEXT NOT NULL, "
+                    "id UUID NOT NULL, user_id TEXT NOT NULL, run_id TEXT NOT NULL, "
                     "symbol TEXT NOT NULL, agent TEXT NOT NULL, direction TEXT NOT NULL, "
                     "confidence DOUBLE PRECISION NOT NULL, thesis TEXT NOT NULL, "
                     "anchor_timeframe TEXT NOT NULL, anchor_time TEXT NOT NULL, anchor_price DOUBLE PRECISION NOT NULL, "
@@ -58,6 +61,13 @@ class AgentPredictionStore:
                     "range_low DOUBLE PRECISION NULL, range_high DOUBLE PRECISION NULL, status TEXT NOT NULL, "
                     "created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, "
                     "PRIMARY KEY(id), UNIQUE(id, user_id))"
+                ))
+                conn.execute(text(
+                    "DO $$ BEGIN "
+                    "IF EXISTS (SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = 'agent_predictions' AND column_name = 'id' AND data_type = 'text') "
+                    "THEN ALTER TABLE agent_predictions ALTER COLUMN id TYPE UUID USING id::uuid; "
+                    "END IF; END $$"
                 ))
                 conn.execute(text(
                     "CREATE INDEX IF NOT EXISTS idx_agent_predictions_user_created "
@@ -90,9 +100,30 @@ class AgentPredictionStore:
         self.ensure_schema()
         with self._engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM agent_predictions WHERE id = :id AND user_id = :user_id"),
+                text("SELECT * FROM agent_predictions WHERE id = CAST(:id AS uuid) AND user_id = :user_id"),
                 {"id": str(prediction_id), "user_id": normalized_user},
             ).mappings().first()
+        if row is None:
+            return None
+        payload = dict(row)
+        payload["anchor"] = {
+            "timeframe": payload.pop("anchor_timeframe"),
+            "time": payload.pop("anchor_time"),
+            "price": payload.pop("anchor_price"),
+        }
+        return AgentPrediction.model_validate(payload)
+
+    def get_latest(self, *, user_id: str, symbol: str) -> AgentPrediction | None:
+        normalized_user = str(user_id or "").strip()
+        normalized_symbol = str(symbol or "").strip().upper()
+        if not normalized_user or normalized_user == "public" or not normalized_symbol:
+            return None
+        self.ensure_schema()
+        with self._engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT * FROM agent_predictions WHERE user_id = :user_id AND symbol = :symbol "
+                "ORDER BY created_at DESC LIMIT 1"
+            ), {"user_id": normalized_user, "symbol": normalized_symbol}).mappings().first()
         if row is None:
             return None
         payload = dict(row)
