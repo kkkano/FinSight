@@ -3,8 +3,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
 import type { ChatContext } from '../api/client';
+import type { PortfolioSummaryPosition } from '../api/contracts';
 import { getAgentPreferences } from '../components/settings/AgentControlPanel';
 import { useToast } from '../components/ui';
+import { queryClient } from '../queryClient';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useExecutionStore } from '../store/executionStore';
 import { useStore } from '../store/useStore';
@@ -98,6 +100,20 @@ export const findRetryQuery = (messages: Message[], messageId: string): string |
   const lastUser = [...messages].reverse().find((message) => message.role === 'user');
   return lastUser?.content?.trim() || null;
 };
+
+export const normalizePortfolioPositionsForChat = (
+  positions: PortfolioSummaryPosition[] | null | undefined,
+): PortfolioSummaryPosition[] => (Array.isArray(positions) ? positions : [])
+  .filter((position) => {
+    const ticker = String(position?.ticker || '').trim();
+    const shares = Number(position?.shares);
+    return Boolean(ticker) && Number.isFinite(shares) && shares > 0;
+  })
+  .map((position) => ({
+    ...position,
+    ticker: position.ticker.trim().toUpperCase(),
+    shares: Number(position.shares),
+  }));
 
 export function useChatStream(sessionId: string): UseChatStreamResult {
   const { toast } = useToast();
@@ -247,6 +263,19 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       }
       if (dashboard.activeSelections.length === 1) context.selection = dashboard.activeSelections[0];
       if (dashboard.activeSelections.length > 1) context.selections = dashboard.activeSelections;
+      if (requestSessionId) {
+        try {
+          const portfolioSummary = await queryClient.fetchQuery({
+            queryKey: ['portfolio-summary', requestSessionId],
+            queryFn: () => apiClient.getPortfolioSummary(requestSessionId),
+            staleTime: 30_000,
+          });
+          const positions = normalizePortfolioPositionsForChat(portfolioSummary.positions);
+          if (positions.length > 0) context.positions = positions;
+        } catch {
+          // 持仓不可用时不阻断普通聊天，也不伪造空持仓。
+        }
+      }
       if (initialState.subscriptionEmail) context.user_email = initialState.subscriptionEmail;
       const streamContext = Object.keys(context).length > 0 ? context : undefined;
       const agentPreferences = getAgentPreferences();

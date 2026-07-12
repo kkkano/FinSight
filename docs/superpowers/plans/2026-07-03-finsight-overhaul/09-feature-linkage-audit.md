@@ -143,10 +143,10 @@ type PredictionOverlay = {
 
 ### B-6: 持仓上下文接线【盘点】
 
-- [ ] Step 1【盘点】: `grep -rn "positions" frontend/src/api/client.ts frontend/src/components/ChatInput.tsx frontend/src/store | head`——确认发消息时 ui_context 是否携带 positions。
-- [ ] Step 2 分支 a（未携带）：从 workbench PortfolioEditor 的数据源（`grep -rn "usePortfolio\|portfolio" frontend/src/hooks`）取当前持仓，在 ChatInput 发送时写入 `ui_context.positions`（字段结构对齐 understand_request.py:2083 `_positions_from_ui_context` 期待的形状——先读该函数确认键名）。分支 b（已携带）：跳过。
-- [ ] Step 3: PortfolioSummaryBar 加「分析我的持仓」按钮 → `/chat` 预填 `我的持仓该怎么调整？`（后端 portfolio 意图路径此刻能拿到真持仓，blocked_tasks 的"缺持仓"分支不再误触发）。
-- [ ] Commit: `feat(linkage): real positions flow into chat portfolio analysis`
+- [x] Step 1【盘点】: `grep -rn "positions" frontend/src/api/client.ts frontend/src/components/ChatInput.tsx frontend/src/store | head`——确认发消息时 ui_context 是否携带 positions。
+- [x] Step 2 分支 a（未携带）：从 workbench PortfolioEditor 的数据源（`grep -rn "usePortfolio\|portfolio" frontend/src/hooks`）取当前持仓，在 ChatInput 发送时写入 `ui_context.positions`（字段结构对齐 understand_request.py:2083 `_positions_from_ui_context` 期待的形状——先读该函数确认键名）。分支 b（已携带）：跳过。
+- [x] Step 3: PortfolioSummaryBar 加「分析我的持仓」按钮 → `/chat` 预填 `我的持仓该怎么调整？`（后端 portfolio 意图路径此刻能拿到真持仓，blocked_tasks 的"缺持仓"分支不再误触发）。
+- [x] Commit: `feat(linkage): real positions flow into chat portfolio analysis`
 
 ### B-7: 晨报要点深入
 

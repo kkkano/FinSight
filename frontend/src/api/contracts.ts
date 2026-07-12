@@ -12,6 +12,7 @@ export interface ChatContext {
   view?: string;
   selection?: SelectionItem;
   selections?: SelectionItem[];
+  positions?: PortfolioSummaryPosition[];
   user_email?: string;
 }
 

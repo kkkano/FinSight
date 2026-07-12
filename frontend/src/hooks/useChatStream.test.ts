@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Message } from '../types';
-import { findRetryQuery } from './useChatStream';
+import { findRetryQuery, normalizePortfolioPositionsForChat } from './useChatStream';
 
 const messages: Message[] = [
   { id: 'u1', role: 'user', content: 'AAPL first', timestamp: 1 },
@@ -18,5 +18,26 @@ describe('findRetryQuery', () => {
 
   it('目标消息不存在时不猜测 query', () => {
     expect(findRetryQuery(messages, 'missing')).toBeNull();
+  });
+});
+
+describe('normalizePortfolioPositionsForChat', () => {
+  it('keeps real positive holdings and normalizes ticker casing', () => {
+    expect(normalizePortfolioPositionsForChat([
+      {
+        ticker: ' aapl ',
+        shares: 12,
+        avg_cost: 150,
+        market_value: 2188.8,
+        cost_basis: 1800,
+      },
+      { ticker: 'MSFT', shares: 0, market_value: 0, cost_basis: 0 },
+    ])).toEqual([{
+      ticker: 'AAPL',
+      shares: 12,
+      avg_cost: 150,
+      market_value: 2188.8,
+      cost_basis: 1800,
+    }]);
   });
 });

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { BarChart3, Briefcase, Crown, TrendingUp } from 'lucide-react';
+import { BarChart3, Briefcase, Crown, MessageCircle, TrendingUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { useStore } from '../../store/useStore';
 import { usePortfolioSummary } from '../../hooks/usePortfolioSummary';
@@ -53,6 +54,14 @@ export function PortfolioSummaryBar() {
           )}
         </div>
       ))}
+      <Link
+        to={`/chat?prompt=${encodeURIComponent('我的持仓该怎么调整？')}`}
+        className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-fin-primary transition-colors hover:bg-fin-primary/10"
+        data-testid="portfolio-analyze-in-chat"
+      >
+        <MessageCircle size={14} />
+        分析我的持仓
+      </Link>
     </div>
   );
 }
