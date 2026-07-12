@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from backend.agents.profiles import AGENT_PROFILES
+
 
 DashboardTab = Literal["overview", "financial", "news", "peers", "technical"]
 
@@ -25,6 +27,13 @@ _TAB_AGENTS: dict[str, tuple[str, ...]] = {
     "peers": ("price_agent", "fundamental_agent", "risk_agent"),
     "overview": _CORE_AGENTS,
 }
+
+_profile_tabs = {key: item.dashboard_tabs for key, item in AGENT_PROFILES.items()}
+_bridge_tabs = {
+    key: tuple(tab for tab, agents in _TAB_AGENTS.items() if key in agents)
+    for key in AGENT_PROFILES
+}
+assert _profile_tabs == _bridge_tabs, "AgentProfile.dashboard_tabs must match _TAB_AGENTS"
 
 _TAB_BUDGET: dict[str, int] = {
     "technical": 4,

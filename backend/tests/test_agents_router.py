@@ -28,6 +28,9 @@ def test_list_agents_returns_all_candidates():
     for item in data["items"]:
         assert item["display_name"], "每个 agent 必须有中文展示名"
         assert item["description"], "每个 agent 必须有描述"
+        assert len(item["glyph"]) == 1
+        assert item["color_token"].startswith("t-")
+        assert item["mandate"]
         # insert_text 用 @{name} 触发，供前端插入输入框
         assert item["insert_text"] == f"@{item['name']} "
 

@@ -72,10 +72,10 @@ def lead_agent_for_operation(operation: str) -> str:
     portfolio_*/rebalance_check→risk_agent; qa→deep_search_agent; 其余→fundamental_agent"""
 ```
 
-- [ ] Step 1: TDD——7 个 profile 完整性断言（key 集合 == REPORT_AGENT_CANDIDATES；scorer_key 与 `backend/dashboard/insights_scorer.py` 的 score_* 函数名集合互相覆盖；dashboard_tabs 与 `agent_bridge._TAB_AGENTS` 一致性断言）。
-- [ ] Step 2: 实现 profiles.py；`agents_router` 的 `_AGENT_DISPLAY_META` 删除、改由 profiles 生成（对外 JSON 结构不变，加 `glyph/color_token/mandate` 字段）。
-- [ ] Step 3: 启动一致性断言（WP3 T8 的模式）：profiles ↔ capability_registry ↔ agent_bridge 三方 key 对齐。
-- [ ] Commit: `feat(agents): single AgentProfile registry — identity, mandate, glyph, scorer & tab bindings`
+- [x] Step 1: TDD——7 个 profile 完整性断言（key 集合 == REPORT_AGENT_CANDIDATES；scorer_key 与 `backend/dashboard/insights_scorer.py` 的 score_* 函数名集合互相覆盖；dashboard_tabs 与 `agent_bridge._TAB_AGENTS` 一致性断言）。
+- [x] Step 2: 实现 profiles.py；`agents_router` 的 `_AGENT_DISPLAY_META` 删除、改由 profiles 生成（对外 JSON 结构不变，加 `glyph/color_token/mandate` 字段）。
+- [x] Step 3: 启动一致性断言（WP3 T8 的模式）：profiles ↔ capability_registry ↔ agent_bridge 三方 key 对齐。
+- [x] Commit: `feat(agents): single AgentProfile registry — identity, mandate, glyph, scorer & tab bindings`
 
 ### Task 2: Lead/Support 结构 + 报告署名
 

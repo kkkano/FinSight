@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from backend.agents.profiles import AGENT_PROFILES
+
 
 @dataclass(frozen=True)
 class AgentCapability:
@@ -15,15 +17,7 @@ class AgentCapability:
     keyword_boost: float = 0.25
 
 
-REPORT_AGENT_CANDIDATES: tuple[str, ...] = (
-    "price_agent",
-    "news_agent",
-    "fundamental_agent",
-    "technical_agent",
-    "macro_agent",
-    "risk_agent",
-    "deep_search_agent",
-)
+REPORT_AGENT_CANDIDATES: tuple[str, ...] = tuple(AGENT_PROFILES)
 
 
 AGENT_CAPABILITIES: dict[str, AgentCapability] = {
@@ -79,6 +73,13 @@ AGENT_CAPABILITIES: dict[str, AgentCapability] = {
         keyword_boost=0.45,
     ),
 }
+
+assert set(AGENT_CAPABILITIES) == set(AGENT_PROFILES), (
+    "AgentProfile and capability registry keys must match"
+)
+assert all(key == item.name for key, item in AGENT_CAPABILITIES.items()), (
+    "AgentCapability.name must match its registry key"
+)
 
 
 _MACRO_HINTS = ("\u5b8f\u89c2", "macro", "cpi", "ppi", "fed", "fomc", "\u5229\u7387", "\u901a\u80c0", "\u5c31\u4e1a", "gdp")
