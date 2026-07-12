@@ -81,10 +81,14 @@ export function ChatWorkspace({
 
   useEffect(() => {
     const nextDraft = initialDraft?.trim();
-    if (!nextDraft || loadedDraftRef.current === nextDraft) return;
-    loadedDraftRef.current = nextDraft;
+    if (!nextDraft) return;
+    // 登录态/匿名态初始化可能在路由挂载后切换 session，并清空当前 draft。
+    // 按 session 记录已加载键，确保深链草稿在最终会话中仍能恢复。
+    const loadedDraftKey = `${sessionId}\u0000${nextDraft}`;
+    if (loadedDraftRef.current === loadedDraftKey) return;
+    loadedDraftRef.current = loadedDraftKey;
     setDraft(nextDraft);
-  }, [initialDraft, setDraft]);
+  }, [initialDraft, sessionId, setDraft]);
 
   // --- P0-2: report_id replay ---
   const replayLoadedRef = useRef<string | null>(null);
