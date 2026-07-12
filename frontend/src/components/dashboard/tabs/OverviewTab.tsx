@@ -19,6 +19,7 @@ import { FearGreedGauge } from './overview/FearGreedGauge';
 import { AgentStatusOverview } from './overview/AgentStatusOverview';
 import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
+import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { asRecord } from '../../../utils/record';
 import { DashboardSourceBadge } from '../DashboardSourceBadge';
@@ -237,6 +238,12 @@ export function OverviewTab() {
 
   return (
     <div className="space-y-4">
+      <ResidentAnalystBar
+        tab="overview"
+        onDeepDive={() => deepDive.startDeepDive()}
+        deepDiveRunning={deepDive.isRunning}
+      />
+
       {/* P5: 今天为何涨跌 一键 Agent 归因（复用 Phase3 深挖闭环 + 五维归因 prompt） */}
       <button
         type="button"

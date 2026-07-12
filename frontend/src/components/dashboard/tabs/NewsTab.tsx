@@ -30,6 +30,7 @@ import { NewsTimeRange } from './news/NewsTimeRange';
 import { NewsCard } from './news/NewsCard';
 import { NewsSentimentOverview } from './news/NewsSentimentOverview';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
+import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 
 // ---------------------------------------------------------------------------
 // Deduplicate news items by title+source key
@@ -210,6 +211,12 @@ export function NewsTab() {
   // --- Render ---
   return (
     <div className="space-y-4">
+      <ResidentAnalystBar
+        tab="news"
+        onDeepDive={() => deepDive.startDeepDive()}
+        deepDiveRunning={deepDive.isRunning}
+      />
+
       {/* 舆情总览：REST 未暴露 NewsSentimentSnapshot 时，先用新闻列表做客户端聚合。 */}
       <NewsSentimentOverview
         news={overviewNews}

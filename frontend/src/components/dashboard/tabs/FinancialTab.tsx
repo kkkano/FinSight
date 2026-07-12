@@ -18,6 +18,7 @@ import { EarningsSurpriseChart } from './financial/EarningsSurpriseChart';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
+import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
@@ -49,6 +50,12 @@ export function FinancialTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ResidentAnalystBar
+        tab="financial"
+        onDeepDive={() => deepDive.startDeepDive()}
+        deepDiveRunning={deepDive.isRunning}
+      />
+
       {/* AI Financial Analysis Card */}
       <AiInsightCard
         tab="financial"

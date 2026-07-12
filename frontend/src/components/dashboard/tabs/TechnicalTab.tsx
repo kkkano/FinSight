@@ -19,6 +19,7 @@ import { BollingerVolumeCard } from './technical/BollingerVolumeCard';
 import { TechnicalSubCharts } from './technical/TechnicalSubCharts';
 import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
+import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
@@ -48,6 +49,12 @@ export function TechnicalTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ResidentAnalystBar
+        tab="technical"
+        onDeepDive={() => deepDive.startDeepDive()}
+        deepDiveRunning={deepDive.isRunning}
+      />
+
       {/* AI Technical Analysis Card */}
       <AiInsightCard
         tab="technical"

@@ -31,6 +31,9 @@ def test_list_agents_returns_all_candidates():
         assert len(item["glyph"]) == 1
         assert item["color_token"].startswith("t-")
         assert item["mandate"]
+        assert item["short_zh"]
+        assert "scorer_key" in item
+        assert isinstance(item["dashboard_tabs"], list)
         # insert_text 用 @{name} 触发，供前端插入输入框
         assert item["insert_text"] == f"@{item['name']} "
 

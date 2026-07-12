@@ -161,10 +161,13 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
             items.append({
                 "name": name,
                 "display_name": display_name,
+                "short_zh": item_profile.short_zh,
                 "description": description,
                 "glyph": item_profile.glyph,
                 "color_token": item_profile.color_token,
                 "mandate": item_profile.mandate_zh,
+                "scorer_key": item_profile.scorer_key,
+                "dashboard_tabs": list(item_profile.dashboard_tabs),
                 "insert_text": f"@{name} ",
                 "track_record": track_record,
                 "cost_summary": cost_summary,

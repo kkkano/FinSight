@@ -306,9 +306,9 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 - [问TA]：打开 MiniChat 预填 `@{agent} `（AgentMention 语法，走 agents_override 强制该 agent）；[深入分析]：现有 deep-dive。
 - 类名走 08 规范（Tag/ghost Button）；一行高 40px，不抢内容。
 
-- [ ] Step 1: 实现 + vitest（渲染 profile 与两按钮回调）。
-- [ ] Step 2: 五 tab 挂入（overview 显示 lead=综合，其余按 `profile.dashboard_tabs` 反查首个驻场 agent）。
-- [ ] Commit: `feat(dashboard): resident analyst bar on every tab — the team is visible where users live`
+- [x] Step 1: 实现 + vitest（渲染 profile 与两按钮回调）。
+- [x] Step 2: 五 tab 挂入（overview 显示 lead=综合，其余按 `profile.dashboard_tabs` 反查首个驻场 agent）。
+- [x] Commit: `feat(dashboard): resident analyst bar on every tab — the team is visible where users live`
 
 ### Task 9: 全链路署名清扫
 

@@ -15,6 +15,7 @@ import { RevenueGrowthChart } from './peers/RevenueGrowthChart.tsx';
 import { AiPeerSummary } from './peers/AiPeerSummary.tsx';
 import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
+import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 import { DashboardSourceBadge } from '../DashboardSourceBadge';
 import type { SelectionItem } from '../../../types/dashboard';
 
@@ -58,6 +59,12 @@ export function PeersTab() {
   if (peers.length === 0 && !peerData) {
     return (
       <div className="space-y-4">
+        <ResidentAnalystBar
+          tab="peers"
+          onDeepDive={() => deepDive.startDeepDive()}
+          deepDiveRunning={deepDive.isRunning}
+        />
+
         <AiInsightCard
           tab="peers"
           insight={peersInsight}
@@ -85,6 +92,12 @@ export function PeersTab() {
 
   return (
     <div className="space-y-4">
+      <ResidentAnalystBar
+        tab="peers"
+        onDeepDive={() => deepDive.startDeepDive()}
+        deepDiveRunning={deepDive.isRunning}
+      />
+
       {/* AI Peers Insight Card — replaces AiPeerSummary when insights available */}
       <AiInsightCard
         tab="peers"
