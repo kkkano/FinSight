@@ -210,8 +210,8 @@ type PredictionOverlay = {
 ### C-8: 订阅/邮件提醒入口 —— 提升
 
 **证据:** SubscribeModal 存在但入口深；预警是核心卖点之一却难被发现。
-- [ ] Step 1: Sidebar「订阅与提醒」入口（08 Task 7 结构已含）→ 打开一个聚合页/抽屉：邮件订阅管理（SubscribeModal 内容平铺）+ 监控规则跳转（workbench MonitorConfigPanel 的深链）。
-- [ ] Commit: `feat(alerts): first-class subscriptions & alerts entry`
+- [x] Step 1: Sidebar「订阅与提醒」入口（08 Task 7 结构已含）→ 打开一个聚合页/抽屉：邮件订阅管理（SubscribeModal 内容平铺）+ 监控规则跳转（workbench MonitorConfigPanel 的深链）。
+- [x] Commit: `feat(alerts): first-class subscriptions & alerts entry`
 
 ### C-9: `/api/supabase` 前端残留 ——【盘点】
 

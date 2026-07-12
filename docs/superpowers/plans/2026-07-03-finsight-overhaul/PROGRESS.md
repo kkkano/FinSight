@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | 09-C8 订阅与提醒一级聚合入口 | 本提交 | 复用 Sidebar 已有一级“订阅与提醒”，SubscribeModal 顶部新增监控规则说明与“去配置”，下方保留完整邮件订阅管理；新增 `/workbench?focus=monitor` 深链，Workbench 挂载后自动滚到 MonitorConfigPanel。新增聚合内容合同测试，定向 ESLint/tsc 与 `2 files/5 tests` 通过；完整前端 `62 files/287 tests`、生产 build 成功。真实 Chromium 验证一级入口→邮件订阅/监控聚合→监控深链与自动滚动，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |
 | 2026-07-12 | 09-C7 诊断页收进设置登记 | 本提交 | 对照 08-Task7 现有实现确认无需重复改 UI：`/rag-inspector` 与 `/cost-audit` 鉴权路由继续保留，Sidebar 对诊断页名称/路径扫描为 0；设置→高级设置已有开发者模式开关及 RAG 检索观测、成本审计链接。静态合同检查通过，SettingsModal 与 RAG 访问控制聚焦 `2 files/6 tests` 通过。 |
 | 2026-07-12 | 09-C6 图表组件收敛 | 本提交 | RightPanelChartTab 删除 StockChart 依赖，直接请求真实 K 线并通过 SmartChart ref 模式渲染；删除 521 行 StockChart，InlineChart 改复用 SmartChart 的 K 线 adapter 与 line/candlestick builders，三套实现收敛为同一组件族。新增共享 OHLC/收益 adapter 合同测试；`StockChart/const buildLineOption/const buildCandleOption` 生产残留扫描为 0，完整前端 `61 files/286 tests`、生产 build 成功。真实 Chromium 验证 AAPL 右栏与全屏图表可见、来源 `yfinance · 2026-07-11`、控制台 0 error；截图留于忽略目录，QA 端口已清理。 |
 | 2026-07-12 | 09-C5 智能体偏好显式化与接线确认 | 本提交 | 盘点确认高级设置已有完整 AgentControlPanel：7 个报告 Agent 的标准/深度/关闭、轮次预算、并发、超时、LLM 分析与 reflectionRounds 均通过 GET/PUT `/api/agents/preferences` 同步，并在主 Chat/MiniChat 请求中作为 `agent_preferences` 发送。标题改为“智能体偏好”，补充“控制报告默认参与的智能体”及手动 @ 覆盖关系说明，并为关键控件增加稳定 QA 标识。后端 preferences/policy `24 passed`；前端新增 1 项渲染合同，定向 ESLint/tsc 通过，完整前端 `61 files/285 tests`、生产 build 成功。真实 Chromium 关闭 price_agent、将反思轮数设为 2，确认 3 次 PUT 保存且随后聊天请求携带相同值，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |

@@ -219,6 +219,31 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
       </div>
 
       <div className="space-y-5 p-6">
+        <section className="rounded-lg border border-t-border bg-t-bg px-4 py-3" data-testid="subscriptions-monitor-entry">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-t-text">监控规则</h3>
+              <p className="mt-1 text-xs text-t-text3">配置盯盘标的、触发阈值与监控邮件通知。</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onClose();
+                window.location.assign('/workbench?focus=monitor');
+              }}
+              data-testid="subscriptions-open-monitor"
+            >
+              去配置
+            </Button>
+          </div>
+        </section>
+
+        <div>
+          <h3 className="text-sm font-semibold text-t-text">邮件订阅</h3>
+          <p className="mt-1 text-xs text-t-text3">按股票管理价格波动、到价与新闻提醒。</p>
+        </div>
+
         <div className="grid gap-4 text-sm md:grid-cols-2">
           <Input
             label="邮箱"

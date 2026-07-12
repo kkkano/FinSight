@@ -42,6 +42,7 @@ export function Workbench({
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedReportId = searchParams.get('report')?.trim() || null;
+  const monitorFocusRequested = searchParams.get('focus') === 'monitor';
   const { sessionId, setDraft } = useStore();
   const setActiveAsset = useDashboardStore((state) => state.setActiveAsset);
   const portfolioSummary = usePortfolioSummary(sessionId);
@@ -102,6 +103,14 @@ export function Workbench({
     // 仅依赖 sessionId：每个会话只迁移一次。portfolioSummary.refresh 引用稳定，无需入依赖。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!monitorFocusRequested) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('monitor-config')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [monitorFocusRequested]);
 
   const openQualityDrawer = useCallback((focusHint?: string | null) => {
     setQualityFocusHint(focusHint ?? null);
@@ -214,7 +223,9 @@ export function Workbench({
             loading={portfolioSummary.loading}
             onChanged={portfolioSummary.refresh}
           />
-          <MonitorConfigPanel sessionId={sessionId} />
+          <div id="monitor-config" data-testid="workbench-monitor-config">
+            <MonitorConfigPanel sessionId={sessionId} />
+          </div>
           {/* 宏观日历：未来 14 天财报/分红/宏观事件时间线 */}
           <MacroCalendarPanel sessionId={sessionId} />
           {/* 调仓入口：发现卡片「调仓建议」联动滚动目标 + 短暂高亮 */}
