@@ -87,6 +87,12 @@ def test_store_schema_is_postgres_and_has_composite_tenant_constraint():
     assert "UNIQUE(id, user_id)" in schema_sql
     assert "TIMESTAMPTZ" in schema_sql
     assert "scenarios JSONB" in schema_sql
+    migration_sql, migration_params = next(
+        (sql, params) for sql, params in engine.conn.calls
+        if "ADD COLUMN IF NOT EXISTS scenarios" in sql
+    )
+    assert ":legacy_scenarios" in migration_sql
+    assert '"probability": 50' in migration_params["legacy_scenarios"]
 
 
 def test_get_always_filters_by_prediction_id_and_user_id():
