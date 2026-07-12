@@ -2,9 +2,13 @@
 """prediction 的服务端校验、真实行情锚定与确定性逐 bar 判定。"""
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Mapping
 from uuid import uuid4
+
+from pydantic import ValidationError
 
 from backend.agents.prediction_contract import (
     AgentPrediction,
@@ -18,12 +22,20 @@ from backend.config.ticker_mapping import normalize_ticker
 SCORABLE_OPERATIONS = frozenset({
     "investment_opinion", "technical", "earnings_impact", "report_generation",
 })
+SCORABLE_AGENTS = frozenset({
+    "price_agent", "fundamental_agent", "technical_agent", "risk_agent",
+})
 _NON_CONCRETE_SYMBOLS = frozenset({"", "UNKNOWN", "N/A", "NONE", "MARKET", "MACRO"})
 
 
-def submission_allowed(*, symbol: str, operation: str) -> bool:
+def submission_allowed(*, symbol: str, operation: str, agent: str | None = None) -> bool:
     normalized = str(symbol or "").strip().upper()
-    return normalized not in _NON_CONCRETE_SYMBOLS and str(operation or "").strip() in SCORABLE_OPERATIONS
+    agent_allowed = agent is None or str(agent or "").strip() in SCORABLE_AGENTS
+    return (
+        normalized not in _NON_CONCRETE_SYMBOLS
+        and str(operation or "").strip() in SCORABLE_OPERATIONS
+        and agent_allowed
+    )
 
 
 def _bar_number(bar: Mapping[str, Any], key: str) -> float:
@@ -69,7 +81,7 @@ def submit_prediction(
     store: Any,
 ) -> AgentPrediction:
     """校验模型白名单后，用服务端上下文和最后一根真实 bar 覆盖可信字段。"""
-    if not submission_allowed(symbol=symbol, operation=operation):
+    if not submission_allowed(symbol=symbol, operation=operation, agent=agent):
         raise ValueError("当前步骤不允许提交可计分 prediction")
     normalized_user = str(user_id or "").strip()
     if not normalized_user or normalized_user == "public":
@@ -83,6 +95,19 @@ def submit_prediction(
     raw_bars = fetch_bars(normalized_symbol, period="1mo", interval="1d")
     bars, timeframe = _normalized_bars(raw_bars)
     anchor_bar = bars[-1]
+    submitted_anchor_time = str(draft.anchor.time or "").strip()
+    trusted_anchor_time = str(anchor_bar["time"])
+    if submitted_anchor_time != trusted_anchor_time:
+        raise ValueError(
+            f"anchor.time 与最新完整 bar 不一致: current={submitted_anchor_time}, expected={trusted_anchor_time}"
+        )
+    submitted_price = float(draft.anchor.price)
+    trusted_price = float(anchor_bar["close"])
+    deviation = abs(submitted_price - trusted_price) / trusted_price
+    if deviation > 0.005:
+        raise ValueError(
+            f"anchor.price 偏离最新完整 bar close 超过 0.5%: current={submitted_price}, expected={trusted_price}"
+        )
     trusted_payload = draft.model_dump(exclude={"risk_reward"}) | {
         "symbol": normalized_symbol,
         "agent": str(agent or "").strip(),
@@ -121,6 +146,95 @@ def submit_prediction_with_correction(
         except ValueError as exc:
             feedback = str(exc)[:500]
     return None
+
+
+def _submission_issues(exc: Exception) -> list[dict[str, Any]]:
+    if isinstance(exc, ValidationError):
+        issues: list[dict[str, Any]] = []
+        for item in exc.errors(include_url=False)[:12]:
+            field = ".".join(str(part) for part in item.get("loc") or ()) or "prediction"
+            current = item.get("input")
+            if any(token in field.lower() for token in ("user_id", "run_id", "token", "secret", "key")):
+                current = "[redacted]"
+            elif isinstance(current, str):
+                current = current[:80]
+            elif not isinstance(current, (int, float, bool, type(None))):
+                current = None
+            issues.append({
+                "field": field,
+                "rule": str(item.get("type") or "validation_error"),
+                "current": current,
+                "expected": str(item.get("msg") or "字段必须满足 prediction 合同")[:240],
+            })
+        return issues
+    message = str(exc or "prediction validation failed")[:300]
+    field = "anchor" if message.startswith("anchor.") or "行情" in message else "prediction"
+    return [{
+        "field": field,
+        "rule": "domain_validation",
+        "current": None,
+        "expected": message,
+    }]
+
+
+def validate_prediction_submission(raw_prediction: Mapping[str, Any], **submit_kwargs: Any) -> dict[str, Any]:
+    try:
+        prediction = submit_prediction(raw_prediction, **submit_kwargs)
+    except (ValidationError, ValueError) as exc:
+        return {"ok": False, "issues": _submission_issues(exc)}
+    return {"ok": True, "issues": [], "prediction": prediction}
+
+
+async def submit_prediction_with_async_correction(
+    generate_prediction: Callable[[list[dict[str, Any]] | None], Any],
+    **submit_kwargs: Any,
+) -> tuple[AgentPrediction | None, list[dict[str, Any]]]:
+    """最多两次结构化提交；仅成功值落库，失败不会阻断 Agent 主摘要。"""
+    feedback: list[dict[str, Any]] | None = None
+    trace: list[dict[str, Any]] = []
+    for attempt in range(1, 3):
+        raw = generate_prediction(feedback)
+        if hasattr(raw, "__await__"):
+            raw = await raw
+        if not isinstance(raw, Mapping):
+            issues = [{
+                "field": "prediction",
+                "rule": "missing_submission",
+                "current": None,
+                "expected": "返回一个 JSON prediction 对象",
+            }]
+            trace.append({"attempt": attempt, "ok": False, "issues": issues})
+            feedback = issues
+            continue
+        result = await asyncio.to_thread(validate_prediction_submission, raw, **submit_kwargs)
+        issues = result.get("issues") if isinstance(result.get("issues"), list) else []
+        trace.append({"attempt": attempt, "ok": bool(result.get("ok")), "issues": issues})
+        if result.get("ok") and isinstance(result.get("prediction"), AgentPrediction):
+            return result["prediction"], trace
+        feedback = issues
+    return None, trace
+
+
+def prediction_json_from_llm_content(content: Any) -> dict[str, Any] | None:
+    raw = content.content if hasattr(content, "content") else content
+    if isinstance(raw, list):
+        raw = "".join(
+            str(item.get("text") or "") if isinstance(item, dict) else str(item)
+            for item in raw
+        )
+    text_value = str(raw or "").strip()
+    if text_value.startswith("```"):
+        lines = text_value.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text_value = "\n".join(lines).strip()
+    try:
+        parsed = json.loads(text_value)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _crossed_entry(draft: PredictionDraft, bar: Mapping[str, Any]) -> tuple[bool, float | None]:
@@ -201,6 +315,7 @@ def evaluate_prediction_bars(
 
 
 __all__ = [
-    "SCORABLE_OPERATIONS", "evaluate_prediction_bars", "submission_allowed", "submit_prediction",
-    "submit_prediction_with_correction",
+    "SCORABLE_AGENTS", "SCORABLE_OPERATIONS", "evaluate_prediction_bars", "prediction_json_from_llm_content",
+    "submission_allowed", "submit_prediction", "submit_prediction_with_async_correction",
+    "submit_prediction_with_correction", "validate_prediction_submission",
 ]

@@ -85,6 +85,13 @@ def _archive_report_predictions(
         and isinstance(step.get("inputs"), dict)
         and step["inputs"].get("prediction_eligible") is True
     }
+    eligible_step_ids.update(
+        str(step_id)
+        for step_id, result in step_results.items()
+        if isinstance(result, dict)
+        and isinstance(result.get("output"), dict)
+        and result["output"].get("prediction_eligible") is True
+    )
     prediction_ids: list[str] = []
     for step_id in eligible_step_ids:
         result = step_results.get(step_id)

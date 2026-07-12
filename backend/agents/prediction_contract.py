@@ -82,6 +82,10 @@ class PredictionDraft(BaseModel):
 
         assert self.entry is not None and self.stop is not None
         assert self.target1 is not None and self.invalidation_price is not None
+        risk = abs(self.entry - self.stop)
+        reward = abs(self.target1 - self.entry)
+        if risk <= 0 or reward / risk < 1:
+            raise ValueError("prediction target1 风险收益比必须至少为 1")
         if self.direction == "long":
             if not self.stop < self.entry < self.target1:
                 raise ValueError("long prediction 必须满足 stop < entry < target1")

@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import json
+
+import pytest
 
 
 def _run(coro):
@@ -102,3 +105,100 @@ def test_build_agent_invoker_retries_and_fallbacks_on_runtime_error(monkeypatch)
     assert out.get("agent_name") == "fundamental_agent"
     assert out.get("fallback_used") is True
     assert "RuntimeError" in "\n".join(out.get("risks") or [])
+
+
+@pytest.mark.asyncio
+async def test_prediction_terminal_submission_corrects_once_and_only_stores_valid_value(monkeypatch):
+    from backend.graph.adapters.agent_adapter import _maybe_submit_prediction
+
+    responses = [
+        {
+            "symbol": "FORGED", "agent": "forged", "direction": "long", "confidence": 0.8,
+            "thesis": "趋势延续", "anchor": {"timeframe": "1d", "time": "2026-07-10", "price": 102},
+            "entry_type": "limit", "entry": 101, "stop": 105, "target1": 111,
+            "invalidation_price": 95,
+            "scenarios": [
+                {"name": "延续", "probability": 60, "invalidation": "跌破止损"},
+                {"name": "失败", "probability": 40, "invalidation": "突破目标"},
+            ],
+        },
+        {
+            "symbol": "FORGED", "agent": "forged", "direction": "long", "confidence": 0.8,
+            "thesis": "趋势延续", "anchor": {"timeframe": "1d", "time": "2026-07-10", "price": 102},
+            "entry_type": "limit", "entry": 101, "stop": 96, "target1": 111,
+            "invalidation_price": 95,
+            "scenarios": [
+                {"name": "延续", "probability": 60, "invalidation": "跌破止损"},
+                {"name": "失败", "probability": 40, "invalidation": "突破目标"},
+            ],
+        },
+    ]
+
+    class LLM:
+        def __init__(self):
+            self.prompts = []
+
+        async def ainvoke(self, messages):
+            self.prompts.append(messages[0].content)
+            payload = responses[len(self.prompts) - 1]
+            return type("Response", (), {"content": json.dumps(payload, ensure_ascii=False)})()
+
+    class Tools:
+        @staticmethod
+        def get_stock_historical_data(_ticker, **_kwargs):
+            return {
+                "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
+                "interval": "1d",
+            }
+
+    class Store:
+        def __init__(self):
+            self.saved = []
+
+        def create(self, prediction):
+            self.saved.append(prediction)
+            return prediction
+
+    store = Store()
+    monkeypatch.setattr(
+        "backend.services.agent_prediction_store.get_agent_prediction_store",
+        lambda: store,
+    )
+    llm = LLM()
+    result = await _maybe_submit_prediction(
+        step_name="technical_agent",
+        inputs={"ticker": "AAPL", "objective": "technical"},
+        state={"ui_context": {"__user_id": "alice", "run_id": "run-1"}},
+        output={"summary": "AAPL 技术趋势延续", "evidence": []},
+        llm=llm,
+        tools_module=Tools,
+    )
+
+    assert result["prediction_eligible"] is True
+    assert result["prediction_trace"]["status"] == "submitted"
+    assert [item["ok"] for item in result["prediction_trace"]["attempts"]] == [False, True]
+    assert len(store.saved) == 1
+    assert store.saved[0].symbol == "AAPL"
+    assert store.saved[0].agent == "technical_agent"
+    assert "逐项修正" in llm.prompts[1]
+    assert "user_id" not in result["prediction"]
+    assert "run_id" not in result["prediction"]
+
+
+@pytest.mark.asyncio
+async def test_noneligible_agent_does_not_expose_prediction_terminal_submission():
+    from backend.graph.adapters.agent_adapter import _maybe_submit_prediction
+
+    class UnexpectedLLM:
+        async def ainvoke(self, _messages):
+            raise AssertionError("noneligible step must not call LLM")
+
+    result = await _maybe_submit_prediction(
+        step_name="macro_agent",
+        inputs={"ticker": "AAPL", "objective": "technical"},
+        state={"ui_context": {"__user_id": "alice", "run_id": "run-1"}},
+        output={"summary": "macro"},
+        llm=UnexpectedLLM(),
+        tools_module=object(),
+    )
+    assert result == {"summary": "macro", "prediction_eligible": False}

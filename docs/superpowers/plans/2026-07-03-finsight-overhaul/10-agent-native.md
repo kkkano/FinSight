@@ -229,18 +229,18 @@ def prediction_history(*, agent: str, ticker: str, user_id: str,
 ### Task 5A: `submit_prediction` 工具 + 服务端校验回路
 
 **Files:**
-- Create: `backend/agents/prediction_submit.py`
-- Modify: `backend/agents/base_agent.py`、`backend/graph/adapters/agent_adapter.py`、`backend/graph/dag_executor.py`
+- Extend: `backend/agents/prediction_submit.py`（09 D-0 已创建）
+- Modify: `backend/graph/adapters/agent_adapter.py`（Agent 主摘要后执行服务端管理的终结提交；DAG 继续透传结构化 output）
 - Test: `backend/tests/test_prediction_submit.py`、`backend/tests/test_agent_adapter_resilience.py`
 
-**协议:** 扩展 09 D-0 的 `submit_prediction`。仅 `prediction_eligible=true`（concrete ticker + `investment_opinion/technical/earnings_impact/report_generation` + 可计分 agent）的 LangGraph agent step 暴露终结工具，并要求恰好一次**成功的**终结提交；macro/news/qa/document/无 ticker step 不暴露工具且允许零提交。首次非法提交允许纠正一次。工具先做 Pydantic 校验，再从现有行情工具读取受信任 symbol/最新 bar 校准 anchor，最后执行领域规则：long 为 `stop < entry < target1`、short 为 `target1 < entry < stop`、T1 风险收益比 `abs(target1-entry) / abs(entry-stop) >= 1`、target2 比 target1 更远、neutral range 包含 anchor、scenario 概率和 `100±10`。不得信任模型提供的 user_id、agent、run_id 或 anchor quote。
+**协议:** 扩展 09 D-0 的 `submit_prediction`。仅 `prediction_eligible=true`（concrete ticker + `investment_opinion/technical/earnings_impact/report_generation` + price/fundamental/technical/risk 可计分 agent）的 LangGraph agent step 在主摘要后进入服务端管理的终结提交，并要求恰好一次**成功的**提交；macro/news/qa/document/无 ticker step 不进入提交回路且允许零提交。首次非法提交允许纠正一次。服务端先读取最新完整 bar，把可信 time/close 提供给终结提交，再做 Pydantic 与领域校验并覆盖 symbol/agent/user/run/anchor：long 为 `stop < entry < target1`、short 为 `target1 < entry < stop`、T1 风险收益比 `abs(target1-entry) / abs(entry-stop) >= 1`、target2 比 target1 更远、neutral range 包含 anchor、scenario 概率和 `100±10`。不得信任模型提供的 user_id、agent、run_id 或 anchor quote。
 
-- [ ] Step 1: TDD 构造「eligible step 第一次 stop 方向错误 → 工具返回 `{ok:false,issues:[...]}` → 同一 agent step 修正后第二次通过」；断言只有最终通过值落库；另测 macro/news/qa/无 ticker step 不暴露工具、不产生 `prediction_missing` 失败。
-- [ ] Step 2: 实现结构化 issues（字段、规则、当前值、期望关系），通过 LangGraph tool result 原样回送模型；每个 agent step 最多 2 次提交，第二次仍失败则返回 `prediction_validation_failed`，主摘要可继续但不得落档或计入战绩。
-- [ ] Step 3: 服务端覆盖 `symbol/agent/user_id/run_id`；模型 anchor time 必须落在最新完整 bar 的一个 timeframe 内，anchor price 与服务端 bar close 偏差不得超过 0.5%，通过后以服务端 time/close 作为最终 anchor。行情不可用时 fail closed，不允许模型自报价格绕过。
-- [ ] Step 4: 记录 validation attempts、issues 和最终状态到 trace，但在用户输出/日志中脱敏；不引入 `pi-agent-core` 或开放式 agent loop。
-- [ ] 验收: 非法 RR、反向 stop、伪造 ticker/anchor、概率和错误都无法入库；一次纠错可成功；超过两次不会形成无限循环或重复计费。
-- [ ] Commit: `feat(agents): server-validated submit_prediction loop for LangGraph agents`
+- [x] Step 1: TDD 构造「eligible step 第一次 stop 方向错误 → 工具返回 `{ok:false,issues:[...]}` → 同一 agent step 修正后第二次通过」；断言只有最终通过值落库；另测 macro/news/qa/无 ticker step 不暴露工具、不产生 `prediction_missing` 失败。
+- [x] Step 2: 实现结构化 issues（字段、规则、当前值、期望关系），通过下一次受限终结提交 prompt 原样回送模型；每个 agent step 最多 2 次提交，第二次仍失败则返回 `prediction_validation_failed`，主摘要可继续但不得落档或计入战绩。
+- [x] Step 3: 服务端覆盖 `symbol/agent/user_id/run_id`；模型 anchor time 必须等于最新完整 bar，anchor price 与服务端 bar close 偏差不得超过 0.5%，通过后以服务端 time/close 作为最终 anchor。行情不可用时 fail closed，不允许模型自报价格绕过。
+- [x] Step 4: 记录 validation attempts、issues 和最终状态到 trace，但在用户输出/日志中脱敏；不引入 `pi-agent-core` 或开放式 agent loop。
+- [x] 验收: 非法 RR、反向 stop、伪造 ticker/anchor、概率和错误都无法入库；一次纠错可成功；超过两次不会形成无限循环或重复计费。
+- [x] Commit: `feat(agents): server-validated submit_prediction loop for LangGraph agents`
 
 ### Task 6: 确定性 Outcome / 战绩与成本归档
 

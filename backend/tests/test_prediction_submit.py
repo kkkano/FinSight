@@ -5,6 +5,7 @@ import pytest
 
 from backend.agents.prediction_submit import (
     evaluate_prediction_bars,
+    submit_prediction_with_async_correction,
     submit_prediction,
     submit_prediction_with_correction,
     submission_allowed,
@@ -45,7 +46,7 @@ class RecordingStore:
 def test_submit_overrides_identity_symbol_agent_run_and_anchor_from_real_bar():
     store = RecordingStore()
     result = submit_prediction(
-        _draft(),
+        _draft(anchor={"timeframe": "1d", "time": "2026-07-10", "price": 103.0}),
         symbol="aapl",
         agent="technical_agent",
         user_id="alice",
@@ -85,11 +86,34 @@ def test_non_scoring_or_non_concrete_steps_do_not_submit(symbol: str, operation:
         )
 
 
+@pytest.mark.parametrize("agent", ["macro_agent", "news_agent", "deep_search_agent"])
+def test_non_scoring_agents_are_not_eligible(agent: str):
+    assert not submission_allowed(symbol="AAPL", operation="technical", agent=agent)
+
+
 def test_submit_fails_closed_when_market_anchor_is_unavailable():
     with pytest.raises(ValueError, match="真实行情锚点"):
         submit_prediction(
             _draft(), symbol="AAPL", agent="technical_agent", user_id="alice", run_id="run",
             operation="technical", fetch_bars=lambda *_args, **_kwargs: {"error": "down"}, store=RecordingStore(),
+        )
+
+
+@pytest.mark.parametrize("anchor", [
+    {"timeframe": "1d", "time": "2026-07-09", "price": 102.0},
+    {"timeframe": "1d", "time": "2026-07-10", "price": 110.0},
+])
+def test_submit_rejects_forged_anchor_before_server_overwrite(anchor):
+    with pytest.raises(ValueError, match="anchor"):
+        submit_prediction(
+            _draft(anchor=anchor),
+            symbol="AAPL", agent="technical_agent", user_id="alice", run_id="run",
+            operation="technical",
+            fetch_bars=lambda *_args, **_kwargs: {
+                "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
+                "interval": "1d",
+            },
+            store=RecordingStore(),
         )
 
 
@@ -126,6 +150,34 @@ def test_invalid_prediction_gets_one_correction_then_stores_or_returns_none():
     assert never_store.saved is None
 
 
+@pytest.mark.asyncio
+async def test_async_submission_returns_structured_issues_then_accepts_one_correction():
+    store = RecordingStore()
+    feedbacks = []
+
+    async def generate(feedback):
+        feedbacks.append(feedback)
+        if feedback is None:
+            return _draft(stop=105.0)
+        return _draft()
+
+    prediction, trace = await submit_prediction_with_async_correction(
+        generate,
+        symbol="AAPL", agent="technical_agent", user_id="alice", run_id="run",
+        operation="technical",
+        fetch_bars=lambda *_args, **_kwargs: {
+            "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
+            "interval": "1d",
+        },
+        store=store,
+    )
+
+    assert prediction is store.saved
+    assert [item["ok"] for item in trace] == [False, True]
+    assert trace[0]["issues"][0]["field"]
+    assert feedbacks[1] == trace[0]["issues"]
+
+
 def test_bar_rules_limit_market_stop_invalidation_gap_and_same_bar_conservative():
     anchor = {"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}
 
@@ -143,7 +195,7 @@ def test_bar_rules_limit_market_stop_invalidation_gap_and_same_bar_conservative(
     assert limit_gap.entry_price == 99.0
 
     stop_gap = evaluate_prediction_bars(
-        _draft(entry_type="stop", entry=105.0),
+        _draft(entry_type="stop", entry=105.0, target1=115.0),
         [anchor, {"time": "2026-07-11", "open": 107, "high": 110, "low": 106, "close": 109}],
     )
     assert stop_gap.entry_price == 107.0

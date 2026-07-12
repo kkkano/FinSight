@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict, is_dataclass
+import json
 import logging
+import os
 import time
 from typing import Any, Iterable, Mapping
 
@@ -321,6 +323,123 @@ def _prediction_memory_context(*, user_id: str, agent: str, ticker: str) -> str:
     )
 
 
+def _prediction_operation(*, inputs: Mapping[str, Any], state: Mapping[str, Any]) -> str:
+    objective = str(inputs.get("objective") or "").strip()
+    if objective:
+        return objective
+    if str(state.get("output_mode") or "").strip() == "investment_report":
+        return "report_generation"
+    operation = state.get("operation") if isinstance(state.get("operation"), dict) else {}
+    return str(operation.get("name") or "").strip()
+
+
+async def _maybe_submit_prediction(
+    *,
+    step_name: str,
+    inputs: Mapping[str, Any],
+    state: Mapping[str, Any],
+    output: dict[str, Any],
+    llm: Any,
+    tools_module: Any,
+) -> dict[str, Any]:
+    from backend.agents.prediction_submit import (
+        prediction_json_from_llm_content,
+        submission_allowed,
+        submit_prediction_with_async_correction,
+    )
+
+    ticker = str(inputs.get("ticker") or "").strip().upper()
+    operation = _prediction_operation(inputs=inputs, state=state)
+    eligible = submission_allowed(symbol=ticker, operation=operation, agent=step_name)
+    output["prediction_eligible"] = eligible
+    if not eligible:
+        return output
+
+    enabled = str(os.getenv("FINSIGHT_PREDICTION_SUBMIT_ENABLED", "true")).strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    if not enabled:
+        output["prediction_trace"] = {"status": "disabled", "attempts": []}
+        return output
+
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    user_id = str(ui_context.get("__user_id") or "").strip()
+    run_id = str(ui_context.get("run_id") or state.get("run_id") or "").strip()
+    fetch_bars = getattr(tools_module, "get_stock_historical_data", None)
+    if not user_id or user_id == "public" or not run_id or llm is None or not callable(fetch_bars):
+        output["prediction_trace"] = {"status": "prediction_missing", "attempts": []}
+        return output
+
+    try:
+        raw_bars = await asyncio.to_thread(fetch_bars, ticker, period="1mo", interval="1d")
+        bars = raw_bars.get("kline_data") if isinstance(raw_bars, dict) else None
+        anchor_bar = bars[-1] if isinstance(bars, list) and bars and isinstance(bars[-1], dict) else None
+        anchor_time = str(anchor_bar.get("time") or "").strip() if anchor_bar else ""
+        anchor_price = anchor_bar.get("close") if anchor_bar else None
+        if not anchor_time or anchor_price is None:
+            raise ValueError("trusted anchor unavailable")
+        from backend.services.agent_prediction_store import get_agent_prediction_store
+
+        store = get_agent_prediction_store()
+    except Exception:
+        output["prediction_trace"] = {"status": "prediction_missing", "attempts": []}
+        return output
+
+    evidence = output.get("evidence") if isinstance(output.get("evidence"), list) else []
+    evidence_titles = [
+        str(item.get("title") or item.get("text") or "").strip()[:120]
+        for item in evidence[:6]
+        if isinstance(item, dict) and str(item.get("title") or item.get("text") or "").strip()
+    ]
+
+    async def _generate(feedback: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+        from langchain_core.messages import HumanMessage
+
+        correction = (
+            "\n上次提交未通过，必须逐项修正：\n" + json.dumps(feedback, ensure_ascii=False, default=str)
+            if feedback else ""
+        )
+        prompt = f"""你是 {step_name}，现在必须调用一次终结工具 submit_prediction。
+只返回一个 JSON 对象，不要 markdown。symbol/agent 会被服务端覆盖，但仍填写当前值。
+可信最新完整 bar：timeframe=1d, time={anchor_time}, close={anchor_price}；anchor 必须原样回填。
+direction 只能 long/short/neutral；confidence 0-1；thesis 最多 400 字。
+long/short 必须给 entry_type(market/limit/stop)、entry、stop、target1、invalidation_price；RR>=1；target2 可选。
+neutral 不得给方向价位，必须给包含 anchor 的 range_low/range_high。
+scenarios 必须 2-4 条，每条含 name/probability/invalidation，概率和在 90-110。
+禁止 bars/candles/series/ohlc/data/user_id/run_id。
+本轮摘要：{str(output.get('summary') or '')[:1600]}
+证据标题：{json.dumps(evidence_titles, ensure_ascii=False)}{correction}"""
+        try:
+            response = await asyncio.wait_for(llm.ainvoke([HumanMessage(content=prompt)]), timeout=30.0)
+        except Exception:
+            return None
+        return prediction_json_from_llm_content(response)
+
+    try:
+        prediction, attempts = await submit_prediction_with_async_correction(
+            _generate,
+            symbol=ticker,
+            agent=step_name,
+            user_id=user_id,
+            run_id=run_id,
+            operation=operation,
+            fetch_bars=lambda *_args, **_kwargs: raw_bars,
+            store=store,
+        )
+    except Exception:
+        output["prediction_trace"] = {"status": "prediction_missing", "attempts": []}
+        return output
+    output["prediction_trace"] = {
+        "status": "submitted" if prediction is not None else "prediction_validation_failed",
+        "attempts": attempts,
+    }
+    if prediction is not None:
+        output["prediction"] = prediction.model_dump(
+            mode="json", exclude={"risk_reward", "user_id", "run_id"}
+        )
+    return output
+
+
 def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, Any]) -> dict[str, Any]:
     """
     Build best-effort invokers for legacy specialist agents.
@@ -494,6 +613,14 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                         output=result,
                         query=query,
                         ticker=ticker,
+                    )
+                    normalized = await _maybe_submit_prediction(
+                        step_name=_name,
+                        inputs=inputs if isinstance(inputs, dict) else {},
+                        state=state,
+                        output=normalized,
+                        llm=getattr(_agent, "llm", None),
+                        tools_module=tools_module,
                     )
                     if is_cancelled():
                         raise asyncio.CancelledError()

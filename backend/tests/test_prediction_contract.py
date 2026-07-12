@@ -63,6 +63,9 @@ def test_long_and_short_require_ordered_numeric_risk_reward_levels():
         with pytest.raises(ValidationError):
             PredictionDraft.model_validate(invalid)
 
+    with pytest.raises(ValidationError, match="风险收益比"):
+        PredictionDraft.model_validate(_long_payload() | {"target1": 215.0})
+
 
 def test_neutral_requires_only_range_containing_anchor():
     neutral = PredictionDraft.model_validate({
