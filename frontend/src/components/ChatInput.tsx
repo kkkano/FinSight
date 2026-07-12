@@ -153,6 +153,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         {skillAutocomplete.isOpen && (
           <SkillAutocomplete
             skills={skillAutocomplete.filteredSkills}
+            totalCount={skillAutocomplete.skillCount}
             selectedIndex={skillAutocomplete.selectedIndex}
             onSelect={skillAutocomplete.selectSkill}
             onOpenLibrary={() => setSkillLibraryOpen(true)}

@@ -3,6 +3,7 @@ import type { SkillItem } from '../hooks/useSkillAutocomplete';
 
 interface SkillAutocompleteProps {
   skills: SkillItem[];
+  totalCount: number;
   selectedIndex: number;
   onSelect: (skill: SkillItem) => void;
   onOpenLibrary: () => void;
@@ -16,6 +17,7 @@ const RISK_COLORS: Record<string, string> = {
 
 export function SkillAutocomplete({
   skills,
+  totalCount,
   selectedIndex,
   onSelect,
   onOpenLibrary,
@@ -43,6 +45,9 @@ export function SkillAutocomplete({
         borderColor: 'var(--fin-border, #2a2a4a)',
       }}
     >
+      <div className="border-b border-fin-border px-3 py-2 text-2xs text-fin-muted">
+        {totalCount} 个可用技能 · 输入名称筛选
+      </div>
       {skills.slice(0, 5).map((skill, index) => (
         <div
           key={skill.name}

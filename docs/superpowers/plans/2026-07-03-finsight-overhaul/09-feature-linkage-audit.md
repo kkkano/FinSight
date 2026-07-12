@@ -181,9 +181,11 @@ type PredictionOverlay = {
 ### C-4: Skills 三件套（SkillAutocomplete / SkillLibraryDrawer / skills_router）——【盘点】
 
 **证据:** 前端三组件互相引用成环，但 skills 实际内容未知。
-- [ ] Step 1【盘点】: `curl -s localhost:8000/api/skills | python -m json.tool | head -40`（或读 `backend/api/skills_router.py` + `backend/skills/` 目录）统计可用 skill 数量与质量。
-- [ ] Step 2 分支 a（≥3 个真实可用 skill）：保留，且在 ChatInput 输入 `/` 时的提示文案里写明可用技能数；分支 b（<3 或全是演示）：三组件与入口全部隐藏到开发者模式（`finsight_dev` 条件，同 08 Task 5 层3），不删代码。把结论写进 notes。
-- [ ] Commit: `chore(skills): gate skill UI by real skill availability`
+- [x] Step 1【盘点】: `curl -s localhost:8000/api/skills | python -m json.tool | head -40`（或读 `backend/api/skills_router.py` + `backend/skills/` 目录）统计可用 skill 数量与质量。
+- [x] Step 2 分支 a（≥3 个真实可用 skill）：保留，且在 ChatInput 输入 `/` 时的提示文案里写明可用技能数；分支 b（<3 或全是演示）：三组件与入口全部隐藏到开发者模式（`finsight_dev` 条件，同 08 Task 5 层3），不删代码。把结论写进 notes。
+- [x] Commit: `chore(skills): gate skill UI by real skill availability`
+
+**盘点结论（notes）:** builtin registry 当前稳定加载 7 个非演示 skill；每项都有真实 required facets、工具/Agent 偏好、预算与输出合同，其中财报影响、A股研究、估值校验直接连接生产工具，缠论/波浪/均线/成长质量作为显式分析视角且不会自动劫持普通请求。因此走分支 a：保留 Skills UI，并在 `/` 提示顶部展示服务端实际返回的可用技能总数。
 
 ### C-5: @agent 提及与 agent 偏好 ——【盘点】接线
 

@@ -120,6 +120,7 @@ export function useSkillAutocomplete(
   return {
     isOpen,
     query,
+    skillCount: skills.length,
     filteredSkills,
     selectedIndex,
     handleKeyDown,

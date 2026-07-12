@@ -523,6 +523,7 @@ export const MiniChat: React.FC = () => {
           {skillAutocomplete.isOpen && (
             <SkillAutocomplete
               skills={skillAutocomplete.filteredSkills}
+              totalCount={skillAutocomplete.skillCount}
               selectedIndex={skillAutocomplete.selectedIndex}
               onSelect={skillAutocomplete.selectSkill}
               onOpenLibrary={() => {}}
