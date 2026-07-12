@@ -272,8 +272,11 @@ export const AgentControlPanel: React.FC = () => {
   return (
     <Card className="p-4 bg-fin-bg/40">
       <h3 className="text-sm font-medium text-fin-text mb-3">
-        Agent 控制面板
+        智能体偏好
       </h3>
+      <p className="mb-4 text-2xs leading-relaxed text-fin-muted">
+        控制报告默认参与的智能体及研究深度；关闭的智能体不会进入普通报告计划，手动 @ 提及时仍以本次请求为准。
+      </p>
 
       <div className="space-y-2 mb-4">
         {AGENT_NAMES.map(({ key, label }) => (
@@ -284,6 +287,7 @@ export const AgentControlPanel: React.FC = () => {
                 <button
                   key={opt.value}
                   type="button"
+                  data-testid={`agent-depth-${key}-${opt.value}`}
                   onClick={() => setAgentDepth(key, opt.value)}
                   className={`px-2 py-0.5 rounded text-2xs transition-colors ${depthButtonClass(
                     opt.value,
@@ -373,6 +377,7 @@ export const AgentControlPanel: React.FC = () => {
           </div>
           <input
             type="range"
+            data-testid="agent-reflection-rounds"
             min={0}
             max={3}
             step={1}

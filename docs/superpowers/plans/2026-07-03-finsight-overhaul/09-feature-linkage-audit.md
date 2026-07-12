@@ -190,9 +190,9 @@ type PredictionOverlay = {
 ### C-5: @agent 提及与 agent 偏好 ——【盘点】接线
 
 **证据:** AgentMention 在 ChatInput/MiniChat 可用（`agents_override` 后端有强制直达逻辑，runner._route_after_understand_request:101-107 尊重它）；但 `agent_router.py` 的 GET/PUT `/api/agents/preferences` 前端消费点未知。
-- [ ] Step 1【盘点】: `grep -rn "preferences" frontend/src/api frontend/src/components/settings` → 找偏好 UI。
-- [ ] Step 2 分支 a（有 UI）：在设置里给它加说明文案（"控制报告默认参与的智能体"）并确认保存生效；分支 b（无 UI）：SettingsModal 加「智能体偏好」区（7 个 agent 的开关 + max_reflections 滑条，读写现有 preferences 端点——字段结构照 `backend/api/agent_router.py` 的 schema）。
-- [ ] Commit: `feat(settings): agent preferences surfaced and wired`
+- [x] Step 1【盘点】: `grep -rn "preferences" frontend/src/api frontend/src/components/settings` → 找偏好 UI。
+- [x] Step 2 分支 a（有 UI）：在设置里给它加说明文案（"控制报告默认参与的智能体"）并确认保存生效；分支 b（无 UI）：SettingsModal 加「智能体偏好」区（7 个 agent 的开关 + max_reflections 滑条，读写现有 preferences 端点——字段结构照 `backend/api/agent_router.py` 的 schema）。
+- [x] Commit: `feat(settings): agent preferences surfaced and wired`
 
 ### C-6: StockChart vs SmartChart vs InlineChart 三套图表组件 —— 合并
 
