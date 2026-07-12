@@ -204,8 +204,8 @@ type PredictionOverlay = {
 ### C-7: rag-inspector / cost-audit —— 移出主导航，收进设置
 
 **证据:** 两页是内部诊断工具（RagInspectorPage 1412 行），出现在普通用户导航里加重"这产品是给开发者用的"感。
-- [ ] Step 1: 路由保留（直链可达），Sidebar 入口删除（08 Task 7 已做则登记）；SettingsModal「高级」区加「诊断工具」链接组（RAG Inspector / 成本审计 / 开发者模式开关）。
-- [ ] Commit: `chore(nav): diagnostics pages accessible via settings advanced section only`
+- [x] Step 1: 路由保留（直链可达），Sidebar 入口删除（08 Task 7 已做则登记）；SettingsModal「高级」区加「诊断工具」链接组（RAG Inspector / 成本审计 / 开发者模式开关）。
+- [x] Commit: `chore(nav): diagnostics pages accessible via settings advanced section only`
 
 ### C-8: 订阅/邮件提醒入口 —— 提升
 
