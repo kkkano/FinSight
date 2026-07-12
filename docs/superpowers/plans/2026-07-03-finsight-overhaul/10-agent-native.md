@@ -220,11 +220,11 @@ def prediction_history(*, agent: str, ticker: str, user_id: str,
 ```
 
 - [x] Step 1: 在 09 D-0 测试上扩展 scenarios/历史合同：long/short 缺 entry_type/entry/stop/target1/invalidation_price 拒绝；neutral 带 entry 或 range 不含 anchor 拒绝；scenario 概率和不在 90-110 拒绝。
-- [ ] Step 2: 用项目 PostgreSQL 连接/迁移机制实现 store；user_id 只从服务端身份传入，所有读写 SQL 必须同时约束 user_id。测试使用事务隔离的 PostgreSQL fixture，不以临时 SQLite 代替。
+- [x] Step 2: 用项目 PostgreSQL 连接/迁移机制实现 store；user_id 只从服务端身份传入，所有读写 SQL 必须同时约束 user_id。事务隔离的真实 PostgreSQL fixture 已通过，不以临时 SQLite 代替。
 - [x] Step 3: 报告完成时仅归档通过 Task 5A 校验的 prediction；没有结构化 prediction 时保留原报告但不从 summary 关键词猜价位、不伪造 anchor，并记录 `prediction_missing` 诊断。
 - [x] Step 4: 回忆注入——agent_adapter 构造 AgentBrief 时读取同 user/agent/ticker 最近一条 prediction，在 context_digest 前追加 `你上次({anchor_time})对{ticker}判断 {direction}：{thesis前60字}；锚点 {anchor_price}，entry/stop/T1={...}，当前 outcome={...}`。历史观点只作上下文，不自动继承为本轮结论。
-- [ ] 验收: 每条可计分观点都有可信 anchor 与 entry/stop/target（neutral 为 range）；数据库无 `user_id='public'` 默认；AI payload 无法写入任何行情 series。
-- [ ] Commit: `feat(agents): postgres prediction ledger with trusted anchors and actionable levels`
+- [x] 验收: 每条可计分观点都有可信 anchor 与 entry/stop/target（neutral 为 range）；数据库无 `user_id='public'` 默认；AI payload 无法写入任何行情 series。
+- [x] Commit: `feat(agents): postgres prediction ledger with trusted anchors and actionable levels`（`6e47ff5`）
 
 ### Task 5A: `submit_prediction` 工具 + 服务端校验回路
 
@@ -268,7 +268,7 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 - [x] Step 3: 把每次 agent/monitor commentator/analyst 调用的 token、成本、耗时、状态按 `run_id + agent + layer` 归档，并可关联 prediction_id；失败/校验重试同样记成本，避免只统计成功调用。
 - [x] Step 4: `/api/agents` 增加 `track_record` 与 `cost_summary`：90 天 hits/misses/invalidated/hit_rate、样本数、最近评估时间，以及 7/30 天 tokens/cost/run_count。所有聚合限定当前 user；管理员全局聚合走独立权限端点。
 - [x] Step 5: Agent 档案页展示方向分桶战绩与成本趋势；成本高但无有效 prediction 的 run 单独计为 `unscored_runs`，不粉饰命中率。
-- [ ] 验收: outcome resolver 在断网、无模型环境仍可全量运行；同 fixture 在任意时区/重复执行结果一致；用户只能看到自己的战绩与成本；数据库可从 prediction 追到 run/cost/outcome 完整链路。
+- [x] 验收: outcome resolver 在断网、无模型环境仍可全量运行；同 fixture 在任意时区/重复执行结果一致；用户只能看到自己的战绩与成本；数据库可从 prediction 追到 run/cost/outcome 完整链路。
 - [x] Commit: `feat(agents): deterministic prediction outcomes with postgres track-record and cost archive`
 
 ---
@@ -347,15 +347,17 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 
 ## 10 完成门禁
 
-- [ ] `python -m pytest backend/tests tests/golden -x -q` 全绿（金样按各 Task 说明处理署名 diff）
-- [ ] Prediction 合同验收：long/short 每条可计分观点都有可信 anchor + entry/stop/T1，neutral 有包含 anchor 的 range；非法 submit 经服务端 issues 回路最多纠正一次，仍非法不入库
-- [ ] Outcome/归档验收：固定 OHLC 回放的 outcome 逐字节稳定；`prediction -> outcome -> run -> agent cost` 可在 PostgreSQL 按同一 user_id 完整追溯，跨用户查询为空
-- [ ] 端到端叙事验收（模拟用户视角走一遍，录屏）：
+- [x] `python -m pytest backend/tests tests/golden -x -q` 全绿（金样按各 Task 说明处理署名 diff）
+- [x] Prediction 合同验收：long/short 每条可计分观点都有可信 anchor + entry/stop/T1，neutral 有包含 anchor 的 range；非法 submit 经服务端 issues 回路最多纠正一次，仍非法不入库
+- [x] Outcome/归档验收：固定 OHLC 回放的 outcome 逐字节稳定；`prediction -> outcome -> run -> agent cost` 可在 PostgreSQL 按同一 user_id 完整追溯，跨用户查询为空
+- [x] 端到端叙事验收（模拟用户视角走一遍；无 PR 视频托管环境，以 Chromium 截图与 JSON 证据留档）：
   1. 打开技术 tab → 看到「技术面分析师 驻场 · 近90天命中率 xx%」→ 洞察卡署名同一人
   2. 点「深入分析」→ AgentWorkLog 里看到技术面分析师工作 → 结果署名一致
   3. 生成一份投资报告 → 各章节署名 + lead 领衔结论 + 「风险质询」小节（风险分析师对某家观点的具体质疑）
   4. 一周后再问同一只票 → 回答里出现"我上次判断…现在…"的观点回访
   5. 点一条历史 prediction → ECharts 定位到 anchor，并显示 entry/stop/target；战绩 outcome 与同一段真实 K 线一致
   6. GET /api/agents → 7 个 profile 完整（身份/职责/战绩/成本），前后端无一处硬编码 agent 中文名
-- [ ] 关键反例检查：关闭 `DEBATE_GRAPH_ENABLED` 与 `FINSIGHT_AGENT_DELEGATION` 后主链路行为与今日一致（全部增强可独立降级）
-- [ ] 技术栈反例检查：依赖与 lockfile 无 Longbridge、`pi-agent-core`、`lightweight-charts`；仓库未新增 agent/prediction/outcome SQLite 文件
+- [x] 关键反例检查：关闭 `DEBATE_GRAPH_ENABLED` 与 `FINSIGHT_AGENT_DELEGATION` 后主链路行为与今日一致（全部增强可独立降级）
+- [x] 技术栈反例检查：依赖与 lockfile 无 Longbridge、`pi-agent-core`、`lightweight-charts`；仓库未新增 agent/prediction/outcome SQLite 文件
+
+最终证据：真实 PostgreSQL 集成 `1 passed`，覆盖 prediction→outcome→run/cost、跨租户空查询和复合外键拒绝伪造租户；Linux 后端分片全量 `2119 passed / 9 skipped`，golden `12 passed`，debate/delegation 关闭反例 `56 passed`；生产 `/api/agents` 返回 7 个完整 profile。

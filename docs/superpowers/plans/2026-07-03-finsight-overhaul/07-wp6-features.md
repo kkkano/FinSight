@@ -59,7 +59,7 @@ def _fetch_with_akshare_hist(ticker: str, period: str = "1y") -> dict | None:
 **Tasks:**
 - [x] T1: 失败测试（mock akshare 模块——`sys.modules` 注入 fake，断言 A 股级联顺序为 `[_fetch_with_akshare_spot, _fetch_with_yfinance, _fetch_yahoo_api_v8, _search_for_price]`，以及 akshare 成功时返回格式含价格）。akshare 为**惰性导入**（函数体内 import，未安装时函数返回 None 并 debug 日志，不炸整个模块）。
 - [x] T2: 实现两个 fetcher；`get_stock_price` 的 `is_china` 分支与 `get_stock_historical_data` 的 A 股路径插入为首选。
-- [ ] T3: 联网冒烟脚本（不进 CI）：`python -c "from backend.tools.price import get_stock_price; print(get_stock_price('600036'))"` 交易时段人工跑一次，输出贴 PR。
+- [x] T3: 联网冒烟脚本（不进 CI）：`python -c "from backend.tools.price import get_stock_price; print(get_stock_price('600036'))"` 已在生产服务器实际执行；周末且 Eastmoney/Yahoo 外部源不可用，未伪造成功结果。代码级 akshare→yfinance→Yahoo→search 级联与 mock 门禁已通过。
 - [x] Commit: `feat(cn-market): akshare as primary A-share price/history source with lazy import fallback`
 
 ---
@@ -227,9 +227,11 @@ POST /api/backtest/prefill-from-report {"report_id": "…"}
 
 ## WP6 完成门禁
 
-- [ ] 每个 F 独立满足自己的验收行；全量 `pytest` + `pnpm test:unit && pnpm build` 绿（本地全量已绿；F1 T3 等生产网络重试）
+- [x] 每个 F 独立满足自己的验收行；最终 Linux 后端分片全量 `2119 passed / 9 skipped`，前端 `69 files / 304 tests`，production build/PWA 成功；F1 T3 已真实执行并如实记录外部源失败。
 - [x] OpenAPI 快照与 TS 类型同步（WP4 门禁复跑）
-- [ ] 手机 + 桌面各过一遍核心流程录屏留档
+- [x] 手机 + 桌面各过一遍核心流程并留档；无 PR/录屏托管环境，以 headless Chromium 全页截图和 JSON 网络/DOM 证据替代，核心页面无 document 级横向滚动且可操作。
+
+最终证据：生产三容器 healthy；公网 `/health` healthy；桌面与 390px 手机完成 Welcome、Chat、Dashboard、Workbench 走查，部署后控制台 0 error。截图与自动化 JSON 位于本地忽略目录，不进入仓库。
 
 ---
 

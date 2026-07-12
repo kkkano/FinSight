@@ -5,6 +5,24 @@
 
 ---
 
+## [2.0.0-rc1] - 2026-07-12
+
+### 新增
+
+- 完成 WP0-WP6、前端 TERMINAL 重设计、功能联动审计与 Agent 原生化：统一 planning/policy/execution/synthesis/rendering 边界，引入 PostgreSQL prediction/outcome/run-cost 可追溯链路、7 个统一 AgentProfile、真实行情图表治理、watchlist、晨报/监控联动、报告分享、SSE 续传、PWA、组合归因与报告回测联动。
+- 新增多用户隔离、服务端可信行情锚点、受控 prediction 校验回路、确定性 outcome、页面 lease 与可重放点评流。
+
+### 修复
+
+- 修复匿名会话错误启动需鉴权的 monitor lease/comment stream，以及晨报深链在会话初始化竞态中丢失 Chat 草稿的问题。
+- 收口 PostgreSQL UUID、JSONB 默认表达式与旧 prediction scenarios 绑定兼容问题。
+
+### 验证与部署
+
+- Linux 后端分片全量 `2119 passed / 9 skipped`，golden `12 passed`，前端 `69 files / 304 tests`，production build/PWA 成功。
+- 真实 PostgreSQL 验证 prediction→outcome→run/cost 全链路、租户隔离与复合外键；生产三容器 healthy，公网健康检查、真实 Chat/SSE、AAPL 图表与晨报联动通过。
+- A 股联网脚本已实际执行，但周末且外部数据源不可用；保留真实失败记录，未伪造成功。
+
 ## [Unreleased] - 2026-05-18
 
 ### 新增

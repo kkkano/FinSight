@@ -342,9 +342,11 @@ def heartbeat_due(*, last_comment_at: datetime | None, now: datetime,
 
 ## 09 完成门禁
 
-- [ ] Part A: 让模型回答"画一下 AAPL 最近走势"→ 出的是真数据图（有来源徽标）；诱导模型输出内联价格图 → 不渲染或带「AI示意」标
-- [ ] Part B: 八条联动逐条手工走通（B-8 由 WP6 验收）；每条录一段 5 秒操作视频贴 PR
-- [ ] Part C: 12 条处置全部落地或按分支归档结论到 notes；`grep -rn "ResearchCard\|StockChart" frontend/src` → 0
-- [ ] Part D: 固定行情回放触发结果确定；无 lease 时高频 LLM 调用为 0；有 lease 时 heartbeat/trigger 点评可重放并深链到同一 prediction anchor
-- [ ] 技术栈反例: 依赖清单无 Longbridge、`pi-agent-core`、Fastify、`lightweight-charts`；新增 lease/comment/prediction 数据只落 PostgreSQL，不新增 SQLite 文件
-- [ ] 综合场景验收（模拟新用户 10 分钟）: 欢迎页进入 → 问一只票 → 点 ticker 进看板 → 看板问 AI → 加自选 → 工作台看晨报点深入 → 全程无死链、无"这是什么"时刻
+- [x] Part A: 让模型回答"画一下 AAPL 最近走势"→ 出的是真数据图（有来源徽标）；诱导模型输出内联价格图 → 不渲染或带「AI示意」标
+- [x] Part B: 八条联动逐条手工走通（B-8 由 WP6 验收）；无 PR 视频托管环境，以每项 Chromium 截图及网络/DOM JSON 证据替代 5 秒视频
+- [x] Part C: 12 条处置全部落地或按分支归档结论到 notes；`rg "ResearchCard|StockChart" frontend/src` → 0
+- [x] Part D: 固定行情回放触发结果确定；无 lease 时高频 LLM 调用为 0；有 lease 时 heartbeat/trigger 点评可重放并深链到同一 prediction anchor
+- [x] 技术栈反例: 依赖清单无 Longbridge、`pi-agent-core`、Fastify、`lightweight-charts`；新增 lease/comment/prediction 数据只落 PostgreSQL，不新增 SQLite 文件
+- [x] 综合场景验收（模拟新用户 10 分钟）: 欢迎页进入 → 问一只票 → 点 ticker 进看板 → 看板问 AI → 加自选 → 工作台看晨报点深入 → 全程无死链、无"这是什么"时刻
+
+最终证据：生产 chat stream、chart detect、AAPL K 线与晨报接口均为 200；真实 ECharts 与行情来源徽标可见；`GET /api/watchlist` 确认 AAPL 存在；晨报 `morning-brief-deep-dive-AAPL` 精确深链进入 `/chat?prompt=...` 并恢复 AAPL 草稿；部署后控制台 0 error。
