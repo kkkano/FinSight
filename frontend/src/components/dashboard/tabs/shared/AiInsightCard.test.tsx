@@ -9,6 +9,14 @@ import { confidenceColorClass, formatAsOf } from './aiInsightFormat';
 const baseInsight: InsightCard = {
   agent_name: 'technical_digest',
   scorer_name: 'technical_scorer',
+  analyst: {
+    key: 'technical_agent',
+    name_zh: '技术面分析师',
+    short_zh: '技术面',
+    glyph: 'T',
+    color_token: 't-predict',
+    mandate_zh: 'RSI、MACD、均线、形态与交易信号研判',
+  },
   tab: 'technical',
   score: 6.4,
   score_label: '中性',
@@ -30,8 +38,10 @@ describe('AiInsightCard honesty labels', () => {
       <AiInsightCard tab="technical" insight={baseInsight} />,
     );
 
-    // 标题用 Tab 维度名，不冒充某个 Agent
+    // 快速评分与深挖使用同一个 AgentProfile 人格。
     expect(html).toContain('AI 技术分析');
+    expect(html).toContain('技术面分析师');
+    expect(html).toContain('data-testid="insight-analyst"');
     // 诚实标签：快速评分（model_generated=true）
     expect(html).toContain('快速评分');
     expect(html).toContain('AI 评分 · 基于 2 项真实指标 · 置信度 80%');
@@ -40,7 +50,7 @@ describe('AiInsightCard honesty labels', () => {
     expect(html).not.toContain('AI Agent');
   });
 
-  it('提供 onDeepDive 回调时渲染「深挖」入口引导真正的 Agent 深度分析', () => {
+  it('提供 onDeepDive 回调时使用同一分析师署名引导深度分析', () => {
     const html = renderToStaticMarkup(
       <AiInsightCard
         tab="technical"
@@ -49,7 +59,7 @@ describe('AiInsightCard honesty labels', () => {
       />,
     );
 
-    expect(html).toContain('深挖');
+    expect(html).toContain('请技术面分析师深入分析 →');
   });
 });
 

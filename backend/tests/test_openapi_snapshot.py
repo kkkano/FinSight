@@ -16,7 +16,7 @@ def test_openapi_snapshot_is_current() -> None:
         SNAPSHOT.write_text(current, encoding="utf-8")
         return
 
-    assert SNAPSHOT.read_text(encoding="utf-8") == current, (
+    assert SNAPSHOT.read_text(encoding="utf-8").rstrip("\r\n") == current, (
         "OpenAPI drift: 后端 schema 变了。删除快照后运行 "
         "`python -m pytest backend/tests/test_openapi_snapshot.py` 重新生成，"
         "并在前端执行 `pnpm gen:api` 同步类型，两个生成物一起提交。"

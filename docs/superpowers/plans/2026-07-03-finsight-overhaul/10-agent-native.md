@@ -285,10 +285,10 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 - 后端：`insights_engine.generate` 的响应每个洞察卡附 `analyst: {key, name_zh, glyph, color_token, mandate_zh}`（经 `profile_for_scorer(scorer_key)` 查 Task 1 注册表）；`insights_prompts.py` 各 tab 的 system prompt 开头统一改为 `你是{name_zh}，职责是{mandate_zh}。`——**与 agent 深挖时的 persona 同源**，一个"技术面分析师"只有一个人格。
 - 前端：AiInsightCard 头部渲染 `[glyph] {name_zh}` 署名（glyph 用 08 规范的 Tag 样式 + color_token 上色）；卡底按钮文案从"深挖"改为 `请{short_zh}分析师深入分析 →`（点击走既有 useDashboardDeepDive，行为不变）。
 
-- [ ] Step 1: 后端 TDD（insights 响应含 analyst 字段；prompt 含 name_zh——mock 断言）。
-- [ ] Step 2: 前端接字段 + 文案（vitest：卡片渲染署名）。
-- [ ] Step 3: 验收：技术 tab 的洞察卡和深挖结果都署名"技术面分析师"——用户眼里它们终于是同一个人。
-- [ ] Commit: `feat(dashboard): insight cards and deep-dives share one analyst persona per domain`
+- [x] Step 1: 后端 TDD（insights 响应含 analyst 字段；prompt 含 name_zh——mock 断言）。
+- [x] Step 2: 前端接字段 + 文案（vitest：卡片渲染署名）。
+- [x] Step 3: 验收：技术 tab 的洞察卡和深挖结果都署名"技术面分析师"——用户眼里它们终于是同一个人。
+- [x] Commit: `feat(dashboard): insight cards and deep-dives share one analyst persona per domain`
 
 ### Task 8: 深挖入口显性化——每个 tab 的"驻场分析师栏"
 

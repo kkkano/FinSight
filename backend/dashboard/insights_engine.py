@@ -16,6 +16,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.agents.profiles import profile_for_scorer
 from backend.dashboard import scorers as scorer_runtime
 from backend.dashboard.cache import DashboardCache, dashboard_cache
 from backend.dashboard.scorers import (
@@ -56,6 +57,27 @@ _ensure_str_list = scorer_runtime._ensure_str_list
 _generation_semaphore: asyncio.Semaphore | None = None
 # Background refresh tasks by symbol (dedupe stale-triggered refreshes).
 _refresh_tasks: dict[str, asyncio.Task[None]] = {}
+
+
+def _attach_analyst(tab: str, card: InsightCard) -> InsightCard:
+    analyst = profile_for_scorer(tab)
+    if analyst is None:
+        raise KeyError(f"dashboard tab 未绑定 AgentProfile: {tab}")
+    return InsightCard.model_validate({
+        **card.model_dump(),
+        "analyst": {
+            "key": analyst.key,
+            "name_zh": analyst.name_zh,
+            "short_zh": analyst.short_zh,
+            "glyph": analyst.glyph,
+            "color_token": analyst.color_token,
+            "mandate_zh": analyst.mandate_zh,
+        },
+    })
+
+
+def _attach_analysts(insights: dict[str, InsightCard]) -> dict[str, InsightCard]:
+    return {tab: _attach_analyst(tab, card) for tab, card in insights.items()}
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -124,6 +146,7 @@ class InsightsOrchestrator:
                 cache_generated_at = cached_data.get("generated_at", "")
                 cache_age = _compute_cache_age(cache_generated_at)
                 insights_dict = _deserialize_insights(cached_data.get("insights", {}))
+                insights_dict = _attach_analysts(insights_dict)
                 if self._cached_insights_need_refresh(sym_upper, insights_dict):
                     logger.info(
                         "[Insights] cached news fallback stale for %s; regenerate from refreshed dashboard data",
@@ -235,6 +258,7 @@ class InsightsOrchestrator:
                 "news": news_card,
                 "peers": peers_card,
             }
+            insights = _attach_analysts(insights)
 
             # Cache the results.
             self._cache.set(

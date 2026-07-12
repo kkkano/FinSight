@@ -142,6 +142,8 @@ export function AiInsightCard({
   const label = TAB_LABELS[tab] ?? 'AI 分析';
   const icon = TAB_ICONS[tab] ?? '🤖';
   const deepDivePercent = Math.max(0, Math.min(100, deepDiveProgress));
+  const analyst = insight?.analyst;
+  const deepDiveLabel = analyst ? `请${analyst.short_zh}分析师深入分析 →` : '深入分析 →';
 
   const renderDeepDiveButton = () => {
     if (!onDeepDive) return null;
@@ -150,8 +152,8 @@ export function AiInsightCard({
     return (
       <button
         type="button"
-        title={deepDiveRunning ? 'Agent 深挖进行中' : 'Agent 深挖'}
-        aria-label={`${label} Agent 深挖`}
+        title={deepDiveRunning ? `${analyst?.name_zh ?? 'Agent'}深入分析进行中` : deepDiveLabel}
+        aria-label={deepDiveLabel}
         disabled={deepDiveRunning}
         className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all shrink-0 ${
           deepDiveRunning
@@ -165,7 +167,7 @@ export function AiInsightCard({
         ) : (
           <Search size={13} />
         )}
-        <span>深挖</span>
+        <span>{deepDiveRunning ? '分析中' : deepDiveLabel}</span>
       </button>
     );
   };
@@ -271,6 +273,17 @@ export function AiInsightCard({
             <span className="text-sm font-medium text-fin-text truncate">
               {label}
             </span>
+            {analyst && (
+              <span
+                className="inline-flex items-center gap-1 rounded border border-current/30 bg-t-elevated px-1.5 py-0.5 font-mono text-2xs"
+                style={{ color: `var(--${analyst.color_token})` }}
+                title={analyst.mandate_zh}
+                data-testid="insight-analyst"
+              >
+                <span>{analyst.glyph}</span>
+                <span>{analyst.name_zh}</span>
+              </span>
+            )}
             <CardInfoTip content="快速评分：规则 + 单次 LLM 对实时数据打分（非自主 Agent，无多轮推理/工具调用）。点「深挖」可触发真正的多 Agent 深度分析" />
           </div>
           <div className="flex items-center gap-2 mt-0.5">

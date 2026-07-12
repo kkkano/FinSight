@@ -352,21 +352,25 @@ class TestPrompts:
         assert "AAPL" in prompt
         assert "技术分析" in prompt
         assert "JSON" in prompt
+        assert prompt.startswith("你是技术面分析师，职责是RSI、MACD、均线、形态与交易信号研判。")
 
     def test_build_financial_prompt(self):
         prompt = build_financial_prompt("AAPL", {"trailing_pe": 28.5})
         assert "AAPL" in prompt
         assert "财务" in prompt
+        assert prompt.startswith("你是基本面分析师，职责是增长、盈利质量、现金流、EPS 修正与估值支撑。")
 
     def test_build_news_prompt(self):
         prompt = build_news_prompt("TSLA", {"market": [{"title": "test"}]})
         assert "TSLA" in prompt
         assert "新闻" in prompt
+        assert prompt.startswith("你是舆情新闻分析师，职责是新闻情绪量化、催化事件识别、来源核验与价格传导。")
 
     def test_build_peers_prompt(self):
         prompt = build_peers_prompt("MSFT", {"peers": [{"symbol": "GOOG"}]})
         assert "MSFT" in prompt
         assert "同行" in prompt
+        assert prompt.startswith("你是价格行为分析师，职责是趋势、动量、关键价位、量价确认与价格行为风险。")
 
     def test_build_overview_prompt_with_sub_scores(self):
         prompt = build_overview_prompt(
@@ -377,6 +381,7 @@ class TestPrompts:
         assert "NVDA" in prompt
         assert "7.0" in prompt
         assert "6.5" in prompt
+        assert prompt.startswith("你是宏观分析师，职责是通胀、利率、就业、政策与跨资产环境影响。")
 
     def test_build_overview_prompt_without_sub_scores(self):
         prompt = build_overview_prompt("AAPL", {}, sub_scores=None)
@@ -615,6 +620,8 @@ class TestInsightsOrchestrator:
             assert card.model_generated is False
             assert card.scorer_name is not None
             assert card.scorer_name.endswith("_scorer")
+            assert card.analyst is not None
+            assert card.analyst.key in {"macro_agent", "fundamental_agent", "technical_agent", "news_agent", "price_agent"}
             assert 1.0 <= card.score <= 10.0
 
     @pytest.mark.asyncio

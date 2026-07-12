@@ -463,6 +463,14 @@ export interface InsightCard {
   agent_name: string;
   scorer_name?: string;      // preferred semantic identifier, e.g. technical_scorer
   source_type?: string;      // quick_score=快速评分 / agent_deep=Agent 深度分析
+  analyst?: {
+    key: string;
+    name_zh: string;
+    short_zh: string;
+    glyph: string;
+    color_token: string;
+    mandate_zh: string;
+  } | null;
   tab: string;
   score: number;             // 0-10
   score_label: string;       // 弱势 | 偏空 | 中性 | 偏多 | 强势

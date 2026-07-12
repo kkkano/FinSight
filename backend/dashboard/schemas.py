@@ -337,6 +337,17 @@ class ScoreBreakdownItem(BaseModel):
     rationale: str = Field("", description="贡献解释")
 
 
+class InsightAnalyst(BaseModel):
+    """评分卡绑定的统一 AgentProfile 身份快照。"""
+
+    key: str
+    name_zh: str
+    short_zh: str
+    glyph: str
+    color_token: str
+    mandate_zh: str
+
+
 class InsightCard(BaseModel):
     """
     单个维度的 AI 洞察卡片
@@ -355,6 +366,7 @@ class InsightCard(BaseModel):
         "quick_score",
         description="卡片来源类型：quick_score=快速评分(规则+单次 LLM) / agent_deep=Agent 深度分析",
     )
+    analyst: Optional[InsightAnalyst] = Field(None, description="与深挖 Agent 同源的分析师身份")
     tab: str = Field(..., description="对应的 Dashboard Tab 名称")
     score: float = Field(..., ge=0, le=10, description="综合评分 (0-10)")
     score_label: str = Field(..., description="评分标签 (弱势/偏空/中性/偏多/强势)")

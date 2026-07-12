@@ -2625,6 +2625,24 @@ export interface components {
             rsi?: (number | null)[];
         };
         /**
+         * InsightAnalyst
+         * @description 评分卡绑定的统一 AgentProfile 身份快照。
+         */
+        InsightAnalyst: {
+            /** Color Token */
+            color_token: string;
+            /** Glyph */
+            glyph: string;
+            /** Key */
+            key: string;
+            /** Mandate Zh */
+            mandate_zh: string;
+            /** Name Zh */
+            name_zh: string;
+            /** Short Zh */
+            short_zh: string;
+        };
+        /**
          * InsightCard
          * @description 单个维度的 AI 洞察卡片
          *
@@ -2638,6 +2656,8 @@ export interface components {
              * @description 生成该卡片的历史标识名（兼容字段）
              */
             agent_name: string;
+            /** @description 与深挖 Agent 同源的分析师身份 */
+            analyst?: components["schemas"]["InsightAnalyst"] | null;
             /**
              * As Of
              * @description 数据时间 ISO 格式

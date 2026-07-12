@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from backend.agents.profiles import profile_for_scorer
+
 # ---------------------------------------------------------------------------
 # Shared preamble
 # ---------------------------------------------------------------------------
@@ -52,12 +54,20 @@ def _truncate_data(data: Any, max_chars: int = 3000) -> str:
     return text
 
 
+def _persona(scorer_key: str) -> str:
+    analyst = profile_for_scorer(scorer_key)
+    if analyst is None:
+        raise KeyError(f"dashboard scorer 未绑定 AgentProfile: {scorer_key}")
+    return f"你是{analyst.name_zh}，职责是{analyst.mandate_zh}。"
+
+
 # ---------------------------------------------------------------------------
 # Technical Digest Prompt
 # ---------------------------------------------------------------------------
 
 def build_technical_prompt(ticker: str, data: dict[str, Any]) -> str:
     return f"""\
+{_persona('technical')}
 <role>资深技术分析师 — 快速诊断模式</role>
 
 <task>
@@ -85,6 +95,7 @@ def build_technical_prompt(ticker: str, data: dict[str, Any]) -> str:
 
 def build_financial_prompt(ticker: str, data: dict[str, Any]) -> str:
     return f"""\
+{_persona('financial')}
 <role>资深财务分析师 — 快速诊断模式</role>
 
 <task>
@@ -113,6 +124,7 @@ def build_financial_prompt(ticker: str, data: dict[str, Any]) -> str:
 
 def build_news_prompt(ticker: str, data: dict[str, Any]) -> str:
     return f"""\
+{_persona('news')}
 <role>资深财经新闻分析师 — 快速诊断模式</role>
 
 <task>
@@ -141,6 +153,7 @@ def build_news_prompt(ticker: str, data: dict[str, Any]) -> str:
 
 def build_peers_prompt(ticker: str, data: dict[str, Any]) -> str:
     return f"""\
+{_persona('peers')}
 <role>行业分析师 — 快速同行对比模式</role>
 
 <task>
@@ -181,6 +194,7 @@ def build_overview_prompt(
 """
 
     return f"""\
+{_persona('overview')}
 <role>首席投资策略师 — 快速综合评估模式</role>
 
 <task>
