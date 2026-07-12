@@ -50,7 +50,7 @@
 ## 前端与 Dashboard
 
 - `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`：Dashboard/Workbench 开发指南。
-- `docs/superpowers/plans/2026-07-03-finsight-overhaul/`：当前 FinSight overhaul 的 00-10 spec、唯一进度账本与执行盘点；Dashboard 六标签来源审计见 `notes-dashboard-data-sources.md`。
+- `docs/superpowers/plans/2026-07-03-finsight-overhaul/`：当前 FinSight overhaul 的 00-10 spec、唯一进度账本与执行盘点；Dashboard 六标签来源审计见 `notes-dashboard-data-sources.md`，Supabase 前端引用盘点见 `notes-c9-supabase-references.md`。
 - `docs/design/`：视觉方案与品牌资产。
 - `docs/prototype/`：静态原型。
 - `docs/ux/`：信息架构和交互提案。

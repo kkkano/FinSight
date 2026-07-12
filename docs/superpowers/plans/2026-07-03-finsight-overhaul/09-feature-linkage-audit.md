@@ -216,8 +216,8 @@ type PredictionOverlay = {
 ### C-9: `/api/supabase` 前端残留 ——【盘点】
 
 **证据:** 前端 4 处引用 `/api/supabase`（client.ts 等），后端 24 个 router 无此前缀。
-- [ ] Step 1【盘点】: `grep -rn "/api/supabase" frontend/src` 逐处看语义：若是走 Supabase 官方 SDK 的相对路径拼接则改注释澄清；若是调不存在的后端端点则为死代码 → 删除该调用及其 UI 分支。结论写 notes。
-- [ ] Commit: `chore(frontend): resolve phantom /api/supabase references`
+- [x] Step 1【盘点】: `grep -rn "/api/supabase" frontend/src` 逐处看语义：若是走 Supabase 官方 SDK 的相对路径拼接则改注释澄清；若是调不存在的后端端点则为死代码 → 删除该调用及其 UI 分支。结论写 notes。
+- [x] Commit: `chore(frontend): resolve phantom /api/supabase references`
 
 ### C-10: daily_tasks / task_generator 任务质量 ——【盘点】
 
