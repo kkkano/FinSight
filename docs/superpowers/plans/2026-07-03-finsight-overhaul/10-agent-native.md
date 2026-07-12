@@ -85,8 +85,8 @@ def lead_agent_for_operation(operation: str) -> str:
 - Modify: `backend/graph/nodes/chat_renderer.py`：`_agent_summary` 类渲染同样带 `profile(name).name_zh` 署名
 - Test: `backend/tests/test_lead_agent_attribution.py`（构造两 agent 输出的 state → 断言报告 markdown 含署名与 lead 领衔顺序）
 
-- [ ] Step 1: TDD → 实现 → 金样零 diff 确认（署名属于渲染文本变化，金样切片不含 markdown 正文则零 diff；若含，重录并在 commit 说明）。
-- [ ] Commit: `feat(report): lead/support roles and analyst attribution in reports and chat summaries`
+- [x] Step 1: TDD → 实现 → 金样零 diff 确认（署名属于渲染文本变化，金样切片不含 markdown 正文则零 diff；若含，重录并在 commit 说明）。
+- [x] Commit: `feat(report): lead/support roles and analyst attribution in reports and chat summaries`
 
 ### Task 3: 挑战轮——复活 research_debate 为真质询
 

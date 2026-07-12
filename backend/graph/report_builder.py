@@ -55,17 +55,13 @@ from backend.report.util import (  # WP3-T5 拆分回接
     _safe_str,
     _sanitize_report_text_block,
 )
+from backend.agents.profiles import AGENT_PROFILES, profile
 
 
 
 _AGENT_TITLE_MAP: dict[str, str] = {
-    "price_agent": "价格分析",
-    "news_agent": "新闻分析",
-    "technical_agent": "技术分析",
-    "fundamental_agent": "基本面分析",
-    "macro_agent": "宏观分析",
-    "risk_agent": "风险分析",
-    "deep_search_agent": "深度搜索",
+    key: f"{item.short_zh} · {item.name_zh}"
+    for key, item in AGENT_PROFILES.items()
 }
 
 
@@ -644,9 +640,28 @@ def _agent_summaries_from_steps(
         if isinstance(sid, str) and sid and isinstance(msg, str) and msg:
             errors_by_step[sid] = msg
 
+    role_by_agent: dict[str, str] = {}
+    for step in plan_steps:
+        if not isinstance(step, dict) or step.get("kind") != "agent":
+            continue
+        name = _safe_str(step.get("name") or "").strip()
+        inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+        role = _safe_str(inputs.get("role") or "support").strip().lower()
+        if name:
+            role_by_agent[name] = "lead" if role == "lead" else "support"
+
+    indexed_agents = list(enumerate(allowed_agents))
+    ordered_agents = [
+        agent_name
+        for _, agent_name in sorted(
+            indexed_agents,
+            key=lambda item: (0 if role_by_agent.get(item[1]) == "lead" else 1, item[0]),
+        )
+    ]
+
     summaries: list[dict[str, Any]] = []
     order = 1
-    for agent_name in allowed_agents:
+    for agent_name in ordered_agents:
         step_id = steps_by_agent.get(agent_name)
         title = _AGENT_TITLE_MAP.get(agent_name, agent_name)
         if not step_id:
@@ -1046,6 +1061,28 @@ def _build_long_synthesis_report(
     elif query:
         parts.append(f"**问题**：{query}")
         parts.append("")
+
+    successful_agents = [
+        item
+        for item in agent_summaries
+        if isinstance(item, dict)
+        and item.get("status") == "success"
+        and _safe_str(item.get("summary") or "").strip()
+    ]
+    if successful_agents:
+        parts.append("## 分析师观点")
+        for item in successful_agents:
+            agent_name = _safe_str(item.get("agent_name") or "").strip()
+            title = _safe_str(item.get("title") or agent_name).strip()
+            if agent_name:
+                try:
+                    item_profile = profile(agent_name)
+                    title = f"{item_profile.short_zh} · {item_profile.name_zh}"
+                except KeyError:
+                    pass
+            parts.append(f"### {title}")
+            parts.append(_safe_str(item.get("summary") or "").strip())
+            parts.append("")
 
     # 2) Citation references (only when citations exist — real data, not filler).
     if citations:

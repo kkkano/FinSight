@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.plan_ir import PlanBudget
+from backend.graph.planning.roles import assign_agent_roles
 from backend.graph.planning.steps import finalize_step_dependencies
 from backend.graph.state import GraphState
 
@@ -728,6 +729,12 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             if budget_assertions.get("cost_within_budget") and budget_assertions.get("latency_within_budget"):
                 break
     budget_assertions["dropped_steps"] = dropped_for_budget
+    operation_obj = state.get("operation") if isinstance(state.get("operation"), dict) else {}
+    assign_agent_roles(
+        sanitized_steps,
+        operation=str(operation_obj.get("name") or "qa"),
+        tasks=state.get("tasks") if isinstance(state.get("tasks"), list) else [],
+    )
     finalize_step_dependencies(sanitized_steps)
 
     return ({

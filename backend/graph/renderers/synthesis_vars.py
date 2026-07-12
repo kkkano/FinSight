@@ -9,8 +9,9 @@ import time
 from typing import Any
 from urllib.parse import quote_plus
 
+from backend.agents.profiles import profile
 from backend.graph.state import GraphState
-from backend.graph.renderers.shared import _first_matching_output, _parse_jsonish, _step_outputs
+from backend.graph.renderers.shared import _parse_jsonish, _step_outputs
 
 
 def _render_vars(state: GraphState) -> dict[str, str]:
@@ -92,14 +93,23 @@ def _sanitize_agent_summary(summary: str) -> str:
 
 
 def _agent_summary(state: GraphState, names: set[str]) -> str:
-    output = _first_matching_output(state, names)
-    parsed = _parse_jsonish(output)
-    if isinstance(parsed, dict):
-        summary = str(parsed.get("summary") or parsed.get("analysis") or "").strip()
-        if summary:
-            return _sanitize_agent_summary(summary)
-    if isinstance(parsed, str) and parsed.strip():
-        return _sanitize_agent_summary(parsed)
+    for step, output in _step_outputs(state):
+        agent_name = str(step.get("name") or "").strip()
+        if agent_name not in names:
+            continue
+        parsed = _parse_jsonish(output)
+        summary = ""
+        if isinstance(parsed, dict):
+            summary = str(parsed.get("summary") or parsed.get("analysis") or "").strip()
+        elif isinstance(parsed, str):
+            summary = parsed.strip()
+        if not summary:
+            continue
+        cleaned = _sanitize_agent_summary(summary)
+        try:
+            return f"{profile(agent_name).name_zh}：{cleaned}"
+        except KeyError:
+            return cleaned
     return ""
 
 

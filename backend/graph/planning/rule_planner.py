@@ -35,6 +35,7 @@ from backend.graph.planning.frames import (
     _request_frames_authoritatively_need_no_plan_steps,
 )
 from backend.graph.planning.report_mode import _append_report_mode_enrichment_steps
+from backend.graph.planning.roles import assign_agent_roles
 from backend.graph.planning.steps import _append_tool_step, finalize_step_dependencies
 from backend.graph.planning.util import (
     _contains_any,
@@ -267,6 +268,7 @@ def rule_based_planner(state: GraphState) -> dict:
         for task in ctx.ready_tasks[:8]:
             label = str(task.get("subject_label") or ", ".join(_task_tickers(ctx, task)) or task.get("subject_type") or "任务")
             task_sections.append(f"{label}:{_task_operation_name(ctx, task)}")
+        assign_agent_roles(ctx.steps, operation=str(operation), tasks=ctx.ready_tasks)
         finalize_step_dependencies(ctx.steps)
         raw_plan = {
             "goal": ctx.query or "N/A",
@@ -947,6 +949,7 @@ def rule_based_planner(state: GraphState) -> dict:
             )
             ctx.step_id += 1
 
+    assign_agent_roles(ctx.steps, operation=str(operation), tasks=ctx.ready_tasks)
     finalize_step_dependencies(ctx.steps)
     raw_plan = {
         "goal": ctx.query or "N/A",
