@@ -8,7 +8,10 @@ SQLite 落到 tmp_path，避免污染 data/monitor.db。
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from backend.api import monitor_router as mr
@@ -31,6 +34,94 @@ def client(tmp_path, monkeypatch):
 
 
 SESSION = "sess-router"
+
+
+def test_monitor_lease_api_auth_tenant_token_and_two_page_instances(monkeypatch):
+    class MemoryLeaseStore:
+        def __init__(self):
+            self.items = {}
+            self.seq = 0
+
+        def acquire(self, *, user_id, session_id, symbol):
+            self.seq += 1
+            item = {
+                "id": str(uuid.uuid4()), "session_id": session_id, "symbol": symbol.upper(),
+                "lease_token": f"token-{'x' * 20}-{self.seq}", "expires_at": "2026-07-10T15:01:30Z",
+            }
+            self.items[(item["id"], user_id)] = item
+            return item
+
+        def renew(self, lease_id, *, user_id, lease_token):
+            item = self.items.get((lease_id, user_id))
+            return item["expires_at"] if item and item["lease_token"] == lease_token else None
+
+        def release(self, lease_id, *, user_id, lease_token):
+            item = self.items.get((lease_id, user_id))
+            if not item or item["lease_token"] != lease_token:
+                return False
+            del self.items[(lease_id, user_id)]
+            return True
+
+    store = MemoryLeaseStore()
+    monkeypatch.setattr(mr, "get_monitor_lease_store", lambda: store)
+    lease_app = FastAPI()
+
+    @lease_app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = request.headers.get("x-test-user", "public")
+        return await call_next(request)
+
+    lease_app.include_router(mr.monitor_router)
+    lease_client = TestClient(lease_app)
+    assert lease_client.post("/api/monitor/leases", json={"session_id": "s1", "symbol": "AAPL"}).status_code == 401
+
+    headers = {"x-test-user": "alice"}
+    assert lease_client.post(
+        "/api/monitor/leases", headers=headers,
+        json={"session_id": "s1", "symbol": "AAPL;DROP TABLE leases"},
+    ).status_code == 422
+    assert lease_client.put(
+        "/api/monitor/leases/not-a-uuid", headers=headers,
+        json={"lease_token": "x" * 24},
+    ).status_code == 422
+    first = lease_client.post("/api/monitor/leases", headers=headers, json={"session_id": "s1", "symbol": "AAPL"})
+    second = lease_client.post("/api/monitor/leases", headers=headers, json={"session_id": "s1", "symbol": "AAPL"})
+    assert first.status_code == second.status_code == 201
+    first_lease, second_lease = first.json()["lease"], second.json()["lease"]
+    assert first_lease["id"] != second_lease["id"]
+
+    assert lease_client.put(
+        f"/api/monitor/leases/{first_lease['id']}",
+        headers={"x-test-user": "bob"}, json={"lease_token": first_lease["lease_token"]},
+    ).status_code == 404
+    assert lease_client.put(
+        f"/api/monitor/leases/{first_lease['id']}",
+        headers=headers, json={"lease_token": first_lease["lease_token"]},
+    ).status_code == 200
+    assert lease_client.request(
+        "DELETE", f"/api/monitor/leases/{first_lease['id']}",
+        headers=headers, json={"lease_token": first_lease["lease_token"]},
+    ).status_code == 200
+    assert (second_lease["id"], "alice") in store.items
+
+
+def test_monitor_lease_api_fails_closed_when_store_unavailable(monkeypatch):
+    class Down:
+        def acquire(self, **_kwargs): raise RuntimeError("down")
+
+    monkeypatch.setattr(mr, "get_monitor_lease_store", lambda: Down())
+    lease_app = FastAPI()
+
+    @lease_app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = "alice"
+        return await call_next(request)
+
+    lease_app.include_router(mr.monitor_router)
+    response = TestClient(lease_app).post(
+        "/api/monitor/leases", json={"session_id": "s1", "symbol": "AAPL"},
+    )
+    assert response.status_code == 503
 
 
 # ── targets CRUD ──────────────────────────────────────────────

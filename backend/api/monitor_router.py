@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.monitor_engine import run_l1_scan
 from backend.services.monitor_store import get_monitor_store
+from backend.services.monitor_lease_store import get_monitor_lease_store
 from backend.services.portfolio_store import get_positions
 from backend.tools import get_event_calendar
 
@@ -114,6 +115,70 @@ class UpsertSettingsRequest(BaseModel):
     session_id: str
     notify_email: str | None = None
     notify_enabled: bool = False
+
+
+class AcquireLeaseRequest(BaseModel):
+    session_id: str = Field(
+        ..., min_length=1, max_length=256,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
+    )
+    symbol: str = Field(
+        ..., min_length=1, max_length=32,
+        pattern=r"^[A-Za-z0-9^][A-Za-z0-9._:^=-]{0,31}$",
+    )
+
+
+class LeaseTokenRequest(BaseModel):
+    lease_token: str = Field(..., min_length=20, max_length=256)
+
+
+def _authenticated_user_id(request: Request) -> str:
+    user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+    if user_id == "public":
+        raise HTTPException(status_code=401, detail="登录后才能启用页面实时监控")
+    return user_id
+
+
+@monitor_router.post("/api/monitor/leases", status_code=201)
+async def acquire_monitor_lease(payload: AcquireLeaseRequest, request: Request):
+    user_id = _authenticated_user_id(request)
+    try:
+        lease = get_monitor_lease_store().acquire(
+            user_id=user_id,
+            session_id=payload.session_id,
+            symbol=payload.symbol,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="monitor lease store unavailable") from exc
+    return {"lease": lease}
+
+
+@monitor_router.put("/api/monitor/leases/{lease_id}")
+async def renew_monitor_lease(lease_id: uuid.UUID, payload: LeaseTokenRequest, request: Request):
+    user_id = _authenticated_user_id(request)
+    try:
+        expires_at = get_monitor_lease_store().renew(
+            str(lease_id), user_id=user_id, lease_token=payload.lease_token,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="monitor lease store unavailable") from exc
+    if expires_at is None:
+        raise HTTPException(status_code=404, detail="monitor lease not found")
+    return {"success": True, "expires_at": expires_at}
+
+
+@monitor_router.delete("/api/monitor/leases/{lease_id}")
+async def release_monitor_lease(lease_id: uuid.UUID, payload: LeaseTokenRequest, request: Request):
+    user_id = _authenticated_user_id(request)
+    try:
+        released = get_monitor_lease_store().release(
+            str(lease_id), user_id=user_id, lease_token=payload.lease_token,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="monitor lease store unavailable") from exc
+    if not released:
+        raise HTTPException(status_code=404, detail="monitor lease not found")
+    return {"success": True}
 
 
 # ── Findings ──────────────────────────────────────────────────

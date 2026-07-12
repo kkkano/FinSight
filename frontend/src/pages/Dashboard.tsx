@@ -24,6 +24,7 @@ import { useMarketQuotes } from '../hooks/useMarketQuotes';
 import { SmartChartRenderer, type SmartChartBlock } from '../components/SmartChart';
 import { getPredictionIdFromSearch } from '../components/chatChartIntent';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
+import { useMonitorLease } from '../hooks/useMonitorLease';
 
 interface DashboardProps {
   initialSymbol?: string;
@@ -51,6 +52,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   const [currentSymbol, setCurrentSymbol] = useState<string>(
     () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
+  useMonitorLease(currentSymbol);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(formatClock()), 1000);

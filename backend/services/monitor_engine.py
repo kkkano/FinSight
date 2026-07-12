@@ -28,7 +28,8 @@ import asyncio
 import logging
 import os
 import uuid
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Callable
 from datetime import datetime, timezone
 
 from backend.services.alert_scheduler import fetch_price_snapshot
@@ -39,6 +40,7 @@ from backend.services.market_hours import (
 )
 from backend.services.email_service import get_email_service
 from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
+from backend.services.monitor_lease_store import get_monitor_lease_store
 from backend.services.monitor_store import get_monitor_store
 from backend.services.monitor_signals import (
     MarketSnapshot,
@@ -64,6 +66,10 @@ logger = logging.getLogger(__name__)
 # 重启重置无妨，下个心跳即恢复节奏。
 _last_scan_at: float | None = None
 
+# 页面实时监控只保留必要的进程内游标；lease、租户边界与多 worker 锁均在 PostgreSQL。
+_realtime_snapshots: dict[tuple[str, str, str], MarketSnapshot] = {}
+_realtime_last_comment_at: dict[tuple[str, str, str], datetime] = {}
+
 # 通知冷却阈值：同 session 该窗口内最多发 1 封。
 # 冷却时间戳已落库（monitor_store.notify_cooldown），跨重启 / 多 worker 共享，
 # 不再用进程内 dict（重启会立即重发、多 worker 各自冷却互不可见）。
@@ -76,6 +82,131 @@ DEFAULT_SENTIMENT_ABS_THRESHOLD = 0.35  # 舆情突变：平均分绝对值阈�
 EARNINGS_NEAR_DAYS = 3  # 财报临近：距今 <= 3 天（含今天）触发
 MACRO_EVENT_DAYS = 2  # 宏观事件：距今 <= 2 天触发
 DEDUP_WINDOW_HOURS = 4
+
+
+@dataclass(frozen=True)
+class RealtimeMonitorTarget:
+    """由有效页面 lease 临时投影出的高频监控目标。"""
+
+    user_id: str
+    session_id: str
+    symbol: str
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+def dispatch_realtime_triggers(
+    target: RealtimeMonitorTarget,
+    snapshot: MarketSnapshot,
+    triggers: list[MonitorTrigger],
+) -> bool:
+    """D3 点评生产者的装配边界；D2 默认不调用 LLM、不写库。"""
+    del target, snapshot, triggers
+    return False
+
+
+def _realtime_target_from_lease(lease: dict[str, Any]) -> RealtimeMonitorTarget:
+    user_id = str(lease.get("user_id") or "").strip()
+    session_id = str(lease.get("session_id") or "").strip()
+    symbol = str(lease.get("symbol") or "").strip().upper()
+    config: dict[str, Any] = {}
+    try:
+        targets = get_monitor_store().list_targets(session_id, user_id=user_id)
+        for target in targets:
+            if not target.get("enabled", True):
+                continue
+            if str(target.get("ticker") or "").strip().upper() == symbol:
+                config = dict(target.get("config") or {})
+                break
+    except Exception as exc:  # 读取旧 L1 配置失败时使用只读默认值，不创建持久 target
+        logger.warning("[RealtimeMonitor] target config unavailable for %s: %s", symbol, exc)
+    return RealtimeMonitorTarget(
+        user_id=user_id,
+        session_id=session_id,
+        symbol=symbol,
+        config=config,
+    )
+
+
+def _fetch_realtime_snapshot(target: RealtimeMonitorTarget, now: datetime) -> MarketSnapshot:
+    snapshot = fetch_price_snapshot(target.symbol)
+    price = None if snapshot is None else snapshot.price
+    return MarketSnapshot(
+        symbol=target.symbol,
+        observed_at=now.isoformat(),
+        price=float(price) if price is not None else None,
+    )
+
+
+def run_realtime_monitor_cycle(
+    *,
+    now: datetime | None = None,
+    snapshot_fetcher: Callable[[RealtimeMonitorTarget, datetime], MarketSnapshot] | None = None,
+    trigger_consumer: Callable[[RealtimeMonitorTarget, MarketSnapshot, list[MonitorTrigger]], bool] | None = None,
+) -> int:
+    """每 60 秒执行的页面高频监控 tick，返回交给点评边界的目标数。"""
+    tick_at = now or datetime.now(timezone.utc)
+    store = get_monitor_lease_store()
+    fetcher = snapshot_fetcher or _fetch_realtime_snapshot
+    consumer = trigger_consumer or dispatch_realtime_triggers
+
+    try:
+        with store.realtime_tick_lock() as acquired:
+            if not acquired:
+                logger.info("[RealtimeMonitor] advisory lock busy; skip tick")
+                return 0
+            store.cleanup_expired(now=tick_at)
+            leases = store.list_active(now=tick_at)
+            if not leases:
+                _realtime_snapshots.clear()
+                _realtime_last_comment_at.clear()
+                logger.info("[RealtimeMonitor] no active page leases; skip before market/LLM I/O")
+                return 0
+            if get_market_session(tick_at) == "closed":
+                logger.info("[RealtimeMonitor] market closed; skip active page leases")
+                return 0
+
+            # 同一页面目标可能有多个浏览器实例；按租户/会话/标的合并，避免重复点评。
+            unique_leases: dict[tuple[str, str, str], dict[str, Any]] = {}
+            for lease in leases:
+                key = (
+                    str(lease.get("user_id") or "").strip(),
+                    str(lease.get("session_id") or "").strip(),
+                    str(lease.get("symbol") or "").strip().upper(),
+                )
+                if all(key):
+                    unique_leases.setdefault(key, lease)
+
+            active_keys = set(unique_leases)
+            for stale_key in set(_realtime_snapshots) - active_keys:
+                _realtime_snapshots.pop(stale_key, None)
+                _realtime_last_comment_at.pop(stale_key, None)
+
+            dispatched = 0
+            for key, lease in unique_leases.items():
+                try:
+                    target = _realtime_target_from_lease(lease)
+                    current = fetcher(target, tick_at)
+                    previous = _realtime_snapshots.get(key, current)
+                    triggers = evaluate_realtime_snapshot(
+                        previous=previous,
+                        current=current,
+                        prediction=None,
+                        last_comment_at=_realtime_last_comment_at.get(key),
+                        now=tick_at,
+                    )
+                    _realtime_snapshots[key] = current
+                    if not triggers:
+                        continue
+                    consumer(target, current, triggers)
+                    # D3 将把这里的交付替换为 PostgreSQL comment 时间；D2 先保证心跳不超过 5 分钟一次。
+                    _realtime_last_comment_at[key] = tick_at
+                    dispatched += 1
+                except Exception as exc:  # 单标的失败不阻断其他有效 lease
+                    logger.warning("[RealtimeMonitor] tick failed for %s: %s", key, exc)
+            return dispatched
+    except Exception as exc:
+        logger.warning("[RealtimeMonitor] lease store unavailable; fail closed: %s", exc)
+        return 0
 
 
 def evaluate_realtime_snapshot(
@@ -894,6 +1025,9 @@ def run_monitor_dispatch_cycle() -> None:
 
 
 __all__ = [
+    "RealtimeMonitorTarget",
+    "dispatch_realtime_triggers",
+    "run_realtime_monitor_cycle",
     "run_l1_scan",
     "run_monitor_scan_cycle",
     "run_monitor_dispatch_cycle",

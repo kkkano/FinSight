@@ -314,12 +314,12 @@ def heartbeat_due(*, last_comment_at: datetime | None, now: datetime,
 
 **PostgreSQL 表:** `monitor_page_leases(id UUID, user_id TEXT, session_id TEXT, symbol TEXT, lease_token_hash TEXT, expires_at TIMESTAMPTZ, updated_at TIMESTAMPTZ)`；唯一约束为 `(user_id, lease_token_hash)`，并建 `(user_id, session_id, symbol, expires_at)` 查询索引，允许同一用户的两个页面实例各持一个 lease。默认 TTL 90 秒，只存 token hash，不存明文 lease token。
 
-- [ ] Step 1: TDD 覆盖 acquire/renew/release/过期清理、不同 user 同 symbol 隔离、伪造 user_id 无效，以及两个页面实例分别持有 lease 时关闭一个不会误释放另一个。
-- [ ] Step 2: FastAPI 增加 `POST /api/monitor/leases`、`PUT /api/monitor/leases/{id}`、`DELETE /api/monitor/leases/{id}`；user_id 从鉴权上下文取得，renew/release 同时校验 lease token 与租户。数据库或鉴权不可用时 fail closed，不启动高频 AI。
-- [ ] Step 3: `useMonitorLease(symbol)` 在 Dashboard/技术图表可见且页面非 hidden 时 acquire，每 30 秒 renew；`visibilitychange`、symbol 变化和 unmount 时 release。网络瞬断允许服务端 TTL 自然回收，前端不得无限重试。
-- [ ] Step 4: 在现有 lifespan scheduler 装配 60 秒实时 tick，并用 PostgreSQL advisory lock 保证多 worker 只有一个 tick 执行。每个未过期 lease 自身创建一个临时高频 target；若同 symbol 已有持久 monitor target 则继承其阈值，否则用只读默认阈值。仅有 trigger/heartbeat 才进入 LangGraph L2/点评调用；原有低频持仓扫描/邮件提醒不受 lease 影响。
-- [ ] 验收: 打开两个 symbol 页面即只运行对应两个临时高频目标（无需预建 monitor target）；关闭后 90 秒内停止；直接伪造请求不能为其他用户续租；PostgreSQL 中无永不过期 lease；连续运行 10 分钟 60 秒 tick 无重入、无活跃 lease 时 LLM 调用为 0、heartbeat 每 symbol 最多 5 分钟一次。
-- [ ] Commit: `feat(monitor): tenant-safe page leases gate high-frequency AI monitoring`
+- [x] Step 1: TDD 覆盖 acquire/renew/release/过期清理、不同 user 同 symbol 隔离、伪造 user_id 无效，以及两个页面实例分别持有 lease 时关闭一个不会误释放另一个。
+- [x] Step 2: FastAPI 增加 `POST /api/monitor/leases`、`PUT /api/monitor/leases/{id}`、`DELETE /api/monitor/leases/{id}`；user_id 从鉴权上下文取得，renew/release 同时校验 lease token 与租户。数据库或鉴权不可用时 fail closed，不启动高频 AI。
+- [x] Step 3: `useMonitorLease(symbol)` 在 Dashboard/技术图表可见且页面非 hidden 时 acquire，每 30 秒 renew；`visibilitychange`、symbol 变化和 unmount 时 release。网络瞬断允许服务端 TTL 自然回收，前端不得无限重试。
+- [x] Step 4: 在现有 lifespan scheduler 装配 60 秒实时 tick，并用 PostgreSQL advisory lock 保证多 worker 只有一个 tick 执行。每个未过期 lease 自身创建一个临时高频 target；若同 symbol 已有持久 monitor target 则继承其阈值，否则用只读默认阈值。仅有 trigger/heartbeat 才进入 LangGraph L2/点评调用；原有低频持仓扫描/邮件提醒不受 lease 影响。
+- [x] 验收: 打开两个 symbol 页面即只运行对应两个临时高频目标（无需预建 monitor target）；关闭后 90 秒内停止；直接伪造请求不能为其他用户续租；PostgreSQL 中无永不过期 lease；连续运行 10 分钟 60 秒 tick 无重入、无活跃 lease 时 LLM 调用为 0、heartbeat 每 symbol 最多 5 分钟一次。
+- [x] Commit: `feat(monitor): tenant-safe page leases gate high-frequency AI monitoring`
 
 ### D-3: 点评流 + prediction 图表深链
 

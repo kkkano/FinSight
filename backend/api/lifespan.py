@@ -167,6 +167,23 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[Scheduler] MONITOR_SCAN_ENABLED is false; skip start.")
 
+    # 页面可见时的高频监控：固定 60 秒 tick；函数内部再由 PostgreSQL lease + advisory lock 门控。
+    realtime_monitor_enabled = _env_bool("MONITOR_REALTIME_ENABLED", True)
+    if realtime_monitor_enabled:
+        from backend.services.monitor_engine import run_realtime_monitor_cycle
+
+        sched = start_interval_scheduler(
+            run_realtime_monitor_cycle,
+            interval_minutes=1.0,
+            enabled=True,
+            job_id="monitor_realtime_tick",
+            job_label="page-lease realtime monitor tick",
+        )
+        if sched:
+            _schedulers.append(sched)
+    else:
+        logger.info("[Scheduler] MONITOR_REALTIME_ENABLED is false; skip start.")
+
     try:
         install_rag_observability_hooks()
         rag_observability_status = get_rag_observability_store().ensure_schema() if hasattr(get_rag_observability_store(), 'ensure_schema') else False
