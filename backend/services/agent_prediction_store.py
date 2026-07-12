@@ -61,18 +61,6 @@ class AgentPredictionStore:
             if self._schema_ready:
                 return True
             with self._engine.begin() as conn:
-                legacy_scenarios = json.dumps([
-                    {
-                        "name": "历史记录：原始情景未归档",
-                        "probability": 50,
-                        "invalidation": "该历史记录未包含结构化失效条件",
-                    },
-                    {
-                        "name": "历史记录：需重新评估",
-                        "probability": 50,
-                        "invalidation": "生成新预测后替代该历史记录",
-                    },
-                ], ensure_ascii=False)
                 conn.execute(text(
                     "CREATE TABLE IF NOT EXISTS agent_predictions ("
                     "id UUID NOT NULL, user_id TEXT NOT NULL, run_id TEXT NOT NULL, "
@@ -95,8 +83,12 @@ class AgentPredictionStore:
                 ))
                 conn.execute(text(
                     "ALTER TABLE agent_predictions ADD COLUMN IF NOT EXISTS scenarios JSONB NOT NULL "
-                    "DEFAULT CAST(:legacy_scenarios AS jsonb)"
-                ), {"legacy_scenarios": legacy_scenarios})
+                    "DEFAULT jsonb_build_array("
+                    "jsonb_build_object('name', '历史记录：原始情景未归档', 'probability', 50, "
+                    "'invalidation', '该历史记录未包含结构化失效条件'), "
+                    "jsonb_build_object('name', '历史记录：需重新评估', 'probability', 50, "
+                    "'invalidation', '生成新预测后替代该历史记录'))"
+                ))
                 conn.execute(text(
                     "ALTER TABLE agent_predictions ALTER COLUMN scenarios DROP DEFAULT"
                 ))

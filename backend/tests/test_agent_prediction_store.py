@@ -91,8 +91,9 @@ def test_store_schema_is_postgres_and_has_composite_tenant_constraint():
         (sql, params) for sql, params in engine.conn.calls
         if "ADD COLUMN IF NOT EXISTS scenarios" in sql
     )
-    assert ":legacy_scenarios" in migration_sql
-    assert '"probability": 50' in migration_params["legacy_scenarios"]
+    assert "jsonb_build_array" in migration_sql
+    assert "'probability', 50" in migration_sql
+    assert migration_params == {}
 
 
 def test_get_always_filters_by_prediction_id_and_user_id():
