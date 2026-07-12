@@ -105,10 +105,10 @@ def lead_agent_for_operation(operation: str) -> str:
 超时/失败: 整轮跳过（现有 try/except 结构保留），报告无该小节，不阻塞主链路。
 ```
 
-- [ ] Step 1: TDD（mock LLM 返回两条质询 → 断言 artifacts 结构与报告小节渲染；LLM 失败 → 报告正常无小节）。
-- [ ] Step 2: 实现（`build_debate_artifact` 改造为上述协议；prompt 写进 `backend/prompts/` 现有目录，要求输出 JSON、引用具体数字、不允许空泛质疑）。
-- [ ] Step 3: `.env.server.example` 更新 `DEBATE_GRAPH_ENABLED=true` 默认与说明。
-- [ ] Commit: `feat(debate): risk-agent challenge round produces attributed structured objections in reports`
+- [x] Step 1: TDD（mock LLM 返回两条质询 → 断言 artifacts 结构与报告小节渲染；LLM 失败 → 报告正常无小节）。
+- [x] Step 2: 实现（`build_debate_artifact` 改造为上述协议；prompt 写进 `backend/prompts/` 现有目录，要求输出 JSON、引用具体数字、不允许空泛质疑）。
+- [x] Step 3: `.env.server.example` 更新 `DEBATE_GRAPH_ENABLED=true` 默认与说明。
+- [x] Commit: `feat(debate): risk-agent challenge round produces attributed structured objections in reports`
 
 ### Task 4: 委托机制——agent 可请求补证据（受控版）
 

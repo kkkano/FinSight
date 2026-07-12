@@ -99,7 +99,7 @@ def test_build_debate_artifact_outputs_read_only_adjudications():
     assert first["rationale"]
 
 
-def test_research_debate_node_respects_flag_and_missing_ledger(monkeypatch):
+def test_research_debate_node_respects_flag_and_non_report_skip(monkeypatch):
     from backend.graph.nodes.research_debate import research_debate
 
     monkeypatch.setenv("DEBATE_GRAPH_ENABLED", "false")
@@ -107,24 +107,48 @@ def test_research_debate_node_respects_flag_and_missing_ledger(monkeypatch):
 
     monkeypatch.setenv("DEBATE_GRAPH_ENABLED", "true")
     out = _run(research_debate({"query": "NVDA", "artifacts": {}, "trace": {}}))
-    debate = (out.get("artifacts") or {}).get("debate") or {}
-    assert debate == {
-        "enabled": True,
-        "status": "skipped",
-        "reason": "missing_evidence_ledger",
-    }
+    assert "debate" not in (out.get("artifacts") or {})
+    assert (out.get("trace") or {}).get("research_debate", {}).get("reason") == "not_investment_report"
 
 
 def test_research_debate_node_attaches_artifact_when_enabled(monkeypatch):
-    from backend.graph.nodes.research_debate import research_debate
+    import importlib
+
+    debate_module = importlib.import_module("backend.graph.nodes.research_debate")
+    research_debate = debate_module.research_debate
+
+    async def fake_generate(_payload):
+        return [{
+            "target_agent": "technical_agent",
+            "challenge_zh": "技术结论是否忽略量能不足？",
+            "severity": "med",
+        }]
 
     monkeypatch.setenv("DEBATE_GRAPH_ENABLED", "true")
-    state = {"query": "NVDA investment debate", "artifacts": {"evidence_ledger": _ledger()}, "trace": {}}
+    monkeypatch.setattr(debate_module, "_generate_challenges", fake_generate)
+    agents = ["fundamental_agent", "technical_agent", "news_agent"]
+    state = {
+        "query": "NVDA investment debate",
+        "output_mode": "investment_report",
+        "plan_ir": {"steps": [
+            {"id": f"s{index}", "kind": "agent", "name": name}
+            for index, name in enumerate(agents, 1)
+        ]},
+        "artifacts": {
+            "evidence_ledger": _ledger(),
+            "step_results": {
+                f"s{index}": {"output": {"summary": f"{name} summary"}}
+                for index, name in enumerate(agents, 1)
+            },
+        },
+        "trace": {},
+    }
 
     out = _run(research_debate(state))
 
     artifacts = out.get("artifacts") or {}
     debate = artifacts.get("debate") or {}
     assert debate.get("status") == "done"
+    assert debate.get("challenges", [])[0]["target_agent"] == "technical_agent"
     assert debate.get("judge_scorecard", {}).get("evidence_balance") in {"bull", "bear", "mixed"}
     assert (out.get("trace") or {}).get("research_debate", {}).get("status") == "done"

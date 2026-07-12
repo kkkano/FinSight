@@ -214,6 +214,7 @@ async def generate_narrative_draft(
                 "judge_scorecard": debate.get("judge_scorecard") if isinstance(debate.get("judge_scorecard"), dict) else {},
                 "consensus": debate.get("consensus"),
                 "open_questions": debate.get("open_questions") if isinstance(debate.get("open_questions"), list) else [],
+                "challenges": debate.get("challenges") if isinstance(debate.get("challenges"), list) else [],
             },
             ensure_ascii=False,
             indent=2,

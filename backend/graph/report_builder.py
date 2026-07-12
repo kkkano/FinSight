@@ -1689,6 +1689,26 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if "conflict" not in report_tags and (has_active_conflicts or is_degraded_conflict):
             report_tags.append("conflict")
 
+    challenges = debate.get("challenges") if isinstance(debate.get("challenges"), list) else []
+    if challenges:
+        challenge_lines = ["## 风险质询"]
+        for item in challenges[:3]:
+            if not isinstance(item, dict):
+                continue
+            target = _safe_str(item.get("target_agent") or "").strip()
+            text = _safe_str(item.get("challenge_zh") or "").strip()
+            if not target or not text:
+                continue
+            try:
+                target_name = profile(target).name_zh
+            except KeyError:
+                target_name = target
+            challenge_lines.append(f"- ⚠ 对{target_name}: {text}")
+        if len(challenge_lines) > 1:
+            synthesis_report = f"{synthesis_report.rstrip()}\n\n" + "\n".join(challenge_lines) + "\n"
+            if "debate" not in report_tags:
+                report_tags.append("debate")
+
     grounding_stats = _compute_grounding_stats(
         generated_text=synthesis_report,
         citations=citations,

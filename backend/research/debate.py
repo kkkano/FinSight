@@ -200,7 +200,12 @@ def build_read_only_adjudications(
     return rows
 
 
-def build_debate_artifact(ledger: Any, query: str = "") -> dict[str, Any]:
+def build_debate_artifact(
+    ledger: Any,
+    query: str = "",
+    *,
+    challenges: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     parsed = _as_ledger(ledger)
     bull = build_bull_thesis(parsed)
     bear = build_bear_thesis(parsed)
@@ -228,7 +233,7 @@ def build_debate_artifact(ledger: Any, query: str = "") -> dict[str, Any]:
     if not open_questions:
         open_questions.append("后续需要补充更多来源来验证结论稳定性。")
 
-    return {
+    artifact = {
         "enabled": True,
         "status": "done",
         "query": query or parsed.query,
@@ -246,6 +251,9 @@ def build_debate_artifact(ledger: Any, query: str = "") -> dict[str, Any]:
         "consensus": consensus,
         "open_questions": open_questions,
     }
+    if challenges:
+        artifact["challenges"] = challenges[:3]
+    return artifact
 
 
 __all__ = [
