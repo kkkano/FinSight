@@ -17,8 +17,9 @@ from backend.services.agent_prediction_store import (
 
 
 class FakeResult:
-    def __init__(self, *, row=None, rowcount=1):
+    def __init__(self, *, row=None, rows=None, rowcount=1):
         self._row = row
+        self._rows = rows if rows is not None else ([row] if row is not None else [])
         self.rowcount = rowcount
 
     def mappings(self):
@@ -27,17 +28,21 @@ class FakeResult:
     def first(self):
         return self._row
 
+    def all(self):
+        return self._rows
+
 
 class FakeConnection:
     def __init__(self):
         self.calls = []
         self.row = None
+        self.rows = []
 
     def execute(self, statement, params=None):
         sql = str(statement)
         self.calls.append((sql, params or {}))
         if sql.lstrip().upper().startswith("SELECT"):
-            return FakeResult(row=self.row)
+            return FakeResult(row=self.row, rows=self.rows or None)
         return FakeResult()
 
 
@@ -61,6 +66,11 @@ def _record(**overrides):
         "thesis": "趋势延续", "anchor_timeframe": "1d", "anchor_time": "2026-07-10", "anchor_price": 103.0,
         "entry_type": "limit", "entry": 104.0, "stop": 99.0, "target1": 114.0,
         "target2": None, "invalidation_price": 98.0, "range_low": None, "range_high": None,
+        "scenarios": [
+            {"name": "延续", "probability": 60, "invalidation": "跌破止损"},
+            {"name": "失败", "probability": 40, "invalidation": "突破目标"},
+        ],
+        "report_id": None,
         "status": "waiting", "created_at": datetime(2026, 7, 11, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 7, 11, tzinfo=timezone.utc),
     }
@@ -76,6 +86,7 @@ def test_store_schema_is_postgres_and_has_composite_tenant_constraint():
     assert "agent_predictions" in schema_sql
     assert "UNIQUE(id, user_id)" in schema_sql
     assert "TIMESTAMPTZ" in schema_sql
+    assert "scenarios JSONB" in schema_sql
 
 
 def test_get_always_filters_by_prediction_id_and_user_id():
@@ -87,6 +98,57 @@ def test_get_always_filters_by_prediction_id_and_user_id():
     assert "id = CAST(:id AS uuid) AND user_id = :user_id" in select_sql
     assert params == {"id": "pred-1", "user_id": "alice"}
     assert result and result.user_id == "alice"
+
+
+def test_latest_and_history_queries_are_tenant_agent_and_ticker_scoped():
+    engine = FakeEngine()
+    engine.conn.rows = [_record(id="00000000-0000-0000-0000-000000000001")]
+    store = AgentPredictionStore(engine=engine)
+
+    latest = store.latest_predictions(ticker="aapl", user_id="alice", limit_per_agent=1)
+    latest_sql, latest_params = [
+        call for call in engine.conn.calls if "ROW_NUMBER()" in call[0]
+    ][-1]
+    assert "user_id = :user_id AND symbol = :symbol" in latest_sql
+    assert latest_params == {"user_id": "alice", "symbol": "AAPL", "limit_per_agent": 1}
+    assert latest[0]["agent"] == "technical_agent"
+
+    history = store.prediction_history(
+        agent="technical_agent", ticker="AAPL", user_id="alice", limit=5,
+    )
+    history_sql, history_params = [
+        call for call in engine.conn.calls if "agent = :agent" in call[0]
+    ][-1]
+    assert "user_id = :user_id AND agent = :agent AND symbol = :symbol" in history_sql
+    assert history_params == {
+        "user_id": "alice", "agent": "technical_agent", "symbol": "AAPL", "limit": 5,
+    }
+    assert history[0]["symbol"] == "AAPL"
+
+
+def test_latest_and_history_reject_public_identity_without_querying():
+    engine = FakeEngine()
+    store = AgentPredictionStore(engine=engine)
+    assert store.latest_predictions(ticker="AAPL", user_id="public") == []
+    assert store.prediction_history(agent="technical_agent", ticker="AAPL", user_id="public") == []
+    assert engine.conn.calls == []
+
+
+def test_attach_report_is_tenant_scoped():
+    engine = FakeEngine()
+    store = AgentPredictionStore(engine=engine)
+    assert store.attach_report(
+        "00000000-0000-0000-0000-000000000001",
+        user_id="alice",
+        report_id="rpt-1",
+    )
+    update_sql, params = [call for call in engine.conn.calls if call[0].lstrip().upper().startswith("UPDATE")][-1]
+    assert "id = CAST(:id AS uuid) AND user_id = :user_id" in update_sql
+    assert params == {
+        "report_id": "rpt-1",
+        "id": "00000000-0000-0000-0000-000000000001",
+        "user_id": "alice",
+    }
 
 
 def test_store_fails_closed_without_postgres():

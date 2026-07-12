@@ -417,6 +417,7 @@ async def run_graph_pipeline(
 
             graph_ui_context = dict(ui_context or {})
             graph_ui_context.setdefault("run_id", run_id_value)
+            graph_ui_context["__user_id"] = str(user_id or "public").strip() or "public"
 
             # P1-7: 报告缓存命中 → 直接回放，不跑图（零 LLM 成本）
             cache_ticker = _resolve_cache_ticker(graph_ui_context, output_mode)

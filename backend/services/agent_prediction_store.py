@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import json
 import threading
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import create_engine, text
 
@@ -29,6 +31,15 @@ class UnavailableAgentPredictionStore:
         raise PredictionStoreUnavailable(self.reason)
 
     def get_latest(self, *, user_id: str, symbol: str) -> AgentPrediction | None:
+        raise PredictionStoreUnavailable(self.reason)
+
+    def latest_predictions(self, *, ticker: str, user_id: str, limit_per_agent: int = 1) -> list[dict[str, Any]]:
+        raise PredictionStoreUnavailable(self.reason)
+
+    def prediction_history(self, *, agent: str, ticker: str, user_id: str, limit: int = 5) -> list[dict[str, Any]]:
+        raise PredictionStoreUnavailable(self.reason)
+
+    def attach_report(self, prediction_id: str, *, user_id: str, report_id: str) -> bool:
         raise PredictionStoreUnavailable(self.reason)
 
 
@@ -58,7 +69,8 @@ class AgentPredictionStore:
                     "anchor_timeframe TEXT NOT NULL, anchor_time TEXT NOT NULL, anchor_price DOUBLE PRECISION NOT NULL, "
                     "entry_type TEXT NULL, entry DOUBLE PRECISION NULL, stop DOUBLE PRECISION NULL, "
                     "target1 DOUBLE PRECISION NULL, target2 DOUBLE PRECISION NULL, invalidation_price DOUBLE PRECISION NULL, "
-                    "range_low DOUBLE PRECISION NULL, range_high DOUBLE PRECISION NULL, status TEXT NOT NULL, "
+                    "range_low DOUBLE PRECISION NULL, range_high DOUBLE PRECISION NULL, scenarios JSONB NOT NULL, "
+                    "report_id TEXT NULL, status TEXT NOT NULL, "
                     "created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, "
                     "PRIMARY KEY(id), UNIQUE(id, user_id))"
                 ))
@@ -70,8 +82,25 @@ class AgentPredictionStore:
                     "END IF; END $$"
                 ))
                 conn.execute(text(
+                    "ALTER TABLE agent_predictions ADD COLUMN IF NOT EXISTS scenarios JSONB NOT NULL "
+                    "DEFAULT '[{\"name\":\"历史记录：原始情景未归档\",\"probability\":50,"
+                    "\"invalidation\":\"该历史记录未包含结构化失效条件\"},"
+                    "{\"name\":\"历史记录：需重新评估\",\"probability\":50,"
+                    "\"invalidation\":\"生成新预测后替代该历史记录\"}]'::jsonb"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE agent_predictions ALTER COLUMN scenarios DROP DEFAULT"
+                ))
+                conn.execute(text(
+                    "ALTER TABLE agent_predictions ADD COLUMN IF NOT EXISTS report_id TEXT NULL"
+                ))
+                conn.execute(text(
                     "CREATE INDEX IF NOT EXISTS idx_agent_predictions_user_created "
                     "ON agent_predictions(user_id, created_at DESC)"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_agent_predictions_owner_ticker "
+                    "ON agent_predictions(user_id, symbol, created_at DESC)"
                 ))
             self._schema_ready = True
         return True
@@ -82,13 +111,20 @@ class AgentPredictionStore:
             "anchor_timeframe": prediction.anchor.timeframe,
             "anchor_time": prediction.anchor.time,
             "anchor_price": prediction.anchor.price,
+            "scenarios": json.dumps(
+                [item.model_dump(mode="json") for item in prediction.scenarios],
+                ensure_ascii=False,
+            ),
         }
         columns = (
             "id, user_id, run_id, symbol, agent, direction, confidence, thesis, "
             "anchor_timeframe, anchor_time, anchor_price, entry_type, entry, stop, target1, target2, "
-            "invalidation_price, range_low, range_high, status, created_at, updated_at"
+            "invalidation_price, range_low, range_high, scenarios, report_id, status, created_at, updated_at"
         )
-        values = ", ".join(f":{name.strip()}" for name in columns.split(","))
+        values = ", ".join(
+            "CAST(:scenarios AS jsonb)" if name.strip() == "scenarios" else f":{name.strip()}"
+            for name in columns.split(",")
+        )
         with self._engine.begin() as conn:
             conn.execute(text(f"INSERT INTO agent_predictions ({columns}) VALUES ({values})"), data)
         return prediction
@@ -105,13 +141,7 @@ class AgentPredictionStore:
             ).mappings().first()
         if row is None:
             return None
-        payload = dict(row)
-        payload["anchor"] = {
-            "timeframe": payload.pop("anchor_timeframe"),
-            "time": payload.pop("anchor_time"),
-            "price": payload.pop("anchor_price"),
-        }
-        return AgentPrediction.model_validate(payload)
+        return _prediction_from_row(row)
 
     def get_latest(self, *, user_id: str, symbol: str) -> AgentPrediction | None:
         normalized_user = str(user_id or "").strip()
@@ -126,13 +156,98 @@ class AgentPredictionStore:
             ), {"user_id": normalized_user, "symbol": normalized_symbol}).mappings().first()
         if row is None:
             return None
-        payload = dict(row)
-        payload["anchor"] = {
-            "timeframe": payload.pop("anchor_timeframe"),
-            "time": payload.pop("anchor_time"),
-            "price": payload.pop("anchor_price"),
-        }
-        return AgentPrediction.model_validate(payload)
+        return _prediction_from_row(row)
+
+    def latest_predictions(
+        self,
+        *,
+        ticker: str,
+        user_id: str,
+        limit_per_agent: int = 1,
+    ) -> list[dict[str, Any]]:
+        normalized_user = str(user_id or "").strip()
+        normalized_symbol = str(ticker or "").strip().upper()
+        safe_limit = max(1, min(20, int(limit_per_agent)))
+        if not normalized_user or normalized_user == "public" or not normalized_symbol:
+            return []
+        self.ensure_schema()
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT * FROM ("
+                "SELECT agent_predictions.*, ROW_NUMBER() OVER (PARTITION BY agent ORDER BY created_at DESC) AS agent_rank "
+                "FROM agent_predictions WHERE user_id = :user_id AND symbol = :symbol"
+                ") ranked WHERE agent_rank <= :limit_per_agent ORDER BY created_at DESC"
+            ), {
+                "user_id": normalized_user,
+                "symbol": normalized_symbol,
+                "limit_per_agent": safe_limit,
+            }).mappings().all()
+        return [
+            _prediction_from_row(row).model_dump(mode="json", exclude={"risk_reward"})
+            for row in rows
+        ]
+
+    def prediction_history(
+        self,
+        *,
+        agent: str,
+        ticker: str,
+        user_id: str,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        normalized_user = str(user_id or "").strip()
+        normalized_agent = str(agent or "").strip()
+        normalized_symbol = str(ticker or "").strip().upper()
+        safe_limit = max(1, min(50, int(limit)))
+        if not normalized_user or normalized_user == "public" or not normalized_agent or not normalized_symbol:
+            return []
+        self.ensure_schema()
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT * FROM agent_predictions "
+                "WHERE user_id = :user_id AND agent = :agent AND symbol = :symbol "
+                "ORDER BY created_at DESC LIMIT :limit"
+            ), {
+                "user_id": normalized_user,
+                "agent": normalized_agent,
+                "symbol": normalized_symbol,
+                "limit": safe_limit,
+            }).mappings().all()
+        return [
+            _prediction_from_row(row).model_dump(mode="json", exclude={"risk_reward"})
+            for row in rows
+        ]
+
+    def attach_report(self, prediction_id: str, *, user_id: str, report_id: str) -> bool:
+        normalized_user = str(user_id or "").strip()
+        normalized_report = str(report_id or "").strip()
+        if not normalized_user or normalized_user == "public" or not normalized_report:
+            return False
+        self.ensure_schema()
+        with self._engine.begin() as conn:
+            result = conn.execute(text(
+                "UPDATE agent_predictions SET report_id = :report_id, updated_at = now() "
+                "WHERE id = CAST(:id AS uuid) AND user_id = :user_id"
+            ), {
+                "report_id": normalized_report,
+                "id": str(prediction_id),
+                "user_id": normalized_user,
+            })
+        return bool(getattr(result, "rowcount", 0))
+
+
+def _prediction_from_row(row: Any) -> AgentPrediction:
+    payload = dict(row)
+    payload.pop("agent_rank", None)
+    scenarios = payload.get("scenarios")
+    if isinstance(scenarios, str):
+        payload["scenarios"] = json.loads(scenarios)
+    payload["anchor"] = {
+        "timeframe": payload.pop("anchor_timeframe"),
+        "time": payload.pop("anchor_time"),
+        "price": payload.pop("anchor_price"),
+    }
+    return AgentPrediction.model_validate(payload)
 
 
 def _resolve_dsn() -> str:
@@ -168,7 +283,46 @@ def reset_agent_prediction_store_cache() -> None:
         _store = None
 
 
+def record_prediction(
+    *,
+    prediction: AgentPrediction,
+    user_id: str,
+    run_id: str,
+    report_id: str | None,
+) -> UUID:
+    """用服务端身份/运行信息归档已通过 submit_prediction 校验的观点。"""
+    normalized_user = str(user_id or "").strip()
+    normalized_run = str(run_id or "").strip()
+    if not normalized_user or normalized_user == "public" or not normalized_run:
+        raise ValueError("prediction 归档需要已鉴权用户和 run_id")
+    trusted = prediction.model_copy(update={
+        "user_id": normalized_user,
+        "run_id": normalized_run,
+        "report_id": str(report_id or "").strip() or None,
+    })
+    saved = get_agent_prediction_store().create(trusted)
+    return UUID(str(saved.id))
+
+
+def latest_predictions(*, ticker: str, user_id: str, limit_per_agent: int = 1) -> list[dict[str, Any]]:
+    return get_agent_prediction_store().latest_predictions(
+        ticker=ticker,
+        user_id=user_id,
+        limit_per_agent=limit_per_agent,
+    )
+
+
+def prediction_history(*, agent: str, ticker: str, user_id: str, limit: int = 5) -> list[dict[str, Any]]:
+    return get_agent_prediction_store().prediction_history(
+        agent=agent,
+        ticker=ticker,
+        user_id=user_id,
+        limit=limit,
+    )
+
+
 __all__ = [
     "AgentPredictionStore", "PredictionStoreUnavailable", "UnavailableAgentPredictionStore",
-    "get_agent_prediction_store", "reset_agent_prediction_store_cache",
+    "get_agent_prediction_store", "latest_predictions", "prediction_history", "record_prediction",
+    "reset_agent_prediction_store_cache",
 ]

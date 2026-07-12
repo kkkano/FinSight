@@ -29,6 +29,14 @@ class PredictionAnchor(BaseModel):
     price: float = Field(gt=0, allow_inf_nan=False)
 
 
+class PredictionScenario(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80)
+    probability: int = Field(ge=0, le=100)
+    invalidation: str = Field(min_length=1, max_length=200)
+
+
 class PredictionDraft(BaseModel):
     """模型可提交字段的白名单；任何行情数组或服务端身份字段都会被拒绝。"""
 
@@ -38,7 +46,7 @@ class PredictionDraft(BaseModel):
     agent: str = Field(min_length=1, max_length=64)
     direction: Direction
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
-    thesis: str = Field(min_length=1, max_length=4000)
+    thesis: str = Field(min_length=1, max_length=400)
     anchor: PredictionAnchor
     entry_type: EntryType | None = None
     entry: float | None = Field(default=None, gt=0, allow_inf_nan=False)
@@ -48,9 +56,13 @@ class PredictionDraft(BaseModel):
     invalidation_price: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     range_low: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     range_high: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    scenarios: list[PredictionScenario] = Field(min_length=2, max_length=4)
 
     @model_validator(mode="after")
     def validate_direction_fields(self) -> "PredictionDraft":
+        probability_total = sum(item.probability for item in self.scenarios)
+        if not 90 <= probability_total <= 110:
+            raise ValueError("prediction scenarios 概率和必须在 90-110 之间")
         directional_values = (self.entry, self.stop, self.target1, self.invalidation_price)
         if self.direction == "neutral":
             if any(value is not None for value in (*directional_values, self.target2, self.entry_type)):
@@ -102,6 +114,7 @@ class AgentPrediction(PredictionDraft):
     id: str = Field(min_length=1, max_length=64)
     user_id: str = Field(min_length=1, max_length=256)
     run_id: str = Field(min_length=1, max_length=256)
+    report_id: str | None = Field(default=None, max_length=256)
     status: PredictionStatus = "waiting"
     created_at: datetime
     updated_at: datetime
@@ -118,5 +131,5 @@ class PredictionEvaluation(BaseModel):
 
 __all__ = [
     "AgentPrediction", "Direction", "EntryType", "PredictionAnchor", "PredictionDraft",
-    "PredictionEvaluation", "PredictionStatus",
+    "PredictionEvaluation", "PredictionScenario", "PredictionStatus",
 ]

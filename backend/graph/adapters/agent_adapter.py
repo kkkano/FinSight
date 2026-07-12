@@ -286,6 +286,41 @@ def brief_from_inputs(
     )
 
 
+def _prediction_memory_context(*, user_id: str, agent: str, ticker: str) -> str:
+    normalized_user = str(user_id or "").strip()
+    normalized_agent = str(agent or "").strip()
+    normalized_ticker = str(ticker or "").strip().upper()
+    if not normalized_user or normalized_user == "public" or not normalized_agent or not normalized_ticker:
+        return ""
+    try:
+        from backend.services.agent_prediction_store import get_agent_prediction_store
+
+        rows = get_agent_prediction_store().prediction_history(
+            agent=normalized_agent,
+            ticker=normalized_ticker,
+            user_id=normalized_user,
+            limit=1,
+        )
+    except Exception:
+        logger.debug("agent prediction memory unavailable", exc_info=True)
+        return ""
+    if not rows or not isinstance(rows[0], dict):
+        return ""
+    row = rows[0]
+    anchor = row.get("anchor") if isinstance(row.get("anchor"), dict) else {}
+    thesis = " ".join(str(row.get("thesis") or "").split())[:60]
+    direction = str(row.get("direction") or "unknown")
+    anchor_time = str(anchor.get("time") or "未知时间")
+    anchor_price = anchor.get("price")
+    levels = f"{row.get('entry')}/{row.get('stop')}/{row.get('target1')}"
+    outcome = str(row.get("status") or "waiting")
+    return (
+        f"你上次({anchor_time})对{normalized_ticker}判断 {direction}：{thesis}；"
+        f"锚点 {anchor_price}，entry/stop/T1={levels}，当前 outcome={outcome}。"
+        "历史观点只作上下文，不得自动继承为本轮结论。"
+    )
+
+
 def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, Any]) -> dict[str, Any]:
     """
     Build best-effort invokers for legacy specialist agents.
@@ -341,6 +376,9 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
         else ""
     )
     default_query = str(state.get("query") or "").strip()
+    ui_context = state.get("ui_context") if isinstance(state, Mapping) else {}
+    ui_context = ui_context if isinstance(ui_context, dict) else {}
+    authenticated_user_id = str(ui_context.get("__user_id") or "").strip()
 
     policy = state.get("policy") if isinstance(state, Mapping) else {}
     policy = policy if isinstance(policy, dict) else {}
@@ -437,6 +475,15 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                         default_ticker=default_ticker,
                         output_mode=str(state.get("output_mode") or "chat"),
                     )
+                    memory_context = _prediction_memory_context(
+                        user_id=authenticated_user_id,
+                        agent=_name,
+                        ticker=ticker,
+                    )
+                    if memory_context:
+                        brief.context_digest = "\n".join(
+                            item for item in (memory_context, brief.context_digest) if item
+                        )
                     use_brief = agent_settings().brief_enabled
                     result = await asyncio.wait_for(
                         _agent.research(query=query or "N/A", ticker=ticker, brief=brief if use_brief else None),

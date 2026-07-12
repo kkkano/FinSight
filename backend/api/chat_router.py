@@ -159,6 +159,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
             ui_context = deps.build_ui_context(request)
             ui_context = _attach_session_history(ui_context, deps.get_session_context(thread_id))
+            ui_context["__user_id"] = user_id
 
             output_mode = None
             strict_selection = None
@@ -326,6 +327,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
         trace_raw_enabled = deps.resolve_trace_raw_enabled(request)
         ui_context = deps.build_ui_context(request)
         ui_context = _attach_session_history(ui_context, deps.get_session_context(thread_id))
+        ui_context["__user_id"] = user_id
 
         output_mode = None
         strict_selection = None

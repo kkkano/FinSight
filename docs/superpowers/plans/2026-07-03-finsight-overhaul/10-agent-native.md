@@ -142,13 +142,13 @@ LIMITS = {"max_dynamic_steps_per_run": 2}
 - Test: `backend/tests/test_prediction_contract.py`、`backend/tests/test_agent_prediction_store.py`
 - Modify: `backend/graph/report_builder.py`（报告落库时同步写已校验观点）、`backend/graph/adapters/agent_adapter.py`（AgentBrief.context_digest 注入历史观点）
 
-**Pydantic 合同（行情与判断分离）:**
+**Pydantic 合同（行情与判断分离）:** 以下在 09 D-0 的既有 `PredictionDraft → AgentPrediction` 单一合同上扩展。为保持已上线 overlay/逐 bar 计算兼容，锚点时间/价位及价位字段继续使用 D-0 的 ISO 字符串 + 有限正浮点表示；服务端身份、状态、`report_id` 仍只存在于 `AgentPrediction`。
 
 ```python
 class PredictionAnchor(BaseModel):
     timeframe: str
-    time: datetime
-    price: Decimal
+    time: str
+    price: float
 
 class PredictionScenario(BaseModel):
     name: str = Field(min_length=1, max_length=80)
@@ -163,13 +163,13 @@ class AgentPrediction(BaseModel):
     thesis: str = Field(min_length=1, max_length=400)
     anchor: PredictionAnchor
     entry_type: Literal["market", "limit", "stop"] | None = None
-    entry: Decimal | None = None
-    stop: Decimal | None = None
-    target1: Decimal | None = None
-    target2: Decimal | None = None
-    invalidation_price: Decimal | None = None
-    range_low: Decimal | None = None
-    range_high: Decimal | None = None
+    entry: float | None = None
+    stop: float | None = None
+    target1: float | None = None
+    target2: float | None = None
+    invalidation_price: float | None = None
+    range_low: float | None = None
+    range_high: float | None = None
     scenarios: list[PredictionScenario] = Field(min_length=2, max_length=4)
 ```
 
@@ -182,21 +182,21 @@ CREATE TABLE IF NOT EXISTS agent_predictions (
   id UUID PRIMARY KEY,
   user_id TEXT NOT NULL,
   agent TEXT NOT NULL,            -- "technical_agent"
-  ticker TEXT NOT NULL,
+  symbol TEXT NOT NULL,
   direction TEXT NOT NULL,        -- long | short | neutral
   confidence DOUBLE PRECISION NOT NULL,
   thesis TEXT NOT NULL,
-  timeframe TEXT NOT NULL,
-  anchor_time TIMESTAMPTZ NOT NULL,
-  anchor_price NUMERIC NOT NULL,
+  anchor_timeframe TEXT NOT NULL,
+  anchor_time TEXT NOT NULL,
+  anchor_price DOUBLE PRECISION NOT NULL,
   entry_type TEXT,
-  entry_price NUMERIC,
-  stop_price NUMERIC,
-  target1_price NUMERIC,
-  target2_price NUMERIC,
-  invalidation_price NUMERIC,
-  range_low NUMERIC,
-  range_high NUMERIC,
+  entry DOUBLE PRECISION,
+  stop DOUBLE PRECISION,
+  target1 DOUBLE PRECISION,
+  target2 DOUBLE PRECISION,
+  invalidation_price DOUBLE PRECISION,
+  range_low DOUBLE PRECISION,
+  range_high DOUBLE PRECISION,
   scenarios JSONB NOT NULL,
   report_id TEXT,
   run_id TEXT NOT NULL,
@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS agent_predictions (
   UNIQUE (id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_predictions_owner_ticker
-  ON agent_predictions(user_id, ticker, created_at DESC);
+  ON agent_predictions(user_id, symbol, created_at DESC);
 ```
 
 **接口:**
@@ -219,10 +219,10 @@ def prediction_history(*, agent: str, ticker: str, user_id: str,
                        limit: int = 5) -> list[dict]: ...
 ```
 
-- [ ] Step 1: 在 09 D-0 测试上扩展 scenarios/历史合同：long/short 缺 entry_type/entry/stop/target1/invalidation_price 拒绝；neutral 带 entry 或 range 不含 anchor 拒绝；scenario 概率和不在 90-110 拒绝。
+- [x] Step 1: 在 09 D-0 测试上扩展 scenarios/历史合同：long/short 缺 entry_type/entry/stop/target1/invalidation_price 拒绝；neutral 带 entry 或 range 不含 anchor 拒绝；scenario 概率和不在 90-110 拒绝。
 - [ ] Step 2: 用项目 PostgreSQL 连接/迁移机制实现 store；user_id 只从服务端身份传入，所有读写 SQL 必须同时约束 user_id。测试使用事务隔离的 PostgreSQL fixture，不以临时 SQLite 代替。
-- [ ] Step 3: 报告完成时仅归档通过 Task 5A 校验的 prediction；没有结构化 prediction 时保留原报告但不从 summary 关键词猜价位、不伪造 anchor，并记录 `prediction_missing` 诊断。
-- [ ] Step 4: 回忆注入——agent_adapter 构造 AgentBrief 时读取同 user/agent/ticker 最近一条 prediction，在 context_digest 前追加 `你上次({anchor_time})对{ticker}判断 {direction}：{thesis前60字}；锚点 {anchor_price}，entry/stop/T1={...}，当前 outcome={...}`。历史观点只作上下文，不自动继承为本轮结论。
+- [x] Step 3: 报告完成时仅归档通过 Task 5A 校验的 prediction；没有结构化 prediction 时保留原报告但不从 summary 关键词猜价位、不伪造 anchor，并记录 `prediction_missing` 诊断。
+- [x] Step 4: 回忆注入——agent_adapter 构造 AgentBrief 时读取同 user/agent/ticker 最近一条 prediction，在 context_digest 前追加 `你上次({anchor_time})对{ticker}判断 {direction}：{thesis前60字}；锚点 {anchor_price}，entry/stop/T1={...}，当前 outcome={...}`。历史观点只作上下文，不自动继承为本轮结论。
 - [ ] 验收: 每条可计分观点都有可信 anchor 与 entry/stop/target（neutral 为 range）；数据库无 `user_id='public'` 默认；AI payload 无法写入任何行情 series。
 - [ ] Commit: `feat(agents): postgres prediction ledger with trusted anchors and actionable levels`
 

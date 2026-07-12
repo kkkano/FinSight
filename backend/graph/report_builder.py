@@ -69,6 +69,56 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _archive_report_predictions(
+    *,
+    report_id: str,
+    user_id: str,
+    plan_steps: list[dict[str, Any]],
+    step_results: dict[str, Any],
+) -> dict[str, Any]:
+    """只关联 Agent step 已通过服务端校验并持久化的 prediction。"""
+    eligible_step_ids = {
+        str(step.get("id") or "")
+        for step in plan_steps
+        if isinstance(step, dict)
+        and str(step.get("kind") or "") == "agent"
+        and isinstance(step.get("inputs"), dict)
+        and step["inputs"].get("prediction_eligible") is True
+    }
+    prediction_ids: list[str] = []
+    for step_id in eligible_step_ids:
+        result = step_results.get(step_id)
+        output = result.get("output") if isinstance(result, dict) else None
+        prediction = output.get("prediction") if isinstance(output, dict) else None
+        prediction_id = str(prediction.get("id") or "").strip() if isinstance(prediction, dict) else ""
+        if prediction_id and prediction_id not in prediction_ids:
+            prediction_ids.append(prediction_id)
+
+    diagnostics = {
+        "eligible_steps": len(eligible_step_ids),
+        "archived": 0,
+        "prediction_ids": [],
+        "status": "not_eligible" if not eligible_step_ids else "prediction_missing",
+    }
+    normalized_user = str(user_id or "").strip()
+    if not prediction_ids or not normalized_user or normalized_user == "public":
+        return diagnostics
+    try:
+        from backend.services.agent_prediction_store import get_agent_prediction_store
+
+        store = get_agent_prediction_store()
+        for prediction_id in prediction_ids:
+            if store.attach_report(prediction_id, user_id=normalized_user, report_id=report_id):
+                diagnostics["archived"] += 1
+                diagnostics["prediction_ids"].append(prediction_id)
+    except Exception:
+        logger.warning("prediction report archive unavailable", exc_info=True)
+        diagnostics["status"] = "archive_unavailable"
+        return diagnostics
+    diagnostics["status"] = "archived" if diagnostics["archived"] else "prediction_missing"
+    return diagnostics
+
+
 # P2-1 护城河前置：幻觉洗涤可见化最大展示条数
 _FACT_CHECK_MAX_CLAIMS = 20
 
@@ -1762,6 +1812,12 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
 
     report_id = f"lg_{uuid.uuid4().hex[:10]}"
     run_id = _safe_str(ui_context.get("run_id") or state.get("run_id") or report_id).strip() or report_id
+    prediction_archive = _archive_report_predictions(
+        report_id=report_id,
+        user_id=_safe_str(ui_context.get("__user_id") or "").strip(),
+        plan_steps=plan_steps,
+        step_results=step_results,
+    )
     run_result = _collect_agent_run_result(
         run_id=run_id,
         session_id=thread_id,
@@ -1793,6 +1849,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
             "report_hints": report_hints,
             "grounding": grounding_stats,
             "verifier": verifier_result,
+            "prediction_archive": prediction_archive,
             "report_builder_input": {
                 "query": query,
                 "ticker_label": ticker_label,
@@ -1850,6 +1907,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if debate:
             meta["debate"] = debate
         meta["verifier"] = verifier_result
+        meta["prediction_archive"] = prediction_archive
         meta["run_id"] = run_id
         meta["run_result"] = run_result
         meta["chart_specs"] = run_result.get("chart_specs", [])

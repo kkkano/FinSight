@@ -21,6 +21,10 @@ def _long_payload() -> dict:
         "target1": 223.0,
         "target2": 229.0,
         "invalidation_price": 204.0,
+        "scenarios": [
+            {"name": "延续", "probability": 60, "invalidation": "跌破止损"},
+            {"name": "失败", "probability": 40, "invalidation": "突破目标"},
+        ],
     }
 
 
@@ -70,6 +74,10 @@ def test_neutral_requires_only_range_containing_anchor():
         "anchor": {"timeframe": "1d", "time": "2026-07-10", "price": 450.0},
         "range_low": 440.0,
         "range_high": 460.0,
+        "scenarios": [
+            {"name": "维持区间", "probability": 55, "invalidation": "收盘离开区间"},
+            {"name": "突破区间", "probability": 45, "invalidation": "继续维持区间"},
+        ],
     })
     assert neutral.range_low == 440.0
 
@@ -91,3 +99,13 @@ def test_anchor_requires_positive_finite_price():
     with pytest.raises(ValidationError):
         PredictionAnchor(timeframe="1d", time="2026-07-10", price=float("nan"))
 
+
+@pytest.mark.parametrize("probabilities", [[80, 40], [30, 30], [100]])
+def test_scenarios_require_two_to_four_items_and_probability_sum_near_100(probabilities: list[int]):
+    payload = _long_payload()
+    payload["scenarios"] = [
+        {"name": f"情景 {index}", "probability": probability, "invalidation": "条件失效"}
+        for index, probability in enumerate(probabilities, start=1)
+    ]
+    with pytest.raises(ValidationError):
+        PredictionDraft.model_validate(payload)

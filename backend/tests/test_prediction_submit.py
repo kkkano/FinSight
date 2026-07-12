@@ -24,6 +24,10 @@ def _draft(**overrides):
         "stop": 96.0,
         "target1": 111.0,
         "invalidation_price": 95.0,
+        "scenarios": [
+            {"name": "延续", "probability": 60, "invalidation": "跌破止损"},
+            {"name": "失败", "probability": 40, "invalidation": "突破目标"},
+        ],
     }
     payload.update(overrides)
     return payload

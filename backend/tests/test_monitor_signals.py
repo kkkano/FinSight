@@ -41,6 +41,10 @@ def _prediction(**overrides) -> AgentPrediction:
         "anchor": {"timeframe": "1d", "time": "2026-07-09", "price": 100.0},
         "entry_type": "stop", "entry": 105.0, "stop": 95.0, "target1": 120.0,
         "target2": 130.0, "invalidation_price": 94.0,
+        "scenarios": [
+            {"name": "延续", "probability": 60, "invalidation": "跌破止损"},
+            {"name": "失败", "probability": 40, "invalidation": "突破目标"},
+        ],
         "status": "waiting", "created_at": NOW, "updated_at": NOW,
     }
     data.update(overrides)
