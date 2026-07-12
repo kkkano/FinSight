@@ -172,7 +172,7 @@ type PredictionOverlay = {
 
 **证据:** 仅 RightPanel.tsx 引用；功能完好但可发现性≈0。
 **决定:** B-2 已把它接进 dashboard；此外给它一个全局快捷键。
-- [ ] CommandPalette 加一条命令「问 AI（带当前页面上下文）」；MiniChat 打开时读当前路由推断上下文（dashboard→symbol，workbench→无）。Commit: `feat(minichat): global ask-AI command with route context`
+- [x] CommandPalette 加一条命令「问 AI（带当前页面上下文）」；MiniChat 打开时读当前路由推断上下文（dashboard→symbol，workbench→无）。Commit: `feat(minichat): global ask-AI command with route context`
 
 ### C-3: CommandPalette —— 保留，可见性已由 08 Task 7 解决
 

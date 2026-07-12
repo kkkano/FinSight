@@ -1,18 +1,22 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { FC, KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Bot,
   Gauge,
   GitCompare,
   LayoutDashboard,
   MessageSquarePlus,
+  MessageCircleQuestion,
   Moon,
   Search,
   Sparkles,
   Sun,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useDashboardStore } from '../store/dashboardStore';
+import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
+import { getMiniChatRouteSymbol, routeSupportsMiniChat } from '../utils/miniChatRouteContext';
 import { Dialog } from './ui/Dialog';
 
 interface CommandAction {
@@ -31,7 +35,9 @@ interface CommandPaletteProps {
 
 export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { theme, setTheme, setDraft, currentTicker } = useStore();
+  const location = useLocation();
+  const { theme, setTheme, setDraft, currentTicker, setShowRightPanel } = useStore();
+  const activeAsset = useDashboardStore((state) => state.activeAsset);
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -47,6 +53,26 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         keywords: ['chat', 'new'],
         execute: () => {
           navigate('/chat');
+          onClose();
+        },
+      },
+      {
+        id: 'ask-ai-with-context',
+        label: '问 AI（带当前页面上下文）',
+        icon: MessageCircleQuestion,
+        keywords: ['ask', 'ai', 'context', '提问', '上下文'],
+        execute: () => {
+          const symbol = getMiniChatRouteSymbol(
+            location.pathname,
+            activeAsset?.symbol || currentTicker,
+          );
+          const tab = new URLSearchParams(location.search).get('tab');
+          setDraft(symbol ? buildDashboardAskAiDraft(symbol, tab) : '');
+          if (routeSupportsMiniChat(location.pathname)) {
+            setShowRightPanel(true);
+          } else {
+            navigate('/chat');
+          }
           onClose();
         },
       },
@@ -115,7 +141,18 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         },
       },
     ],
-    [navigate, onClose, theme, setTheme, setDraft, currentTicker],
+    [
+      activeAsset?.symbol,
+      currentTicker,
+      location.pathname,
+      location.search,
+      navigate,
+      onClose,
+      setDraft,
+      setShowRightPanel,
+      setTheme,
+      theme,
+    ],
   );
 
   const filteredActions = useMemo(() => {

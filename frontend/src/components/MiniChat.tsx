@@ -8,6 +8,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Send, Loader2, X, Paperclip, Square } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { apiClient, type ChatContext } from '../api/client';
@@ -21,6 +22,7 @@ import { SkillAutocomplete } from './SkillAutocomplete';
 import { useAgentMention, parseAgentMentions } from '../hooks/useAgentMention';
 import { AgentMention } from './AgentMention';
 import { buildMiniChatContext } from '../utils/miniChatContext';
+import { getMiniChatRouteSymbol } from '../utils/miniChatRouteContext';
 
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -59,6 +61,7 @@ const buildCancelledThinkingStep = () => ({
 });
 
 export const MiniChat: React.FC = () => {
+  const location = useLocation();
   // 共享主 Chat 的 messages（统一上下文）
   const {
     messages,
@@ -103,7 +106,10 @@ export const MiniChat: React.FC = () => {
   const streamControllerRef = useRef<AbortController | null>(null);
 
   // 当前 symbol（优先 dashboardStore，兜底 useStore）
-  const currentSymbol = activeAsset?.symbol || currentTicker || null;
+  const currentSymbol = getMiniChatRouteSymbol(
+    location.pathname,
+    activeAsset?.symbol || currentTicker,
+  );
   const canGenerateReport = Boolean(
     currentSymbol || activeSelections.length > 0 || hasActionableResearchInput(input),
   );
