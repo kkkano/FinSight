@@ -2,7 +2,7 @@
 
 感谢你对 FinSight 项目的关注。本文档描述了参与开发所需的环境配置、工作流规范与代码风格要求。
 
-更新时间：2026-05-25
+更新时间：2026-07-12
 
 ---
 
@@ -45,7 +45,7 @@ cp .env.server.example .env.server
 docker compose --env-file .env.server up -d --build
 # 前端: http://localhost:5173
 # 后端: http://localhost:8000
-# PostgreSQL: localhost:5432
+# PostgreSQL 默认仅在 Compose 内网可用
 ```
 
 ### 手动启动
@@ -264,7 +264,7 @@ cd frontend && pnpm test:e2e
 ```
 FinSight/
 ├── backend/
-│   ├── api/                    # FastAPI 路由（28 个路由模块）
+│   ├── api/                    # FastAPI API（当前注册 25 个 Router）
 │   │   ├── main.py             # 应用入口 + CORS + 生命周期
 │   │   ├── chat_router.py      # POST /api/chat（SSE 流式）
 │   │   ├── agent_router.py     # Agent 偏好设置 API
@@ -297,22 +297,25 @@ FinSight/
 │   │   ├── preference_timeouts.py # 用户超时偏好
 │   │   ├── event_bus.py        # 事件总线
 │   │   ├── trace.py            # 执行追踪
-│   │   └── nodes/              # 27 个管线节点
+│   │   ├── planning/           # 计划生成、依赖、角色与规则回退
+│   │   ├── policy/             # 能力、证据与安全约束
+│   │   ├── execution/          # 计划执行、证据管线与观测
+│   │   ├── synthesis/          # 叙事和晨报合成
+│   │   ├── renderers/          # 回答形态渲染
+│   │   └── nodes/              # 图节点适配入口
 │   │       ├── understand_request.py # 请求理解主节点（LLM router）
 │   │       ├── chat_respond.py      # 纯社交快速通道
-│   │       ├── conversation_router.py # 上下文路由
 │   │       ├── policy_gate.py       # 策略门控 + 证据最低依赖
-│   │       ├── planner_stub.py      # 契约驱动规划回退
-│   │       ├── chat_renderer.py     # 对话/对比渲染
+│   │       ├── planner.py           # LLM 规划 + 规则规划回退
+│   │       ├── render_node.py       # 渲染入口
 │   │       ├── synthesize.py        # 合成 + 冲突检测 + 幻觉洗涤
 │   │       ├── compare_gate.py      # 对比证据门控
-│   │       ├── execute_plan_stub.py # 计划执行
+│   │       ├── execute_plan_node.py # 计划执行入口
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py
 │   │       ├── prepare_context.py
 │   │       ├── alert_extractor.py / alert_action.py
 │   │       ├── confirmation_gate.py
-│   │       ├── planner.py          # LLM 规划器
 │   │       └── ...                 # resolve_subject/clarify 等兼容节点
 │   ├── agents/                 # 7 个研究智能体 + 基类
 │   │   ├── base_agent.py       # BaseFinancialAgent（反思循环 + configure_research）
@@ -365,7 +368,7 @@ FinSight/
 │   └── tests/                  # 后端测试
 ├── frontend/
 │   ├── src/
-│   │   ├── api/client.ts       # API 客户端 + SSE parseSSEStream
+│   │   ├── api/                # 领域 API 客户端、SSE 与 OpenAPI schema
 │   │   ├── store/              # Zustand 状态管理
 │   │   │   ├── useStore.ts     # 全局 Store（会话、认证）
 │   │   │   ├── dashboardStore.ts  # 仪表盘状态
@@ -442,5 +445,5 @@ FinSight/
 - [LangGraph 管线深度拆解](docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md)
 - [Agent 指南](docs/AGENTS_GUIDE.md)
 - [生产运维手册](docs/11_PRODUCTION_RUNBOOK.md)
-- [Dashboard 开发指南](docs/DASHBOARD_DEVELOPMENT_GUIDE.md)
+- [系统架构](docs/01_ARCHITECTURE.md)
 - [幻觉抑制](docs/HALLUCINATION_MITIGATION.md)

@@ -5,6 +5,18 @@
 
 ---
 
+## [Unreleased] - 文档事实源收敛与死代码清理
+
+### 变更
+
+- 重写中英文 README、系统架构、LangGraph 流程/深潜、Agent、RAG、设计规范和生产 Runbook，并同步当前 Mermaid。
+- 校准 FastAPI 25 个 Router、React/ECharts/Tailwind/Rolldown Vite 版本、PostgreSQL checkpointer、pgvector RAG 和三服务部署拓扑。
+- 将已完成 overhaul spec、历史 QA/发布证据、ADR、源笔记和被替代文档归档到 `docs/archive/2026-07-overhaul-closeout/`。
+- 删除从 `frontend/src/main.tsx` 生产入口不可达的旧 execution 面板、Phase Labs 页面、无效 barrel、独立 retry scope 及其测试。
+- 当前文档索引收敛到 `docs/DOCS_INDEX.md`；历史材料不再作为架构事实源。
+
+---
+
 ## [2.0.0-rc1] - 2026-07-12
 
 ### 新增

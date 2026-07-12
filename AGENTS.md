@@ -14,7 +14,7 @@
 
 - 先确认当前请求属于 planning、policy、execution、synthesis 或 rendering，再修改对应边界。
 - 不恢复已迁移的 `*_stub.py` 或旧节点实现；需要兼容时使用薄适配层。
-- 不把历史变更日志继续追加到本文件；历史说明见 `docs/agents-architecture-history.md`。
+- 不把历史变更日志继续追加到本文件；历史说明已归档到 `docs/archive/2026-07-overhaul-closeout/superseded/agents-architecture-history.md`。
 - 保留用户未提交改动，不执行无关格式化、批量重命名或顺手重构。
 - 面向人的注释、文档和日志使用中文；代码标识符使用英文。
 

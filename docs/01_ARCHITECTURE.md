@@ -1,492 +1,89 @@
-# FinSight 当前架构（代码对齐版）
+# FinSight 当前架构
 
-> 更新时间：2026-05-25
-> 适用分支：`main`
-> 主链实现：`backend/graph/runner.py`
+更新时间：2026-07-12
 
-> 2026-05-06 运行时事实：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见；普通聊天、追问、非金融边界、URL/文章分析、提醒、行情和报告请求都进入 `understand_request` 内部的 LLM conversation router。显式 `output_mode=investment_report`（报告按钮）或强报告 query（如深度投资报告 / deep report / filing document longform）进入报告模板；普通 chat/brief 不套报告结构。URL 读取通过 planner/agent 工具 `fetch_url_content`，不在请求理解层预抓取。若本文与代码冲突，以 `backend/graph/runner.py`、`backend/graph/nodes/understand_request.py` 和测试为准。
-> 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
-> 2026-05-10 增量：`understand_request` 现在写入 `ReplyContract`，将默认聊天、取证回答、报告生成拆成 `chat_answer / source_grounded_answer / report_generation` 三条 lane；`brief` 仅作为长度偏好保留。工具失败、403、rejected、empty、timeout 等只能进入 `artifacts.tool_diagnostics`，不能进入 `evidence_pool` 或被渲染为来源/结论。
-> 2026-05-11 验收：最终聊天 UX current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 `100/100 PASS`。这批用例覆盖连续上下文、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。
-> 2026-05-11 增量：`memory_context` 改为作用域化结构，区分 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；只有当前线程焦点/报告可绑定“刚才那份报告/第三点”等指代。前端偏好新增 `agent_preferences.timeoutSeconds`，`0` 使用系统默认，正数限制在 `30-1200s` 并应用到 chat/planner/synthesize/graph 执行预算。
-> 2026-05-24 增量：请求理解进入 evidence-first intent contract 模型。`conversation_router` 只负责定位与上下文绑定，router `task_hints` 在落任务前统一编译为 `intent_contract`；`operation` 降级为旧 planner/renderer 的兼容投影。新增 `external_entity_impact` facet，覆盖“上市公司 + 外部实体/主题 + 影响判断”类 query，例如“研究特斯拉会不会被 SpaceX 影响”，会产生 TSLA 的 `price_snapshot/news_context/risk_profile` 证据义务并投影为 `analyze_impact`。普通金融机制解释默认保持 direct；如果 router 给出宏观代理标的（如 `CL=F`）但 query 没有 current/latest/source/news/price 等取证要求，会在 planner 前被纠偏，不生成空研究任务。
-> 2026-05-25 增量：request-frame release gate 固化为生产默认：`FINSIGHT_INTENT_CONTRACT_MODE=enforce`、`FINSIGHT_CONTEXT_ROUTER_ENABLED=true`、`FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true`、`AGENT_LLM_ANALYZE_ENABLED=true`、`SEC_HOLDINGS_ENABLED=true`、`BASE_AGENT_MAX_REFLECTIONS=0`、`FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3`。机制解释的边界进一步收敛为“无实时取证诉求则 direct；具名当前宏观影响、估值排序、外部实体影响、持仓/内部人、回测、URL/新闻/来源请求则生成 evidence obligation 或 workflow action”。新增语义时应补 facet/evidence registry 与 coverage 测试，不应在 router 内按 query 文案穷举。
+## 1. 架构原则
 
-## 1. 系统总览
+FinSight 的聊天和研究主链路以 `backend/graph/runner.py` 为唯一图结构事实源。请求理解之后，职责按边界分离：
+
+- `backend/graph/planning/`：从请求合同生成计划、依赖、角色和执行策略。
+- `backend/graph/policy/`：在执行前约束能力、证据、安全和工具选择。
+- `backend/graph/execution/`：执行计划、采集工具/Agent 结果、构建证据与观测。
+- `backend/graph/synthesis/`：把结构化证据合成为叙事或晨报。
+- `backend/graph/renderers/`：按回答形态渲染，不重新推断意图。
+- `backend/agents/`：专项研究实现；公共身份与质量合同由 `AgentProfile` 复用。
+- `backend/rag/`：memory、working set、knowledge base 的摄取、检索和观测。
+
+旧 `*_stub.py` 节点已迁移，禁止恢复。兼容行为应通过薄适配层或规则规划器实现。
+
+## 2. 运行时总览
 
 ```mermaid
 flowchart LR
-  subgraph FE[Frontend]
-    CHAT_UI[Chat]
-    DASH_UI[Dashboard]
-    WB_UI[Workbench]
-    PREF_UI[Settings timeoutSeconds]
-  end
-
-  subgraph API[FastAPI]
-    CHAT_EP["/chat/supervisor*"]
-    EXEC_EP["/api/execute*"]
-    DASH_EP["/api/dashboard*"]
-    REPORT_EP["/api/reports/*"]
-    CONV_EP["/api/conversations/*"]
-    AGENT_PREF_EP["/api/agents/preferences"]
-  end
-
-  subgraph GRAPH[LangGraph Pipeline]
-    RUNNER[GraphRunner]
-    MEM_SCOPE[memory_scope.py]
-    NODES[StateGraph Nodes]
-    EXECUTOR[executor.py]
-    SYNTH[synthesize + render]
-  end
-
-  subgraph ANALYSIS[Execution Layer]
-    TA[tool_adapter]
-    AA[agent_adapter]
-    TOOLS[langchain_tools]
-    AGENTS[price/news/fundamental/technical/macro/risk/deep_search]
-  end
-
-  FE --> API
-  PREF_UI --> CHAT_EP
-  PREF_UI --> EXEC_EP
-  CHAT_EP --> RUNNER
-  EXEC_EP --> RUNNER
-  RUNNER --> MEM_SCOPE --> NODES --> EXECUTOR --> ANALYSIS --> SYNTH
-  DASH_EP --> FE
-  REPORT_EP --> FE
-  CONV_EP --> FE
-  AGENT_PREF_EP --> FE
+    WEB[React SPA] -->|HTTP / SSE| API[FastAPI · 25 routers]
+    API --> GRAPH[LangGraph]
+    GRAPH --> PLAN[planning]
+    PLAN --> POLICY[policy]
+    POLICY --> EXEC[execution]
+    EXEC --> AGENT[7 Agent Profiles]
+    EXEC --> SYN[synthesis]
+    SYN --> RENDER[renderers]
+    AGENT --> TOOL[tools / external providers]
+    EXEC <--> RAG[(pgvector RAG)]
+    GRAPH <--> CP[(PostgreSQL checkpointer)]
 ```
 
-## 2. LangGraph 主流程
+FastAPI 当前注册 25 个 router：system、user、watchlist、conversation、chat、market、subscription、alerts、screener、cn_market、backtest、config、report、research、task、tools、skills、agents、execution、dashboard、portfolio、attribution、monitor、rebalance、morning_brief。
+
+## 3. GraphState 与请求合同
+
+`GraphState` 承载本轮输入、会话上下文、请求理解结果、策略、计划、证据、产物、追踪和最终回复。关键规则：
+
+- 用户 query 明示的标的优先于 UI hint。
+- `understand_request` 生成结构化任务、请求帧和回复合同。
+- `policy_gate`、`planner`、`execute_plan` 和 renderer 消费结构化合同，不靠重复关键词猜测。
+- 工具失败、拒绝、空结果和超时进入 diagnostics，不得伪装成 evidence。
+- 取消信号贯穿 API、执行服务、图节点和 executor。
+
+## 4. 主路径
 
 ```mermaid
 flowchart TD
-  START --> build_initial_state
-  build_initial_state --> load_memory_context
-  load_memory_context --> memory_scope
-  memory_scope --> reset_turn_state
-  reset_turn_state --> prepare_context
-  prepare_context --> chat_respond
-  chat_respond -->|pure social| END
-  chat_respond -->|all other turns| understand_request
-  understand_request --> conversation_router
-  conversation_router -->|direct/out_of_scope/clarify| END
-  conversation_router -->|research/alert| task_projection
-  task_projection -->|alert| alert_extractor
-  task_projection -->|research| policy_gate
-  alert_extractor -->|valid| alert_action
-  alert_extractor -->|invalid| END
-  alert_action --> END
-  policy_gate --> planner
-  planner --> confirmation_gate
-  confirmation_gate --> execute_plan
-  execute_plan --> synthesize
-  synthesize --> render
-  render --> END
+    START --> build_initial_state --> reset_turn_state --> prepare_context --> chat_respond
+    chat_respond -->|pure social| END
+    chat_respond --> understand_request
+    understand_request -->|direct / clarify| END
+    understand_request -->|alert| alert_extractor --> alert_action --> END
+    understand_request --> policy_gate --> planner --> confirmation_gate
+    confirmation_gate -->|adjust| planner
+    confirmation_gate -->|cancel| END
+    confirmation_gate --> execute_plan --> research_debate --> synthesize --> render --> END
 ```
 
-### 2.1 请求理解（understand_request）
+`trim_history`、`summarize_history`、`normalize_ui_context`、`decide_output_mode` 仍注册以兼容历史调用，但当前主边从 `prepare_context` 直接进入 `chat_respond`。
 
-`understand_request` 是聊天前半段的语义事实源，一次性处理：
+## 5. 数据边界
 
-- 纯寒暄由 `chat_respond` 快速结束；其他直接回复、非金融边界和澄清由 LLM conversation router 自然生成，不走本地模板。
-- 公司、ticker、中文别名、index、commodity、macro、theme、selection、portfolio。
-- URL/网页/文章任务作为可规划的 `fetch_url_content` 工具步骤进入执行层。
-- 复合请求拆成 `tasks[]`，例如 `company/GOOGL/price` + `company/MSFT/fetch` + `macro/fact_check`。
-- 局部缺信息写入 `blocked_tasks[]`，例如缺持仓只阻塞 portfolio task，不阻塞公司/宏观任务。
-- 当前 query 明说的 ticker 优先于 UI `active_symbol`；UI 选择、MiniChat 当前标的和持仓只作为上下文候选。
-- 兼容投影：`subject` / `operation` 从 primary task 写入，保证旧 policy/planner/executor 可继续运行。
-- 结构化回复契约：写入 `reply_contract`，包含 lane、回答风格、长度偏好、上下文绑定、source constraints、citation policy 和续问目标。
-- 用户可见 trace：发出 `type="trace"`、`visibility="user"`、`stage="understanding"`。
+| 数据 | 当前生产存储 |
+|---|---|
+| LangGraph checkpoint | PostgreSQL |
+| RAG chunk / embedding / observability | PostgreSQL + pgvector，BGE-M3 1024 维 |
+| Agent 预测、结果与运行归档 | PostgreSQL |
+| Monitor page lease / comments | PostgreSQL |
+| 部分持仓、会话、报告及兼容业务数据 | 仍存在按用户隔离的 SQLite/JSON store |
 
-旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
+因此不能笼统声称“全部业务数据已迁移 PostgreSQL”。新增跨实例协调或高一致性数据应优先落 PostgreSQL；修改旧业务存储前必须先设计迁移与回滚。
 
-### 2.1.1 IntentContract（证据优先意图核心）
+## 6. 前端边界
 
-文件：`backend/graph/intent_contract.py`
+`frontend/src/App.tsx` 是页面路由事实源。当前入口包括 welcome、chat、workbench、cn-market、rag-inspector、cost-audit、screener、backtest、dashboard 和共享报告。`/phase-labs` 仅为兼容重定向。
 
-`IntentContract` 是当前请求分解的语义事实源。它从 query/frame 与 resolved tickers 编译出有限 facets、`required_evidence`、`render_intent` 和 `budget_profile`；下游仍看到 `operation`，但 `operation` 只是兼容投影，不再决定“应该研究什么”。
+后端合同变化必须同步：
 
-| 层 | 职责 | 示例 |
-|---|---|---|
-| Router / Resolution | 判断本轮路径、上下文来源、显式 ticker/selection、追问关系 | `direct_answer/research/clarify`、`context_binding`、`task_hints` |
-| Intent Contract / Decomposition | 从 frame 编译 facets 与证据义务 | `valuation`、`earnings`、`external_entity_impact` -> `required_evidence` |
-| Evidence Planner | 按 evidence kind 选择工具和 agent | `news_context` -> news tools + `news_agent`; `risk_profile` -> risk tools + `risk_agent` |
-| Legacy Projection | 为旧 policy/planner/renderer 保留 operation 字段 | `external_entity_impact` -> `analyze_impact`; `valuation compare` -> synthesis-only `compare` + per-ticker evidence |
+- `frontend/src/api/` 下的 API 客户端与 schema；
+- `frontend/src/types/` 和对应 store；
+- 单元测试，以及必要时的 Playwright 关键路径。
 
-当前闭集 evidence kind 包含价格、公司信息、盈利预期、基本面、技术面、新闻、风险、宏观、filing、performance comparison、持仓/内部人、期权、事件日历、电话会和文档上下文。新增证据类型必须先补 registry、planner 映射和 contract 层测试，不能只在 router 里加关键词。
+## 7. 部署边界
 
-Direct/research 边界：`why/how/can/机制是什么` 这类机制解释默认走 `chat_answer`，除非用户显式要求最新数据、新闻、来源、链接、当前价格、URL 或“研究/判断某上市公司是否受到外部实体影响”。这条边界在 `conversation_router._task_hints_require_execution` 前置纠偏，避免 LLM router 把宏观代理 ticker 当成必须执行的研究任务。
-
-当前 `ReplyContract` lane：
-
-| Lane | 触发 | 下游约束 |
-|---|---|---|
-| `chat_answer` | 普通解释、追问、纠偏、安全边界、明确“不要新闻/不要链接/直接说” | 不强制查新闻，不套报告结构，`citation_policy=none` |
-| `source_grounded_answer` | 明确要新闻/链接/引用/实时价格/URL/数据证据 | 规划取证工具；有可用来源则引用，没有则披露不可用 |
-| `report_generation` | 报告按钮、`output_mode=investment_report`、明确生成报告/研报、`deep report` / `filing document longform` 等强报告 query | 使用报告模板和报告级引用约束 |
-
-### 2.2 记忆作用域与连续对话边界
-
-`build_initial_state` 读取长期 JSON 记忆后，会通过 `backend/graph/memory_scope.py` 和 `backend/graph/store.py` 投影成四个明确字段：
-
-| 字段 | 作用 | 能否绑定当前追问 |
-|---|---|---|
-| `user_profile_memory` | 用户级偏好、风险偏好、自选列表等稳定信息 | 否，只能个性化 |
-| `historical_focus_memory` | 用户历史 `last_focus / last_report / recent_focuses` 兼容载荷 | 否，不能当成当前线程上下文 |
-| `current_thread_focus` | 当前 `thread_id` 下的最近主体、报告和焦点 | 是 |
-| `current_report` | 当前线程最后一份报告 artifact | 是 |
-
-因此 conversation router、planner prompt、synthesize prompt 只通过 helper 读取安全投影：普通“它/刚才/第三点”这类指代必须来自当前线程；用户其他会话的 `last_report` 不会混入当前线程。
-
-```mermaid
-flowchart LR
-  STORE[(data/memory/{user}.json)] --> LOAD[load_memory_context]
-  LOAD --> PROFILE[user_profile_memory]
-  LOAD --> HISTORY[historical_focus_memory]
-  LOAD --> THREAD[current_thread_focus by thread_id]
-  THREAD --> REPORT[current_report]
-  PROFILE --> PROMPT[prompt_memory_context]
-  THREAD --> PROMPT
-  REPORT --> PROMPT
-  HISTORY -. not current referent .-> AUDIT[history only]
-  PROMPT --> ROUTER[conversation_router / planner / synthesize]
-```
-
-### 2.3 用户可调超时
-
-前端 Settings 写入 `agent_preferences.timeoutSeconds` 并随 `ChatOptions` / execute payload 进入 `ui_context`。后端通过 `backend/graph/preference_timeouts.py` 统一校验：`0`、空值、`auto/default/system` 使用系统默认；正数按 `30-1200s` clamp。该偏好被 chat direct reply、planner、synthesize、agent adapter、同步 `/chat/supervisor` 和流式 `execution_service` 的整体执行超时读取。
-
-## 3. 规划与执行策略
-
-### 3.1 Policy Gate（入口约束）
-
-文件：`backend/graph/nodes/policy_gate.py`
-
-- 根据 `required_evidence` 优先生成 tool/agent allowlist；`subject_type + operation + output_mode` 作为兼容和预算信号
-- 支持用户覆盖：
-  - `agents_override`
-  - `budget_override`
-  - `analysis_depth`（`quick/report/deep_research`）
-  - `agent_preferences`
-- 在 `investment_report` 模式下，通过 `capability_registry` 做 agent 评分选择
-- 普通聊天若 `reply_contract.source_constraints.disallow_news=true`，会从 allowlist 移除新闻类工具，避免上一轮 research 惯性泄漏。
-
-### 3.2 Planner / Planner Stub
-
-文件：`backend/graph/nodes/planner.py`, `backend/graph/nodes/planner_stub.py`
-
-- `planner.py` 支持：
-  - `LANGGRAPH_PLANNER_MODE=stub|llm`
-  - A/B 变体与指标（`get_planner_ab_metrics`）
-  - LLM 解析失败回退 `planner_stub`
-  - JSON Schema 容错（2026-05-20）：`PlannerSchemaShapeError` + 自动重试 prompt，解析失败时二次修复
-  - `plan_ready` 事件携带 `agent_selection` 诊断——被跳过 Agent 附带原因、预算优先级排序（详见 `execution-event-contract.md`）
-  - 新闻引用兜底：当 plan 无新闻源时直接抓取文章，确保回复契约有可引用 URL
-  - 对话路由安全边界：`_query_requests_illicit_nonpublic_info` 拦截索取内幕/非公开信息的请求，阻止进入 research
-  - 执行闭环守卫（2026-05-21）：`direct_answer` 携带结构化可执行 `task_hints` 时会投射为 research；direct 回复层会清理“是否启动研究/进入研究链路”类二次确认话术，避免明确请求被反问绕圈。
-  - 显式执行 fast path（2026-05-21）：`investment_report` 与技术面 query 已有明确执行意图时不再等待会话路由 LLM，直接进入 research 任务投射。
-- `planner_stub.py` 已支持新工具关键词路由：
-  - `get_earnings_estimates`, `get_eps_revisions`
-  - `get_option_chain_metrics`
-  - `get_factor_exposure`, `run_portfolio_stress_test`
-  - `get_event_calendar`
-  - `score_news_source_reliability`
-- request-understanding tasks 路径的 `investment_report` 会补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、电话会 transcript 与报告 agent 步骤，不再只保留任务自身的价格/新闻/公司信息步骤。
-- `policy_gate.py` 对显式技术面任务在 chat 模式开放 `technical_agent`，planner 会和 `get_stock_price` / `get_technical_snapshot` 一起执行，避免技术面请求只输出工具摘要。
-- `base_agent.py` 对 Agent 内部 LLM 分析、gap detection 与 summary update 增加硬超时；长尾或失败时回退确定性摘要，避免单 Agent 阻塞整轮报告。
-- `technical_agent.py` 已将技术分析扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search 的共振证据；确定性摘要包含支撑/阻力、MA20 偏离和成交量相对均量，而不是单一 K 线判断。
-
-### 3.3 Executor
-
-文件：`backend/graph/executor.py`
-
-- 支持 `parallel_group` 并行执行
-- step 级缓存：`step_cache_key`
-- 支持 optional step 容错与 required step 中断
-- 统一事件输出：`step_start/step_done/step_error/tool_start/tool_end/agent_start/agent_done`
-- `execute_plan_stub` 从工具输出中构建 `evidence_pool` 前先执行 evidence gate；失败/拒绝/空结果/超时输出写入 `artifacts.tool_diagnostics` 的 `ToolError`，不进入 `EvidenceItem`。
-
-## 4. SSE 事件与前端消费链路
-
-```mermaid
-sequenceDiagram
-  participant UI as Frontend
-  participant ROUTER as chat_router/execution_router
-  participant PIPE as execution_service.run_graph_pipeline
-  participant EX as graph.executor
-
-  UI->>ROUTER: POST /chat/supervisor/stream or /api/execute
-  ROUTER->>PIPE: run_graph_pipeline(...)
-  PIPE->>EX: execute_plan(...)
-  EX-->>PIPE: step/tool/agent events
-  PIPE-->>ROUTER: structured SSE events
-  ROUTER-->>UI: SSE stream (token + thinking + done)
-```
-
-前端事件解析位置：`frontend/src/api/client.ts`
-
-取消语义：
-
-- 前端通过 `AbortController.abort()` 停止当前 SSE。
-- `backend/services/execution_service.py` 捕获取消后发送 `trace.stage="cancelled"` 和 `pipeline_stage.stage="cancelled"`。
-- `backend/graph/cancellation.py` 提供 context-scoped cancellation token，executor 与 agent adapter 在阶段边界检查 token，尽量停止后续 step/agent 输出。
-- 前端消息保留已收到 token、thinking steps 和“已停止生成，保留已完成的结果。”提示。
-
-## 4.1 会话生命周期链路
-
-```mermaid
-flowchart LR
-  RAIL[Conversation Rail] --> CREATE["POST /api/conversations"]
-  RAIL --> LIST["GET /api/conversations"]
-  RAIL --> GET["GET /api/conversations/{id}"]
-  RAIL --> PATCH["PATCH /api/conversations/{id}"]
-  RAIL --> DELETE["DELETE /api/conversations/{id}"]
-  CREATE --> STORE[conversation_store.json]
-  GET --> STORE
-  PATCH --> STORE
-  DELETE --> STORE
-  DELETE --> CTX[Clear session context]
-  DELETE --> RPT[Delete report/citation index rows]
-  DELETE --> RAG[Delete thread RAG collections]
-  DELETE --> OBS[Soft-delete RAG observability runs]
-```
-
-边界：
-
-- 前端 localStorage 仍是当前浏览器运行态的消息真相源。
-- 后端 `conversation_store` 保存 messages/title/pinned/archive snapshot，服务 list/get/patch/delete 和基础恢复。
-- 后端 conversation API 负责 thread context 隔离、服务端 snapshot 删除和 RAG/report/session 清理。
-- 下一阶段若要多设备同步，应迁移到数据库并增加用户级权限边界。
-
-## 5. Dashboard / Workbench 数据链路
-
-```mermaid
-flowchart LR
-  DSH[Dashboard Page] --> DS[useDashboardData]
-  DS --> DAPI["/api/dashboard"]
-  DSH --> INS[useDashboardInsights]
-  INS --> IAPI["/api/dashboard/insights"]
-  DAPI --> DATA_SERVICE[dashboard.data_service]
-  IAPI --> INS_ENGINE[dashboard.insights_engine]
-  INS_ENGINE --> DIGEST[Overview/Financial/Technical/News/Peers Digests]
-
-  WB[Workbench Page] --> TASK[TaskSection]
-  WB --> REPORT[ReportSection]
-  TASK --> EXEC["/api/execute"]
-  REPORT --> RINDEX["/api/reports/index"]
-```
-
-## 6. Agent/Tool 边界
-
-- Tool 只通过 `backend/graph/adapters/tool_adapter.py` 注入执行层
-- Agent 只通过 `backend/graph/adapters/agent_adapter.py` 注入执行层
-- Graph 节点不直接依赖具体 agent/tool 实现（降低耦合）
-
-详细矩阵见：`docs/AGENTS_GUIDE.md`
-
-## 7. 已知约束（当前版本）
-
-- `agent_preferences` 仍通过 `ui_context` 传递；其中 `timeoutSeconds` 已接入预算控制，后续可再显式化为 `GraphState` 字段
-- `confirmation_gate` 目前是 run 级中断，非逐 step 人工确认
-- `synthesize` 仍保留 `stub/llm` 双模式，需要按环境切换
-
----
-
-## 8. Phase I 增量链路（I1-I4）
-
-### 8.1 Execution SSE Event Flow（with `run_id`）
-
-```mermaid
-sequenceDiagram
-  participant FE as frontend/api/client.ts
-  participant API as /api/execute
-  participant SVC as execution_service
-  participant EX as graph.executor
-  participant UI as executionStore + AgentTimeline
-
-  FE->>API: POST /api/execute { run_id, session_id, ... }
-  API->>SVC: run_graph_pipeline(run_id=...)
-  SVC->>EX: execute_plan()
-  EX-->>SVC: step_start/tool_start/agent_start/...
-  SVC-->>API: stamped SSE events (run_id + session_id + schema_version)
-  API-->>FE: text/event-stream
-  FE-->>UI: onThinking/onRawEvent (runId filter)
-  UI-->>UI: append timeline (FIFO<=300), render AgentTimeline
-```
-
-### 8.2 Alert Scheduler -> Alert Feed -> Right Panel
-
-```mermaid
-flowchart LR
-  subgraph Scheduler
-    PRICE[PriceChangeScheduler]
-    NEWS[NewsAlertScheduler]
-    RISK[RiskAlertScheduler]
-  end
-
-  PRICE -->|record_alert_event| SUBS[(subscriptions.json)]
-  NEWS -->|record_alert_event| SUBS
-  RISK -->|record_alert_event| SUBS
-
-  SUBS --> FEED["GET /api/alerts/feed"]
-  FEED --> RP_HOOK[useRightPanelData]
-  RP_HOOK --> RP_TAB[RightPanelAlertsTab]
-  RP_TAB --> USER[事件列表 + 订阅配置 + 未读数]
-```
-
-### 8.3 Workbench 收口策略（2026-02-18）
-
-- `RightPanel` 自动切换规则：仅在 `activeRuns` 发生 `0->N` 时触发。
-- 若用户已手动锁定非 `execution` 标签页（`userPinnedTab`），不强制切换，改为 execution 标签脉冲提示。
-- `useRightPanelData` 对 Alerts 状态做类型化输出：
-  - 事件状态：`no_email | loading | error | no_events | ready`
-  - 订阅状态：`no_email | loading | error | no_subscriptions | ready`
-- 当前 Alerts 数据刷新模式仍为轮询（`60s`），后续可按需要演进到推送模型。
-
----
-
-## 9. P0-P2 增量链路（2026-02-26）
-
-### 9.1 ThinkingBubble 三层展示
-
-将程序员视角的 trace 事件转换为用户友好的三层展示：
-
-```mermaid
-flowchart LR
-    subgraph Backend
-        T[trace.py<br/>NODE_USER_MESSAGES] --> E[trace_emitter<br/>inject userMessage]
-        E --> S[SSE event stream]
-    end
-
-    subgraph Frontend
-        S --> STORE[executionStore<br/>buildTimelineEvent]
-        STORE --> M[userMessageMapper<br/>fallback]
-        M --> L1["Layer 1: ThinkingBubble<br/>打字机效果"]
-        STORE --> L2["Layer 2: AgentSummaryCards<br/>Agent 摘要卡片"]
-        STORE --> L3["Layer 3: ExecutionPanel<br/>详细时间线"]
-    end
-
-    style L1 fill:#4caf50,color:#fff
-    style L2 fill:#2196f3,color:#fff
-    style L3 fill:#9e9e9e,color:#fff
-```
-
-- `ThinkingBubble.tsx`：以打字机动画展示当前阶段的用户友好消息
-- `AgentSummaryCards.tsx`：Agent 完成研究后展示摘要卡片
-- `ExecutionPanel.tsx`：详细时间线，支持展开查看完整 trace
-
-### 9.2 晨报 Graph Pipeline 接入
-
-晨报操作通过独立的 `morning_brief_router` 入口接入 LangGraph Pipeline，使用确定性合成（零 LLM 成本）。**该路径不经过主聊天的 `prepare_context → understand_request`**，仍由兼容 `parse_operation` 节点做关键词解析；后续若把 morning_brief 收敛进 `understand_request` 的 task graph，这条独立路径会被替换为 `understanding.tasks[].operation == "morning_brief"`。
-
-```mermaid
-flowchart TD
-    ROUTER["morning_brief_router<br/>(独立入口，非主聊天链路)"] --> CACHE{"Cache 30min?"}
-    CACHE -->|Hit| RET[Return]
-    CACHE -->|Miss| GP["GraphRunner.ainvoke()"]
-    GP --> PARSE["parse_operation → morning_brief<br/>(legacy 兼容节点)"]
-    PARSE --> POLICY["policy_gate → whitelist"]
-    POLICY --> PLAN["planner_stub → per-ticker parallel"]
-    PLAN --> EXEC["execute_plan"]
-    EXEC --> SYNTH["synthesize → deterministic"]
-    SYNTH --> RENDER["render_stub → pass-through"]
-    GP -->|Failed| FALLBACK["Direct fetch fallback"]
-```
-
-- 关键词匹配：13 个中英文关键词，confidence=0.85
-- 工具白名单：`get_stock_price`, `get_company_news`, `get_current_datetime`
-- 合成模式：纯确定性（`_synthesize_morning_brief_data`），不调用 LLM
-
-### 9.3 调仓 LLM 增强（HC-2 独立路径）
-
-调仓引擎保持独立于 Graph Pipeline（HC-2 约束），新增 Agent-backed LLM 增强：
-
-```mermaid
-flowchart LR
-    ENGINE[RebalanceEngine] --> DIAG[diagnose]
-    DIAG --> SOLVE[constraint_solver]
-    SOLVE --> ENH{"LLM enhance?"}
-    ENH -->|Yes| AGENT[AgentBackedEnhancer<br/>news + info + LLM]
-    ENH -->|No| OUT[suggestion]
-    AGENT --> OUT
-
-    subgraph SSE["generate-stream endpoint"]
-        P1[init] --> P2[fetching_prices]
-        P2 --> P3[diagnosing]
-        P3 --> P4[generating]
-        P4 --> P5[result]
-    end
-```
-
-- `AgentBackedEnhancer`：并行获取新闻+公司信息，LLM 精调优先级和理由
-- SSE 流式端点：`POST /api/rebalance/suggestions/generate-stream`（6 阶段进度事件）
-- 安全回退：LLM 失败时返回原始 candidates，不丢失数据
-
----
-
-## 10. 执行追踪 Console 与 LLM Token 可观测（2026-05-31）
-
-主聊天 SSE 流此前未接入 `executionStore`，底部「执行指挥台」在 user/expert 模式下空白。本次重构把主聊天流接入现成的 `executionStore`，并新增并行泳道瀑布图与 LLM token 计量，使指挥台对齐真实执行链路。
-
-### 10.1 三模式指挥台与 SSE 接线
-
-`ChatInput` 在 SSE 生命周期各阶段调用 `executionStore` 的外部接口，把主聊天流喂入与 Workbench 共用的执行模型：
-
-| 阶段 | ChatInput 调用 | executionStore 行为 |
-|------|---------------|--------------------|
-| 首个事件 | `beginExternalExecution({runId, query, tickers, source:'chat', outputMode})` | 创建 `ExecutionRun`，runId 取自 SSE `run_id` |
-| 每个 thinking 事件 | `ingestExternalThinking(runId, step)` | 经 `pipelineReducer` 填充 plan/timeline/agents/decisions/stages |
-| token 流 | `ingestExternalToken(runId, content)` | 累加流式输出 |
-| 结束/错误/取消 | `completeExternalExecution({runId, status, report, meta})` | 收口 run，从 `meta.metrics` 提取 token 用量 |
-
-底部指挥台据 `mode` 渲染同一份 `ExecutionRun`：
-
-- `user`：阶段条（`PipelineStageBar`）+ agent 进度
-- `expert`：并行瀑布图 + 计划摘要（含预算优先级表）+ 决策流 + 统计（含 token/成本）
-- `dev`：`AgentLogPanel` 原始事件流（开发者调试）
-
-```mermaid
-sequenceDiagram
-  participant FE as ChatInput / api.client.ts
-  participant SVC as execution_service
-  participant STORE as executionStore (pipelineReducer)
-  participant PANEL as ExecutionPanel (user/expert/dev)
-
-  FE->>SVC: POST /chat/supervisor/stream
-  SVC-->>FE: SSE plan_ready / step_start / step_done / decision_note / done
-  FE->>STORE: beginExternalExecution(首个事件)
-  FE->>STORE: ingestExternalThinking(每个 thinking)
-  FE->>STORE: ingestExternalToken(token)
-  FE->>STORE: completeExternalExecution(done, meta.metrics)
-  STORE-->>PANEL: ExecutionRun (timeline/agents/budgetPriority/tokenUsage)
-  PANEL-->>PANEL: 按 mode 渲染 阶段条/瀑布/统计
-```
-
-### 10.2 并行泳道瀑布图（ParallelWaterfall）
-
-`frontend/src/components/execution/waterfallLayout.ts` 纯函数把 `run.timeline` 聚合成瀑布布局：
-
-- `extractWaterfallSteps`：按 `stepId` 配对 `step_start` / `step_done`，`startMs` 取开始时间，`durationMs` 取 `step_done.duration_ms`（精确）
-- `groupWaterfallLanes`：按 `parallel_group` 分泳道（无组归一为 `(serial)`），泳道与组内均按起点升序
-- `buildWaterfallLayout`：计算每个 bar 的 `left% ∝ (start−origin)`、`width% ∝ duration_ms`，并约束 `left+width ≤ 100`
-
-同组并行步骤起点对齐、bar 宽反映各自真实耗时，一眼看出并行结构与瓶颈。bar 配色（`colorMaps.ts`）：tool=amber、agent=violet、cached=emerald、error=red、skipped=slate。
-
-### 10.3 预算优先级诊断（budget_priority）
-
-`pipelineReducer` 解析 `plan_ready.agent_selection.budget_priority` 写入 `ExecutionRun.budgetPriority`，expert 计划摘要渲染为表（`BudgetPriorityItem`：`rank` / `effort` / `latency`），解释 Planner 为何按此顺序与预算选择 agent。
-
-### 10.4 LLM Token 计量
-
-后端在 LLM 统一入口埋点，经 SSE `done.metrics` 上送，前端展示：
-
-- `backend/services/llm_usage.py`：`TokenUsageAccumulator` 基于 `ContextVar`，`asyncio.create_task` 复制上下文 → 每个 run 天然隔离，无需 reset。提取逻辑兼容 LangChain 新版 `usage_metadata` 与旧版 `response_metadata.token_usage`。
-- 采集点：`llm_retry.ainvoke_with_rate_limit_retry`（统一入口）+ 4 处节点直接 `ainvoke`（`resolve_subject` ×1 / `conversation_router` ×3）调用 `record_llm_usage`。
-- `execution_service.run_graph_pipeline` 的 `done.metrics` 合并 `token_acc.summary()`：`total_prompt_tokens` / `total_completion_tokens` / `total_tokens` / `total_cost_usd` / `tokens_by_model`。
-- 前端 `completeExternalExecution` 把 `meta.metrics` 映射为 `ExecutionRun.tokenUsage`（`promptTokens` / `completionTokens` / `totalTokens` / `costUsd` / `llmCalls`），`ExecutionStats` 展示 token 总量与成本。
-- 单价经 `LLM_PRICING_JSON` 环境变量配置（每 1K token USD）；mimo-v2.5-pro 默认单价 0（仅显示 token 量，不显示成本）。
-
-> 事件协议字段详见 `docs/execution-event-contract.md`。
+Docker Compose 运行三项服务：PostgreSQL/pgvector、FastAPI/Uvicorn 后端、Nginx/React 前端。后端宿主端口只绑定 `127.0.0.1:8000`；前端映射 `5173:80`。生产操作以 [`11_PRODUCTION_RUNBOOK.md`](11_PRODUCTION_RUNBOOK.md) 为准。
