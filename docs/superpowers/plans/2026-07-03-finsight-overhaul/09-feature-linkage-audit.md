@@ -248,8 +248,8 @@ type PredictionOverlay = {
 ### C-12: thinking/ 与 execution/ 两套过程组件 —— 代码收编
 
 **证据:** `components/thinking/`（ThinkingProcess 等 5 件）与 `components/execution/`（17 件）都在展示"AI 在干嘛"，08 Task 5 已在 UI 层收敛为三层；本条处理代码层。
-- [ ] Step 1: `grep -rln "ThinkingProcess\|ThinkingUserView" frontend/src --include="*.tsx" | grep -v thinking/` 确认收敛后的引用面；把仍被引用的 thinking 组件迁入 `execution/`（同域合并），零引用的删除。
-- [ ] Commit: `refactor(execution): merge thinking/ components into execution/, drop unreferenced`
+- [x] Step 1: `grep -rln "ThinkingProcess\|ThinkingUserView" frontend/src --include="*.tsx" | grep -v thinking/` 确认收敛后的引用面；把仍被引用的 thinking 组件迁入 `execution/`（同域合并），零引用的删除。
+- [x] Commit: `refactor(execution): merge thinking/ components into execution/, drop unreferenced`
 
 ---
 

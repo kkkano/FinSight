@@ -12,7 +12,7 @@ import {
   parseSmartChartBlocks,
   resolveRealPriceChartRequest,
 } from './SmartChart';
-import { ThinkingProcess } from './thinking';
+import { ThinkingProcess } from './execution/ThinkingProcess';
 import { ReportView } from './report';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
