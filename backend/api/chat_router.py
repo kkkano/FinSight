@@ -239,6 +239,21 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                         thread_id,
                         audit_exc,
                     )
+                try:
+                    from backend.services.agent_run_archive import get_agent_run_archive
+
+                    get_agent_run_archive().archive_usage_summary(
+                        run_id=thread_id,
+                        user_id=token_acc.user_id,
+                        summary=token_acc.summary(),
+                        status="completed",
+                    )
+                except Exception as archive_exc:  # noqa: BLE001 — PostgreSQL 归档为旁路
+                    _logger.warning(
+                        "[chat/supervisor] agent run archive failed thread_id=%s: %s",
+                        thread_id,
+                        archive_exc,
+                    )
             markdown, state = _ensure_deliverable_markdown(state)
 
             report = None

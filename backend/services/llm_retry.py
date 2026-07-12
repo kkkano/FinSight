@@ -19,12 +19,14 @@ import asyncio
 import logging
 import random
 import re
+from time import perf_counter
 from typing import Any, Callable, Optional
 
 from backend.llm_config import report_llm_failure, report_llm_success
 from backend.services.llm_usage import (
     TokenBudgetExceededError,
     check_token_budget,
+    record_llm_attempt,
     record_llm_usage,
 )
 
@@ -143,9 +145,18 @@ async def ainvoke_with_rate_limit_retry(
 
     enabled = _env_bool("LLM_RATE_LIMIT_RETRY_ENABLED", True)
     if not enabled or max_attempts <= 1:
-        result = await llm.ainvoke(messages)
+        started = perf_counter()
+        model = getattr(llm, "model_name", None)
+        try:
+            result = await llm.ainvoke(messages)
+        except Exception:
+            record_llm_attempt(model=model, status="failed", duration_ms=int((perf_counter() - started) * 1000))
+            raise
         report_llm_success(llm)
-        record_llm_usage(result, getattr(llm, "model_name", None))
+        record_llm_usage(result, model, count_call=False)
+        record_llm_attempt(
+            model=model, status="success", duration_ms=int((perf_counter() - started) * 1000), response=result,
+        )
         return result
 
     acquire_fn = None
@@ -183,14 +194,24 @@ async def ainvoke_with_rate_limit_retry(
         try:
             # P1-5: 每次重试前也检查预算（重试循环本身也在消耗 token）
             check_token_budget()
+            started = perf_counter()
             result = await current_llm.ainvoke(messages)
             report_llm_success(current_llm)
-            record_llm_usage(result, getattr(current_llm, "model_name", None))
+            model = getattr(current_llm, "model_name", None)
+            record_llm_usage(result, model, count_call=False)
+            record_llm_attempt(
+                model=model, status="success", duration_ms=int((perf_counter() - started) * 1000), response=result,
+            )
             return result
         except TokenBudgetExceededError:
             raise  # 预算超限不重试，直接上抛
         except Exception as exc:
             last_exc = exc
+            record_llm_attempt(
+                model=getattr(current_llm, "model_name", None),
+                status="failed",
+                duration_ms=int((perf_counter() - started) * 1000),
+            )
             report_llm_failure(current_llm, exc)
 
             retryable = (

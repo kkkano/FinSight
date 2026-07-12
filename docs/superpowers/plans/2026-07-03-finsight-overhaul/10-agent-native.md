@@ -263,13 +263,13 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 
 **PostgreSQL 归档:** `agent_prediction_outcomes(prediction_id UUID, user_id TEXT, status TEXT, resolved_at TIMESTAMPTZ, pct_since_anchor DOUBLE PRECISION, resolution_reason TEXT, evaluated_through TIMESTAMPTZ, updated_at TIMESTAMPTZ, PRIMARY KEY(prediction_id, user_id), FOREIGN KEY(prediction_id,user_id) REFERENCES agent_predictions(id,user_id))`，索引 `(user_id, status, updated_at)`；`agent_run_archive(..., user_id TEXT, prediction_id UUID NULL, ..., FOREIGN KEY(prediction_id,user_id) REFERENCES agent_predictions(id,user_id))`，索引 `(user_id, agent, created_at)`。数据库层必须拒绝跨租户 prediction 关联；成本从现有 LLM usage/cost trace 归集，不再新建 agent SQLite 库。
 
-- [ ] Step 1: TDD 用固定 OHLC fixture 覆盖 waiting/triggered/hit_target/hit_stop/held_range/broke_range/invalidated/open，以及同 bar 双穿的保守判定；重复执行结果与数据库行完全一致。
-- [ ] Step 2: 实现纯函数 resolver + PostgreSQL upsert；日更调度批量评估未决 prediction，行情缺口只推进 `evaluated_through` 到最后可信 bar，不把缺数据判 miss。
-- [ ] Step 3: 把每次 agent/monitor commentator/analyst 调用的 token、成本、耗时、状态按 `run_id + agent + layer` 归档，并可关联 prediction_id；失败/校验重试同样记成本，避免只统计成功调用。
-- [ ] Step 4: `/api/agents` 增加 `track_record` 与 `cost_summary`：90 天 hits/misses/invalidated/hit_rate、样本数、最近评估时间，以及 7/30 天 tokens/cost/run_count。所有聚合限定当前 user；管理员全局聚合走独立权限端点。
-- [ ] Step 5: Agent 档案页展示方向分桶战绩与成本趋势；成本高但无有效 prediction 的 run 单独计为 `unscored_runs`，不粉饰命中率。
+- [x] Step 1: TDD 用固定 OHLC fixture 覆盖 waiting/triggered/hit_target/hit_stop/held_range/broke_range/invalidated/open，以及同 bar 双穿的保守判定；重复执行结果与数据库行完全一致。
+- [x] Step 2: 实现纯函数 resolver + PostgreSQL upsert；日更调度批量评估未决 prediction，行情缺口只推进 `evaluated_through` 到最后可信 bar，不把缺数据判 miss。
+- [x] Step 3: 把每次 agent/monitor commentator/analyst 调用的 token、成本、耗时、状态按 `run_id + agent + layer` 归档，并可关联 prediction_id；失败/校验重试同样记成本，避免只统计成功调用。
+- [x] Step 4: `/api/agents` 增加 `track_record` 与 `cost_summary`：90 天 hits/misses/invalidated/hit_rate、样本数、最近评估时间，以及 7/30 天 tokens/cost/run_count。所有聚合限定当前 user；管理员全局聚合走独立权限端点。
+- [x] Step 5: Agent 档案页展示方向分桶战绩与成本趋势；成本高但无有效 prediction 的 run 单独计为 `unscored_runs`，不粉饰命中率。
 - [ ] 验收: outcome resolver 在断网、无模型环境仍可全量运行；同 fixture 在任意时区/重复执行结果一致；用户只能看到自己的战绩与成本；数据库可从 prediction 追到 run/cost/outcome 完整链路。
-- [ ] Commit: `feat(agents): deterministic prediction outcomes with postgres track-record and cost archive`
+- [x] Commit: `feat(agents): deterministic prediction outcomes with postgres track-record and cost archive`
 
 ---
 

@@ -86,7 +86,17 @@ async def produce_monitor_comments(
     written = 0
     for trigger in triggers:
         try:
-            raw = await generate(_prompt(target, snapshot, trigger, prediction))
+            from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
+
+            attribution_token = set_llm_attribution(LLMAttribution(
+                agent=str(getattr(prediction, "agent", None) or "monitor_commentator"),
+                layer="monitor_commentator",
+                prediction_id=str(getattr(prediction, "id", "") or "").strip() or None,
+            ))
+            try:
+                raw = await generate(_prompt(target, snapshot, trigger, prediction))
+            finally:
+                reset_llm_attribution(attribution_token)
             draft = CommentDraft.model_validate(raw)
             if trigger.kind == "heartbeat" and draft.level != "info":
                 raise ValueError("heartbeat comment must be info")

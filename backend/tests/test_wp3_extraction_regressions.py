@@ -135,6 +135,8 @@ async def test_lifespan_runs_startup_and_shutdown_hooks(monkeypatch: pytest.Monk
         "RISK_ALERT_SCHEDULER_ENABLED",
         "HEALTH_PROBE_ENABLED",
         "MONITOR_SCAN_ENABLED",
+        "MONITOR_REALTIME_ENABLED",
+        "PREDICTION_OUTCOME_SCHEDULER_ENABLED",
         "RAG_OBSERVABILITY_RETENTION_ENABLED",
     ):
         monkeypatch.setenv(key, "false")

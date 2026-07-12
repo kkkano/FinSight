@@ -19,11 +19,19 @@ from __future__ import annotations
 import contextvars
 import json
 import os
+from dataclasses import dataclass
 from typing import Any
 
 # ---------------------------------------------------------------------------
 # Accumulator
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LLMAttribution:
+    agent: str
+    layer: str
+    prediction_id: str | None = None
 
 
 class TokenUsageAccumulator:
@@ -34,8 +42,10 @@ class TokenUsageAccumulator:
         self.prompt_tokens: int = 0
         self.completion_tokens: int = 0
         self.call_count: int = 0
+        self.failed_call_count: int = 0
         # model -> {"prompt": int, "completion": int, "calls": int}
         self.by_model: dict[str, dict[str, int]] = {}
+        self.by_attribution: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
 
     def add(self, model: str | None, prompt: int, completion: int) -> None:
         self.prompt_tokens += prompt
@@ -46,6 +56,56 @@ class TokenUsageAccumulator:
         entry["prompt"] += prompt
         entry["completion"] += completion
         entry["calls"] += 1
+
+    def add_attributed_attempt(
+        self,
+        *,
+        model: str | None,
+        status: str,
+        duration_ms: int,
+        prompt: int = 0,
+        completion: int = 0,
+        attribution: LLMAttribution | None = None,
+    ) -> None:
+        key_model = model or "unknown"
+        identity = attribution or LLMAttribution(agent="unattributed", layer="unknown")
+        key = (identity.agent, identity.layer, identity.prediction_id, key_model)
+        entry = self.by_attribution.setdefault(key, {
+            "agent": identity.agent,
+            "layer": identity.layer,
+            "prediction_id": identity.prediction_id,
+            "model": key_model,
+            "prompt": 0,
+            "completion": 0,
+            "calls": 0,
+            "failed_calls": 0,
+            "duration_ms": 0,
+        })
+        entry["prompt"] += max(0, int(prompt))
+        entry["completion"] += max(0, int(completion))
+        entry["calls"] += 1
+        entry["failed_calls"] += int(status != "success")
+        entry["duration_ms"] += max(0, int(duration_ms))
+        self.failed_call_count += int(status != "success")
+
+    def bind_prediction(self, *, agent: str, prediction_id: str) -> None:
+        """提交成功后，把本 Agent 本 run 尚未关联的调用层绑定到该 prediction。"""
+        normalized_id = str(prediction_id or "").strip()
+        if not normalized_id:
+            return
+        for key in list(self.by_attribution):
+            key_agent, layer, current_prediction_id, model = key
+            if key_agent != agent or current_prediction_id is not None:
+                continue
+            source = self.by_attribution.pop(key)
+            target_key = (key_agent, layer, normalized_id, model)
+            target = self.by_attribution.get(target_key)
+            source["prediction_id"] = normalized_id
+            if target is None:
+                self.by_attribution[target_key] = source
+                continue
+            for field in ("prompt", "completion", "calls", "failed_calls", "duration_ms"):
+                target[field] += source[field]
 
     @property
     def total_tokens(self) -> int:
@@ -58,13 +118,18 @@ class TokenUsageAccumulator:
             "total_completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "llm_token_calls": self.call_count,
+            "failed_llm_calls": self.failed_call_count,
             "total_cost_usd": round(cost, 6) if cost else 0.0,
             "tokens_by_model": self.by_model,
+            "usage_by_attribution": list(self.by_attribution.values()),
         }
 
 
 _ACC: contextvars.ContextVar[TokenUsageAccumulator | None] = contextvars.ContextVar(
     "_LLM_TOKEN_ACC", default=None
+)
+_ATTRIBUTION: contextvars.ContextVar[LLMAttribution | None] = contextvars.ContextVar(
+    "_LLM_ATTRIBUTION", default=None
 )
 
 
@@ -81,6 +146,27 @@ def reset_token_accumulator(token: contextvars.Token) -> None:
 
 def get_token_accumulator() -> TokenUsageAccumulator | None:
     return _ACC.get()
+
+
+def set_llm_attribution(attribution: LLMAttribution) -> contextvars.Token:
+    return _ATTRIBUTION.set(attribution)
+
+
+def reset_llm_attribution(token: contextvars.Token) -> None:
+    try:
+        _ATTRIBUTION.reset(token)
+    except Exception:
+        return
+
+
+def get_llm_attribution() -> LLMAttribution | None:
+    return _ATTRIBUTION.get()
+
+
+def bind_current_llm_usage_prediction(*, agent: str, prediction_id: str) -> None:
+    acc = get_token_accumulator()
+    if acc is not None:
+        acc.bind_prediction(agent=agent, prediction_id=prediction_id)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +201,7 @@ def extract_token_usage(response: Any) -> tuple[int, int]:
     return 0, 0
 
 
-def record_llm_usage(response: Any, model: str | None = None) -> None:
+def record_llm_usage(response: Any, model: str | None = None, *, count_call: bool = True) -> None:
     """统一入口调用：提取 token 并累加到当前 run 的 accumulator（无 accumulator 时静默）。"""
     acc = get_token_accumulator()
     if acc is None:
@@ -124,8 +210,36 @@ def record_llm_usage(response: Any, model: str | None = None) -> None:
         prompt, completion = extract_token_usage(response)
         if prompt or completion:
             acc.add(model, prompt, completion)
+            if not count_call:
+                acc.call_count -= 1
+                acc.by_model[model or "unknown"]["calls"] -= 1
     except Exception:
         return
+
+
+def record_llm_attempt(
+    *,
+    model: str | None,
+    status: str,
+    duration_ms: int,
+    response: Any | None = None,
+) -> None:
+    """记录一次真正发往模型的调用；限流令牌等待不属于模型调用。"""
+    acc = get_token_accumulator()
+    if acc is None:
+        return
+    prompt, completion = extract_token_usage(response) if response is not None else (0, 0)
+    acc.call_count += 1
+    model_entry = acc.by_model.setdefault(model or "unknown", {"prompt": 0, "completion": 0, "calls": 0})
+    model_entry["calls"] += 1
+    acc.add_attributed_attempt(
+        model=model,
+        status=status,
+        duration_ms=duration_ms,
+        prompt=prompt,
+        completion=completion,
+        attribution=get_llm_attribution(),
+    )
 
 
 # ---------------------------------------------------------------------------

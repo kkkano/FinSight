@@ -30,6 +30,8 @@ _MAX_ROUNDS_DEFAULT = 3
 class AgentsRouterDeps:
     memory_service: Any
     get_prediction_store: Callable[[], Any] | None = None
+    get_outcome_store: Callable[[], Any] | None = None
+    get_run_archive: Callable[[], Any] | None = None
 
 
 def _default_preferences() -> dict[str, Any]:
@@ -112,10 +114,12 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
 
     @router.get("/api/agents")
     async def list_agents(
+        request: Request,
         query: str = Query("", description="按名称或描述子串过滤 agent"),
         limit: int = Query(20, description="最大条目数", ge=1, le=50),
     ) -> dict[str, Any]:
         q = str(query or "").strip().lower()
+        user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
         items: list[dict[str, Any]] = []
         for name in REPORT_AGENT_CANDIDATES:
             item_profile = profile(name)
@@ -128,6 +132,32 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
                 and q not in description.lower()
             ):
                 continue
+            track_record: dict[str, Any] = {
+                "hits": 0, "misses": 0, "invalidated": 0, "sample_count": 0,
+                "hit_rate": None, "sample_state": "样本不足", "latest_evaluated_at": None,
+                "by_direction": {},
+            }
+            cost_summary = {
+                "days_7": {"days": 7, "tokens": 0, "cost_usd": 0.0, "run_count": 0, "call_count": 0, "failed_call_count": 0, "unscored_runs": 0},
+                "days_30": {"days": 30, "tokens": 0, "cost_usd": 0.0, "run_count": 0, "call_count": 0, "failed_call_count": 0, "unscored_runs": 0},
+            }
+            if user_id and user_id != "public":
+                if deps.get_outcome_store is not None:
+                    try:
+                        track_record = deps.get_outcome_store().track_record(
+                            user_id=user_id, agent=name, days=90,
+                        )
+                    except Exception:
+                        pass
+                if deps.get_run_archive is not None:
+                    try:
+                        archive = deps.get_run_archive()
+                        cost_summary = {
+                            "days_7": archive.cost_summary(user_id=user_id, agent=name, days=7),
+                            "days_30": archive.cost_summary(user_id=user_id, agent=name, days=30),
+                        }
+                    except Exception:
+                        pass
             items.append({
                 "name": name,
                 "display_name": display_name,
@@ -136,6 +166,8 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
                 "color_token": item_profile.color_token,
                 "mandate": item_profile.mandate_zh,
                 "insert_text": f"@{name} ",
+                "track_record": track_record,
+                "cost_summary": cost_summary,
             })
             if len(items) >= limit:
                 break

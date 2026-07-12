@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
 """Tests for backend.services.llm_usage — token 提取 / 累加 / 成本估算。"""
 from backend.services.llm_usage import (
+    LLMAttribution,
     TokenUsageAccumulator,
+    bind_current_llm_usage_prediction,
     estimate_cost,
     extract_token_usage,
+    record_llm_attempt,
     record_llm_usage,
+    reset_llm_attribution,
+    reset_token_accumulator,
+    set_llm_attribution,
     set_token_accumulator,
 )
 
@@ -64,11 +70,37 @@ def test_accumulator_summary_aggregates():
 
 def test_record_llm_usage_with_accumulator():
     acc = TokenUsageAccumulator()
-    set_token_accumulator(acc)
+    token = set_token_accumulator(acc)
     record_llm_usage(_NewResp(), "gpt-4o")
     record_llm_usage(_EmptyResp(), "gpt-4o")  # 0 token 不增加 call
     assert acc.total_tokens == 150
     assert acc.call_count == 1
+    reset_token_accumulator(token)
+
+
+def test_attempts_are_attributed_and_failed_retry_has_no_fake_tokens():
+    acc = TokenUsageAccumulator(user_id="alice")
+    acc_token = set_token_accumulator(acc)
+    attr_token = set_llm_attribution(LLMAttribution(
+        agent="technical_agent", layer="prediction_submit",
+    ))
+    try:
+        record_llm_usage(_NewResp(), "gpt-4o", count_call=False)
+        record_llm_attempt(model="gpt-4o", status="success", duration_ms=12, response=_NewResp())
+        record_llm_attempt(model="gpt-4o", status="failed", duration_ms=8)
+        bind_current_llm_usage_prediction(agent="technical_agent", prediction_id="pred-1")
+    finally:
+        reset_llm_attribution(attr_token)
+        reset_token_accumulator(acc_token)
+    summary = acc.summary()
+    assert summary["llm_token_calls"] == 2
+    assert summary["failed_llm_calls"] == 1
+    row = summary["usage_by_attribution"][0]
+    assert row["agent"] == "technical_agent"
+    assert row["layer"] == "prediction_submit"
+    assert row["prediction_id"] == "pred-1"
+    assert row["prompt"] == 100 and row["completion"] == 50
+    assert row["calls"] == 2 and row["failed_calls"] == 1
 
 
 # --- cost -----------------------------------------------------------------

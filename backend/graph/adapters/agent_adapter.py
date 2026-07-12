@@ -394,6 +394,8 @@ async def _maybe_submit_prediction(
 
     async def _generate(feedback: list[dict[str, Any]] | None) -> dict[str, Any] | None:
         from langchain_core.messages import HumanMessage
+        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
 
         correction = (
             "\n上次提交未通过，必须逐项修正：\n" + json.dumps(feedback, ensure_ascii=False, default=str)
@@ -410,7 +412,18 @@ scenarios 必须 2-4 条，每条含 name/probability/invalidation，概率和�
 本轮摘要：{str(output.get('summary') or '')[:1600]}
 证据标题：{json.dumps(evidence_titles, ensure_ascii=False)}{correction}"""
         try:
-            response = await asyncio.wait_for(llm.ainvoke([HumanMessage(content=prompt)]), timeout=30.0)
+            attribution_token = set_llm_attribution(LLMAttribution(
+                agent=step_name, layer="prediction_submit",
+            ))
+            try:
+                response = await asyncio.wait_for(
+                    ainvoke_with_rate_limit_retry(
+                        llm, [HumanMessage(content=prompt)], max_attempts=2, agent_name=step_name,
+                    ),
+                    timeout=30.0,
+                )
+            finally:
+                reset_llm_attribution(attribution_token)
         except Exception:
             return None
         return prediction_json_from_llm_content(response)
@@ -434,6 +447,9 @@ scenarios 必须 2-4 条，每条含 name/probability/invalidation，概率和�
         "attempts": attempts,
     }
     if prediction is not None:
+        from backend.services.llm_usage import bind_current_llm_usage_prediction
+
+        bind_current_llm_usage_prediction(agent=step_name, prediction_id=prediction.id)
         output["prediction"] = prediction.model_dump(
             mode="json", exclude={"risk_reward", "user_id", "run_id"}
         )
@@ -585,6 +601,8 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                 if is_cancelled():
                     raise asyncio.CancelledError()
                 try:
+                    from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
+
                     invoke_timeout = (
                         deep_search_timeout_seconds if _name == "deep_search_agent" else timeout_seconds
                     )
@@ -604,10 +622,14 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                             item for item in (memory_context, brief.context_digest) if item
                         )
                     use_brief = agent_settings().brief_enabled
-                    result = await asyncio.wait_for(
-                        _agent.research(query=query or "N/A", ticker=ticker, brief=brief if use_brief else None),
-                        timeout=invoke_timeout,
-                    )
+                    attribution_token = set_llm_attribution(LLMAttribution(agent=_name, layer="research"))
+                    try:
+                        result = await asyncio.wait_for(
+                            _agent.research(query=query or "N/A", ticker=ticker, brief=brief if use_brief else None),
+                            timeout=invoke_timeout,
+                        )
+                    finally:
+                        reset_llm_attribution(attribution_token)
                     normalized = _normalize_agent_output(
                         step_name=_name,
                         output=result,

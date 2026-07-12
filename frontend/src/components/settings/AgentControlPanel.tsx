@@ -22,6 +22,31 @@ const AGENT_NAMES = [
 
 type AgentDepth = 'standard' | 'deep' | 'off';
 
+interface AgentStats {
+  track_record?: {
+    sample_count?: number;
+    hit_rate?: number | null;
+    sample_state?: string;
+    by_direction?: Record<string, { sample_count?: number; hit_rate?: number | null }>;
+  };
+  cost_summary?: {
+    days_7?: { tokens?: number; cost_usd?: number; run_count?: number; unscored_runs?: number };
+    days_30?: { tokens?: number; cost_usd?: number; run_count?: number; unscored_runs?: number };
+  };
+}
+
+function directionSummary(stats: AgentStats | undefined): string {
+  const buckets = stats?.track_record?.by_direction ?? {};
+  const labels: Record<string, string> = { long: '多', short: '空', neutral: '中性' };
+  const parts = ['long', 'short', 'neutral'].flatMap((direction) => {
+    const bucket = buckets[direction];
+    if (!bucket || !bucket.sample_count) return [];
+    const rate = typeof bucket.hit_rate === 'number' ? `${(bucket.hit_rate * 100).toFixed(0)}%` : '样本不足';
+    return [`${labels[direction]} ${rate}/${bucket.sample_count}`];
+  });
+  return parts.length ? parts.join(' · ') : '方向分桶暂无样本';
+}
+
 export interface AgentPreferences {
   agents: Record<string, AgentDepth>;
   maxRounds: number;
@@ -155,6 +180,7 @@ export const AgentControlPanel: React.FC = () => {
   const sessionId = useStore((state) => state.sessionId);
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
   const [prefs, setPrefs] = useState<AgentPreferences>(() => preferenceCache);
+  const [agentStats, setAgentStats] = useState<Record<string, AgentStats>>({});
 
   useEffect(() => {
     const localPrefs = loadPreferences();
@@ -179,6 +205,20 @@ export const AgentControlPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
+  }, [userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient.listAgents(undefined, 50).then((response) => {
+      if (cancelled || !response?.success || !Array.isArray(response.items)) return;
+      const next: Record<string, AgentStats> = {};
+      response.items.forEach((item) => {
+        const name = typeof item.name === 'string' ? item.name : '';
+        if (name) next[name] = item as AgentStats;
+      });
+      setAgentStats(next);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
   }, [userId]);
 
   const persist = useCallback(
@@ -280,9 +320,10 @@ export const AgentControlPanel: React.FC = () => {
 
       <div className="space-y-2 mb-4">
         {AGENT_NAMES.map(({ key, label }) => (
-          <div key={key} className="flex items-center justify-between gap-3">
-            <span className="text-xs text-fin-text min-w-20">{label}</span>
-            <div className="flex gap-1">
+          <div key={key} className="rounded-md border border-fin-border/70 p-2" data-testid={`agent-profile-${key}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-fin-text min-w-20">{label}</span>
+              <div className="flex gap-1">
               {DEPTH_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -297,6 +338,21 @@ export const AgentControlPanel: React.FC = () => {
                   {opt.label}
                 </button>
               ))}
+              </div>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-fin-muted">
+              <span>
+                90天 {typeof agentStats[key]?.track_record?.hit_rate === 'number'
+                  ? `命中率 ${(agentStats[key].track_record!.hit_rate! * 100).toFixed(0)}% / ${agentStats[key].track_record?.sample_count ?? 0} 样本`
+                  : '样本不足'}
+              </span>
+              <span>
+                7天 {agentStats[key]?.cost_summary?.days_7?.tokens ?? 0} tokens / {agentStats[key]?.cost_summary?.days_7?.run_count ?? 0} runs
+              </span>
+              <span>
+                30天 ${Number(agentStats[key]?.cost_summary?.days_30?.cost_usd ?? 0).toFixed(4)} / 未计分 {agentStats[key]?.cost_summary?.days_30?.unscored_runs ?? 0}
+              </span>
+              <span>{directionSummary(agentStats[key])}</span>
             </div>
           </div>
         ))}

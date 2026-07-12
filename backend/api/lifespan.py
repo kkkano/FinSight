@@ -184,6 +184,23 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[Scheduler] MONITOR_REALTIME_ENABLED is false; skip start.")
 
+    outcome_enabled = _env_bool("PREDICTION_OUTCOME_SCHEDULER_ENABLED", True)
+    if outcome_enabled:
+        from backend.services.prediction_outcomes import run_prediction_outcome_cycle
+
+        outcome_interval = float(os.getenv("PREDICTION_OUTCOME_INTERVAL_MINUTES", "1440"))
+        sched = start_interval_scheduler(
+            run_prediction_outcome_cycle,
+            interval_minutes=outcome_interval,
+            enabled=True,
+            job_id="prediction_outcome_daily",
+            job_label="deterministic prediction outcome evaluation",
+        )
+        if sched:
+            _schedulers.append(sched)
+    else:
+        logger.info("[Scheduler] PREDICTION_OUTCOME_SCHEDULER_ENABLED is false; skip start.")
+
     try:
         install_rag_observability_hooks()
         rag_observability_status = get_rag_observability_store().ensure_schema() if hasattr(get_rag_observability_store(), 'ensure_schema') else False

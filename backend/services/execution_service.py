@@ -711,6 +711,21 @@ async def run_graph_pipeline(
                     thread_id,
                     audit_exc,
                 )
+            try:
+                from backend.services.agent_run_archive import get_agent_run_archive
+
+                get_agent_run_archive().archive_usage_summary(
+                    run_id=str(run_id_value or thread_id),
+                    user_id=token_acc.user_id,
+                    summary=token_acc.summary(),
+                    status="completed",
+                )
+            except Exception as archive_exc:  # noqa: BLE001 — PostgreSQL 归档为旁路
+                logger.warning(
+                    "[execution_service] agent run archive failed thread_id=%s: %s",
+                    thread_id,
+                    archive_exc,
+                )
 
             # P1-7: 缓存成功生成的报告（仅 report 模式 + 显式 ticker 请求 + 无失败/拦截）
             if (
@@ -1069,6 +1084,21 @@ async def resume_graph_pipeline(
                     "[resume_pipeline] cost audit record failed thread_id=%s: %s",
                     thread_id,
                     audit_exc,
+                )
+            try:
+                from backend.services.agent_run_archive import get_agent_run_archive
+
+                get_agent_run_archive().archive_usage_summary(
+                    run_id=str(run_id_value or thread_id),
+                    user_id=token_acc.user_id,
+                    summary=token_acc.summary(),
+                    status="completed",
+                )
+            except Exception as archive_exc:  # noqa: BLE001 — PostgreSQL 归档为旁路
+                logger.warning(
+                    "[resume_pipeline] agent run archive failed thread_id=%s: %s",
+                    thread_id,
+                    archive_exc,
                 )
         except asyncio.CancelledError:
             cancel_event.set()
