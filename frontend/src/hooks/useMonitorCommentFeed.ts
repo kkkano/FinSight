@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { buildAuthHeaders } from '../api/http';
 import { buildApiUrl } from '../config/runtime';
+import { useStore } from '../store/useStore';
+import { isAuthenticatedMonitorSession } from './useMonitorLease';
 
 export type MonitorComment = {
   id: string;
@@ -25,10 +27,13 @@ function mergeComments(previous: MonitorComment[], incoming: MonitorComment[]): 
 export function useMonitorCommentFeed(sessionId: string | null | undefined) {
   const [comments, setComments] = useState<MonitorComment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const userId = useStore((state) => state.authIdentity?.userId);
+  const isAvailable = isAuthenticatedMonitorSession(userId);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || !isAvailable) {
       setComments([]);
+      setError(null);
       return undefined;
     }
     const controller = new AbortController();
@@ -82,8 +87,7 @@ export function useMonitorCommentFeed(sessionId: string | null | undefined) {
       controller.abort();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [sessionId]);
+  }, [isAvailable, sessionId]);
 
-  return { comments, error };
+  return { comments, error, isAvailable };
 }
-

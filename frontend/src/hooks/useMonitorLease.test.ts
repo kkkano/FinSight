@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createMonitorLeaseController,
+  isAuthenticatedMonitorSession,
   type MonitorLease,
   type MonitorLeaseTransport,
 } from './useMonitorLease';
@@ -23,6 +24,12 @@ afterEach(() => {
 });
 
 describe('monitor page lease lifecycle', () => {
+  it('only enables authenticated monitor sessions', () => {
+    expect(isAuthenticatedMonitorSession(undefined)).toBe(false);
+    expect(isAuthenticatedMonitorSession('')).toBe(false);
+    expect(isAuthenticatedMonitorSession('user-1')).toBe(true);
+  });
+
   it('acquires, renews every 30 seconds, and releases only its own lease', async () => {
     vi.useFakeTimers();
     const transport: MonitorLeaseTransport = {
@@ -82,4 +89,3 @@ describe('monitor page lease lifecycle', () => {
     expect(transport.release).not.toHaveBeenCalled();
   });
 });
-

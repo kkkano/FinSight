@@ -33,7 +33,7 @@ const time = (value: string) => new Date(value).toLocaleTimeString('zh-CN', { ho
 
 export function MonitorCommentFeed({ sessionId }: { sessionId: string | null | undefined }) {
   const navigate = useNavigate();
-  const { comments, error } = useMonitorCommentFeed(sessionId);
+  const { comments, error, isAvailable } = useMonitorCommentFeed(sessionId);
   const items = foldHeartbeatComments(comments);
   const storageKey = `finsight:monitor-comment-seen:${sessionId || 'none'}`;
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
@@ -63,10 +63,15 @@ export function MonitorCommentFeed({ sessionId }: { sessionId: string | null | u
           <Radio size={13} className="text-fin-primary" /> 实时点评
           {alertCount > 0 && <span className="rounded-full bg-fin-danger/10 px-1.5 py-0.5 text-2xs text-fin-danger">未读警报 {alertCount}</span>}
         </div>
-        {error && <span className="text-2xs text-fin-danger">连接已中断</span>}
+        {!isAvailable && <span className="text-2xs text-fin-muted">登录后启用</span>}
+        {isAvailable && error && <span className="text-2xs text-fin-danger">连接已中断</span>}
       </div>
       {items.length === 0 ? (
-        <div className="text-2xs text-fin-muted">打开看板后，这里会显示可追溯的实时触发与点评。</div>
+        <div className="text-2xs text-fin-muted">
+          {isAvailable
+            ? '打开看板后，这里会显示可追溯的实时触发与点评。'
+            : '实时点评需要登录；匿名模式不会启动高频 AI 监控。'}
+        </div>
       ) : (
         <div className="max-h-64 space-y-2 overflow-y-auto">
           {items.map((item) => item.kind === 'heartbeat' ? (

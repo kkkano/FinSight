@@ -25,6 +25,9 @@ export type MonitorLeaseTransport = {
   release(lease: MonitorLease): Promise<void>;
 };
 
+export const isAuthenticatedMonitorSession = (userId: string | null | undefined): boolean =>
+  Boolean(String(userId || '').trim());
+
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
 
 export function createMonitorLeaseController(
@@ -143,12 +146,17 @@ const httpTransport: MonitorLeaseTransport = {
 
 export function useMonitorLease(symbol: string): void {
   const sessionId = useStore((state) => state.sessionId);
+  const userId = useStore((state) => state.authIdentity?.userId);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
     const controller = createMonitorLeaseController(httpTransport);
     const sync = () => {
-      controller.start(document.visibilityState === 'visible' ? { sessionId, symbol } : null);
+      controller.start(
+        document.visibilityState === 'visible' && isAuthenticatedMonitorSession(userId)
+          ? { sessionId, symbol }
+          : null,
+      );
     };
     sync();
     document.addEventListener('visibilitychange', sync);
@@ -156,6 +164,5 @@ export function useMonitorLease(symbol: string): void {
       document.removeEventListener('visibilitychange', sync);
       controller.dispose();
     };
-  }, [sessionId, symbol]);
+  }, [sessionId, symbol, userId]);
 }
-
