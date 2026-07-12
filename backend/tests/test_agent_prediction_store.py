@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI, Request
@@ -98,13 +99,14 @@ def test_store_schema_is_postgres_and_has_composite_tenant_constraint():
 
 def test_get_always_filters_by_prediction_id_and_user_id():
     engine = FakeEngine()
-    engine.conn.row = _record()
+    engine.conn.row = _record(id=UUID("00000000-0000-0000-0000-000000000001"))
     store = AgentPredictionStore(engine=engine)
     result = store.get("pred-1", user_id="alice")
     select_sql, params = [call for call in engine.conn.calls if call[0].lstrip().upper().startswith("SELECT")][-1]
     assert "id = CAST(:id AS uuid) AND user_id = :user_id" in select_sql
     assert params == {"id": "pred-1", "user_id": "alice"}
     assert result and result.user_id == "alice"
+    assert result.id == "00000000-0000-0000-0000-000000000001"
 
 
 def test_latest_and_history_queries_are_tenant_agent_and_ticker_scoped():

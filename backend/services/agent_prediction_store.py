@@ -240,6 +240,8 @@ class AgentPredictionStore:
 def _prediction_from_row(row: Any) -> AgentPrediction:
     payload = dict(row)
     payload.pop("agent_rank", None)
+    if isinstance(payload.get("id"), UUID):
+        payload["id"] = str(payload["id"])
     scenarios = payload.get("scenarios")
     if isinstance(scenarios, str):
         payload["scenarios"] = json.loads(scenarios)
