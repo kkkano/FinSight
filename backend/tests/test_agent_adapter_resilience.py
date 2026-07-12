@@ -50,6 +50,7 @@ def test_normalize_agent_output_returns_fallback_on_empty_summary():
 
     assert out.get("agent_name") == "price_agent"
     assert out.get("fallback_used") is True
+    assert out.get("requests") == []
     assert float(out.get("confidence", 1)) <= 0.2
     assert "降级" in str(out.get("summary") or "")
 
@@ -101,4 +102,3 @@ def test_build_agent_invoker_retries_and_fallbacks_on_runtime_error(monkeypatch)
     assert out.get("agent_name") == "fundamental_agent"
     assert out.get("fallback_used") is True
     assert "RuntimeError" in "\n".join(out.get("risks") or [])
-

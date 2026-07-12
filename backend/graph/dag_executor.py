@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 import time
 from collections import defaultdict
 from typing import Any, Callable, Mapping, MutableMapping
@@ -33,6 +35,7 @@ from backend.graph.executor import (
     step_task_ids,
 )
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
+from backend.graph.planning.delegation import DELEGATION_CATALOG, LIMITS
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +130,17 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
     done: set[str] = set()
     failed: set[str] = set()
     running: dict[asyncio.Task, str] = {}
+    dynamic_steps = 0
+
+    def _delegation_enabled() -> bool:
+        return str(os.getenv("FINSIGHT_AGENT_DELEGATION", "off")).strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+
+    def _trace_delegation(payload: dict[str, Any]) -> None:
+        rows = ctx.artifacts.setdefault("delegation_trace", [])
+        if isinstance(rows, list):
+            rows.append(payload)
 
     def _ready() -> list[str]:
         in_flight = set(running.values())
@@ -148,6 +162,7 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
                 stack.append(nxt)
 
     def _scope_ids(step: dict[str, Any]) -> list[str]:
+        """黑板作用域；无业务 task 的 step 使用内部全局作用域。"""
         return step_task_ids(step) or ["__global__"]
 
     def _scoped_bus(scope_id: str) -> dict[str, str]:
@@ -173,14 +188,89 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
 
     def _write_bus_after_success(sid: str) -> None:
         step = by_id[sid]
-        if ctx.context_bus is None or str(step.get("kind") or "") != "agent":
+        if ctx.context_bus is None:
             return
         result = ctx.artifacts["step_results"].get(sid)
         output = result.get("output") if isinstance(result, dict) else None
-        digest = digest_agent_output(str(step.get("name") or ""), output)
+        kind = str(step.get("kind") or "")
+        inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+        if kind == "agent":
+            bus_key = str(step.get("name") or "")
+            digest = digest_agent_output(bus_key, output)
+        elif kind == "tool" and inputs.get("__delegated") is True:
+            bus_key = f"delegated:{step.get('name') or 'tool'}"
+            if isinstance(output, dict):
+                digest = digest_agent_output(bus_key, output)
+                if not digest:
+                    digest = f"{bus_key}: {str(output)[:240]}"
+            else:
+                digest = f"{bus_key}: {str(output or '')[:240]}" if output else ""
+        else:
+            return
         if digest:
             for scope_id in _scope_ids(step):
-                _scoped_bus(scope_id)[str(step.get("name") or "")] = digest
+                _scoped_bus(scope_id)[bus_key] = digest
+
+    def _insert_delegation_after_success(sid: str) -> None:
+        nonlocal dynamic_steps
+        if not _delegation_enabled() or dynamic_steps >= LIMITS["max_dynamic_steps_per_run"]:
+            return
+        step = by_id[sid]
+        if str(step.get("kind") or "") != "agent":
+            return
+        result = ctx.artifacts["step_results"].get(sid)
+        output = result.get("output") if isinstance(result, dict) else None
+        requests = output.get("requests") if isinstance(output, dict) and isinstance(output.get("requests"), list) else []
+        if not requests:
+            return
+        request = requests[0] if isinstance(requests[0], dict) else {}
+        evidence = str(request.get("evidence") or "").strip()
+        builder = DELEGATION_CATALOG.get(evidence)
+        if builder is None:
+            _trace_delegation({"requesting_step_id": sid, "evidence": evidence, "status": "ignored_not_whitelisted"})
+            return
+        template = builder(step, request)
+        safe_evidence = re.sub(r"[^a-z0-9_]+", "_", evidence.lower()).strip("_") or "evidence"
+        dynamic_id = f"delegated_{sid}_{safe_evidence}"
+        if dynamic_id in by_id:
+            return
+        task_ids = step_task_ids(step)
+        bus_scope_ids = task_ids or ["__global__"]
+        delegated_inputs = template.get("inputs") if isinstance(template.get("inputs"), dict) else {}
+        dynamic_step = {
+            "id": dynamic_id,
+            "kind": str(template.get("kind") or "tool"),
+            "name": str(template.get("name") or ""),
+            "inputs": {**delegated_inputs, "__delegated": True, "__requesting_agent": step.get("name")},
+            "depends_on": [sid],
+            "task_ids": task_ids,
+            "optional": True,
+        }
+        if task_ids:
+            dynamic_step["task_id"] = task_ids[0]
+        by_id[dynamic_id] = dynamic_step
+        ctx.steps.append(dynamic_step)
+        deps[dynamic_id] = {sid}
+        dependents[sid].add(dynamic_id)
+        for downstream_id, downstream in by_id.items():
+            if downstream_id in {sid, dynamic_id} or downstream_id in done or downstream_id in failed:
+                continue
+            if downstream_id in running.values():
+                continue
+            if str(downstream.get("kind") or "") not in {"agent", "llm"}:
+                continue
+            if not set(_scope_ids(downstream)).intersection(bus_scope_ids):
+                continue
+            deps.setdefault(downstream_id, set()).add(dynamic_id)
+            dependents[dynamic_id].add(downstream_id)
+        dynamic_steps += 1
+        _trace_delegation({
+            "requesting_step_id": sid,
+            "dynamic_step_id": dynamic_id,
+            "evidence": evidence,
+            "status": "scheduled",
+            "task_ids": task_ids,
+        })
 
     try:
         while len(done) + len(failed) < len(by_id):
@@ -212,7 +302,8 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
                     await _record_skipped(step, ctx, reason="dependency_cycle")
                 break
             finished, _ = await asyncio.wait(set(running), return_when=asyncio.FIRST_COMPLETED)
-            for task in finished:
+            plan_order = {sid: index for index, sid in enumerate(by_id)}
+            for task in sorted(finished, key=lambda item: plan_order[running[item]]):
                 sid = running.pop(task)
                 step = by_id[sid]
                 if task.cancelled():
@@ -221,6 +312,7 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
                 if exc is None:
                     done.add(sid)
                     _write_bus_after_success(sid)
+                    _insert_delegation_after_success(sid)
                 elif isinstance(exc, asyncio.CancelledError):
                     raise exc
                 else:

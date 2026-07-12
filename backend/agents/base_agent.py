@@ -61,6 +61,7 @@ class AgentOutput:
     fallback_reason: Optional[str] = None
     retryable: bool = True
     error_stage: Optional[str] = None
+    requests: List[Dict[str, Any]] = field(default_factory=list)
 
 class BaseFinancialAgent:
     AGENT_NAME = "base"
@@ -82,6 +83,10 @@ class BaseFinancialAgent:
         self.__current_brief: ContextVar[Optional["AgentBrief"]] = ContextVar(
             f"{type(self).__name__}._current_brief",
             default=None,
+        )
+        self.__current_requests: ContextVar[List[Dict[str, Any]]] = ContextVar(
+            f"{type(self).__name__}._current_requests",
+            default=[],
         )
         self._llm_analyze_enabled_override: Optional[bool] = None
         self._llm_analyze_timeout_override: Optional[float] = None
@@ -362,6 +367,7 @@ class BaseFinancialAgent:
                     logger.debug("[%s] on_event callback failed", self.AGENT_NAME, exc_info=True)
 
         _log_event("agent_start", {"query": query, "ticker": ticker})
+        self.__current_requests.set([])
 
         # 1. 初始搜索
         if on_event:
@@ -415,6 +421,7 @@ class BaseFinancialAgent:
                 })
 
         output = self._format_output(summary, results)
+        output.requests = list(self.__current_requests.get())[:1]
         try:
             from backend.research.agent_quality_contract import apply_agent_quality_contract
             from backend.research.agent_research_loop import apply_agent_self_check
@@ -560,6 +567,19 @@ class BaseFinancialAgent:
                 if isinstance(obj, dict):
                     if obj.get("complete"):
                         return []  # LLM says info is sufficient
+                    if obj.get("type") == "delegate":
+                        evidence = str(obj.get("evidence") or "").strip()
+                        reason = str(obj.get("reason") or obj.get("gap") or "").strip()
+                        if evidence:
+                            requests = list(self.__current_requests.get())
+                            if not requests:
+                                requests.append({
+                                    "type": "delegate",
+                                    "evidence": evidence,
+                                    "reason": reason[:240],
+                                })
+                                self.__current_requests.set(requests)
+                        continue
                     if obj.get("gap") or obj.get("query"):
                         gaps.append(obj)
                     continue

@@ -127,9 +127,9 @@ DELEGATION_CATALOG: dict[str, dict] = {
 LIMITS = {"max_dynamic_steps_per_run": 2}
 ```
 
-- [ ] Step 1: TDD（agent 输出 requests → executor 追加白名单内 step 且全局不超 2 个；断言 depends_on/requesting task_ids/barrier 正确，另一 task 看不到其证据；白名单外忽略并记 trace）。
-- [ ] Step 2: 实现（flag 默认 off；在当前调度批次结束后、同 task 下一阶段前插入受控 step，不允许运行中追加无依赖 root）。
-- [ ] Commit: `feat(agents): bounded delegation — agents may request whitelisted supplementary evidence steps`
+- [x] Step 1: TDD（agent 输出 requests → executor 追加白名单内 step 且全局不超 2 个；断言 depends_on/requesting task_ids/barrier 正确，另一 task 看不到其证据；白名单外忽略并记 trace）。
+- [x] Step 2: 实现（flag 默认 off；在当前调度批次结束后、同 task 下一阶段前插入受控 step，不允许运行中追加无依赖 root）。
+- [x] Commit: `feat(agents): bounded delegation — agents may request whitelisted supplementary evidence steps`
 
 ---
 

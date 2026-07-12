@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
     if output is None:
-        return {"agent_name": step_name, "summary": "", "evidence": []}
+        return {"agent_name": step_name, "summary": "", "evidence": [], "requests": []}
 
     if isinstance(output, dict):
         return output
@@ -43,6 +43,7 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
     risks = getattr(output, "risks", None)
     trace = getattr(output, "trace", None)
     chart_specs = getattr(output, "chart_specs", None)
+    requests = getattr(output, "requests", None)
 
     serialized_evidence: list[dict[str, Any]] = []
     for item in evidence[:12]:
@@ -79,6 +80,7 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
         "trace": trace,
         "chart_specs": chart_specs if isinstance(chart_specs, list) else [],
         "evidence": serialized_evidence,
+        "requests": requests if isinstance(requests, list) else [],
     }
 
 
@@ -154,6 +156,7 @@ def _build_agent_fallback_output(
         "trace": [{"event": "agent_fallback", "agent": step_name, "error": safe_error}],
         "chart_specs": [],
         "evidence": [],
+        "requests": [],
     }
 
 
@@ -227,6 +230,24 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
         and isinstance(item.get("title"), str)
         and isinstance(item.get("data"), dict)
     ]
+
+    requests = payload.get("requests")
+    normalized_requests: list[dict[str, str]] = []
+    if isinstance(requests, list):
+        for item in requests[:1]:
+            if not isinstance(item, dict) or str(item.get("type") or "").strip() != "delegate":
+                continue
+            evidence_name = str(item.get("evidence") or "").strip()[:80]
+            if not evidence_name:
+                continue
+            normalized_requests.append(
+                {
+                    "type": "delegate",
+                    "evidence": evidence_name,
+                    "reason": str(item.get("reason") or "").strip()[:240],
+                }
+            )
+    payload["requests"] = normalized_requests
 
     payload["claims"] = extract_claims_from_agent_output(payload, query=query, ticker=ticker)
 

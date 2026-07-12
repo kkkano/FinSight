@@ -238,3 +238,39 @@ async def test_agent_reflection_gap_detection_has_hard_call_timeout(monkeypatch)
 
     assert result == []
     assert elapsed < 0.8
+
+
+@pytest.mark.asyncio
+async def test_agent_reflection_can_emit_one_delegation_request(monkeypatch) -> None:
+    class _DelegateLLM:
+        model_name = "delegate-fixture"
+
+        async def ainvoke(self, _messages):
+            return type(
+                "_Resp",
+                (),
+                {"content": '{"type":"delegate","evidence":"peer_tickers","reason":"缺少同行基准"}'},
+            )()
+
+    class _DelegateAgent(BaseFinancialAgent):
+        AGENT_NAME = "delegate_agent"
+
+        async def _initial_search(self, query: str, ticker: str) -> dict[str, str]:
+            return {"query": query, "ticker": ticker}
+
+        async def _first_summary(self, data: object) -> str:
+            del data
+            return "已有价格判断，但同行基准不足。"
+
+    monkeypatch.setattr(
+        "backend.services.rate_limiter.acquire_llm_token",
+        lambda *args, **kwargs: asyncio.sleep(0, result=True),
+    )
+    agent = _DelegateAgent(llm=_DelegateLLM(), cache=None)
+    agent.configure_research(max_reflections=1)
+
+    output = await agent.research("分析 AAPL", "AAPL")
+
+    assert output.requests == [
+        {"type": "delegate", "evidence": "peer_tickers", "reason": "缺少同行基准"}
+    ]
