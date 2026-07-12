@@ -12,8 +12,11 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import type { MorningBriefData, MorningBriefHighlight } from '../../api/client';
+import { useDashboardStore } from '../../store/dashboardStore';
+import { buildMorningBriefDeepDiveHref } from '../../utils/morningBriefLinkage';
 import { Card } from '../ui/Card';
 
 // ==================== 子组件 ====================
@@ -80,6 +83,7 @@ function formatPct(pct: number | null): string {
 
 /** 单个持仓高亮行 */
 function HighlightRow({ item }: { item: MorningBriefHighlight }) {
+  const setActiveAsset = useDashboardStore((state) => state.setActiveAsset);
   return (
     <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-fin-hover/40 transition-colors">
       {/* 趋势图标 */}
@@ -102,6 +106,14 @@ function HighlightRow({ item }: { item: MorningBriefHighlight }) {
       <span className={`text-xs font-mono font-medium tabular-nums ${pctColorClass(item.price_change_pct)}`}>
         {formatPct(item.price_change_pct)}
       </span>
+      <Link
+        to={buildMorningBriefDeepDiveHref(item.key_event, item.ticker)}
+        onClick={() => setActiveAsset({ symbol: item.ticker, type: 'equity', display_name: item.ticker })}
+        className="inline-flex min-h-11 shrink-0 items-center px-2 text-2xs text-fin-primary transition-colors hover:text-fin-primary/80"
+        data-testid={`morning-brief-deep-dive-${item.ticker}`}
+      >
+        深入 →
+      </Link>
     </div>
   );
 }
@@ -121,7 +133,14 @@ function ActionItems({ items }: { items: string[] }) {
           className="flex items-start gap-2 text-2xs text-fin-text/70 pl-1"
         >
           <span className="text-fin-primary mt-0.5 shrink-0">•</span>
-          <span>{item}</span>
+          <span className="flex-1">{item}</span>
+          <Link
+            to={buildMorningBriefDeepDiveHref(item)}
+            className="inline-flex min-h-11 shrink-0 items-center px-2 text-fin-primary transition-colors hover:text-fin-primary/80"
+            data-testid={`morning-brief-action-deep-dive-${idx}`}
+          >
+            深入 →
+          </Link>
         </div>
       ))}
     </div>

@@ -152,8 +152,8 @@ type PredictionOverlay = {
 
 **Files:** Modify `frontend/src/components/workbench/MorningBriefCard.tsx`
 
-- [ ] Step 1: 晨报每个要点行尾加「深入 →」ghost 链接：`/chat` 预填 `晨报提到：{要点文本}。展开讲讲对 {关联ticker（若有）} 的影响。`
-- [ ] Commit: `feat(linkage): morning brief bullets expand into chat analysis`
+- [x] Step 1: 晨报每个要点行尾加「深入 →」ghost 链接：`/chat` 预填 `晨报提到：{要点文本}。展开讲讲对 {关联ticker（若有）} 的影响。`
+- [x] Commit: `feat(linkage): morning brief bullets expand into chat analysis`
 
 ---
 
