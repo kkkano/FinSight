@@ -9,7 +9,7 @@ interface AgentMentionProps {
 
 /**
  * AgentMention — 对话框 @agent 手动选择下拉（镜像 SkillAutocomplete 样式）。
- * 显示 agent 中文名 + 描述，选中后由 useAgentMention 就地替换触发片段。
+ * 显示同源 Agent 档案与战绩，选中后由 useAgentMention 就地替换触发片段。
  */
 export function AgentMention({
   agents,
@@ -59,26 +59,27 @@ export function AgentMention({
           }`}
           onClick={() => onSelect(agent)}
         >
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2">
             <span
-              className="font-medium text-sm"
+              className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-current/30 px-1 font-mono text-2xs"
+              style={{ color: `var(--${agent.color_token})` }}
+            >
+              {agent.glyph}
+            </span>
+            <span
+              className="min-w-0 flex-1 truncate font-medium text-sm"
               style={{ color: 'var(--fin-text, #e0e0e0)' }}
             >
               {agent.display_name}
+              <span className="ml-1 font-normal text-fin-muted">— {agent.mandate}</span>
             </span>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 font-mono"
-              style={{ color: 'var(--fin-text-secondary, #888)' }}
-            >
-              @{agent.name.replace('_agent', '')}
-            </span>
+            {agent.track_record?.sample_state === 'sufficient'
+              && typeof agent.track_record.hit_rate === 'number' && (
+                <span className="num ml-auto shrink-0 text-2xs text-t-accent">
+                  命中率 {(agent.track_record.hit_rate * 100).toFixed(0)}%
+                </span>
+              )}
           </div>
-          <p
-            className="text-xs truncate"
-            style={{ color: 'var(--fin-text-secondary, #888)' }}
-          >
-            {agent.description}
-          </p>
         </div>
       ))}
     </div>

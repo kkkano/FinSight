@@ -326,9 +326,9 @@ agent 战绩: 近 90 天按 agent + direction 分桶；hit_target/held_range 算
 **Files:**
 - Modify: `frontend/src/components/AgentMention.tsx`、`frontend/src/components/CommandPalette.tsx`
 
-- [ ] Step 1: AgentMention 下拉项升级：`[glyph] name_zh — mandate_zh`（现状只有名字；数据源 /api/agents 已全）+ 战绩样本足够时附命中率。
-- [ ] Step 2: CommandPalette 加 7 条命令「问技术面分析师…」→ /chat 预填 `@technical_agent `。
-- [ ] Commit: `feat(mention): expert picker shows mandate and track record`
+- [x] Step 1: AgentMention 下拉项升级：`[glyph] name_zh — mandate_zh`（现状只有名字；数据源 /api/agents 已全）+ 战绩样本足够时附命中率。
+- [x] Step 2: CommandPalette 加 7 条命令「问技术面分析师…」→ /chat 预填 `@technical_agent `。
+- [x] Commit: `feat(mention): expert picker shows mandate and track record`
 
 ---
 

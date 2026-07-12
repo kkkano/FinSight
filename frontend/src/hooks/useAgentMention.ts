@@ -1,12 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { apiClient } from '../api/client';
+import { useAgentProfiles } from './useAgentProfiles';
+import type { AgentProfileView } from '../types/agents';
 
-export interface AgentItem {
-  name: string;
-  display_name: string;
-  description: string;
-  insert_text: string;
-}
+export type AgentItem = AgentProfileView;
 
 // 输入 "@" 触发 agent 选择（前面须是行首或空白，避免 email 等误触发）
 const AGENT_TRIGGER_RE = /(^|\s)@(\S*)$/;
@@ -22,10 +18,9 @@ export function useAgentMention(
   inputText: string,
   onReplace: (newText: string) => void,
 ) {
-  const [agents, setAgents] = useState<AgentItem[]>([]);
+  const { profiles: agents } = useAgentProfiles();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  const fetchedRef = useRef(false);
   const prevInputRef = useRef(inputText);
   const insertingRef = useRef(false);
 
@@ -44,21 +39,6 @@ export function useAgentMention(
     }
   }, [inputText]);
 
-  useEffect(() => {
-    if (isOpen && !fetchedRef.current) {
-      fetchedRef.current = true;
-      apiClient.listAgents()
-        .then((res) => {
-          if (res?.success && Array.isArray(res.items)) {
-            setAgents(res.items as unknown as AgentItem[]);
-          }
-        })
-        .catch(() => {
-          fetchedRef.current = false;
-        });
-    }
-  }, [isOpen]);
-
   const filteredAgents = useMemo(
     () =>
       query
@@ -66,7 +46,8 @@ export function useAgentMention(
             (a) =>
               a.name.toLowerCase().includes(query) ||
               a.display_name.toLowerCase().includes(query) ||
-              a.description.toLowerCase().includes(query),
+              a.short_zh.toLowerCase().includes(query) ||
+              a.mandate.toLowerCase().includes(query),
           )
         : agents,
     [agents, query],

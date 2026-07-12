@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
+import { useAgentProfiles } from '../hooks/useAgentProfiles';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
 import { getMiniChatRouteSymbol, routeSupportsMiniChat } from '../utils/miniChatRouteContext';
+import { buildExpertCommandDescriptors, runExpertCommand } from './commandPaletteExperts';
 import { Dialog } from './ui/Dialog';
 
 interface CommandAction {
@@ -50,6 +52,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
     setShowRightPanel,
   } = useStore();
   const activeAsset = useDashboardStore((state) => state.activeAsset);
+  const { profiles } = useAgentProfiles();
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -88,6 +91,13 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
           onClose();
         },
       },
+      ...buildExpertCommandDescriptors(profiles).map((command) => ({
+        id: command.id,
+        label: command.label,
+        icon: Bot,
+        keywords: command.keywords,
+        execute: () => runExpertCommand(command, { setDraft, navigate, close: onClose }),
+      })),
       {
         id: 'open-workbench',
         label: '打开工作台',
@@ -201,6 +211,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
       location.search,
       navigate,
       onClose,
+      profiles,
       setDraft,
       setColorConvention,
       setShowRightPanel,
