@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | 09-C1 删除死 ResearchCard | 本提交 | 全仓复核确认顶层 `frontend/src/components/ResearchCard.tsx` 除自身外零引用；Dashboard research 内同名函数是局部组件，不受影响。删除该死文件后完整前端 `58 files/280 tests` 通过，生产 build 成功。 |
 | 2026-07-12 | 09-B8 自选股联动登记 | WP6-F2 `e0a91fc` | 对照代码、WP6 spec 与既有验收账本确认：自选股已进入 ChatInput 前 4 项快捷建议，晨报按显式请求 > 自选 > 持仓选标的，monitor 在未显式给 targets 时注入用户自选默认标的；本项按 09 约定仅登记、不重复实现。当前 `backend/tests/test_watchlist.py` 5 passed。 |
 | 2026-07-12 | 09-B7 晨报要点深入分析 | 本提交 | MorningBriefCard 的 ticker 高亮与操作建议均新增 ≥44px「深入 →」入口，统一通过 `/chat?prompt=` 生成可刷新、可分享的对话草稿；ticker 要点跳转前同步 Dashboard activeAsset，使实际聊天请求携带 `context.active_symbol`，无 ticker 的建议保持诚实，不臆造标的。新增 2 项 prompt/URL 纯函数测试，定向 ESLint 与生产 build 已通过；完整前端 `58 files/280 tests` 通过。真实 Chromium 从工作台生成晨报后点击 AAPL 要点，确认草稿与发送 query 一致、请求携带 `active_symbol=AAPL`、操作建议入口可见且控制台 0 error；截图留于忽略目录，QA 端口已清理。 |
 | 2026-07-12 | 09-B6 真实持仓进入聊天上下文 | 本提交 | 盘点确认 ChatContext 原先没有 positions；对齐后端 `_positions_from_ui_context` 后扩展合同，主聊天发送前从同一 `portfolio-summary` React Query 缓存读取，缓存缺失时请求真实 summary，保留 ticker/shares/avg_cost/market_value 等字段，过滤空 ticker 与非正股数；持仓接口失败只省略上下文，不阻断普通聊天。PortfolioSummaryBar 新增“分析我的持仓”URL 草稿入口。聚焦 3 tests、定向 ESLint 通过；完整前端 `57 files/278 tests`、生产 build 成功。真实 Chromium 从工作台进入并发送，确认 query 为“我的持仓该怎么调整？”且请求体携带 AAPL 12 股、MSFT 5 股及真实成本/市值字段，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |

@@ -166,7 +166,7 @@ type PredictionOverlay = {
 ### C-1: ResearchCard —— 删除
 
 **证据:** `grep -rln "import.*ResearchCard" frontend/src --include="*.tsx"` 除自身外零引用（2026-07-03 复核）。
-- [ ] `git rm frontend/src/components/ResearchCard.tsx`（连同其测试若有）→ build 绿 → Commit: `chore(frontend): remove dead ResearchCard component`
+- [x] `git rm frontend/src/components/ResearchCard.tsx`（连同其测试若有）→ build 绿 → Commit: `chore(frontend): remove dead ResearchCard component`
 
 ### C-2: MiniChat —— 保留并升级为全局"随处问"
 
