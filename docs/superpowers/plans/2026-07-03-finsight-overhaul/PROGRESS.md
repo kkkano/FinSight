@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | 09-C11 Workbench 今日驾驶舱信息架构 | 本提交 | Workbench 从旧的“左发现/任务 + 右持仓/工具”双列堆叠重排为顶部今日日期与主操作、①晨报速览、②需要你注意、③我的持仓、④研究归档四段纵向叙事；段标题统一 `text-2xs uppercase tracking-wider text-t-text3`。监控、今日任务、宏观日历、持仓管理、归因、再平衡与报告质量能力全部保留并归入对应段落。发现空态改为“一切平静 · 配置监控”，晨报/持仓/报告继续提供生成、录入、去对话动作；路由与 report/focus query 逻辑不变。完整前端 `63 files/288 tests`、生产 build 成功。真实 Chromium 验证四段 DOM 顺序、3 类动作空态、监控滚动、控制台 0 error；旧 `task11-light-workbench.png` 与新 `workbench-daily-cockpit-after.png` 留于忽略目录作前后对比，视觉检查通过。 |
 | 2026-07-12 | 09-C10 今日任务质量与执行入口 | 本提交 | 读取规则并用 AAPL/NVDA/MSFT 持仓、跌幅、报告与集中度上下文实际生成样本：异动、缺报告、集中度、调仓、报告回放均有明确对象/原因与 execution_params/action_url；发现唯一水话是无条件“市场新闻速览”，已删除，空上下文现在返回 0 项。TaskCard 新增原因副文案与显式“去执行/去查看/查看报告”入口，继续复用既有 executeAgent/路由动作。后端质量+集中度 `4 passed`，前端新增 1 项卡片合同，ESLint/tsc 通过；完整前端 `63 files/288 tests`、生产 build 成功。 |
 | 2026-07-12 | 09-C9 `/api/supabase` 前端残留盘点 | 本提交 | 逐处确认原 4 个命中均是 `./api/supabaseClient` / `../../api/supabaseClient` TypeScript 模块导入，并非 URL；真实认证由官方 `@supabase/supabase-js` 直连 SUPABASE_URL，FinSight 后端只校验 Bearer token且无 `/api/supabase` router。新增模块澄清注释与逐处 notes，并同步 DOCS_INDEX；前后端 `/api/supabase` URL 字面量扫描为 0，鉴权/欢迎页 `2 files/5 tests`、ESLint/tsc 与 diff check 通过。 |
 | 2026-07-12 | 09-C8 订阅与提醒一级聚合入口 | 本提交 | 复用 Sidebar 已有一级“订阅与提醒”，SubscribeModal 顶部新增监控规则说明与“去配置”，下方保留完整邮件订阅管理；新增 `/workbench?focus=monitor` 深链，Workbench 挂载后自动滚到 MonitorConfigPanel。新增聚合内容合同测试，定向 ESLint/tsc 与 `2 files/5 tests` 通过；完整前端 `62 files/287 tests`、生产 build 成功。真实 Chromium 验证一级入口→邮件订阅/监控聚合→监控深链与自动滚动，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |

@@ -19,6 +19,8 @@ interface FindingsFeedProps {
   onNavigateToChat?: (ticker: string, prompt: string) => void;
   /** 行动按钮联动调仓卡片（滚动 + 高亮） */
   onNavigateToRebalance?: () => void;
+  /** 空态跳到监控规则 */
+  onConfigureMonitor?: () => void;
 }
 
 type FeedFilter = 'all' | 'unread';
@@ -27,6 +29,7 @@ export function FindingsFeed({
   sessionId,
   onNavigateToChat,
   onNavigateToRebalance,
+  onConfigureMonitor,
 }: FindingsFeedProps) {
   const { findings, loading, error, scanning, scan, markViewed } = useFindings(sessionId);
   const [filter, setFilter] = useState<FeedFilter>('all');
@@ -125,10 +128,12 @@ export function FindingsFeed({
             icon={RadarIcon}
             message={filter === 'unread'
               ? '没有未读发现，Agent 盯盘正常。'
-              : 'Agent 正在盯盘，当前没有价格异动或集中度风险。'}
+              : '一切平静 · 当前没有价格异动或集中度风险。'}
             action={filter === 'unread'
               ? { label: '查看全部发现', onClick: () => setFilter('all') }
-              : { label: '立即扫描', onClick: () => void scan() }}
+              : onConfigureMonitor
+                ? { label: '配置监控', onClick: onConfigureMonitor }
+                : { label: '立即扫描', onClick: () => void scan() }}
             className="py-10"
           />
         ) : (

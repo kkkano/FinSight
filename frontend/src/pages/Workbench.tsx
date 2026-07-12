@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRight, FileText, Newspaper } from 'lucide-react';
+import { FileText, Newspaper } from 'lucide-react';
 
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -31,6 +31,25 @@ type WorkbenchProps = {
   fromDashboard?: boolean;
   onNavigateToChat?: () => void;
 };
+
+function CockpitSectionHeader({
+  index,
+  title,
+  description,
+}: {
+  index: number;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-end justify-between gap-3 border-b border-t-border pb-2">
+      <div>
+        <div className="text-2xs uppercase tracking-wider text-t-text3">0{index} · {title}</div>
+        <p className="mt-1 text-xs text-t-text2">{description}</p>
+      </div>
+    </div>
+  );
+}
 
 // ==================== 页面主体 ====================
 
@@ -86,6 +105,13 @@ export function Workbench({
 
   // 一键晨报
   const morningBrief = useMorningBrief(sessionId);
+  const cockpitDate = useMemo(
+    () => new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date()),
+    [],
+  );
+  const lastBriefTime = morningBrief.brief?.generated_at
+    ? new Date(morningBrief.brief.generated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   // 旧版 localStorage 持仓 → 后端一次性迁移（工作台是持仓主场景，挂载时执行一次）。
   // 仅当本地有数据且后端为空时迁移，迁移成功后清除本地 key 并刷新 summary。
@@ -150,85 +176,78 @@ export function Workbench({
   }, []);
 
   return (
-    <div className="space-y-4">
-      {/* Breadcrumb / navigation bar */}
+    <div className="space-y-7" data-testid="workbench-daily-cockpit">
       <Card className="px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-xs text-fin-muted">
-            {fromDashboard
-              ? '来源：仪表盘 -> 工作台'
-              : '来源：侧边导航 -> 工作台'}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-2xs uppercase tracking-wider text-t-text3">今日驾驶舱</div>
+            <div className="mt-1 text-lg font-semibold text-t-text">今日 · {cockpitDate}</div>
+            <div className="mt-1 text-2xs text-t-text3">
+              {fromDashboard ? '来源：仪表盘' : '来源：侧边导航'}
+              {lastBriefTime ? ` · 上次晨报 ${lastBriefTime}` : ' · 今日晨报尚未生成'}
+            </div>
           </div>
-          <button
-            type="button"
-            data-testid="workbench-back-dashboard"
-            onClick={() =>
-              navigate(symbol ? `/dashboard/${encodeURIComponent(symbol)}` : '/dashboard')
-            }
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-fin-border hover:border-fin-primary/50 text-fin-text-secondary hover:text-fin-primary transition-colors"
-          >
-            回到上游（仪表盘）
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => morningBrief.generate()}
+              disabled={morningBrief.loading}
+              className="inline-flex min-h-11 items-center gap-2 rounded border border-t-accent/50 bg-t-accent/10 px-3 text-xs font-medium text-t-accent hover:bg-t-accent/15 disabled:opacity-50"
+              data-testid="workbench-generate-brief"
+            >
+              <Newspaper size={15} />
+              {morningBrief.loading ? '生成中…' : '生成晨报'}
+            </button>
+            <button
+              type="button"
+              data-testid="workbench-back-dashboard"
+              onClick={() => navigate(symbol ? `/dashboard/${encodeURIComponent(symbol)}` : '/dashboard')}
+              className="inline-flex min-h-11 items-center rounded border border-t-border px-3 text-xs text-t-text2 hover:border-t-accent/50 hover:text-t-accent"
+            >
+              回到看板
+            </button>
+          </div>
         </div>
       </Card>
 
-      {/* 顶部：持仓摘要条（常驻） */}
-      <PortfolioSummaryBar />
+      <section className="space-y-3" data-testid="cockpit-section-brief">
+        <CockpitSectionHeader index={1} title="晨报速览" description="先看隔夜变化、持仓异动与今日建议。" />
+        <MorningBriefCard
+          brief={morningBrief.brief}
+          loading={morningBrief.loading}
+          error={morningBrief.error}
+          onGenerate={morningBrief.generate}
+        />
+      </section>
 
-      {/* 主体：双列布局——左侧发现流 + 任务，右侧持仓管理 + 监控配置 + 其余 */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        {/* 左列（约 2/3）：每日晨报摘要（折叠，融入发现流）+ 今日发现流 + 每日任务 */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* 晨报融入发现流：默认折叠，点击展开（DailyDigest 化） */}
-          <details
-            className="group rounded-lg border border-fin-border bg-fin-card overflow-hidden"
-            data-testid="morning-brief-details"
-          >
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-medium text-fin-text bg-gradient-to-r from-amber-500/5 to-transparent hover:bg-fin-hover/40 transition-colors">
-              <ChevronRight
-                size={15}
-                className="text-fin-muted transition-transform group-open:rotate-90"
-              />
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10 text-amber-400">
-                <Newspaper size={14} />
-              </span>
-              <span>每日晨报摘要</span>
-              <span className="ml-auto text-2xs text-fin-muted">点击展开</span>
-            </summary>
-            <div className="border-t border-fin-border p-3">
-              <MorningBriefCard
-                brief={morningBrief.brief}
-                loading={morningBrief.loading}
-                error={morningBrief.error}
-                onGenerate={morningBrief.generate}
-              />
-            </div>
-          </details>
-
+      <section className="space-y-3" data-testid="cockpit-section-attention">
+        <CockpitSectionHeader index={2} title="需要你注意" description="真实监控发现、今日任务与未来事件；没有信号时就保持安静。" />
+        <div className="grid gap-4 xl:grid-cols-2">
           <FindingsFeed
             sessionId={sessionId}
             onNavigateToChat={handleNavigateToChatWithTicker}
             onNavigateToRebalance={handleNavigateToRebalance}
+            onConfigureMonitor={() => document.getElementById('monitor-config')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           />
-          <TaskSection
-            symbol={symbol}
-            onNavigateToChat={onNavigateToChat}
-          />
+          <TaskSection symbol={symbol} onNavigateToChat={onNavigateToChat} />
         </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div id="monitor-config" data-testid="workbench-monitor-config">
+            <MonitorConfigPanel sessionId={sessionId} />
+          </div>
+          <MacroCalendarPanel sessionId={sessionId} />
+        </div>
+      </section>
 
-        {/* 右列（约 1/3）：持仓管理 + 监控配置 + 调仓入口 + 分布饼图 + 报告时间线 */}
-        <div className="space-y-4">
+      <section className="space-y-3" data-testid="cockpit-section-portfolio">
+        <CockpitSectionHeader index={3} title="我的持仓" description="从组合总览进入持仓管理、归因与再平衡。" />
+        <PortfolioSummaryBar />
+        <div className="grid gap-4 xl:grid-cols-2">
           <PortfolioEditor
             data={portfolioSummary.data}
             loading={portfolioSummary.loading}
             onChanged={portfolioSummary.refresh}
           />
-          <div id="monitor-config" data-testid="workbench-monitor-config">
-            <MonitorConfigPanel sessionId={sessionId} />
-          </div>
-          {/* 宏观日历：未来 14 天财报/分红/宏观事件时间线 */}
-          <MacroCalendarPanel sessionId={sessionId} />
-          {/* 调仓入口：发现卡片「调仓建议」联动滚动目标 + 短暂高亮 */}
           <div
             id="rebalance-card"
             data-testid="rebalance-card-anchor"
@@ -238,31 +257,31 @@ export function Workbench({
           >
             <RebalanceEntryCard />
           </div>
-          {/* 持仓收益追踪表（保留） */}
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
           <PortfolioPerformance
             data={portfolioSummary.data}
             loading={portfolioSummary.loading}
             onAddPosition={() => document.getElementById('portfolio-editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
           />
-          <AttributionPanel
-            data={portfolioSummary.data}
-            loading={portfolioSummary.loading}
-          />
-          {/* 持仓分布饼图 */}
-          {portfolioSummary.data && portfolioSummary.data.positions.length > 0 && (
-            <PortfolioPieChart
-              positions={portfolioSummary.data.positions}
-              totalValue={portfolioSummary.data.total_value}
-            />
-          )}
-          <ReportSection
-            reports={latestReports}
-            loading={loadingReports}
-            selectedReportId={selectedReportId}
-            onSelectReport={handleSelectReport}
-          />
+          <AttributionPanel data={portfolioSummary.data} loading={portfolioSummary.loading} />
         </div>
-      </div>
+        {portfolioSummary.data && portfolioSummary.data.positions.length > 0 && (
+          <PortfolioPieChart
+            positions={portfolioSummary.data.positions}
+            totalValue={portfolioSummary.data.total_value}
+          />
+        )}
+      </section>
+
+      <section className="space-y-3" data-testid="cockpit-section-archive">
+        <CockpitSectionHeader index={4} title="研究归档" description="回放、追问、对比或回测最近报告。" />
+        <ReportSection
+          reports={latestReports}
+          loading={loadingReports}
+          selectedReportId={selectedReportId}
+          onSelectReport={handleSelectReport}
+        />
 
       <Card className="p-4 space-y-3" data-testid="workbench-report-view">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -428,6 +447,7 @@ export function Workbench({
           </>
         )}
       </Card>
+      </section>
 
       <WorkbenchQualityDrawer
         open={qualityDrawerOpen}

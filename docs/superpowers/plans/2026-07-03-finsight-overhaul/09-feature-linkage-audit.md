@@ -240,10 +240,10 @@ type PredictionOverlay = {
   ④ 研究归档        最近报告时间线 · 每份[继续追问](B-3) [对比] [回测](WP6 F7)
 ```
 
-- [ ] Step 1: Workbench.tsx 按上述四段重排（组件全部复用现有：MorningBriefCard/FindingsFeed/PortfolioSummaryBar/RebalanceEntryCard/ReportSection，只动布局与段落标题）；段标题规格 `text-2xs uppercase tracking-wider text-t-text3`；顶部日期行 + 主操作。
-- [ ] Step 2: 每段空态用 EmptyState 带动作（晨报空→生成；发现空→"一切平静 · 配置监控"；持仓空→录入持仓；报告空→"去对话生成第一份报告"）。
-- [ ] Step 3: 路由默认 tab 逻辑不变；截图前后对比。
-- [ ] Commit: `feat(workbench): daily-cockpit information architecture — brief / attention / portfolio / archive`
+- [x] Step 1: Workbench.tsx 按上述四段重排（组件全部复用现有：MorningBriefCard/FindingsFeed/PortfolioSummaryBar/RebalanceEntryCard/ReportSection，只动布局与段落标题）；段标题规格 `text-2xs uppercase tracking-wider text-t-text3`；顶部日期行 + 主操作。
+- [x] Step 2: 每段空态用 EmptyState 带动作（晨报空→生成；发现空→"一切平静 · 配置监控"；持仓空→录入持仓；报告空→"去对话生成第一份报告"）。
+- [x] Step 3: 路由默认 tab 逻辑不变；截图前后对比。
+- [x] Commit: `feat(workbench): daily-cockpit information architecture — brief / attention / portfolio / archive`
 
 ### C-12: thinking/ 与 execution/ 两套过程组件 —— 代码收编
 
