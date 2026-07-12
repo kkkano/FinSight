@@ -155,6 +155,10 @@ type PredictionOverlay = {
 - [x] Step 1: 晨报每个要点行尾加「深入 →」ghost 链接：`/chat` 预填 `晨报提到：{要点文本}。展开讲讲对 {关联ticker（若有）} 的影响。`
 - [x] Commit: `feat(linkage): morning brief bullets expand into chat analysis`
 
+### B-8: 自选股联动登记
+
+- [x] 登记：WP6-F2 已将用户自选股接入 ChatInput 快捷建议、晨报选标的优先级与 monitor 默认 targets；实现提交 `e0a91fc`，当前 `backend/tests/test_watchlist.py` 5 项回归通过。
+
 ---
 
 ## Part C: 摆设/死件处置清单（12 件，证据 + 决定 + 步骤）
