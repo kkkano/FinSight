@@ -50,7 +50,7 @@ function MetricTag({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ResearchCard({
+function ResearchInsightCard({
   config,
   insight,
   stale,
@@ -206,7 +206,7 @@ export function ResearchInsightGrid({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {CARD_ORDER.map((config) => (
-        <ResearchCard
+        <ResearchInsightCard
           key={config.key}
           config={config}
           insight={insights[config.key]}
