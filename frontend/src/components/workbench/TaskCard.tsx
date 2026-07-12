@@ -74,14 +74,22 @@ function TaskCard({ task, run: runProp, onClick, onResume, onCancelInterrupt }: 
           />
         )}
 
-        <span className="truncate flex-1">
-          {isDone && run.reportId ? '查看报告' : isInterrupted ? '等待确认' : isExpired ? '任务已过期' : task.title}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">
+            {isInterrupted ? '等待确认' : isExpired ? '任务已过期' : task.title}
+          </span>
+          {task.reason && !isInterrupted && !isExpired && (
+            <span className="mt-0.5 block truncate text-2xs text-fin-muted">{task.reason}</span>
+          )}
         </span>
 
-        {isExecutable && isPending && (
-          <span className="ml-auto px-1.5 py-0.5 rounded text-2xs bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
-            待执行
+        {isPending && (
+          <span className="ml-auto shrink-0 rounded border border-t-border px-1.5 py-0.5 text-2xs text-t-accent group-hover:border-t-accent/50">
+            {isExecutable ? '去执行 →' : '去查看 →'}
           </span>
+        )}
+        {isDone && run.reportId && (
+          <span className="ml-auto shrink-0 text-2xs text-t-accent">查看报告 →</span>
         )}
       </button>
 

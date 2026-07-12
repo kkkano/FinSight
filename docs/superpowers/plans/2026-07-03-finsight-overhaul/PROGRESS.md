@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | 09-C10 今日任务质量与执行入口 | 本提交 | 读取规则并用 AAPL/NVDA/MSFT 持仓、跌幅、报告与集中度上下文实际生成样本：异动、缺报告、集中度、调仓、报告回放均有明确对象/原因与 execution_params/action_url；发现唯一水话是无条件“市场新闻速览”，已删除，空上下文现在返回 0 项。TaskCard 新增原因副文案与显式“去执行/去查看/查看报告”入口，继续复用既有 executeAgent/路由动作。后端质量+集中度 `4 passed`，前端新增 1 项卡片合同，ESLint/tsc 通过；完整前端 `63 files/288 tests`、生产 build 成功。 |
 | 2026-07-12 | 09-C9 `/api/supabase` 前端残留盘点 | 本提交 | 逐处确认原 4 个命中均是 `./api/supabaseClient` / `../../api/supabaseClient` TypeScript 模块导入，并非 URL；真实认证由官方 `@supabase/supabase-js` 直连 SUPABASE_URL，FinSight 后端只校验 Bearer token且无 `/api/supabase` router。新增模块澄清注释与逐处 notes，并同步 DOCS_INDEX；前后端 `/api/supabase` URL 字面量扫描为 0，鉴权/欢迎页 `2 files/5 tests`、ESLint/tsc 与 diff check 通过。 |
 | 2026-07-12 | 09-C8 订阅与提醒一级聚合入口 | 本提交 | 复用 Sidebar 已有一级“订阅与提醒”，SubscribeModal 顶部新增监控规则说明与“去配置”，下方保留完整邮件订阅管理；新增 `/workbench?focus=monitor` 深链，Workbench 挂载后自动滚到 MonitorConfigPanel。新增聚合内容合同测试，定向 ESLint/tsc 与 `2 files/5 tests` 通过；完整前端 `62 files/287 tests`、生产 build 成功。真实 Chromium 验证一级入口→邮件订阅/监控聚合→监控深链与自动滚动，控制台 0 error；截图留于忽略目录，QA 端口已清理。 |
 | 2026-07-12 | 09-C7 诊断页收进设置登记 | 本提交 | 对照 08-Task7 现有实现确认无需重复改 UI：`/rag-inspector` 与 `/cost-audit` 鉴权路由继续保留，Sidebar 对诊断页名称/路径扫描为 0；设置→高级设置已有开发者模式开关及 RAG 检索观测、成本审计链接。静态合同检查通过，SettingsModal 与 RAG 访问控制聚焦 `2 files/6 tests` 通过。 |

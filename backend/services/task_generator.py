@@ -120,22 +120,7 @@ class TaskGenerator:
             expires_at=expires_at,
         )
 
-        # Rule 5: Market news scan (always present)
-        tasks.append(
-            AITask(
-                id=self._hash("market_news"),
-                title="\u5e02\u573a\u65b0\u95fb\u901f\u89c8",
-                category="news",
-                priority=4,
-                reason="\u67e5\u770b\u6700\u65b0\u5e02\u573a\u52a8\u6001",
-                icon="newspaper",
-                action_url="/dashboard",
-                expires_at=expires_at,
-                source="rule",
-            )
-        )
-
-        # Rule 6: Rebalance suggestion (if portfolio has 3+ positions)
+        # Rule 5: Rebalance suggestion (if portfolio has 3+ positions)
         if len(ctx.portfolio) >= _MIN_POSITIONS_FOR_REBALANCE:
             tasks.append(
                 AITask(

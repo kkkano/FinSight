@@ -222,9 +222,9 @@ type PredictionOverlay = {
 ### C-10: daily_tasks / task_generator 任务质量 ——【盘点】
 
 **证据:** TaskSection 从 `/api/tasks` 拉"今日任务"（task_generator 自动生成），生成质量未知——若任务是"看看 AAPL"这种水话，就是摆设感的直接来源。
-- [ ] Step 1【盘点】: 读 `backend/services/task_generator.py` 的生成规则 + 实际调一次看输出。判据：任务是否可执行（有明确对象+动作+入口）。
-- [ ] Step 2 分支 a（质量可）：TaskCard 加"去执行"按钮直连对应功能（分析→chat 预填；盯盘→monitor 配置）；分支 b（水话）：TaskSection 改为由**真实信号**驱动——只显示三类：watchlist 异动（monitor findings）、晨报待读、报告待对比，删除生成式任务。
-- [ ] Commit: `feat(workbench): tasks are real signals with execute actions (or pruned)`
+- [x] Step 1【盘点】: 读 `backend/services/task_generator.py` 的生成规则 + 实际调一次看输出。判据：任务是否可执行（有明确对象+动作+入口）。
+- [x] Step 2 分支 a（质量可）：TaskCard 加"去执行"按钮直连对应功能（分析→chat 预填；盯盘→monitor 配置）；分支 b（水话）：TaskSection 改为由**真实信号**驱动——只显示三类：watchlist 异动（monitor findings）、晨报待读、报告待对比，删除生成式任务。
+- [x] Commit: `feat(workbench): tasks are real signals with execute actions (or pruned)`
 
 ### C-11: Workbench 重定位 ——「今日驾驶舱」信息架构（"工作台不知道是干嘛的"的根治）
 
