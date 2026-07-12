@@ -11,10 +11,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from backend.services import monitor_engine
+from backend.services.monitor_signals import MarketSnapshot
 from backend.services.alert_scheduler import PriceSnapshot
 from backend.services.monitor_store import MonitorStore
 from backend.services.session_price import SessionPriceSnapshot
@@ -764,3 +766,49 @@ def test_notify_cooldown_persists_across_store_instances(
     assert restarted.get_last_notified_at("sess-n") is not None
     monitor_engine._notify_findings("sess-n", [_make_finding(title="重启后第二条")])
     assert len(fake.calls) == 1  # 仍只有第一封，重启未重发
+
+
+def test_evaluate_realtime_snapshot_prefers_explicit_trigger_over_heartbeat(monkeypatch):
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda _now=None: "regular")
+    previous = MarketSnapshot(
+        symbol="AAPL", observed_at="2026-07-10T15:00:00+00:00", price=99.0,
+        levels={"pivot": 100.0},
+    )
+    current = MarketSnapshot(
+        symbol="AAPL", observed_at="2026-07-10T15:01:00+00:00", price=101.0,
+        levels={"pivot": 100.0},
+    )
+    now = datetime(2026, 7, 10, 15, 5, tzinfo=timezone.utc)
+
+    triggers = monitor_engine.evaluate_realtime_snapshot(
+        previous, current, None, now - timedelta(seconds=300), now,
+    )
+    assert [item.kind for item in triggers] == ["level_break"]
+
+
+def test_evaluate_realtime_snapshot_heartbeat_closed_and_data_gap(monkeypatch):
+    previous = MarketSnapshot(
+        symbol="AAPL", observed_at="2026-07-10T15:00:00+00:00", price=100.0,
+    )
+    current = MarketSnapshot(
+        symbol="AAPL", observed_at="2026-07-10T15:01:00+00:00", price=100.0,
+    )
+    now = datetime(2026, 7, 10, 15, 5, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda _now=None: "regular")
+    assert [item.kind for item in monitor_engine.evaluate_realtime_snapshot(
+        previous, current, None, now - timedelta(seconds=300), now,
+    )] == ["heartbeat"]
+
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda _now=None: "closed")
+    assert monitor_engine.evaluate_realtime_snapshot(previous, current, None, None, now) == []
+
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda _now=None: "regular")
+    gap = monitor_engine.evaluate_realtime_snapshot(
+        previous,
+        MarketSnapshot(symbol="AAPL", observed_at=current.observed_at, price=None),
+        None,
+        None,
+        now,
+    )
+    assert [item.kind for item in gap] == ["data_gap"]

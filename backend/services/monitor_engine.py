@@ -40,6 +40,12 @@ from backend.services.market_hours import (
 from backend.services.email_service import get_email_service
 from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
 from backend.services.monitor_store import get_monitor_store
+from backend.services.monitor_signals import (
+    MarketSnapshot,
+    MonitorTrigger,
+    detect_triggers,
+    heartbeat_due,
+)
 from backend.services.portfolio_store import (
     get_positions,
     list_session_ids,  # 兼容旧测试/扩展注入点；现役调度使用 list_user_sessions
@@ -70,6 +76,32 @@ DEFAULT_SENTIMENT_ABS_THRESHOLD = 0.35  # 舆情突变：平均分绝对值阈�
 EARNINGS_NEAR_DAYS = 3  # 财报临近：距今 <= 3 天（含今天）触发
 MACRO_EVENT_DAYS = 2  # 宏观事件：距今 <= 2 天触发
 DEDUP_WINDOW_HOURS = 4
+
+
+def evaluate_realtime_snapshot(
+    previous: MarketSnapshot,
+    current: MarketSnapshot,
+    prediction,
+    last_comment_at: datetime | None,
+    now: datetime,
+) -> list[MonitorTrigger]:
+    """只计算实时触发，不调用 LLM、不写库、不修改旧 L1 调度状态。"""
+    if get_market_session(now) == "closed":
+        return []
+    triggers = detect_triggers(previous=previous, current=current, prediction=prediction)
+    if triggers:
+        return triggers
+    if heartbeat_due(last_comment_at=last_comment_at, now=now):
+        return [MonitorTrigger(
+            kind="heartbeat",
+            detail=(
+                f"{current.symbol} 过去 300 秒无显式触发；"
+                f"最新价 {float(current.price):.4f}"
+            ),
+            observed_at=current.observed_at,
+            severity="info",
+        )]
+    return []
 
 
 def _sentiment_rule_enabled() -> bool:

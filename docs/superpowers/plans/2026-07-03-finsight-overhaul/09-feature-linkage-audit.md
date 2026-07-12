@@ -298,12 +298,12 @@ def heartbeat_due(*, last_comment_at: datetime | None, now: datetime,
                   interval_seconds: int = 300) -> bool: ...
 ```
 
-- [ ] Step 1: TDD 覆盖价位上/下穿、zone 进入/离开、MACD 柱符号翻转、资金流零轴抖动抑制（末值绝对值小于峰值 5% 不触发）、量能大于前 20 根均量 3 倍，以及 5 分钟心跳边界。所有测试使用固定行情 fixture，禁止 mock LLM。
-- [ ] Step 2: 实现无 I/O 的纯函数触发库；所有价格、指标和 prediction 都作为显式参数传入。`detail` 必须包含触发前值、触发后值和命中的命名价位，供日志、prompt、点评流复用。
-- [ ] Step 3: 在 `monitor_engine` 增加无调度副作用的 `evaluate_realtime_snapshot(previous, current, prediction, last_comment_at, now)`，只返回 triggers（显式信号优先，只有无显式信号且心跳到期时才返回 heartbeat），不得直接调用 LLM 或写库。
-- [ ] Step 4: 盘前/休市等市场时段沿用 FinSight 现有 market-hours 与市场映射，不写死 ET、不接 Longbridge。行情缺字段时返回可诊断的 data-gap 结果，不把缺数据伪装成 heartbeat 成功。
-- [ ] 验收: 固定输入的 trigger 输出逐字节稳定；重复调用纯函数无外部副作用；heartbeat 在第 299 秒为 false、第 300 秒为 true，且显式 trigger 与 heartbeat 不重复发两条。
-- [ ] Commit: `feat(monitor): deterministic trigger library and heartbeat policy`
+- [x] Step 1: TDD 覆盖价位上/下穿、zone 进入/离开、MACD 柱符号翻转、资金流零轴抖动抑制（末值绝对值小于峰值 5% 不触发）、量能大于前 20 根均量 3 倍，以及 5 分钟心跳边界。所有测试使用固定行情 fixture，禁止 mock LLM。
+- [x] Step 2: 实现无 I/O 的纯函数触发库；所有价格、指标和 prediction 都作为显式参数传入。`detail` 必须包含触发前值、触发后值和命中的命名价位，供日志、prompt、点评流复用。
+- [x] Step 3: 在 `monitor_engine` 增加无调度副作用的 `evaluate_realtime_snapshot(previous, current, prediction, last_comment_at, now)`，只返回 triggers（显式信号优先，只有无显式信号且心跳到期时才返回 heartbeat），不得直接调用 LLM 或写库。
+- [x] Step 4: 盘前/休市等市场时段沿用 FinSight 现有 market-hours 与市场映射，不写死 ET、不接 Longbridge。行情缺字段时返回可诊断的 data-gap 结果，不把缺数据伪装成 heartbeat 成功。
+- [x] 验收: 固定输入的 trigger 输出逐字节稳定；重复调用纯函数无外部副作用；heartbeat 在第 299 秒为 false、第 300 秒为 true，且显式 trigger 与 heartbeat 不重复发两条。
+- [x] Commit: `feat(monitor): deterministic trigger library and heartbeat policy`
 
 ### D-2: 页面 lease 门控（没人看，不跑高频 AI）
 
