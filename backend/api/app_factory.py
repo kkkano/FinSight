@@ -51,6 +51,7 @@ from backend.api.agents_router import AgentsRouterDeps, create_agents_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.api.watchlist_router import WatchlistRouterDeps, create_watchlist_router
 from backend.services.watchlist_store import get_watchlist_store
+from backend.services.agent_prediction_store import get_agent_prediction_store
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
@@ -357,7 +358,10 @@ def create_app() -> FastAPI:
     )
     tools_router = create_tools_router()
     skills_router = create_skills_router()
-    agents_router = create_agents_router(AgentsRouterDeps(memory_service=memory_service))
+    agents_router = create_agents_router(AgentsRouterDeps(
+        memory_service=memory_service,
+        get_prediction_store=get_agent_prediction_store,
+    ))
 
     morning_brief_router = create_morning_brief_router(
         MorningBriefRouterDeps(

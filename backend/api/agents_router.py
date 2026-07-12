@@ -12,12 +12,13 @@ agent 清单复用 capability_registry.REPORT_AGENT_CANDIDATES（单一数据源
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES
 from backend.graph.preference_timeouts import normalize_timeout_seconds
+from backend.services.agent_prediction_store import PredictionStoreUnavailable
 
 _VALID_DEPTHS = {"standard", "deep", "off"}
 _MAX_ROUNDS_MIN = 1
@@ -62,6 +63,7 @@ assert not _missing_display_meta, f"agents missing display meta: {_missing_displ
 @dataclass(frozen=True)
 class AgentsRouterDeps:
     memory_service: Any
+    get_prediction_store: Callable[[], Any] | None = None
 
 
 def _default_preferences() -> dict[str, Any]:
@@ -169,6 +171,37 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
             if len(items) >= limit:
                 break
         return {"success": True, "query": q, "count": len(items), "items": items}
+
+    @router.get("/api/agents/predictions/{prediction_id}")
+    async def get_prediction(prediction_id: str, request: Request) -> dict[str, Any]:
+        user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+        if user_id == "public":
+            raise HTTPException(status_code=401, detail="登录后才能读取 AI prediction")
+        if deps.get_prediction_store is None:
+            raise HTTPException(status_code=503, detail="AI prediction store unavailable")
+        try:
+            prediction = deps.get_prediction_store().get(prediction_id, user_id=user_id)
+        except PredictionStoreUnavailable as exc:
+            raise HTTPException(status_code=503, detail="AI prediction store unavailable") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="AI prediction store unavailable") from exc
+        if prediction is None:
+            # 404 不区分不存在与跨租户，避免泄露资源存在性。
+            raise HTTPException(status_code=404, detail="prediction not found")
+        overlay = {
+            "predictionId": prediction.id,
+            "symbol": prediction.symbol,
+            "direction": prediction.direction,
+            "anchor": prediction.anchor.model_dump(mode="json"),
+            "entry": prediction.entry,
+            "stop": prediction.stop,
+            "target1": prediction.target1,
+            "target2": prediction.target2,
+            "status": prediction.status,
+        }
+        if prediction.range_low is not None and prediction.range_high is not None:
+            overlay["range"] = {"low": prediction.range_low, "high": prediction.range_high}
+        return {"prediction": {key: value for key, value in overlay.items() if value is not None}}
 
     @router.get("/api/agents/preferences")
     async def get_agent_preferences(user_id: str = "default_user") -> dict[str, Any]:

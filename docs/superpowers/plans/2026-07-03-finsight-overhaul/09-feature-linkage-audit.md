@@ -268,12 +268,12 @@ type PredictionOverlay = {
 
 **PostgreSQL:** `agent_predictions` 必须带 `UNIQUE(id, user_id)`，所有读取带 `user_id`；不新增 SQLite。09 只存最小可校验字段，10 Task 5/6 在同表/关联表上扩展 scenarios、历史记忆、outcome 与成本。
 
-- [ ] Step 1: TDD 覆盖 extra 行情字段拒绝、long/short/neutral 字段关系、entry_type、数值 invalidation、RR、伪造 symbol/anchor/user_id 以及跨租户读写隔离。
-- [ ] Step 2: 实现 PostgreSQL store 与受鉴权 `GET /api/agents/predictions/{id}`；数据库不可用或无权限时 fail closed，A-4 仍只显示真实行情。
-- [ ] Step 3: 实现服务端 `submit_prediction` 校验；仅 concrete ticker 且 operation 属于 `investment_opinion/technical/earnings_impact/report_generation` 的可计分 agent step 暴露工具。首次非法可纠正一次，第二次仍非法则不落库；其他 agent/tool/qa/macro step 允许零提交且不得被迫造价位。
-- [ ] Step 4: 固化逐 bar 入场规则：market 从 anchor 后首根完整 bar 入场；limit 仅在 bar 区间触及 entry 时入场；stop 仅在顺方向穿越 entry 时入场；入场前触及 `invalidation_price` 为 invalidated；跳空按首个可交易 bar 的 open 保守成交。同 bar 入场并同时触及 stop/target 时判 hit_stop。
-- [ ] 验收: 09 不依赖 10 即可创建、校验、鉴权读取 prediction 并供 ECharts overlay/monitor 使用；非法 prediction 和 AI 行情数组均无法入库。
-- [ ] Commit: `feat(prediction): minimal server-validated postgres prediction foundation`
+- [x] Step 1: TDD 覆盖 extra 行情字段拒绝、long/short/neutral 字段关系、entry_type、数值 invalidation、RR、伪造 symbol/anchor/user_id 以及跨租户读写隔离。
+- [x] Step 2: 实现 PostgreSQL store 与受鉴权 `GET /api/agents/predictions/{id}`；数据库不可用或无权限时 fail closed，A-4 仍只显示真实行情。
+- [x] Step 3: 实现服务端 `submit_prediction` 校验；仅 concrete ticker 且 operation 属于 `investment_opinion/technical/earnings_impact/report_generation` 的可计分 agent step 暴露工具。首次非法可纠正一次，第二次仍非法则不落库；其他 agent/tool/qa/macro step 允许零提交且不得被迫造价位。
+- [x] Step 4: 固化逐 bar 入场规则：market 从 anchor 后首根完整 bar 入场；limit 仅在 bar 区间触及 entry 时入场；stop 仅在顺方向穿越 entry 时入场；入场前触及 `invalidation_price` 为 invalidated；跳空按首个可交易 bar 的 open 保守成交。同 bar 入场并同时触及 stop/target 时判 hit_stop。
+- [x] 验收: 09 不依赖 10 即可创建、校验、鉴权读取 prediction 并供 ECharts overlay/monitor 使用；非法 prediction 和 AI 行情数组均无法入库。
+- [x] Commit: `feat(prediction): minimal server-validated postgres prediction foundation`
 
 ### D-1: 纯代码触发库 + 心跳判定
 
