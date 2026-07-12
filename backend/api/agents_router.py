@@ -11,6 +11,7 @@ agent 清单与面向用户的身份元数据统一读取 AgentProfile 注册表
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -19,6 +20,8 @@ from backend.agents.profiles import profile
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES
 from backend.graph.preference_timeouts import normalize_timeout_seconds
 from backend.services.agent_prediction_store import PredictionStoreUnavailable
+
+logger = logging.getLogger(__name__)
 
 _VALID_DEPTHS = {"standard", "deep", "off"}
 _MAX_ROUNDS_MIN = 1
@@ -147,8 +150,8 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
                         track_record = deps.get_outcome_store().track_record(
                             user_id=user_id, agent=name, days=90,
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("读取 Agent 历史命中率失败，使用空样本降级: agent=%s error=%s", name, exc)
                 if deps.get_run_archive is not None:
                     try:
                         archive = deps.get_run_archive()
@@ -156,8 +159,8 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
                             "days_7": archive.cost_summary(user_id=user_id, agent=name, days=7),
                             "days_30": archive.cost_summary(user_id=user_id, agent=name, days=30),
                         }
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("读取 Agent 成本摘要失败，使用零值降级: agent=%s error=%s", name, exc)
             items.append({
                 "name": name,
                 "display_name": display_name,
