@@ -32,6 +32,7 @@ import { StageStepper, type StageStepperProps, type StageStatus } from './execut
 import { AgentWorkLog } from './execution/AgentWorkLog';
 import { EmptyState } from './ui/EmptyState';
 import { extractTickers } from '../utils/ticker';
+import { parseChartMarkers } from '../utils/chartIntent';
 import { createTickerLinkPlugin, tickerFromDashboardHref } from '../utils/tickerMarkdown';
 import { TickerLink } from './common/TickerLink';
 import { ReportArchiveLink } from './common/ReportArchiveLink';
@@ -500,7 +501,13 @@ export const ChatList: React.FC = () => {
 const EMPTY_SMART_CHART_BLOCKS: ReturnType<typeof parseSmartChartBlocks> = [];
 
 const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRetry: () => void }> = ({ content, isStreaming, onRetry }) => {
-  const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
+  const [chartData, setChartData] = useState<Array<{
+    ticker: string;
+    chartType: ChartType;
+    valueMode: 'close' | 'return';
+    period: string;
+    summary: string;
+  }>>([]);
 
   // FE-03b：流式中间态跳过全文图表正则解析（每 token 一次太贵），落定后一次解析
   const smartChartBlocks = useMemo(
@@ -515,22 +522,34 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
 
   useEffect(() => {
     if (isStreaming) return; // CHART 标记由收尾阶段注入，流式期间无需扫描
-    const matches = Array.from(content.matchAll(/\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g));
+    const matches = parseChartMarkers(content);
     if (matches.length === 0) {
       setChartData([]);
       return;
     }
     const validChartTypes: ChartType[] = ['line', 'candlestick', 'pie', 'bar', 'tree', 'area', 'scatter', 'heatmap'];
     const seen = new Set<string>();
-    const nextData: Array<{ ticker: string; chartType: ChartType; summary: string }> = [];
+    const nextData: Array<{
+      ticker: string;
+      chartType: ChartType;
+      valueMode: 'close' | 'return';
+      period: string;
+      summary: string;
+    }> = [];
     matches.forEach((match) => {
-      const ticker = match[1];
-      const chartTypeStr = match[2];
+      const ticker = match.ticker;
+      const chartTypeStr = match.chartType;
       const chartType = (validChartTypes.includes(chartTypeStr as ChartType) ? chartTypeStr : 'line') as ChartType;
-      const key = `${ticker}-${chartType}`;
+      const key = `${ticker}-${chartType}-${match.valueMode}-${match.period}`;
       if (seen.has(key)) return;
       seen.add(key);
-      nextData.push({ ticker, chartType, summary: '' });
+      nextData.push({
+        ticker,
+        chartType,
+        valueMode: match.valueMode,
+        period: match.period,
+        summary: '',
+      });
     });
     setChartData(nextData);
   }, [content, isStreaming]);
@@ -573,9 +592,11 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
       </ReactMarkdown>
       {chartData.map((chart) => (
         <InlineChart
-          key={`${chart.ticker}-${chart.chartType}`}
+          key={`${chart.ticker}-${chart.chartType}-${chart.valueMode}-${chart.period}`}
           ticker={chart.ticker}
           chartType={chart.chartType}
+          valueMode={chart.valueMode}
+          period={chart.period}
           onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
         />
       ))}

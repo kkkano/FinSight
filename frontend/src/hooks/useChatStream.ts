@@ -380,7 +380,10 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(userMsgContent);
                 const forceMulti = tickers.length > 1;
                 if (chartInfo.chartType || forceMulti) {
-                  const withMarkers = injectChartMarkers(patched, tickers, chartInfo.chartType);
+                  const withMarkers = injectChartMarkers(patched, tickers, chartInfo.chartType, {
+                    valueMode: chartInfo.valueMode,
+                    period: chartInfo.period,
+                  });
                   if (withMarkers !== patched && tickers.length === 1) useStore.getState().setTicker(tickers[0]);
                   patched = withMarkers;
                 } else if (chartInfo.smartChart && !forceMulti) {
