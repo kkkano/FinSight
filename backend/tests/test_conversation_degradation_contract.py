@@ -38,3 +38,23 @@ def test_llm_degradation_reads_synthesis_fallback():
         "stage": "synthesis",
         "reason": "provider_timeout",
     }
+
+
+def test_llm_degradation_marks_all_runtime_attempts_failed():
+    result = _llm_degradation(
+        {"trace": {}},
+        {"llm_token_calls": 2, "failed_llm_calls": 2},
+    )
+
+    assert result == {
+        "used": True,
+        "stage": "runtime",
+        "reason": "all_llm_attempts_failed",
+    }
+
+
+def test_llm_degradation_does_not_mark_recovered_retry():
+    assert _llm_degradation(
+        {"trace": {}},
+        {"llm_token_calls": 2, "failed_llm_calls": 1},
+    ) is None

@@ -349,7 +349,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)
             from backend.services.execution_service import _llm_degradation
 
-            degradation = _llm_degradation(state)
+            degradation = _llm_degradation(state, token_acc.summary())
             return {
                 "success": True,
                 "schema_version": deps.chat_response_schema_version,

@@ -49,13 +49,13 @@
   "message": "LLM 暂时不可用，本轮已使用降级回答；结果可能不完整，请稍后重试。",
   "degradation": {
     "used": true,
-    "stage": "routing|direct_reply|synthesis",
-    "reason": "llm_unavailable"
+    "stage": "routing|direct_reply|synthesis|runtime",
+    "reason": "llm_unavailable|all_llm_attempts_failed"
   }
 }
 ```
 
-流式 `done` 和同步聊天响应同时返回 `degraded: boolean` 与 `degradation: object|null`。降级回答仍可展示，但前端必须显示警告/来源徽标，不能伪装成正常 LLM 成功。
+流式 `done` 和同步聊天响应同时返回 `degraded: boolean` 与 `degradation: object|null`。若一次失败后通过端点轮换成功，不标记整轮降级；若本轮所有 LLM 尝试均失败并使用规则、工具或模板结果，则以 `runtime/all_llm_attempts_failed` 披露。降级回答仍可展示，但前端必须显示警告/来源徽标，不能伪装成正常 LLM 成功。
 
 ## `plan_ready`
 

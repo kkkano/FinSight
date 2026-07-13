@@ -106,7 +106,10 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
     return markdown, state
 
 
-def _llm_degradation(state: dict[str, Any]) -> dict[str, Any] | None:
+def _llm_degradation(
+    state: dict[str, Any],
+    usage_summary: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
     conversation = trace.get("conversation_degraded") if isinstance(trace, dict) else None
     if isinstance(conversation, dict) and conversation.get("used"):
@@ -121,6 +124,15 @@ def _llm_degradation(state: dict[str, Any]) -> dict[str, Any] | None:
             "used": True,
             "stage": "synthesis",
             "reason": str(synth.get("reason") or "llm_unavailable"),
+        }
+    usage = usage_summary if isinstance(usage_summary, dict) else {}
+    calls = max(0, int(usage.get("llm_token_calls") or 0))
+    failed_calls = max(0, int(usage.get("failed_llm_calls") or 0))
+    if calls > 0 and failed_calls >= calls:
+        return {
+            "used": True,
+            "stage": "runtime",
+            "reason": "all_llm_attempts_failed",
         }
     return None
 
@@ -681,7 +693,8 @@ async def run_graph_pipeline(
             if tool_total_calls <= 0:
                 tool_total_calls = stream_metrics.get("tool_call", 0)
 
-            degradation = _llm_degradation(state)
+            usage_summary = token_acc.summary()
+            degradation = _llm_degradation(state, usage_summary)
             if degradation:
                 await _queue_event(
                     {
@@ -720,7 +733,7 @@ async def run_graph_pipeline(
                         **stream_metrics,
                         "llm_total_calls": llm_total_calls,
                         "tool_total_calls": tool_total_calls,
-                        **token_acc.summary(),
+                        **usage_summary,
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),
                     },
@@ -1077,7 +1090,8 @@ async def resume_graph_pipeline(
                     }
                 )
 
-            degradation = _llm_degradation(final_state)
+            usage_summary = token_acc.summary()
+            degradation = _llm_degradation(final_state, usage_summary)
             if degradation:
                 await _queue_event(
                     {
@@ -1109,7 +1123,7 @@ async def resume_graph_pipeline(
                     "degraded": bool(degradation),
                     "degradation": degradation,
                     "metrics": {
-                        **token_acc.summary(),
+                        **usage_summary,
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),
                     },
