@@ -41,6 +41,7 @@
 14. 比较型 renderer 必须回答比较维度；“采用了什么证据/方法”不构成比较结论。
 15. 价格图标题、单位和数值语义必须一致；价格语义不得使用模型生成时间序列。
 16. `render_intent.shape=compare` 且要求逐标的证据时，必须先生成整体比较，再考虑通用 task 分节。
+17. LLM intent pipeline 生成的 `intent_contract(s)` / `request_frame(s)` 必须投影到顶层 GraphState，不得只留在 task params。
 
 ## 输出与证据策略
 

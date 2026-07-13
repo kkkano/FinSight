@@ -231,6 +231,8 @@ async def build_intent_result(state: GraphState) -> tuple[IntentFrame, dict]:
     # ── research：hints 投影（LLM 权威）──
     tasks: list[dict[str, Any]] = []
     context_refs: list[dict[str, Any]] = []
+    intent_contracts: list[dict[str, Any]] = []
+    request_frames: list[dict[str, Any]] = []
     if getattr(decision, "task_hints", ()):
         contract_enforced = ur.intent_contract_mode() == "enforce"
         if contract_enforced:
@@ -238,7 +240,7 @@ async def build_intent_result(state: GraphState) -> tuple[IntentFrame, dict]:
                 tasks=tasks, context_refs=context_refs, decision=decision, query=query,
                 output_mode=output_mode, current_tickers=signals.tickers,
                 selection_ids=selection_ids, selection_types=selection_types,
-                intent_contracts=[], request_frames=[],
+                intent_contracts=intent_contracts, request_frames=request_frames,
                 project_residual_hints=True,
             )
         else:
@@ -292,6 +294,9 @@ async def build_intent_result(state: GraphState) -> tuple[IntentFrame, dict]:
     }
     trace["understanding"] = understanding
     trace["reply_contract"] = reply_contract
+    if intent_contracts:
+        trace["intent_contract"] = intent_contracts[0]
+        trace["intent_contracts"] = intent_contracts
 
     result = {
         "understanding": understanding,
@@ -309,6 +314,13 @@ async def build_intent_result(state: GraphState) -> tuple[IntentFrame, dict]:
         "artifacts": artifacts,
         "trace": trace,
     }
+    if intent_contracts:
+        result["intent_contract"] = intent_contracts[0]
+        result["intent_contracts"] = intent_contracts
+        understanding["intent_contract"] = intent_contracts[0]
+    if request_frames:
+        result["request_frame"] = request_frames[0]
+        result["request_frames"] = request_frames
     frame = intent_frame_from_legacy(understanding)
     frame.source = "llm_router"
     understanding["intent_frame"] = frame.model_dump()

@@ -116,6 +116,44 @@ async def test_compare_query_keeps_non_company_hints(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_llm_compare_projection_preserves_top_level_intent_contract(monkeypatch):
+    """生产 renderer 依赖顶层合同；管线不能只把合同埋在 task params 里。"""
+    from backend.graph.intent import pipeline
+
+    monkeypatch.setenv("FINSIGHT_INTENT_CONTRACT_MODE", "enforce")
+    decision = make_decision(
+        "research",
+        relation="compare",
+        task_hints=(
+            {
+                "subject_type": "company",
+                "subject_label": "NVDA",
+                "tickers": ["NVDA"],
+                "operation": "valuation_sanity",
+            },
+            {
+                "subject_type": "company",
+                "subject_label": "AMD",
+                "tickers": ["AMD"],
+                "operation": "valuation_sanity",
+            },
+        ),
+    )
+
+    with patch.object(pipeline, "route_conversation", new=AsyncMock(return_value=decision)):
+        _frame, result = await pipeline.build_intent_result(
+            {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
+        )
+
+    contract = result.get("intent_contract") or {}
+    assert contract.get("facets") == ["valuation"]
+    assert contract.get("primary_tickers") == ["NVDA", "AMD"]
+    assert contract.get("per_ticker_required") is True
+    assert (contract.get("render_intent") or {}).get("shape") == "compare"
+    assert (result.get("understanding") or {}).get("intent_contract") == contract
+
+
+@pytest.mark.asyncio
 async def test_heuristic_fallback_decision_is_not_authoritative():
     """router 的 fail-open 启发式决策（decision_source=heuristic_fallback）
     不得拥有 LLM 权威——投资类 query 必须交回规则 fallback 产生 research 任务。"""
