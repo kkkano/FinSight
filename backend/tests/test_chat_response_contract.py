@@ -1701,7 +1701,19 @@ def test_chat_renderer_valuation_compare_light_does_not_emit_missing_fundamental
                 "step_results": {
                     "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
                     "s4": {"output": {"price": 50.0, "change_percent": -1.0}},
-                }
+                },
+                # 生产 DAG 会按 task_id 写入结果；整体 compare 必须优先于
+                # 通用多任务分节，否则会退化成两份单股投资观点。
+                "task_results": {
+                    "task_2": {
+                        "step_ids": ["s1", "s2", "s3"],
+                        "results": {"s1": {"output": {"price": 100.0}}},
+                    },
+                    "task_3": {
+                        "step_ids": ["s4", "s5", "s6"],
+                        "results": {"s4": {"output": {"price": 50.0}}},
+                    },
+                },
             },
         }
     )

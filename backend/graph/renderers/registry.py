@@ -42,7 +42,11 @@ from backend.graph.renderers.misc import (
     render_last_report_followup,
     render_technical,
 )
-from backend.graph.renderers.compare import render_compare, render_research_compare
+from backend.graph.renderers.compare import (
+    render_compare,
+    render_research_compare,
+    requires_research_compare,
+)
 from backend.graph.renderers.earnings import render_earnings_impact, render_earnings_performance
 from backend.graph.renderers.holdings import render_holdings
 from backend.graph.renderers.news import render_news_impact
@@ -244,6 +248,14 @@ def _with_existing_prefixes(markdown: str, state: GraphState) -> str:
 
 
 def render_chat_markdown(state: GraphState) -> str:
+    # compare 是一个跨 task 的整体回答契约。若先按 task 分节，NVDA/AMD 这类
+    # 估值比较会被拆成两份 investment_opinion，丢失真正的横向结论。
+    if requires_research_compare(state):
+        compare_ctx = enrich_render_ctx(build_render_ctx(state), state)
+        compared = render_research_compare(state, compare_ctx)
+        if compared is not None:
+            return compared
+
     sectioned = render_task_sections(state)
     if sectioned is not None:
         return _with_existing_prefixes(sectioned, state)

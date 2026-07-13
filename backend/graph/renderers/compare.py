@@ -258,6 +258,23 @@ def _v2_requires_research_compare(state: GraphState) -> bool:
         return False
     return VALUATION_COMPARE_LIGHT_PROFILE in _v2_profiles(state)
 
+
+def requires_research_compare(state: GraphState) -> bool:
+    """整体比较契约必须先于逐 task 分节渲染，否则会退化成多份单股模板。"""
+    intent_contract = _intent_contract(state)
+    render_intent = (
+        intent_contract.get("render_intent")
+        if isinstance(intent_contract.get("render_intent"), dict)
+        else {}
+    )
+    return bool(
+        (
+            render_intent.get("shape") == "compare"
+            and intent_contract.get("per_ticker_required")
+        )
+        or _v2_requires_research_compare(state)
+    )
+
 def _render_research_compare_markdown(
     state: GraphState,
     *,
@@ -347,12 +364,7 @@ def _render_research_compare_markdown(
 
 def render_research_compare(state: GraphState, ctx: dict[str, Any]) -> str | None:
     """原分支#4：意图契约 compare 形态 / v2 轻量对比档案。"""
-    intent_contract = _intent_contract(state)
-    render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
-    if (
-        render_intent.get("shape") == "compare"
-        and bool(intent_contract.get("per_ticker_required"))
-    ) or _v2_requires_research_compare(state):
+    if requires_research_compare(state):
         return _render_research_compare_markdown(
             state,
             prices=ctx["prices"],
