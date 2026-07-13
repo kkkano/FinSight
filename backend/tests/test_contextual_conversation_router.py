@@ -9,6 +9,32 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def test_context_timeout_respects_router_and_reply_hard_caps(monkeypatch):
+    from backend.graph.intent.router import _context_timeout
+
+    state = {
+        "ui_context": {
+            "agent_preferences": {"timeoutSeconds": 600},
+        }
+    }
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_MAX_TIMEOUT_SEC", "45")
+    assert _context_timeout(
+        45.0,
+        "FINSIGHT_CONTEXT_ROUTER_MAX_TIMEOUT_SEC",
+        45.0,
+        state=state,
+    ) == 45.0
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_REPLY_MAX_TIMEOUT_SEC", "60")
+    assert _context_timeout(
+        60.0,
+        "FINSIGHT_CONTEXT_REPLY_MAX_TIMEOUT_SEC",
+        60.0,
+        state=state,
+    ) == 60.0
+
+
 def _task_required_evidence(task: dict) -> set[str]:
     operation = task.get("operation") if isinstance(task, dict) else {}
     params = operation.get("params") if isinstance(operation, dict) else {}
