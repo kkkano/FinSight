@@ -106,6 +106,25 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
     return markdown, state
 
 
+def _llm_degradation(state: dict[str, Any]) -> dict[str, Any] | None:
+    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
+    conversation = trace.get("conversation_degraded") if isinstance(trace, dict) else None
+    if isinstance(conversation, dict) and conversation.get("used"):
+        return {
+            "used": True,
+            "stage": str(conversation.get("stage") or "conversation"),
+            "reason": str(conversation.get("reason") or "llm_unavailable"),
+        }
+    synth = trace.get("synthesize_runtime") if isinstance(trace, dict) else None
+    if isinstance(synth, dict) and synth.get("fallback"):
+        return {
+            "used": True,
+            "stage": "synthesis",
+            "reason": str(synth.get("reason") or "llm_unavailable"),
+        }
+    return None
+
+
 def _apply_quality_gate(
     *,
     report: dict[str, Any] | None,
@@ -662,6 +681,17 @@ async def run_graph_pipeline(
             if tool_total_calls <= 0:
                 tool_total_calls = stream_metrics.get("tool_call", 0)
 
+            degradation = _llm_degradation(state)
+            if degradation:
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "degraded",
+                        "message": "LLM 暂时不可用，本轮已使用降级回答；结果可能不完整，请稍后重试。",
+                        "degradation": degradation,
+                    }
+                )
+
             await _queue_event(
                 {
                     "schema_version": deps.sse_event_schema_version,
@@ -679,6 +709,8 @@ async def run_graph_pipeline(
                     "blocked_report_available": bool(blocked_report_preview),
                     "allow_continue_when_blocked": True,
                     "soft_blocked": soft_blocked,
+                    "degraded": bool(degradation),
+                    "degradation": degradation,
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),
@@ -1045,6 +1077,17 @@ async def resume_graph_pipeline(
                     }
                 )
 
+            degradation = _llm_degradation(final_state)
+            if degradation:
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "degraded",
+                        "message": "LLM 暂时不可用，本轮已使用降级回答；结果可能不完整，请稍后重试。",
+                        "degradation": degradation,
+                    }
+                )
+
             # Done
             await _queue_event(
                 {
@@ -1063,6 +1106,8 @@ async def resume_graph_pipeline(
                     "blocked_report_available": bool(blocked_report_preview),
                     "allow_continue_when_blocked": True,
                     "soft_blocked": soft_blocked,
+                    "degraded": bool(degradation),
+                    "degradation": degradation,
                     "metrics": {
                         **token_acc.summary(),
                         "request_started_at": request_started_at,

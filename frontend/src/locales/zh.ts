@@ -16,6 +16,8 @@ export const zh = {
     backToLatest: '回到最新',
     source: '来源',
     fallback: '兜底',
+    degradedTitle: '模型已降级',
+    degradedMessage: 'LLM 暂时不可用，本轮使用了降级回答，结果可能不完整；稍后可重试。',
     asOf: '截至',
     triedSources: '尝试',
     sourceLink: '来源链接',

@@ -200,6 +200,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     let fullContent = '';
     let thinkingSteps: ThinkingStep[] = [];
     let execRunId: string | null = null;
+    let terminalHandlingPromise: Promise<void> | null = null;
     const outputMode = opts.outputMode ?? 'chat';
     const requestStartedAt = Date.now();
 
@@ -322,6 +323,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             });
           },
           onDone: async (report, thinking, meta) => {
+            const degraded = meta?.degraded === true;
             const doneStep: ThinkingStep = {
               stage: 'done',
               message: zh.chat.analysisDone,
@@ -363,7 +365,12 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               report,
               thinking: thinkingSteps,
               evidence_pool: meta?.evidence_pool ?? meta?.data?.evidence_pool,
+              fallback_used: degraded,
+              data_origin: degraded ? 'LLM' : undefined,
             });
+            if (degraded) {
+              toast({ type: 'warning', title: zh.chat.degradedTitle, message: zh.chat.degradedMessage });
+            }
 
             // 5. 文本先落定，图表异步补挂。
             void (async () => {
@@ -400,7 +407,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             if (isRequestSessionActive()) useStore.getState().setStatus(null);
           },
           onError: (error) => {
-            void (async () => {
+            terminalHandlingPromise = (async () => {
               if (await recoverReportIfAvailable()) return;
               updateScopedMessage(aiMsgId, {
                 content: fullContent || zh.chat.streamInterrupted,
@@ -468,6 +475,8 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           },
         },
       );
+      const pendingTerminalHandling = terminalHandlingPromise;
+      if (pendingTerminalHandling) await pendingTerminalHandling;
       if (streamController.signal.aborted) finishAbortedStream();
     } catch (error) {
       if (streamController.signal.aborted) {

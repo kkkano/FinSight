@@ -94,6 +94,33 @@ describe('parseSSEStream', () => {
     });
   });
 
+  it('surfaces explicit LLM degradation as a user-visible thinking event', async () => {
+    const thinking: any[] = [];
+
+    await parseSSEStream(
+      sseResponse([
+        {
+          type: 'degraded',
+          message: 'LLM 暂时不可用，本轮已使用降级回答。',
+          degradation: { used: true, stage: 'direct_reply', reason: 'llm_unavailable' },
+        },
+      ]),
+      {
+        onThinking: (step) => thinking.push(step),
+      },
+    );
+
+    expect(thinking).toHaveLength(1);
+    expect(thinking[0]).toMatchObject({
+      stage: 'degraded',
+      message: 'LLM 暂时不可用，本轮已使用降级回答。',
+      eventType: 'degraded',
+      result: {
+        degradation: { used: true, stage: 'direct_reply', reason: 'llm_unavailable' },
+      },
+    });
+  });
+
   it('does not report missing done when execute stream was aborted', async () => {
     const controller = new AbortController();
     controller.abort();

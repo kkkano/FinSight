@@ -1,11 +1,13 @@
 # LangGraph 当前流程
 
-更新时间：2026-07-12　事实源：`backend/graph/runner.py`
+更新时间：2026-07-13　事实源：`backend/graph/runner.py`
 
 ## 主图
 
 ```mermaid
 flowchart TD
+    UIH[客户端最近可见历史] -. checkpoint 缺失时恢复 .-> INIT
+    CP[(PostgreSQL checkpoint)] -. 已有历史优先 .-> INIT
     S((START)) --> INIT[build_initial_state]
     INIT --> RESET[reset_turn_state]
     RESET --> PREP[prepare_context]
@@ -25,7 +27,7 @@ flowchart TD
 
 | 节点 | 输入重点 | 输出重点 |
 |---|---|---|
-| `build_initial_state` | API 请求 | 标准 GraphState |
+| `build_initial_state` | API 请求、checkpoint、客户端最近可见历史 | 标准 GraphState；仅在 checkpoint 无消息时恢复最多 12 条客户端历史 |
 | `reset_turn_state` | 历史 state | 清理本轮临时字段，保留有作用域的会话信息 |
 | `prepare_context` | query、UI、历史 | 规范化本轮上下文 |
 | `chat_respond` | 当前 query | 仅纯社交快速回复；其他请求继续理解 |
@@ -47,6 +49,9 @@ flowchart TD
 - 高影响操作由 `confirmation_gate` 暂停；调整后回到 `planner`。
 - 工具失败只能进入 diagnostics；只有通过 evidence gate 的结果进入证据池。
 - `research_debate` 位于执行与合成之间，不是独立 API 入口。
+- 客户端历史只用于同线程 checkpoint 缺失恢复；已有 checkpoint 时不得重复注入。
+- 匿名长期记忆按完整 thread id 派生隔离身份；ticker 焦点只接受当前 query 明示值或已验证主焦点，不从助手正文扩散缩写。
+- 会话 router/reply 失败时允许给出可用回退，但必须在 trace、SSE 和终态中明确标记降级。
 
 ## 注册但不在当前主边的节点
 

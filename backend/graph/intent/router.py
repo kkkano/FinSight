@@ -43,6 +43,23 @@ from backend.graph.state import GraphState
 
 logger = logging.getLogger(__name__)
 
+
+def _context_timeout(default_seconds: float, cap_env: str, cap_default: float, *, state: GraphState) -> float:
+    preferred = apply_preferred_timeout(default_seconds, state=state)
+    cap = max(5.0, _env_float(cap_env, cap_default))
+    return max(2.0, min(preferred, cap))
+
+
+def _record_conversation_degradation(state: GraphState, *, stage: str, error: BaseException) -> None:
+    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
+    trace["conversation_degraded"] = {
+        "used": True,
+        "stage": stage,
+        "reason": "llm_unavailable",
+        "error_type": type(error).__name__,
+    }
+    state["trace"] = trace
+
 _IMPLICIT_HISTORY_SOURCES: set[str] = {"last_turn", "recent_focus", "unresolved_clarification"}
 _INHERITED_CONTEXT_SOURCES: set[str] = {"none", "last_turn", "last_report", "active_symbol", "recent_focus", "unresolved_clarification"}
 _GLOBAL_CHAT_VIEWS: set[str] = {"chat", "main", "global", "conversation"}
@@ -1229,20 +1246,30 @@ def _history_subject_hint(recent_history: list[dict[str, str]]) -> str:
     if tickers:
         return ", ".join(tickers[:3])
 
-    for preferred_role in ("user", "assistant"):
-        for row in reversed(recent_history or []):
-            if row.get("role") != preferred_role:
-                continue
-            content = str(row.get("content") or "").strip()
-            if not content:
-                continue
-            extracted = [
-                str(ticker).upper()
-                for ticker in (extract_tickers(content).get("tickers") or [])
-                if str(ticker).strip()
-            ]
-            if extracted:
-                return ", ".join(_dedupe_preserve_order(extracted)[:3])
+    for row in reversed(recent_history or []):
+        if row.get("role") != "user":
+            continue
+        content = str(row.get("content") or "").strip()
+        extracted = [
+            str(ticker).upper()
+            for ticker in (extract_tickers(content).get("tickers") or [])
+            if str(ticker).strip()
+        ]
+        if extracted:
+            return ", ".join(_dedupe_preserve_order(extracted)[:3])
+
+    # 助手正文包含 ATM、CNN、RSI 等大量大写术语；无验证元数据时只允许首个主标的作弱锚点。
+    for row in reversed(recent_history or []):
+        if row.get("role") != "assistant":
+            continue
+        content = str(row.get("content") or "").strip()
+        extracted = [
+            str(ticker).upper()
+            for ticker in (extract_tickers(content).get("tickers") or [])
+            if str(ticker).strip()
+        ]
+        if extracted:
+            return _dedupe_preserve_order(extracted)[0]
 
     for preferred_role in ("assistant", "user"):
         for row in reversed(recent_history or []):
@@ -1751,12 +1778,11 @@ async def route_conversation(
         return fast_decision
 
     inputs = _router_inputs(state, tickers=tickers, selection_ids=selection_ids)
-    timeout_sec = max(
-        2.0,
-        apply_preferred_timeout(
-            _env_float("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", 90.0),
-            state=state,
-        ),
+    timeout_sec = _context_timeout(
+        _env_float("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", 45.0),
+        "FINSIGHT_CONTEXT_ROUTER_MAX_TIMEOUT_SEC",
+        45.0,
+        state=state,
     )
     max_tokens = int(max(512, _env_float("FINSIGHT_CONTEXT_ROUTER_MAX_TOKENS", 2200.0)))
 
@@ -1817,12 +1843,28 @@ async def route_conversation(
 
     try:
         from backend.llm_config import create_llm
+        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
 
-        llm = create_llm(temperature=0.0, max_tokens=max_tokens, request_timeout=int(timeout_sec) + 2)
+        llm_factory = lambda: create_llm(  # noqa: E731
+            temperature=0.0,
+            max_tokens=max_tokens,
+            request_timeout=int(timeout_sec) + 2,
+        )
+        llm = llm_factory()
         messages = [SystemMessage(content=system), HumanMessage(content=prompt)]
-        response = await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout_sec)
-        from backend.services.llm_usage import record_llm_usage
-        record_llm_usage(response, getattr(llm, "model_name", None))
+        response = await asyncio.wait_for(
+            ainvoke_with_rate_limit_retry(
+                llm,
+                messages,
+                llm_factory=llm_factory,
+                max_attempts=2,
+                sleep_seconds=0.2,
+                jitter_seconds=0.0,
+                acquire_timeout_seconds=timeout_sec,
+                agent_name="conversation_router",
+            ),
+            timeout=timeout_sec,
+        )
         raw_output = str(getattr(response, "content", "") or "")
         try:
             payload = _extract_json_object(raw_output)
@@ -1848,10 +1890,18 @@ async def route_conversation(
                 + raw_output[:1600]
             )
             retry_response = await asyncio.wait_for(
-                llm.ainvoke([SystemMessage(content=system), HumanMessage(content=retry_prompt)]),
+                ainvoke_with_rate_limit_retry(
+                    llm_factory(),
+                    [SystemMessage(content=system), HumanMessage(content=retry_prompt)],
+                    llm_factory=llm_factory,
+                    max_attempts=2,
+                    sleep_seconds=0.2,
+                    jitter_seconds=0.0,
+                    acquire_timeout_seconds=timeout_sec,
+                    agent_name="conversation_router_json_retry",
+                ),
                 timeout=timeout_sec,
             )
-            record_llm_usage(retry_response, getattr(llm, "model_name", None))
             raw_output = str(getattr(retry_response, "content", "") or "")
             payload = _extract_json_object(raw_output)
         decision = normalize_context_decision(
@@ -1874,6 +1924,7 @@ async def route_conversation(
         return decision
     except Exception as exc:
         logger.info("[conversation_router] fail-open: %s", exc)
+        _record_conversation_degradation(state, stage="routing", error=exc)
         return _fallback_decision(state, tickers=tickers, selection_ids=selection_ids)
 
 
@@ -1916,12 +1967,11 @@ async def generate_contextual_reply(
     decision: ConversationDecision,
 ) -> str:
     """Generate a natural direct-answer reply."""
-    timeout_sec = max(
-        2.0,
-        apply_preferred_timeout(
-            _env_float("FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC", 120.0),
-            state=state,
-        ),
+    timeout_sec = _context_timeout(
+        _env_float("FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC", 60.0),
+        "FINSIGHT_CONTEXT_REPLY_MAX_TIMEOUT_SEC",
+        60.0,
+        state=state,
     )
     max_tokens = int(max(512, _env_float("FINSIGHT_CONTEXT_REPLY_MAX_TOKENS", 3000.0)))
     inputs = _router_inputs(state, tickers=[], selection_ids=[])
@@ -1946,20 +1996,34 @@ async def generate_contextual_reply(
 
     try:
         from backend.llm_config import create_llm
+        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
 
-        llm = create_llm(temperature=0.35, max_tokens=max_tokens, request_timeout=int(timeout_sec) + 2)
+        llm_factory = lambda: create_llm(  # noqa: E731
+            temperature=0.35,
+            max_tokens=max_tokens,
+            request_timeout=int(timeout_sec) + 2,
+        )
+        llm = llm_factory()
         response = await asyncio.wait_for(
-            llm.ainvoke([SystemMessage(content=system), HumanMessage(content=prompt)]),
+            ainvoke_with_rate_limit_retry(
+                llm,
+                [SystemMessage(content=system), HumanMessage(content=prompt)],
+                llm_factory=llm_factory,
+                max_attempts=2,
+                sleep_seconds=0.2,
+                jitter_seconds=0.0,
+                acquire_timeout_seconds=timeout_sec,
+                agent_name="conversation_reply",
+            ),
             timeout=timeout_sec,
         )
-        from backend.services.llm_usage import record_llm_usage
-        record_llm_usage(response, getattr(llm, "model_name", None))
         text = str(getattr(response, "content", "") or "").strip()
         text = re.sub(r"^```(?:markdown)?\s*", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\s*```$", "", text).strip()
         return text or _fallback_direct_reply(decision, state)
     except Exception as exc:
         logger.info("[conversation_router] direct reply fallback: %s", exc)
+        _record_conversation_degradation(state, stage="direct_reply", error=exc)
         return _fallback_direct_reply(decision, state)
 
 

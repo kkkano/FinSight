@@ -126,6 +126,9 @@ def _sanitize_direct_chat_reply(reply: str) -> str:
     return cleaned.strip()
 
 def _ensure_direct_reply_names_bound_tickers(reply: str, *, decision: ConversationDecision, query: str) -> str:
+    explicit_tickers = dedup_tickers(extract_tickers(query).get("tickers") or [])
+    if decision.relation != "compare" and len(explicit_tickers) < 2:
+        return reply
     subject_hint = str(decision.context_binding.subject_hint or "")
     tickers = dedup_tickers(extract_tickers(subject_hint).get("tickers") or [])
     if len(tickers) < 2:
@@ -141,6 +144,36 @@ def _ensure_direct_reply_names_bound_tickers(reply: str, *, decision: Conversati
     if reply.startswith(prefix):
         return reply
     return f"{prefix}\n\n{reply}".strip()
+
+
+def _direct_reply_subject(
+    *,
+    query: str,
+    decision: ConversationDecision,
+    memory_context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """为直接追问保留已验证焦点，不从回答正文扩散大写缩写。"""
+    tickers = dedup_tickers(extract_tickers(query).get("tickers") or [])
+    if not tickers and decision.relation != "new_topic":
+        thread_focus = current_thread_focus(memory_context or {})
+        focus_ticker = str((thread_focus or {}).get("ticker") or "").strip().upper()
+        if focus_ticker:
+            tickers = [focus_ticker]
+    if not tickers and decision.context_binding.source != "none":
+        bound = dedup_tickers(extract_tickers(str(decision.context_binding.subject_hint or "")).get("tickers") or [])
+        tickers = bound if decision.relation == "compare" else bound[:1]
+    if not tickers:
+        return _build_subject(None, [])
+    return _build_subject(
+        {
+            "subject_type": "company",
+            "tickers": tickers,
+            "selection_ids": [],
+            "selection_types": [],
+            "operation": {"name": "compare" if decision.relation == "compare" else "qa"},
+        },
+        [],
+    )
 
 def _direct_conversation_result(
     *,
@@ -182,7 +215,11 @@ def _direct_conversation_result(
     trace["understanding"] = understanding
     trace["conversation_router"] = decision.model_dump()
     trace["reply_contract"] = reply_contract
-    subject = _build_subject(None, [])
+    subject = _direct_reply_subject(
+        query=query,
+        decision=decision,
+        memory_context=memory_context,
+    )
     operation = _operation("chat", decision.confidence)
     facets = derive_request_facets(query=query, operation=operation, subject=subject)
     understanding["facets"] = facets

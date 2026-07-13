@@ -228,7 +228,7 @@ export async function parseSSEStream(
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (
-            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system', 'quality_blocked'].includes(data.type)
+            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system', 'quality_blocked', 'degraded'].includes(data.type)
           ) {
             const stage = data.stage || data.type;
             const message =

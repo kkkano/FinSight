@@ -1,6 +1,6 @@
 # Execution Event Contract
 
-更新时间：2026-07-12
+更新时间：2026-07-13
 
 本契约约束后端执行事件、SSE 序列化和前端消费。事件是可观测事实，不是前端模拟动画。
 
@@ -19,6 +19,7 @@
 | `decision_note` | 不含 chain-of-thought 的决策摘要 |
 | `trace` | `visibility=user` 的可解释进度 |
 | `token` | 流式文本 token |
+| `degraded` | LLM router、直接回复或合成不可用，本轮使用了明确披露的回退 |
 | `done/error` | 流结束或错误 |
 
 `llm_*`、`tool_*`、`cache_*`、`data_source`、`api_call` 等细节只在 raw/dev 模式保留。
@@ -39,6 +40,22 @@
 ```
 
 事件新增字段应向后兼容；消费者必须忽略未知字段。不得在 payload 中放 API key、Authorization、Cookie、完整敏感工具参数或跨用户数据。
+
+## `degraded` 与终态
+
+```json
+{
+  "type": "degraded",
+  "message": "LLM 暂时不可用，本轮已使用降级回答；结果可能不完整，请稍后重试。",
+  "degradation": {
+    "used": true,
+    "stage": "routing|direct_reply|synthesis",
+    "reason": "llm_unavailable"
+  }
+}
+```
+
+流式 `done` 和同步聊天响应同时返回 `degraded: boolean` 与 `degradation: object|null`。降级回答仍可展示，但前端必须显示警告/来源徽标，不能伪装成正常 LLM 成功。
 
 ## `plan_ready`
 

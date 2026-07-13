@@ -74,8 +74,43 @@ def _session_history_for_context(manager: Any, *, limit: int = 6) -> list[dict[s
     return history[-(limit * 2):]
 
 
-def _attach_session_history(ui_context: dict[str, Any], manager: Any) -> dict[str, Any]:
-    history = _session_history_for_context(manager)
+def _request_history_for_context(request_history: Any, *, limit: int = 12) -> list[dict[str, str]]:
+    """将客户端可见历史规范化为 graph 可恢复的同线程上下文。"""
+    rows: list[dict[str, str]] = []
+    if not isinstance(request_history, list):
+        return rows
+    for item in request_history[-limit:]:
+        role = str(getattr(item, "role", "") or "").strip().lower()
+        content = " ".join(str(getattr(item, "content", "") or "").strip().split())
+        if role not in {"user", "assistant"} or not content:
+            continue
+        rows.append({"role": role, "content": content[:900 if role == "assistant" else 600]})
+    return rows
+
+
+def _attach_session_history(
+    ui_context: dict[str, Any],
+    manager: Any,
+    request_history: Any = None,
+) -> dict[str, Any]:
+    manager_history = _session_history_for_context(manager)
+    client_history = _request_history_for_context(request_history)
+
+    # 客户端历史是用户当前实际可见的事实源；同内容命中后端会话时，补回已验证 ticker 元数据。
+    if client_history:
+        manager_by_key = {
+            (row.get("role", ""), row.get("content", "")): row
+            for row in manager_history
+        }
+        history = []
+        for row in client_history:
+            enriched = dict(row)
+            manager_row = manager_by_key.get((row.get("role", ""), row.get("content", "")))
+            if manager_row and manager_row.get("tickers"):
+                enriched["tickers"] = manager_row["tickers"]
+            history.append(enriched)
+    else:
+        history = manager_history
     if not history:
         return ui_context
     enriched = dict(ui_context or {})
@@ -113,6 +148,18 @@ def _generation_enabled() -> bool:
 
 def _ensure_llm_available() -> None:
     """P1-3: LLM endpoint 不可用时快速失败（503），而非让用户等待数百秒超时。"""
+    # 规则规划 + 规则合成 + 关闭会话 LLM router 时，整条链路可合法离线运行。
+    # 该模式常用于测试、演练或显式无 LLM 部署，不应被 endpoint 健康门误拦截。
+    planner_mode = str(os.getenv("LANGGRAPH_PLANNER_MODE", "llm") or "llm").strip().lower()
+    synthesize_mode = str(os.getenv("LANGGRAPH_SYNTHESIZE_MODE", "llm") or "llm").strip().lower()
+    context_router_enabled = str(os.getenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true") or "true").strip().lower()
+    if (
+        planner_mode == "stub"
+        and synthesize_mode == "stub"
+        and context_router_enabled in {"false", "0", "off", "no"}
+    ):
+        return
+
     from backend.services.startup_check import is_llm_available
 
     if not is_llm_available():
@@ -147,18 +194,22 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 status_code=503,
                 detail="服务临时维护中，报告生成已暂停，请稍后再试",
             )
+        try:
+            thread_id = deps.resolve_thread_id(request.session_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         user_id = _enforce_user_quota(http_request)
         _ensure_llm_available()
         _t0 = _time.perf_counter()
         try:
             runner = await deps.get_graph_runner()
-            try:
-                thread_id = deps.resolve_thread_id(request.session_id)
-            except ValueError as exc:
-                raise HTTPException(status_code=422, detail=str(exc)) from exc
 
             ui_context = deps.build_ui_context(request)
-            ui_context = _attach_session_history(ui_context, deps.get_session_context(thread_id))
+            ui_context = _attach_session_history(
+                ui_context,
+                deps.get_session_context(thread_id),
+                request.history,
+            )
             ui_context["__user_id"] = user_id
 
             output_mode = None
@@ -296,6 +347,9 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
 
             _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)
+            from backend.services.execution_service import _llm_degradation
+
+            degradation = _llm_degradation(state)
             return {
                 "success": True,
                 "schema_version": deps.chat_response_schema_version,
@@ -309,6 +363,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 "classification": {"method": "langgraph", "confidence": 1.0},
                 "session_id": thread_id,
                 "response_time_ms": _elapsed_ms,
+                "degraded": bool(degradation),
+                "degradation": degradation,
                 "graph": {
                     "subject": state.get("subject"),
                     "output_mode": state.get("output_mode"),
@@ -328,20 +384,23 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 status_code=503,
                 detail="服务临时维护中，报告生成已暂停，请稍后再试",
             )
+        try:
+            thread_id = deps.resolve_thread_id(request.session_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         user_id = _enforce_user_quota(http_request)
         _ensure_llm_available()
         import json as _json
 
         from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
 
-        try:
-            thread_id = deps.resolve_thread_id(request.session_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
         trace_raw_enabled = deps.resolve_trace_raw_enabled(request)
         ui_context = deps.build_ui_context(request)
-        ui_context = _attach_session_history(ui_context, deps.get_session_context(thread_id))
+        ui_context = _attach_session_history(
+            ui_context,
+            deps.get_session_context(thread_id),
+            request.history,
+        )
         ui_context["__user_id"] = user_id
 
         output_mode = None

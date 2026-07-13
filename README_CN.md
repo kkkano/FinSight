@@ -3,14 +3,14 @@
 <p align="center"><strong>基于 LangGraph、以证据为先的多智能体金融研究平台</strong></p>
 <p align="center"><a href="./README.md">English</a> · <a href="./README_CN.md">中文</a> · <a href="./docs/DOCS_INDEX.md">文档索引</a> · <a href="https://finsight-ai.chat">在线演示</a></p>
 
-FinSight AI 将对话研究、市场仪表盘、自主任务、投资组合工作流、主动提醒和可审计证据整合在一个生产系统中。当前运行时使用统一 LangGraph 主入口、7 个共享 Agent Profile、PostgreSQL 检查点和 pgvector RAG；LLM 采用 OpenAI-compatible 配置，可替换供应商而无需修改业务代码。
+FinSight AI 将对话研究、市场仪表盘、自主任务、投资组合工作流、主动提醒和可审计证据整合在一个生产系统中。当前运行时使用统一 LangGraph 主入口、7 个共享 Agent Profile、PostgreSQL 检查点和 pgvector RAG；刷新或实例切换时可从客户端可见历史恢复同线程对话。LLM 采用 OpenAI-compatible 配置，可替换供应商而无需修改业务代码；供应商不可用时会显式显示降级状态。
 
 ## 当前能力
 
 | 领域 | 当前实现 |
 |---|---|
 | 研究 | 价格、新闻、基本面、技术面、宏观、风险、深度搜索 7 类智能体 |
-| 对话运行时 | 请求理解、策略约束、计划确认、并行执行、研究辩论、合成和渲染 |
+| 对话运行时 | 同线程历史恢复、上下文绑定、请求理解、策略约束、计划确认、并行执行、研究辩论、合成和渲染 |
 | 证据 | 结构化证据池、工具诊断隔离、引用和幻觉检查 |
 | 产品入口 | 对话、工作台、仪表盘、A 股市场、RAG 检查器、成本审计、选股、回测和报告分享 |
 | 数据 | PostgreSQL 检查点与 pgvector RAG；部分旧业务存储仍为 SQLite/JSON |

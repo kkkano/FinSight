@@ -179,6 +179,7 @@ _ESSENTIAL_SSE_TYPES = {
     "token",
     "done",
     "error",
+    "degraded",
     # Execution visibility essentials (kept even when trace_raw is OFF)
     "plan_ready",
     "pipeline_stage",
@@ -497,9 +498,17 @@ def _update_session_context(
     if skip_context:
         return
     try:
-        tickers = []
+        tickers: list[str] = []
         if isinstance(subject, dict):
-            tickers = [str(t).strip().upper() for t in (subject.get("tickers") or []) if str(t).strip()]
+            candidates = [str(t).strip().upper() for t in (subject.get("tickers") or []) if str(t).strip()]
+            query_upper = str(original_query or "").upper()
+            explicit = [
+                ticker
+                for ticker in candidates
+                if re.search(rf"(?<![A-Z0-9]){re.escape(ticker)}(?![A-Z0-9])", query_upper)
+            ]
+            # 显式 ticker 全保留；公司名解析等隐式场景只接受主 ticker，阻止 ATM/CNN/RSI 扩散。
+            tickers = explicit or candidates[:1]
         metadata: Dict[str, Any] = {}
         if tickers:
             metadata["tickers"] = tickers

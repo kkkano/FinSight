@@ -1,6 +1,6 @@
 # FinSight 当前架构
 
-更新时间：2026-07-12
+更新时间：2026-07-13
 
 ## 1. 架构原则
 
@@ -44,11 +44,15 @@ FastAPI 当前注册 25 个 router：system、user、watchlist、conversation、
 - `policy_gate`、`planner`、`execute_plan` 和 renderer 消费结构化合同，不靠重复关键词猜测。
 - 工具失败、拒绝、空结果和超时进入 diagnostics，不得伪装成 evidence。
 - 取消信号贯穿 API、执行服务、图节点和 executor。
+- 客户端发送最近可见历史；仅当当前 thread 的 checkpoint 没有消息时，`build_initial_state` 才恢复最多 12 条，避免刷新/实例切换后丢失连续对话。
+- 认证用户按 user id 隔离长期记忆；匿名会话按完整 thread id 的稳定摘要隔离，不能共享统一 `anonymous` 记忆桶。
+- 会话 router/reply 使用独立短超时和统一 LLM 重试/端点轮换；回退通过 `degraded` SSE、终态字段和前端徽标显式披露。
 
 ## 4. 主路径
 
 ```mermaid
 flowchart TD
+    H[客户端可见历史] -. checkpoint 缺失时恢复 .-> build_initial_state
     START --> build_initial_state --> reset_turn_state --> prepare_context --> chat_respond
     chat_respond -->|pure social| END
     chat_respond --> understand_request

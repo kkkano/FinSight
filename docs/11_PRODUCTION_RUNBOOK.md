@@ -1,6 +1,6 @@
 # FinSight 生产部署 Runbook
 
-更新时间：2026-07-12
+更新时间：2026-07-13
 
 ## 1. 当前拓扑
 
@@ -25,6 +25,8 @@ flowchart TB
 OPENAI_COMPATIBLE_API_KEY=...
 OPENAI_COMPATIBLE_API_BASE=https://provider.example/v1
 OPENAI_COMPATIBLE_MODEL=model-id
+FINSIGHT_CONTEXT_ROUTER_MAX_TIMEOUT_SEC=45
+FINSIGHT_CONTEXT_REPLY_MAX_TIMEOUT_SEC=60
 ```
 
 LLM 供应商可替换，只要支持 OpenAI-compatible API。生产 RAG 和 checkpointer 使用 Compose 注入的 PostgreSQL DSN：
@@ -78,7 +80,7 @@ docker compose --env-file .env.server ps
 docker compose --env-file .env.server logs --tail=100 backend frontend
 ```
 
-再从公网验证首页、`/chat`、`/dashboard/AAPL`、`/screener`，并确认纯社交请求快速结束、研究请求产生 SSE 事件并完成 evidence → synthesis → render。不得在冒烟命令、截图或日志摘录中打印 LLM key。
+再从公网验证首页、`/chat`、`/dashboard/AAPL`、`/screener`，并确认纯社交请求快速结束、研究请求产生 SSE 事件并完成 evidence → synthesis → render。聊天至少用同一 session 连续验证“明确标的 → 省略式追问 → 风险追问”；标的焦点必须保持，助手正文中的大写缩写不得污染 subject。若 LLM 失败，响应必须出现 `degraded` 事件/字段和前端警告，不得表现为正常成功。不得在冒烟命令、截图或日志摘录中打印 LLM key。
 
 ## 6. 回滚
 

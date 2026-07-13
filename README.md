@@ -3,14 +3,14 @@
 <p align="center"><strong>Evidence-first multi-agent financial research built with LangGraph</strong></p>
 <p align="center"><a href="./README.md">English</a> · <a href="./README_CN.md">中文</a> · <a href="./docs/DOCS_INDEX.md">Documentation</a> · <a href="https://finsight-ai.chat">Live demo</a></p>
 
-FinSight AI combines conversational research, market dashboards, autonomous tasks, portfolio workflows, alerts and auditable evidence in one production system. The current runtime uses a single LangGraph entry path, seven shared agent profiles, PostgreSQL-backed checkpoints and pgvector RAG, plus an OpenAI-compatible LLM configuration that can be replaced without changing application code.
+FinSight AI combines conversational research, market dashboards, autonomous tasks, portfolio workflows, alerts and auditable evidence in one production system. The current runtime uses a single LangGraph entry path, seven shared agent profiles, PostgreSQL-backed checkpoints and pgvector RAG. It can recover same-thread chat from client-visible history after a refresh or instance change. The OpenAI-compatible LLM provider is replaceable without application changes, and provider failures are surfaced as explicit degraded responses.
 
 ## What is included
 
 | Area | Current capability |
 |---|---|
 | Research | Price, news, fundamental, technical, macro, risk and deep-search agents |
-| Chat runtime | Request understanding, policy enforcement, plan confirmation, parallel execution, debate, synthesis and rendering |
+| Chat runtime | Same-thread history recovery, context binding, request understanding, policy enforcement, plan confirmation, parallel execution, debate, synthesis and rendering |
 | Evidence | Structured evidence pool, tool diagnostics isolation, citations and hallucination checks |
 | Product surfaces | Chat, Workbench, dashboard, China market, RAG inspector, cost audit, screener, backtest and shared reports |
 | Data | PostgreSQL checkpoints and pgvector RAG; selected legacy business stores remain SQLite/JSON |

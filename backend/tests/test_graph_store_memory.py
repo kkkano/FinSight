@@ -14,6 +14,15 @@ def test_resolve_user_id_from_thread_id():
     assert resolve_user_id("") == "default_user"
 
 
+def test_resolve_user_id_isolates_anonymous_threads_stably():
+    first = resolve_user_id("public:anonymous:thread-1")
+    second = resolve_user_id("public:anonymous:thread-2")
+
+    assert first.startswith("anonymous_")
+    assert first == resolve_user_id("public:anonymous:thread-1")
+    assert first != second
+
+
 def test_persist_and_load_memory_snapshot(tmp_path):
     service = MemoryService(storage_path=str(tmp_path))
     thread_id = "public:test_user:thread-001"

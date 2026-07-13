@@ -79,6 +79,7 @@ def test_is_raw_trace_event_keeps_execution_progress_events():
     assert main._is_raw_trace_event({"type": "plan_ready"}) is False
     assert main._is_raw_trace_event({"type": "decision_note"}) is False
     assert main._is_raw_trace_event({"type": "step_start"}) is False
+    assert main._is_raw_trace_event({"type": "degraded"}) is False
 
 
 def test_is_raw_trace_event_filters_verbose_events():
@@ -141,6 +142,46 @@ def test_session_context_isolation_blocks_cross_session_reference(monkeypatch):
 
     assert "AAPL" in resolved_a
     assert resolved_b == "它的估值如何"
+
+
+def test_session_context_only_persists_tickers_explicit_in_query(monkeypatch):
+    session_context = importlib.import_module("backend.api.session_context")
+    captured = {}
+
+    class FakeManager:
+        def add_turn(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(session_context, "_get_session_context", lambda _thread_id: FakeManager())
+
+    session_context._update_session_context(
+        thread_id="public:anonymous:thread-a",
+        original_query="NVDA 推荐怎么操作？",
+        response_markdown="回答正文可能提到 ATM、CNN、RSI。",
+        subject={"tickers": ["NVDA", "ATM", "CNN", "RSI"]},
+    )
+
+    assert captured["metadata"] == {"tickers": ["NVDA"]}
+
+
+def test_session_context_keeps_multiple_explicit_compare_tickers(monkeypatch):
+    session_context = importlib.import_module("backend.api.session_context")
+    captured = {}
+
+    class FakeManager:
+        def add_turn(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(session_context, "_get_session_context", lambda _thread_id: FakeManager())
+
+    session_context._update_session_context(
+        thread_id="public:anonymous:thread-a",
+        original_query="比较 NVDA 和 AMD",
+        response_markdown="比较结果",
+        subject={"tickers": ["NVDA", "AMD", "ATM"]},
+    )
+
+    assert captured["metadata"] == {"tickers": ["NVDA", "AMD"]}
 
 
 def test_rag_collection_name_uses_session_key_shape():

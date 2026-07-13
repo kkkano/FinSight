@@ -60,11 +60,12 @@ const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence
 const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; as_of?: string | null; tried_sources?: string[] }> = ({
   data_origin, fallback_used, as_of, tried_sources,
 }) => {
-  if (!data_origin) return null;
+  if (!data_origin && !fallback_used) return null;
+  const sourceLabel = data_origin || 'LLM';
   return (
     <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
-      <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
-        {zh.chat.source}: {data_origin} {fallback_used ? `(${zh.chat.fallback})` : ''}
+      <span className={`px-2 py-0.5 rounded-full border ${fallback_used ? 'border-amber-400/70 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200' : 'border-fin-border/60 bg-fin-bg/60'}`}>
+        {zh.chat.source}: {sourceLabel} {fallback_used ? `(${zh.chat.fallback})` : ''}
       </span>
       {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">{zh.chat.asOf}: {as_of}</span>}
       {tried_sources && tried_sources.length > 0 && (

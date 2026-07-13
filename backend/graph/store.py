@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from datetime import datetime, timezone
@@ -29,6 +30,10 @@ def resolve_user_id(thread_id: str | None) -> str:
     if len(parts) >= 2:
         candidate = parts[1].strip()
         if candidate:
+            if candidate == "anonymous":
+                # 所有匿名会话的第二段都相同；直接使用会导致跨访客共享长期记忆。
+                digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+                return f"anonymous_{digest}"
             return candidate
     return _DEFAULT_USER_ID
 

@@ -12,6 +12,7 @@ import { useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { apiClient, type ChatContext } from '../api/client';
+import { zh } from '../locales/zh';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { ReportView } from './report';
@@ -193,6 +194,7 @@ export const MiniChat: React.FC = () => {
     setSessionAbortController(requestSessionId, streamController);
 
     const requestStartedAt = Date.now();
+    let terminalHandlingPromise: Promise<void> | null = null;
 
     const recoverReportIfAvailable = async (): Promise<boolean> => {
       const session = sessionId || useStore.getState().sessionId;
@@ -289,6 +291,7 @@ export const MiniChat: React.FC = () => {
         },
           onDone: (report, thinking, meta) => {
           // onDone
+          const degraded = meta?.degraded === true;
           const metrics = meta?.metrics || {};
           if (metrics && typeof metrics === 'object') {
             setRequestMetrics({
@@ -305,7 +308,12 @@ export const MiniChat: React.FC = () => {
             isLoading: false,
             report,
             thinking,
+            fallback_used: degraded,
+            data_origin: degraded ? 'LLM' : undefined,
           });
+          if (degraded) {
+            toast({ type: 'warning', title: zh.chat.degradedTitle, message: zh.chat.degradedMessage });
+          }
         },
           onError: (error: string) => {
           const handleFailure = async () => {
@@ -322,7 +330,7 @@ export const MiniChat: React.FC = () => {
               message: error || '连接被中断或服务暂不可用，请重试',
             });
           };
-          void handleFailure();
+          terminalHandlingPromise = handleFailure();
         },
           onThinking: (step) => {
           // onThinking
@@ -337,6 +345,8 @@ export const MiniChat: React.FC = () => {
         },
         { traceRawEnabled, signal: streamController.signal },
       );
+      const pendingTerminalHandling = terminalHandlingPromise;
+      if (pendingTerminalHandling) await pendingTerminalHandling;
       if (streamController.signal.aborted) {
         accumulatedThinkingRef.current = [
           ...accumulatedThinkingRef.current,

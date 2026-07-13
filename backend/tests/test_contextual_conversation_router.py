@@ -1646,6 +1646,41 @@ def test_understand_request_sanitizes_direct_chat_template_markers(monkeypatch):
     assert result["messages"][-1].content == markdown
 
 
+def test_direct_follow_up_keeps_single_thread_focus_without_noisy_prefix():
+    from backend.graph.intent.direct_reply import (
+        _direct_reply_subject,
+        _ensure_direct_reply_names_bound_tickers,
+    )
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
+
+    decision = ConversationDecision(
+        execution_route="direct_answer",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.9,
+            subject_hint="NVDA, ATM, CNN",
+        ),
+        relation="follow_up",
+        domain_intent="analysis",
+        confidence=0.9,
+        needs_tools=False,
+    )
+
+    reply = _ensure_direct_reply_names_bound_tickers(
+        "可以按仓位、止损和催化剂三层处理。",
+        decision=decision,
+        query="推荐怎么操作？",
+    )
+    subject = _direct_reply_subject(
+        query="推荐怎么操作？",
+        decision=decision,
+        memory_context={"current_thread_focus": {"ticker": "NVDA"}},
+    )
+
+    assert reply == "可以按仓位、止损和催化剂三层处理。"
+    assert subject["tickers"] == ["NVDA"]
+
+
 def test_understand_request_strips_research_confirmation_cta_from_direct_reply(monkeypatch):
     from backend.graph.intent.router import ContextBinding, ConversationDecision
 
