@@ -155,6 +155,16 @@ describe('line chart number formatting', () => {
     expect(tooltip).toContain('$28.09');
     expect(tooltip).not.toContain('28.086951607');
   });
+
+  it('does not force real price lines to start at zero', () => {
+    const option = buildLineOption(
+      { labels: ['2026-07-10', '2026-07-11'], values: [208.5, 212.4], unit: '$' },
+      '价格走势',
+      buildTerminalChartTheme(false),
+    );
+
+    expect(option.yAxis.scale).toBe(true);
+  });
 });
 
 describe('getRenderableMessageContent', () => {

@@ -593,6 +593,7 @@ export function buildLineOption(
   fillArea = true,
 ) {
   const formatValue = (value: unknown) => formatSmartChartValue(value, data.unit);
+  const isPriceSeries = PRICE_CURRENCY_UNITS.has(String(data.unit ?? '').trim().toLowerCase());
   return {
     tooltip: {
       trigger: 'axis' as const,
@@ -628,6 +629,7 @@ export function buildLineOption(
     },
     yAxis: {
       type: 'value' as const,
+      scale: isPriceSeries,
       axisLabel: { color: theme.muted, fontSize: 9, formatter: formatValue },
       splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
     },
