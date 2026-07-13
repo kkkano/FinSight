@@ -34,6 +34,19 @@ from backend.services.llm_usage import (
 logger = logging.getLogger(__name__)
 
 
+def _exception_chain_summary(exc: BaseException, *, max_depth: int = 4) -> str:
+    """Return exception types/causes without request payloads or credentials."""
+    parts: list[str] = []
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and len(parts) < max_depth and id(current) not in seen:
+        seen.add(id(current))
+        message = str(current).replace("\n", " ").strip()
+        parts.append(f"{current.__class__.__name__}: {message[:240]}")
+        current = current.__cause__ or current.__context__
+    return " <- ".join(parts)
+
+
 def is_rate_limit_error(exc: BaseException) -> bool:
     text = str(exc).lower()
     return any(
@@ -253,8 +266,12 @@ async def ainvoke_with_rate_limit_retry(
                 )
             else:
                 logger.warning(
-                    "[LLM] Execution error retry %d/%d (agent=%s): %s",
-                    attempt, max_attempts, agent_name or "unknown", exc,
+                    "[LLM] Execution error retry %d/%d (agent=%s): %s details=%s",
+                    attempt,
+                    max_attempts,
+                    agent_name or "unknown",
+                    exc,
+                    _exception_chain_summary(exc),
                 )
 
             # Rotate to next endpoint when factory is available
