@@ -16,6 +16,9 @@ from backend.graph.renderers.shared import (
     _append_sources,
     _finalize_chat_markdown,
     _intent_contract,
+    _parse_jsonish,
+    _step_outputs,
+    _ticker_for_step,
     _tickers,
     _understanding_v2,
     _v2_profiles,
@@ -23,6 +26,175 @@ from backend.graph.renderers.shared import (
 from backend.graph.renderers.synthesis_vars import _agent_summary
 from backend.graph.state import GraphState
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE
+
+
+_VALUATION_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "market_cap": ("market_cap", "marketCap", "marketCapitalization"),
+    "trailing_pe": ("trailing_pe", "trailingPE", "pe", "price_to_earnings"),
+    "forward_pe": ("forward_pe", "forwardPE"),
+    "price_to_book": ("price_to_book", "priceToBook", "pb"),
+    "price_to_sales": ("price_to_sales", "priceToSalesTrailing12Months", "ps"),
+    "ev_to_ebitda": ("ev_to_ebitda", "enterpriseToEbitda"),
+}
+
+_VALUATION_TEXT_LABELS: dict[str, tuple[str, ...]] = {
+    "market_cap": ("Market Cap", "Market Capitalization"),
+    "trailing_pe": ("Trailing P/E", "P/E", "PE Ratio"),
+    "forward_pe": ("Forward P/E", "Forward PE"),
+    "price_to_book": ("Price/Book", "Price to Book", "P/B"),
+    "price_to_sales": ("Price/Sales", "Price to Sales", "P/S"),
+    "ev_to_ebitda": ("EV/EBITDA", "Enterprise Value/EBITDA"),
+}
+
+
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        return number if number == number else None
+    text = str(value).strip().replace(",", "").replace("$", "")
+    match = re.fullmatch(r"(-?\d+(?:\.\d+)?)\s*([KMBT])?", text, re.IGNORECASE)
+    if not match:
+        return None
+    number = float(match.group(1))
+    scale = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}.get((match.group(2) or "").upper(), 1.0)
+    return number * scale
+
+
+def _first_number(payload: dict[str, Any], aliases: tuple[str, ...]) -> float | None:
+    for alias in aliases:
+        value = _as_number(payload.get(alias))
+        if value is not None:
+            return value
+    lowered = {str(key).lower(): value for key, value in payload.items()}
+    for alias in aliases:
+        value = _as_number(lowered.get(alias.lower()))
+        if value is not None:
+            return value
+    return None
+
+
+def _parse_company_valuation(output: Any) -> dict[str, float]:
+    parsed = _parse_jsonish(output)
+    metrics: dict[str, float] = {}
+    if isinstance(parsed, dict):
+        for field, aliases in _VALUATION_FIELD_ALIASES.items():
+            value = _first_number(parsed, aliases)
+            if value is not None and value > 0:
+                metrics[field] = value
+        return metrics
+    if not isinstance(parsed, str):
+        return metrics
+    for field, labels in _VALUATION_TEXT_LABELS.items():
+        for label in labels:
+            match = re.search(
+                rf"(?:^|\n)\s*-?\s*{re.escape(label)}\s*:\s*([^\n]+)",
+                parsed,
+                re.IGNORECASE,
+            )
+            if not match:
+                continue
+            value = _as_number(match.group(1).strip())
+            if value is not None and value > 0:
+                metrics[field] = value
+                break
+    return metrics
+
+
+def _forward_eps_from_estimates(payload: dict[str, Any]) -> tuple[float | None, str]:
+    rows = payload.get("earnings_estimate")
+    if not isinstance(rows, list):
+        return None, ""
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        estimate = _first_number(
+            row,
+            ("avg", "avgEstimate", "epsEstimate", "currentEstimate", "mean", "consensus"),
+        )
+        if estimate is not None and estimate > 0:
+            return estimate, str(row.get("period") or row.get("date") or "").strip()
+    return None, ""
+
+
+def _valuation_evidence_by_ticker(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    evidence: dict[str, dict[str, Any]] = {ticker: {} for ticker in _tickers(state)}
+    for step, output in _step_outputs(state):
+        name = str(step.get("name") or "")
+        if name not in {"get_company_info", "get_earnings_estimates", "run_python_compute"}:
+            continue
+        ticker = _ticker_for_step(step, output, state)
+        if not ticker:
+            continue
+        row = evidence.setdefault(ticker, {})
+        if name == "get_company_info":
+            row.update(_parse_company_valuation(output))
+            continue
+        parsed = _parse_jsonish(output)
+        if not isinstance(parsed, dict):
+            continue
+        if name == "get_earnings_estimates":
+            revision_signal = str(parsed.get("revision_signal") or "").strip().lower()
+            if revision_signal in {"positive", "neutral", "negative"}:
+                row["revision_signal"] = revision_signal
+            forward_eps, period = _forward_eps_from_estimates(parsed)
+            if forward_eps is not None:
+                row["forward_eps"] = forward_eps
+                row["forward_eps_period"] = period
+            continue
+        metrics = parsed.get("metrics")
+        if isinstance(metrics, dict):
+            for field, aliases in _VALUATION_FIELD_ALIASES.items():
+                value = _first_number(metrics, aliases)
+                if value is not None and value > 0:
+                    row.setdefault(field, value)
+
+    for ticker, row in evidence.items():
+        if row.get("forward_pe"):
+            continue
+        price = _as_number((prices.get(ticker) or {}).get("price"))
+        forward_eps = _as_number(row.get("forward_eps"))
+        if price is not None and forward_eps is not None and forward_eps > 0:
+            row["forward_pe"] = price / forward_eps
+            row["forward_pe_derived"] = True
+    return evidence
+
+
+def _format_market_cap(value: float) -> str:
+    if value >= 1e12:
+        return f"${value / 1e12:.2f}T"
+    if value >= 1e9:
+        return f"${value / 1e9:.2f}B"
+    if value >= 1e6:
+        return f"${value / 1e6:.2f}M"
+    return f"${value:,.0f}"
+
+
+def _valuation_conclusion(tickers: list[str], evidence: dict[str, dict[str, Any]]) -> str:
+    for field, label in (("forward_pe", "Forward P/E"), ("trailing_pe", "Trailing P/E")):
+        comparable = [
+            (ticker, _as_number(evidence.get(ticker, {}).get(field)))
+            for ticker in tickers
+        ]
+        comparable = [(ticker, value) for ticker, value in comparable if value is not None and value > 0]
+        if len(comparable) < 2:
+            continue
+        ranked = sorted(comparable, key=lambda item: item[1])
+        winner = ranked[0][0]
+        comparison = "，".join(f"{ticker} {value:.2f}x" for ticker, value in ranked)
+        return (
+            f"按本轮可比的 {label}，{winner} 的估值倍数更低（{comparison}）。"
+            "这回答的是相对便宜程度；是否更合理仍要结合增长和盈利修正，不能只凭单一倍数下结论。"
+        )
+    return (
+        "当前只取得价格、公司资料或盈利预期中的部分证据，缺少至少两只标的可比的 "
+        "P/E、Forward P/E 或同行基准，因此这轮不能诚实判断谁的估值更合理。"
+    )
 
 
 def _render_compare_or_basket_markdown(
@@ -120,6 +292,7 @@ def _render_research_compare_markdown(
         headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}."
         omitted = scope.get("omitted_tickers") if isinstance(scope.get("omitted_tickers"), list) else []
     label = ", ".join(tickers) or "these tickers"
+    valuation_evidence = _valuation_evidence_by_ticker(state, prices=prices) if "valuation" in facets else {}
     lines: list[str] = [
         headline,
         "",
@@ -133,17 +306,35 @@ def _render_research_compare_markdown(
         else:
             lines.append("  - [data missing] current price evidence was not available.")
         if "valuation" in facets:
-            lines.append("  - Valuation evidence uses company context, earnings expectations, and fundamental review.")
+            valuation = valuation_evidence.get(ticker, {})
+            if valuation.get("market_cap"):
+                lines.append(f"  - 市值：{_format_market_cap(float(valuation['market_cap']))}")
+            multiple_lines: list[str] = []
+            for field, label_text in (
+                ("trailing_pe", "Trailing P/E"),
+                ("forward_pe", "Forward P/E"),
+                ("price_to_book", "P/B"),
+                ("price_to_sales", "P/S"),
+                ("ev_to_ebitda", "EV/EBITDA"),
+            ):
+                value = _as_number(valuation.get(field))
+                if value is not None and value > 0:
+                    suffix = "（按价格/EPS 预期推算）" if field == "forward_pe" and valuation.get("forward_pe_derived") else ""
+                    multiple_lines.append(f"{label_text} {value:.2f}x{suffix}")
+            if multiple_lines:
+                lines.append("  - 估值倍数：" + "；".join(multiple_lines))
+            revision_signal = str(valuation.get("revision_signal") or "")
+            if revision_signal:
+                signal_label = {"positive": "上修", "neutral": "中性", "negative": "下修"}.get(revision_signal, revision_signal)
+                lines.append(f"  - EPS 修正信号：{signal_label}")
+            if not any(valuation.get(field) for field in ("trailing_pe", "forward_pe", "price_to_book", "price_to_sales", "ev_to_ebitda")):
+                lines.append("  - [data missing] 本轮没有取得可比较的 P/E、Forward P/E、P/B、P/S 或 EV/EBITDA。")
 
     fundamental = _agent_summary(state, {"fundamental_agent"})
+    if "valuation" in facets:
+        lines.extend(["", "估值结论", f"- {_valuation_conclusion(tickers, valuation_evidence)}"])
     if fundamental:
-        lines.extend(["", "Fundamental / valuation read", f"- {fundamental}"])
-    elif "valuation" in facets:
-        lines.extend([
-            "",
-            "Valuation read",
-            "- Quick valuation pass is based on current price, company context, and earnings-expectation evidence for each ticker.",
-        ])
+        lines.extend(["", "基本面补充", f"- {fundamental}"])
 
     omitted = [str(ticker).strip().upper() for ticker in omitted if str(ticker).strip()]
     if omitted:

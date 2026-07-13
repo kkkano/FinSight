@@ -154,6 +154,28 @@ const PRICE_TYPE_ALIASES: Record<string, SmartChartType> = {
   line_price: 'line',
 };
 
+const PRICE_LIKE_LINE_TITLE = /(?:股价|价格走势|收盘价|行情|stock\s*price|price\s*(?:trend|history|chart)|clos(?:e|ing)\s*price)/i;
+const PRICE_LIKE_SERIES_NAME = /^(?:股价|价格|收盘价|行情|stock\s*price|price|close|closing\s*price)$/i;
+const PRICE_CURRENCY_UNITS = new Set([
+  '$',
+  'usd',
+  'us$',
+  '美元',
+  'hk$',
+  'hkd',
+  '港元',
+  '¥',
+  '￥',
+  'cny',
+  'rmb',
+  '人民币',
+  '元',
+  '€',
+  'eur',
+  '£',
+  'gbp',
+]);
+
 const FINANCIAL_NUMERIC_FIELDS = [
   'revenue',
   'gross_profit',
@@ -247,12 +269,15 @@ export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
     const title = extractAttr(attrs, 'title') ?? '';
     if (!type) continue;
     const symbol = extractAttr(attrs, 'symbol') ?? extractAttr(attrs, 'ticker') ?? extractInlineSymbol(json);
+    const normalizedRawType = rawType?.trim().toLowerCase();
     blocks.push({
       mode: 'inline',
       type,
       title,
       dataJson: json,
-      priceLike: rawType === 'line_price' || PRICE_LIKE_INLINE_TYPES.has(type),
+      priceLike: normalizedRawType === 'line_price'
+        || PRICE_LIKE_INLINE_TYPES.has(type)
+        || (type === 'line' && hasInlinePriceSemantics(title, json)),
       ...(symbol ? { symbol: symbol.trim().toUpperCase() } : {}),
     });
   }
@@ -320,6 +345,23 @@ function extractInlineSymbol(json: string): string | undefined {
   }
 }
 
+function hasInlinePriceSemantics(title: string, json: string): boolean {
+  if (PRICE_LIKE_LINE_TITLE.test(title.trim())) return true;
+  try {
+    const value: unknown = JSON.parse(json);
+    if (!isRecord(value)) return false;
+    const unit = typeof value.unit === 'string' ? value.unit.trim().toLowerCase() : '';
+    if (PRICE_CURRENCY_UNITS.has(unit)) return true;
+    const names = [value.name, value.series_name, value.metric];
+    if (Array.isArray(value.series)) {
+      names.push(...value.series.map((item) => (isRecord(item) ? item.name : undefined)));
+    }
+    return names.some((name) => typeof name === 'string' && PRICE_LIKE_SERIES_NAME.test(name.trim()));
+  } catch {
+    return false;
+  }
+}
+
 // eslint-disable-next-line react-refresh/only-export-components -- shared rendering policy for ChatList and tests
 export function isPriceLikeInlineBlock(block: SmartChartBlock): boolean {
   return block.mode === 'inline' && (block.priceLike === true || PRICE_LIKE_INLINE_TYPES.has(block.type));
@@ -328,6 +370,7 @@ export function isPriceLikeInlineBlock(block: SmartChartBlock): boolean {
 export interface RealPriceChartRequest {
   ticker: string;
   chartType: 'candlestick' | 'line';
+  valueMode: 'close';
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- pure policy helper
@@ -341,6 +384,7 @@ export function resolveRealPriceChartRequest(
   return {
     ticker,
     chartType: block.type === 'candlestick' || block.type === 'price_volume' ? 'candlestick' : 'line',
+    valueMode: 'close',
   };
 }
 
@@ -548,12 +592,27 @@ export function buildLineOption(
   theme: ChartTheme,
   fillArea = true,
 ) {
+  const formatValue = (value: unknown) => formatSmartChartValue(value, data.unit);
   return {
     tooltip: {
       trigger: 'axis' as const,
       backgroundColor: theme.tooltipBackground,
       borderColor: theme.tooltipBorder,
       textStyle: { color: theme.tooltipText, fontSize: 11 },
+      formatter: (params: unknown) => {
+        const rows = Array.isArray(params) ? params : [params];
+        const first = rows.find(isRecord);
+        const axisLabel = first && (first.axisValueLabel ?? first.axisValue);
+        const lines = axisLabel === undefined ? [] : [String(axisLabel)];
+        for (const row of rows) {
+          if (!isRecord(row)) continue;
+          const rawValue = Array.isArray(row.value) ? row.value.at(-1) : row.value;
+          const marker = typeof row.marker === 'string' ? row.marker : '';
+          const name = typeof row.seriesName === 'string' && row.seriesName.trim() ? `${row.seriesName}: ` : '';
+          lines.push(`${marker}${name}${formatValue(rawValue)}`);
+        }
+        return lines.join('<br/>');
+      },
     },
     grid: { left: 48, right: 16, top: 32, bottom: 24 },
     title: {
@@ -569,7 +628,7 @@ export function buildLineOption(
     },
     yAxis: {
       type: 'value' as const,
-      axisLabel: { color: theme.muted, fontSize: 9 },
+      axisLabel: { color: theme.muted, fontSize: 9, formatter: formatValue },
       splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
     },
     series: [{
@@ -583,6 +642,26 @@ export function buildLineOption(
       areaStyle: fillArea ? { opacity: 0.1 } : undefined,
     }],
   };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- unit-aware formatting is part of the chart truthfulness contract
+export function formatSmartChartValue(value: unknown, unit?: string): string {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return String(value ?? '');
+  const formatted = new Intl.NumberFormat('zh-CN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(numeric);
+  const normalizedUnit = String(unit ?? '').trim();
+  const loweredUnit = normalizedUnit.toLowerCase();
+  if (!normalizedUnit) return formatted;
+  if (normalizedUnit === '%' || loweredUnit === 'percent') return `${formatted}%`;
+  if (['$', 'usd', 'us$', '美元'].includes(loweredUnit)) return `$${formatted}`;
+  if (['hk$', 'hkd', '港元'].includes(loweredUnit)) return `HK$${formatted}`;
+  if (['¥', '￥', 'cny', 'rmb', '人民币', '元'].includes(loweredUnit)) return `¥${formatted}`;
+  if (['€', 'eur'].includes(loweredUnit)) return `€${formatted}`;
+  if (['£', 'gbp'].includes(loweredUnit)) return `£${formatted}`;
+  return `${formatted}${normalizedUnit}`;
 }
 
 function buildPieOption(data: SmartChartData, title: string, theme: ChartTheme) {

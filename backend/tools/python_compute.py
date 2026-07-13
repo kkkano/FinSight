@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import re
 import time
 from typing import Any
 
@@ -63,6 +64,26 @@ def _pick_number(payload: Any, keys: tuple[str, ...]) -> float | None:
             nested = _pick_number(item, keys)
             if nested is not None:
                 return nested
+    if isinstance(payload, str):
+        label_map = {
+            "marketCap": ("Market Cap", "Market Capitalization"),
+            "market_cap": ("Market Cap", "Market Capitalization"),
+            "marketCapitalization": ("Market Cap", "Market Capitalization"),
+        }
+        labels = {label for key in keys for label in label_map.get(key, ())}
+        for label in labels:
+            match = re.search(
+                rf"(?:^|\n)\s*-?\s*{re.escape(label)}\s*:\s*\$?([\d,.]+)\s*([KMBT])?",
+                payload,
+                re.IGNORECASE,
+            )
+            if not match:
+                continue
+            number = _safe_float(match.group(1).replace(",", ""))
+            if number is None:
+                continue
+            scale = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}.get((match.group(2) or "").upper(), 1.0)
+            return number * scale
     return None
 
 

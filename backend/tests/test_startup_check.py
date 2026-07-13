@@ -175,10 +175,14 @@ class TestGetStartupResult:
 class TestChatRouterFastFail:
     """P1-3: chat_router 在 LLM 不可用时立即 503，不让用户等超时"""
 
-    def test_ensure_llm_available_raises_503_when_unavailable(self):
+    def test_ensure_llm_available_raises_503_when_unavailable(self, monkeypatch):
         from fastapi import HTTPException
 
         from backend.api.chat_router import _ensure_llm_available
+
+        # 全局测试夹具默认启用完全离线的 stub 链路；本用例需要显式模拟
+        # 生产 LLM 路径，才能验证 endpoint 不可用时的快速失败门禁。
+        monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 
         with patch(
             "backend.llm_config.load_user_endpoints",

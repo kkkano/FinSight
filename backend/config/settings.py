@@ -37,8 +37,8 @@ class ExecutorSettings(_DomainSettings):
     progress_heartbeat_seconds: float = Field(
         2.5, validation_alias="LANGGRAPH_EXECUTION_PROGRESS_HEARTBEAT_SECONDS"
     )
-    dag_executor: bool = Field(False, validation_alias="FINSIGHT_DAG_EXECUTOR")
-    evidence_bus: bool = Field(False, validation_alias="FINSIGHT_EVIDENCE_BUS")
+    dag_executor: bool = Field(True, validation_alias="FINSIGHT_DAG_EXECUTOR")
+    evidence_bus: bool = Field(True, validation_alias="FINSIGHT_EVIDENCE_BUS")
     research_ledger_enabled: bool = Field(True, validation_alias="RESEARCH_LEDGER_ENABLED")
     jina_enrich_evidence: bool = Field(True, validation_alias="JINA_ENRICH_EVIDENCE")
     agent_invoker_timeout_seconds: float = Field(
@@ -54,7 +54,7 @@ class ExecutorSettings(_DomainSettings):
 
 class AgentSettings(_DomainSettings):
     temperature: float = Field(0.2, validation_alias="LANGGRAPH_AGENT_TEMPERATURE")
-    brief_enabled: bool = Field(False, validation_alias="FINSIGHT_AGENT_BRIEF")
+    brief_enabled: bool = Field(True, validation_alias="FINSIGHT_AGENT_BRIEF")
     llm_analyze_enabled: bool = Field(False, validation_alias="AGENT_LLM_ANALYZE_ENABLED")
     llm_analyze_timeout_seconds: float = Field(
         8.0, validation_alias="AGENT_LLM_ANALYZE_TIMEOUT_SECONDS"

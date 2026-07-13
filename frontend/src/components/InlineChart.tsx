@@ -17,6 +17,8 @@ interface InlineChartProps {
   ticker: string;
   period?: string;
   chartType?: ChartType;
+  /** 价格语义图使用 close；旧的收益率快捷图保持 return。 */
+  valueMode?: 'close' | 'return';
   onDataReady?: (data: KlineData[], summary: string) => void;
 }
 
@@ -58,6 +60,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   ticker,
   period = '1y',
   chartType = 'line',
+  valueMode = 'return',
   onDataReady,
 }) => {
   const chartTheme = useChartTheme();
@@ -140,11 +143,15 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   // 合成占位数据：后端全源失败后用最新价生成的等值序列，非真实行情，必须显著标注
   const isSynthetic = typeof dataSource === 'string' && dataSource.startsWith('price_fallback');
 
-  const smartData = buildKlineSmartChartData(
-    data,
-    chartType === 'candlestick' ? 'close' : 'return',
-  );
-  const title = `${ticker} ${chartLabels[chartType] || 'Chart'} (${period})`;
+  const effectiveValueMode = chartType === 'candlestick' ? 'close' : valueMode;
+  const smartData = buildKlineSmartChartData(data, effectiveValueMode);
+  if (effectiveValueMode === 'close') {
+    smartData.unit = inferTickerPriceUnit(ticker);
+  }
+  const chartLabel = chartType === 'line' && effectiveValueMode === 'close'
+    ? 'Price trend'
+    : chartLabels[chartType] || 'Chart';
+  const title = `${ticker} ${chartLabel} (${period})`;
   const option = chartType === 'candlestick'
     ? buildCandlestickOption(smartData, title, chartTheme)
     : buildLineOption(smartData, title, chartTheme, chartType === 'area');
@@ -153,7 +160,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     <div className="my-4 p-4 bg-fin-panel rounded-lg border border-fin-border">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-xs text-fin-muted">
-          {ticker} {chartLabels[chartType] || 'Chart'} ({period})
+          {ticker} {chartLabel} ({period})
         </div>
         <SourceBadge
           source={dataSource ?? undefined}
@@ -175,3 +182,13 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     </div>
   );
 };
+
+function inferTickerPriceUnit(ticker: string): string {
+  const normalized = ticker.trim().toUpperCase();
+  if (normalized.endsWith('.HK')) return 'HK$';
+  if (/\.(?:SS|SZ|BJ)$/.test(normalized)) return '¥';
+  if (normalized.endsWith('.L')) return '£';
+  if (/\.(?:PA|DE|AS|MI)$/.test(normalized)) return '€';
+  if (normalized.endsWith('.T')) return '¥';
+  return '$';
+}

@@ -244,11 +244,11 @@ from backend.graph.intent.keywords import (  # noqa: F401 —— 关键词单一
 async def understand_request(state: GraphState) -> dict[str, Any]:
     """分发壳（WP2 Task 3）：FINSIGHT_INTENT_FRAME=off|shadow|on。
 
-    off（默认）——完全走 legacy 关键词瀑布，行为与基线逐字节一致；
+    off——完全走 legacy 关键词瀑布，仅用于显式回滚；
     shadow——新管线跑一遍只记 trace 影子，行为仍取 legacy（对拍用）；
-    on——LLM 唯一决策者的新管线；任何未预期异常自动兜底回 legacy（安全阀）。
+    on（默认）——结构化新管线；任何未预期异常自动兜底回 legacy（安全阀）。
     """
-    mode = str(os.getenv("FINSIGHT_INTENT_FRAME", "off")).strip().lower()
+    mode = str(os.getenv("FINSIGHT_INTENT_FRAME", "on")).strip().lower()
     if mode in {"shadow", "on"}:
         try:
             from backend.graph.intent.pipeline import build_intent_result

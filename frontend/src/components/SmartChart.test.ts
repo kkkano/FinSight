@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildLineOption,
   buildKlineSmartChartData,
+  formatSmartChartValue,
   getRenderableMessageContent,
   getSmartChartProvenance,
   getSmartChartRenderer,
@@ -9,6 +11,7 @@ import {
   parseSmartChartBlocks,
   resolveRealPriceChartRequest,
 } from './SmartChart';
+import { buildTerminalChartTheme } from '../hooks/useChartTheme';
 import { applyPredictionOverlay, buildPredictionAnnotations } from './charts/PredictionOverlay';
 import {
   loadPredictionOverlay,
@@ -51,7 +54,7 @@ describe('parseSmartChartBlocks', () => {
     );
 
     expect(isPriceLikeInlineBlock(block)).toBe(true);
-    expect(resolveRealPriceChartRequest(block, [])).toEqual({ ticker: 'AAPL', chartType: 'candlestick' });
+    expect(resolveRealPriceChartRequest(block, [])).toEqual({ ticker: 'AAPL', chartType: 'candlestick', valueMode: 'close' });
   });
 
   it('normalizes price aliases and never trusts their inline arrays', () => {
@@ -60,7 +63,36 @@ describe('parseSmartChartBlocks', () => {
     );
 
     expect(block).toMatchObject({ type: 'line', priceLike: true, symbol: 'NVDA' });
-    expect(resolveRealPriceChartRequest(block, ['AAPL'])).toEqual({ ticker: 'NVDA', chartType: 'line' });
+    expect(resolveRealPriceChartRequest(block, ['AAPL'])).toEqual({ ticker: 'NVDA', chartType: 'line', valueMode: 'close' });
+  });
+
+  it('treats a plain line with a price title as real market data', () => {
+    const [block] = parseSmartChartBlocks(
+      '<chart type="line" ticker="NVDA" title="价格走势">{"labels":["D1"],"values":[28.086951607]}</chart>',
+    );
+
+    expect(isPriceLikeInlineBlock(block)).toBe(true);
+    expect(resolveRealPriceChartRequest(block, [])).toEqual({ ticker: 'NVDA', chartType: 'line', valueMode: 'close' });
+  });
+
+  it('treats an exact currency unit as price semantics but does not misclassify financial units', () => {
+    const [priceBlock] = parseSmartChartBlocks(
+      '<chart type="line" title="NVDA">{"unit":"USD","labels":["D1"],"values":[100]}</chart>',
+    );
+    const [revenueBlock] = parseSmartChartBlocks(
+      '<chart type="line" title="Revenue">{"unit":"USD bn","labels":["2026"],"values":[100]}</chart>',
+    );
+
+    expect(isPriceLikeInlineBlock(priceBlock)).toBe(true);
+    expect(isPriceLikeInlineBlock(revenueBlock)).toBe(false);
+  });
+
+  it('does not reroute a non-price indicator line', () => {
+    const [block] = parseSmartChartBlocks(
+      '<chart type="line" title="RSI 趋势">{"unit":"点","labels":["D1"],"values":[62.123456]}</chart>',
+    );
+
+    expect(isPriceLikeInlineBlock(block)).toBe(false);
   });
 
   it('keeps conceptual inline charts but marks their provenance as synthetic', () => {
@@ -102,6 +134,26 @@ describe('shared real-market chart adapter', () => {
       volume: [10, 20],
     });
     expect(buildKlineSmartChartData(rows, 'return').values[1]).toBeCloseTo(2.941176, 5);
+  });
+});
+
+describe('line chart number formatting', () => {
+  it('renders currency and percentage values with bounded precision', () => {
+    expect(formatSmartChartValue(28.086951607, '$')).toBe('$28.09');
+    expect(formatSmartChartValue(28.086951607, '%')).toBe('28.09%');
+  });
+
+  it('uses the formatted value in the line tooltip instead of raw floating point output', () => {
+    const option = buildLineOption(
+      { labels: ['2026-07-10'], values: [28.086951607], unit: '$' },
+      '价格走势',
+      buildTerminalChartTheme(false),
+    );
+    const formatter = option.tooltip.formatter;
+    const tooltip = formatter([{ axisValue: '2026-07-10', value: 28.086951607, marker: '', seriesName: 'Close' }]);
+
+    expect(tooltip).toContain('$28.09');
+    expect(tooltip).not.toContain('28.086951607');
   });
 });
 

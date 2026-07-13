@@ -34,6 +34,22 @@ def _assert_evidence_task(result: dict, tickers: tuple[str, ...], expected: set[
     raise AssertionError(f"missing evidence task for {tickers}: {sorted(expected)}")
 
 
+def test_intent_frame_explicit_off_keeps_legacy_rollback(monkeypatch):
+    import importlib
+
+    understand_request_module = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def _legacy(state):
+        return {"path": "legacy", "query": state.get("query")}
+
+    monkeypatch.setenv("FINSIGHT_INTENT_FRAME", "off")
+    monkeypatch.setattr(understand_request_module, "_legacy_understand_request", _legacy)
+
+    result = _run(understand_request_module.understand_request({"query": "rollback"}))
+
+    assert result == {"path": "legacy", "query": "rollback"}
+
+
 def test_pure_greeting_routes_direct_without_research_pipeline():
     from backend.graph import GraphRunner
 

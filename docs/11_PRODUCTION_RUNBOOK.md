@@ -27,6 +27,13 @@ OPENAI_COMPATIBLE_API_BASE=https://provider.example/v1
 OPENAI_COMPATIBLE_MODEL=model-id
 FINSIGHT_CONTEXT_ROUTER_MAX_TIMEOUT_SEC=45
 FINSIGHT_CONTEXT_REPLY_MAX_TIMEOUT_SEC=60
+FINSIGHT_INTENT_FRAME=on
+FINSIGHT_DAG_EXECUTOR=on
+FINSIGHT_AGENT_BRIEF=on
+FINSIGHT_EVIDENCE_BUS=on
+LANGGRAPH_EXECUTE_LIVE_TOOLS=true
+AGENT_LLM_ANALYZE_ENABLED=true
+LANGGRAPH_SYNTHESIZE_MODE=llm
 ```
 
 若 OpenAI-compatible 代理与 FinSight 部署在同一台 Linux 宿主机，不要填写宿主机公网 IP；应使用
@@ -84,7 +91,7 @@ docker compose --env-file .env.server ps
 docker compose --env-file .env.server logs --tail=100 backend frontend
 ```
 
-再从公网验证首页、`/chat`、`/dashboard/AAPL`、`/screener`，并确认纯社交请求快速结束、研究请求产生 SSE 事件并完成 evidence → synthesis → render。聊天至少用同一 session 连续验证“明确标的 → 省略式追问 → 风险追问”；标的焦点必须保持，助手正文中的大写缩写不得污染 subject。若 LLM 失败，响应必须出现 `degraded` 事件/字段和前端警告，不得表现为正常成功。不得在冒烟命令、截图或日志摘录中打印 LLM key。
+再从公网验证首页、`/chat`、`/dashboard/AAPL`、`/screener`，并确认纯社交请求快速结束、研究请求产生 SSE 事件并完成 evidence → synthesis → render。聊天至少用同一 session 连续验证“明确标的 → 省略式追问 → 风险追问”；标的焦点必须保持，助手正文中的大写缩写不得污染 subject。另用“NVDA 和 AMD 哪个估值更合理”检查正文是否逐标的给出实际倍数或明确说明缺少可比倍数；用价格走势图检查日期对应值是否为真实收盘价、tooltip 是否有正确单位和至多两位小数。HTTP 200、容器 healthy 或 `degraded=false` 都不能替代答案语义检查。若 LLM 失败，响应必须出现 `degraded` 事件/字段和前端警告，不得表现为正常成功。不得在冒烟命令、截图或日志摘录中打印 LLM key。
 
 ## 6. 回滚
 

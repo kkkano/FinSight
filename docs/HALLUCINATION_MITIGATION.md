@@ -1,6 +1,6 @@
 # 幻觉与错误事实治理
 
-更新时间：2026-07-12
+更新时间：2026-07-13
 
 FinSight 的目标不是声称“消灭幻觉”，而是把未经取证的金融事实阻挡在证据、合成和渲染边界之外，并在证据不足时明确降级。
 
@@ -42,8 +42,10 @@ flowchart LR
 - 引用必须保留 source id、标题/URL（可用时）、as-of/published time 和作用域。
 - 模型分析可以存在，但必须标为分析或推断，不能伪装为外部事实。
 - `chart_ref` 只引用真实 API/数据产物；图表标题和说明不能改变数据含义。
+- 价格语义的内联图必须强制切到真实行情；renderer 不得把“使用了某种方法/证据”写成已经完成的估值结论。
+- 比较型问题必须逐标的展示实际可比指标。缺少 P/E、Forward P/E 或同行基准时，应明确说无法排序，不能用空泛模板替代答案。
 - 用户要求“不使用新闻/链接”等约束由 reply contract/policy 传播，下游不得偷偷加入。
 
 ## 验证
 
-测试至少覆盖 evidence/diagnostics 隔离、冲突披露、占位值清理、无来源数字、引用覆盖、过期数据、工具全失败、RAG 空结果和多用户 scope。RAG 指标与运行方法见 [`rag-evaluation-guide.md`](rag-evaluation-guide.md)。
+测试至少覆盖 evidence/diagnostics 隔离、冲突披露、占位值清理、无来源数字、引用覆盖、过期数据、工具全失败、RAG 空结果、多用户 scope、价格图真实数据分流，以及比较回答是否包含实际指标或明确缺口。RAG 指标与运行方法见 [`rag-evaluation-guide.md`](rag-evaluation-guide.md)。

@@ -328,11 +328,13 @@ def get_company_info(ticker: str) -> str:
         if info and 'longName' in info:
             summary = info.get('longBusinessSummary', '')
             description = (summary[:200] + '...') if summary else 'No description available'
+            valuation_lines = _company_valuation_lines(info)
             return f"""Company Profile ({ticker}):
 - Name: {info.get('longName', 'Unknown')}
 - Sector: {info.get('sector', 'Unknown')}
 - Industry: {info.get('industry', 'Unknown')}
 - Market Cap: ${info.get('marketCap', 0):,.0f}
+{valuation_lines}
 - Website: {info.get('website', 'N/A')}
 - Description: {description}"""
     except Exception as e:
@@ -362,11 +364,19 @@ def get_company_info(ticker: str) -> str:
         data = response.json()
         if 'Symbol' in data and data['Symbol']:
             description = data.get('Description', 'No description')[:200] + '...'
+            valuation_lines = _company_valuation_lines({
+                "trailingPE": data.get("PERatio"),
+                "forwardPE": data.get("ForwardPE"),
+                "priceToBook": data.get("PriceToBookRatio"),
+                "priceToSalesTrailing12Months": data.get("PriceToSalesRatioTTM"),
+                "enterpriseToEbitda": data.get("EVToEBITDA"),
+            })
             return f"""Company Profile ({ticker}):
 - Name: {data.get('Name', 'Unknown')}
 - Sector: {data.get('Sector', 'Unknown')}
 - Industry: {data.get('Industry', 'Unknown')}
 - Market Cap: ${int(data.get('MarketCapitalization', 0)):,}
+{valuation_lines}
 - Description: {description}"""
     except Exception as e:
         logger.info(f"Alpha Vantage overview fetch failed: {e}")
@@ -374,6 +384,26 @@ def get_company_info(ticker: str) -> str:
     # 方法4: 网页搜索
     logger.info(f"Falling back to web search for '{ticker}' company info")
     return search(f"{ticker} company profile stock information")
+
+
+def _company_valuation_lines(info: Dict[str, Any]) -> str:
+    fields = (
+        ("Trailing P/E", info.get("trailingPE")),
+        ("Forward P/E", info.get("forwardPE")),
+        ("Price/Book", info.get("priceToBook")),
+        ("Price/Sales", info.get("priceToSalesTrailing12Months")),
+        ("EV/EBITDA", info.get("enterpriseToEbitda")),
+    )
+    lines: List[str] = []
+    for label, raw_value in fields:
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if value <= 0:
+            continue
+        lines.append(f"- {label}: {value:.2f}")
+    return "\n".join(lines)
 
 
 def _serialize_table_records(table: Any, *, max_rows: int = 8) -> List[Dict[str, Any]]:

@@ -588,6 +588,7 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
               key={key}
               ticker={realPriceRequest.ticker}
               chartType={realPriceRequest.chartType}
+              valueMode={realPriceRequest.valueMode}
               onDataReady={(_data, summary) => handleChartDataReady(realPriceRequest.ticker, summary)}
             />
           );

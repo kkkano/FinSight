@@ -1708,8 +1708,73 @@ def test_chat_renderer_valuation_compare_light_does_not_emit_missing_fundamental
 
     _assert_chat_contract(markdown)
     assert "Research comparison for NVDA, AMD" in markdown
-    assert "Valuation read" in markdown
+    assert "估值结论" in markdown
+    assert "缺少至少两只标的可比的 P/E、Forward P/E 或同行基准" in markdown
+    assert "Quick valuation pass is based on" not in markdown
+    assert "Valuation evidence uses company context" not in markdown
     assert "[data missing] fundamental_agent output was not available" not in markdown
+
+
+def test_chat_renderer_valuation_compare_uses_actual_multiples_and_answers_the_ranking() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA and AMD which valuation is more reasonable?",
+            "subject": {"subject_type": "company", "tickers": ["NVDA", "AMD"]},
+            "operation": {"name": "compare"},
+            "intent_contract": {
+                "facets": ["valuation"],
+                "budget_profile": "valuation_compare_light",
+                "primary_tickers": ["NVDA", "AMD"],
+                "per_ticker_required": True,
+                "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates"],
+            },
+            "plan_ir": {
+                "steps": [
+                    {"id": "nvda_price", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "nvda_info", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
+                    {"id": "nvda_eps", "name": "get_earnings_estimates", "inputs": {"ticker": "NVDA"}},
+                    {"id": "amd_price", "name": "get_stock_price", "inputs": {"ticker": "AMD"}},
+                    {"id": "amd_info", "name": "get_company_info", "inputs": {"ticker": "AMD"}},
+                    {"id": "amd_eps", "name": "get_earnings_estimates", "inputs": {"ticker": "AMD"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "nvda_price": {"output": {"price": 180.0, "change_percent": 1.0}},
+                    "nvda_info": {
+                        "output": (
+                            "Company Profile (NVDA):\n"
+                            "- Market Cap: $4,000,000,000,000\n"
+                            "- Trailing P/E: 52.00\n"
+                            "- Forward P/E: 35.00\n"
+                            "- Price/Book: 40.00"
+                        )
+                    },
+                    "nvda_eps": {"output": {"ticker": "NVDA", "revision_signal": "positive"}},
+                    "amd_price": {"output": {"price": 160.0, "change_percent": -1.0}},
+                    "amd_info": {
+                        "output": (
+                            "Company Profile (AMD):\n"
+                            "- Market Cap: $300,000,000,000\n"
+                            "- Trailing P/E: 95.00\n"
+                            "- Forward P/E: 28.00\n"
+                            "- Price/Book: 7.00"
+                        )
+                    },
+                    "amd_eps": {"output": {"ticker": "AMD", "revision_signal": "neutral"}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "市值：$4.00T" in markdown
+    assert "Forward P/E 35.00x" in markdown
+    assert "Forward P/E 28.00x" in markdown
+    assert "EPS 修正信号：上修" in markdown
+    assert "AMD 的估值倍数更低" in markdown
+    assert "AMD 28.00x，NVDA 35.00x" in markdown
 
 
 def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_operation() -> None:
