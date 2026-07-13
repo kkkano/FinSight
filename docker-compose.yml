@@ -76,6 +76,10 @@ services:
       - backend_data:/app/data
       - backend_logs:/app/logs
       - model_cache:/app/.cache
+    # Linux 容器访问宿主机上的 OpenAI-compatible 代理时使用该稳定别名，
+    # 避免经公网 IP 回源产生 hairpin NAT 连接抖动。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8000:8000"   # 仅本机可直连；外部流量必须走 Cloudflare Tunnel（token 模式，ingress 指宿主机 localhost，兼容）
     depends_on:

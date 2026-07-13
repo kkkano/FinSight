@@ -29,6 +29,10 @@ FINSIGHT_CONTEXT_ROUTER_MAX_TIMEOUT_SEC=45
 FINSIGHT_CONTEXT_REPLY_MAX_TIMEOUT_SEC=60
 ```
 
+若 OpenAI-compatible 代理与 FinSight 部署在同一台 Linux 宿主机，不要填写宿主机公网 IP；应使用
+`OPENAI_COMPATIBLE_API_BASE=http://host.docker.internal/v1`。生产 Compose 已将
+`host.docker.internal` 映射到 Docker host gateway，可避免公网回源的 hairpin NAT 连接抖动。
+
 LLM 供应商可替换，只要支持 OpenAI-compatible API。生产 RAG 和 checkpointer 使用 Compose 注入的 PostgreSQL DSN：
 
 ```env
