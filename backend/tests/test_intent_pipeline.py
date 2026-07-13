@@ -170,3 +170,72 @@ async def test_heuristic_fallback_decision_is_not_authoritative():
         frame = await build_intent_frame({"query": "AAPL 值得买吗", "ui_context": {}})
     assert frame.source == "rules_fallback"
     assert frame.route == "research"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("query", "expected_operation", "expected_focus"),
+    [
+        ("推荐怎么操作？", "investment_opinion", "investment_opinion"),
+        ("那风险呢？", "investment_opinion", "risk"),
+        ("技术面呢？", "technical", "technical"),
+    ],
+)
+async def test_verified_thread_focus_projects_elliptical_follow_up_without_router_llm(
+    monkeypatch,
+    query,
+    expected_operation,
+    expected_focus,
+):
+    """路由 LLM 不可用时，当前 thread 的已验证 NVDA 焦点仍必须生成有证据的任务。"""
+    from backend.graph.intent import pipeline
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+
+    def fail_if_llm_is_created(*_args, **_kwargs):
+        raise AssertionError("高置信省略追问不应依赖 router LLM")
+
+    monkeypatch.setattr("backend.llm_config.create_llm", fail_if_llm_is_created)
+    frame, result = await pipeline.build_intent_result(
+        {
+            "query": query,
+            "ui_context": {},
+            "output_mode": "chat",
+            "memory_context": {
+                "current_thread_focus": {
+                    "ticker": "NVDA",
+                    "query": "分析 NVDA 当前技术面",
+                    "summary": "NVDA 当前重点看趋势、支撑阻力与风险。",
+                }
+            },
+            "messages": [],
+            "trace": {},
+        }
+    )
+
+    assert frame.route == "research"
+    assert any(task.operation == expected_operation and task.tickers == ["NVDA"] for task in frame.tasks)
+    assert result["subject"]["tickers"] == ["NVDA"]
+    router_trace = result["trace"]["conversation_router"]
+    assert router_trace["decision_source"] == "fast_path"
+    assert router_trace["context_binding"]["source"] == "last_turn"
+    assert "我在。你可以继续直接问" not in str((result.get("artifacts") or {}).get("draft_markdown") or "")
+    if expected_focus == "risk":
+        task = next(task for task in result["tasks"] if (task.get("operation") or {}).get("name") == expected_operation)
+        assert (task.get("operation") or {}).get("params", {}).get("evidence_focus") == "risk"
+
+
+def test_risk_concept_is_not_forced_into_current_ticker_research():
+    from backend.graph.intent.router import _fast_contextual_execution_decision
+
+    decision = _fast_contextual_execution_decision(
+        {
+            "query": "风险是什么意思？",
+            "ui_context": {},
+            "memory_context": {"current_thread_focus": {"ticker": "NVDA"}},
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert decision is None

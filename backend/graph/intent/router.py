@@ -26,7 +26,7 @@ from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from backend.config.ticker_mapping import extract_tickers
+from backend.config.ticker_mapping import extract_tickers, normalize_ticker
 from backend.graph.earnings_intent import (
     query_requests_earnings_performance,
     query_requests_earnings_price_impact,
@@ -36,7 +36,7 @@ from backend.graph.investment_intent import (
     query_requests_investment_opinion,
 )
 from backend.graph.json_utils import json_dumps_safe
-from backend.graph.memory_scope import current_report_context
+from backend.graph.memory_scope import current_report_context, current_thread_focus
 from backend.graph.preference_timeouts import apply_preferred_timeout
 from backend.graph.request_task_contract import query_explicitly_requests_sources, wants_no_news_or_links
 from backend.graph.state import GraphState
@@ -333,6 +333,38 @@ def _query_explicitly_requests_technical(query: str) -> bool:
 
 def _query_explicitly_requests_investment_opinion(query: str) -> bool:
     return query_requests_investment_opinion(query)
+
+
+def _query_explicitly_requests_risk_review(query: str) -> bool:
+    """识别需要绑定当前标的的风险追问，排除纯概念解释。"""
+    text = str(query or "").strip()
+    if not text:
+        return False
+    lowered = text.lower()
+    if re.search(
+        r"((什么是|定义|概念).{0,8}(风险|回撤|波动)|(风险|回撤|波动).{0,8}(是什么|是什么意思|定义|概念))",
+        text,
+    ):
+        return False
+    if re.search(r"\b(?:what\s+is|define|meaning\s+of)\b.{0,20}\b(?:risk|drawdown|volatility)\b", lowered):
+        return False
+    return bool(
+        re.search(r"(风险|风险点|下行|回撤|止损|不利因素|隐患|踩雷)", text)
+        or re.search(r"\b(?:risk|risks|downside|drawdown|stop[- ]?loss)\b", lowered)
+    )
+
+
+def _query_explicitly_requests_contextual_trade_action(query: str) -> bool:
+    """识别省略了标的、但明确要求仓位或买卖动作的追问。"""
+    text = str(query or "").strip()
+    if not text:
+        return False
+    lowered = text.lower()
+    return bool(
+        re.search(r"(怎么|如何|怎样).{0,6}(操作|处理|买|卖|加仓|减仓|持有|止损|入场|出场)", text)
+        or re.search(r"(推荐|建议).{0,6}(怎么|如何|操作|仓位|买|卖|持有)", text)
+        or re.search(r"\b(?:what\s+should\s+i\s+do|how\s+should\s+i\s+trade|position\s+sizing)\b", lowered)
+    )
 
 
 def _query_explicitly_requests_earnings_performance(query: str) -> bool:
@@ -1319,6 +1351,29 @@ def _compact_last_report(memory_context: dict[str, Any]) -> dict[str, Any] | Non
     return compact or None
 
 
+def _compact_current_thread_focus(memory_context: dict[str, Any]) -> dict[str, Any] | None:
+    """只暴露当前 thread 的轻量焦点，避免把跨会话历史混入路由。"""
+    focus = current_thread_focus(memory_context)
+    if not isinstance(focus, dict):
+        return None
+    compact: dict[str, Any] = {}
+    for key in ("ticker", "query", "summary", "sentiment", "updated_at"):
+        value = focus.get(key)
+        if value is not None:
+            compact[key] = value
+    return compact or None
+
+
+def _current_thread_focus_tickers(state: GraphState) -> list[str]:
+    memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else {}
+    focus = current_thread_focus(memory_context)
+    raw = str((focus or {}).get("ticker") or "").strip()
+    if not raw:
+        return []
+    ticker = normalize_ticker(raw)
+    return [ticker] if ticker else []
+
+
 def _portfolio_summary(ui_context: dict[str, Any]) -> dict[str, Any] | None:
     raw: Any = None
     for key in ("positions", "holdings", "portfolio"):
@@ -1403,7 +1458,7 @@ def _router_inputs(
         "selections": _selection_summary(ui_context),
         "portfolio": _portfolio_summary(ui_context),
         "last_report": _compact_last_report(memory_context),
-        "last_focus": None,
+        "last_focus": _compact_current_thread_focus(memory_context),
         "recent_focuses": [],
         "recent_history": recent_history,
     }
@@ -1427,10 +1482,87 @@ def _deictic_query_has_no_available_context(
         return False
     if _compact_last_report(memory_context):
         return False
+    if _compact_current_thread_focus(memory_context):
+        return False
     active_symbol = ui_context.get("active_symbol")
     if isinstance(active_symbol, str) and active_symbol.strip():
         return False
     return True
+
+
+def _fast_contextual_execution_decision(
+    state: GraphState,
+    *,
+    tickers: list[str],
+    selection_ids: list[str],
+) -> ConversationDecision | None:
+    """把当前 thread 已验证焦点投影到高置信省略追问。
+
+    该路径只处理明确需要公司证据的动作；普通问候、泛概念和新话题仍交给
+    LLM router，避免把用户的所有问题都错误绑定到上一只股票。
+    """
+    if tickers or selection_ids:
+        return None
+    focus_tickers = _current_thread_focus_tickers(state)
+    if not focus_tickers:
+        return None
+
+    query = str(state.get("query") or "").strip()
+    decision = _fast_explicit_execution_decision(
+        state,
+        tickers=focus_tickers,
+        selection_ids=[],
+    )
+    if decision is None and _query_explicitly_requests_contextual_trade_action(query):
+        contextual_state = dict(state)
+        contextual_state["query"] = f"{focus_tickers[0]} {query}".strip()
+        decision = _fast_explicit_execution_decision(
+            contextual_state,
+            tickers=focus_tickers,
+            selection_ids=[],
+        )
+    if decision is None and _query_explicitly_requests_risk_review(query):
+        ticker = focus_tickers[0]
+        decision = ConversationDecision(
+            decision_source="fast_path",
+            execution_route="research",
+            context_binding=ContextBinding(),
+            relation="follow_up",
+            domain_intent="analysis",
+            confidence=0.84,
+            needs_tools=True,
+            reason="context-bound risk review fast path",
+            reply_guidance="基于当前标的的价格、技术面、基本面和风险证据，直接回答主要下行风险与触发条件。",
+            task_hints=(
+                {
+                    "subject_type": "company",
+                    "subject_label": ticker,
+                    "tickers": [ticker],
+                    "operation": "investment_opinion",
+                    "params": {
+                        "evidence_focus": "risk",
+                        "facets": ["risk"],
+                        "required_dimensions": ["price", "technical", "fundamental", "risk"],
+                    },
+                    "reason": "context-bound risk follow-up",
+                },
+            ),
+        )
+    if decision is None:
+        return None
+
+    return replace(
+        decision,
+        decision_source="fast_path",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.9,
+            reason="current thread has a verified persisted company focus",
+            subject_hint=", ".join(focus_tickers[:3]),
+        ),
+        relation="follow_up",
+        reason=f"context-bound follow-up: {decision.reason}",
+    )
 
 
 def _fallback_decision(
@@ -1446,6 +1578,14 @@ def _fallback_decision(
     handling the turn. It does not try to replace the LLM router with another
     keyword classifier.
     """
+    contextual_decision = _fast_contextual_execution_decision(
+        state,
+        tickers=tickers,
+        selection_ids=selection_ids,
+    )
+    if contextual_decision is not None:
+        return contextual_decision
+
     output_mode = str(state.get("output_mode") or "").strip().lower()
     if output_mode == "investment_report" and (tickers or selection_ids):
         return ConversationDecision(
@@ -1776,6 +1916,19 @@ async def route_conversation(
             fast_decision.reason,
         )
         return fast_decision
+
+    contextual_decision = _fast_contextual_execution_decision(
+        state,
+        tickers=tickers,
+        selection_ids=selection_ids,
+    )
+    if contextual_decision is not None:
+        logger.info(
+            "[conversation_router] contextual fast_path route=%s reason=%s",
+            contextual_decision.execution_route,
+            contextual_decision.reason,
+        )
+        return contextual_decision
 
     inputs = _router_inputs(state, tickers=tickers, selection_ids=selection_ids)
     timeout_sec = _context_timeout(

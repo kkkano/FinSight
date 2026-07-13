@@ -22,6 +22,7 @@
 - [x] 价格语义图只消费真实行情并按价格单位渲染，不把收益率或模型数组伪装成金额。
 - [x] 估值比较降级回答逐标的展示实际倍数；证据不足时明确拒绝排序，不用方法模板冒充结论。
 - [x] 跨标的 compare 合同优先于通用 task 分节，避免拆成多份单股模板而丢失横向结论。
+- [x] 当前 thread 已验证 ticker 进入会话路由；执行型省略追问在 router LLM 不可用时仍确定性生成研究任务。
 
 ## 强制设计约束
 
@@ -42,6 +43,7 @@
 15. 价格图标题、单位和数值语义必须一致；价格语义不得使用模型生成时间序列。
 16. `render_intent.shape=compare` 且要求逐标的证据时，必须先生成整体比较，再考虑通用 task 分节。
 17. LLM intent pipeline 生成的 `intent_contract(s)` / `request_frame(s)` 必须投影到顶层 GraphState，不得只留在 task params。
+18. 当前 thread 已验证焦点可用于省略追问，但不得读取跨 thread 历史焦点；明确的操作、风险、技术面追问不得因 router LLM 降级而变成 smalltalk/direct 泛化文案。
 
 ## 输出与证据策略
 

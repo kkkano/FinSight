@@ -91,7 +91,7 @@ docker compose --env-file .env.server ps
 docker compose --env-file .env.server logs --tail=100 backend frontend
 ```
 
-再从公网验证首页、`/chat`、`/dashboard/AAPL`、`/screener`，并确认纯社交请求快速结束、研究请求产生 SSE 事件并完成 evidence → synthesis → render。聊天至少用同一 session 连续验证“明确标的 → 省略式追问 → 风险追问”；标的焦点必须保持，助手正文中的大写缩写不得污染 subject。另用“NVDA 和 AMD 哪个估值更合理”检查正文是否逐标的给出实际倍数或明确说明缺少可比倍数；用价格走势图检查日期对应值是否为真实收盘价、tooltip 是否有正确单位和至多两位小数。HTTP 200、容器 healthy 或 `degraded=false` 都不能替代答案语义检查。若 LLM 失败，响应必须出现 `degraded` 事件/字段和前端警告，不得表现为正常成功。不得在冒烟命令、截图或日志摘录中打印 LLM key。
+再从公网验证首页、`/chat`、`/dashboard/AAPL`、`/screener`，并确认纯社交请求快速结束、研究请求产生 SSE 事件并完成 evidence → synthesis → render。聊天至少用同一 session 连续验证“明确标的 → 推荐怎么操作？ → 那风险呢？”；后两问必须保持标的焦点并生成对应研究任务，即使 trace 显示 router LLM 降级也不得返回“我在……”等泛化文案。助手正文中的大写缩写不得污染 subject。另用“NVDA 和 AMD 哪个估值更合理”检查正文是否逐标的给出实际倍数或明确说明缺少可比倍数；用价格走势图检查日期对应值是否为真实收盘价、tooltip 是否有正确单位和至多两位小数。HTTP 200、容器 healthy 或 `degraded=false` 都不能替代答案语义检查。若 LLM 失败，响应必须出现 `degraded` 事件/字段和前端警告，不得表现为正常成功。不得在冒烟命令、截图或日志摘录中打印 LLM key。
 
 ## 6. 回滚
 

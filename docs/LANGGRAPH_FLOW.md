@@ -50,7 +50,7 @@ flowchart TD
 - 工具失败只能进入 diagnostics；只有通过 evidence gate 的结果进入证据池。
 - `research_debate` 位于执行与合成之间，不是独立 API 入口。
 - 客户端历史只用于同线程 checkpoint 缺失恢复；已有 checkpoint 时不得重复注入。
-- 匿名长期记忆按完整 thread id 派生隔离身份；ticker 焦点只接受当前 query 明示值或已验证主焦点，不从助手正文扩散缩写。
+- 匿名长期记忆按完整 thread id 派生隔离身份；ticker 焦点只接受当前 query 明示值或当前 thread 已验证主焦点，不从助手正文扩散缩写。已验证焦点必须进入 router 输入；明确的操作、风险、技术面等省略追问即使 router LLM 不可用，也要投影为该 ticker 的研究任务，不能落到泛化闲聊文案。
 - 会话 router/reply 失败时允许给出可用回退，但必须在 trace、SSE 和终态中明确标记降级。
 
 ## 注册但不在当前主边的节点

@@ -183,7 +183,9 @@ def _router_hint_frame_query(
         return " ".join(matched)
 
     topic = params.get("topic") if isinstance(params.get("topic"), str) else ""
-    parts = [subject_label, topic]
+    evidence_focus = params.get("evidence_focus") if isinstance(params.get("evidence_focus"), str) else ""
+    facets = params.get("facets") if isinstance(params.get("facets"), list) else []
+    parts = [subject_label, topic, evidence_focus, *[str(facet) for facet in facets if str(facet).strip()]]
     if operation_name not in {"qa", "compare"}:
         parts.append(operation_name)
     frame_query = " ".join(str(part) for part in parts if str(part or "").strip()).strip()
@@ -613,6 +615,8 @@ def _add_router_task_hints_contract(
             return "news"
         if operation_name == "technical":
             return "technical"
+        if operation_name == "investment_opinion":
+            return "investment_opinion"
         if operation_name == "holdings":
             return "holdings"
         if operation_name in {"macro_brief", "fact_check"}:
