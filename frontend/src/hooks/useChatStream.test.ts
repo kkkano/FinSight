@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { Message } from '../types';
@@ -39,5 +40,18 @@ describe('normalizePortfolioPositionsForChat', () => {
       market_value: 2188.8,
       cost_basis: 1800,
     }]);
+  });
+});
+
+describe('SSE 异步终态竞态契约', () => {
+  it.each([
+    ['./useChatStream.ts', '主聊天'],
+    ['../components/MiniChat.tsx', 'MiniChat'],
+  ])('%s 在流返回后等待 onError 的异步恢复逻辑', (relativePath) => {
+    const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+
+    expect(source).toContain('terminalHandlingPromise =');
+    expect(source).toContain('const pendingTerminalHandling = terminalHandlingPromise;');
+    expect(source).toContain('if (pendingTerminalHandling) await pendingTerminalHandling;');
   });
 });
