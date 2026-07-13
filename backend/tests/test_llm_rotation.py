@@ -517,6 +517,43 @@ def test_retry_fallback_without_factory(monkeypatch):
     assert llm.call_count == 3
 
 
+def test_retry_transient_connection_error_without_factory(monkeypatch):
+    """单端点连接抖动时应复用原 LLM 重试，而不是立即降级。"""
+    import backend.services.llm_retry as llm_retry
+
+    async def _no_sleep(_seconds: float):
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _no_sleep)
+
+    class _FlakyLLM:
+        def __init__(self):
+            self.call_count = 0
+
+        async def ainvoke(self, messages):
+            self.call_count += 1
+            if self.call_count == 1:
+                raise RuntimeError('Connection error.')
+            return {'ok': True}
+
+    llm = _FlakyLLM()
+    result = asyncio.run(
+        llm_retry.ainvoke_with_rate_limit_retry(
+            llm,
+            messages=[{'role': 'user', 'content': 'hello'}],
+            max_attempts=2,
+            sleep_seconds=0,
+            jitter_seconds=0,
+            acquire_token=False,
+        )
+    )
+
+    assert result == {'ok': True}
+    assert llm.call_count == 2
+
+
 def test_raw_url_preserved():
     """raw_url=True should preserve the full URL without stripping /chat/completions."""
     llm_config = _reload_llm_config()

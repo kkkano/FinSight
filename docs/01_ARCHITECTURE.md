@@ -46,7 +46,7 @@ FastAPI 当前注册 25 个 router：system、user、watchlist、conversation、
 - 取消信号贯穿 API、执行服务、图节点和 executor。
 - 客户端发送最近可见历史；仅当当前 thread 的 checkpoint 没有消息时，`build_initial_state` 才恢复最多 12 条，避免刷新/实例切换后丢失连续对话。
 - 认证用户按 user id 隔离长期记忆；匿名会话按完整 thread id 的稳定摘要隔离，不能共享统一 `anonymous` 记忆桶。
-- 会话 router/reply 使用独立短超时和统一 LLM 重试/端点轮换；回退通过 `degraded` SSE、终态字段和前端徽标显式披露。
+- 会话 router/reply 使用独立短超时和统一 LLM 重试；单端点瞬态连接错误复用当前端点，多端点故障则轮换；回退通过 `degraded` SSE、终态字段和前端徽标显式披露。
 
 ## 4. 主路径
 

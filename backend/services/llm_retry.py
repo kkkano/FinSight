@@ -6,7 +6,8 @@ Why:
 - Some free/proxy LLM endpoints enforce strict rate limits (e.g. N calls / 5 minutes).
 - LangChain's built-in retries are often short backoffs and may still fail.
 
-This module provides a conservative "wait and retry" loop for *rate limit* errors.
+This module provides a conservative retry loop for rate limits and transient
+transport/provider failures.
 """
 
 from __future__ import annotations
@@ -100,6 +101,27 @@ def is_endpoint_retryable_error(exc: BaseException) -> bool:
         "无可用渠道",
     )
     return any(token in text for token in transient_tokens)
+
+
+def _is_transient_transport_error(exc: BaseException) -> bool:
+    """Retry the same endpoint only for failures that can recover in-place."""
+    text = str(exc).lower()
+    status = _extract_http_status_code(text)
+    if status in {408, 409, 425, 500, 502, 503, 504}:
+        return True
+    return any(
+        token in text
+        for token in (
+            "service unavailable",
+            "gateway timeout",
+            "bad gateway",
+            "connection",
+            "timed out",
+            "timeout",
+            "ssl",
+            "eof",
+        )
+    )
 
 
 async def ainvoke_with_rate_limit_retry(
@@ -217,7 +239,7 @@ async def ainvoke_with_rate_limit_retry(
             retryable = (
                 is_endpoint_retryable_error(exc)
                 if llm_factory is not None
-                else is_rate_limit_error(exc)
+                else is_rate_limit_error(exc) or _is_transient_transport_error(exc)
             )
 
             if not retryable or attempt >= max_attempts:
