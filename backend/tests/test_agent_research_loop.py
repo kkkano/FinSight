@@ -267,6 +267,13 @@ async def test_agent_reflection_can_emit_one_delegation_request(monkeypatch) -> 
         lambda *args, **kwargs: asyncio.sleep(0, result=True),
     )
     agent = _DelegateAgent(llm=_DelegateLLM(), cache=None)
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await agent.llm.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
     agent.configure_research(max_reflections=1)
 
     output = await agent.research("分析 AAPL", "AAPL")

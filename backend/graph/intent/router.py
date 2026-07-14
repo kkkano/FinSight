@@ -1995,26 +1995,20 @@ async def route_conversation(
     prompt = "<context>\n" + json_dumps_safe(inputs, ensure_ascii=False, indent=2) + "\n</context>"
 
     try:
-        from backend.llm_config import create_llm
-        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-        llm_factory = lambda: create_llm(  # noqa: E731
-            temperature=0.0,
-            max_tokens=max_tokens,
-            request_timeout=int(timeout_sec) + 2,
+        call_context = LLMCallContext.create(
+            stage="conversation_router", agent="conversation_router", layer="routing", max_provider_attempts=3,
         )
-        llm = llm_factory()
         messages = [SystemMessage(content=system), HumanMessage(content=prompt)]
         response = await asyncio.wait_for(
-            ainvoke_with_rate_limit_retry(
-                llm,
+            ainvoke_configured_llm(
                 messages,
-                llm_factory=llm_factory,
-                max_attempts=2,
-                sleep_seconds=0.2,
-                jitter_seconds=0.0,
+                context=call_context,
+                temperature=0.0,
+                max_tokens=max_tokens,
+                request_timeout=int(timeout_sec) + 2,
                 acquire_timeout_seconds=timeout_sec,
-                agent_name="conversation_router",
             ),
             timeout=timeout_sec,
         )
@@ -2043,15 +2037,13 @@ async def route_conversation(
                 + raw_output[:1600]
             )
             retry_response = await asyncio.wait_for(
-                ainvoke_with_rate_limit_retry(
-                    llm_factory(),
+                ainvoke_configured_llm(
                     [SystemMessage(content=system), HumanMessage(content=retry_prompt)],
-                    llm_factory=llm_factory,
-                    max_attempts=2,
-                    sleep_seconds=0.2,
-                    jitter_seconds=0.0,
+                    context=call_context,
+                    temperature=0.0,
+                    max_tokens=max_tokens,
+                    request_timeout=int(timeout_sec) + 2,
                     acquire_timeout_seconds=timeout_sec,
-                    agent_name="conversation_router_json_retry",
                 ),
                 timeout=timeout_sec,
             )
@@ -2148,25 +2140,18 @@ async def generate_contextual_reply(
     prompt = "<context>\n" + json_dumps_safe(inputs, ensure_ascii=False, indent=2) + "\n</context>"
 
     try:
-        from backend.llm_config import create_llm
-        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-        llm_factory = lambda: create_llm(  # noqa: E731
-            temperature=0.35,
-            max_tokens=max_tokens,
-            request_timeout=int(timeout_sec) + 2,
-        )
-        llm = llm_factory()
         response = await asyncio.wait_for(
-            ainvoke_with_rate_limit_retry(
-                llm,
+            ainvoke_configured_llm(
                 [SystemMessage(content=system), HumanMessage(content=prompt)],
-                llm_factory=llm_factory,
-                max_attempts=2,
-                sleep_seconds=0.2,
-                jitter_seconds=0.0,
+                context=LLMCallContext.create(
+                    stage="conversation_router", agent="conversation_reply", layer="routing", max_provider_attempts=2,
+                ),
+                temperature=0.35,
+                max_tokens=max_tokens,
+                request_timeout=int(timeout_sec) + 2,
                 acquire_timeout_seconds=timeout_sec,
-                agent_name="conversation_reply",
             ),
             timeout=timeout_sec,
         )

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, GitCompareArrows,
   FlaskConical, Inbox, Library, Search,
@@ -11,7 +11,8 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { EmptyState } from '../ui/EmptyState';
 import { ReportCompare } from './ReportCompare';
-import { buildReportFollowUpHref } from '../../utils/reportLinkage';
+import { buildReportFollowUpPrompt } from '../../utils/reportLinkage';
+import { useChatHandoff } from '../../hooks/useChatHandoff';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -142,6 +143,7 @@ interface TimelineGroupProps {
   onToggleCompare: (id: string) => void;
   onViewReport: (reportId: string) => void;
   onBacktestReport: (reportId: string) => void;
+  onFollowUp: (item: ReportIndexItem) => void;
 }
 
 function TimelineGroup({
@@ -153,6 +155,7 @@ function TimelineGroup({
   onToggleCompare,
   onViewReport,
   onBacktestReport,
+  onFollowUp,
 }: TimelineGroupProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -264,13 +267,14 @@ function TimelineGroup({
                 </div>
                 {!compareMode && (
                   <div className="mt-1.5 flex flex-wrap justify-end gap-1">
-                    <Link
-                      to={buildReportFollowUpHref(item.title || '', item.report_id)}
+                    <button
+                      type="button"
+                      onClick={() => onFollowUp(item)}
                       className="inline-flex min-h-11 items-center rounded px-2 text-2xs text-fin-muted transition-colors hover:bg-fin-primary/10 hover:text-fin-primary"
                       data-testid={`workbench-report-follow-up-${item.report_id}`}
                     >
                       继续追问
-                    </Link>
+                    </button>
                     <button
                       type="button"
                       onClick={() => onBacktestReport(item.report_id)}
@@ -297,6 +301,7 @@ function TimelineGroup({
 
 function ReportSection({ reports, loading, selectedReportId, onSelectReport }: ReportSectionProps) {
   const navigate = useNavigate();
+  const handoffToChat = useChatHandoff();
   const [filter, setFilter] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('date');
   const [compareMode, setCompareMode] = useState(false);
@@ -375,6 +380,15 @@ function ReportSection({ reports, loading, selectedReportId, onSelectReport }: R
     },
     [navigate],
   );
+
+  const handleFollowUp = useCallback((item: ReportIndexItem) => {
+    handoffToChat({
+      draft: buildReportFollowUpPrompt(item.title || '', item.report_id),
+      activeSymbol: item.ticker,
+      sourceView: 'workbench',
+      sourceTab: 'research',
+    });
+  }, [handoffToChat]);
 
   const compareArray = useMemo(() => Array.from(compareIds), [compareIds]);
 
@@ -496,6 +510,7 @@ function ReportSection({ reports, loading, selectedReportId, onSelectReport }: R
               onToggleCompare={handleToggleCompare}
               onViewReport={handleViewReport}
               onBacktestReport={handleBacktestReport}
+              onFollowUp={handleFollowUp}
             />
           ))}
       </div>

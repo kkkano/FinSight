@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from backend.services import monitor_comment_store as module
-from backend.services.monitor_comment_store import MonitorCommentStore, trigger_fingerprint
+from backend.services.monitor_comment_store import (
+    MonitorCommentStore,
+    MonitorCommentStoreUnavailable,
+    trigger_fingerprint,
+)
 from backend.services.monitor_commentator import produce_monitor_comments
 from backend.services.monitor_signals import MarketSnapshot, MonitorTrigger
 
@@ -27,9 +31,11 @@ class Connection:
 
 
 class Engine:
-    def __init__(self): self.conn = Connection()
+    def __init__(self): self.conn, self.begin_calls = Connection(), 0
     @contextmanager
-    def begin(self): yield self.conn
+    def begin(self):
+        self.begin_calls += 1
+        yield self.conn
     @contextmanager
     def connect(self): yield self.conn
 
@@ -93,6 +99,34 @@ def test_list_supports_date_filter_desc_order_and_opaque_cursor():
     sql, params = engine.conn.calls[-1]
     assert "(ts, id) <" in sql
     assert params["user_id"] == "alice" and params["session_id"] == "s1"
+
+
+def test_list_and_list_after_are_read_only_without_schema_helpers(monkeypatch):
+    engine = Engine()
+    store = MonitorCommentStore(engine=engine)
+    monkeypatch.setattr(store, "ensure_schema", lambda: pytest.fail("read path called ensure_schema"))
+
+    assert store.list(user_id="alice", session_id="s1") == ([], None)
+    assert store.list_after(
+        user_id="alice",
+        session_id="s1",
+        last_event_id="11111111-1111-1111-1111-111111111111",
+    ) == []
+    assert engine.begin_calls == 0
+    assert all(sql.lstrip().upper().startswith("SELECT") for sql, _ in engine.conn.calls)
+
+
+def test_read_failure_is_stable_store_unavailable():
+    class BrokenConnection(Connection):
+        def execute(self, statement, params=None):
+            raise RuntimeError("dsn and sql must stay private")
+
+    engine = Engine()
+    engine.conn = BrokenConnection()
+    store = MonitorCommentStore(engine=engine)
+
+    with pytest.raises(MonitorCommentStoreUnavailable, match="read unavailable"):
+        store.list(user_id="alice", session_id="s1")
 
 
 @pytest.mark.asyncio

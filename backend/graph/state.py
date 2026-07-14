@@ -77,6 +77,7 @@ class ContextRef(TypedDict, total=False):
 
 class UnderstandingTask(TypedDict, total=False):
     id: str
+    title: str
     subject_type: SubjectType
     subject_label: str
     tickers: list[str]
@@ -85,6 +86,10 @@ class UnderstandingTask(TypedDict, total=False):
     operation: Operation
     time_scope: TimeScope
     priority: int
+    order_index: int
+    request_frame_id: str
+    render_kind: Literal["single", "compare"]
+    render_group_id: str
     status: UnderstandingTaskStatus
     reason: str
     constraints: list[str]
@@ -93,6 +98,7 @@ class UnderstandingTask(TypedDict, total=False):
 
 class BlockedTask(TypedDict, total=False):
     id: str
+    title: str
     subject_type: SubjectType
     subject_label: str
     operation: Operation
@@ -100,6 +106,13 @@ class BlockedTask(TypedDict, total=False):
     question: str
     suggestions: list[str]
     fallback_allowed: bool
+    tickers: list[str]
+    priority: int
+    order_index: int
+    request_frame_id: str
+    render_kind: Literal["single", "compare"]
+    render_group_id: str
+    error_code: str
 
 
 class Understanding(TypedDict, total=False):

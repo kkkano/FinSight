@@ -258,13 +258,9 @@ class BaseFinancialAgent:
 
         try:
             from langchain_core.messages import HumanMessage
-            from backend.services.rate_limiter import acquire_llm_token
-            from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
             token_timeout = self._llm_analyze_timeout()
-            if not await acquire_llm_token(timeout=token_timeout, agent_name=self.AGENT_NAME):
-                logger.warning("[%s] Rate limit timeout in _llm_analyze", self.AGENT_NAME)
-                return None
 
             trace_emitter = get_trace_emitter()
             trace_emitter.emit_llm_start(
@@ -275,10 +271,13 @@ class BaseFinancialAgent:
             start_time = time.perf_counter()
 
             response = await asyncio.wait_for(
-                ainvoke_with_rate_limit_retry(
-                    self.llm,
+                ainvoke_configured_llm(
                     [HumanMessage(content=prompt)],
-                    acquire_token=False,
+                    context=LLMCallContext.create(
+                        stage="agent_analyze", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=3,
+                    ),
+                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
+                    acquire_timeout_seconds=token_timeout,
                 ),
                 timeout=self._llm_analyze_call_timeout(),
             )
@@ -511,12 +510,9 @@ class BaseFinancialAgent:
 </constraints>"""
         try:
             from langchain_core.messages import HumanMessage
-            from backend.services.rate_limiter import acquire_llm_token
+            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
             token_timeout = self._reflection_token_timeout()
-            if not await acquire_llm_token(timeout=token_timeout, agent_name=self.AGENT_NAME):
-                logger.warning("[%s] Rate limit timeout after %.1fs in _identify_gaps", self.AGENT_NAME, token_timeout)
-                return []
 
             trace_emitter = get_trace_emitter()
             trace_emitter.emit_llm_start(
@@ -526,13 +522,14 @@ class BaseFinancialAgent:
             )
             start_time = time.perf_counter()
 
-            from backend.services.llm_retry import ainvoke_with_rate_limit_retry
-
             response = await asyncio.wait_for(
-                ainvoke_with_rate_limit_retry(
-                    self.llm,
+                ainvoke_configured_llm(
                     [HumanMessage(content=prompt)],
-                    acquire_token=False,
+                    context=LLMCallContext.create(
+                        stage="agent_analyze", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=3,
+                    ),
+                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
+                    acquire_timeout_seconds=token_timeout,
                 ),
                 timeout=self._llm_analyze_call_timeout(),
             )
@@ -708,13 +705,9 @@ class BaseFinancialAgent:
 </constraints>"""
         try:
             from langchain_core.messages import HumanMessage
-            from backend.services.rate_limiter import acquire_llm_token
+            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-            # 获取速率限制令牌（并发 agent 场景需要较长等待）
             token_timeout = self._reflection_token_timeout()
-            if not await acquire_llm_token(timeout=token_timeout, agent_name=self.AGENT_NAME):
-                logger.warning("[%s] Rate limit timeout after %.1fs in _update_summary", self.AGENT_NAME, token_timeout)
-                return summary  # 限流超时，返回原摘要
 
             # 发射 LLM 调用开始事件
             trace_emitter = get_trace_emitter()
@@ -725,13 +718,14 @@ class BaseFinancialAgent:
             )
             start_time = time.perf_counter()
 
-            from backend.services.llm_retry import ainvoke_with_rate_limit_retry
-
             response = await asyncio.wait_for(
-                ainvoke_with_rate_limit_retry(
-                    self.llm,
+                ainvoke_configured_llm(
                     [HumanMessage(content=prompt)],
-                    acquire_token=False,
+                    context=LLMCallContext.create(
+                        stage="agent_analyze", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=3,
+                    ),
+                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
+                    acquire_timeout_seconds=token_timeout,
                 ),
                 timeout=self._llm_analyze_call_timeout(),
             )

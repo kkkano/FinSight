@@ -970,3 +970,50 @@ def test_intent_contract_mode_shadow_records_only_trace_shadow(monkeypatch):
     assert "request_frame" not in understanding
     assert isinstance(trace.get("request_frame_shadow"), dict)
     assert "request_frame" not in trace
+
+
+def test_task_identity_binds_compare_tickers_to_one_group_and_macro_to_own_frame():
+    from backend.graph.nodes.understand_request import _bind_task_render_identity
+
+    result = _bind_task_render_identity({
+        "understanding": {"original_query": "比较 NVDA 和 AMD，并说明利率影响"},
+        "tasks": [
+            {"id": "t1", "subject_type": "company", "subject_label": "NVDA", "tickers": ["nvda"], "operation": {"name": "compare"}},
+            {"id": "t2", "subject_type": "company", "subject_label": "AMD", "tickers": ["amd"], "operation": {"name": "compare"}},
+            {"id": "t3", "subject_type": "macro", "subject_label": "利率影响", "tickers": [], "operation": {"name": "analyze_impact"}},
+        ],
+        "blocked_tasks": [],
+        "request_frames": [
+            {"frame_id": "compare-frame", "relation": "compare", "subject": {"type": "company", "tickers": ["NVDA", "AMD"]}, "render_contract": {"shape": "compare"}, "legacy_operation": {"name": "compare"}},
+            {"frame_id": "macro-frame", "relation": "single", "subject": {"type": "macro", "tickers": []}, "render_contract": {"shape": "answer"}, "legacy_operation": {"name": "analyze_impact"}},
+        ],
+    })
+    tasks = result["tasks"]
+    assert [task["order_index"] for task in tasks] == [0, 1, 2]
+    assert tasks[0]["tickers"] == ["NVDA"]
+    assert tasks[0]["render_kind"] == tasks[1]["render_kind"] == "compare"
+    assert tasks[0]["render_group_id"] == tasks[1]["render_group_id"] == "compare-frame"
+    assert tasks[2]["render_kind"] == "single"
+    assert tasks[2]["render_group_id"] == "macro-frame"
+
+
+def test_missing_subject_block_is_idempotent_and_shares_order_allocator():
+    from backend.graph.nodes.understand_request import _bind_task_render_identity
+
+    payload = {
+        "understanding": {"original_query": "给我一个投资意见"},
+        "tasks": [],
+        "blocked_tasks": [{
+            "id": "blocked_1", "title": "需要补充分析标的",
+            "subject_type": "company", "subject_label": "未指定分析对象",
+            "tickers": [], "operation": {"name": "investment_opinion"},
+            "reason": "task_missing_subject", "error_code": "task_missing_subject",
+        }],
+    }
+    first = _bind_task_render_identity(payload)
+    second = _bind_task_render_identity(first)
+    assert len(second["blocked_tasks"]) == 1
+    blocked = second["blocked_tasks"][0]
+    assert blocked["order_index"] == 0
+    assert blocked["render_kind"] == "single"
+    assert blocked["render_group_id"] == blocked["request_frame_id"]

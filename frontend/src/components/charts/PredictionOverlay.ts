@@ -16,7 +16,7 @@ const RESOLVED_STATUSES = new Set([
   'broke_range',
 ]);
 
-const STATUS_SUFFIX: Record<PredictionOverlay['status'], string> = {
+export const STATUS_SUFFIX: Record<PredictionOverlay['status'], string> = {
   waiting: '等待',
   open: '生效',
   triggered: '已触发',
@@ -145,26 +145,29 @@ export function applyPredictionOverlay(
   }
 
   const annotations = buildPredictionAnnotations(prediction, labels);
-  const series = marketOption.series.map((item, index) => (
-    index === 0 ? { ...item, ...annotations } : item
-  ));
-
-  const anchorIndex = findAnchorIndex(labels, prediction.anchor.time);
-  const shouldFocusAnchor = anchorIndex >= 0 && labels.length > 80;
-  const focusStart = shouldFocusAnchor ? Math.max(0, anchorIndex - 30) : 0;
-  const focusEnd = shouldFocusAnchor ? Math.min(labels.length - 1, anchorIndex + 30) : labels.length - 1;
+  const series = marketOption.series.map((item, index) => {
+    if (index !== 0) return item;
+    const merged = { ...item };
+    for (const key of ['markLine', 'markPoint', 'markArea'] as const) {
+      const existing = item[key];
+      const incoming = annotations[key];
+      if (!incoming) continue;
+      const existingAnnotation = existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? existing as Record<string, unknown>
+        : {};
+      const existingData = Array.isArray(existingAnnotation.data) ? existingAnnotation.data : [];
+      const incomingData = Array.isArray(incoming.data) ? incoming.data : [];
+      merged[key] = {
+        ...existingAnnotation,
+        ...incoming,
+        data: [...existingData, ...incomingData],
+      };
+    }
+    return merged;
+  });
 
   return {
     ...marketOption,
     series,
-    ...(shouldFocusAnchor
-      ? {
-          dataZoom: [{
-            type: 'inside',
-            startValue: labels[focusStart],
-            endValue: labels[focusEnd],
-          }],
-        }
-      : {}),
   };
 }

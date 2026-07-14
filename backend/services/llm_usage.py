@@ -3,7 +3,7 @@
 Per-run LLM token usage accumulator.
 
 设计：与 ``graph/event_bus.py`` 同构，用 ContextVar 在单次请求（run）内累加每次
-LLM 调用的 token。统一在 LLM 调用入口 ``llm_retry.ainvoke_with_rate_limit_retry``
+LLM 调用的 token。统一在 LLM 调用入口 ``llm_retry.ainvoke_llm``
 提取 token 并累加 —— 一处覆盖所有 agent/节点的 LLM 调用，零额外 SSE 流量，且不受
 trace-raw 事件过滤影响。done 事件构造时读取总量写入 ``metrics``。
 
@@ -43,6 +43,9 @@ class TokenUsageAccumulator:
         self.completion_tokens: int = 0
         self.call_count: int = 0
         self.failed_call_count: int = 0
+        self.reported_usage_calls: int = 0
+        self.unreported_usage_calls: int = 0
+        self.selection_failed_call_count: int = 0
         # model -> {"prompt": int, "completion": int, "calls": int}
         self.by_model: dict[str, dict[str, int]] = {}
         self.by_attribution: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
@@ -66,6 +69,7 @@ class TokenUsageAccumulator:
         prompt: int = 0,
         completion: int = 0,
         attribution: LLMAttribution | None = None,
+        usage_reported: bool | None = None,
     ) -> None:
         key_model = model or "unknown"
         identity = attribution or LLMAttribution(agent="unattributed", layer="unknown")
@@ -87,6 +91,11 @@ class TokenUsageAccumulator:
         entry["failed_calls"] += int(status != "success")
         entry["duration_ms"] += max(0, int(duration_ms))
         self.failed_call_count += int(status != "success")
+        if status == "success":
+            if usage_reported:
+                self.reported_usage_calls += 1
+            else:
+                self.unreported_usage_calls += 1
 
     def bind_prediction(self, *, agent: str, prediction_id: str) -> None:
         """提交成功后，把本 Agent 本 run 尚未关联的调用层绑定到该 prediction。"""
@@ -113,12 +122,22 @@ class TokenUsageAccumulator:
 
     def summary(self) -> dict[str, Any]:
         cost = estimate_cost(self.by_model)
+        if self.reported_usage_calls == 0:
+            usage_state = "not_reported"
+        elif self.unreported_usage_calls == 0 and self.failed_call_count == 0:
+            usage_state = "reported"
+        else:
+            usage_state = "partial"
         return {
             "total_prompt_tokens": self.prompt_tokens,
             "total_completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "llm_token_calls": self.call_count,
             "failed_llm_calls": self.failed_call_count,
+            "selection_failed_llm_calls": self.selection_failed_call_count,
+            "reported_usage_calls": self.reported_usage_calls,
+            "unreported_usage_calls": self.unreported_usage_calls,
+            "usage_state": usage_state,
             "total_cost_usd": round(cost, 6) if cost else 0.0,
             "tokens_by_model": self.by_model,
             "usage_by_attribution": list(self.by_attribution.values()),
@@ -201,6 +220,22 @@ def extract_token_usage(response: Any) -> tuple[int, int]:
     return 0, 0
 
 
+def has_reported_token_usage(response: Any) -> bool:
+    """Return true when the provider explicitly supplied usage, including 0/0."""
+    usage_metadata = getattr(response, "usage_metadata", None)
+    if isinstance(usage_metadata, dict) and any(
+        key in usage_metadata for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")
+    ):
+        return True
+    response_metadata = getattr(response, "response_metadata", None)
+    if not isinstance(response_metadata, dict):
+        return False
+    usage = response_metadata.get("token_usage") or response_metadata.get("usage")
+    return isinstance(usage, dict) and any(
+        key in usage for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")
+    )
+
+
 def record_llm_usage(response: Any, model: str | None = None, *, count_call: bool = True) -> None:
     """统一入口调用：提取 token 并累加到当前 run 的 accumulator（无 accumulator 时静默）。"""
     acc = get_token_accumulator()
@@ -239,7 +274,14 @@ def record_llm_attempt(
         prompt=prompt,
         completion=completion,
         attribution=get_llm_attribution(),
+        usage_reported=has_reported_token_usage(response) if status == "success" and response is not None else False,
     )
+
+
+def record_llm_selection_failure() -> None:
+    acc = get_token_accumulator()
+    if acc is not None:
+        acc.selection_failed_call_count += 1
 
 
 # ---------------------------------------------------------------------------

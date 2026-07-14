@@ -26,10 +26,7 @@ describe('ReportSection 报告行动入口', () => {
     expect(html).toContain('继续追问');
     expect(html).toContain('workbench-report-follow-up-rpt-1');
 
-    const anchor = html.match(/<a[^>]*data-testid="workbench-report-follow-up-rpt-1"[^>]*>/)?.[0];
-    const href = anchor?.match(/href="([^"]+)"/)?.[1];
-    expect(href).toBeTruthy();
-    const params = new URLSearchParams(String(href).split('?')[1].replaceAll('&amp;', '&'));
-    expect(params.get('prompt')).toBe('基于报告《Apple research》，');
+    expect(html).toContain('<button type="button"');
+    expect(html).not.toContain('report-follow-up-rpt-1" href=');
   });
 });

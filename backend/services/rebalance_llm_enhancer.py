@@ -41,7 +41,7 @@ class AgentBackedEnhancer:
     ):
         self._get_company_news = get_company_news
         self._get_company_info = get_company_info
-        self._create_llm_fn = create_llm_fn
+        self._create_llm_fn = create_llm_fn  # 仅保留构造兼容；生产调用不创建 raw client。
 
     async def __call__(
         self,
@@ -62,10 +62,6 @@ class AgentBackedEnhancer:
         agent_context = await self._gather_agent_data(unique_tickers)
 
         # 2. Call LLM for enhanced reasoning
-        if not self._create_llm_fn:
-            logger.info("[rebalance-enhancer] no LLM factory, returning original candidates")
-            return candidates
-
         enhanced = await self._llm_enhance(candidates, diag, ctx, agent_context)
         return enhanced
 
@@ -117,12 +113,6 @@ class AgentBackedEnhancer:
         agent_context: dict[str, dict[str, Any]],
     ) -> list[RebalanceAction]:
         """Use LLM to refine candidate priorities and reasoning."""
-        try:
-            llm = self._create_llm_fn(temperature=0.2)
-        except Exception as exc:
-            logger.warning("[rebalance-enhancer] LLM init failed: %s", exc)
-            return candidates
-
         # Build prompt
         candidate_summaries = []
         for c in candidates:
@@ -160,7 +150,15 @@ class AgentBackedEnhancer:
 
         try:
             from langchain_core.messages import HumanMessage
-            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
+
+            response = await ainvoke_configured_llm(
+                [HumanMessage(content=prompt)],
+                context=LLMCallContext.create(
+                    stage="rebalance_enhancer", agent="rebalance_enhancer", layer="analysis", max_provider_attempts=2,
+                ),
+                temperature=0.2,
+            )
             content = response.content if hasattr(response, "content") else str(response)
             enhancements = self._parse_llm_response(content)
         except Exception as exc:

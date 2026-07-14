@@ -207,7 +207,7 @@ def _search_with_duckduckgo(query: str) -> str:
         raise Exception("DuckDuckGo 不可用")
     
     # DDGS (primp/curl_cffi) 不一定读取 HTTP_PROXY 环境变量，显式传入
-    _proxy = os.getenv("HTTPS_PROXY") or os.getenv("YFINANCE_PROXY") or None
+    _proxy = os.getenv("SEARCH_PROXY") or None
     
     for attempt in range(3):  # 增加重试次数
         try:

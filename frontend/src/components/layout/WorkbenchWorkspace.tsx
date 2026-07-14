@@ -9,7 +9,6 @@ type WorkbenchWorkspaceProps = {
   isMobile: boolean;
   symbol: string;
   fromDashboard: boolean;
-  onNavigateToChat?: () => void;
   contextPanel: {
     panelWidth: number;
     isExpanded: boolean;
@@ -26,7 +25,6 @@ export function WorkbenchWorkspace({
   isMobile,
   symbol,
   fromDashboard,
-  onNavigateToChat,
   contextPanel,
 }: WorkbenchWorkspaceProps) {
   const [developerMode] = useDeveloperMode();
@@ -38,7 +36,6 @@ export function WorkbenchWorkspace({
           <Workbench
             symbol={symbol}
             fromDashboard={fromDashboard}
-            onNavigateToChat={onNavigateToChat}
           />
         </div>
 
@@ -59,7 +56,6 @@ export function WorkbenchWorkspace({
         onSubscribeClick={contextPanel.onSubscribeClick}
         autoSwitchExecution={contextPanel.autoSwitchExecution}
         onNavigateToChat={contextPanel.onNavigateToChat}
-        showMiniChat
       />
     </div>
   );

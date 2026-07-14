@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('phase-labs backtest panel renders metrics after run', async ({ page }) => {
+test('backtest page renders metrics after run', async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
     localStorage.setItem('finsight-entry-mode', 'anonymous');
@@ -25,7 +25,7 @@ test('phase-labs backtest panel renders metrics after run', async ({ page }) => 
     });
   });
 
-  await page.goto('/phase-labs');
+  await page.goto('/backtest');
   await page.getByRole('button', { name: '运行回测' }).click();
   await expect(page.getByText('总收益', { exact: true })).toBeVisible();
   await expect(page.getByText('12.30%')).toBeVisible();

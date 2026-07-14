@@ -11,10 +11,20 @@ from urllib.parse import quote_plus
 from langchain_core.messages import AIMessage
 
 from backend.graph.intent_contract import is_research_compare_contract
-from backend.graph.renderers import render_chat_markdown
+from backend.graph.renderers import render_chat_markdown, render_research_report, render_task_groups
 from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
+from backend.graph.synthesis.contracts import ReportSynthesisDraft
+from backend.graph.synthesis.research_synthesis import (
+    evaluate_synthesis_quality,
+    finalize_report_synthesis,
+)
 from backend.utils.quote import parse_quote_payload
+
+SYNTHESIS_QUALITY_BLOCKED_MARKDOWN = (
+    "## 报告暂不可用\n\n"
+    "本轮结果未通过内部一致性校验，未展示未经验证的内容。请重试。\n"
+)
 
 
 def _build_ai_reply_message(artifacts: dict) -> AIMessage:
@@ -456,11 +466,76 @@ def render_node(state: GraphState) -> dict:
         if isinstance(brief_draft, str) and brief_draft.strip():
             return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
 
+    if state.get("output_mode") == "investment_report" and isinstance(artifacts, dict):
+        raw_draft = artifacts.get("research_synthesis_draft")
+        if isinstance(raw_draft, dict):
+            draft = ReportSynthesisDraft.model_validate(raw_draft)
+            requested_ids = artifacts.get("research_requested_task_ids")
+            requested_ids = requested_ids if isinstance(requested_ids, list) else []
+            structural = artifacts.get("research_structural_block_reasons")
+            structural = structural if isinstance(structural, list) else []
+            pre_gate = evaluate_synthesis_quality(
+                draft=draft,
+                requested_task_ids=requested_ids,
+                evidence_index=draft.evidence_index,
+                structural_block_reasons=structural,
+            )
+            render_result = None
+            final_gate = pre_gate
+            if pre_gate.state != "block":
+                render_result = render_research_report(draft)
+                final_gate = evaluate_synthesis_quality(
+                    draft=draft,
+                    requested_task_ids=requested_ids,
+                    evidence_index=draft.evidence_index,
+                    rendered_task_ids=render_result.rendered_task_ids,
+                    structural_block_reasons=structural,
+                )
+            final_result = finalize_report_synthesis(draft=draft, final_gate=final_gate)
+            result_artifacts = dict(artifacts)
+            result_artifacts["research_synthesis"] = final_result.model_dump()
+            result_artifacts["research_synthesis_gate"] = final_gate.model_dump()
+            if final_gate.state == "block":
+                result_artifacts.pop("research_report_render", None)
+                result_artifacts["draft_markdown"] = SYNTHESIS_QUALITY_BLOCKED_MARKDOWN
+                result_artifacts["quality_blocked"] = True
+                result_artifacts["publishable"] = False
+                result_artifacts["error_code"] = "synthesis_quality_blocked"
+            else:
+                assert render_result is not None
+                result_artifacts["research_report_render"] = render_result.model_dump()
+                result_artifacts["draft_markdown"] = render_result.markdown
+                result_artifacts["quality_blocked"] = False
+                result_artifacts["publishable"] = True
+            return {
+                "artifacts": result_artifacts,
+                "messages": [_build_ai_reply_message(result_artifacts)],
+                "trace": {
+                    **(state.get("trace") or {}),
+                    "rendered_task_ids": render_result.rendered_task_ids if render_result else [],
+                },
+            }
+
     # ── Early-return: honour existing narrative draft ──────────────
     _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
     output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
     if output_mode in {"chat", "brief"}:
+        grouped = render_task_groups(state)
+        if grouped is not None:
+            markdown, rendered_task_ids, coverage_ok = grouped
+            result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
+            if not coverage_ok:
+                result_artifacts["quality_blocked"] = True
+                result_artifacts["error_code"] = "task_render_coverage_mismatch"
+            return {
+                "artifacts": result_artifacts,
+                "messages": [_build_ai_reply_message(result_artifacts)],
+                "trace": {
+                    **(state.get("trace") or {}),
+                    "rendered_task_ids": rendered_task_ids,
+                },
+            }
         markdown = render_chat_markdown(state)
         if not str(markdown or "").strip():
             markdown = _build_multitask_markdown(state, artifacts if isinstance(artifacts, dict) else {})

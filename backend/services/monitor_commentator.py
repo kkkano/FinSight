@@ -39,14 +39,17 @@ def _extract_json(raw: str) -> dict[str, Any]:
 async def _default_generate(prompt: str) -> dict[str, Any]:
     from langchain_core.messages import HumanMessage
     from langgraph.graph import END, START, StateGraph
-    from backend.llm_config import create_llm
-    from backend.services.llm_retry import ainvoke_with_rate_limit_retry
-
-    llm = create_llm(temperature=0.1, max_tokens=300, request_timeout=12, max_retries=1)
+    from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
     async def call_model(state: _State) -> _State:
-        response = await ainvoke_with_rate_limit_retry(
-            llm, [HumanMessage(content=state["prompt"])], max_attempts=2,
+        response = await ainvoke_configured_llm(
+            [HumanMessage(content=state["prompt"])],
+            context=LLMCallContext.create(
+                stage="monitor_comment", agent="monitor_commentator", layer="analysis", max_provider_attempts=2,
+            ),
+            temperature=0.1,
+            max_tokens=300,
+            request_timeout=12,
         )
         return {"raw": response.content if hasattr(response, "content") else str(response)}
 

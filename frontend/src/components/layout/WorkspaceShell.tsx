@@ -253,7 +253,6 @@ export function WorkspaceShell({
               isMobile={isMobile}
               symbol={preferredSymbol}
               fromDashboard={fromDashboard}
-              onNavigateToChat={navigateToChat}
               contextPanel={contextPanelProps}
             />
           ) : view === 'cn-market' ? (

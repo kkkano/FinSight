@@ -20,6 +20,12 @@ from backend.utils.quote import safe_float
 logger = logging.getLogger(__name__)
 
 
+def _create_ticker(symbol: str):
+    from backend.tools.yfinance_client import create_ticker
+
+    return create_ticker(symbol)
+
+
 _SOURCE_RELIABILITY_WEIGHTS = {
     "reuters": 0.95,
     "bloomberg": 0.95,
@@ -274,9 +280,8 @@ def fetch_market_chart(symbol: str, period: str = "1y", interval: str = "1d") ->
 def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any] | None:
     """Return snapshot dict, or ``None`` on fetch failure."""
     try:
-        import yfinance as yf
 
-        ticker = yf.Ticker(symbol)
+        ticker = _create_ticker(symbol)
         info: dict[str, Any] = {}
         try:
             info = getattr(ticker, "info", {}) or {}
@@ -316,9 +321,8 @@ def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any] | None:
 
 def fetch_revenue_trend(symbol: str) -> list[dict[str, Any]]:
     try:
-        import yfinance as yf
 
-        ticker = yf.Ticker(symbol)
+        ticker = _create_ticker(symbol)
         financials = getattr(ticker, "quarterly_income_stmt", None)
         if financials is None or (hasattr(financials, "empty") and financials.empty):
             financials = getattr(ticker, "quarterly_financials", None)
@@ -823,9 +827,8 @@ def _load_ohlcv_frame(symbol: str, period: str = "1y", interval: str = "1d") -> 
             logger.warning("[DataService] CN/HK OHLCV fallback failed for %s: %s", symbol, exc)
 
     try:
-        import yfinance as yf
 
-        hist = yf.Ticker(symbol).history(period=period, interval=interval)
+        hist = _create_ticker(symbol).history(period=period, interval=interval)
         if hist is not None and not hist.empty:
             return hist
     except Exception as exc:
@@ -1274,9 +1277,8 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
             return cn_hk_fallback
 
     try:
-        import yfinance as yf
 
-        info = yf.Ticker(symbol).info or {}
+        info = _create_ticker(symbol).info or {}
         result = {
             "market_cap": safe_float(info.get("marketCap")),
             "trailing_pe": safe_float(info.get("trailingPE")),
@@ -1321,9 +1323,8 @@ def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] 
             return cn_hk_payload
 
     try:
-        import yfinance as yf
 
-        ticker = yf.Ticker(symbol)
+        ticker = _create_ticker(symbol)
 
         def _period_label(col: Any) -> str:
             if isinstance(col, pd.Timestamp):
@@ -1497,9 +1498,8 @@ def fetch_indicator_series(symbol: str, n_days: int = 120) -> dict[str, Any] | N
 def fetch_earnings_history(symbol: str) -> list[dict[str, Any]] | None:
     """Fetch EPS estimate vs actual history from yfinance (Phase G2)."""
     try:
-        import yfinance as yf
 
-        ticker = yf.Ticker(symbol)
+        ticker = _create_ticker(symbol)
         eh = getattr(ticker, "earnings_history", None)
         if eh is None or (hasattr(eh, "empty") and eh.empty):
             return None
@@ -1529,9 +1529,8 @@ def fetch_earnings_history(symbol: str) -> list[dict[str, Any]] | None:
 def fetch_analyst_targets(symbol: str) -> dict[str, Any] | None:
     """Fetch analyst price targets from yfinance (Phase G2)."""
     try:
-        import yfinance as yf
 
-        ticker = yf.Ticker(symbol)
+        ticker = _create_ticker(symbol)
         targets = getattr(ticker, "analyst_price_targets", None)
         if targets is None:
             return None
@@ -1571,9 +1570,8 @@ def fetch_analyst_targets(symbol: str) -> dict[str, Any] | None:
 def fetch_recommendations(symbol: str) -> dict[str, Any] | None:
     """Fetch analyst recommendation summary from yfinance (Phase G2)."""
     try:
-        import yfinance as yf
 
-        ticker = yf.Ticker(symbol)
+        ticker = _create_ticker(symbol)
         rec = getattr(ticker, "recommendations_summary", None)
         if rec is None:
             return None

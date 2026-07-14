@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from urllib.parse import quote
 
 import requests
-import yfinance as yf
+from .yfinance_client import create_ticker
 
 from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY, finnhub_client
 from .http import _http_get, _http_post
@@ -134,15 +134,15 @@ def get_financial_statements(ticker: str) -> dict:
     """
     获取公司的财务报表数据（财报）
     包括：损益表、资产负债表、现金流量表
-    
+
     Args:
         ticker: 股票代码
-        
+
     Returns:
         dict: 包含 financials, balance_sheet, cashflow 的字典
     """
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
 
         result = {
             'ticker': ticker,
@@ -231,32 +231,32 @@ def get_financial_statements(ticker: str) -> dict:
 def get_financial_statements_summary(ticker: str) -> str:
     """
     获取财报数据并格式化为可读的文本摘要
-    
+
     Args:
         ticker: 股票代码
-        
+
     Returns:
         str: 格式化的财报摘要文本
     """
     data = get_financial_statements(ticker)
-    
+
     if data.get('error'):
         return f"无法获取 {ticker} 的财报数据: {data['error']}"
-    
+
     summary_parts = [f"📊 {ticker} 财务报表摘要\n"]
     summary_parts.append("=" * 50 + "\n")
-    
+
     # 损益表摘要
     if data.get('financials'):
         financials = data['financials']
         summary_parts.append("\n📈 损益表 (Income Statement):\n")
         summary_parts.append("-" * 50 + "\n")
-        
+
         # 获取最新年份的数据
         if financials.get('columns') and len(financials['columns']) > 0:
             latest_year = financials['columns'][0]
             summary_parts.append(f"最新财报日期: {latest_year}\n\n")
-            
+
             # 显示关键指标
             key_metrics = ['Total Revenue', 'Net Income', 'Operating Income', 'EBIT', 'Gross Profit']
             for metric in key_metrics:
@@ -270,17 +270,17 @@ def get_financial_statements_summary(ticker: str) -> str:
                                 if value != 'N/A' and value is not None:
                                     formatted_value = f"${value/1e9:.2f}B" if abs(value) >= 1e9 else f"${value/1e6:.2f}M"
                                     summary_parts.append(f"  {row_name}: {formatted_value}\n")
-    
+
     # 资产负债表摘要
     if data.get('balance_sheet'):
         balance_sheet = data['balance_sheet']
         summary_parts.append("\n💰 资产负债表 (Balance Sheet):\n")
         summary_parts.append("-" * 50 + "\n")
-        
+
         if balance_sheet.get('columns') and len(balance_sheet['columns']) > 0:
             latest_year = balance_sheet['columns'][0]
             summary_parts.append(f"最新财报日期: {latest_year}\n\n")
-            
+
             key_metrics = ['Total Assets', 'Total Liabilities', 'Total Stockholder Equity', 'Cash And Cash Equivalents']
             for metric in key_metrics:
                 if balance_sheet.get('index'):
@@ -291,17 +291,17 @@ def get_financial_statements_summary(ticker: str) -> str:
                                 if value != 'N/A' and value is not None:
                                     formatted_value = f"${value/1e9:.2f}B" if abs(value) >= 1e9 else f"${value/1e6:.2f}M"
                                     summary_parts.append(f"  {row_name}: {formatted_value}\n")
-    
+
     # 现金流量表摘要
     if data.get('cashflow'):
         cashflow = data['cashflow']
         summary_parts.append("\n💵 现金流量表 (Cash Flow):\n")
         summary_parts.append("-" * 50 + "\n")
-        
+
         if cashflow.get('columns') and len(cashflow['columns']) > 0:
             latest_year = cashflow['columns'][0]
             summary_parts.append(f"最新财报日期: {latest_year}\n\n")
-            
+
             key_metrics = ['Operating Cash Flow', 'Free Cash Flow', 'Capital Expenditure']
             for metric in key_metrics:
                 if cashflow.get('index'):
@@ -312,7 +312,7 @@ def get_financial_statements_summary(ticker: str) -> str:
                                 if value != 'N/A' and value is not None:
                                     formatted_value = f"${value/1e9:.2f}B" if abs(value) >= 1e9 else f"${value/1e6:.2f}M"
                                     summary_parts.append(f"  {row_name}: {formatted_value}\n")
-    
+
     return "".join(summary_parts)
 
 
@@ -323,7 +323,7 @@ def get_company_info(ticker: str) -> str:
     """
     # 方法1: yfinance
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         info = stock.info
         if info and 'longName' in info:
             summary = info.get('longBusinessSummary', '')
@@ -354,7 +354,7 @@ def get_company_info(ticker: str) -> str:
 - Description: Search online for more details.""" # Finnhub profile doesn't include a long description
         except Exception as e:
             logger.info(f"Finnhub profile fetch failed: {e}")
-    
+
     # 方法3: Alpha Vantage
     try:
         logger.info(f"Trying Alpha Vantage for company info: {ticker}")
@@ -380,7 +380,7 @@ def get_company_info(ticker: str) -> str:
 - Description: {description}"""
     except Exception as e:
         logger.info(f"Alpha Vantage overview fetch failed: {e}")
-    
+
     # 方法4: 网页搜索
     logger.info(f"Falling back to web search for '{ticker}' company info")
     return search(f"{ticker} company profile stock information")
@@ -525,7 +525,7 @@ def get_earnings_estimates(ticker: str) -> Dict[str, Any]:
         return result
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
 
         result["earnings_estimate"] = _serialize_table_records(getattr(stock, "earnings_estimate", None), max_rows=8)
         result["eps_trend"] = _serialize_table_records(getattr(stock, "eps_trend", None), max_rows=8)

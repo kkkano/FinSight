@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 
 import { useAgentProfiles } from '../../../../hooks/useAgentProfiles';
+import { useChatHandoff } from '../../../../hooks/useChatHandoff';
+import { useDashboardStore } from '../../../../store/dashboardStore';
 import {
-  openResidentAnalystChat,
   selectResidentAnalyst,
   type ResidentAnalystProfile,
 } from './residentAnalyst';
@@ -23,6 +24,8 @@ export function ResidentAnalystBar({
   profile: providedProfile,
 }: ResidentAnalystBarProps) {
   const { profiles } = useAgentProfiles();
+  const handoffToChat = useChatHandoff();
+  const activeSymbol = useDashboardStore((state) => state.activeAsset?.symbol);
 
   const profile = useMemo(
     () => providedProfile ?? selectResidentAnalyst(tab, profiles),
@@ -40,7 +43,12 @@ export function ResidentAnalystBar({
       onAsk(profile);
       return;
     }
-    openResidentAnalystChat(profile);
+    handoffToChat({
+      draft: `@${profile.name} `,
+      activeSymbol,
+      sourceView: 'dashboard',
+      sourceTab: tab,
+    });
   };
 
   return (

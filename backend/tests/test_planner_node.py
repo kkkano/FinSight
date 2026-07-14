@@ -1,9 +1,32 @@
 ﻿# -*- coding: utf-8 -*-
 import asyncio
 
+import pytest
+
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+@pytest.fixture(autouse=True)
+def _configured_llm_test_adapter(monkeypatch):
+    """Route planner provider calls to each test's existing fake client."""
+    import importlib
+
+    import backend.llm_config as llm_config
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+
+    monkeypatch.setattr(llm_config, "get_endpoint_manager", lambda *_args, **_kwargs: object())
+
+    async def _invoke(messages, **kwargs):
+        client = llm_config.create_llm(
+            temperature=kwargs.get("temperature", 0.3),
+            max_tokens=kwargs.get("max_tokens"),
+            request_timeout=kwargs.get("request_timeout", 600),
+        )
+        return await client.ainvoke(messages)
+
+    monkeypatch.setattr(planner_mod, "ainvoke_configured_llm", _invoke)
 
 
 def test_planner_ab_variant_is_deterministic_and_present_in_runtime(monkeypatch):
@@ -135,9 +158,9 @@ def test_planner_llm_mode_uses_chat_budget_for_chat_turns(monkeypatch):
         captured["create_kwargs"] = kwargs
         return _FakeLLM()
 
-    async def _fake_retry(llm, messages, **kwargs):
+    async def _fake_retry(messages, **kwargs):
         captured["retry_kwargs"] = kwargs
-        return await llm.ainvoke(messages)
+        return await _FakeLLM().ainvoke(messages)
 
     import importlib
 
@@ -145,8 +168,7 @@ def test_planner_llm_mode_uses_chat_budget_for_chat_turns(monkeypatch):
 
     planner_mod = importlib.import_module("backend.graph.nodes.planner")
 
-    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
-    monkeypatch.setattr(planner_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(planner_mod, "ainvoke_configured_llm", _fake_retry)
 
     out = _run(
         planner_mod.planner(
@@ -164,9 +186,9 @@ def test_planner_llm_mode_uses_chat_budget_for_chat_turns(monkeypatch):
     runtime = (out.get("trace") or {}).get("planner_runtime") or {}
     assert runtime.get("mode") == "llm"
     assert runtime.get("fallback") is False
-    assert (captured["create_kwargs"] or {})["request_timeout"] == 47
-    assert (captured["create_kwargs"] or {})["max_tokens"] == 1700
-    assert (captured["retry_kwargs"] or {})["max_attempts"] == 2
+    assert (captured["retry_kwargs"] or {})["request_timeout"] == 47
+    assert (captured["retry_kwargs"] or {})["max_tokens"] == 1700
+    assert (captured["retry_kwargs"] or {})["context"].budget.max_provider_attempts == 2
     assert (captured["retry_kwargs"] or {})["acquire_timeout_seconds"] == 46.0
 
 
@@ -933,11 +955,11 @@ def test_planner_llm_mode_keeps_llm_for_investment_report_tasks(monkeypatch):
         called["llm"] = True
         return _FakeLLM()
 
-    async def _fake_retry(llm, messages, **kwargs):
-        return await llm.ainvoke(messages)
+    async def _fake_retry(messages, **kwargs):
+        called["llm"] = True
+        return await _FakeLLM().ainvoke(messages)
 
-    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
-    monkeypatch.setattr(planner_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(planner_mod, "ainvoke_configured_llm", _fake_retry)
 
     out = _run(
         planner_mod.planner(

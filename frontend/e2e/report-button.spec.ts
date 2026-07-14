@@ -146,10 +146,8 @@ const parseRequestBody = (route: any) => {
   }
 };
 
-// The right context panel (which hosts the mini chat) now defaults to collapsed
-// (store `showRightPanel: false`). On desktop a collapsed panel renders a
-// `context-panel-expand` toggle; click it so the mini chat / panel content is
-// reachable. No-op when the panel is already expanded.
+// The right context panel defaults to collapsed (store `showRightPanel: false`).
+// On desktop a collapsed panel renders a `context-panel-expand` toggle.
 const ensureRightPanelExpanded = async (page: any) => {
   const expandButton = page.getByTestId('context-panel-expand');
   try {
@@ -283,32 +281,30 @@ test('ChatInput: report toggle + send uses options.output_mode=investment_report
   expect(captured?.options?.output_mode).toBe('investment_report');
 });
 
-test('MiniChat: report toggle + send uses options.output_mode=investment_report', async ({ page }) => {
-  let captured: any = null;
-
-  await page.unroute('**/chat/supervisor/stream');
-  await page.route('**/chat/supervisor/stream', async (route) => {
-    captured = parseRequestBody(route);
-    await fulfillSSE(route);
-  });
-
+test('Dashboard and Workbench do not mount MiniChat; Chat owns the send controls', async ({ page }) => {
   await page.goto('/dashboard/AAPL');
   await ensureRightPanelExpanded(page);
+  await expect(page.getByTestId('mini-chat-input')).toHaveCount(0);
+  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
+  await expect(page.getByTestId('mini-chat-report-toggle-btn')).toHaveCount(0);
 
-  await page.getByTestId('mini-chat-input').fill('分析影响');
-  await page.getByTestId('mini-chat-report-toggle-btn').click();
-  await page.getByTestId('mini-chat-send-btn').click();
+  await page.goto('/workbench?symbol=AAPL');
+  await expect(page.getByTestId('mini-chat-input')).toHaveCount(0);
+  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
 
-  await expect.poll(() => captured).not.toBeNull();
-  expect(captured?.options?.output_mode).toBe('investment_report');
+  await page.goto('/chat');
+  await expect(page.getByTestId('chat-send-btn')).toBeVisible();
+  await expect(page.getByTestId('chat-report-toggle-btn')).toBeVisible();
+  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
 });
 
 test('Legacy /?symbol=AAPL route redirects to dashboard route', async ({ page }) => {
   await page.goto('/?symbol=AAPL');
 
   await expect(page).toHaveURL(/\/dashboard\/AAPL(?:\?symbol=AAPL)?$/);
-  await ensureRightPanelExpanded(page);
-  await expect(page.getByTestId('mini-chat-input')).toBeVisible();
+  await expect(page.getByTestId('dashboard-ask-ai')).toBeVisible();
+  await expect(page.getByTestId('mini-chat-input')).toHaveCount(0);
+  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
 });
 
 test('Route switch: sidebar can switch between chat and dashboard', async ({ page }) => {
@@ -345,15 +341,16 @@ test('Context panel tabs can switch and panel can collapse/expand', async ({ pag
   await expect(page.getByTestId('context-panel')).toBeVisible();
 });
 
-test('Session continuity: chat and mini chat share session_id', async ({ page }) => {
+test('Session continuity: dashboard handoff returns to the same Chat session', async ({ page }) => {
   const payloads: any[] = [];
 
+  await page.unroute('**/chat/supervisor/stream');
   await page.route('**/chat/supervisor/stream', async (route) => {
     const payload = parseRequestBody(route);
     payloads.push(payload);
 
     if (payloads.length === 1) {
-      await fulfillSSE(route, { session_id: E2E_SESSION_ID });
+      await fulfillSSE(route, { session_id: payload.session_id });
       return;
     }
 
@@ -368,36 +365,47 @@ test('Session continuity: chat and mini chat share session_id', async ({ page })
 
   await page.getByTestId('sidebar-nav-dashboard').click();
   await expect(page).toHaveURL(/\/dashboard\/[A-Z0-9._-]+$/);
-  await ensureRightPanelExpanded(page);
+  await page.getByTestId('dashboard-ask-ai').click();
+  await expect(page).toHaveURL(/\/chat(?:\?|$)/);
+  await expect(page.locator('#chat-input')).toBeFocused();
+  await expect(page.locator('#chat-input')).not.toHaveValue('');
+  expect(payloads).toHaveLength(1);
 
-  await page.getByTestId('mini-chat-input').fill('再来一条消息');
-  await page.getByTestId('mini-chat-send-btn').click();
+  await page.locator('#chat-input').fill('再来一条消息');
+  await page.getByTestId('chat-send-btn').click();
   await expect.poll(() => payloads.length).toBeGreaterThanOrEqual(2);
 
   expect(typeof payloads[0]?.session_id).toBe('string');
-  expect(payloads[1]?.session_id).toBe(E2E_SESSION_ID);
+  expect(payloads[0]?.session_id).not.toBe('');
+  expect(payloads[1]?.session_id).toBe(payloads[0]?.session_id);
 });
 
 test('Selection reference: ask-from-news keeps selection context in request', async ({ page }) => {
   let captured: any = null;
 
+  await page.unroute('**/chat/supervisor/stream');
   await page.route('**/chat/supervisor/stream', async (route) => {
     captured = parseRequestBody(route);
     await fulfillSSE(route);
   });
 
   await page.goto('/dashboard/AAPL');
-  await ensureRightPanelExpanded(page);
   await page.getByTestId('dashboard-tab-news').click();
-  const selectButton = page.locator('[data-testid^="news-select-"]').first();
-  await expect(selectButton).toBeVisible();
-  await selectButton.click();
+  const askButton = page.locator('[data-testid^="news-ask-"]').first();
+  await expect(askButton).toBeVisible();
+  await askButton.click();
 
-  await page.getByTestId('mini-chat-input').fill('基于这条新闻给个判断');
-  await page.getByTestId('mini-chat-send-btn').click();
+  await expect(page).toHaveURL(/\/chat(?:\?|$)/);
+  await expect(page.locator('#chat-input')).toBeFocused();
+  await expect(page.locator('#chat-input')).toHaveValue(/请结合已选内容分析 AAPL/);
+  expect(captured).toBeNull();
+
+  await page.getByTestId('chat-send-btn').click();
 
   await expect.poll(() => captured).not.toBeNull();
   expect(captured?.context?.active_symbol).toBe('AAPL');
+  expect(captured?.context?.source_view).toBe('dashboard');
+  expect(captured?.context?.source_tab).toBe('news');
   expect(captured?.context?.selection?.type).toBe('news');
   expect(String(captured?.context?.selection?.title || '')).toMatch(
     /(Apple launches major AI update|AAPL receives positive analyst outlook)/,
@@ -406,6 +414,7 @@ test('Selection reference: ask-from-news keeps selection context in request', as
 
 test('Workbench: report list shows ticker/depth/source tags', async ({ page }) => {
   await page.goto('/workbench?symbol=AAPL');
+  await page.getByTestId('workbench-tab-research').click();
 
   await expect(page.getByTestId('workbench-report-tag-ticker-wb-rpt-1')).toBeVisible();
   await expect(page.getByTestId('workbench-report-tag-depth-wb-rpt-1')).toBeVisible();
@@ -437,7 +446,7 @@ test('Workbench: hard-blocks report conclusion when ticker mismatches', async ({
     },
   });
 
-  await page.goto('/workbench?symbol=AAPL');
+  await page.goto('/workbench?symbol=AAPL&report=wb-rpt-mismatch');
 
   await expect(page.getByTestId('workbench-report-ticker-mismatch')).toBeVisible();
   await expect(page.getByTestId('workbench-report-conclusion-disabled')).toBeVisible();
@@ -494,11 +503,11 @@ test('Workbench: quality gap can jump to evidence snippets via diagnostic drawer
     },
   });
 
-  await page.goto('/workbench?symbol=AAPL');
+  await page.goto('/workbench?symbol=AAPL&report=wb-rpt-quality-gap');
 
   await expect(page.getByTestId('workbench-report-grounding-warning')).toBeVisible();
   await expect(page.getByTestId('workbench-report-quality-gap')).toBeVisible();
-  await page.getByTestId('workbench-quality-focus-0').click();
+  await page.getByRole('button', { name: '查看引用片段' }).click();
   await expect(page.getByTestId('workbench-quality-drawer')).toBeVisible();
   await expect(page.getByTestId('workbench-quality-snippet-item').first()).toBeVisible();
 });
@@ -548,7 +557,7 @@ test('Workbench: verifier gap is visible in report view and diagnostics drawer',
     },
   });
 
-  await page.goto('/workbench?symbol=AAPL');
+  await page.goto('/workbench?symbol=AAPL&report=wb-rpt-verifier-gap');
 
   await expect(page.getByTestId('workbench-report-verifier-gap')).toBeVisible();
   await page.getByTestId('workbench-quality-open-drawer').click();

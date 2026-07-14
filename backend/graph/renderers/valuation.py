@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 
 from backend.graph.state import GraphState
 from backend.graph.renderers.price import _format_price_line
-from backend.graph.renderers.shared import _append_sources, _finalize_chat_markdown, _tickers
+from backend.graph.renderers.shared import _append_sources_for_state, _finalize_chat_markdown, _tickers
 from backend.graph.renderers.synthesis_vars import (
     _agent_risks,
     _agent_summary,
@@ -73,7 +73,7 @@ def _render_valuation_sanity_markdown(
     else:
         lines.append("- 若增长放缓、EPS 下修或风险偏好回落，估值倍数可能先压缩。")
 
-    _append_sources(lines, evidence_items)
+    _append_sources_for_state(lines, evidence_items, state)
     return _finalize_chat_markdown(lines, state)
 
 

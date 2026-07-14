@@ -165,6 +165,13 @@ async def test_prediction_terminal_submission_corrects_once_and_only_stores_vali
         lambda: store,
     )
     llm = LLM()
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await llm.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
     result = await _maybe_submit_prediction(
         step_name="technical_agent",
         inputs={"ticker": "AAPL", "objective": "technical"},

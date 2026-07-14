@@ -9,12 +9,13 @@
 import { useMemo, useState } from 'react';
 import { Loader2, RadarIcon, RefreshCw } from 'lucide-react';
 
-import { useFindings } from '../../hooks/useFindings';
+import type { UseFindingsResult } from '../../hooks/useFindings';
 import { EmptyState } from '../ui';
 import { FindingCard } from './FindingCard';
 import { MonitorCommentFeed } from './MonitorCommentFeed';
 
 interface FindingsFeedProps {
+  controller: UseFindingsResult;
   sessionId: string | null | undefined;
   /** 行动按钮跳转 Chat 深挖 */
   onNavigateToChat?: (ticker: string, prompt: string) => void;
@@ -27,12 +28,13 @@ interface FindingsFeedProps {
 type FeedFilter = 'all' | 'unread';
 
 export function FindingsFeed({
+  controller,
   sessionId,
   onNavigateToChat,
   onNavigateToRebalance,
   onConfigureMonitor,
 }: FindingsFeedProps) {
-  const { findings, loading, error, scanning, scan, markViewed } = useFindings(sessionId);
+  const { findings, loading, error, scanning, scan, markViewed } = controller;
   const [filter, setFilter] = useState<FeedFilter>('all');
 
   const unreadCount = useMemo(
@@ -94,7 +96,7 @@ export function FindingsFeed({
           <button
             type="button"
             onClick={() => void scan()}
-            disabled={scanning || !sessionId}
+            disabled={scanning}
             data-testid="findings-scan-button"
             className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >

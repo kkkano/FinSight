@@ -13,6 +13,7 @@ import { useDashboardStore } from '../../../store/dashboardStore';
 import { useLatestReport } from '../../../hooks/useLatestReport';
 import { useExecuteAgent } from '../../../hooks/useExecuteAgent';
 import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
+import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import type { NewsItem, SelectionItem, NewsTagGroup } from '../../../types/dashboard';
 import { NEWS_TAG_GROUP_MAP } from '../../../types/dashboard';
 import {
@@ -94,7 +95,7 @@ export function NewsTab() {
   const setNewsTimeRange = useDashboardStore((s) => s.setNewsTimeRange);
   const activeSelections = useDashboardStore((s) => s.activeSelections);
   const toggleSelection = useDashboardStore((s) => s.toggleSelection);
-  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+  const handoffToChat = useChatHandoff();
   const insightsData = useDashboardStore((s) => s.insightsData);
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
@@ -182,7 +183,14 @@ export function NewsTab() {
 
   // --- Handlers ---
   const handleAskAbout = (selection: SelectionItem) => {
-    setActiveSelection(selection);
+    const symbol = ticker?.trim().toUpperCase();
+    handoffToChat({
+      draft: `请结合已选内容分析${symbol ? ` ${symbol}` : ''}：${selection.title}`,
+      activeSymbol: symbol,
+      selections: [selection],
+      sourceView: 'dashboard',
+      sourceTab: 'news',
+    });
   };
 
   const handleAnalyze = (title: string) => {

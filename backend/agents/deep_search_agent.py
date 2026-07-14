@@ -1367,53 +1367,27 @@ queries 要求：
         external rate-limit windows may already be hot.  The outer retry
         gives endpoints extra time to recover.
         """
-        max_outer_retries = self.LLM_MAX_ATTEMPTS
-        for outer in range(max_outer_retries):
-            try:
-                from backend.services.rate_limiter import acquire_llm_token
-                token_timeout = max(1.0, float(self.LLM_TOKEN_TIMEOUT_SECONDS))
-                if not await acquire_llm_token(timeout=token_timeout, agent_name=self.AGENT_NAME):
-                    logger.warning(
-                        "[DeepSearch] Rate limit timeout after %.1fs, skipping LLM call",
-                        token_timeout,
-                    )
-                    return ""
+        try:
+            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-                message = HumanMessage(content=prompt)
-                if hasattr(self.llm, "ainvoke"):
-                    from backend.services.llm_retry import ainvoke_with_rate_limit_retry
-                    from backend.llm_config import create_llm
-
-                    _temp = getattr(self.llm, "temperature", 0.3)
-                    llm_factory = lambda: create_llm(temperature=_temp)
-
-                    response = await asyncio.wait_for(
-                        ainvoke_with_rate_limit_retry(
-                            self.llm,
-                            [message],
-                            acquire_token=False,
-                            llm_factory=llm_factory,
-                        ),
-                        timeout=max(1.0, float(self.LLM_CALL_TIMEOUT_SECONDS)),
-                    )
-                else:
-                    response = await asyncio.wait_for(
-                        asyncio.to_thread(self.llm.invoke, [message]),
-                        timeout=max(1.0, float(self.LLM_CALL_TIMEOUT_SECONDS)),
-                    )
-                return getattr(response, "content", "") if response is not None else ""
-            except Exception as exc:
-                logger.warning(
-                    "[DeepSearch] LLM call attempt %d/%d failed (%s): %s",
-                    outer + 1, max_outer_retries, type(exc).__name__, exc,
-                )
-                if outer < max_outer_retries - 1:
-                    backoff = 5.0 * (outer + 1)
-                    logger.info("[DeepSearch] Waiting %.1fs before outer retry...", backoff)
-                    await asyncio.sleep(backoff)
-                else:
-                    logger.error("[DeepSearch] All %d outer retries exhausted", max_outer_retries)
-        return ""
+            response = await asyncio.wait_for(
+                ainvoke_configured_llm(
+                    [HumanMessage(content=prompt)],
+                    context=LLMCallContext.create(
+                        stage="agent_analyze",
+                        agent=self.AGENT_NAME,
+                        layer="analysis",
+                        max_provider_attempts=min(3, max(1, int(self.LLM_MAX_ATTEMPTS))),
+                    ),
+                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
+                    acquire_timeout_seconds=max(1.0, float(self.LLM_TOKEN_TIMEOUT_SECONDS)),
+                ),
+                timeout=max(1.0, float(self.LLM_CALL_TIMEOUT_SECONDS)),
+            )
+            return getattr(response, "content", "") if response is not None else ""
+        except Exception as exc:
+            logger.warning("[DeepSearch] LLM call failed (%s): %s", type(exc).__name__, exc)
+            return ""
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         if not text:

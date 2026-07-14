@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/predictions/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Latest Prediction */
+        get: operations["get_latest_prediction_api_agents_predictions_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/predictions/{prediction_id}": {
         parameters: {
             query?: never;
@@ -2106,6 +2123,16 @@ export interface components {
              */
             selections?: components["schemas"]["SelectionContext"][] | null;
             /**
+             * Source Tab
+             * @description one-shot handoff source tab
+             */
+            source_tab?: string | null;
+            /**
+             * Source View
+             * @description one-shot handoff source view
+             */
+            source_view?: ("dashboard" | "workbench" | "command_palette") | null;
+            /**
              * User Email
              * @description user email for alert actions
              */
@@ -3552,6 +3579,38 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_latest_prediction_api_agents_predictions_latest_get: {
+        parameters: {
+            query: {
+                /** @description 规范化后的行情 symbol */
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -217,23 +217,33 @@ async def stream_monitor_comments(request: Request, session_id: str, last_event_
     resume_id = last_event_id or request.headers.get("last-event-id")
     store = get_monitor_comment_store()
 
+    try:
+        if resume_id:
+            initial_items = store.list_after(
+                user_id=user_id, session_id=session_id, last_event_id=resume_id,
+            )
+            initial_is_snapshot = False
+        else:
+            initial_items, _ = store.list(
+                user_id=user_id, session_id=session_id,
+                day=datetime.now(timezone.utc).date(), limit=100,
+            )
+            initial_is_snapshot = True
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="monitor comment store unavailable") from exc
+
     async def events():
         current_id = resume_id
         try:
-            if current_id:
-                backlog = store.list_after(user_id=user_id, session_id=session_id, last_event_id=current_id)
-                for item in backlog:
+            if not initial_is_snapshot:
+                for item in initial_items:
                     current_id = item.id
                     yield f"id: {item.id}\nevent: comment\ndata: {json.dumps(_public_comment(item), ensure_ascii=False)}\n\n"
             else:
-                snapshot, _ = store.list(
-                    user_id=user_id, session_id=session_id,
-                    day=datetime.now(timezone.utc).date(), limit=100,
-                )
-                if snapshot:
-                    current_id = snapshot[0].id
+                if initial_items:
+                    current_id = initial_items[0].id
                 yield "event: snapshot\ndata: " + json.dumps(
-                    [_public_comment(item) for item in snapshot], ensure_ascii=False,
+                    [_public_comment(item) for item in initial_items], ensure_ascii=False,
                 ) + "\n\n"
             idle = 0
             while not await request.is_disconnected():

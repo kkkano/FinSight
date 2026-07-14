@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 from dataclasses import asdict, is_dataclass
 import json
 import logging
@@ -172,6 +173,8 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
             error="invalid_agent_output",
         )
 
+    # 原始 Claim 是结构化 synthesis 的信任边界；外部自带 raw_claims 不可信。
+    payload["raw_claims"] = copy.deepcopy(payload.get("claims")) if isinstance(payload.get("claims"), list) else []
     payload["agent_name"] = step_name
 
     summary = str(payload.get("summary") or "").strip()
@@ -391,10 +394,15 @@ async def _maybe_submit_prediction(
         for item in evidence[:6]
         if isinstance(item, dict) and str(item.get("title") or item.get("text") or "").strip()
     ]
+    from backend.services.llm_retry import LLMCallContext
+
+    prediction_call_context = LLMCallContext.create(
+        stage="agent_analyze", agent=step_name, layer="analysis", max_provider_attempts=3,
+    )
 
     async def _generate(feedback: list[dict[str, Any]] | None) -> dict[str, Any] | None:
         from langchain_core.messages import HumanMessage
-        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        from backend.services.llm_retry import ainvoke_configured_llm
         from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
 
         correction = (
@@ -417,8 +425,10 @@ scenarios 必须 2-4 条，每条含 name/probability/invalidation，概率和�
             ))
             try:
                 response = await asyncio.wait_for(
-                    ainvoke_with_rate_limit_retry(
-                        llm, [HumanMessage(content=prompt)], max_attempts=2, agent_name=step_name,
+                    ainvoke_configured_llm(
+                        [HumanMessage(content=prompt)],
+                        context=prediction_call_context,
+                        temperature=float(getattr(llm, "temperature", 0.3) or 0.3),
                     ),
                     timeout=30.0,
                 )
@@ -483,9 +493,10 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
 
     llm = None
     try:  # pragma: no cover - runtime dependency path
-        from backend.llm_config import create_llm
+        from backend.llm_config import ConfiguredLLMHandle, get_endpoint_manager
 
-        llm = create_llm(temperature=agent_settings().temperature)
+        get_endpoint_manager()
+        llm = ConfiguredLLMHandle(temperature=agent_settings().temperature)
     except Exception:
         llm = None
 

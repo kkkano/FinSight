@@ -53,6 +53,11 @@ from backend.graph.synthesis.normalization import (
     _scrub_unverified_future_claims,
     _section_limits,
 )
+from backend.graph.synthesis.structured_orchestration import (
+    prepare_chat_task_contract,
+    prepare_opinion_synthesis,
+    synthesize_structured_report,
+)
 from backend.report.verifier import (  # WP3-T4 verifier 搬家回接
     _apply_verifier_redactions,
     _compute_unresolved_unsupported_claims,
@@ -60,7 +65,7 @@ from backend.report.verifier import (  # WP3-T4 verifier 搬家回接
     _normalize_verifier_claims,
     _run_deep_report_verifier,
 )
-from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
+from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, is_rate_limit_error
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +93,7 @@ async def _generate_narrative_draft(
         render_vars,
         trace,
         emit_event_fn=emit_event,
-        ainvoke_fn=ainvoke_with_rate_limit_retry,
+        ainvoke_fn=ainvoke_configured_llm,
         verifier_fn=_run_deep_report_verifier,
         is_rate_limit_error_fn=is_rate_limit_error,
     )
@@ -119,6 +124,9 @@ async def synthesize(state: GraphState) -> dict:
     """
     env_mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "llm").lower()
     output_mode = state.get("output_mode") or "brief"
+    structured_synthesis_mode = _env_str("FINSIGHT_STRUCTURED_SYNTHESIS", "on").lower()
+    if structured_synthesis_mode not in {"off", "shadow", "on"}:
+        structured_synthesis_mode = "on"
     _ready_tasks_raw = state.get("tasks")
     _ready_tasks = _ready_tasks_raw if isinstance(_ready_tasks_raw, list) else []
     _op_dict = state.get("operation") if isinstance(state.get("operation"), dict) else {}
@@ -234,6 +242,30 @@ async def synthesize(state: GraphState) -> dict:
         }
         await _emit_synth_stage_done(status="done", message="Morning brief synthesized (deterministic)")
         return {"artifacts": merged_artifacts, "trace": trace}
+
+    chat_task_contract = None
+    if output_mode in {"chat", "brief"}:
+        state, chat_task_contract = prepare_chat_task_contract(state, trace)
+
+    # 深度报告只产生结构化 draft；Markdown 所有权属于 render_node。
+    if output_mode == "investment_report" and structured_synthesis_mode in {"shadow", "on"}:
+        state, structured_result = await synthesize_structured_report(
+            state,
+            trace,
+            structured_synthesis_mode=structured_synthesis_mode,
+            env_mode=env_mode,
+        )
+        if structured_result is not None:
+            await _emit_synth_stage_done(status="done", message="Research synthesis draft completed")
+            return structured_result
+
+    if output_mode in {"chat", "brief"}:
+        state = await prepare_opinion_synthesis(
+            state,
+            chat_task_contract,
+            structured_synthesis_mode=structured_synthesis_mode,
+            env_mode=env_mode,
+        )
 
     # ── Emit decision_note when compare intent has no evidence ──
     # should_render_compare() now requires BOTH operation=compare AND valid
@@ -386,20 +418,15 @@ async def synthesize(state: GraphState) -> dict:
         llm_limits["sdk_max_retries"] = _REPORT_SYNTHESIS_SDK_MAX_RETRIES
         llm_create_extra["max_retries"] = _REPORT_SYNTHESIS_SDK_MAX_RETRIES
     try:
-        from backend.llm_config import create_llm
+        from backend.llm_config import get_endpoint_manager
 
+        get_endpoint_manager()
         _synth_temp = float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.2"))
-        llm = create_llm(
-            temperature=_synth_temp,
-            max_tokens=int(llm_limits["max_tokens"]),
-            request_timeout=int(llm_limits["request_timeout"]),
-            **llm_create_extra,
-        )
-        llm_factory = lambda: create_llm(  # noqa: E731
-            temperature=_synth_temp,
-            max_tokens=int(llm_limits["max_tokens"]),
-            request_timeout=int(llm_limits["request_timeout"]),
-            **llm_create_extra,
+        call_context = LLMCallContext.create(
+            stage="synthesize",
+            agent="synthesizer",
+            layer="synthesis",
+            max_provider_attempts=int(llm_limits["max_attempts"]),
         )
     except Exception as exc:
         render_vars = _stub_render_vars(state)
@@ -558,14 +585,14 @@ summary, highlights, analysis.
                 "timestamp": utc_now_iso(),
             }
         )
-        resp = await ainvoke_with_rate_limit_retry(
-            llm,
+        resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
-            llm_factory=llm_factory,
+            context=call_context,
+            temperature=_synth_temp,
+            max_tokens=int(llm_limits["max_tokens"]),
+            request_timeout=int(llm_limits["request_timeout"]),
             acquire_token=True,
-            max_attempts=int(llm_limits["max_attempts"]),
             acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
-            on_retry=_on_retry,
         )
         await emit_event(
             {

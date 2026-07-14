@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('phase-labs screener panel can render result rows', async ({ page }) => {
+test('screener page can render result rows', async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
     localStorage.setItem('finsight-entry-mode', 'anonymous');
@@ -20,7 +20,7 @@ test('phase-labs screener panel can render result rows', async ({ page }) => {
     });
   });
 
-  await page.goto('/phase-labs');
+  await page.goto('/screener');
   await page.getByRole('button', { name: '运行筛选' }).click();
   await expect(page.getByText('AAPL')).toBeVisible();
   await expect(page.getByText('Apple Inc.')).toBeVisible();

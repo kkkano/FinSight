@@ -2,11 +2,10 @@ import { readFileSync } from 'node:fs';
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
-import { useStore } from '../../../../store/useStore';
 import { ResidentAnalystBar } from './ResidentAnalystBar';
 import {
-  openResidentAnalystChat,
   selectResidentAnalyst,
   type ResidentAnalystProfile,
 } from './residentAnalyst';
@@ -22,7 +21,9 @@ const profile: ResidentAnalystProfile = {
 describe('ResidentAnalystBar', () => {
   it('渲染同源 profile、战绩与两个操作入口', () => {
     const html = renderToStaticMarkup(
-      <ResidentAnalystBar tab="technical" profile={profile} onDeepDive={() => {}} onAsk={() => {}} />,
+      <MemoryRouter>
+        <ResidentAnalystBar tab="technical" profile={profile} onDeepDive={() => {}} onAsk={() => {}} />
+      </MemoryRouter>,
     );
     expect(html).toContain('技术面分析师');
     expect(html).toContain('驻场 · RSI、MACD');
@@ -33,13 +34,6 @@ describe('ResidentAnalystBar', () => {
 
   it('优先按 scorer_key 反查当前 tab 驻场 Agent', () => {
     expect(selectResidentAnalyst('technical', [profile])?.name).toBe('technical_agent');
-  });
-
-  it('问TA会打开 MiniChat 并预填强制 Agent mention', () => {
-    useStore.setState({ draft: '', showRightPanel: false });
-    openResidentAnalystChat(profile);
-    expect(useStore.getState().draft).toBe('@technical_agent ');
-    expect(useStore.getState().showRightPanel).toBe(true);
   });
 
   it.each(['Overview', 'Financial', 'Technical', 'News', 'Peers'])(

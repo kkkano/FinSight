@@ -6,6 +6,7 @@ from backend.services.llm_usage import (
     bind_current_llm_usage_prediction,
     estimate_cost,
     extract_token_usage,
+    has_reported_token_usage,
     record_llm_attempt,
     record_llm_usage,
     reset_llm_attribution,
@@ -51,6 +52,15 @@ def test_extract_old_usage():
 
 def test_extract_empty_returns_zero():
     assert extract_token_usage(_EmptyResp()) == (0, 0)
+    assert has_reported_token_usage(_EmptyResp()) is False
+
+
+def test_explicit_zero_usage_is_still_reported():
+    class _ZeroUsage:
+        usage_metadata = {"input_tokens": 0, "output_tokens": 0}
+
+    assert extract_token_usage(_ZeroUsage()) == (0, 0)
+    assert has_reported_token_usage(_ZeroUsage()) is True
 
 
 # --- accumulator ----------------------------------------------------------
@@ -101,6 +111,23 @@ def test_attempts_are_attributed_and_failed_retry_has_no_fake_tokens():
     assert row["prediction_id"] == "pred-1"
     assert row["prompt"] == 100 and row["completion"] == 50
     assert row["calls"] == 2 and row["failed_calls"] == 1
+    assert summary["usage_state"] == "partial"
+    assert summary["reported_usage_calls"] == 1
+    assert summary["unreported_usage_calls"] == 0
+
+
+def test_success_without_usage_is_not_reported_instead_of_zero_usage():
+    acc = TokenUsageAccumulator()
+    token = set_token_accumulator(acc)
+    try:
+        record_llm_attempt(model="test", status="success", duration_ms=1, response=_EmptyResp())
+    finally:
+        reset_token_accumulator(token)
+    summary = acc.summary()
+    assert summary["usage_state"] == "not_reported"
+    assert summary["reported_usage_calls"] == 0
+    assert summary["unreported_usage_calls"] == 1
+    assert summary["total_tokens"] == 0
 
 
 # --- cost -----------------------------------------------------------------

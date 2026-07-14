@@ -45,17 +45,15 @@ def test_health_endpoint(client):
     data = resp.json()
     assert data.get("status") in ("healthy", "degraded")
     components = data.get("components") or {}
-    checkpointer = components.get("checkpointer") or {}
-    assert checkpointer.get("status") == "ok"
-    assert checkpointer.get("schema_version") == "checkpointer.v1"
-    assert checkpointer.get("backend") in ("sqlite", "postgres", "memory")
-    rag = components.get("rag") or {}
-    if rag:
-        assert rag.get("status") in ("ok", "degraded", "error")
-        assert "backend" in rag or rag.get("status") == "error"
-        assert "embedding_model" in rag or rag.get("status") == "error"
-        assert "vector_dim" in rag or rag.get("status") == "error"
-        assert "doc_count" in rag or rag.get("status") == "error"
+    assert set(components) == {
+        "langgraph_runner", "checkpointer", "orchestrator", "rag", "memory", "live_tools",
+    }
+    assert all(set(component) == {"status"} for component in components.values())
+    assert components["checkpointer"]["status"] in ("ok", "initializing", "error")
+    assert components["rag"]["status"] in ("ok", "degraded", "error")
+    serialized = repr(data).lower()
+    for forbidden in ("backend", "embedding_model", "vector_dim", "doc_count", "fallback_reason", "recent_runs"):
+        assert forbidden not in serialized
     assert "timestamp" in data
 
 
@@ -87,8 +85,7 @@ def test_health_rag_fallback_reason_marks_component_degraded(client, monkeypatch
     assert data.get("status") == "healthy"
     rag = (data.get("components") or {}).get("rag") or {}
     assert rag.get("status") == "degraded"
-    assert "fallback_reason" in rag
-    assert rag["fallback_reason"]
+    assert set(rag) == {"status"}
 
 
 def test_health_rag_no_fallback_reason_stays_ok(client, monkeypatch):

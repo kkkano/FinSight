@@ -11,6 +11,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -154,6 +155,24 @@ class EndpointConfig:
     enabled: bool = True
     cooldown_sec: int = 60
     raw_url: bool = False
+    failure_domain: str = ""
+
+
+@dataclass(frozen=True)
+class ConfiguredLLMHandle:
+    """Non-network handle used by agents that historically stored a raw client."""
+
+    temperature: float = 0.3
+    model_name: str = "configured-at-invocation"
+
+
+class AllEndpointsCoolingDown(RuntimeError):
+    code = "all_endpoints_cooling_down"
+
+    def __init__(self, *, retry_after_seconds: int, endpoint_names: tuple[str, ...]) -> None:
+        self.retry_after_seconds = max(1, int(retry_after_seconds))
+        self.endpoint_names = endpoint_names
+        super().__init__(self.code)
 
 
 @dataclass
@@ -183,14 +202,29 @@ class EndpointManager:
         self.endpoints = [EndpointRuntime(cfg=s) for s in specs]
         self.fingerprint = fingerprint
 
-    def select(self) -> EndpointConfig:
+    def select(
+        self,
+        *,
+        exclude_names: set[str] | None = None,
+        prefer_different_failure_domain: str | None = None,
+    ) -> EndpointConfig:
         with self.lock:
-            available = [ep for ep in self.endpoints if ep.is_available]
+            enabled = [ep for ep in self.endpoints if ep.cfg.enabled]
+            available = [ep for ep in enabled if ep.is_available and ep.cfg.name not in (exclude_names or set())]
             if not available:
-                if not self.endpoints:
+                if not enabled:
                     raise ValueError("No LLM endpoint available")
-                # All cooling down: pick the one with earliest recovery.
-                available = [min(self.endpoints, key=lambda ep: ep.cooldown_until)]
+                cooldowns = [ep.cooldown_until for ep in enabled]
+                retry_after = max(1, int(__import__("math").ceil(min(cooldowns) - time.time())))
+                raise AllEndpointsCoolingDown(
+                    retry_after_seconds=retry_after,
+                    endpoint_names=tuple(ep.cfg.name for ep in enabled),
+                )
+
+            if prefer_different_failure_domain:
+                different = [ep for ep in available if ep.cfg.failure_domain != prefer_different_failure_domain]
+                if different:
+                    available = different
 
             total_weight = 0
             winner: EndpointRuntime | None = None
@@ -207,17 +241,25 @@ class EndpointManager:
             winner.current_weight -= max(1, total_weight)
             return winner.cfg
 
-    def report_failure(self, endpoint_name: str, *, reason: str | None = None) -> None:
+    def report_failure(
+        self,
+        endpoint_name: str,
+        *,
+        reason: str | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> None:
         with self.lock:
             for ep in self.endpoints:
                 if ep.cfg.name != endpoint_name:
                     continue
-                ep.cooldown_until = time.time() + max(1, int(ep.cfg.cooldown_sec))
+                retry_after = min(300, max(0, int(retry_after_seconds or 0)))
+                cooldown_seconds = max(1, int(ep.cfg.cooldown_sec), retry_after)
+                ep.cooldown_until = time.time() + cooldown_seconds
                 ep.current_weight = 0
                 logger.warning(
                     "[LLM Rotation] endpoint cooling down: name=%s cooldown=%ss reason=%s",
                     endpoint_name,
-                    ep.cfg.cooldown_sec,
+                    cooldown_seconds,
                     (reason or "unknown")[:180],
                 )
                 return
@@ -239,6 +281,17 @@ _LLM_BINDINGS_LOCK = threading.Lock()
 def _safe_endpoint_name(value: Any, default_name: str) -> str:
     text = str(value or "").strip()
     return text or default_name
+
+
+def _failure_domain(value: Any, api_base: str | None, fallback: str) -> str:
+    configured = str(value or "").strip().lower()
+    if configured:
+        return configured
+    try:
+        hostname = (urlparse(str(api_base or "")).hostname or "").strip().lower()
+    except ValueError:
+        hostname = ""
+    return hostname or fallback
 
 
 def _endpoint_config_error() -> RuntimeError:
@@ -289,6 +342,7 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
                     enabled=True,
                     cooldown_sec=max(1, int(raw.get("cooldown_sec", default_cooldown) or default_cooldown)),
                     raw_url=is_raw_url,
+                    failure_domain=_failure_domain(raw.get("failure_domain"), api_base, _safe_endpoint_name(raw.get("name"), f"ep-{idx+1}")),
                 )
             )
 
@@ -315,6 +369,7 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
                 enabled=True,
                 cooldown_sec=default_cooldown,
                 raw_url=legacy_raw_url,
+                failure_domain=_failure_domain(None, _normalize_api_base(legacy_api_base, raw=legacy_raw_url), "legacy-single"),
             )
         )
     return endpoints
@@ -355,6 +410,7 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
                 enabled=True,
                 cooldown_sec=_env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90),
                 raw_url=is_raw_url,
+                failure_domain=_failure_domain(None, api_base, name),
             )
         )
 
@@ -368,7 +424,13 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
             "OPENAI_COMPATIBLE_API_BASE",
             _oc_model,
         )
-        _try_add("gemini-proxy", "openai_compatible", "GEMINI_PROXY_API_KEY", "GEMINI_PROXY_API_BASE", "gemini-2.5-flash")
+        _try_add(
+            "gemini-proxy",
+            "openai_compatible",
+            "GEMINI_PROXY_API_KEY",
+            "GEMINI_PROXY_API_BASE",
+            str(os.getenv("GEMINI_PROXY_MODEL", "gemini-2.5-flash") or "gemini-2.5-flash").strip(),
+        )
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
     elif canonical == "openai":
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
@@ -402,19 +464,24 @@ def load_user_endpoints(provider: str | None = None, model: str | None = None) -
     return _resolve_endpoints(canonical, model)
 
 
-def get_llm_config(provider: str | None = None, model: str | None = None) -> dict:
+def get_endpoint_manager(provider: str | None = None, model: str | None = None) -> EndpointManager:
+    """Resolve endpoint configuration without selecting or creating a client."""
     canonical = _canonical_provider(provider or _default_provider())
     endpoints = _resolve_endpoints(canonical, model)
     _ENDPOINT_MANAGER._sync_if_changed(endpoints)
-    selected = _ENDPOINT_MANAGER.select()
+    return _ENDPOINT_MANAGER
+
+
+def get_llm_config(provider: str | None = None, model: str | None = None) -> dict:
+    manager = get_endpoint_manager(provider=provider, model=model)
+    selected = manager.select()
 
     logger.info(
-        "[LLM Rotation] select endpoint name=%s provider=%s model=%s api_base=%s api_key=%s",
+        "[LLM] select endpoint name=%s provider=%s model=%s failure_domain=%s",
         selected.name,
         selected.provider,
         selected.model,
-        selected.api_base,
-        _mask(selected.api_key),
+        selected.failure_domain,
     )
     return {
         "provider": selected.provider,
@@ -445,6 +512,39 @@ def report_llm_failure(llm: Any, error: BaseException | str | None = None) -> No
         _ENDPOINT_MANAGER.report_failure(endpoint_name, reason=str(error or "unknown"))
 
 
+def create_llm_for_endpoint(
+    cfg: EndpointConfig,
+    *,
+    temperature: float = 0.3,
+    max_tokens: int | None = None,
+    request_timeout: int = 600,
+):
+    """Build one client for an already selected endpoint without re-selecting."""
+    from langchain_openai import ChatOpenAI
+
+    api_key = cfg.api_key
+    sdk_api_base = _to_chatopenai_base(cfg.api_base)
+    if not api_key:
+        raise ValueError(f"API key not found for provider '{cfg.provider}'")
+    resolved_max_tokens = max(256, int(max_tokens if max_tokens is not None else _env_int("LLM_MAX_TOKENS", 8192)))
+    callbacks = []
+    langfuse_cb = get_langfuse_callback()
+    if langfuse_cb is not None:
+        callbacks.append(langfuse_cb)
+    llm = ChatOpenAI(
+        model=cfg.model,
+        openai_api_key=api_key,
+        openai_api_base=sdk_api_base,
+        temperature=temperature,
+        max_tokens=resolved_max_tokens,
+        request_timeout=request_timeout,
+        max_retries=0,
+        callbacks=callbacks or None,
+    )
+    bind_llm_instance(llm, cfg.name)
+    return llm
+
+
 def create_llm(
     provider: str | None = None,
     model: str | None = None,
@@ -453,54 +553,12 @@ def create_llm(
     request_timeout: int = 600,
     max_retries: int | None = None,
 ):
-    from langchain_openai import ChatOpenAI
-
     cfg = get_llm_config(provider=provider, model=model)
-    api_key = cfg.get("api_key")
-    api_base = cfg.get("api_base")
-    sdk_api_base = _to_chatopenai_base(api_base)
-    model_name = cfg.get("model")
-    endpoint_name = str(cfg.get("endpoint_name") or "unknown")
-
-    resolved_max_tokens = max_tokens
-    if resolved_max_tokens is None:
-        resolved_max_tokens = _env_int("LLM_MAX_TOKENS", 8192)
-    resolved_max_tokens = max(256, int(resolved_max_tokens))
-
-    if not api_key:
-        resolved_provider = str(cfg.get("provider") or provider or _default_provider())
-        raise ValueError(f"API key not found for provider '{resolved_provider}'")
-
-    resolved_max_retries = 3 if max_retries is None else max(0, int(max_retries))
-
-    logger.info(
-        "[LLM Factory] create endpoint=%s provider=%s model=%s api_base=%s sdk_api_base=%s timeout=%ss max_retries=%s",
-        endpoint_name,
-        cfg.get("provider"),
-        model_name,
-        api_base,
-        sdk_api_base,
-        request_timeout,
-        resolved_max_retries,
+    endpoint = EndpointConfig(
+        name=str(cfg.get("endpoint_name") or "unknown"), provider=str(cfg["provider"]),
+        api_base=cfg.get("api_base"), api_key=str(cfg["api_key"]), model=str(cfg["model"]),
     )
-
-    callbacks = []
-    langfuse_cb = get_langfuse_callback()
-    if langfuse_cb is not None:
-        callbacks.append(langfuse_cb)
-
-    llm = ChatOpenAI(
-        model=model_name,
-        openai_api_key=api_key,
-        openai_api_base=sdk_api_base,
-        temperature=temperature,
-        max_tokens=resolved_max_tokens,
-        request_timeout=request_timeout,
-        max_retries=resolved_max_retries,
-        callbacks=callbacks or None,
-    )
-    bind_llm_instance(llm, endpoint_name)
-    return llm
+    return create_llm_for_endpoint(endpoint, temperature=temperature, max_tokens=max_tokens, request_timeout=request_timeout)
 
 
 LANGSMITH_CONFIG = {
@@ -515,8 +573,14 @@ __all__ = [
     "LLM_CONFIGS",
     "LANGSMITH_CONFIG",
     "load_user_endpoints",
+    "get_endpoint_manager",
     "get_llm_config",
     "create_llm",
+    "create_llm_for_endpoint",
+    "AllEndpointsCoolingDown",
+    "EndpointConfig",
+    "ConfiguredLLMHandle",
+    "EndpointManager",
     "report_llm_failure",
     "report_llm_success",
 ]

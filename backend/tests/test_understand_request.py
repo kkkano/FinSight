@@ -47,7 +47,10 @@ def test_intent_frame_explicit_off_keeps_legacy_rollback(monkeypatch):
 
     result = _run(understand_request_module.understand_request({"query": "rollback"}))
 
-    assert result == {"path": "legacy", "query": "rollback"}
+    assert result["path"] == "legacy"
+    assert result["query"] == "rollback"
+    assert result["tasks"] == []
+    assert result["blocked_tasks"] == []
 
 
 def test_pure_greeting_routes_direct_without_research_pipeline():

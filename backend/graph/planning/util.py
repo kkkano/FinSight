@@ -137,10 +137,16 @@ def _plan_task_summary(ctx) -> list[dict]:
         rows.append(
             {
                 "id": task_id or f"task_{len(rows) + 1}",
+                "title": str(task.get("title") or task.get("subject_label") or task.get("subject_type") or "分析任务"),
                 "subject_type": str(task.get("subject_type") or "unknown"),
                 "tickers": _task_tickers(ctx, task),
                 "operation": _task_operation_name(ctx, task),
                 "status": str(task.get("status") or "ready"),
+                "priority": int(task.get("priority") or 50),
+                "order_index": int(task.get("order_index") or 0),
+                "request_frame_id": str(task.get("request_frame_id") or f"request_frame_{len(rows)}"),
+                "render_kind": str(task.get("render_kind") or "single"),
+                "render_group_id": str(task.get("render_group_id") or task.get("request_frame_id") or f"request_frame_{len(rows)}"),
             }
         )
     return rows

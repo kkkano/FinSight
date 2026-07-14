@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import pandas as pd
 import requests
-import yfinance as yf
+from .yfinance_client import create_ticker, download
 from bs4 import BeautifulSoup
 
 from .env import (
@@ -40,22 +40,22 @@ def _fetch_with_alpha_vantage(ticker: str):
         response = _http_get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
+
         if 'Global Quote' in data and data['Global Quote']:
             quote = data['Global Quote']
             price = float(quote.get('05. price', 0))
             change = float(quote.get('09. change', 0))
             change_percent_str = quote.get('10. change percent', '0%').replace('%', '')
-            
+
             if price > 0 and change_percent_str:
                 change_percent = float(change_percent_str)
                 return f"{ticker} Current Price: ${price:.2f} | Change: ${change:.2f} ({change_percent:+.2f}%)"
-        
+
         if 'Note' in data or 'Information' in data:
             logger.info(f"  - Alpha Vantage note: {data.get('Note') or data.get('Information')}")
         if 'Error Message' in data:
             logger.info(f"  - Alpha Vantage error: {data['Error Message']}")
-            
+
         return None
     except Exception as e:
         logger.info(f"  - Alpha Vantage exception: {e}")
@@ -84,16 +84,16 @@ def _fetch_with_yfinance(ticker: str):
     """尝试使用 yfinance 获取价格"""
     logger.info(f"  - Attempting yfinance for {ticker}...")
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         hist = stock.history(period="5d")
         if hist.empty or len(hist) < 2:
             return None
-        
+
         current_price = hist['Close'].iloc[-1]
         prev_close = hist['Close'].iloc[-2]
         change = current_price - prev_close
         change_percent = (change / prev_close) * 100
-        
+
         return f"{ticker} Current Price: ${current_price:.2f} | Change: ${change:.2f} ({change_percent:+.2f}%)"
     except Exception as e:
         logger.info(f"  - yfinance exception: {e}")
@@ -297,19 +297,19 @@ def _scrape_yahoo_finance(ticker: str):
         response = _http_get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         price_elem = soup.find('fin-streamer', {'data-symbol': ticker, 'data-field': 'regularMarketPrice'})
         change_elem = soup.find('fin-streamer', {'data-symbol': ticker, 'data-field': 'regularMarketChange'})
         change_percent_elem = soup.find('fin-streamer', {'data-symbol': ticker, 'data-field': 'regularMarketChangePercent'})
-        
+
         if price_elem and change_elem and change_percent_elem:
             price = price_elem.get('value')
             change = change_elem.get('value')
             change_percent = change_percent_elem.get('value')
-            
+
             if price and change and change_percent:
                 return f"{ticker} Current Price: ${float(price):.2f} | Change: ${float(change):.2f} ({float(change_percent)*100:+.2f}%)"
-        
+
         return None
     except Exception as e:
         logger.info(f"  - Yahoo scraping exception: {e}")
@@ -325,7 +325,7 @@ def _fetch_index_price(ticker: str):
         return None
     logger.info(f"  - Attempting index price via yfinance.download for {ticker}...")
     try:
-        hist = yf.download(ticker, period="3d", interval="1d", progress=False, timeout=20)
+        hist = download(ticker, period="3d", interval="1d", progress=False, timeout=20)
         if not hist.empty and len(hist) > 0:
             closes = hist['Close'].dropna().tolist()
             if closes:
@@ -363,7 +363,7 @@ def _search_for_price(ticker: str):
             r'(?:Price|price)[:\s]+\$?(\d{1,5}(?:,\d{3})*\.\d{2})',
             r'(\d{1,5}(?:,\d{3})*\.\d{2})\s*USD'
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, search_result)
             if match:
@@ -374,7 +374,7 @@ def _search_for_price(ticker: str):
                 from datetime import date
                 today = date.today().isoformat()
                 return f"{ticker} Current Price (via search): ${price_val:.2f} (as of {today})"
-        
+
         return None
     except Exception as e:
         logger.info(f"  - Search price exception: {e}")
@@ -688,7 +688,7 @@ def get_stock_price(ticker: str) -> str:
             _scrape_yahoo_finance,
             _search_for_price
         ]
-    
+
     for i, source_func in enumerate(sources, 1):
         try:
             result = source_func(ticker)
@@ -738,14 +738,14 @@ def _fetch_with_yahoo_scrape_historical(ticker: str, period: str = "1y") -> dict
     """
     try:
         logger.info(f"[get_stock_historical_data] 尝试从 Yahoo Finance 网页抓取 {ticker}...")
-        
+
         # 根据 period 计算需要的天数
         period_days = {
             "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
         }
         days = period_days.get(period, 365)
-        
+
         # 改进的请求头（模拟真实浏览器）
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -758,13 +758,13 @@ def _fetch_with_yahoo_scrape_historical(ticker: str, period: str = "1y") -> dict
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "same-origin"
         }
-        
+
         # 尝试多个 Yahoo Finance URL（备用方案）
         urls = [
             f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}",
             f"https://query2.finance.yahoo.com/v7/finance/download/{ticker}",
         ]
-        
+
         for url in urls:
             try:
                 params = {
@@ -774,16 +774,16 @@ def _fetch_with_yahoo_scrape_historical(ticker: str, period: str = "1y") -> dict
                     "events": "history",
                     "includeAdjustedClose": "true"
                 }
-                
+
                 response = _http_get(url, params=params, headers=headers, timeout=20, allow_redirects=True)
-                
+
                 if response.status_code == 200 and len(response.text) > 100:  # 确保有实际数据
                     # 解析 CSV 数据
                     import io
                     import csv
                     csv_data = io.StringIO(response.text)
                     reader = csv.DictReader(csv_data)
-                    
+
                     kline_data = []
                     for row in reader:
                         try:
@@ -800,14 +800,14 @@ def _fetch_with_yahoo_scrape_historical(ticker: str, period: str = "1y") -> dict
                             })
                         except (ValueError, KeyError) as e:
                             continue  # 跳过无效行
-                    
+
                     if kline_data:
                         logger.info(f"[get_stock_historical_data] Yahoo Finance 网页抓取成功，获取 {len(kline_data)} 条数据")
                         return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "yahoo_scrape"}
             except Exception as e:
                 logger.info(f"[get_stock_historical_data] Yahoo Finance URL {url} 失败: {e}")
                 continue
-        
+
         return None
     except Exception as e:
         logger.info(f"[get_stock_historical_data] Yahoo Finance 网页抓取失败: {e}")
@@ -825,9 +825,9 @@ def _fetch_with_iex_cloud(ticker: str, period: str = "1y") -> dict:
     try:
         if not IEX_CLOUD_API_KEY:
             return None
-            
+
         logger.info(f"[get_stock_historical_data] 尝试使用 IEX Cloud {ticker}...")
-        
+
         # IEX Cloud API 端点
         # 根据 period 计算时间范围
         period_days = {
@@ -835,7 +835,7 @@ def _fetch_with_iex_cloud(ticker: str, period: str = "1y") -> dict:
             "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
         }
         days = period_days.get(period, 365)
-        
+
         # IEX Cloud 使用不同的时间范围参数
         if days <= 5:
             range_param = "5d"
@@ -851,20 +851,20 @@ def _fetch_with_iex_cloud(ticker: str, period: str = "1y") -> dict:
             range_param = "5y"
         else:
             range_param = "max"
-        
+
         # IEX Cloud 不支持指数代码（如 ^IXIC），只支持股票代码
         # 如果ticker以^开头，跳过IEX Cloud
         if ticker.startswith('^'):
             return None
-        
+
         url = f"https://cloud.iexapis.com/stable/stock/{ticker}/chart/{range_param}"
         params = {
             "token": IEX_CLOUD_API_KEY,
             "chartCloseOnly": "false"
         }
-        
+
         response = _http_get(url, params=params, timeout=20)
-        
+
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
@@ -878,11 +878,11 @@ def _fetch_with_iex_cloud(ticker: str, period: str = "1y") -> dict:
                         "close": float(item.get('close', 0)),
                         "volume": float(item.get('volume', 0)),
                     })
-                
+
                 if kline_data:
                     logger.info(f"[get_stock_historical_data] IEX Cloud 成功获取 {len(kline_data)} 条数据")
                     return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "iex_cloud"}
-        
+
         return None
     except Exception as e:
         logger.info(f"[get_stock_historical_data] IEX Cloud 失败: {e}")
@@ -898,38 +898,38 @@ def _fetch_with_tiingo(ticker: str, period: str = "1y") -> dict:
     try:
         if not TIINGO_API_KEY:
             return None
-            
+
         logger.info(f"[get_stock_historical_data] 尝试使用 Tiingo {ticker}...")
-        
+
         # Tiingo API 端点
         period_days = {
             "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
         }
         days = period_days.get(period, 365)
-        
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+
         # Tiingo 不支持指数代码（如 ^IXIC），需要特殊处理
         # 如果ticker以^开头，跳过Tiingo（因为Tiingo不支持指数）
         if ticker.startswith('^'):
             return None
-        
+
         url = f"https://api.tiingo.com/tiingo/daily/{ticker}/prices"
         params = {
             "startDate": start_date.strftime('%Y-%m-%d'),
             "endDate": end_date.strftime('%Y-%m-%d'),
             "format": "json"
         }
-        
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Token {TIINGO_API_KEY}"
         }
-        
+
         response = _http_get(url, params=params, headers=headers, timeout=20)
-        
+
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list) and len(data) > 0:
@@ -943,7 +943,7 @@ def _fetch_with_tiingo(ticker: str, period: str = "1y") -> dict:
                         "close": float(item.get('close', 0)),
                         "volume": float(item.get('volume', 0)),
                     })
-                
+
                 if kline_data:
                     logger.info(f"[get_stock_historical_data] Tiingo 成功获取 {len(kline_data)} 条数据")
                     return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "tiingo"}
@@ -951,7 +951,7 @@ def _fetch_with_tiingo(ticker: str, period: str = "1y") -> dict:
             # Tiingo 可能不支持该ticker（如指数），返回None让其他数据源处理
             logger.info(f"[get_stock_historical_data] Tiingo 不支持 {ticker}，跳过")
             return None
-        
+
         return None
     except Exception as e:
         logger.info(f"[get_stock_historical_data] Tiingo 失败: {e}")
@@ -1038,27 +1038,27 @@ def _fetch_with_marketstack(ticker: str, period: str = "1y") -> dict:
     try:
         if not MARKETSTACK_API_KEY:
             return None
-            
+
         logger.info(f"[get_stock_historical_data] 尝试使用 Marketstack {ticker}...")
-        
+
         # Marketstack API 端点
         url = "http://api.marketstack.com/v1/eod"
-        
+
         # Marketstack 不支持指数代码（如 ^IXIC），需要特殊处理
         # 如果ticker以^开头，跳过Marketstack（因为Marketstack不支持指数）
         if ticker.startswith('^'):
             return None
-        
+
         # 计算日期范围
         period_days = {
             "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
         }
         days = period_days.get(period, 365)
-        
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+
         params = {
             "access_key": MARKETSTACK_API_KEY,
             "symbols": ticker,
@@ -1066,15 +1066,15 @@ def _fetch_with_marketstack(ticker: str, period: str = "1y") -> dict:
             "date_to": end_date.strftime('%Y-%m-%d'),
             "limit": 10000  # 最大限制
         }
-        
+
         response = _http_get(url, params=params, timeout=20)
-        
+
         if response.status_code == 200:
             data = response.json()
             if "error" in data:
                 logger.info(f"[get_stock_historical_data] Marketstack 错误: {data['error']}")
                 return None
-            
+
             if "data" in data and isinstance(data["data"], list) and len(data["data"]) > 0:
                 kline_data = []
                 for item in data["data"]:
@@ -1086,11 +1086,11 @@ def _fetch_with_marketstack(ticker: str, period: str = "1y") -> dict:
                         "close": float(item.get('close', 0)),
                         "volume": float(item.get('volume', 0)),
                     })
-                
+
                 if kline_data:
                     logger.info(f"[get_stock_historical_data] Marketstack 成功获取 {len(kline_data)} 条数据")
                     return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "marketstack"}
-        
+
         return None
     except Exception as e:
         logger.info(f"[get_stock_historical_data] Marketstack 失败: {e}")
@@ -1106,40 +1106,40 @@ def _fetch_with_massive_io(ticker: str, period: str = "1y") -> dict:
         if not MASSIVE_API_KEY:
             logger.info(f"[get_stock_historical_data] Massive.com API key 未配置")
             return None
-            
+
         logger.info(f"[get_stock_historical_data] 尝试使用 Massive.com {ticker}...")
-        
+
         # Massive.com (原 Polygon.io) API 端点
         # 注意：Polygon.io 已更名为 Massive.com，但 API 端点仍为 api.polygon.io
         # API 格式: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
         # 日期必须作为路径参数，不能作为查询参数
-        
+
         # 计算日期范围
         period_days = {
             "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
         }
         days = period_days.get(period, 365)
-        
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+
         # 日期作为路径参数
         url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
-        
+
         params = {
             "adjusted": "true",
             "sort": "asc",
             "limit": 50000,
             "apikey": MASSIVE_API_KEY  # Massive.com API key 作为查询参数
         }
-        
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
-        
+
         response = _http_get(url, params=params, headers=headers, timeout=20)
-        
+
         if response.status_code == 200:
             data = response.json()
             # Massive.com API 可能返回 'OK' 或 'DELAYED' 状态，只要 results 有数据就可以使用
@@ -1159,7 +1159,7 @@ def _fetch_with_massive_io(ticker: str, period: str = "1y") -> dict:
                             "close": item['c'],
                             "volume": item.get('v', 0),
                         })
-                    
+
                     if kline_data:
                         logger.info(f"[get_stock_historical_data] Massive.com 成功获取 {len(kline_data)} 条数据")
                         return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "massive"}
@@ -1179,7 +1179,7 @@ def _fetch_with_massive_io(ticker: str, period: str = "1y") -> dict:
                     logger.info(f"[get_stock_historical_data] API 错误: {error_data['error']}")
             except:
                 pass
-        
+
         return None
     except Exception as e:
         logger.info(f"[get_stock_historical_data] Massive.com 失败: {e}")
@@ -1345,12 +1345,12 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     获取股票的历史数据，用于K线图。
     返回的数据格式专门为 ECharts 优化。
     使用多源回退策略：yfinance (优先，最可靠) → Alpha Vantage → Finnhub → Yahoo 网页抓取 → IEX Cloud → Tiingo → Twelve Data → Marketstack → Massive.com → Stooq
-    
+
     Args:
         ticker: 股票代码
         period: 时间周期 ("1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max")
         interval: 数据间隔 ("1d", "1wk", "1mo")
-    
+
     Returns:
         dict: {"kline_data": [...]} 或 {"error": "..."}
     """
@@ -1375,18 +1375,17 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     for attempt in range(max_retries):
         try:
             logger.info(f"[get_stock_historical_data] 尝试使用 yfinance {ticker} (尝试 {attempt + 1}/{max_retries})...")
-            
+
             # 创建新的 session，避免缓存问题
-            import yfinance as yf_local
-            stock = yf_local.Ticker(ticker, session=None)  # 不使用缓存
-            
+            stock = create_ticker(ticker, session=None)  # 不使用缓存
+
             # 对于指数，使用不同的参数
             include_time = interval.endswith('h') or interval.endswith('m')
             if ticker.startswith('^'):
                 hist = stock.history(period=period, interval=interval, timeout=30, raise_errors=True)
             else:
                 hist = stock.history(period=period, interval=interval, timeout=30, raise_errors=True)
-            
+
             if not hist.empty and len(hist) > 0:
                 data = []
                 for index, row in hist.iterrows():
@@ -1399,7 +1398,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         time_str = index.date().strftime('%Y-%m-%d')
                     else:
                         time_str = str(index)[:10]
-                    
+
                     time_value = time_str if include_time else f"{time_str} 00:00"
                     data.append({
                         "time": time_value,
@@ -1409,7 +1408,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         "close": float(row['Close']),
                         "volume": float(row.get('Volume', 0)) if 'Volume' in row else 0,
                     })
-                
+
                 if data:
                     logger.info(f"[get_stock_historical_data] ✅ yfinance 成功获取 {len(data)} 条数据 (来源: yfinance)")
                     return {"kline_data": data, "period": period, "interval": interval, "source": "yfinance"}
@@ -1425,7 +1424,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             logger.info(f"[get_stock_historical_data] yfinance 失败 (尝试 {attempt + 1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 break
-    
+
     # 策略 1: 尝试使用 Alpha Vantage
     # 注意：Alpha Vantage 不支持指数代码（如 ^IXIC），对于指数直接跳过
     if ALPHA_VANTAGE_API_KEY and not ticker.startswith('^'):
@@ -1441,13 +1440,13 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             }
             response = _http_get(url, params=params, timeout=15)
             data = response.json()
-            
+
             # 检查是否有错误信息
             if "Error Message" in data:
                 error_msg = data.get('Error Message', 'Unknown error')
                 logger.info(f"[get_stock_historical_data] Alpha Vantage 返回错误: {error_msg}")
                 raise Exception(f"Alpha Vantage API error: {error_msg}")
-            
+
             # 检查是否有速率限制提示
             if "Note" in data:
                 note = data.get('Note', '')
@@ -1457,7 +1456,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                 else:
                     logger.info(f"[get_stock_historical_data] Alpha Vantage 提示: {note}")
                     raise Exception(f"Alpha Vantage note: {note}")
-            
+
             if "Time Series (Daily)" in data:
                 time_series = data["Time Series (Daily)"]
                 # 根据 period 确定需要的数据量
@@ -1466,9 +1465,9 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                     "1y": 252, "2y": 504, "5y": 1260, "10y": 2520, "max": 10000
                 }
                 max_days = period_days.get(period, 252)
-                
+
                 sorted_dates = sorted(time_series.keys(), reverse=True)[:max_days]
-                
+
                 kline_data = []
                 for date_str in sorted_dates:
                     day_data = time_series[date_str]
@@ -1480,14 +1479,14 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         "close": float(day_data["4. close"]),
                         "volume": float(day_data.get("5. volume", 0)),
                     })
-                
+
                 # 按时间正序排列
                 kline_data.reverse()
                 logger.info(f"[get_stock_historical_data] Alpha Vantage 成功获取 {len(kline_data)} 条数据")
                 return {"kline_data": kline_data, "period": period, "interval": interval}
         except Exception as e:
             logger.info(f"[get_stock_historical_data] Alpha Vantage 失败: {e}，尝试 yfinance...")
-    
+
     # 策略 2: 回退到 yfinance（支持多时间周期，带重试）
     # 注意：yfinance 已在文件顶部导入，这里直接使用
     # yfinance 支持指数代码（如 ^IXIC, ^GSPC），这是获取指数数据的主要方法
@@ -1495,14 +1494,14 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     for attempt in range(max_retries):
         try:
             # yfinance 支持指数代码，直接使用
-            stock = yf.Ticker(ticker)
-            
+            stock = create_ticker(ticker)
+
             # 根据 period 和 interval 获取数据
             # yfinance 支持的 period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
             # yfinance 支持的 interval: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
             # 对于指数，yfinance 通常能正常工作
             hist = stock.history(period=period, interval=interval, timeout=15)
-            
+
             if hist.empty:
                 if attempt < max_retries - 1:
                     logger.info(f"[get_stock_historical_data] yfinance 返回空数据，重试 {attempt + 1}/{max_retries}...")
@@ -1548,24 +1547,24 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             logger.info(f"[get_stock_historical_data] yfinance 失败 (尝试 {attempt + 1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 break  # 最后一次尝试失败，继续到下一个策略
-    
+
     # 策略 3: 尝试使用 Finnhub（如果有 API key）
     if FINNHUB_API_KEY and finnhub_client:
         try:
             from datetime import datetime, timedelta
-            
+
             # 根据 period 计算天数
             period_days = {
                 "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
                 "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
             }
             days = period_days.get(period, 365)
-            
+
             end_date = int(time.time())
             start_date = int((datetime.now() - timedelta(days=days)).timestamp())
-            
+
             res = finnhub_client.stock_candles(ticker, 'D', start_date, end_date)
-            
+
             if res['s'] == 'ok' and len(res['c']) > 0:
                 kline_data = []
                 for i in range(len(res['t'])):
@@ -1583,7 +1582,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                 return {"kline_data": kline_data, "period": period, "interval": interval}
         except Exception as e2:
             logger.info(f"[get_stock_historical_data] Finnhub 也失败: {e2}")
-    
+
     # 策略 4: 尝试从 Yahoo Finance 网页直接抓取（对指数代码特别有效）
     try:
         result = _fetch_with_yahoo_scrape_historical(ticker, period)
@@ -1591,15 +1590,15 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             return result
     except Exception as e3:
         logger.info(f"[get_stock_historical_data] Yahoo Finance 网页抓取失败: {e3}")
-    
+
     # 对于指数代码，优先使用 yfinance（即使之前失败，再试一次，因为指数可能支持）
     if ticker.startswith('^'):
         logger.info(f"[get_stock_historical_data] 检测到指数代码 {ticker}，尝试使用 yfinance 专门获取指数数据...")
         try:
             # 对于指数，yfinance 通常支持，但可能需要特殊处理
-            stock = yf.Ticker(ticker)
+            stock = create_ticker(ticker)
             hist = stock.history(period=period, interval=interval, timeout=20)
-            
+
             if not hist.empty:
                 include_time = interval.endswith('h') or interval.endswith('m')
                 data = []
@@ -1612,7 +1611,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         time_str = index.date().strftime('%Y-%m-%d')
                     else:
                         time_str = str(index)[:10]
-                    
+
                     time_value = time_str if include_time else f"{time_str} 00:00"
                     data.append({
                         "time": time_value,
@@ -1622,13 +1621,13 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         "close": float(row['Close']),
                         "volume": float(row.get('Volume', 0)),
                     })
-                
+
                 if data:
                     logger.info(f"[get_stock_historical_data] yfinance 成功获取指数 {ticker} 的 {len(data)} 条数据")
                     return {"kline_data": data, "period": period, "interval": interval, "source": "yfinance_index"}
         except Exception as e_index:
             logger.info(f"[get_stock_historical_data] yfinance 获取指数数据失败: {e_index}")
-    
+
     # 策略 5a: 尝试使用 IEX Cloud (免费额度大，优先使用)
     try:
         result = _fetch_with_iex_cloud(ticker, period)
@@ -1636,7 +1635,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             return result
     except Exception as e4a:
         logger.info(f"[get_stock_historical_data] IEX Cloud 失败: {e4a}")
-    
+
     # 策略 5b: 尝试使用 Tiingo (免费额度: 每日500次)
     try:
         result = _fetch_with_tiingo(ticker, period)
@@ -1644,7 +1643,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             return result
     except Exception as e4b:
         logger.info(f"[get_stock_historical_data] Tiingo 失败: {e4b}")
-    
+
     # 策略 5c: 尝试使用 Twelve Data (免费额度)
     try:
         result = _fetch_with_twelve_data(ticker, period)
@@ -1652,7 +1651,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             return result
     except Exception as e4c:
         logger.info(f"[get_stock_historical_data] Twelve Data 失败: {e4c}")
-    
+
     # 策略 5d: 尝试使用 Marketstack (免费额度: 1000次/月)
     try:
         result = _fetch_with_marketstack(ticker, period)
@@ -1660,7 +1659,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             return result
     except Exception as e4d:
         logger.info(f"[get_stock_historical_data] Marketstack 失败: {e4d}")
-    
+
     # 策略 5e: 尝试使用 Massive.com (原 Polygon.io)
     try:
         result = _fetch_with_massive_io(ticker, period)
@@ -1681,30 +1680,30 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     # 等待一段时间后再尝试，避免速率限制
     import time as time_module
     time_module.sleep(2)  # 等待2秒，避免速率限制
-    
+
     try:
         logger.info(f"[get_stock_historical_data] 尝试 yfinance 备用方法（等待后重试）...")
         # 使用 yfinance 的 download 函数（yf 已在文件顶部导入）
         from datetime import datetime, timedelta
-        
+
         period_days = {
             "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
         }
         days = period_days.get(period, 365)
-        
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+
         # 使用 yfinance.download 直接下载
-        hist = yf.download(
+        hist = download(
             ticker,
             start=start_date.strftime('%Y-%m-%d'),
             end=end_date.strftime('%Y-%m-%d'),
             progress=False,
             timeout=20
         )
-        
+
         if not hist.empty:
             include_time = interval.endswith('h') or interval.endswith('m')
             data = []
@@ -1717,7 +1716,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                     time_str = index.date().strftime('%Y-%m-%d')
                 else:
                     time_str = str(index)[:10]
-                
+
                 time_value = time_str if include_time else f"{time_str} 00:00"
                 data.append({
                     "time": time_value,
@@ -1727,13 +1726,13 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                     "close": float(row['Close']),
                     "volume": float(row.get('Volume', 0)) if 'Volume' in row else 0,
                 })
-            
+
             if data:
                 logger.info(f"[get_stock_historical_data] yfinance 备用方法成功获取 {len(data)} 条数据")
                 return {"kline_data": data, "period": period, "interval": interval}
     except Exception as e5:
         logger.info(f"[get_stock_historical_data] yfinance 备用方法失败: {e5}")
-    
+
     # 所有策略都失败，如果是指数，尝试使用最新价格生成平滑序列
     if is_index:
         price_val = _fallback_price_value(ticker)
@@ -1826,7 +1825,7 @@ def get_option_chain_metrics(ticker: str, expiry: Optional[str] = None) -> Dict[
         return result
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         options = list(getattr(stock, "options", []) or [])
         if not options:
             result["error"] = "no_option_chain_available"
@@ -1934,7 +1933,7 @@ def _download_close_frame(symbols: List[str], lookback_days: int) -> Optional[pd
     period = f"{period_days}d"
 
     try:
-        raw = yf.download(
+        raw = download(
             tickers=symbols if len(symbols) > 1 else symbols[0],
             period=period,
             interval="1d",
@@ -2256,7 +2255,7 @@ def get_performance_comparison(tickers: Union[dict, list]) -> str:
         fallback_used = False
         error_note = ""
         try:
-            stock = yf.Ticker(ticker)
+            stock = create_ticker(ticker)
             hist = stock.history(period="2y")
             perf = _calc_from_hist(hist)
             if perf is None:
@@ -2313,7 +2312,7 @@ def analyze_historical_drawdowns(ticker: str = "^IXIC") -> str:
     hist = pd.DataFrame()
     error_note = ""
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         hist = stock.history(period="max")
     except Exception as e:
         error_note = str(e)

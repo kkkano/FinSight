@@ -21,7 +21,8 @@ import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useAgentProfiles } from '../hooks/useAgentProfiles';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
-import { getMiniChatRouteSymbol, routeSupportsMiniChat } from '../utils/miniChatRouteContext';
+import { getMiniChatRouteSymbol } from '../utils/miniChatRouteContext';
+import { useChatHandoff } from '../hooks/useChatHandoff';
 import { buildExpertCommandDescriptors, runExpertCommand } from './commandPaletteExperts';
 import { Dialog } from './ui/Dialog';
 
@@ -49,8 +50,8 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
     setColorConvention,
     setDraft,
     currentTicker,
-    setShowRightPanel,
   } = useStore();
+  const handoffToChat = useChatHandoff();
   const activeAsset = useDashboardStore((state) => state.activeAsset);
   const { profiles } = useAgentProfiles();
 
@@ -82,12 +83,12 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
             activeAsset?.symbol || currentTicker,
           );
           const tab = new URLSearchParams(location.search).get('tab');
-          setDraft(symbol ? buildDashboardAskAiDraft(symbol, tab) : '');
-          if (routeSupportsMiniChat(location.pathname)) {
-            setShowRightPanel(true);
-          } else {
-            navigate('/chat');
-          }
+          handoffToChat({
+            draft: symbol ? buildDashboardAskAiDraft(symbol, tab) : '请分析我当前关注的问题',
+            activeSymbol: symbol ?? undefined,
+            sourceView: 'command_palette',
+            sourceTab: tab ?? undefined,
+          });
           onClose();
         },
       },
@@ -214,7 +215,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
       profiles,
       setDraft,
       setColorConvention,
-      setShowRightPanel,
+      handoffToChat,
       setTheme,
       theme,
     ],

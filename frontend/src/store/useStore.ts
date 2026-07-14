@@ -3,6 +3,7 @@ import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, 
 import { apiClient } from '../api/client';
 import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
+import type { PendingChatHandoffContext } from '../types/chatHandoff';
 
 type Theme = 'dark' | 'light';
 export type ColorConvention = 'intl' | 'cn';
@@ -210,6 +211,9 @@ interface AppState {
   setDraft: (text: string) => void;
   draft: string;
   draftBySession: Record<string, string>;
+  pendingChatHandoffContextBySession: Record<string, PendingChatHandoffContext | undefined>;
+  setPendingChatHandoffContext: (sessionId: string, value: PendingChatHandoffContext) => void;
+  takePendingChatHandoffContext: (sessionId: string) => PendingChatHandoffContext | undefined;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
   entryMode: EntryMode;
@@ -625,6 +629,7 @@ export const useStore = create<AppState>((set) => ({
   abortControllersBySession: {},
   draft: '',
   draftBySession: {},
+  pendingChatHandoffContextBySession: {},
   theme: initialTheme,
   colorConvention: initialColorConvention,
   layoutMode: initialLayout,
@@ -1128,6 +1133,8 @@ export const useStore = create<AppState>((set) => ({
         createBackendConversation(nextSessionId, nextMessages);
       }
       const nextSessionStatus = statusForSession(state.chatStatusBySession, nextSessionId);
+      const pendingChatHandoffContextBySession = { ...state.pendingChatHandoffContextBySession };
+      delete pendingChatHandoffContextBySession[normalized];
       return {
         sessionId: nextSessionId,
         messages: nextMessages,
@@ -1156,6 +1163,7 @@ export const useStore = create<AppState>((set) => ({
           ...state.draftBySession,
           [normalized]: '',
         },
+        pendingChatHandoffContextBySession,
         agentLogs: normalized === state.sessionId ? [] : state.agentLogs,
         agentStatuses: normalized === state.sessionId ? createInitialAgentStatuses() : state.agentStatuses,
         rawEvents: normalized === state.sessionId ? [] : state.rawEvents,
@@ -1173,6 +1181,33 @@ export const useStore = create<AppState>((set) => ({
         [state.sessionId]: text,
       },
     })),
+
+  setPendingChatHandoffContext: (sessionId, value) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized || value.sessionId !== normalized) return {};
+      return {
+        pendingChatHandoffContextBySession: {
+          ...state.pendingChatHandoffContextBySession,
+          [normalized]: value,
+        },
+      };
+    }),
+
+  takePendingChatHandoffContext: (sessionId) => {
+    const normalized = String(sessionId || '').trim();
+    if (!normalized) return undefined;
+    let taken: PendingChatHandoffContext | undefined;
+    set((state) => {
+      const candidate = state.pendingChatHandoffContextBySession[normalized];
+      if (!candidate || candidate.sessionId !== normalized) return {};
+      taken = candidate;
+      const next = { ...state.pendingChatHandoffContextBySession };
+      delete next[normalized];
+      return { pendingChatHandoffContextBySession: next };
+    });
+    return taken;
+  },
 
   // Agent Logs Actions
   addAgentLog: (log) =>

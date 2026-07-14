@@ -8,6 +8,7 @@
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { useLatestReport } from '../../../hooks/useLatestReport';
 import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
+import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import type { SelectionItem, TechnicalData, NewsItem, PeerMetrics } from '../../../types/dashboard';
 import { ScoreRing } from './overview/ScoreRing';
 import { AnalystRatingCard } from './overview/AnalystRatingCard';
@@ -209,11 +210,18 @@ export function OverviewTab() {
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
-  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+  const handoffToChat = useChatHandoff();
   const insightsRefetch = useDashboardStore((s) => s.insightsRefetch);
 
   const handleAskAbout = (selection: SelectionItem) => {
-    setActiveSelection(selection);
+    const symbol = activeAsset?.symbol?.trim().toUpperCase();
+    handoffToChat({
+      draft: `请结合已选内容分析${symbol ? ` ${symbol}` : ''}：${selection.title}`,
+      activeSymbol: symbol,
+      selections: [selection],
+      sourceView: 'dashboard',
+      sourceTab: 'overview',
+    });
   };
 
   const { data: reportData } = useLatestReport(activeAsset?.symbol, {

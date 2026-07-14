@@ -22,6 +22,13 @@ async def test_brief_reaches_llm_analyze_prompt(monkeypatch):
             return R()
 
     agent = BaseFinancialAgent(FakeLLM(), cache=None)
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await agent.llm.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
     monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
     from backend.config.settings import agent_settings
     agent_settings.cache_clear()

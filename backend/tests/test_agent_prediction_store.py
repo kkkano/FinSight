@@ -50,9 +50,11 @@ class FakeConnection:
 class FakeEngine:
     def __init__(self):
         self.conn = FakeConnection()
+        self.begin_calls = 0
 
     @contextmanager
     def begin(self):
+        self.begin_calls += 1
         yield self.conn
 
     @contextmanager
@@ -107,6 +109,22 @@ def test_get_always_filters_by_prediction_id_and_user_id():
     assert params == {"id": "pred-1", "user_id": "alice"}
     assert result and result.user_id == "alice"
     assert result.id == "00000000-0000-0000-0000-000000000001"
+    assert engine.begin_calls == 0
+
+
+def test_get_latest_is_read_only_and_filters_tenant_and_normalized_symbol():
+    engine = FakeEngine()
+    engine.conn.row = _record(id=UUID("00000000-0000-0000-0000-000000000001"))
+    store = AgentPredictionStore(engine=engine)
+
+    result = store.get_latest(user_id="alice", symbol="aapl")
+
+    select_sql, params = engine.conn.calls[-1]
+    assert "user_id = :user_id AND symbol = :symbol" in select_sql
+    assert "ORDER BY created_at DESC LIMIT 1" in select_sql
+    assert params == {"user_id": "alice", "symbol": "AAPL"}
+    assert result and result.symbol == "AAPL"
+    assert engine.begin_calls == 0
 
 
 def test_latest_and_history_queries_are_tenant_agent_and_ticker_scoped():
@@ -170,8 +188,24 @@ def test_prediction_api_is_authenticated_tenant_scoped_and_fail_closed():
     records = {("pred-1", "alice"): _record()}
 
     class Store:
+        latest_calls = []
+
         def get(self, prediction_id, *, user_id):
             row = records.get((prediction_id, user_id))
+            if row is None:
+                return None
+            from backend.agents.prediction_contract import AgentPrediction
+            payload = dict(row)
+            payload["anchor"] = {
+                "timeframe": payload.pop("anchor_timeframe"),
+                "time": payload.pop("anchor_time"),
+                "price": payload.pop("anchor_price"),
+            }
+            return AgentPrediction.model_validate(payload)
+
+        def get_latest(self, *, user_id, symbol):
+            self.latest_calls.append({"user_id": user_id, "symbol": symbol})
+            row = records.get(("pred-1", user_id)) if symbol == "AAPL" else None
             if row is None:
                 return None
             from backend.agents.prediction_contract import AgentPrediction
@@ -201,6 +235,35 @@ def test_prediction_api_is_authenticated_tenant_scoped_and_fail_closed():
     assert response.json()["prediction"]["predictionId"] == "pred-1"
     assert "user_id" not in response.json()["prediction"]
 
+    latest = client.get(
+        "/api/agents/predictions/latest?symbol=%20aapl%20",
+        headers={"x-test-user": "alice"},
+    )
+    assert latest.status_code == 200
+    assert latest.json() == response.json()
+    missing = client.get(
+        "/api/agents/predictions/latest?symbol=MSFT",
+        headers={"x-test-user": "alice"},
+    )
+    assert missing.status_code == 204
+    assert missing.content == b""
+
+    for symbol in ("^GSPC", "BRK-B", "0700.HK", "GC=F"):
+        assert client.get(
+            f"/api/agents/predictions/latest?symbol={symbol}",
+            headers={"x-test-user": "alice"},
+        ).status_code == 204
+    for symbol in ("", "AAPL/US", "AAPL\\US", "AA PL", "ＡＡＰＬ"):
+        assert client.get(
+            "/api/agents/predictions/latest",
+            params={"symbol": symbol},
+            headers={"x-test-user": "alice"},
+        ).status_code == 422
+
+    assert client.get(
+        "/api/agents/predictions/latest?symbol=AAPL",
+    ).status_code == 401
+
     unavailable_app = FastAPI()
 
     @unavailable_app.middleware("http")
@@ -213,3 +276,6 @@ def test_prediction_api_is_authenticated_tenant_scoped_and_fail_closed():
         get_prediction_store=lambda: UnavailableAgentPredictionStore("down"),
     )))
     assert TestClient(unavailable_app).get("/api/agents/predictions/pred-1").status_code == 503
+    assert TestClient(unavailable_app).get(
+        "/api/agents/predictions/latest?symbol=AAPL",
+    ).status_code == 503

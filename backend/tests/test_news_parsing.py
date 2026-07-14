@@ -96,7 +96,7 @@ def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -125,7 +125,7 @@ def test_get_company_news_leaves_url_empty_when_source_has_no_article_url(monkey
                 }
             ]
 
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -162,7 +162,7 @@ def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypat
                 },
             ]
 
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -187,7 +187,7 @@ def test_get_company_news_cools_down_yfinance_after_timeout(monkeypatch):
 
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_COOLDOWN_SEC", 900)
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda ticker: _Ticker(ticker))
+    monkeypatch.setattr(news_mod, "create_ticker", lambda ticker: _Ticker(ticker))
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -223,7 +223,7 @@ def test_get_company_news_prefers_finnhub_when_configured(monkeypatch):
             ]
 
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", _Finnhub())
 
     items = news_mod.get_company_news("NVDA", limit=1)
@@ -253,7 +253,7 @@ def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monk
             ]
 
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", _Finnhub())
     monkeypatch.setattr(
         news_mod,

@@ -20,6 +20,7 @@ SUBJECT_TYPES = {
 
 class IntentTask(BaseModel):
     id: str
+    title: str = ""
     subject_type: str
     subject_label: str = ""
     tickers: list[str] = Field(default_factory=list)
@@ -28,17 +29,30 @@ class IntentTask(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     required_evidence: list[str] = Field(default_factory=list)
     priority: int = 50
+    order_index: int = 0
+    request_frame_id: str = ""
+    render_kind: str = "single"
+    render_group_id: str = ""
     reason: str = ""
 
 
 class BlockedIntent(BaseModel):
     id: str
+    title: str = ""
     reason: str
     question: str
     suggestions: list[str] = Field(default_factory=list)
     fallback_allowed: bool = False
     subject_type: str = "unknown"
     subject_label: str = ""
+    tickers: list[str] = Field(default_factory=list)
+    operation: str = "qa"
+    priority: int = 50
+    order_index: int = 0
+    request_frame_id: str = ""
+    render_kind: str = "single"
+    render_group_id: str = ""
+    error_code: str = "task_blocked"
 
 
 class IntentFrame(BaseModel):
@@ -73,6 +87,7 @@ def _task_from_legacy(raw: dict[str, Any]) -> IntentTask:
     operation = raw.get("operation") if isinstance(raw.get("operation"), dict) else {}
     return IntentTask(
         id=str(raw.get("id") or ""),
+        title=str(raw.get("title") or raw.get("subject_label") or ""),
         subject_type=str(raw.get("subject_type") or "unknown"),
         subject_label=str(raw.get("subject_label") or ""),
         tickers=[str(t) for t in (raw.get("tickers") or []) if str(t).strip()],
@@ -81,6 +96,10 @@ def _task_from_legacy(raw: dict[str, Any]) -> IntentTask:
         params=dict(operation.get("params") or {}) or dict(raw.get("params") or {}),
         required_evidence=[str(e) for e in (raw.get("required_evidence") or [])],
         priority=int(raw.get("priority") or 50),
+        order_index=int(raw.get("order_index") or 0),
+        request_frame_id=str(raw.get("request_frame_id") or ""),
+        render_kind=str(raw.get("render_kind") or "single"),
+        render_group_id=str(raw.get("render_group_id") or ""),
         reason=str(raw.get("reason") or ""),
     )
 
@@ -88,12 +107,21 @@ def _task_from_legacy(raw: dict[str, Any]) -> IntentTask:
 def _blocked_from_legacy(raw: dict[str, Any]) -> BlockedIntent:
     return BlockedIntent(
         id=str(raw.get("id") or "blocked_1"),
+        title=str(raw.get("title") or raw.get("subject_label") or ""),
         reason=str(raw.get("reason") or ""),
         question=str(raw.get("question") or ""),
         suggestions=[str(s) for s in (raw.get("suggestions") or [])],
         fallback_allowed=bool(raw.get("fallback_allowed")),
         subject_type=str(raw.get("subject_type") or "unknown"),
         subject_label=str(raw.get("subject_label") or ""),
+        tickers=[str(t) for t in (raw.get("tickers") or []) if str(t).strip()],
+        operation=str((raw.get("operation") or {}).get("name") if isinstance(raw.get("operation"), dict) else raw.get("operation") or "qa"),
+        priority=int(raw.get("priority") or 50),
+        order_index=int(raw.get("order_index") or 0),
+        request_frame_id=str(raw.get("request_frame_id") or ""),
+        render_kind=str(raw.get("render_kind") or "single"),
+        render_group_id=str(raw.get("render_group_id") or ""),
+        error_code=str(raw.get("error_code") or "task_blocked"),
     )
 
 
@@ -160,12 +188,17 @@ def legacy_understanding_from_frame(frame: IntentFrame) -> dict[str, Any]:
     tasks = [
         {
             "id": t.id,
+            "title": t.title,
             "subject_type": t.subject_type,
             "subject_label": t.subject_label,
             "tickers": list(t.tickers),
             "operation": {"name": t.operation, "confidence": t.operation_confidence, "params": dict(t.params)},
             "required_evidence": list(t.required_evidence),
             "priority": t.priority,
+            "order_index": t.order_index,
+            "request_frame_id": t.request_frame_id,
+            "render_kind": t.render_kind,
+            "render_group_id": t.render_group_id,
             "reason": t.reason,
         }
         for t in frame.tasks
@@ -173,9 +206,17 @@ def legacy_understanding_from_frame(frame: IntentFrame) -> dict[str, Any]:
     blocked_tasks = [
         {
             "id": b.id,
+            "title": b.title,
             "subject_type": b.subject_type,
             "subject_label": b.subject_label,
-            "operation": {"name": "qa", "confidence": 0.0},
+            "tickers": list(b.tickers),
+            "operation": {"name": b.operation, "confidence": 0.0},
+            "priority": b.priority,
+            "order_index": b.order_index,
+            "request_frame_id": b.request_frame_id,
+            "render_kind": b.render_kind,
+            "render_group_id": b.render_group_id,
+            "error_code": b.error_code,
             "reason": b.reason,
             "question": b.question,
             "suggestions": list(b.suggestions),

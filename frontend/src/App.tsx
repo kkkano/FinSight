@@ -1,5 +1,6 @@
 ﻿import { useState, useCallback, useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useRef } from 'react';
 import { WorkspaceShell } from './components/layout/WorkspaceShell';
 import { WelcomePage } from './components/welcome/WelcomePage';
 import { ToastProvider } from './components/ui';
@@ -14,6 +15,7 @@ import { BacktestPage } from './pages/BacktestPage';
 import { ScreenerPage } from './pages/ScreenerPage';
 import { SharedReportPage } from './pages/SharedReportPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
+import { useDashboardStore } from './store/dashboardStore';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
 
@@ -41,14 +43,45 @@ function ChatRoute() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const reportId = searchParams.get('report_id') || null;
-  const initialDraft = searchParams.get('prompt') || null;
+  const initialHandoffRef = useRef({
+    draft: searchParams.get('prompt') || null,
+    symbol: searchParams.get('context_symbol') || null,
+  });
+  const consumedRef = useRef(false);
+
+  useEffect(() => {
+    if (consumedRef.current) return;
+    const { draft, symbol } = initialHandoffRef.current;
+    if (!draft && !symbol) return;
+    consumedRef.current = true;
+
+    const normalizedSymbol = String(symbol ?? '').trim().toUpperCase();
+    if (normalizedSymbol) {
+      const dashboard = useDashboardStore.getState();
+      if (dashboard.activeAsset?.symbol !== normalizedSymbol) {
+        dashboard.setActiveAsset({
+          symbol: normalizedSymbol,
+          display_name: normalizedSymbol,
+          type: dashboard.activeAsset?.type ?? 'equity',
+        });
+      }
+    }
+
+    const next = new URLSearchParams(location.search);
+    next.delete('prompt');
+    next.delete('context_symbol');
+    navigate(
+      { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : '', hash: location.hash },
+      { replace: true },
+    );
+  }, [location.hash, location.pathname, location.search, navigate]);
 
   return (
     <WorkspaceShell
       view="chat"
       dashboardSymbol={null}
       initialReportId={reportId}
-      initialChatDraft={initialDraft}
+      initialChatDraft={initialHandoffRef.current.draft}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
       navigateToWorkbench={() => navigate('/workbench')}

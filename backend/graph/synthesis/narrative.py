@@ -63,15 +63,12 @@ async def generate_narrative_draft(
     - markdown string on success (or empty string on failure)
     - optional verifier result payload
     """
-    try:
-        from backend.llm_config import create_llm
+    from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-        _synth_temp = float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.3"))
-        llm = create_llm(temperature=_synth_temp)
-        llm_factory = lambda: create_llm(temperature=_synth_temp)  # noqa: E731
-    except Exception as exc:
-        logger.warning("[Synthesize/narrative] LLM init failed: %s", exc)
-        return "", None
+    _synth_temp = float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.3"))
+    call_context = LLMCallContext.create(
+        stage="report_synthesize", agent="report_synthesizer", layer="synthesis", max_provider_attempts=3,
+    )
 
     artifacts = state.get("artifacts") or {}
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
@@ -332,12 +329,11 @@ async def generate_narrative_draft(
                 "timestamp": utc_now_iso(),
             }
         )
-        resp = await ainvoke_fn(
-            llm,
+        resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
-            llm_factory=llm_factory,
+            context=call_context,
+            temperature=_synth_temp,
             acquire_token=True,
-            on_retry=_on_retry,
         )
         await emit_event_fn(
             {

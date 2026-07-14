@@ -10,6 +10,7 @@
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
+import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import { IncomeTable } from './financial/IncomeTable';
 import { ProfitabilityChart } from './financial/ProfitabilityChart';
 import { ValuationGrid } from './financial/ValuationGrid';
@@ -25,14 +26,22 @@ import type { SelectionItem } from '../../../types/dashboard';
 
 export function FinancialTab() {
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const activeAsset = useDashboardStore((s) => s.activeAsset);
   const insightsData = useDashboardStore((s) => s.insightsData);
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
-  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+  const handoffToChat = useChatHandoff();
 
   const handleAskAbout = (selection: SelectionItem) => {
-    setActiveSelection(selection);
+    const symbol = activeAsset?.symbol?.trim().toUpperCase();
+    handoffToChat({
+      draft: `请结合已选内容分析${symbol ? ` ${symbol}` : ''}：${selection.title}`,
+      activeSymbol: symbol,
+      selections: [selection],
+      sourceView: 'dashboard',
+      sourceTab: 'financial',
+    });
   };
 
   const financials = dashboardData?.financials;

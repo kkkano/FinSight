@@ -44,14 +44,19 @@ describe('normalizePortfolioPositionsForChat', () => {
 });
 
 describe('SSE 异步终态竞态契约', () => {
-  it.each([
-    ['./useChatStream.ts', '主聊天'],
-    ['../components/MiniChat.tsx', 'MiniChat'],
-  ])('%s 在流返回后等待 onError 的异步恢复逻辑', (relativePath) => {
-    const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+  it('主聊天在流返回后等待 onError 的异步恢复逻辑', () => {
+    const source = readFileSync(new URL('./useChatStream.ts', import.meta.url), 'utf8');
 
     expect(source).toContain('terminalHandlingPromise =');
     expect(source).toContain('const pendingTerminalHandling = terminalHandlingPromise;');
     expect(source).toContain('if (pendingTerminalHandling) await pendingTerminalHandling;');
+  });
+
+  it('MiniChat 不再拥有发送、消息写入或 AbortController', () => {
+    const source = readFileSync(new URL('../components/MiniChat.tsx', import.meta.url), 'utf8');
+    expect(source).not.toContain('sendMessageStream');
+    expect(source).not.toContain('AbortController');
+    expect(source).not.toContain('addMessage');
+    expect(source).toContain('useChatHandoff');
   });
 });

@@ -529,6 +529,10 @@ def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
         ui_context["active_symbol"] = request.context.active_symbol
     if request.context.view:
         ui_context["view"] = request.context.view
+    if request.context.source_view:
+        ui_context["source_view"] = request.context.source_view
+    if request.context.source_tab:
+        ui_context["source_tab"] = request.context.source_tab
 
     selections: List[Dict[str, Any]] = []
     if request.context.selection:

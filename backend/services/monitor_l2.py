@@ -147,11 +147,12 @@ def _build_agent(agent_kind: str):
 
     llm = None
     try:
-        from backend.llm_config import create_llm
+        from backend.llm_config import ConfiguredLLMHandle, get_endpoint_manager
 
-        llm = create_llm(temperature=0.2)
+        get_endpoint_manager()
+        llm = ConfiguredLLMHandle(temperature=0.2)
     except Exception:  # noqa: BLE001 - LLM 不可用时 agent 走确定性兜底
-        logger.info("[MonitorL2] create_llm unavailable, agent runs in deterministic mode")
+        logger.info("[MonitorL2] LLM configuration unavailable, agent runs in deterministic mode")
         llm = None
 
     cache = DataCache()

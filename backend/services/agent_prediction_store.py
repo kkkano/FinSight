@@ -134,30 +134,38 @@ class AgentPredictionStore:
         normalized_user = str(user_id or "").strip()
         if not normalized_user or normalized_user == "public":
             return None
-        self.ensure_schema()
-        with self._engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT * FROM agent_predictions WHERE id = CAST(:id AS uuid) AND user_id = :user_id"),
-                {"id": str(prediction_id), "user_id": normalized_user},
-            ).mappings().first()
-        if row is None:
-            return None
-        return _prediction_from_row(row)
+        try:
+            with self._engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT * FROM agent_predictions WHERE id = CAST(:id AS uuid) AND user_id = :user_id"),
+                    {"id": str(prediction_id), "user_id": normalized_user},
+                ).mappings().first()
+            if row is None:
+                return None
+            return _prediction_from_row(row)
+        except PredictionStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise PredictionStoreUnavailable("prediction store read unavailable") from exc
 
     def get_latest(self, *, user_id: str, symbol: str) -> AgentPrediction | None:
         normalized_user = str(user_id or "").strip()
         normalized_symbol = str(symbol or "").strip().upper()
         if not normalized_user or normalized_user == "public" or not normalized_symbol:
             return None
-        self.ensure_schema()
-        with self._engine.connect() as conn:
-            row = conn.execute(text(
-                "SELECT * FROM agent_predictions WHERE user_id = :user_id AND symbol = :symbol "
-                "ORDER BY created_at DESC LIMIT 1"
-            ), {"user_id": normalized_user, "symbol": normalized_symbol}).mappings().first()
-        if row is None:
-            return None
-        return _prediction_from_row(row)
+        try:
+            with self._engine.connect() as conn:
+                row = conn.execute(text(
+                    "SELECT * FROM agent_predictions WHERE user_id = :user_id AND symbol = :symbol "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ), {"user_id": normalized_user, "symbol": normalized_symbol}).mappings().first()
+            if row is None:
+                return None
+            return _prediction_from_row(row)
+        except PredictionStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise PredictionStoreUnavailable("prediction store read unavailable") from exc
 
     def latest_predictions(
         self,

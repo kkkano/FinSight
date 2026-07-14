@@ -11,6 +11,7 @@
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
+import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import { TechnicalSummaryCard } from './technical/TechnicalSummaryCard';
 import { MovingAverageTable } from './technical/MovingAverageTable';
 import { OscillatorTable } from './technical/OscillatorTable';
@@ -21,19 +22,32 @@ import { AiInsightCard } from './shared/AiInsightCard';
 import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 import type { SelectionItem } from '../../../types/dashboard';
+import type { PredictionOverlay } from '../../../types/chartPrediction';
 
 // --- Component ---
 
-export function TechnicalTab() {
+interface TechnicalTabProps {
+  predictionOverlay?: PredictionOverlay | null;
+}
+
+export function TechnicalTab({ predictionOverlay }: TechnicalTabProps) {
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const activeAsset = useDashboardStore((s) => s.activeAsset);
   const insightsData = useDashboardStore((s) => s.insightsData);
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
-  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+  const handoffToChat = useChatHandoff();
 
   const handleAskAbout = (selection: SelectionItem) => {
-    setActiveSelection(selection);
+    const symbol = activeAsset?.symbol?.trim().toUpperCase();
+    handoffToChat({
+      draft: `请结合已选内容分析${symbol ? ` ${symbol}` : ''}：${selection.title}`,
+      activeSymbol: symbol,
+      selections: [selection],
+      sourceView: 'dashboard',
+      sourceTab: 'technical',
+    });
   };
 
   const technicals = dashboardData?.technicals;
@@ -81,7 +95,12 @@ export function TechnicalTab() {
         </div>
       )}
 
-      <SupportResistanceChart technicals={technicals} marketChart={marketChart} />
+      <SupportResistanceChart
+        technicals={technicals}
+        marketChart={marketChart}
+        marketAsOf={dashboardData?.meta?.market_chart?.as_of}
+        predictionOverlay={predictionOverlay}
+      />
 
       {/* Row 2: Summary full width */}
       <TechnicalSummaryCard technicals={technicals} />

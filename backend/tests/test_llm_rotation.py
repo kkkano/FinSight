@@ -172,6 +172,85 @@ def test_get_llm_config_raises_when_all_sources_empty(monkeypatch):
     assert 'OPENAI_COMPATIBLE_API_BASE' in str(exc.value)
 
 
+def test_all_cooling_down_creates_no_client_or_provider_request(monkeypatch):
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoint = llm_config.EndpointConfig(
+        name="cooling", provider="openai_compatible", api_base="https://a.example.test/v1",
+        api_key="test-key", model="test-model", cooldown_sec=60, failure_domain="a.example.test",
+    )
+    manager = llm_config.EndpointManager(endpoints=[llm_config.EndpointRuntime(cfg=endpoint, cooldown_until=10**12)])
+    context = llm_retry.LLMCallContext.create(stage="planner")
+    client_calls: list[object] = []
+    invoke_calls: list[object] = []
+
+    async def invoke(client, messages):
+        invoke_calls.append(client)
+        return {"ok": True}
+
+    with pytest.raises(llm_config.AllEndpointsCoolingDown) as exc:
+        asyncio.run(llm_retry.ainvoke_llm(
+            messages=["x"], context=context, endpoint_manager=manager,
+            client_factory=lambda config: client_calls.append(config), invoke=invoke,
+        ))
+    assert exc.value.retry_after_seconds >= 1
+    assert client_calls == []
+    assert invoke_calls == []
+    assert context.budget.provider_attempts_used == 0
+
+
+@pytest.mark.parametrize("failure", ["401 unauthorized", "403 forbidden", "400 bad request", "404 not found", "422 invalid"])
+def test_non_retryable_failures_do_not_retry_or_cool_down(failure):
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoint = llm_config.EndpointConfig(
+        name="primary", provider="openai_compatible", api_base="https://a.example.test/v1",
+        api_key="test-key", model="test-model", failure_domain="a.example.test",
+    )
+    manager = llm_config.EndpointManager(endpoints=[llm_config.EndpointRuntime(cfg=endpoint)])
+    calls: list[object] = []
+
+    async def invoke(client, messages):
+        calls.append(client)
+        raise RuntimeError(failure)
+
+    with pytest.raises(RuntimeError, match=failure):
+        asyncio.run(llm_retry.ainvoke_llm(
+            messages=["x"], context=llm_retry.LLMCallContext.create(stage="planner"),
+            endpoint_manager=manager, client_factory=lambda config: object(), invoke=invoke,
+            sleeper=lambda _: asyncio.sleep(0),
+        ))
+    assert len(calls) == 1
+    assert manager.endpoints[0].cooldown_until == 0
+
+
+def test_retry_prefers_another_failure_domain_and_caps_attempts():
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoints = [
+        llm_config.EndpointConfig("a", "openai_compatible", "https://a.example.test/v1", "key", "m", failure_domain="a"),
+        llm_config.EndpointConfig("b", "openai_compatible", "https://b.example.test/v1", "key", "m", failure_domain="b"),
+    ]
+    manager = llm_config.EndpointManager(endpoints=[llm_config.EndpointRuntime(cfg=endpoint) for endpoint in endpoints])
+    used: list[str] = []
+
+    async def invoke(client, messages):
+        used.append(client.name)
+        if len(used) == 1:
+            raise RuntimeError("503 service unavailable")
+        return {"ok": True}
+
+    result = asyncio.run(llm_retry.ainvoke_llm(
+        messages=["x"], context=llm_retry.LLMCallContext.create(stage="planner"), endpoint_manager=manager,
+        client_factory=lambda config: config, invoke=invoke, sleeper=lambda _: asyncio.sleep(0),
+    ))
+    assert result == {"ok": True}
+    assert used == ["a", "b"]
+
+
 def test_retry_helper_reports_failure_and_success(monkeypatch):
     import backend.services.llm_retry as llm_retry
 

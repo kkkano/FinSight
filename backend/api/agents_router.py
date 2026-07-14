@@ -12,11 +12,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Any, Callable
+import re
+from typing import Annotated, Any, Callable
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from pydantic import BeforeValidator
 
 from backend.agents.profiles import profile
+from backend.config.ticker_mapping import normalize_ticker
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES
 from backend.graph.preference_timeouts import normalize_timeout_seconds
 from backend.services.agent_prediction_store import PredictionStoreUnavailable
@@ -27,6 +30,26 @@ _VALID_DEPTHS = {"standard", "deep", "off"}
 _MAX_ROUNDS_MIN = 1
 _MAX_ROUNDS_MAX = 10
 _MAX_ROUNDS_DEFAULT = 3
+_PREDICTION_SYMBOL_PATTERN = re.compile(
+    r"^(?=.{1,32}$)(?:\^[A-Z0-9][A-Z0-9.-]*|[A-Z0-9][A-Z0-9.-]*(?:=[A-Z])?)$",
+    flags=re.ASCII,
+)
+
+
+def _normalize_prediction_symbol(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("symbol must be a string")
+    normalized = normalize_ticker(value.strip())
+    if not _PREDICTION_SYMBOL_PATTERN.fullmatch(normalized):
+        raise ValueError("invalid prediction symbol")
+    return normalized
+
+
+PredictionSymbol = Annotated[
+    str,
+    BeforeValidator(_normalize_prediction_symbol),
+    Query(description="规范化后的行情 symbol"),
+]
 
 
 @dataclass(frozen=True)
@@ -35,6 +58,23 @@ class AgentsRouterDeps:
     get_prediction_store: Callable[[], Any] | None = None
     get_outcome_store: Callable[[], Any] | None = None
     get_run_archive: Callable[[], Any] | None = None
+
+
+def _prediction_overlay(prediction: Any) -> dict[str, Any]:
+    overlay = {
+        "predictionId": prediction.id,
+        "symbol": prediction.symbol,
+        "direction": prediction.direction,
+        "anchor": prediction.anchor.model_dump(mode="json"),
+        "entry": prediction.entry,
+        "stop": prediction.stop,
+        "target1": prediction.target1,
+        "target2": prediction.target2,
+        "status": prediction.status,
+    }
+    if prediction.range_low is not None and prediction.range_high is not None:
+        overlay["range"] = {"low": prediction.range_low, "high": prediction.range_high}
+    return {key: value for key, value in overlay.items() if value is not None}
 
 
 def _default_preferences() -> dict[str, Any]:
@@ -179,6 +219,24 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
                 break
         return {"success": True, "query": q, "count": len(items), "items": items}
 
+    @router.get("/api/agents/predictions/latest", response_model=None)
+    async def get_latest_prediction(
+        request: Request,
+        symbol: PredictionSymbol,
+    ) -> dict[str, Any] | Response:
+        user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+        if user_id == "public":
+            raise HTTPException(status_code=401, detail="登录后才能读取 AI prediction")
+        if deps.get_prediction_store is None:
+            raise HTTPException(status_code=503, detail="AI prediction store unavailable")
+        try:
+            prediction = deps.get_prediction_store().get_latest(user_id=user_id, symbol=symbol)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="AI prediction store unavailable") from exc
+        if prediction is None:
+            return Response(status_code=204)
+        return {"prediction": _prediction_overlay(prediction)}
+
     @router.get("/api/agents/predictions/{prediction_id}")
     async def get_prediction(prediction_id: str, request: Request) -> dict[str, Any]:
         user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
@@ -195,20 +253,7 @@ def create_agents_router(deps: AgentsRouterDeps) -> APIRouter:
         if prediction is None:
             # 404 不区分不存在与跨租户，避免泄露资源存在性。
             raise HTTPException(status_code=404, detail="prediction not found")
-        overlay = {
-            "predictionId": prediction.id,
-            "symbol": prediction.symbol,
-            "direction": prediction.direction,
-            "anchor": prediction.anchor.model_dump(mode="json"),
-            "entry": prediction.entry,
-            "stop": prediction.stop,
-            "target1": prediction.target1,
-            "target2": prediction.target2,
-            "status": prediction.status,
-        }
-        if prediction.range_low is not None and prediction.range_high is not None:
-            overlay["range"] = {"low": prediction.range_low, "high": prediction.range_high}
-        return {"prediction": {key: value for key, value in overlay.items() if value is not None}}
+        return {"prediction": _prediction_overlay(prediction)}
 
     @router.get("/api/agents/preferences")
     async def get_agent_preferences(user_id: str = "default_user") -> dict[str, Any]:

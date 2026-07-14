@@ -154,6 +154,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
 
     if (guessedTicker) initialState.setTicker(guessedTicker);
     if (!retryMessageId) initialState.setDraft('');
+    const pendingHandoff = initialState.takePendingChatHandoffContext(requestSessionId);
 
     const isRequestSessionActive = () => useStore.getState().sessionId === requestSessionId;
     const updateScopedMessage = (id: string, patch: Partial<Message>) => {
@@ -261,6 +262,10 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       if (dashboard.activeAsset?.symbol) {
         context.active_symbol = dashboard.activeAsset.symbol;
         context.view = 'chat';
+      }
+      if (pendingHandoff?.sessionId === requestSessionId) {
+        context.source_view = pendingHandoff.sourceView;
+        if (pendingHandoff.sourceTab) context.source_tab = pendingHandoff.sourceTab;
       }
       if (dashboard.activeSelections.length === 1) context.selection = dashboard.activeSelections[0];
       if (dashboard.activeSelections.length > 1) context.selections = dashboard.activeSelections;

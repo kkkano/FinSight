@@ -1258,6 +1258,95 @@ def _is_deep_report_query(query: str) -> bool:
 
 
 
+def _build_structured_report_payload(
+    *, state: dict[str, Any], thread_id: str, artifacts: dict[str, Any]
+) -> dict[str, Any] | None:
+    synthesis = artifacts.get("research_synthesis")
+    gate = artifacts.get("research_synthesis_gate")
+    markdown = artifacts.get("draft_markdown")
+    if not isinstance(synthesis, dict) or not isinstance(gate, dict) or not isinstance(markdown, str):
+        return None
+
+    blocked = gate.get("state") == "block"
+    subject = state.get("subject") if isinstance(state.get("subject"), dict) else {}
+    tickers = [
+        str(item).strip().upper()
+        for item in (subject.get("tickers") if isinstance(subject.get("tickers"), list) else [])
+        if str(item).strip()
+    ]
+    ticker_label = " vs ".join(tickers[:4]) if tickers else "N/A"
+    overall = str(synthesis.get("overall_conclusion") or "").strip()
+    evidence_index = synthesis.get("evidence_index") if isinstance(synthesis.get("evidence_index"), dict) else {}
+    claim_index = synthesis.get("claim_index") if isinstance(synthesis.get("claim_index"), dict) else {}
+    citation_ids = synthesis.get("citation_ids") if isinstance(synthesis.get("citation_ids"), list) else []
+    citations = [] if blocked else [
+        {
+            "source_id": source_id,
+            "title": str((evidence_index.get(source_id) or {}).get("title") or (evidence_index.get(source_id) or {}).get("source_name") or source_id),
+            "url": str((evidence_index.get(source_id) or {}).get("url") or "#"),
+            "snippet": str((evidence_index.get(source_id) or {}).get("text") or ""),
+            "published_date": str((evidence_index.get(source_id) or {}).get("as_of") or ""),
+            "confidence": 0.7,
+        }
+        for source_id in citation_ids
+        if isinstance(source_id, str) and isinstance(evidence_index.get(source_id), dict)
+    ]
+    public_synthesis = None if blocked else synthesis
+    report_quality = {
+        "state": "block" if blocked else ("degraded" if gate.get("state") == "degraded" else "pass"),
+        "reasons": list(gate.get("reasons") or []),
+        "synthesis_gate": gate,
+    }
+    base = {
+        "report_id": f"lg_{uuid.uuid4().hex[:10]}",
+        "ticker": ticker_label,
+        "company_name": ticker_label,
+        "title": "报告暂不可用" if blocked else f"{ticker_label} 分析报告",
+        "summary": "本轮结果未通过内部一致性校验。" if blocked else (overall or "证据不足，无法形成总判断。"),
+        "sentiment": "neutral",
+        "confidence_score": 0.0 if blocked else (0.45 if gate.get("state") == "degraded" else 0.8),
+        "generated_at": _now_iso(),
+        "sections": [{
+            "title": "研究报告",
+            "order": 1,
+            "agent_name": "research_synthesis",
+            "confidence": 0.0 if blocked else 0.7,
+            "data_sources": [item["source_id"] for item in citations],
+            "contents": [{"type": "text", "content": markdown, "citation_refs": [item["source_id"] for item in citations]}],
+        }],
+        "citations": citations,
+        "risks": [] if blocked else list(synthesis.get("risks") or []),
+        "recommendation": None,
+        "meta": {
+            "source": "langgraph",
+            "thread_id": thread_id,
+            "subject_type": str(subject.get("subject_type") or "unknown"),
+            "report_quality": report_quality,
+            **({"research_synthesis": public_synthesis} if public_synthesis is not None else {}),
+        },
+        "report_quality": report_quality,
+    }
+    validated = ReportValidator.validate_and_fix(base, as_dict=True)
+    payload = validated if isinstance(validated, dict) else base
+    payload.update({
+        "synthesis_report": markdown,
+        "draft_markdown": markdown,
+        "report_quality": report_quality,
+        "quality_blocked": blocked,
+        "publishable": not blocked,
+        "agent_claims": [] if blocked else list(claim_index.values()),
+        "agent_evidence": [] if blocked else list(evidence_index.values()),
+        "chart_specs": [],
+    })
+    if blocked:
+        payload["error_code"] = "synthesis_quality_blocked"
+        payload.get("meta", {}).pop("research_synthesis", None)
+    else:
+        payload.setdefault("meta", {})["research_synthesis"] = synthesis
+    payload.setdefault("meta", {})["report_quality"] = report_quality
+    return payload
+
+
 def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -> dict[str, Any] | None:
     """
     Build a frontend-friendly ReportIR payload (used by ReportView cards) from LangGraph state.
@@ -1266,6 +1355,11 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
     output_mode = state.get("output_mode")
     if output_mode != "investment_report":
         return None
+
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    structured = _build_structured_report_payload(state=state, thread_id=thread_id, artifacts=artifacts)
+    if structured is not None:
+        return structured
 
     try:
         return _build_report_payload_impl(state=state, query=query, thread_id=thread_id)

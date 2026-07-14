@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 /* ------------------------------------------------------------------ */
 /*  共享 Mock 工具                                                      */
@@ -22,39 +22,6 @@ const fulfillSSE = async (route: any) => {
     contentType: 'text/event-stream',
     body,
   });
-};
-
-const getTranslateX = (transform: string): number | null => {
-  if (!transform || transform === 'none') return null;
-
-  const matrix3dMatch = transform.match(/^matrix3d\((.+)\)$/);
-  if (matrix3dMatch) {
-    const values = matrix3dMatch[1].split(',').map((value) => Number(value.trim()));
-    return Number.isFinite(values[12]) ? values[12] : null;
-  }
-
-  const matrixMatch = transform.match(/^matrix\((.+)\)$/);
-  if (matrixMatch) {
-    const values = matrixMatch[1].split(',').map((value) => Number(value.trim()));
-    return Number.isFinite(values[4]) ? values[4] : null;
-  }
-
-  const translateMatch = transform.match(/translateX\((-?\d+(?:\.\d+)?)px\)/);
-  if (translateMatch) {
-    return Number(translateMatch[1]);
-  }
-
-  return null;
-};
-
-const expectSidebarHidden = async (sidebar: Locator) => {
-  await expect
-    .poll(async () => {
-      const transform = await sidebar.evaluate((node) => getComputedStyle(node).transform);
-      const translateX = getTranslateX(transform);
-      return translateX !== null ? translateX < 0 : false;
-    })
-    .toBe(true);
 };
 
 const buildDashboardPayload = (symbol = 'AAPL') => ({
@@ -218,61 +185,42 @@ test.describe('Mobile sidebar drawer', () => {
   test('mobile menu button opens sidebar drawer', async ({ page }) => {
     await page.goto('/chat');
 
-    // 等待页面渲染完成
-    await page.waitForTimeout(500);
-
-    // 侧边栏初始状态应为隐藏
+    // 移动端保留紧凑导航栏，可按需展开完整菜单。
     const sidebar = page.getByTestId('sidebar');
-    await expectSidebarHidden(sidebar);
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar).toHaveCSS('width', '56px');
 
-    // 点击移动端菜单按钮
-    const menuBtn = page.locator('button[aria-label="打开导航菜单"]');
+    const menuBtn = page.getByRole('button', { name: '展开导航菜单' });
     await expect(menuBtn).toBeVisible();
     await menuBtn.click();
 
-    // 侧边栏应可见（translate-x-0）
-    await expect(sidebar).toBeVisible();
+    await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
+    await expect(sidebar).toHaveCSS('width', '216px');
   });
 
   test('clicking backdrop closes sidebar drawer', async ({ page }) => {
     await page.goto('/chat');
-    await page.waitForTimeout(500);
+    await page.getByRole('button', { name: '展开导航菜单' }).click();
+    await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
 
-    // 打开侧边栏
-    const menuBtn = page.locator('button[aria-label="打开导航菜单"]');
-    await menuBtn.click();
-
-    // 等待 drawer 动画完成
-    await page.waitForTimeout(350);
-
-    // 点击遮罩层关闭
     const backdrop = page.locator('div.fixed.inset-0.bg-black\\/50');
-    if (await backdrop.isVisible()) {
-      await backdrop.click({ position: { x: 350, y: 400 } });
-      await page.waitForTimeout(350);
+    await expect(backdrop).toBeVisible();
+    await backdrop.click({ position: { x: 350, y: 400 } });
 
-      // 验证侧边栏收起
-      const sidebar = page.getByTestId('sidebar');
-      await expectSidebarHidden(sidebar);
-    }
+    await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+    await expect(page.getByTestId('sidebar')).toHaveCSS('width', '56px');
   });
 
   test('sidebar nav item closes drawer on mobile', async ({ page }) => {
     await page.goto('/chat');
-    await page.waitForTimeout(500);
+    await page.getByRole('button', { name: '展开导航菜单' }).click();
+    await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
 
-    // 打开侧边栏
-    const menuBtn = page.locator('button[aria-label="打开导航菜单"]');
-    await menuBtn.click();
-    await page.waitForTimeout(350);
-
-    // 点击 sidebar 内的 dashboard 导航
     await page.getByTestId('sidebar-nav-dashboard').click();
 
-    // 导航后 drawer 应关闭
-    await page.waitForTimeout(350);
-    const sidebar = page.getByTestId('sidebar');
-    await expectSidebarHidden(sidebar);
+    await expect(page).toHaveURL(/\/dashboard\/[A-Z0-9._-]+$/);
+    await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+    await expect(page.getByTestId('sidebar')).toHaveCSS('width', '56px');
   });
 });
 

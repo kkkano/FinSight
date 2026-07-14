@@ -8,6 +8,7 @@
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
 import { useLatestReport } from '../../../hooks/useLatestReport.ts';
 import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive.ts';
+import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import { PeerScoreGrid } from './peers/PeerScoreGrid.tsx';
 import { PeerComparisonTable } from './peers/PeerComparisonTable.tsx';
 import { ValuationBarChart } from './peers/ValuationBarChart.tsx';
@@ -26,10 +27,17 @@ export function PeersTab() {
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
-  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+  const handoffToChat = useChatHandoff();
 
   const handleAskAbout = (selection: SelectionItem) => {
-    setActiveSelection(selection);
+    const symbol = activeAsset?.symbol?.trim().toUpperCase();
+    handoffToChat({
+      draft: `请结合已选内容分析${symbol ? ` ${symbol}` : ''}：${selection.title}`,
+      activeSymbol: symbol,
+      selections: [selection],
+      sourceView: 'dashboard',
+      sourceTab: 'peers',
+    });
   };
 
   const ticker = activeAsset?.symbol ?? null;

@@ -1,6 +1,6 @@
 # FinSight 当前架构
 
-更新时间：2026-07-13
+更新时间：2026-07-14
 
 ## 1. 架构原则
 
@@ -41,14 +41,19 @@ FastAPI 当前注册 25 个 router：system、user、watchlist、conversation、
 
 - 用户 query 明示的标的优先于 UI hint。
 - `understand_request` 生成结构化任务、请求帧和回复合同。
+- 纯金融术语定义由确定性 resolver 在上下文绑定和 LLM 路由前直答；显式标的、比较、取值、报告或 forced-agent 请求不得误入该分支。
 - `policy_gate`、`planner`、`execute_plan` 和 renderer 消费结构化合同，不靠重复关键词猜测。
+- task 身份从 request frame、PlanTask、PlanStep、evidence 到 `TaskOutcome` 全程保留；`answered / partial / unavailable / blocked` 四态均必须对用户可见，缺失或重复身份时 fail closed。
 - 工具失败、拒绝、空结果和超时进入 diagnostics，不得伪装成 evidence。
 - 取消信号贯穿 API、执行服务、图节点和 executor。
 - 客户端发送最近可见历史；仅当当前 thread 的 checkpoint 没有消息时，`build_initial_state` 才恢复最多 12 条，避免刷新/实例切换后丢失连续对话。
 - 认证用户按 user id 隔离长期记忆；匿名会话按完整 thread id 的稳定摘要隔离，不能共享统一 `anonymous` 记忆桶。
-- 会话 router/reply 使用独立短超时和统一 LLM 重试；单端点瞬态连接错误复用当前端点，多端点故障则轮换。当前 thread 已验证的 ticker 焦点会进入 router 输入；“怎么操作 / 那风险呢 / 技术面呢”这类明确执行型省略追问走确定性研究快路径，不依赖 router LLM 可用性。其他回退通过 `degraded` SSE、终态字段和前端徽标显式披露。
+- 真实 provider 调用统一进入带 `LLMCallContext` 的调用入口；每个逻辑调用最多三次，认证、硬配额、配置和策略错误不重试，全端点冷却时零网络请求。端点按非敏感 `failure_domain` 轮换，未上报 token 保持 `null` 并标记 `usage_state`。
+- 当前 thread 已验证的 ticker 焦点会进入 router 输入；“怎么操作 / 那风险呢 / 技术面呢”这类明确执行型省略追问走确定性研究快路径，不依赖 router LLM 可用性。其他回退通过 `degraded` SSE、终态字段和前端徽标显式披露。
 - IntentFrame、DAG executor、AgentBrief 与 evidence bus 默认启用；环境变量显式 `off` 仅作为运行时回滚开关。
-- renderer 的降级输出仍受语义合同约束：比较问题必须展示实际可比证据或明确缺口，价格图必须使用真实行情且保持价格/收益率单位一致。
+- 普通 chat/brief 先统一归一证据、校验 Claim 和结算 TaskOutcome，再按 group/priority/order 渲染；compare 与其他任务使用隔离 state slice，引用和告警只在外层 finalize 一次。
+- investment report 按 descriptor → evidence → Claim → outcome → finding → task synthesis → report draft → quality gate → render 的固定链路执行；候选正文只渲染一次，最终 gate 阻断时必须丢弃。
+- renderer 的降级输出仍受语义合同约束：比较问题必须展示实际可比证据或明确缺口；无足够 Claim 的 opinion 不得输出方向性结论；价格图必须使用真实行情且保持价格/收益率单位一致。
 
 ## 4. 主路径
 
@@ -83,6 +88,10 @@ flowchart TD
 ## 6. 前端边界
 
 `frontend/src/App.tsx` 是页面路由事实源。当前入口包括 welcome、chat、workbench、cn-market、rag-inspector、cost-audit、screener、backtest、dashboard 和共享报告。`/phase-labs` 仅为兼容重定向。
+
+- Dashboard Prediction 通过显式 ID 或按 symbol 的 latest 只读接口加载，标注合并到唯一主 K 线；图表明确标为“日线快照”并显示 `as_of`。
+- MiniChat 不再建立独立 SSE。Dashboard、Workbench 和 Command Palette 统一把 draft、symbol、selection 与一次性来源上下文 handoff 到主 Chat；context 只由匹配 session 原子消费一次。
+- Workbench 固定为“今日 / 持仓 / 研究 / 监控”四个 tab；今日页只展示最多三条待处理、一行持仓摘要和最近一份报告，完整列表由二级 tab 复用页面级数据 owner。
 
 后端合同变化必须同步：
 

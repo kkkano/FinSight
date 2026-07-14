@@ -13,7 +13,7 @@ from backend.graph.renderers.news import _format_news_item
 from backend.graph.renderers.price import _format_price_line, _price_change_pct
 from backend.graph.renderers.shared import (
     _append_render_var_block,
-    _append_sources,
+    _append_sources_for_state,
     _finalize_chat_markdown,
     _intent_contract,
     _parse_jsonish,
@@ -249,7 +249,7 @@ def _render_compare_or_basket_markdown(
         lines.append(f"我先按 {ticker_label} 这组标的理解。当前没有拿到足够的可引用行情或新闻，所以不硬给排序；更稳的是等价格和新闻源恢复后再比较强弱。")
 
     sources = [item for items in news_map.values() for item in items]
-    _append_sources(lines, sources)
+    _append_sources_for_state(lines, sources, state)
     return _finalize_chat_markdown(lines, state)
 
 def _v2_requires_research_compare(state: GraphState) -> bool:
@@ -282,6 +282,30 @@ def _render_research_compare_markdown(
     news_map: dict[str, list[dict[str, str]]],
     evidence_items: list[dict[str, str]],
 ) -> str:
+    query = str(state.get("query") or "")
+    is_chinese = bool(re.search(r"[\u4e00-\u9fff]", query))
+    dimension_labels_zh = {
+        "valuation": "估值",
+        "valuation_reasonableness": "估值合理性",
+        "fundamental": "基本面",
+        "earnings": "盈利",
+        "technical": "技术面",
+        "risk": "风险",
+        "news": "新闻",
+        "macro": "宏观",
+        "research": "研究证据",
+    }
+    dimension_labels_en = {
+        "valuation": "valuation",
+        "valuation_reasonableness": "valuation reasonableness",
+        "fundamental": "fundamentals",
+        "earnings": "earnings",
+        "technical": "technical signals",
+        "risk": "risk",
+        "news": "news",
+        "macro": "macro conditions",
+        "research": "research evidence",
+    }
     contract = _intent_contract(state)
     v2 = _understanding_v2(state)
     scope = v2.get("scope") if isinstance(v2.get("scope"), dict) else {}
@@ -295,8 +319,16 @@ def _render_research_compare_markdown(
             if isinstance(render_intent.get("dimensions"), list)
             else []
         )
-        focus = ", ".join(dimensions or sorted(facets) or ["research"])
-        headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}: focus={focus}."
+        focus_items = dimensions or sorted(facets) or ["research"]
+        labels = dimension_labels_zh if is_chinese else dimension_labels_en
+        separator = "、" if is_chinese else ", "
+        focus = separator.join(labels.get(item, "相关证据" if is_chinese else "relevant evidence") for item in focus_items)
+        label = ", ".join(tickers) or ("这些标的" if is_chinese else "the selected assets")
+        headline = (
+            f"{label} 的横向比较，重点观察{focus}。"
+            if is_chinese
+            else f"Comparison of {label}, with emphasis on {focus}."
+        )
         omitted = contract.get("omitted_tickers") if isinstance(contract.get("omitted_tickers"), list) else []
     else:
         raw_tickers = scope.get("primary_tickers") if isinstance(scope.get("primary_tickers"), list) else _tickers(state)
@@ -306,14 +338,14 @@ def _render_research_compare_markdown(
             for facet in (v2.get("facets") or [])
             if isinstance(facet, dict) and str(facet.get("name") or "").strip()
         }
-        headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}."
+        label = ", ".join(tickers) or ("这些标的" if is_chinese else "the selected assets")
+        headline = f"{label} 的横向比较。" if is_chinese else f"Comparison of {label}."
         omitted = scope.get("omitted_tickers") if isinstance(scope.get("omitted_tickers"), list) else []
-    label = ", ".join(tickers) or "these tickers"
     valuation_evidence = _valuation_evidence_by_ticker(state, prices=prices) if "valuation" in facets else {}
     lines: list[str] = [
         headline,
         "",
-        "Per-ticker evidence",
+        "分标的证据" if is_chinese else "Evidence by asset",
     ]
     for ticker in tickers[:6]:
         lines.append(f"- {ticker}:")
@@ -321,7 +353,7 @@ def _render_research_compare_markdown(
         if price and price.get("price"):
             lines.append(f"  - {_format_price_line(ticker, price)}")
         else:
-            lines.append("  - [data missing] current price evidence was not available.")
+            lines.append("  - 本轮未取得当前价格证据。" if is_chinese else "  - Current price evidence was unavailable.")
         if "valuation" in facets:
             valuation = valuation_evidence.get(ticker, {})
             if valuation.get("market_cap"):
@@ -345,7 +377,7 @@ def _render_research_compare_markdown(
                 signal_label = {"positive": "上修", "neutral": "中性", "negative": "下修"}.get(revision_signal, revision_signal)
                 lines.append(f"  - EPS 修正信号：{signal_label}")
             if not any(valuation.get(field) for field in ("trailing_pe", "forward_pe", "price_to_book", "price_to_sales", "ev_to_ebitda")):
-                lines.append("  - [data missing] 本轮没有取得可比较的 P/E、Forward P/E、P/B、P/S 或 EV/EBITDA。")
+                lines.append("  - 本轮没有取得可比较的 P/E、Forward P/E、P/B、P/S 或 EV/EBITDA。")
 
     fundamental = _agent_summary(state, {"fundamental_agent"})
     if "valuation" in facets:
@@ -355,10 +387,15 @@ def _render_research_compare_markdown(
 
     omitted = [str(ticker).strip().upper() for ticker in omitted if str(ticker).strip()]
     if omitted:
-        lines.extend(["", f"Not covered in this lightweight chat pass: {', '.join(omitted)}."])
+        omitted_text = (
+            f"本次回答未覆盖：{', '.join(omitted)}。"
+            if is_chinese
+            else f"Not included in this response: {', '.join(omitted)}."
+        )
+        lines.extend(["", omitted_text])
 
     sources = [item for items in news_map.values() for item in items] or evidence_items
-    _append_sources(lines, sources)
+    _append_sources_for_state(lines, sources, state)
     return _finalize_chat_markdown(lines, state)
 
 

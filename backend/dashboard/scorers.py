@@ -59,28 +59,22 @@ _DIGEST_TIMEOUT_SECONDS = float(os.getenv("INSIGHTS_DIGEST_TIMEOUT", "5"))
 # LLM singleton (lazy init)
 # ---------------------------------------------------------------------------
 
-_llm_instance = None
 _llm_init_attempted = False
+_CONFIGURED_LLM = object()
 
 
 def _get_llm():
-    """Lazy-init LLM instance for dashboard scorers."""
-    global _llm_instance, _llm_init_attempted
-    if _llm_instance is not None:
-        return _llm_instance
+    """Validate endpoint configuration without selecting a provider client."""
+    global _llm_init_attempted
     if _llm_init_attempted:
-        return None
+        return _CONFIGURED_LLM
     _llm_init_attempted = True
     try:
-        from backend.llm_config import create_llm
+        from backend.llm_config import get_endpoint_manager
 
-        _llm_instance = create_llm(
-            temperature=0.2,
-            max_tokens=1024,
-            request_timeout=8,
-        )
-        logger.info("[Insights] LLM initialized for dashboard scorers")
-        return _llm_instance
+        get_endpoint_manager()
+        logger.info("[Insights] LLM configuration available for dashboard scorers")
+        return _CONFIGURED_LLM
     except Exception as exc:
         logger.warning("[Insights] LLM init failed, dashboard scorers will use fallback: %s", exc)
         return None
@@ -183,7 +177,20 @@ class DashboardScorer(ABC):
 
     async def _call_llm(self, llm: Any, prompt: str) -> str:
         """Invoke LLM and return raw text response."""
-        result = await llm.ainvoke(prompt)
+        if llm is _CONFIGURED_LLM:
+            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
+
+            result = await ainvoke_configured_llm(
+                prompt,
+                context=LLMCallContext.create(
+                    stage="dashboard_scorer", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=2,
+                ),
+                temperature=0.2,
+                max_tokens=1024,
+                request_timeout=8,
+            )
+        else:  # Existing unit-test injection; production never stores a raw client here.
+            result = await getattr(llm, "ainvoke")(prompt)
         # LangChain ChatOpenAI returns AIMessage
         if hasattr(result, "content"):
             return str(result.content)

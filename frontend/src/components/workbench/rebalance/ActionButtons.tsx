@@ -9,7 +9,6 @@
  *  - 重新生成
  */
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   MessageSquare,
   RefreshCw,
@@ -22,7 +21,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '../../ui/Button.tsx';
-import { useStore } from '../../../store/useStore.ts';
+import { useChatHandoff } from '../../../hooks/useChatHandoff.ts';
 import { downloadCSV, generateShareText, copyToClipboard } from '../../../utils/rebalanceExport.ts';
 import type { RebalanceSuggestion } from '../../../types/dashboard.ts';
 import type {
@@ -57,8 +56,7 @@ export function ActionButtons({
   showCompare,
   onToggleCompare,
 }: ActionButtonsProps) {
-  const navigate = useNavigate();
-  const addMessage = useStore((s) => s.addMessage);
+  const handoffToChat = useChatHandoff();
   const isSent = suggestion.status === 'sent_to_chat';
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -74,19 +72,12 @@ export function ActionButtons({
       .map((a) => `${a.ticker}: ${a.action}`)
       .join(', ');
 
-    const content =
-      `[AI 调仓建议] ${suggestion.summary}\n\n` +
-      `已接受操作 (${acceptedActions.length}/${suggestion.actions.length}): ${actionSummary}`;
-
-    addMessage({
-      id: `rebalance-${suggestion.suggestion_id}-${Date.now()}`,
-      role: 'assistant',
-      content,
-      timestamp: Date.now(),
+    handoffToChat({
+      draft: `请基于以下已接受的调仓动作继续分析：${actionSummary}`,
+      sourceView: 'workbench',
+      sourceTab: 'portfolio',
     });
-
-    navigate('/chat');
-  }, [suggestion, onUpdateStatus, addMessage, navigate, summary]);
+  }, [suggestion, onUpdateStatus, handoffToChat, summary]);
 
   // 导出 CSV
   const handleExportCSV = useCallback(() => {

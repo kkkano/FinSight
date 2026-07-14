@@ -2,9 +2,32 @@
 import asyncio
 from datetime import datetime, timezone
 
+import pytest
+
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+@pytest.fixture(autouse=True)
+def _configured_llm_test_adapter(monkeypatch):
+    """Route synthesis provider calls to each test's existing fake client."""
+    import importlib
+
+    import backend.llm_config as llm_config
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    monkeypatch.setattr(llm_config, "get_endpoint_manager", lambda *_args, **_kwargs: object())
+
+    async def _invoke(messages, **kwargs):
+        client = llm_config.create_llm(
+            temperature=kwargs.get("temperature", 0.3),
+            max_tokens=kwargs.get("max_tokens"),
+            request_timeout=kwargs.get("request_timeout", 600),
+        )
+        return await client.ainvoke(messages)
+
+    monkeypatch.setattr(synth_mod, "ainvoke_configured_llm", _invoke)
 
 
 def test_synthesize_llm_mode_handles_datetime_in_inputs(monkeypatch):
@@ -108,7 +131,7 @@ def test_synthesize_price_snapshot_prefers_price_agent_structured_output(monkeyp
     )
     state = {
         "query": "请做 AAPL 深度投资报告",
-        "output_mode": "investment_report",
+        "output_mode": "brief",
         "operation": {"name": "qa", "confidence": 0.8, "params": {}},
         "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
         "plan_ir": {
@@ -375,8 +398,8 @@ def test_synthesize_research_compare_contract_does_not_emit_performance_missing(
     render_vars = ((out.get("artifacts") or {}).get("render_vars") or {})
 
     assert not any(event.get("code") == "compare_evidence_missing" for event in events)
-    assert "Research comparison" in str(render_vars.get("comparison_conclusion") or "")
-    assert "valuation_reasonableness" in str(render_vars.get("comparison_metrics") or "")
+    assert "横向比较" in str(render_vars.get("comparison_conclusion") or "")
+    assert "估值合理性" in str(render_vars.get("comparison_metrics") or "")
 
 
 def test_synthesize_request_frame_compare_contract_does_not_require_performance_table(monkeypatch):
@@ -422,8 +445,8 @@ def test_synthesize_request_frame_compare_contract_does_not_require_performance_
     render_vars = ((out.get("artifacts") or {}).get("render_vars") or {})
 
     assert not any(event.get("code") == "compare_evidence_missing" for event in events)
-    assert "Research comparison" in str(render_vars.get("comparison_conclusion") or "")
-    assert "valuation_reasonableness" in str(render_vars.get("comparison_metrics") or "")
+    assert "横向比较" in str(render_vars.get("comparison_conclusion") or "")
+    assert "估值合理性" in str(render_vars.get("comparison_metrics") or "")
 
 
 def test_synthesize_stub_company_fetch_formats_news_summary(monkeypatch):
@@ -559,6 +582,7 @@ def test_scrub_unverified_future_claims_keeps_claim_when_grounded():
 
 def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
 
     class _FakeResp:
         def __init__(self, content: str):
@@ -620,6 +644,7 @@ def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
 
 def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", "800")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", "300")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", "4")
@@ -649,7 +674,7 @@ def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
         return {"enabled": False, "checked": False, "unsupported_claims": []}
 
     monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
-    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(synth_mod, "ainvoke_configured_llm", _fake_retry)
     monkeypatch.setattr(synth_mod, "_run_deep_report_verifier", _fake_verifier)
 
     state = {
@@ -666,9 +691,8 @@ def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
     limits = runtime.get("llm_limits") or {}
 
-    assert create_kwargs.get("request_timeout") == 120
-    assert create_kwargs.get("max_retries") == 0
-    assert retry_kwargs.get("max_attempts") == 1
+    assert retry_kwargs.get("request_timeout") == 120
+    assert retry_kwargs.get("context").budget.max_provider_attempts == 1
     assert retry_kwargs.get("acquire_timeout_seconds") == 45.0
     assert limits.get("request_timeout") == 120
     assert limits.get("max_attempts") == 1
@@ -677,6 +701,7 @@ def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
 
 def test_synthesize_narrative_persists_verifier_result(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
 
     import importlib
     synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
@@ -757,10 +782,10 @@ def test_synthesize_narrative_downgraded_when_output_mode_brief(monkeypatch):
         async def ainvoke(self, _messages):
             return _Resp()
 
-    async def _fake_retry(llm, messages, **_kwargs):
-        return await llm.ainvoke(messages)
+    async def _fake_retry(messages, **_kwargs):
+        return await _FakeLLM().ainvoke(messages)
 
-    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(synth_mod, "ainvoke_configured_llm", _fake_retry)
 
     import backend.llm_config as llm_config
 
@@ -803,10 +828,11 @@ def test_synthesize_llm_mode_uses_llm_for_non_price_chat_tasks(monkeypatch):
         return object()
 
     async def _fake_retry(*_args, **_kwargs):
+        called["llm"] = True
         return _FakeResp()
 
     monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
-    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(synth_mod, "ainvoke_configured_llm", _fake_retry)
 
     state = {
         "query": "AAPL 最近新闻怎么看？",
@@ -900,7 +926,7 @@ def test_synthesize_chat_preserves_natural_text_when_llm_ignores_json(monkeypatc
         return _FakeResp()
 
     monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(synth_mod, "ainvoke_configured_llm", _fake_retry)
 
     state = {
         "query": "AAPL 价格、MSFT 新闻、再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
@@ -939,7 +965,7 @@ def test_synthesize_chat_empty_llm_output_records_specific_reason(monkeypatch):
         return _FakeResp()
 
     monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(synth_mod, "ainvoke_configured_llm", _fake_retry)
 
     state = {
         "query": "英伟达最新季度财报表现如何",
@@ -1011,9 +1037,10 @@ def test_synthesize_brief_router_task_graph_skips_llm_for_latency(monkeypatch):
     assert "render_vars" in (out.get("artifacts") or {})
 
 
-def test_synthesize_narrative_kept_for_investment_report(monkeypatch):
-    """env=narrative + output_mode=investment_report → narrative still runs."""
+def test_synthesize_off_mode_keeps_legacy_narrative_for_investment_report(monkeypatch):
+    """结构化开关关闭时保留可回滚的 legacy narrative 路径。"""
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
 
     import importlib
     synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
@@ -1037,13 +1064,14 @@ def test_synthesize_narrative_kept_for_investment_report(monkeypatch):
     assert artifacts.get("draft_markdown") == "## report\n\ncontent"
 
 
-def test_synthesize_multi_task_forces_stub_even_with_narrative_env(monkeypatch):
+def test_synthesize_off_mode_multi_task_forces_stub_even_with_narrative_env(monkeypatch):
     """
     Multi-task plan (>=2 tasks, not pure compare) must force stub mode so
     render_node._build_multitask_markdown can render per-task sections.
     Fixes the C20 bug where 「小米和理想，CPI 影响吗」only rendered 理想.
     """
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
 
     import importlib
     synth_mod = importlib.import_module("backend.graph.nodes.synthesize")

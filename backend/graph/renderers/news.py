@@ -23,7 +23,7 @@ from backend.graph.renderers.news_snapshot import _is_snapshot_news_item, _rende
 from backend.graph.renderers.price import _format_price_line
 from backend.graph.renderers.shared import (
     _append_render_var_block,
-    _append_sources,
+    _append_sources_for_state,
     _company_identity_tokens,
     _finalize_chat_markdown,
     _has_contract_facet,
@@ -321,5 +321,5 @@ def render_news_impact(state: GraphState, ctx: dict[str, Any]) -> str | None:
     if _focus_task_present(state) and "关注" not in "\n".join(lines):
         lines.append("")
         lines.append(_focus_line(state))
-    _append_sources(lines, news or evidence_items)
+    _append_sources_for_state(lines, news or evidence_items, state)
     return _finalize_chat_markdown(lines, state)

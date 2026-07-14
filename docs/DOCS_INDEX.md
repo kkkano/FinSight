@@ -1,6 +1,6 @@
 # FinSight 当前文档索引
 
-更新时间：2026-07-12
+更新时间：2026-07-14
 
 本页只索引当前有效的事实文档。历史计划、阶段报告、QA 证据、ADR 和被替代说明统一位于 [`archive/`](archive/)；设计提案位于 [`design/`](design/)，两者都不作为运行时事实源。
 
@@ -23,6 +23,7 @@
 | [`REPORT_CHART_SPEC.md`](REPORT_CHART_SPEC.md) | 报告图表与 `chart_ref` 合同 |
 | [`HALLUCINATION_MITIGATION.md`](HALLUCINATION_MITIGATION.md) | 证据、引用和降级治理 |
 | [`rag-evaluation-guide.md`](rag-evaluation-guide.md) | RAG 质量评估方法与门禁 |
+| [`12_PRODUCTION_QUALITY_REMEDIATION_SPEC.md`](12_PRODUCTION_QUALITY_REMEDIATION_SPEC.md) | 当前待实施的生产质量修复规范：代理隔离、LLM 韧性、请求/合成合同与前端收口 |
 | [`reports/2026-05-03_request_understanding_query_results.md`](reports/2026-05-03_request_understanding_query_results.md) | 保留的请求理解评估报告 |
 
 ## 维护规则

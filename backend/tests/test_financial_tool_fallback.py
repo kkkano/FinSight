@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import types
-
 from backend.tools import financial
 
 
@@ -52,7 +50,7 @@ def test_get_financial_statements_uses_sec_fallback_when_yfinance_empty(monkeypa
             self.cashflow = None
             self.quarterly_cashflow = None
 
-    monkeypatch.setattr(financial, "yf", types.SimpleNamespace(Ticker=EmptyTicker))
+    monkeypatch.setattr(financial, "create_ticker", EmptyTicker)
     monkeypatch.setattr(
         financial,
         "_fetch_financials_from_sec_companyfacts",
@@ -87,7 +85,7 @@ def test_get_financial_statements_returns_error_when_all_sources_fail(monkeypatc
             self.cashflow = None
             self.quarterly_cashflow = None
 
-    monkeypatch.setattr(financial, "yf", types.SimpleNamespace(Ticker=EmptyTicker))
+    monkeypatch.setattr(financial, "create_ticker", EmptyTicker)
     monkeypatch.setattr(financial, "_fetch_financials_from_sec_companyfacts", lambda _ticker: None)
 
     result = financial.get_financial_statements("MSFT")
@@ -113,7 +111,7 @@ def test_get_company_info_includes_available_valuation_multiples(monkeypatch):
                 "longBusinessSummary": "GPU company",
             }
 
-    monkeypatch.setattr(financial, "yf", types.SimpleNamespace(Ticker=ProfileTicker))
+    monkeypatch.setattr(financial, "create_ticker", ProfileTicker)
 
     result = financial.get_company_info("NVDA")
 

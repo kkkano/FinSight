@@ -12,7 +12,7 @@ import type { Finding, FindingStatus } from '../types/monitor';
 /** 发现流轮询间隔（毫秒） */
 const FINDINGS_POLL_INTERVAL_MS = 60_000;
 
-interface UseFindingsResult {
+export interface UseFindingsResult {
   /** 发现列表（已按未读优先 + 时间倒序排序） */
   findings: Finding[];
   loading: boolean;

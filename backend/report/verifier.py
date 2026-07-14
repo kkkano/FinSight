@@ -13,10 +13,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 
 from backend.graph.failure import utc_now_iso
-from backend.services.llm_retry import (
-    ainvoke_with_rate_limit_retry,
-    is_rate_limit_error,
-)
+from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, is_rate_limit_error
 
 if TYPE_CHECKING:  # GraphState 仅作类型注解——避免触发 backend.graph.__init__ 饿加载环
     from backend.graph.state import GraphState
@@ -133,26 +130,6 @@ async def _run_deep_report_verifier(
     verifier_tokens = max(256, _synth()._env_int("LANGGRAPH_DEEP_VERIFIER_MAX_TOKENS", 900))
     retry_attempts = 0
 
-    try:
-        from backend.llm_config import create_llm
-    except Exception as exc:
-        logger.warning("[Synthesize/verifier] create_llm unavailable: %s", exc)
-        return {"enabled": True, "checked": False, "unsupported_claims": [], "error": str(exc)}
-
-    def _new_verifier_llm():
-        try:
-            return create_llm(
-                temperature=0.0,
-                max_tokens=verifier_tokens,
-                request_timeout=_synth()._DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC,
-                max_retries=0,
-            )
-        except TypeError:
-            # Test doubles may only accept `temperature`.
-            return create_llm(temperature=0.0)
-
-    verifier_llm = _new_verifier_llm()
-
     current_date = utc_now_iso()[:10]
     prompt = f"""你是金融报告事实核查员，只做一件事：识别报告中缺少证据支撑的“事实性断言”。
 
@@ -190,15 +167,20 @@ async def _run_deep_report_verifier(
         retry_attempts = max(retry_attempts, int(attempt))
 
     try:
-        resp = await ainvoke_with_rate_limit_retry(
-            verifier_llm,
+        context = LLMCallContext.create(
+            stage="report_verify",
+            agent="deep_report_verifier",
+            layer="synthesis",
+            max_provider_attempts=_synth()._DEEP_VERIFIER_MAX_ATTEMPTS,
+        )
+        resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
-            llm_factory=_new_verifier_llm,
+            context=context,
+            temperature=0.0,
+            max_tokens=verifier_tokens,
+            request_timeout=_synth()._DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC,
             acquire_token=True,
-            agent_name="deep_report_verifier",
-            max_attempts=_synth()._DEEP_VERIFIER_MAX_ATTEMPTS,
             acquire_timeout_seconds=float(_synth()._DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC),
-            on_retry=_on_retry,
         )
         content = resp.content if hasattr(resp, "content") else str(resp)
         payload = json.loads(_synth()._extract_json_object(str(content)))

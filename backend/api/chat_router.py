@@ -169,6 +169,20 @@ def _ensure_llm_available() -> None:
         )
 
 
+def _is_financial_term_direct_request(request: ChatRequest) -> bool:
+    """Return whether the request can be completed by the deterministic resolver."""
+    from backend.graph.intent.financial_terms import resolve_financial_term_definition
+
+    options = getattr(request, "options", None)
+    output_mode = str(getattr(options, "output_mode", None) or "chat")
+    forced_agent = bool(getattr(options, "agents", None))
+    return resolve_financial_term_definition(
+        request.query,
+        output_mode,
+        forced_agent=forced_agent,
+    ) is not None
+
+
 def _enforce_user_quota(http_request: Request) -> str:
     from backend.services.cost_audit import (
         UserDailyCostLimitExceeded,
@@ -199,7 +213,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         user_id = _enforce_user_quota(http_request)
-        _ensure_llm_available()
+        if not _is_financial_term_direct_request(request):
+            _ensure_llm_available()
         _t0 = _time.perf_counter()
         try:
             runner = await deps.get_graph_runner()
@@ -389,7 +404,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         user_id = _enforce_user_quota(http_request)
-        _ensure_llm_available()
+        if not _is_financial_term_direct_request(request):
+            _ensure_llm_available()
         import json as _json
 
         from backend.services.execution_service import ExecutionDeps, run_graph_pipeline

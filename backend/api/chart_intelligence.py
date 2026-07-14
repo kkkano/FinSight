@@ -292,32 +292,25 @@ async def _llm_decide(query: str, ticker: str | None) -> dict[str, Any] | None:
     try:
         from langchain_core.messages import HumanMessage
 
-        from backend.llm_config import create_llm
-        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
     except Exception as exc:
         logger.warning("[ChartIntelligence] LLM 依赖导入失败: %s", exc)
         return None
 
     timeout_sec = _llm_decide_timeout_sec()
-    try:
-        # 低温；max_tokens 必须给足——mimo 是推理模型，思考过程也消耗输出 token，
-        # 256 会导致 JSON 被截断（实测教训）。
-        llm = create_llm(temperature=0.1, max_tokens=2048, request_timeout=int(timeout_sec) + 5)
-    except Exception as exc:
-        logger.warning("[ChartIntelligence] create_llm 失败: %s", exc)
-        return None
-
     prompt = _build_prompt(query, ticker)
 
     try:
         response = await asyncio.wait_for(
-            ainvoke_with_rate_limit_retry(
-                llm,
+            ainvoke_configured_llm(
                 [HumanMessage(content=prompt)],
-                llm_factory=None,
-                max_attempts=1,  # 决策走快路径，失败立即回退关键词匹配
+                context=LLMCallContext.create(
+                    stage="chart_intelligence", agent="chart_intelligence", layer="routing", max_provider_attempts=1,
+                ),
+                temperature=0.1,
+                max_tokens=2048,
+                request_timeout=int(timeout_sec) + 5,
                 acquire_token=False,
-                agent_name="chart_intelligence",
             ),
             timeout=timeout_sec,
         )

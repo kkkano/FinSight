@@ -11,7 +11,7 @@ from urllib.parse import quote_plus, urlparse
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import yfinance as yf
+from .yfinance_client import create_ticker
 
 from .env import ALPHA_VANTAGE_API_KEY, finnhub_client
 from .authoritative_feeds import search_authoritative_feeds
@@ -93,7 +93,7 @@ NEWS_TAG_RULES = [
 
 MARKET_INDICES = {
     "^GSPC": "S&P 500 index",
-    "^IXIC": "Nasdaq Composite index", 
+    "^IXIC": "Nasdaq Composite index",
     "^DJI": "Dow Jones Industrial Average",
     "^RUT": "Russell 2000 index",
     "^VIX": "VIX volatility index",
@@ -769,7 +769,7 @@ def _fetch_finnhub_market_news(limit: int = 5, max_age_hours: int = 48) -> tuple
 
 MARKET_INDICES = {
     "^GSPC": "S&P 500 index",
-    "^IXIC": "Nasdaq Composite index", 
+    "^IXIC": "Nasdaq Composite index",
     "^DJI": "Dow Jones Industrial Average",
     "^RUT": "Russell 2000 index",
     "^VIX": "VIX volatility index",
@@ -785,7 +785,7 @@ def _is_market_index(ticker: str) -> bool:
     # 方法1: 检查是否在已知指数列表中
     if ticker in MARKET_INDICES:
         return True
-    
+
     # 方法2: 检查常见指数命名模式
     index_patterns = [
         r'^\^',      # 以 ^ 开头（Yahoo Finance指数标记）
@@ -793,11 +793,11 @@ def _is_market_index(ticker: str) -> bool:
         r'NDX$',     # Nasdaq 100
         r'DJI$',     # Dow Jones
     ]
-    
+
     for pattern in index_patterns:
         if re.match(pattern, ticker):
             return True
-    
+
     return False
 
 
@@ -807,10 +807,10 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     策略：通过搜索获取宏观市场新闻和指数分析。
     """
     friendly_name = MARKET_INDICES.get(ticker, ticker.replace('^', ''))
-    
+
     logger.info(f"  → Detected market index: {friendly_name}")
     logger.info(f"  → Using specialized search strategy for index news...")
-    
+
     # 策略1: 搜索指数最近表现和分析
     current_date = datetime.now().strftime('%B %Y')
     search_queries = [
@@ -818,7 +818,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
         f"{friendly_name} market news today",
         f"What's driving {friendly_name} this week"
     ]
-    
+
     all_results = []
     for query in search_queries[:2]:  # 只用前2个查询，避免过多请求
         try:
@@ -829,17 +829,17 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
         except Exception as e:
             logger.info(f"  → Search failed for '{query}': {e}")
             continue
-    
+
     if not all_results:
         return []
-    
+
     # 解析并格式化搜索结果
     combined_results = "\n\n".join(all_results)
-    
+
     # 尝试从搜索结果中提取新闻标题和日期
     news_items: List[Dict[str, Any]] = []
     lines = combined_results.split('\n')
-    
+
     for i, line in enumerate(lines):
         # 寻找标题模式（通常以数字开头）
         if re.match(r'^\d+\.', line.strip()):
@@ -847,7 +847,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
             title = re.sub(r'^\d+\.\s*', '', raw_title).strip()
             window = ' '.join(lines[i:i+3])
             # 尝试找到日期信息
-            date_match = re.search(r'(\d{1,2}\s+\w+\s+ago|\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2},?\s+\d{4})', 
+            date_match = re.search(r'(\d{1,2}\s+\w+\s+ago|\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2},?\s+\d{4})',
                                   window, re.IGNORECASE)
             if not _is_reasonable_headline(title, window):
                 continue
@@ -865,10 +865,10 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
             )
             if item:
                 news_items.append(item)
-            
+
             if len(news_items) >= limit:
                 break
-    
+
     return news_items
 
 
@@ -1034,7 +1034,7 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Di
         # 先试 yfinance 的新闻（部分指数也有）
         if _yfinance_news_available():
             try:
-                stock = yf.Ticker(ticker)
+                stock = create_ticker(ticker)
                 news = stock.news
                 if news:
                     items = []
@@ -1087,7 +1087,7 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Di
     # 方法1: yfinance
     if _yfinance_news_available():
         try:
-            stock = yf.Ticker(ticker)
+            stock = create_ticker(ticker)
             news = stock.news
             if news:
                 items = []
@@ -1195,7 +1195,7 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Di
                 return items
     except Exception as e:
         logger.info(f"Alpha Vantage news fetch failed: {e}")
-    
+
     # 方法4: 回退到公司特定搜索
     logger.info(f"Falling back to search for {ticker} news")
     fallback_text = search(f"{ticker} company latest news stock")
@@ -1352,7 +1352,7 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
         return result
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         calendar_payload = getattr(stock, "calendar", None)
         if isinstance(calendar_payload, dict):
             for key, raw_value in calendar_payload.items():
@@ -1753,7 +1753,7 @@ def get_market_news_headlines(limit: int = 5) -> str:
             continue
     if not combined:
         return "未能获取可靠的市场热点信息，请直接查看 Bloomberg/Reuters/WSJ 等权威来源。"
-    
+
     text = "\n\n".join(combined)
     lines, has_recent = _format_search_news_items(text, limit=limit, max_age_days=3)
     if not has_recent:

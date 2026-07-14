@@ -37,8 +37,16 @@ def test_validate_plan_ir_accepts_task_ids_on_steps():
         "subject": {"subject_type": "company", "tickers": ["GOOGL"]},
         "output_mode": "brief",
         "tasks": [
-            {"id": "task_1", "subject_type": "company", "tickers": ["GOOGL"], "operation": "fetch"},
-            {"id": "task_2", "subject_type": "company", "tickers": ["MSFT"], "operation": "price"},
+            {
+                "id": "task_1", "title": "谷歌新闻", "subject_type": "company",
+                "tickers": ["GOOGL"], "operation": "fetch", "order_index": 0,
+                "request_frame_id": "frame_1", "render_group_id": "frame_1",
+            },
+            {
+                "id": "task_2", "title": "微软涨幅", "subject_type": "company",
+                "tickers": ["MSFT"], "operation": "price", "order_index": 1,
+                "request_frame_id": "frame_2", "render_group_id": "frame_2",
+            },
         ],
         "steps": [
             {

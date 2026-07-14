@@ -254,6 +254,13 @@ def policy_gate(state: GraphState) -> dict:
 
     # Budget baseline
     ready_tasks = _ready_understanding_tasks(state)
+    opinion_missing_subject = bool(
+        (op_name == "investment_opinion" or _has_ready_operation(ready_tasks, "investment_opinion"))
+        and not any(
+            isinstance(task.get("tickers"), list) and any(str(item or "").strip() for item in task["tickers"])
+            for task in ready_tasks
+        )
+    )
     required_evidence = _required_evidence_from_state(
         intent_contract=intent_contract,
         operation=operation,
@@ -658,6 +665,15 @@ def policy_gate(state: GraphState) -> dict:
     except Exception:
         # If tool registry import fails, keep schemas empty (planner will fallback).
         tool_schemas = {}
+
+    if opinion_missing_subject:
+        allowed_tools = []
+        allowed_agents = []
+        agent_selection = {
+            "selected": [],
+            "required": [],
+            "reason": "task_missing_subject",
+        }
 
     policy = {
         "budget": budget,

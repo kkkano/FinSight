@@ -194,4 +194,7 @@ async def test_real_graph_deep_report_path_reaches_render(monkeypatch: pytest.Mo
     assert (result.get("reply_contract") or {}).get("lane") == "report_generation"
     assert len((result.get("plan_ir") or {}).get("steps") or []) >= 6
     assert {"policy_gate", "planner", "execute_plan", "synthesize", "render"}.issubset(nodes)
-    assert len(str(artifacts.get("draft_markdown") or "")) >= 200
+    draft = str(artifacts.get("draft_markdown") or "")
+    assert "## 总判断" in draft
+    assert "## 分任务结论" in draft
+    assert "状态：暂不可用" in draft

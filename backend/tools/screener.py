@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 from typing import Any
 
-import yfinance as yf
+from backend.tools.yfinance_client import create_ticker
 
 from backend.tools.env import FMP_API_KEY
 from backend.tools.http import _http_get
@@ -80,7 +80,7 @@ def _yfinance_popular_stocks(
         batch_size = min(limit + 5, 15)
         for symbol in popular_tickers[:batch_size]:
             try:
-                ticker = yf.Ticker(symbol)
+                ticker = create_ticker(symbol)
                 info = ticker.fast_info
 
                 price = _clean_float(getattr(info, "last_price", None))

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Minimal alert scheduling skeleton for price_change rule.
 
 This keeps the logic small and testable:
@@ -26,6 +26,12 @@ from backend.services.subscription_service import SubscriptionService
 from backend.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
+
+
+def _create_ticker(symbol: str):
+    from backend.tools.yfinance_client import create_ticker
+
+    return create_ticker(symbol)
 
 
 
@@ -294,7 +300,7 @@ class NewsAlertScheduler:
                 current_price=None,
                 change_percent=None,
             )
-            
+
             if isinstance(result, tuple):
                 success, error_type, error_msg = result
             else:
@@ -544,9 +550,8 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
         )
 
     try:
-        import yfinance as yf  # type: ignore
 
-        t = yf.Ticker(ticker)
+        t = _create_ticker(ticker)
         news = getattr(t, "news", []) or []
         for item in news:
             title = item.get("title", "")
@@ -628,9 +633,8 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
 
 def _fetch_with_yfinance(ticker: str) -> Optional[PriceSnapshot]:
     try:
-        import yfinance as yf  # type: ignore
 
-        t = yf.Ticker(ticker)
+        t = _create_ticker(ticker)
         info = getattr(t, "fast_info", {}) or {}
         price = info.get("last_price") or info.get("last_close") or info.get("lastClose")
         prev_close = info.get("previous_close") or info.get("previousClose") or info.get("regularMarketPreviousClose")
@@ -816,4 +820,3 @@ def _get_logger() -> logging.Logger:
     return logger
 
 logger = _get_logger()
-

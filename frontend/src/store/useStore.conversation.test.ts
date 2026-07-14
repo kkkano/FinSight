@@ -189,6 +189,11 @@ describe('useStore conversation lifecycle', () => {
     const state = useStore.getState();
     state.addMessage({ id: 'user-1', role: 'user', content: 'AAPL outlook', timestamp: 10 });
     const originalSession = state.sessionId;
+    state.setPendingChatHandoffContext(originalSession, {
+      sessionId: originalSession,
+      sourceView: 'dashboard',
+      sourceTab: 'overview',
+    });
     state.startNewChat();
 
     useStore.getState().deleteConversation(originalSession);
@@ -196,6 +201,33 @@ describe('useStore conversation lifecycle', () => {
     const next = useStore.getState();
     expect(next.sessionId).not.toBe(originalSession);
     expect(next.conversationSummaries.some((item) => item.sessionId === originalSession)).toBe(false);
+    expect(next.pendingChatHandoffContextBySession[originalSession]).toBeUndefined();
+  });
+
+  it('takes one-shot handoff context atomically and only from the matching session', () => {
+    const state = useStore.getState();
+    const firstSession = state.sessionId;
+    const secondSession = 'public:test-user:second';
+    state.setPendingChatHandoffContext(firstSession, {
+      sessionId: firstSession,
+      sourceView: 'dashboard',
+      sourceTab: 'overview',
+    });
+    state.setPendingChatHandoffContext(firstSession, {
+      sessionId: firstSession,
+      sourceView: 'dashboard',
+      sourceTab: 'technical',
+    });
+    state.setPendingChatHandoffContext(secondSession, {
+      sessionId: secondSession,
+      sourceView: 'workbench',
+    });
+
+    expect(state.takePendingChatHandoffContext(firstSession)).toMatchObject({ sourceTab: 'technical' });
+    expect(state.takePendingChatHandoffContext(firstSession)).toBeUndefined();
+    expect(useStore.getState().pendingChatHandoffContextBySession[secondSession]).toMatchObject({
+      sourceView: 'workbench',
+    });
   });
 
   it('ignores a late async message patch after its conversation was deleted', () => {

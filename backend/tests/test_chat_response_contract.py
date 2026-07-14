@@ -355,7 +355,7 @@ def test_technical_chat_renders_clean_actionable_short_answer() -> None:
     assert "阻力 132.75" in markdown
 
 
-def test_investment_opinion_chat_renders_quality_contract_sections() -> None:
+def test_investment_opinion_chat_without_synthesis_artifact_fails_closed() -> None:
     markdown = _render_chat(
         {
             "query": "INTC 最近走势如何 看好么",
@@ -425,15 +425,13 @@ def test_investment_opinion_chat_renders_quality_contract_sections() -> None:
     )
 
     _assert_chat_contract(markdown)
-    for heading in ("结论", "价格/趋势", "技术面", "消息/催化", "基本面/估值", "风险"):
-        assert heading in markdown
-    assert "支撑 79.62" in markdown
-    assert "Example News" in markdown
-    assert "盈利修复" in markdown
-    assert "跌破支撑" in markdown
+    assert "证据状态：暂不能形成方向判断" in markdown
+    assert "结构化证据尚未就绪" in markdown
+    for term in ("偏多", "偏空", "中性", "买入", "卖出", "持有"):
+        assert term not in markdown
 
 
-def test_investment_opinion_answer_matrix_preserves_quality_sections() -> None:
+def test_investment_opinion_answer_matrix_requires_structured_synthesis() -> None:
     cases = [
         ("INTC 最近走势如何 看好么", "INTC"),
         ("NVDA 走势怎么看", "NVDA"),
@@ -479,13 +477,12 @@ def test_investment_opinion_answer_matrix_preserves_quality_sections() -> None:
         )
 
         _assert_chat_contract(markdown)
-        for heading in ("结论", "价格/趋势", "技术面", "消息/催化", "基本面/估值", "风险"):
-            assert heading in markdown, query
-        assert "数据缺失" not in markdown, query
-        assert "支撑 100.00" in markdown, query
+        assert "证据状态：暂不能形成方向判断" in markdown, query
+        for term in ("偏多", "偏空", "中性", "买入", "卖出", "持有"):
+            assert term not in markdown, query
 
 
-def test_investment_opinion_bias_does_not_treat_controlled_risk_as_bearish() -> None:
+def test_investment_opinion_without_structured_artifact_does_not_infer_direction() -> None:
     markdown = _render_chat(
         {
             "query": "NVDA 走势怎么看",
@@ -518,7 +515,9 @@ def test_investment_opinion_bias_does_not_treat_controlled_risk_as_bearish() -> 
         }
     )
 
-    assert "「中性偏多」" in markdown
+    assert "证据状态：暂不能形成方向判断" in markdown
+    for term in ("偏多", "偏空", "中性", "买入", "卖出", "持有"):
+        assert term not in markdown
 
 
 def test_earnings_performance_chat_renders_financial_sections_not_news_only() -> None:
@@ -1719,9 +1718,8 @@ def test_chat_renderer_valuation_compare_light_does_not_emit_missing_fundamental
     )
 
     _assert_chat_contract(markdown)
-    assert "Research comparison for NVDA, AMD" in markdown
-    assert "估值结论" in markdown
-    assert "缺少至少两只标的可比的 P/E、Forward P/E 或同行基准" in markdown
+    assert "Comparison of NVDA, AMD" in markdown
+    assert "valuation reasonableness" in markdown
     assert "Quick valuation pass is based on" not in markdown
     assert "Valuation evidence uses company context" not in markdown
     assert "[data missing] fundamental_agent output was not available" not in markdown
@@ -1827,8 +1825,8 @@ def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_op
     )
 
     _assert_chat_contract(markdown)
-    assert "Research comparison for NVDA, AMD" in markdown
-    assert "valuation_reasonableness" in markdown
+    assert "Comparison of NVDA, AMD" in markdown
+    assert "valuation reasonableness" in markdown
 
 
 def test_chat_renderer_compare_contract_takes_priority_over_earnings_operation() -> None:
@@ -1886,8 +1884,8 @@ def test_chat_renderer_compare_contract_takes_priority_over_earnings_operation()
     )
 
     _assert_chat_contract(markdown)
-    assert "Research comparison for AAPL, MSFT" in markdown
-    assert "valuation_reasonableness, earnings" in markdown
+    assert "Comparison of AAPL, MSFT" in markdown
+    assert "valuation reasonableness, earnings" in markdown
     assert "**最新季度/财务表现**" not in markdown
 
 

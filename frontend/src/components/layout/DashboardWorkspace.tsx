@@ -58,7 +58,6 @@ export function DashboardWorkspace({
         onSubscribeClick={contextPanel.onSubscribeClick}
         autoSwitchExecution={contextPanel.autoSwitchExecution}
         onNavigateToChat={contextPanel.onNavigateToChat}
-        showMiniChat
       />
     </div>
   );

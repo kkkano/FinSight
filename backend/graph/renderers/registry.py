@@ -11,12 +11,18 @@ phase2（enrich_render_ctx，含 news_map 联网 fallback 增补）→ 其余 re
 """
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Callable
+
+from pydantic import Field
 
 from backend.graph.memory_scope import current_report_context
 from backend.graph.state import GraphState
+from backend.graph.synthesis.contracts import NonEmptyStr, StrictContract
+from backend.graph.synthesis.task_outcomes import TaskOutcome
 
 from backend.graph.renderers.shared import (
+    _append_sources,
     _finalize_chat_markdown,
     _operation_names,
     _tickers,
@@ -157,8 +163,60 @@ OPERATION_LABELS: dict[str, str] = {
     "qa": "问答",
 }
 
+STATUS_SUFFIX = {
+    "answered": "已回答",
+    "partial": "部分完成",
+    "unavailable": "暂不可用",
+    "blocked": "需要补充",
+}
 
-def _task_section_state(state: GraphState, task: dict[str, Any], bucket: dict[str, Any]) -> dict[str, Any]:
+EVIDENCE_LABELS = {
+    "price_snapshot": "行情快照",
+    "performance_comparison": "可比表现",
+    "technical_snapshot": "技术指标",
+    "company_profile": "公司资料",
+    "fundamental_snapshot": "基本面数据",
+    "earnings_estimates": "盈利预期",
+    "filing_context": "公司文件",
+    "transcript_context": "管理层交流记录",
+    "news_context": "新闻资料",
+    "event_calendar": "事件日历",
+    "holdings_ownership": "持仓与股权资料",
+    "macro_context": "宏观资料",
+}
+
+
+class RenderedTaskGroup(StrictContract):
+    group_id: NonEmptyStr
+    rendered_task_ids: list[NonEmptyStr] = Field(min_length=1)
+    markdown: NonEmptyStr
+
+
+def _outcome_status_detail(outcome: TaskOutcome) -> str:
+    if outcome.status == "blocked":
+        if "task_missing_subject" in outcome.error_codes:
+            return "请补充要分析的股票、指数或其他标的。"
+        return "该项仍缺少必要输入或权限，请补充后重试。"
+    if outcome.status == "unavailable":
+        if "no_successful_result" in outcome.error_codes:
+            return "所需数据本次未能取得，请稍后重试。"
+        return "当前没有足够的可靠数据回答这一项。"
+    if outcome.status == "partial":
+        missing = [EVIDENCE_LABELS.get(item, "必要证据") for item in outcome.missing_evidence]
+        missing = list(dict.fromkeys(missing))
+        if missing:
+            return f"已给出有证据支持的部分；仍缺少：{'、'.join(missing)}。"
+        return "已给出有证据支持的部分，其余信息本次未能完整取得。"
+    return ""
+
+
+def _task_section_state(
+    state: GraphState,
+    task: dict[str, Any],
+    bucket: dict[str, Any],
+    *,
+    group_body: bool = False,
+) -> dict[str, Any]:
     """构造 task 级 state 切片，复用现有渲染函数逐节渲染。"""
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
@@ -179,7 +237,38 @@ def _task_section_state(state: GraphState, task: dict[str, Any], bucket: dict[st
         "task_results": {task_id: bucket},
         "evidence_pool": task_evidence,
         "evidence_by_task": {task_id: task_evidence},
+        "render_group_body": group_body,
     }
+    opinion = artifacts.get("opinion_synthesis") if isinstance(artifacts.get("opinion_synthesis"), dict) else None
+    if opinion is not None:
+        results = opinion.get("task_results_by_task") if isinstance(opinion.get("task_results_by_task"), dict) else {}
+        readiness = opinion.get("readiness_by_task") if isinstance(opinion.get("readiness_by_task"), dict) else {}
+        claim_validation = opinion.get("claim_validation") if isinstance(opinion.get("claim_validation"), dict) else {}
+        valid_claims = claim_validation.get("valid_claims") if isinstance(claim_validation.get("valid_claims"), dict) else {}
+        sliced_claims = {
+            claim_id: claim for claim_id, claim in valid_claims.items()
+            if isinstance(claim, dict) and str(claim.get("task_id") or "") == task_id
+        }
+        evidence_normalization = opinion.get("evidence_normalization") if isinstance(opinion.get("evidence_normalization"), dict) else {}
+        evidence_index = evidence_normalization.get("evidence_index") if isinstance(evidence_normalization.get("evidence_index"), dict) else {}
+        source_ids = {
+            str(source_id)
+            for claim in sliced_claims.values()
+            for source_id in (claim.get("evidence_ids") if isinstance(claim.get("evidence_ids"), list) else [])
+        }
+        for source_id, evidence in evidence_index.items():
+            if isinstance(evidence, dict) and task_id in (evidence.get("task_ids") or []):
+                source_ids.add(str(source_id))
+        sub_artifacts["opinion_synthesis"] = {
+            "evidence_normalization": {
+                **evidence_normalization,
+                "evidence_index": {key: value for key, value in evidence_index.items() if key in source_ids},
+                "evidence_by_task": {task_id: (evidence_normalization.get("evidence_by_task") or {}).get(task_id, [])},
+            },
+            "claim_validation": {**claim_validation, "valid_claims": sliced_claims},
+            "task_results_by_task": {task_id: results[task_id]} if task_id in results else {},
+            "readiness_by_task": {task_id: readiness[task_id]} if task_id in readiness else {},
+        }
     understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
     operation_obj = task.get("operation") if isinstance(task.get("operation"), dict) else {"name": str(task.get("operation") or "")}
     return {
@@ -194,6 +283,235 @@ def _task_section_state(state: GraphState, task: dict[str, Any], bucket: dict[st
         },
         "operation": {"name": str(operation_obj.get("name") or "qa")},
     }
+
+
+def _raw_task_index(state: GraphState) -> dict[str, dict[str, Any]]:
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    candidates = [
+        *(state.get("tasks") if isinstance(state.get("tasks"), list) else []),
+        *(understanding.get("tasks") if isinstance(understanding.get("tasks"), list) else []),
+        *(state.get("blocked_tasks") if isinstance(state.get("blocked_tasks"), list) else []),
+        *(understanding.get("blocked_tasks") if isinstance(understanding.get("blocked_tasks"), list) else []),
+    ]
+    return {
+        str(item.get("id") or item.get("task_id")): item
+        for item in candidates
+        if isinstance(item, dict) and str(item.get("id") or item.get("task_id") or "").strip()
+    }
+
+
+def _task_from_outcome(outcome: TaskOutcome, raw_index: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    raw = raw_index.get(outcome.task_id, {})
+    return {
+        **raw,
+        "id": outcome.task_id,
+        "title": outcome.title,
+        "subject_label": outcome.subject_label,
+        "tickers": list(outcome.tickers),
+        "priority": outcome.priority,
+        "order_index": outcome.order_index,
+        "request_frame_id": outcome.request_frame_id,
+        "render_kind": outcome.render_kind,
+        "render_group_id": outcome.render_group_id,
+        "operation": {"name": outcome.operation},
+    }
+
+
+def _task_bucket(state: GraphState, outcome: TaskOutcome) -> dict[str, Any]:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    task_results = artifacts.get("task_results") if isinstance(artifacts.get("task_results"), dict) else {}
+    bucket = task_results.get(outcome.task_id)
+    if isinstance(bucket, dict):
+        return bucket
+    step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
+    return {
+        "task_id": outcome.task_id,
+        "step_ids": list(outcome.required_step_ids),
+        "results": {
+            step_id: step_results[step_id]
+            for step_id in outcome.required_step_ids
+            if step_id in step_results
+        },
+        "errors": [],
+    }
+
+
+def _group_state(
+    state: GraphState,
+    outcomes: list[TaskOutcome],
+    raw_index: dict[str, dict[str, Any]],
+) -> GraphState:
+    tasks = [_task_from_outcome(outcome, raw_index) for outcome in outcomes]
+    task_ids = {outcome.task_id for outcome in outcomes}
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    raw_evidence = artifacts.get("evidence_by_task") if isinstance(artifacts.get("evidence_by_task"), dict) else {}
+    normalized = artifacts.get("task_evidence_normalization") if isinstance(artifacts.get("task_evidence_normalization"), dict) else {}
+    normalized_by_task = normalized.get("evidence_by_task") if isinstance(normalized.get("evidence_by_task"), dict) else {}
+    evidence_by_task = {
+        task_id: raw_evidence.get(task_id, normalized_by_task.get(task_id, []))
+        for task_id in task_ids
+    }
+    evidence_pool = [
+        item
+        for task_id in [outcome.task_id for outcome in outcomes]
+        for item in (evidence_by_task.get(task_id) or [])
+        if isinstance(item, dict)
+    ]
+    seen_sources: set[str] = set()
+    evidence_pool = [
+        item for item in evidence_pool
+        if not (
+            (source_id := str(item.get("source_id") or item.get("id") or ""))
+            and (source_id in seen_sources or seen_sources.add(source_id))
+        )
+    ]
+    plan = state.get("plan_ir") if isinstance(state.get("plan_ir"), dict) else {}
+    steps = [
+        step for step in (plan.get("steps") or [])
+        if isinstance(step, dict)
+        and task_ids.intersection({str(item) for item in (step.get("task_ids") or [])})
+    ]
+    required_step_ids = {step_id for outcome in outcomes for step_id in outcome.required_step_ids}
+    step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
+    sub_artifacts = {
+        "render_group_body": True,
+        "step_results": {key: value for key, value in step_results.items() if key in required_step_ids},
+        "task_results": {outcome.task_id: _task_bucket(state, outcome) for outcome in outcomes},
+        "evidence_pool": evidence_pool,
+        "evidence_by_task": evidence_by_task,
+    }
+    frame_ids = {outcome.request_frame_id for outcome in outcomes}
+    frames = [
+        frame for frame in (state.get("request_frames") or [])
+        if isinstance(frame, dict) and str(frame.get("frame_id") or "") in frame_ids
+    ]
+    tickers = list(dict.fromkeys(ticker for outcome in outcomes for ticker in outcome.tickers))
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    return {
+        **state,
+        "tasks": tasks,
+        "blocked_tasks": [],
+        "understanding": {**understanding, "tasks": tasks, "blocked_tasks": []},
+        "subject": {"subject_type": "company" if tickers else "unknown", "tickers": tickers},
+        "operation": {"name": outcomes[0].operation if len({item.operation for item in outcomes}) == 1 else "compare"},
+        "plan_ir": {**plan, "steps": steps},
+        "request_frames": frames,
+        "request_frame": frames[0] if len(frames) == 1 else state.get("request_frame"),
+        "artifacts": sub_artifacts,
+    }
+
+
+def _aggregate_group_status(outcomes: list[TaskOutcome]) -> str:
+    statuses = {item.status for item in outcomes}
+    if statuses == {"answered"}:
+        return "answered"
+    if statuses <= {"unavailable", "blocked"}:
+        return "blocked" if statuses == {"blocked"} else "unavailable"
+    return "partial"
+
+
+def _render_group_body(state: GraphState, *, compare_group: bool) -> str:
+    ctx = build_render_ctx(state)
+    if compare_group and requires_research_compare(state):
+        enrich_render_ctx(ctx, state)
+        result = render_research_compare(state, ctx)
+        if result is not None:
+            return result
+    result = render_last_report_followup(state, ctx)
+    if result is not None:
+        return result
+    enrich_render_ctx(ctx, state)
+    for _name, renderer in RENDERERS:
+        result = renderer(state, ctx)
+        if result is not None:
+            return result
+    raise AssertionError("render_default must always return a string")
+
+
+def _render_group(
+    state: GraphState,
+    outcomes: list[TaskOutcome],
+    raw_index: dict[str, dict[str, Any]],
+) -> RenderedTaskGroup:
+    group_id = outcomes[0].render_group_id
+    is_compare = any(item.render_kind == "compare" for item in outcomes)
+    sections: list[str] = []
+    if is_compare:
+        usable_count = sum(item.status in {"answered", "partial"} for item in outcomes)
+        group_status = _aggregate_group_status(outcomes)
+        sections.append(f"## 对比结论 · {STATUS_SUFFIX[group_status]}")
+        if usable_count >= 2:
+            body = _render_group_body(
+                _group_state(state, outcomes, raw_index),
+                compare_group=True,
+            ).strip()
+            sections.append(body or "已取得多项可比证据，但本次未能生成可靠的横向结论。")
+        else:
+            sections.append("可比证据不足，暂不能完成横向判断。")
+        for outcome in outcomes:
+            detail = _outcome_status_detail(outcome)
+            sections.append(f"### {outcome.title} · {STATUS_SUFFIX[outcome.status]}")
+            sections.append(detail or "该项证据已纳入上方横向结论。")
+    else:
+        for outcome in outcomes:
+            sections.append(f"## {outcome.title} · {STATUS_SUFFIX[outcome.status]}")
+            detail = _outcome_status_detail(outcome)
+            if outcome.status in {"answered", "partial"}:
+                task = _task_from_outcome(outcome, raw_index)
+                body = _render_group_body(
+                    _task_section_state(
+                        state,
+                        task,
+                        _task_bucket(state, outcome),
+                        group_body=True,
+                    ),
+                    compare_group=False,
+                ).strip()
+                if body:
+                    sections.append(body)
+            if detail:
+                sections.append(detail)
+            if len(sections) == 1 or sections[-1].startswith("## "):
+                sections.append("当前没有可展示的可靠结论。")
+    return RenderedTaskGroup(
+        group_id=group_id,
+        rendered_task_ids=[item.task_id for item in outcomes],
+        markdown="\n\n".join(item for item in sections if item.strip()),
+    )
+
+
+def render_task_groups(state: GraphState) -> tuple[str, list[str], bool] | None:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    if "task_outcomes" not in artifacts:
+        return None
+    raw_outcomes = artifacts.get("task_outcomes")
+    structural = artifacts.get("task_structural_block_reasons")
+    structural = structural if isinstance(structural, list) else []
+    try:
+        outcomes = [TaskOutcome.model_validate(item) for item in (raw_outcomes or [])]
+    except Exception:
+        return ("内部质量检查未通过，本次无法可靠生成回答。\n", [], False)
+    if not outcomes or "task_coverage_mismatch" in structural:
+        return ("内部任务覆盖检查未通过，本次无法可靠生成回答。\n", [], False)
+
+    grouped: dict[str, list[TaskOutcome]] = {}
+    for outcome in sorted(outcomes, key=lambda item: (item.priority, item.order_index)):
+        grouped.setdefault(outcome.render_group_id, []).append(outcome)
+    ordered_groups = sorted(
+        grouped.values(),
+        key=lambda items: (min(item.priority for item in items), min(item.order_index for item in items)),
+    )
+    raw_index = _raw_task_index(state)
+    rendered_groups = [_render_group(state, items, raw_index) for items in ordered_groups]
+    rendered_ids = [task_id for group in rendered_groups for task_id in group.rendered_task_ids]
+    expected_ids = [item.task_id for item in sorted(outcomes, key=lambda item: (item.priority, item.order_index))]
+    coverage_ok = Counter(rendered_ids) == Counter(expected_ids) and len(rendered_ids) == len(set(rendered_ids))
+    if not coverage_ok:
+        return ("内部任务渲染检查未通过，本次无法可靠生成回答。\n", rendered_ids, False)
+
+    lines = [group.markdown for group in rendered_groups]
+    _append_sources(lines, _evidence_items(state))
+    return (_finalize_chat_markdown(lines, state), rendered_ids, True)
 
 
 def render_task_sections(state: GraphState) -> str | None:
@@ -248,6 +566,10 @@ def _with_existing_prefixes(markdown: str, state: GraphState) -> str:
 
 
 def render_chat_markdown(state: GraphState) -> str:
+    grouped = render_task_groups(state)
+    if grouped is not None:
+        return grouped[0]
+
     # compare 是一个跨 task 的整体回答契约。若先按 task 分节，NVDA/AMD 这类
     # 估值比较会被拆成两份 investment_opinion，丢失真正的横向结论。
     if requires_research_compare(state):

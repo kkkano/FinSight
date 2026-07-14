@@ -137,7 +137,6 @@ class MonitorCommentStore:
 
     def list(self, *, user_id: str, session_id: str, day: date | None = None,
              cursor: str | None = None, limit: int = 50) -> tuple[list[MonitorComment], str | None]:
-        self.ensure_schema()
         page_size = max(1, min(int(limit), 100))
         params: dict[str, Any] = {"user_id": user_id, "session_id": session_id, "limit": page_size + 1}
         where = ["user_id=:user_id", "session_id=:session_id"]
@@ -150,23 +149,32 @@ class MonitorCommentStore:
             params.update({"cursor_ts": decoded[0], "cursor_id": decoded[1]})
             where.append("(ts, id) < (:cursor_ts, CAST(:cursor_id AS uuid))")
         sql = "SELECT * FROM monitor_comments WHERE " + " AND ".join(where) + " ORDER BY ts DESC,id DESC LIMIT :limit"
-        with self._engine.connect() as conn:
-            rows = conn.execute(text(sql), params).mappings().all()
-        items = [self._row(row) for row in rows[:page_size]]
-        next_cursor = _encode_cursor(items[-1].ts, items[-1].id) if len(rows) > page_size and items else None
-        return items, next_cursor
+        try:
+            with self._engine.connect() as conn:
+                rows = conn.execute(text(sql), params).mappings().all()
+            items = [self._row(row) for row in rows[:page_size]]
+            next_cursor = _encode_cursor(items[-1].ts, items[-1].id) if len(rows) > page_size and items else None
+            return items, next_cursor
+        except MonitorCommentStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise MonitorCommentStoreUnavailable("monitor comment store read unavailable") from exc
 
     def list_after(self, *, user_id: str, session_id: str, last_event_id: str, limit: int = 100) -> list[MonitorComment]:
-        self.ensure_schema()
-        with self._engine.connect() as conn:
-            rows = conn.execute(text(
-                "SELECT c.* FROM monitor_comments c JOIN monitor_comments anchor "
-                "ON anchor.id=CAST(:last_id AS uuid) AND anchor.user_id=:user_id AND anchor.session_id=:session_id "
-                "WHERE c.user_id=:user_id AND c.session_id=:session_id AND (c.ts,c.id)>(anchor.ts,anchor.id) "
-                "ORDER BY c.ts,c.id LIMIT :limit"
-            ), {"last_id": last_event_id, "user_id": user_id, "session_id": session_id,
-                "limit": max(1, min(int(limit), 200))}).mappings().all()
-        return [self._row(row) for row in rows]
+        try:
+            with self._engine.connect() as conn:
+                rows = conn.execute(text(
+                    "SELECT c.* FROM monitor_comments c JOIN monitor_comments anchor "
+                    "ON anchor.id=CAST(:last_id AS uuid) AND anchor.user_id=:user_id AND anchor.session_id=:session_id "
+                    "WHERE c.user_id=:user_id AND c.session_id=:session_id AND (c.ts,c.id)>(anchor.ts,anchor.id) "
+                    "ORDER BY c.ts,c.id LIMIT :limit"
+                ), {"last_id": last_event_id, "user_id": user_id, "session_id": session_id,
+                    "limit": max(1, min(int(limit), 200))}).mappings().all()
+            return [self._row(row) for row in rows]
+        except MonitorCommentStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise MonitorCommentStoreUnavailable("monitor comment store read unavailable") from exc
 
     @staticmethod
     def _row(row: Any) -> MonitorComment:
@@ -210,5 +218,5 @@ def reset_monitor_comment_store_cache() -> None:
         _store = None
 
 
-__all__ = ["MonitorComment", "MonitorCommentStore", "get_monitor_comment_store",
-           "reset_monitor_comment_store_cache", "trigger_fingerprint"]
+__all__ = ["MonitorComment", "MonitorCommentStore", "MonitorCommentStoreUnavailable",
+           "get_monitor_comment_store", "reset_monitor_comment_store_cache", "trigger_fingerprint"]

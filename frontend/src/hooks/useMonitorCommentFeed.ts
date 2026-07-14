@@ -24,9 +24,20 @@ function mergeComments(previous: MonitorComment[], incoming: MonitorComment[]): 
   return [...byId.values()].sort((a, b) => b.ts.localeCompare(a.ts));
 }
 
+export type MonitorStreamResponseKind = 'stream' | 'retryable_error' | 'terminal_unavailable';
+
+export function classifyMonitorStreamResponse(
+  response: Pick<Response, 'status' | 'ok' | 'body'>,
+): MonitorStreamResponseKind {
+  if (response.status === 503) return 'terminal_unavailable';
+  if (!response.ok || !response.body) return 'retryable_error';
+  return 'stream';
+}
+
 export function useMonitorCommentFeed(sessionId: string | null | undefined) {
   const [comments, setComments] = useState<MonitorComment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const userId = useStore((state) => state.authIdentity?.userId);
   const isAvailable = isAuthenticatedMonitorSession(userId);
 
@@ -34,8 +45,10 @@ export function useMonitorCommentFeed(sessionId: string | null | undefined) {
     if (!sessionId || !isAvailable) {
       setComments([]);
       setError(null);
+      setUnavailable(false);
       return undefined;
     }
+    setUnavailable(false);
     const controller = new AbortController();
     let retries = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -48,7 +61,14 @@ export function useMonitorCommentFeed(sessionId: string | null | undefined) {
           buildApiUrl(`/api/monitor/comments/stream?session_id=${encodeURIComponent(sessionId)}${suffix}`),
           { headers: await buildAuthHeaders(), signal: controller.signal },
         );
-        if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+        const responseKind = classifyMonitorStreamResponse(response);
+        if (responseKind === 'terminal_unavailable') {
+          if (retryTimer) clearTimeout(retryTimer);
+          setUnavailable(true);
+          setError('该数据源暂不可用');
+          return;
+        }
+        if (responseKind === 'retryable_error' || !response.body) throw new Error(`HTTP ${response.status}`);
         retries = 0;
         setError(null);
         const reader = response.body.getReader();
@@ -89,5 +109,5 @@ export function useMonitorCommentFeed(sessionId: string | null | undefined) {
     };
   }, [isAvailable, sessionId]);
 
-  return { comments, error, isAvailable };
+  return { comments, error, isAvailable, unavailable };
 }

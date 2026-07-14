@@ -48,23 +48,28 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
     @router.get("/health")
     def health_check():
         status = "healthy"
-        components: Dict[str, Dict[str, Any]] = {}
+        components: Dict[str, Dict[str, str]] = {}
 
-        components["langgraph_runner"] = {"status": "ok" if deps.graph_runner_ready() else "initializing"}
-        checkpointer_info = deps.get_graph_checkpointer_info()
-        checkpointer_status = "ok" if checkpointer_info.get("backend") != "unknown" else "initializing"
-        components["checkpointer"] = {"status": checkpointer_status, **checkpointer_info}
-
-        orchestrator = deps.get_orchestrator_safe()
-        if orchestrator:
-            components["orchestrator"] = {"status": "ok"}
-            components["cache"] = {"status": "ok" if hasattr(orchestrator, "cache") and orchestrator.cache is not None else "unavailable"}
-            components["tools_module"] = {"status": "ok" if hasattr(orchestrator, "tools_module") and orchestrator.tools_module is not None else "unavailable"}
-        else:
+        try:
+            components["langgraph_runner"] = {"status": "ok" if deps.graph_runner_ready() else "initializing"}
+        except Exception:
+            components["langgraph_runner"] = {"status": "error"}
             status = "degraded"
-            components["orchestrator"] = {"status": "error", "available": False}
-            components["cache"] = {"status": "unavailable"}
-            components["tools_module"] = {"status": "unavailable"}
+
+        try:
+            checkpointer_info = deps.get_graph_checkpointer_info()
+            components["checkpointer"] = {"status": "ok" if checkpointer_info.get("backend") != "unknown" else "initializing"}
+        except Exception:
+            components["checkpointer"] = {"status": "error"}
+            status = "degraded"
+
+        try:
+            components["orchestrator"] = {"status": "ok" if deps.get_orchestrator_safe() else "error"}
+            if components["orchestrator"]["status"] == "error":
+                status = "degraded"
+        except Exception:
+            components["orchestrator"] = {"status": "error"}
+            status = "degraded"
 
         components["memory"] = {"status": "ok" if deps.memory_service else "unavailable"}
         live_tools = os.getenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false").lower() in ("true", "1", "yes", "on")
@@ -74,29 +79,14 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
             from backend.rag.hybrid_service import get_rag_service
 
             rag_service = get_rag_service()
-            rag_component: Dict[str, Any] = {"status": "ok", "backend": rag_service.backend_name, "embedding_model": getattr(rag_service, "embedding_model", "unknown"), "vector_dim": int(getattr(rag_service, "vector_dim", 0) or 0), "doc_count": int(rag_service.count_documents())}
-            # 存在降级原因（embedding hash 降级 / memory 降级等）时，组件级 status 诚实标记为 degraded，
-            # 但不影响整体 /health status——RAG 降级后服务仍可用。
-            fallback_reason = getattr(rag_service, "fallback_reason", None)
-            if fallback_reason:
-                rag_component["fallback_reason"] = str(fallback_reason)
-                rag_component["status"] = "degraded"
-            expected_backend = str(os.getenv("RAG_V2_BACKEND", "auto")).strip().lower()
-            if expected_backend == "postgres" and rag_service.backend_name != "postgres":
-                # 期望 postgres 但实际不是——这是真正影响整体可用性的降级。
-                rag_component["status"] = "degraded"
+            rag_status = "degraded" if getattr(rag_service, "fallback_reason", None) else "ok"
+            if str(os.getenv("RAG_V2_BACKEND", "auto")).strip().lower() == "postgres" and rag_service.backend_name != "postgres":
+                rag_status = "degraded"
                 status = "degraded"
-            try:
-                rag_obs = _rag_store().health_summary(recent_limit=3, fallback_limit=3)
-                rag_component["recent_runs"] = rag_obs.get("recent_runs") or []
-                rag_component["fallback_summary"] = rag_obs.get("fallback_summary") or []
-                components["rag_observability"] = {"status": rag_obs.get("status") or ("ok" if rag_obs.get("enabled") else "disabled"), **rag_obs}
-            except Exception as exc:
-                components["rag_observability"] = {"status": "error", "error": str(exc)}
-            components["rag"] = rag_component
-        except Exception as exc:
+            components["rag"] = {"status": rag_status}
+        except Exception:
+            components["rag"] = {"status": "error"}
             status = "degraded"
-            components["rag"] = {"status": "error", "error": str(exc)}
 
         payload = {"status": status, "components": components, "timestamp": _now()}
         # 整体降级/错误时返回 503，让 Docker healthcheck / Cloudflare 真实反映后端状态。

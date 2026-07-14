@@ -17,6 +17,7 @@ import { TechnicalTab } from './tabs/TechnicalTab.tsx';
 import { NewsTab } from './tabs/NewsTab.tsx';
 import { ResearchTab } from './tabs/ResearchTab.tsx';
 import { PeersTab } from './tabs/PeersTab.tsx';
+import type { PredictionOverlay } from '../../types/chartPrediction';
 
 // --- Tab Definition ---
 
@@ -47,7 +48,11 @@ const DEFAULT_TAB: DashboardTabKey = 'overview';
 
 // --- Component ---
 
-export function DashboardTabs() {
+interface DashboardTabsProps {
+  predictionOverlay?: PredictionOverlay | null;
+}
+
+export function DashboardTabs({ predictionOverlay }: DashboardTabsProps) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab: DashboardTabKey = useMemo(() => {
@@ -96,7 +101,7 @@ export function DashboardTabs() {
         <div className="p-5 max-lg:p-3">
           {activeTab === 'overview' && <OverviewTab />}
           {activeTab === 'financial' && <FinancialTab />}
-          {activeTab === 'technical' && <TechnicalTab />}
+          {activeTab === 'technical' && <TechnicalTab predictionOverlay={predictionOverlay} />}
           {activeTab === 'news' && <NewsTab />}
           {activeTab === 'research' && <ResearchTab />}
           {activeTab === 'peers' && <PeersTab />}

@@ -400,17 +400,8 @@ def create_app() -> FastAPI:
     _rebalance_llm_enhancer = _AgentBackedEnhancer(
         get_company_news=globals().get("get_company_news"),
         get_company_info=globals().get("get_company_info"),
-        create_llm_fn=None,  # Lazy init: set after LLM config is ready
+        create_llm_fn=None,
     )
-    try:
-        from backend.llm_config import create_llm as _create_llm_for_rebalance
-        _rebalance_llm_enhancer = _AgentBackedEnhancer(
-            get_company_news=globals().get("get_company_news"),
-            get_company_info=globals().get("get_company_info"),
-            create_llm_fn=_create_llm_for_rebalance,
-        )
-    except Exception:
-        logger.debug("rebalance LLM enhancer unavailable; using no-op enhancer", exc_info=True)
 
     _rebalance_engine = _RebalanceEngine(llm_enhancer=_rebalance_llm_enhancer)
 

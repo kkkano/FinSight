@@ -14,6 +14,12 @@ from backend.utils.quote import safe_float
 
 logger = logging.getLogger(__name__)
 
+
+def _create_ticker(symbol: str):
+    from backend.tools.yfinance_client import create_ticker
+
+    return create_ticker(symbol)
+
 # Hardcoded sector peer map used when dynamic resolution is unavailable.
 _SECTOR_PEER_MAP: dict[str, list[str]] = {
     "Technology": ["AAPL", "MSFT", "GOOGL", "META", "NVDA", "AMZN", "CRM", "ORCL"],
@@ -181,9 +187,8 @@ def resolve_peers(symbol: str, limit: int = 6) -> list[str]:
     industry = ""
     sector = ""
     try:
-        import yfinance as yf
 
-        info = yf.Ticker(symbol).info or {}
+        info = _create_ticker(symbol).info or {}
         industry = info.get("industry", "") or ""
         sector = info.get("sector", "") or ""
     except Exception as exc:
@@ -247,9 +252,8 @@ def _fetch_single_peer_metrics(sym: str) -> dict[str, Any]:
 
     yfinance_result: dict[str, Any] = {"symbol": sym, "name": sym}
     try:
-        import yfinance as yf
 
-        info = yf.Ticker(sym).info or {}
+        info = _create_ticker(sym).info or {}
         yfinance_result = {
             "symbol": sym,
             "name": info.get("shortName") or info.get("longName") or sym,

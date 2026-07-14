@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('phase-labs cn market panel loads fund-flow data', async ({ page }) => {
+test('CN market page loads fund-flow data', async ({ page }) => {
   await page.addInitScript(() => {
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
     localStorage.setItem('finsight-entry-mode', 'anonymous');
@@ -19,7 +19,7 @@ test('phase-labs cn market panel loads fund-flow data', async ({ page }) => {
     });
   });
 
-  await page.goto('/phase-labs');
+  await page.goto('/cn-market');
   await page.getByTestId('cn-market-load-btn').click();
   await expect(page.getByText('600519.SH')).toBeVisible();
   await expect(page.getByText('贵州茅台')).toBeVisible();

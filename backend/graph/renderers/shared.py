@@ -126,6 +126,15 @@ def _append_sources(lines: list[str], sources: list[dict[str, str]]) -> None:
         suffix = f"（{meta}）" if meta else ""
         lines.append(f"- [{item['title']}]({item['url']}){suffix}")
 
+
+def _append_sources_for_state(
+    lines: list[str], sources: list[dict[str, str]], state: GraphState
+) -> None:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    if artifacts.get("render_group_body"):
+        return
+    _append_sources(lines, sources)
+
 def _task_index(state: GraphState) -> dict[str, dict[str, Any]]:
     return {str(task.get("id")): task for task in _tasks(state) if task.get("id")}
 
@@ -257,6 +266,8 @@ def _sanitize_chat_markdown(text: str) -> str:
 
 def _finalize_chat_markdown(lines: list[str], state: GraphState) -> str:
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    if artifacts.get("render_group_body"):
+        return _sanitize_chat_markdown("\n".join(lines))
     alert_markdown = str(artifacts.get("alert_markdown") or "").strip()
     if alert_markdown and alert_markdown not in "\n".join(lines):
         lines[:0] = [alert_markdown, ""]

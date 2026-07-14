@@ -21,10 +21,11 @@ import { DataSourceTrace } from '../components/dashboard/DataSourceTrace';
 import { useStore } from '../store/useStore';
 import { useToast } from '../components/ui';
 import { useMarketQuotes } from '../hooks/useMarketQuotes';
-import { SmartChartRenderer, type SmartChartBlock } from '../components/SmartChart';
 import { getPredictionIdFromSearch } from '../components/chatChartIntent';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
 import { useMonitorLease } from '../hooks/useMonitorLease';
+import { usePredictionOverlay } from '../hooks/usePredictionOverlay';
+import { useChatHandoff } from '../hooks/useChatHandoff';
 
 interface DashboardProps {
   initialSymbol?: string;
@@ -41,18 +42,20 @@ const formatClock = (): string =>
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
   const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
-  const { theme, setTheme, entryMode, authIdentity, setDraft, setShowRightPanel } = useStore();
+  const { theme, setTheme, entryMode, authIdentity } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const lastErrorRef = useRef<string | null>(null);
   const predictionId = getPredictionIdFromSearch(searchParams.toString());
+  const handoffToChat = useChatHandoff();
 
   const [clock, setClock] = useState<string>(formatClock());
   const [currentSymbol, setCurrentSymbol] = useState<string>(
     () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
   useMonitorLease(currentSymbol);
+  const prediction = usePredictionOverlay(currentSymbol, predictionId);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(formatClock()), 1000);
@@ -119,22 +122,17 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
         type: activeAsset?.type || 'equity',
       });
     }
-    setDraft(buildDashboardAskAiDraft(symbol, searchParams.get('tab')));
-    setShowRightPanel(true);
+    handoffToChat({
+      draft: buildDashboardAskAiDraft(symbol, searchParams.get('tab')),
+      activeSymbol: symbol,
+      sourceView: 'dashboard',
+      sourceTab: searchParams.get('tab') || 'overview',
+    });
   };
 
   const snapshot = dashboardData?.snapshot ?? {};
   const charts = dashboardData?.charts ?? {};
   const valuation = dashboardData?.valuation ?? null;
-  const predictionChartBlock = useMemo<SmartChartBlock>(() => ({
-    mode: 'ref',
-    type: 'line',
-    title: `${currentSymbol} 真实行情与 AI 标注`,
-    symbol: currentSymbol,
-    source: 'market_chart',
-    fields: 'close',
-  }), [currentSymbol]);
-
   const isTerminalStyle = theme === 'dark';
   const sessionText = authIdentity?.email || (entryMode === 'anonymous' ? 'ANON' : 'GUEST');
 
@@ -192,8 +190,8 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
             <span className="text-[#ff8c00] font-semibold tracking-wide">FINSIGHT TERMINAL</span>
             <span>SESSION: <span className="text-slate-200">{sessionText}</span></span>
             <span>
-              MARKET:
-              <span className="ml-1 text-emerald-400">OPEN</span>
+              DATA:
+              <span className="ml-1 text-emerald-400">日线快照</span>
             </span>
           </div>
           <div className="text-slate-400">
@@ -343,16 +341,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
             loading={isLoading && !dashboardData}
           />
 
-          {predictionId && (
-            <div className="shrink-0 px-5 max-lg:px-3">
-              <SmartChartRenderer
-                block={predictionChartBlock}
-                predictionId={predictionId}
-              />
-            </div>
-          )}
-
-          <DashboardTabs />
+          <DashboardTabs predictionOverlay={prediction.overlay} />
 
           {isTerminalStyle && (
             <div className="h-8 shrink-0 border-t border-[#1e2a3a] bg-[#111827] overflow-hidden flex items-center">

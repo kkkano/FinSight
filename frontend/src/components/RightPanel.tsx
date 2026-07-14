@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FC } from 'react';
-import { MiniChat } from './MiniChat';
 import { RightPanelHeader } from './right-panel/RightPanelHeader';
 import { RightPanelAlertsTab } from './right-panel/RightPanelAlertsTab';
 import { RightPanelPortfolioTab } from './right-panel/RightPanelPortfolioTab';
@@ -14,7 +13,6 @@ type RightPanelProps = {
   onCollapse: () => void;
   onSubscribeClick?: () => void;
   onNavigateToChat?: () => void;
-  showMiniChat?: boolean;
   autoSwitchExecution?: boolean;
   className?: string;
 };
@@ -22,7 +20,6 @@ type RightPanelProps = {
 export const RightPanel: FC<RightPanelProps> = ({
   onCollapse,
   onSubscribeClick,
-  showMiniChat = true,
   autoSwitchExecution = true,
   className,
 }) => {
@@ -152,12 +149,6 @@ export const RightPanel: FC<RightPanelProps> = ({
           </div>
         )}
       </div>
-
-      {showMiniChat && (
-        <div className="h-[45%] min-h-[180px] border-t border-fin-border flex flex-col">
-          <MiniChat />
-        </div>
-      )}
 
       {lastUpdated && (
         <div className="text-2xs text-fin-muted text-center py-1 border-t border-fin-border/50 shrink-0">

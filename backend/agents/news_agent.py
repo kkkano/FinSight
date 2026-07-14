@@ -1617,10 +1617,11 @@ class NewsAgent(BaseFinancialAgent):
             if headline:
                 news_list.append(f"- {headline} ({source})")
         
-        # 如果有 LLM，尝试流式生成
-        if self.llm and hasattr(self.llm, 'astream'):
+        # 生产 provider 请求统一走受控入口；上游仍接收异步文本流接口。
+        if self.llm:
             try:
                 from langchain_core.messages import HumanMessage
+                from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
                 prompt = f"""<role>资深金融新闻分析师</role>
 
 <task>基于以下新闻列表，输出一份专业的中文新闻摘要分析（150-250字）。</task>
@@ -1641,45 +1642,24 @@ class NewsAgent(BaseFinancialAgent):
 - 禁止开场白，直接输出分析内容
 - 专业简洁，避免冗余表述
 </constraints>"""
-                async for chunk in self.llm.astream([HumanMessage(content=prompt)]):
-                    if hasattr(chunk, 'content') and chunk.content:
-                        yield chunk.content
-                return
-            except Exception as stream_exc:
-                logger.info(f"[NewsAgent] stream summary failed, fallback to retry invoke: {stream_exc}")
-                try:
-                    from backend.services.llm_retry import ainvoke_with_rate_limit_retry
-
-                    llm_factory = None
-                    try:
-                        from backend.llm_config import create_llm
-
-                        provider = os.getenv("LLM_PROVIDER", "openai_compatible")
-                        temperature = float(os.getenv("NEWS_LLM_TEMPERATURE", "0.3"))
-                        request_timeout = int(os.getenv("NEWS_LLM_REQUEST_TIMEOUT", "600"))
-                        llm_factory = lambda: create_llm(  # noqa: E731
-                            provider=provider,
-                            temperature=temperature,
-                            request_timeout=request_timeout,
-                        )
-                    except Exception:
-                        llm_factory = None
-
-                    max_attempts = max(1, int(os.getenv("NEWS_LLM_MAX_ATTEMPTS", "3")))
-                    resp = await ainvoke_with_rate_limit_retry(
-                        self.llm,
-                        [HumanMessage(content=prompt)],
-                        llm_factory=llm_factory,
-                        max_attempts=max_attempts,
-                        acquire_token=True,
-                    )
-                    text = resp.content if hasattr(resp, "content") else str(resp)
-                    text = str(text or "").strip()
-                    if text:
-                        yield text
-                        return
-                except Exception as invoke_exc:
-                    logger.info(f"[NewsAgent] invoke summary fallback failed: {invoke_exc}")
+                resp = await ainvoke_configured_llm(
+                    [HumanMessage(content=prompt)],
+                    context=LLMCallContext.create(
+                        stage="agent_analyze",
+                        agent=self.AGENT_NAME,
+                        layer="analysis",
+                        max_provider_attempts=max(1, int(os.getenv("NEWS_LLM_MAX_ATTEMPTS", "3"))),
+                    ),
+                    provider=os.getenv("LLM_PROVIDER", "openai_compatible"),
+                    temperature=float(os.getenv("NEWS_LLM_TEMPERATURE", "0.3")),
+                    request_timeout=int(os.getenv("NEWS_LLM_REQUEST_TIMEOUT", "600")),
+                )
+                text = str(resp.content if hasattr(resp, "content") else resp).strip()
+                if text:
+                    yield text
+                    return
+            except Exception as invoke_exc:
+                logger.info(f"[NewsAgent] invoke summary fallback failed: {invoke_exc}")
         
         # 简单方法：直接拼接标题
         yield f"近期新闻包括：{'; '.join([item.get('headline', item.get('title', '')) for item in data[:3]])}"

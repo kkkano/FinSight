@@ -44,6 +44,16 @@ class SelectionContext(BaseModel):
 class ChatContext(BaseModel):
     active_symbol: Optional[str] = Field(None, description="active symbol")
     view: Optional[str] = Field(None, description="ui view")
+    source_view: Optional[Literal["dashboard", "workbench", "command_palette"]] = Field(
+        None, description="one-shot handoff source view",
+    )
+    source_tab: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[^\x00-\x1F\x7F]+$",
+        description="one-shot handoff source tab",
+    )
     selection: Optional[SelectionContext] = Field(None, description="single selection")
     selections: Optional[list[SelectionContext]] = Field(None, description="multi selection")
     user_email: Optional[str] = Field(None, description="user email for alert actions")

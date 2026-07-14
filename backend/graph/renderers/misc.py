@@ -14,7 +14,7 @@ from backend.graph.renderers.news import _format_news_item
 from backend.graph.renderers.price import _format_price_line
 from backend.graph.renderers.shared import (
     _append_render_var_block,
-    _append_sources,
+    _append_sources_for_state,
     _finalize_chat_markdown,
     _format_number,
     _parse_jsonish,
@@ -169,12 +169,12 @@ def render_default(state: GraphState, ctx: dict[str, Any]) -> str:
         lines.append(f"我找到了 {ticker_label} 的几条相关信息，核心先看事件是否改变业绩预期：")
         for item in news[:3]:
             lines.append(f"- {item['title']}")
-        _append_sources(lines, news)
+        _append_sources_for_state(lines, news, state)
     elif evidence_items:
         lines.append(f"我先按 {ticker_label} 相关来源给你看要点：")
         for item in evidence_items[:4]:
             lines.append(f"- {_format_news_item(item)}")
-        _append_sources(lines, evidence_items)
+        _append_sources_for_state(lines, evidence_items, state)
     elif risks:
         lines.extend(_risk_or_qa_fallback_lines(state, risks))
     elif comparison_conclusion:

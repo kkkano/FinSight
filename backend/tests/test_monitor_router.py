@@ -160,6 +160,30 @@ def test_monitor_comments_api_is_tenant_scoped_and_builds_server_deep_link(monke
     assert response.json()["comments"][0]["chart_url"] == "/dashboard/AAPL?analysis=11111111-1111-1111-1111-111111111111"
 
 
+def test_monitor_comment_rest_and_stream_fail_before_200_when_store_unavailable(monkeypatch):
+    class Store:
+        def list(self, **_kwargs):
+            raise RuntimeError("database details")
+
+    monkeypatch.setattr(mr, "get_monitor_comment_store", lambda: Store())
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = "alice"
+        return await call_next(request)
+
+    app.include_router(mr.monitor_router)
+    client = TestClient(app)
+
+    rest = client.get("/api/monitor/comments?session_id=s1")
+    stream = client.get("/api/monitor/comments/stream?session_id=s1")
+    assert rest.status_code == 503
+    assert stream.status_code == 503
+    assert rest.json()["detail"] == "monitor comment store unavailable"
+    assert stream.json()["detail"] == "monitor comment store unavailable"
+
+
 # ── targets CRUD ──────────────────────────────────────────────
 
 

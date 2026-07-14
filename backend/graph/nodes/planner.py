@@ -48,7 +48,7 @@ from backend.graph.planning.policy_enforcement import (
     _plan_tasks_from_state,
 )
 from backend.graph.planning.rule_planner import rule_based_planner
-from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
+from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, is_rate_limit_error
 from backend.config.settings import planner_settings
 
 logger = logging.getLogger(__name__)
@@ -384,18 +384,15 @@ async def planner(state: GraphState) -> dict:
         return out
 
     try:
-        from backend.llm_config import create_llm
+        from backend.llm_config import get_endpoint_manager
 
+        get_endpoint_manager()
         _planner_temp = settings.temperature
-        llm = create_llm(
-            temperature=_planner_temp,
-            max_tokens=int(llm_limits["max_tokens"]),
-            request_timeout=int(llm_limits["request_timeout"]),
-        )
-        llm_factory = lambda: create_llm(  # noqa: E731
-            temperature=_planner_temp,
-            max_tokens=int(llm_limits["max_tokens"]),
-            request_timeout=int(llm_limits["request_timeout"]),
+        call_context = LLMCallContext.create(
+            stage="planner",
+            agent="planner",
+            layer="planning",
+            max_provider_attempts=int(llm_limits["max_attempts"]),
         )
     except Exception as exc:
         append_failure(
@@ -452,16 +449,14 @@ async def planner(state: GraphState) -> dict:
                 "timestamp": utc_now_iso(),
             }
         )
-        resp = await ainvoke_with_rate_limit_retry(
-            llm,
+        resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
-            llm_factory=llm_factory,
-            max_attempts=int(llm_limits["max_attempts"]),
-            sleep_seconds=float(llm_limits["sleep_seconds"]),
-            jitter_seconds=float(llm_limits["jitter_seconds"]),
+            context=call_context,
+            temperature=_planner_temp,
+            max_tokens=int(llm_limits["max_tokens"]),
+            request_timeout=int(llm_limits["request_timeout"]),
             acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
             acquire_token=True,
-            on_retry=_on_retry,
         )
         await emit_event(
             {
@@ -512,16 +507,14 @@ async def planner(state: GraphState) -> dict:
                     parse_error=current_error,
                     invalid_output=current_invalid_output,
                 )
-                retry_resp = await ainvoke_with_rate_limit_retry(
-                    llm,
+                retry_resp = await ainvoke_configured_llm(
                     [HumanMessage(content=repair_prompt)],
-                    llm_factory=llm_factory,
-                    max_attempts=1,
-                    sleep_seconds=float(llm_limits["sleep_seconds"]),
-                    jitter_seconds=float(llm_limits["jitter_seconds"]),
+                    context=call_context,
+                    temperature=_planner_temp,
+                    max_tokens=int(llm_limits["max_tokens"]),
+                    request_timeout=int(llm_limits["request_timeout"]),
                     acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
                     acquire_token=True,
-                    on_retry=_on_retry,
                 )
                 await emit_event(
                     {
@@ -596,16 +589,14 @@ async def planner(state: GraphState) -> dict:
                 schema_error=schema_error_info,
                 invalid_output=last_output_preview,
             )
-            schema_resp = await ainvoke_with_rate_limit_retry(
-                llm,
+            schema_resp = await ainvoke_configured_llm(
                 [HumanMessage(content=schema_prompt)],
-                llm_factory=llm_factory,
-                max_attempts=1,
-                sleep_seconds=float(llm_limits["sleep_seconds"]),
-                jitter_seconds=float(llm_limits["jitter_seconds"]),
+                context=call_context,
+                temperature=_planner_temp,
+                max_tokens=int(llm_limits["max_tokens"]),
+                request_timeout=int(llm_limits["request_timeout"]),
                 acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
                 acquire_token=True,
-                on_retry=_on_retry,
             )
             await emit_event(
                 {

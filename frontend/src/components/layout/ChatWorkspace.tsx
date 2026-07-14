@@ -295,7 +295,6 @@ export function ChatWorkspace({
           onSubscribeClick={contextPanel.onSubscribeClick}
           autoSwitchExecution={contextPanel.autoSwitchExecution}
           onNavigateToChat={contextPanel.onNavigateToChat}
-          showMiniChat={false}
         />
       </div>
     </div>

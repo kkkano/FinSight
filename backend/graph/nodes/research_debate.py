@@ -36,18 +36,20 @@ def _extract_json_array(raw: str) -> list[Any]:
 
 async def _generate_challenges(payload: dict[str, Any]) -> list[dict[str, Any]]:
     from langchain_core.messages import HumanMessage, SystemMessage
-    from backend.llm_config import create_llm
-    from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+    from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-    llm = create_llm(temperature=0.0, max_tokens=600, request_timeout=12, max_retries=1)
     response = await asyncio.wait_for(
-        ainvoke_with_rate_limit_retry(
-            llm,
+        ainvoke_configured_llm(
             [
                 SystemMessage(content=RISK_CHALLENGE_SYSTEM_PROMPT),
                 HumanMessage(content=json.dumps(payload, ensure_ascii=False, default=str)),
             ],
-            max_attempts=2,
+            context=LLMCallContext.create(
+                stage="research_debate", agent="research_debate", layer="analysis", max_provider_attempts=2,
+            ),
+            temperature=0.0,
+            max_tokens=600,
+            request_timeout=12,
         ),
         timeout=15,
     )

@@ -122,7 +122,7 @@ def test_a_share_history_uses_akshare_before_yfinance(monkeypatch):
         def __init__(self, *_args, **_kwargs):
             raise AssertionError("akshare 命中后不应调用 yfinance")
 
-    monkeypatch.setattr(price.yf, "Ticker", ForbiddenTicker)
+    monkeypatch.setattr(price, "create_ticker", ForbiddenTicker)
 
     assert price.get_stock_historical_data("600036") == expected
 

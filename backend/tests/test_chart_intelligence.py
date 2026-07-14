@@ -35,16 +35,13 @@ class _FakeResponse:
 
 def _patch_llm(monkeypatch, content: str | None = None, *, raise_exc: Exception | None = None,
                timeout: bool = False):
-    """把 _llm_decide 依赖的 create_llm / ainvoke_with_rate_limit_retry 打桩。
+    """把 _llm_decide 依赖的统一 LLM 入口打桩。
 
     通过替换 chart_intelligence 模块内 import 的目标符号实现。
     由于这些符号在函数内部 import，这里改为直接替换 _llm_decide 用到的
     底层调用：patch create_llm 返回哑对象，patch retry 返回内容。
     """
-    import backend.llm_config as llm_config
     import backend.services.llm_retry as llm_retry
-
-    monkeypatch.setattr(llm_config, "create_llm", lambda **_kwargs: object())
 
     async def _fake_ainvoke(*_args, **_kwargs):
         if timeout:
@@ -53,7 +50,7 @@ def _patch_llm(monkeypatch, content: str | None = None, *, raise_exc: Exception 
             raise raise_exc
         return _FakeResponse(content or "")
 
-    monkeypatch.setattr(llm_retry, "ainvoke_with_rate_limit_retry", _fake_ainvoke)
+    monkeypatch.setattr(llm_retry, "ainvoke_configured_llm", _fake_ainvoke)
 
 
 # ──────────────────────────────────────────────────────────────────────────

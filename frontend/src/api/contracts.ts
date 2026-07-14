@@ -10,6 +10,8 @@ import type { paths } from './schema';
 export interface ChatContext {
   active_symbol?: string;
   view?: string;
+  source_view?: 'dashboard' | 'workbench' | 'command_palette';
+  source_tab?: string;
   selection?: SelectionItem;
   selections?: SelectionItem[];
   positions?: PortfolioSummaryPosition[];

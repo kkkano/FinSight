@@ -186,7 +186,13 @@ def test_context_router_empty_llm_output_uses_explicit_subject_fallback(monkeypa
             return _Resp()
 
     fake = _FakeLLM()
-    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: fake)
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await fake.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
 
     decision = _run(
         route_conversation(
@@ -219,7 +225,13 @@ def test_context_router_invalid_json_with_explicit_subject_does_not_retry(monkey
             return _Resp()
 
     fake = _FakeLLM()
-    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: fake)
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await fake.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
 
     decision = _run(
         route_conversation(
@@ -262,7 +274,14 @@ def test_context_router_downgrades_llm_macro_proxy_hint_for_mechanism_question(m
         async def ainvoke(self, _messages):
             return _Resp()
 
-    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: _FakeLLM())
+    fake = _FakeLLM()
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await fake.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
 
     decision = _run(
         route_conversation(
@@ -1033,7 +1052,14 @@ def test_route_conversation_normalizes_llm_clarify_when_context_is_bound(monkeyp
             return _Resp()
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
-    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: _FakeLLM())
+    fake = _FakeLLM()
+    async def invoke_with_fixture(messages, **_kwargs):
+        return await fake.ainvoke(messages)
+
+    monkeypatch.setattr(
+        "backend.services.llm_retry.ainvoke_configured_llm",
+        invoke_with_fixture,
+    )
 
     decision = _run(
         route_conversation(

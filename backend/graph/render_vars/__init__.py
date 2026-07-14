@@ -223,22 +223,32 @@ def build_render_vars(state: GraphState) -> dict[str, str]:
                 if str(item).strip()
             ]
             tickers_list = [str(t).strip().upper() for t in ctx.tickers if isinstance(t, str) and str(t).strip()]
-            focus = ", ".join(dimensions or ["research evidence"])
+            dimension_labels = {
+                "valuation": "估值",
+                "valuation_reasonableness": "估值合理性",
+                "fundamental": "基本面",
+                "earnings": "盈利",
+                "technical": "技术面",
+                "risk": "风险",
+                "news": "新闻",
+                "macro": "宏观",
+            }
+            focus = "、".join(dimension_labels.get(item, "相关证据") for item in (dimensions or ["research"]))
             return RenderVars(
                 comparison_conclusion="\n".join(
                     [
-                        f"- Research comparison for {', '.join(tickers_list) or 'selected subjects'}: focus={focus}.",
-                        "- This comparison is based on per-subject research evidence rather than the historical performance table.",
+                        f"- {', '.join(tickers_list) or '所选标的'}的横向比较重点观察{focus}。",
+                        "- 本次比较以各标的研究证据为基础，不使用无关的历史表现替代。",
                     ]
                 ),
                 comparison_metrics="\n".join(
                     [
-                        f"- Evidence dimensions: {focus}.",
-                        "- Missing per-subject agent/tool outputs should be rendered as explicit data gaps, not as a performance-compare failure.",
+                        f"- 证据维度：{focus}。",
+                        "- 某个标的缺少数据时会明确披露，不会把缺口伪装成完整比较。",
                     ]
                 ),
                 risks="- 注：以上仅供参考，不构成投资建议。",
-                conclusion="- 对比结论以 per-ticker 研究证据为准；若证据缺口存在，应降级为部分比较。",
+                conclusion="- 对比结论以各标的研究证据为准；若证据存在缺口，则只给出部分比较。",
             ).model_dump()
 
         if should_render_performance_compare(state):

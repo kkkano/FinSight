@@ -13,7 +13,7 @@ from backend.graph.state import GraphState
 from backend.graph.renderers.news import _filter_news_by_company_identity, _format_news_item
 from backend.graph.renderers.price import _format_price_line
 from backend.graph.renderers.shared import (
-    _append_sources,
+    _append_sources_for_state,
     _case_insensitive_get,
     _finalize_chat_markdown,
     _first_matching_output,
@@ -173,7 +173,7 @@ def _render_earnings_performance_markdown(
     else:
         lines.append("- 重点验证下一季指引、毛利率/净利率变化和 EPS 修正方向；如果预期上修停止，财报利好可能被估值压力抵消。")
 
-    _append_sources(lines, news or evidence_items)
+    _append_sources_for_state(lines, news or evidence_items, state)
     return _finalize_chat_markdown(lines, state)
 
 def _render_earnings_impact_markdown(
@@ -247,7 +247,7 @@ def _render_earnings_impact_markdown(
     else:
         lines.append("- 重点看下一季指引、毛利率、EPS 修正和股价是否放量确认；若预期上修停滞，短线利好可能被估值压力抵消。")
 
-    _append_sources(lines, news or evidence_items)
+    _append_sources_for_state(lines, news or evidence_items, state)
     return _finalize_chat_markdown(lines, state)
 
 

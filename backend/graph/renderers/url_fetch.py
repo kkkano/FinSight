@@ -19,7 +19,7 @@ from backend.graph.renderers.macro import (
 from backend.graph.renderers.price import _format_price_line
 from backend.graph.renderers.shared import (
     _append_render_var_block,
-    _append_sources,
+    _append_sources_for_state,
     _finalize_chat_markdown,
     _parse_jsonish,
     _step_outputs,
@@ -144,5 +144,5 @@ def render_url_context(state: GraphState, ctx: dict[str, Any]) -> str | None:
         lines.append(_focus_line(state))
     if not lines:
         lines.append("这个链接和宏观问题需要更多可读证据；我先不按 URL 字面内容硬下结论。")
-    _append_sources(lines, news or evidence_items)
+    _append_sources_for_state(lines, news or evidence_items, state)
     return _finalize_chat_markdown(lines, state)

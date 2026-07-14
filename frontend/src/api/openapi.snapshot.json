@@ -555,6 +555,38 @@
             "description": "multi selection",
             "title": "Selections"
           },
+          "source_tab": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1F\\x7F]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "one-shot handoff source tab",
+            "title": "Source Tab"
+          },
+          "source_view": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dashboard",
+                  "workbench",
+                  "command_palette"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "one-shot handoff source view",
+            "title": "Source View"
+          },
           "user_email": {
             "anyOf": [
               {
@@ -3824,6 +3856,48 @@
           }
         },
         "summary": "List Agents",
+        "tags": [
+          "Agents"
+        ]
+      }
+    },
+    "/api/agents/predictions/latest": {
+      "get": {
+        "operationId": "get_latest_prediction_api_agents_predictions_latest_get",
+        "parameters": [
+          {
+            "description": "规范化后的行情 symbol",
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "规范化后的行情 symbol",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Latest Prediction",
         "tags": [
           "Agents"
         ]
