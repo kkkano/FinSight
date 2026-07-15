@@ -2,6 +2,7 @@
 """Execute-plan orchestration entrypoint."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -182,7 +183,10 @@ async def execute_plan_node(state: GraphState) -> dict:
         )
     artifacts = _merge_prior_artifacts(state.get("artifacts"), artifacts)
 
-    deduped, step_index, evidence_input_count = normalize_execution_evidence(
+    # Evidence normalization may enrich short snippets through synchronous
+    # network readers. Keep the entire boundary off the ASGI event loop.
+    deduped, step_index, evidence_input_count = await asyncio.to_thread(
+        normalize_execution_evidence,
         state=state,
         plan_ir=plan_ir,
         artifacts=artifacts,

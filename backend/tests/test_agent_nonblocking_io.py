@@ -10,6 +10,7 @@ import pytest
 from backend.agents.fundamental_agent import FundamentalAgent
 from backend.agents.macro_agent import MacroAgent
 from backend.agents.price_agent import PriceAgent
+from backend.graph.execution import plan_pipeline
 from backend.graph.trace import with_node_trace
 from backend.rag import execution_pipeline
 
@@ -127,3 +128,33 @@ async def test_rag_service_initialization_does_not_block_event_loop(monkeypatch)
         evidence_input_count=1,
     )
     await _assert_event_loop_stays_responsive(coro, started)
+
+
+@pytest.mark.asyncio
+async def test_evidence_normalization_does_not_block_event_loop(monkeypatch) -> None:
+    started = threading.Event()
+
+    async def fake_execute_plan_dag(*_args, **_kwargs):
+        return {}, []
+
+    async def fake_rag_pipeline(**_kwargs):
+        return {"enabled": False}
+
+    def slow_normalize(**_kwargs):
+        return _slow_result(started, ([], {}, 0))
+
+    class Settings:
+        live_tools = False
+        dag_executor = True
+        evidence_bus = False
+        research_ledger_enabled = False
+
+    monkeypatch.setattr(plan_pipeline, "executor_settings", lambda: Settings())
+    monkeypatch.setattr(plan_pipeline, "execute_plan_dag", fake_execute_plan_dag)
+    monkeypatch.setattr(plan_pipeline, "run_execution_rag_pipeline", fake_rag_pipeline)
+    monkeypatch.setattr(plan_pipeline, "normalize_execution_evidence", slow_normalize)
+
+    await _assert_event_loop_stays_responsive(
+        plan_pipeline.execute_plan_node({"plan_ir": {}, "trace": {}}),
+        started,
+    )
