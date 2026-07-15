@@ -46,6 +46,7 @@ services:
         APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian-security}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
         TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
+        TORCH_WHEEL_URL: ${TORCH_WHEEL_URL:-}
     container_name: finsight-backend
     restart: unless-stopped
     env_file:

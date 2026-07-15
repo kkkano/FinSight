@@ -31,10 +31,17 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 # Pre-install CPU-only torch to avoid downloading CUDA packages (~3 GB saved on CPU-only servers)
 # BGE_M3_DEVICE=cpu so we never need CUDA at runtime
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
-RUN PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 \
-    --index-url "$TORCH_INDEX_URL" \
-    --extra-index-url "$PIP_INDEX_URL" \
-    torch
+ARG TORCH_WHEEL_URL=
+RUN set -eux; \
+    if [ -n "$TORCH_WHEEL_URL" ]; then \
+        PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 \
+            "$TORCH_WHEEL_URL"; \
+    else \
+        PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 \
+            --index-url "$TORCH_INDEX_URL" \
+            --extra-index-url "$PIP_INDEX_URL" \
+            torch; \
+    fi
 
 # Slow domestic links can stall large wheel downloads; keep the main dependency layer retryable.
 RUN PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 --index-url "$PIP_INDEX_URL" -r requirements.txt
