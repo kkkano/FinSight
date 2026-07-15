@@ -17,6 +17,7 @@ import logging
 import os
 
 from langchain_core.messages import RemoveMessage, trim_messages
+from langchain_core.messages.utils import count_tokens_approximately
 
 from backend.graph.state import GraphState
 
@@ -29,30 +30,15 @@ _DEFAULT_MAX_HISTORY_TOKENS = int(os.getenv("LANGGRAPH_MAX_HISTORY_TOKENS", "800
 
 def _token_counter(messages: list) -> int:
     """
-    Count tokens using tiktoken (cl100k_base encoding, compatible with GPT-4/4o).
+    使用确定性近似值计算历史 token，避免请求期下载 tokenizer 词表。
 
-    Falls back to a rough character-based estimate if tiktoken fails.
+    中英混合文本按每 2 个字符一个 token 保守估算；额外开销与现有逻辑一致。
     """
-    try:
-        import tiktoken
-        enc = tiktoken.get_encoding("cl100k_base")
-        total = 0
-        for msg in messages:
-            content = msg.content if hasattr(msg, "content") else str(msg)
-            if isinstance(content, str):
-                total += len(enc.encode(content))
-            else:
-                total += len(enc.encode(str(content)))
-            # Overhead per message (role tokens etc.)
-            total += 4
-        return total
-    except Exception:
-        # Rough fallback: ~4 chars per token for mixed CJK/English
-        total = 0
-        for msg in messages:
-            content = msg.content if hasattr(msg, "content") else str(msg)
-            total += len(str(content)) // 4 + 4
-        return total
+    return count_tokens_approximately(
+        messages,
+        chars_per_token=2.0,
+        extra_tokens_per_message=4.0,
+    )
 
 
 def trim_conversation_history(state: GraphState) -> dict:
