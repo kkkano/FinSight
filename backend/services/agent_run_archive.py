@@ -2,12 +2,12 @@
 """按租户归档 Agent 各调用层的 LLM token、成本与失败尝试。"""
 from __future__ import annotations
 
-import os
 import threading
 from typing import Any, Mapping
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
+from backend.services.database import create_core_engine, resolve_core_postgres_dsn
 from backend.services.llm_usage import estimate_cost
 
 
@@ -18,40 +18,8 @@ class AgentRunArchiveUnavailable(RuntimeError):
 class AgentRunArchive:
     def __init__(self, *, dsn: str | None = None, engine: Any | None = None) -> None:
         if engine is None:
-            normalized = str(dsn or "").strip()
-            if not normalized.startswith(("postgresql://", "postgresql+psycopg://")):
-                raise ValueError("agent run archive 只允许 PostgreSQL DSN")
-            engine = create_engine(normalized, future=True, pool_pre_ping=True)
+            engine = create_core_engine(dsn=dsn)
         self._engine = engine
-        self._schema_ready = False
-        self._schema_lock = threading.Lock()
-
-    def ensure_schema(self) -> bool:
-        if self._schema_ready:
-            return True
-        with self._schema_lock:
-            if self._schema_ready:
-                return True
-            from backend.services.agent_prediction_store import get_agent_prediction_store
-
-            get_agent_prediction_store().ensure_schema()
-            with self._engine.begin() as conn:
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS agent_run_archive ("
-                    "id BIGSERIAL PRIMARY KEY, run_id TEXT NOT NULL, user_id TEXT NOT NULL, "
-                    "agent TEXT NOT NULL, layer TEXT NOT NULL, prediction_id UUID NULL, model TEXT NOT NULL, "
-                    "prompt_tokens BIGINT NOT NULL, completion_tokens BIGINT NOT NULL, total_tokens BIGINT NOT NULL, "
-                    "cost_usd DOUBLE PRECISION NOT NULL, call_count INTEGER NOT NULL, failed_call_count INTEGER NOT NULL, "
-                    "duration_ms BIGINT NOT NULL, status TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
-                    "UNIQUE(run_id,user_id,agent,layer,model), "
-                    "FOREIGN KEY(prediction_id,user_id) REFERENCES agent_predictions(id,user_id))"
-                ))
-                conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS idx_agent_run_archive_owner_agent_created "
-                    "ON agent_run_archive(user_id,agent,created_at DESC)"
-                ))
-            self._schema_ready = True
-        return True
 
     def archive_usage_summary(
         self, *, run_id: str, user_id: str, summary: Mapping[str, Any], status: str = "completed",
@@ -63,7 +31,6 @@ class AgentRunArchive:
         rows = summary.get("usage_by_attribution") if isinstance(summary, Mapping) else None
         if not isinstance(rows, list) or not rows:
             return 0
-        self.ensure_schema()
         written = 0
         with self._engine.begin() as conn:
             for raw in rows:
@@ -106,7 +73,6 @@ class AgentRunArchive:
         normalized_user = str(user_id or "").strip()
         if not normalized_user or normalized_user == "public":
             return _empty_cost_summary(days)
-        self.ensure_schema()
         with self._engine.connect() as conn:
             row = conn.execute(text(
                 "SELECT COALESCE(SUM(total_tokens),0) AS tokens,COALESCE(SUM(cost_usd),0) AS cost,"
@@ -134,7 +100,7 @@ def _empty_cost_summary(days: int) -> dict[str, Any]:
 
 
 def _resolve_dsn() -> str:
-    return (os.getenv("AGENT_PREDICTION_POSTGRES_DSN") or os.getenv("RAG_V2_POSTGRES_DSN") or os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN") or "").strip()
+    return resolve_core_postgres_dsn(required=False)
 
 
 _archive: AgentRunArchive | None = None

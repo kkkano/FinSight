@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 
 # 防御性校验: report_id 仅允许安全字符
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{1,128}$")
@@ -120,8 +120,22 @@ class ReportRouterDeps:
 def create_report_router(deps: ReportRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Reports"])
 
+    def _authenticated_user(request: Request) -> str:
+        user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+        if user_id == "public":
+            raise HTTPException(status_code=401, detail="auth_required")
+        return user_id
+
+    def _owned_session(session_id: str, request: Request) -> str:
+        user_id = _authenticated_user(request)
+        parts = session_id.split(":")
+        if len(parts) != 3 or parts[1] != user_id:
+            raise HTTPException(status_code=404, detail="report not found")
+        return user_id
+
     @router.get("/api/reports/index")
     async def list_report_index(
+        http_request: Request,
         session_id: str,
         ticker: Optional[str] = None,
         query: Optional[str] = None,
@@ -138,6 +152,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+        user_id = _owned_session(normalized_session, http_request)
         store = deps.get_report_index_store()
         rows = store.list_reports(
             session_id=normalized_session,
@@ -150,22 +165,30 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             favorite_only=bool(favorite_only),
             include_blocked=bool(include_blocked),
             limit=limit,
+            user_id=user_id,
         )
         return {"success": True, "session_id": normalized_session, "items": rows, "count": len(rows)}
 
     @router.get("/api/reports/replay/{report_id}")
-    async def get_report_replay(report_id: str, session_id: str, include_blocked: bool = False):
+    async def get_report_replay(
+        report_id: str,
+        session_id: str,
+        http_request: Request,
+        include_blocked: bool = False,
+    ):
         report_id = _validate_report_id(report_id)
         try:
             normalized_session = deps.resolve_thread_id(session_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+        user_id = _owned_session(normalized_session, http_request)
         store = deps.get_report_index_store()
         replay = store.get_report_replay(
             session_id=normalized_session,
             report_id=report_id,
             include_blocked=bool(include_blocked),
+            user_id=user_id,
         )
         if not replay:
             raise HTTPException(status_code=404, detail="report not found")
@@ -173,6 +196,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
 
     @router.get("/api/reports/citations")
     async def list_report_citations(
+        http_request: Request,
         session_id: str,
         report_id: Optional[str] = None,
         query: Optional[str] = None,
@@ -186,6 +210,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+        user_id = _owned_session(normalized_session, http_request)
         store = deps.get_report_index_store()
         rows = store.list_citations(
             session_id=normalized_session,
@@ -195,6 +220,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             date_from=date_from,
             date_to=date_to,
             limit=limit,
+            user_id=user_id,
         )
         return {
             "success": True,
@@ -204,20 +230,22 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         }
 
     @router.post("/api/reports/{report_id}/favorite")
-    async def set_report_favorite(report_id: str, request: dict):
+    async def set_report_favorite(report_id: str, payload: dict, http_request: Request):
         report_id = _validate_report_id(report_id)
-        session_id = request.get("session_id")
+        session_id = payload.get("session_id")
         try:
             normalized_session = deps.resolve_thread_id(session_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        is_favorite = bool(request.get("is_favorite", True))
+        user_id = _owned_session(normalized_session, http_request)
+        is_favorite = bool(payload.get("is_favorite", True))
         store = deps.get_report_index_store()
         ok = store.set_favorite(
             session_id=normalized_session,
             report_id=report_id,
             is_favorite=is_favorite,
+            user_id=user_id,
         )
         if not ok:
             raise HTTPException(status_code=404, detail="report not found")
@@ -230,17 +258,23 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         }
 
     @router.post("/api/reports/{report_id}/share")
-    async def share_report(report_id: str):
+    async def share_report(report_id: str, request: Request):
         report_id = _validate_report_id(report_id)
-        token = deps.get_report_index_store().create_share(report_id=report_id)
+        token = deps.get_report_index_store().create_share(
+            report_id=report_id,
+            user_id=_authenticated_user(request),
+        )
         if not token:
             raise HTTPException(status_code=404, detail="report not found")
         return {"share_url": f"/share/r/{token}"}
 
     @router.delete("/api/reports/{report_id}/share", status_code=204)
-    async def revoke_report_share(report_id: str):
+    async def revoke_report_share(report_id: str, request: Request):
         report_id = _validate_report_id(report_id)
-        ok = deps.get_report_index_store().revoke_share(report_id=report_id)
+        ok = deps.get_report_index_store().revoke_share(
+            report_id=report_id,
+            user_id=_authenticated_user(request),
+        )
         if not ok:
             raise HTTPException(status_code=404, detail="report not found")
         return Response(status_code=204)
@@ -260,6 +294,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
 
     @router.get("/api/reports/compare")
     async def compare_reports(
+        http_request: Request,
         session_id: str,
         id1: str,
         id2: str,
@@ -273,16 +308,19 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+        user_id = _owned_session(normalized_session, http_request)
         store = deps.get_report_index_store()
         report_a = store.get_report_replay(
             session_id=normalized_session,
             report_id=id1,
             include_blocked=bool(include_blocked),
+            user_id=user_id,
         )
         report_b = store.get_report_replay(
             session_id=normalized_session,
             report_id=id2,
             include_blocked=bool(include_blocked),
+            user_id=user_id,
         )
         if not report_a:
             raise HTTPException(status_code=404, detail=f"report {id1} not found")

@@ -55,7 +55,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
     () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
   useMonitorLease(currentSymbol);
-  const prediction = usePredictionOverlay(currentSymbol, predictionId);
+  const prediction = usePredictionOverlay(currentSymbol, predictionId, Boolean(authIdentity?.userId));
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(formatClock()), 1000);

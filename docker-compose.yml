@@ -72,6 +72,8 @@ services:
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
       RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
+      # 核心业务表的唯一 DSN；旧的 RAG/LangGraph DSN 仅供各自子系统使用。
+      FINSIGHT_POSTGRES_DSN:         postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       RAG_V2_POSTGRES_DSN:          postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       # Supabase runtime auth for /diagnostics/rag/*

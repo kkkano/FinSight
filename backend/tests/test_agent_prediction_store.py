@@ -81,22 +81,11 @@ def _record(**overrides):
     return base
 
 
-def test_store_schema_is_postgres_and_has_composite_tenant_constraint():
+def test_store_constructor_never_runs_schema_ddl():
     engine = FakeEngine()
     store = AgentPredictionStore(engine=engine)
-    assert store.ensure_schema()
-    schema_sql = "\n".join(sql for sql, _ in engine.conn.calls)
-    assert "agent_predictions" in schema_sql
-    assert "UNIQUE(id, user_id)" in schema_sql
-    assert "TIMESTAMPTZ" in schema_sql
-    assert "scenarios JSONB" in schema_sql
-    migration_sql, migration_params = next(
-        (sql, params) for sql, params in engine.conn.calls
-        if "ADD COLUMN IF NOT EXISTS scenarios" in sql
-    )
-    assert "jsonb_build_array" in migration_sql
-    assert "'probability', 50" in migration_sql
-    assert migration_params == {}
+    assert not hasattr(store, "ensure_schema")
+    assert engine.conn.calls == []
 
 
 def test_get_always_filters_by_prediction_id_and_user_id():

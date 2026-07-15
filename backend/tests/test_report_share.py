@@ -2,15 +2,31 @@
 """WP6-F3 报告分享链接契约。"""
 from __future__ import annotations
 
-import importlib
-
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from backend.api.report_router import ReportRouterDeps, create_report_router
+from backend.services.report_index import LegacyReportIndexStore
+from backend.tests.test_report_index_api import _TenantLegacyAdapter
 
-def _load_main():
-    import backend.api.main as main
 
-    return importlib.reload(main)
+def _client(store, *, user_id: str) -> TestClient:
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = user_id
+        return await call_next(request)
+
+    app.include_router(
+        create_report_router(
+            ReportRouterDeps(
+                resolve_thread_id=lambda value: str(value),
+                get_report_index_store=lambda: store,
+            )
+        )
+    )
+    return TestClient(app)
 
 
 def _contains_key(value, prohibited: set[str]) -> bool:
@@ -23,11 +39,7 @@ def _contains_key(value, prohibited: set[str]) -> bool:
 
 def test_report_share_create_anonymous_read_revoke_and_redact(tmp_path, monkeypatch):
     monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(tmp_path / "report_index.sqlite"))
-    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "false")
-    monkeypatch.delenv("API_PUBLIC_PATHS", raising=False)
-
-    main = _load_main()
-    store = main.get_report_index_store()
+    store = _TenantLegacyAdapter(LegacyReportIndexStore())
     store.upsert_report(
         session_id="public:alice:thread",
         report={
@@ -47,7 +59,7 @@ def test_report_share_create_anonymous_read_revoke_and_redact(tmp_path, monkeypa
         },
         trace_digest={"span_count": 9},
     )
-    client = TestClient(main.app)
+    client = _client(store, user_id="alice")
 
     created = client.post("/api/reports/rpt-share-1/share")
     assert created.status_code == 200
@@ -59,16 +71,12 @@ def test_report_share_create_anonymous_read_revoke_and_redact(tmp_path, monkeypa
     assert repeated.json()["share_url"] == share_url
 
     token = share_url.rsplit("/", 1)[-1]
-    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "true")
-    anonymous_main = _load_main()
-    anonymous = TestClient(anonymous_main.app).get(f"/api/reports/shared/{token}")
+    anonymous = _client(store, user_id="public").get(f"/api/reports/shared/{token}")
     assert anonymous.status_code == 200
     payload = anonymous.json()
     assert payload["report"]["report_id"] == "rpt-share-1"
     assert not _contains_key(payload, {"trace", "cost", "tool_diagnostics"})
 
-    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "false")
-    revoke_main = _load_main()
-    revoked = TestClient(revoke_main.app).delete("/api/reports/rpt-share-1/share")
+    revoked = client.delete("/api/reports/rpt-share-1/share")
     assert revoked.status_code == 204
-    assert TestClient(revoke_main.app).get(f"/api/reports/shared/{token}").status_code == 404
+    assert _client(store, user_id="public").get(f"/api/reports/shared/{token}").status_code == 404

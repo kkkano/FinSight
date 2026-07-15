@@ -63,10 +63,15 @@ export async function loadDashboardPredictionOverlay(
 export function usePredictionOverlay(
   symbol: string | undefined,
   explicitPredictionId: string | null | undefined,
+  enabled: boolean = true,
 ): PredictionOverlayLoadState {
   const [state, setState] = useState<PredictionOverlayLoadState>({ status: 'idle', overlay: null });
 
   useEffect(() => {
+    if (!enabled) {
+      setState({ status: 'idle', overlay: null });
+      return undefined;
+    }
     const controller = new AbortController();
     let current = true;
     setState(normalizePredictionRouteSymbol(symbol)
@@ -89,7 +94,7 @@ export function usePredictionOverlay(
       current = false;
       controller.abort();
     };
-  }, [explicitPredictionId, symbol]);
+  }, [enabled, explicitPredictionId, symbol]);
 
   return state;
 }

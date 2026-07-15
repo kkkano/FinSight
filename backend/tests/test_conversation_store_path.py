@@ -7,7 +7,7 @@
 
 from pathlib import Path
 
-from backend.services.conversation_store import ConversationStore, _store_path
+from backend.services.conversation_store import LegacyConversationStore as ConversationStore, _store_path
 
 
 def test_default_path_anchored_to_repo_root(monkeypatch):

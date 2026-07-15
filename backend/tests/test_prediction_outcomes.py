@@ -117,18 +117,11 @@ class _Engine:
     def connect(self): yield self.conn
 
 
-def test_outcome_store_schema_upsert_and_queries_are_tenant_safe(monkeypatch):
-    monkeypatch.setattr(
-        "backend.services.agent_prediction_store.get_agent_prediction_store",
-        lambda: type("S", (), {"ensure_schema": lambda self: True})(),
-    )
+def test_outcome_store_has_no_ddl_and_queries_are_tenant_safe():
     engine = _Engine()
     store = PredictionOutcomeStore(engine=engine)
-    assert store.ensure_schema()
-    schema = "\n".join(sql for sql, _ in engine.conn.calls)
-    assert "PRIMARY KEY(prediction_id, user_id)" in schema
-    assert "FOREIGN KEY(prediction_id, user_id)" in schema
-    assert "user_id, status, updated_at DESC" in schema
+    assert not hasattr(store, "ensure_schema")
+    assert engine.conn.calls == []
 
     outcome = resolve_prediction_outcome(_prediction(), [_bar(11, high=112, low=99)])
     store.upsert(outcome)

@@ -12,10 +12,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.api.security_gate import _env_bool, logger
+from backend.api.security_gate import _env_bool, logger, validate_runtime_auth_configuration
 from backend.graph import aget_graph_runner, reset_graph_runner
 from backend.rag import get_rag_observability_store, install_rag_observability_hooks
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
+from backend.services.database import assert_core_schema_current
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,13 @@ def _init_default_user_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan handler to start/stop price_change scheduler."""
+    validate_runtime_auth_configuration()
+    schema_status = assert_core_schema_current()
+    if schema_status.configured:
+        logger.info("[Database] Alembic revision current=%s", ",".join(schema_status.current))
+    else:
+        logger.info("[Database] development 模式未配置核心 PostgreSQL，跳过 revision 检查")
+
     # Ensure a working default LLM config exists on first boot.
     _init_default_user_config()
 

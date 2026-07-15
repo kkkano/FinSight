@@ -45,19 +45,24 @@ def test_security_gate_allowlisted_path_bypasses_auth(monkeypatch):
     assert response.status_code == 200
 
 
-def test_security_gate_dashboard_requires_auth_by_default(monkeypatch):
+def test_security_gate_dashboard_is_anonymous_read_only_by_default(monkeypatch):
     from backend.api import main
 
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_AUTH_KEYS", "release-key-1")
     monkeypatch.delenv("API_PUBLIC_PATHS", raising=False)
+    monkeypatch.delenv("API_PUBLIC_READ_PATHS", raising=False)
+    from backend.config.settings import security_settings
+    security_settings.cache_clear()
     import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
 
     with TestClient(main.app) as client:
-        response = client.get("/api/dashboard", params={"symbol": "AAPL"})
+        read_response = client.get("/api/dashboard/not-a-route")
+        write_response = client.post("/api/dashboard/not-a-route")
 
-    assert response.status_code == 401
-    assert response.json().get("detail") == "Unauthorized"
+    assert read_response.status_code == 404
+    assert write_response.status_code == 401
+    assert write_response.json().get("detail") == "Unauthorized"
 
 
 def test_allowlisted_paths_can_be_configured_via_env(monkeypatch):

@@ -2,12 +2,13 @@
 """Prediction 的确定性 outcome 解析、PostgreSQL 归档与日更入口。"""
 from __future__ import annotations
 
-import os
 import threading
 from typing import Any, Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+
+from backend.services.database import create_core_engine, resolve_core_postgres_dsn
 
 from backend.agents.prediction_contract import AgentPrediction, PredictionDraft
 from backend.agents.prediction_submit import _crossed_entry
@@ -171,42 +172,10 @@ class PredictionOutcomeStoreUnavailable(RuntimeError):
 class PredictionOutcomeStore:
     def __init__(self, *, dsn: str | None = None, engine: Any | None = None) -> None:
         if engine is None:
-            normalized = str(dsn or "").strip()
-            if not normalized.startswith(("postgresql://", "postgresql+psycopg://")):
-                raise ValueError("prediction outcome store 只允许 PostgreSQL DSN")
-            engine = create_engine(normalized, future=True, pool_pre_ping=True)
+            engine = create_core_engine(dsn=dsn)
         self._engine = engine
-        self._schema_ready = False
-        self._schema_lock = threading.Lock()
-
-    def ensure_schema(self) -> bool:
-        if self._schema_ready:
-            return True
-        with self._schema_lock:
-            if self._schema_ready:
-                return True
-            from backend.services.agent_prediction_store import get_agent_prediction_store
-
-            get_agent_prediction_store().ensure_schema()
-            with self._engine.begin() as conn:
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS agent_prediction_outcomes ("
-                    "prediction_id UUID NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL, "
-                    "resolved_at TIMESTAMPTZ NULL, entry_time TIMESTAMPTZ NULL, entry_price DOUBLE PRECISION NULL, "
-                    "pct_since_anchor DOUBLE PRECISION NULL, resolution_reason TEXT NULL, "
-                    "evaluated_through TIMESTAMPTZ NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
-                    "PRIMARY KEY(prediction_id, user_id), "
-                    "FOREIGN KEY(prediction_id, user_id) REFERENCES agent_predictions(id, user_id))"
-                ))
-                conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS idx_agent_prediction_outcomes_owner_status "
-                    "ON agent_prediction_outcomes(user_id, status, updated_at DESC)"
-                ))
-            self._schema_ready = True
-        return True
 
     def upsert(self, outcome: PredictionOutcome) -> PredictionOutcome:
-        self.ensure_schema()
         with self._engine.begin() as conn:
             conn.execute(text(
                 "INSERT INTO agent_prediction_outcomes ("
@@ -233,7 +202,6 @@ class PredictionOutcomeStore:
         return outcome
 
     def pending_predictions(self, *, limit: int = 500) -> list[AgentPrediction]:
-        self.ensure_schema()
         with self._engine.connect() as conn:
             rows = conn.execute(text(
                 "SELECT p.* FROM agent_predictions p "
@@ -251,7 +219,6 @@ class PredictionOutcomeStore:
         normalized_user = str(user_id or "").strip()
         if not normalized_user or normalized_user == "public":
             return _empty_track_record()
-        self.ensure_schema()
         with self._engine.connect() as conn:
             rows = conn.execute(text(
                 "SELECT p.direction,o.status,COUNT(*) AS count,MAX(o.updated_at) AS latest "
@@ -307,12 +274,7 @@ def summarize_track_record(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def _resolve_dsn() -> str:
-    return (
-        os.getenv("AGENT_PREDICTION_POSTGRES_DSN")
-        or os.getenv("RAG_V2_POSTGRES_DSN")
-        or os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN")
-        or ""
-    ).strip()
+    return resolve_core_postgres_dsn(required=False)
 
 
 _store: PredictionOutcomeStore | None = None

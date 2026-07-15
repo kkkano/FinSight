@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from backend.api.backtest_prefill import build_backtest_prefill
 from backend.api.schemas import BacktestPrefillRequest, BacktestRequest
@@ -38,8 +38,14 @@ def run_backtest(payload: BacktestRequest):
 
 
 @backtest_router.post("/api/backtest/prefill-from-report")
-def prefill_backtest_from_report(payload: BacktestPrefillRequest):
-    report = get_report_index_store().get_report_by_id(report_id=payload.report_id)
+def prefill_backtest_from_report(payload: BacktestPrefillRequest, request: Request):
+    user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+    if user_id == "public":
+        raise HTTPException(status_code=401, detail="auth_required")
+    report = get_report_index_store().get_report_by_id(
+        report_id=payload.report_id,
+        user_id=user_id,
+    )
     if report is None:
         raise HTTPException(status_code=404, detail="report not found")
     try:

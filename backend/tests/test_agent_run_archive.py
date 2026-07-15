@@ -25,15 +25,11 @@ class Engine:
     def connect(self): yield self.conn
 
 
-def test_archive_schema_and_upsert_are_tenant_safe(monkeypatch):
-    monkeypatch.setattr("backend.services.agent_prediction_store.get_agent_prediction_store", lambda: type("S", (), {"ensure_schema": lambda self: True})())
+def test_archive_constructor_has_no_ddl_and_upsert_is_tenant_safe():
     engine = Engine()
     store = AgentRunArchive(engine=engine)
-    assert store.ensure_schema()
-    schema = "\n".join(sql for sql, _ in engine.conn.calls)
-    assert "UNIQUE(run_id,user_id,agent,layer,model)" in schema
-    assert "FOREIGN KEY(prediction_id,user_id)" in schema
-    assert "user_id,agent,created_at DESC" in schema
+    assert not hasattr(store, "ensure_schema")
+    assert engine.conn.calls == []
 
     summary = {"usage_by_attribution": [{"agent": "risk_agent", "layer": "research", "prediction_id": None, "model": "gpt-4o", "prompt": 100, "completion": 20, "calls": 2, "failed_calls": 1, "duration_ms": 90}]}
     assert store.archive_usage_summary(run_id="run-1", user_id="alice", summary=summary) == 1
@@ -43,8 +39,7 @@ def test_archive_schema_and_upsert_are_tenant_safe(monkeypatch):
     assert params["failed_call_count"] == 1
 
 
-def test_cost_summary_is_tenant_agent_and_window_scoped(monkeypatch):
-    monkeypatch.setattr("backend.services.agent_prediction_store.get_agent_prediction_store", lambda: type("S", (), {"ensure_schema": lambda self: True})())
+def test_cost_summary_is_tenant_agent_and_window_scoped():
     engine = Engine()
     engine.conn.row = {"tokens": 120, "cost": 0.25, "run_count": 2, "call_count": 3, "failed_call_count": 1, "unscored_runs": 1}
     result = AgentRunArchive(engine=engine).cost_summary(user_id="alice", agent="risk_agent", days=30)

@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from backend.agents.prediction_contract import AgentPrediction
 from backend.services.agent_prediction_store import AgentPredictionStore
 from backend.services.agent_run_archive import AgentRunArchive
+from backend.services.database import assert_core_schema_current
 from backend.services.prediction_outcomes import (
     PredictionOutcomeStore,
     resolve_prediction_outcome,
@@ -47,14 +48,11 @@ def postgres_transaction(monkeypatch):
 
     engine = create_engine(dsn, future=True, pool_pre_ping=True)
     schema_store = AgentPredictionStore(engine=engine)
-    schema_store.ensure_schema()
+    assert_core_schema_current(engine=engine)
     monkeypatch.setattr(
         "backend.services.agent_prediction_store.get_agent_prediction_store",
         lambda: schema_store,
     )
-    PredictionOutcomeStore(engine=engine).ensure_schema()
-    AgentRunArchive(engine=engine).ensure_schema()
-
     connection = engine.connect()
     transaction = connection.begin()
     try:

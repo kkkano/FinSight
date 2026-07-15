@@ -76,6 +76,7 @@ class SecuritySettings(_DomainSettings):
     api_auth_keys: str = Field("", validation_alias="API_AUTH_KEYS")
     api_auth_key: str = Field("", validation_alias="API_AUTH_KEY")
     api_public_paths: str | None = Field(None, validation_alias="API_PUBLIC_PATHS")
+    api_public_read_paths: str | None = Field(None, validation_alias="API_PUBLIC_READ_PATHS")
     trust_proxy_headers: bool = Field(True, validation_alias="TRUST_PROXY_HEADERS")
     rate_limit_enabled: bool = Field(True, validation_alias="RATE_LIMIT_ENABLED")
     rate_limit_per_minute: int = Field(300, validation_alias="RATE_LIMIT_PER_MINUTE")
@@ -86,6 +87,7 @@ class SecuritySettings(_DomainSettings):
         2, validation_alias="GENERATION_MAX_CONCURRENT_PER_CLIENT"
     )
     supabase_url: str = Field("", validation_alias="SUPABASE_URL")
+    supabase_auth_required: bool = Field(False, validation_alias="SUPABASE_AUTH_REQUIRED")
     vite_supabase_url: str = Field("", validation_alias="VITE_SUPABASE_URL")
     supabase_publishable_key: str = Field("", validation_alias="SUPABASE_PUBLISHABLE_KEY")
     vite_supabase_publishable_key: str = Field(

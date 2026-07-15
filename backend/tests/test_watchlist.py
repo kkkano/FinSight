@@ -10,7 +10,7 @@ import pytest
 from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morning_brief_router
 from backend.api.watchlist_router import WatchlistRouterDeps, create_watchlist_router
 from backend.services import monitor_engine
-from backend.services.watchlist_store import WatchlistStore
+from backend.services.watchlist_store import LegacyWatchlistStore as WatchlistStore
 
 
 def _client(store: WatchlistStore) -> TestClient:

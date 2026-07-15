@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.services import monitor_comment_store as module
 from backend.services.monitor_comment_store import (
     MonitorCommentStore,
     MonitorCommentStoreUnavailable,
@@ -40,19 +39,11 @@ class Engine:
     def connect(self): yield self.conn
 
 
-@pytest.fixture(autouse=True)
-def prediction_schema(monkeypatch):
-    monkeypatch.setattr(module, "get_agent_prediction_store", lambda: SimpleNamespace(ensure_schema=lambda: True))
-
-
-def test_schema_has_tenant_fk_cursor_index_and_trigger_dedupe():
+def test_constructor_never_runs_schema_ddl():
     engine = Engine()
     store = MonitorCommentStore(engine=engine)
-    store.ensure_schema()
-    sql = "\n".join(call[0] for call in engine.conn.calls)
-    assert "FOREIGN KEY(prediction_id, user_id) REFERENCES agent_predictions(id, user_id)" in sql
-    assert "UNIQUE(user_id, session_id, trigger_fingerprint)" in sql
-    assert "user_id, session_id, ts DESC, id DESC" in sql
+    assert not hasattr(store, "ensure_schema")
+    assert engine.conn.calls == []
 
 
 def test_create_binds_original_trigger_and_dedupes_same_fingerprint():
@@ -81,7 +72,6 @@ def test_create_binds_original_trigger_and_dedupes_same_fingerprint():
 def test_list_supports_date_filter_desc_order_and_opaque_cursor():
     engine = Engine()
     store = MonitorCommentStore(engine=engine)
-    store.ensure_schema()
     engine.conn.rows = [
         {"id": "11111111-1111-1111-1111-111111111111", "user_id": "alice", "session_id": "s1",
          "symbol": "AAPL", "ts": NOW, "level": "info", "text": "new", "trigger_kind": "heartbeat",
@@ -104,7 +94,12 @@ def test_list_supports_date_filter_desc_order_and_opaque_cursor():
 def test_list_and_list_after_are_read_only_without_schema_helpers(monkeypatch):
     engine = Engine()
     store = MonitorCommentStore(engine=engine)
-    monkeypatch.setattr(store, "ensure_schema", lambda: pytest.fail("read path called ensure_schema"))
+    monkeypatch.setattr(
+        store,
+        "ensure_schema",
+        lambda: pytest.fail("read path called ensure_schema"),
+        raising=False,
+    )
 
     assert store.list(user_id="alice", session_id="s1") == ([], None)
     assert store.list_after(

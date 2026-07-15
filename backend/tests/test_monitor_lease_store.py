@@ -39,15 +39,16 @@ class Engine:
     def connect(self): yield self.conn
 
 
-def test_lease_schema_and_acquire_store_only_token_hash():
+def test_lease_constructor_has_no_ddl_and_acquire_stores_only_token_hash():
     engine = Engine()
     store = MonitorLeaseStore(engine=engine)
+    assert engine.conn.calls == []
     first = store.acquire(user_id="alice", session_id="s1", symbol="aapl", now=NOW)
     second = store.acquire(user_id="alice", session_id="s1", symbol="aapl", now=NOW)
 
     sql = "\n".join(item[0] for item in engine.conn.calls)
-    assert "UNIQUE(user_id, lease_token_hash)" in sql
-    assert "user_id, session_id, symbol, expires_at" in sql
+    assert "CREATE TABLE" not in sql
+    assert sql.count("INSERT INTO monitor_page_leases") == 2
     assert first["lease_token"] != second["lease_token"]
     insert_params = [params for statement, params in engine.conn.calls if statement.lstrip().startswith("INSERT")]
     assert all("lease_token" not in params for params in insert_params)

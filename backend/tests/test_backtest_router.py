@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from backend.api import backtest_router as backtest_router_module
 
 
-def _build_client() -> TestClient:
+def _build_client(*, user_id: str = "alice") -> TestClient:
     app = FastAPI()
+
+    @app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = user_id
+        return await call_next(request)
+
     app.include_router(backtest_router_module.backtest_router)
     return TestClient(app)
 
@@ -65,8 +71,9 @@ def test_backtest_router_run(monkeypatch):
 
 def test_backtest_router_prefill_from_report(monkeypatch):
     class _Store:
-        def get_report_by_id(self, *, report_id):
+        def get_report_by_id(self, *, report_id, user_id):
             assert report_id == "rpt-1"
+            assert user_id == "alice"
             return {
                 "report_id": report_id,
                 "title": "Apple research",
@@ -86,7 +93,8 @@ def test_backtest_router_prefill_from_report(monkeypatch):
 
 def test_backtest_router_prefill_handles_missing_report(monkeypatch):
     class _Store:
-        def get_report_by_id(self, *, report_id):
+        def get_report_by_id(self, *, report_id, user_id):
+            assert user_id == "alice"
             return None
 
     monkeypatch.setattr(backtest_router_module, "get_report_index_store", lambda: _Store())

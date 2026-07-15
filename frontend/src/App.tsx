@@ -285,14 +285,14 @@ function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/welcome" element={<WelcomeRoute />} />
         <Route path="/share/r/:token" element={<SharedReportPage />} />
-        <Route path="/chat" element={<EntryGuard><ChatRoute /></EntryGuard>} />
-        <Route path="/workbench" element={<EntryGuard><WorkbenchRoute /></EntryGuard>} />
-        <Route path="/cn-market" element={<EntryGuard><CnMarketRoute /></EntryGuard>} />
+        <Route path="/chat" element={<AuthenticatedGuard><ChatRoute /></AuthenticatedGuard>} />
+        <Route path="/workbench" element={<AuthenticatedGuard><WorkbenchRoute /></AuthenticatedGuard>} />
+        <Route path="/cn-market" element={<AuthenticatedGuard><CnMarketRoute /></AuthenticatedGuard>} />
         <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
         <Route path="/cost-audit" element={<AuthenticatedGuard><CostAuditPage /></AuthenticatedGuard>} />
-        <Route path="/screener" element={<EntryGuard><ScreenerPage /></EntryGuard>} />
-        <Route path="/backtest" element={<EntryGuard><BacktestPage /></EntryGuard>} />
-        <Route path="/phase-labs" element={<EntryGuard><Navigate to="/screener" replace /></EntryGuard>} />
+        <Route path="/screener" element={<AuthenticatedGuard><ScreenerPage /></AuthenticatedGuard>} />
+        <Route path="/backtest" element={<AuthenticatedGuard><BacktestPage /></AuthenticatedGuard>} />
+        <Route path="/phase-labs" element={<AuthenticatedGuard><Navigate to="/screener" replace /></AuthenticatedGuard>} />
         <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="/dashboard/:symbol" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="*" element={<Navigate to="/welcome" replace />} />

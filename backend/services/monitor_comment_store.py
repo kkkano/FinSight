@@ -5,16 +5,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import threading
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-from backend.services.agent_prediction_store import get_agent_prediction_store
+from backend.services.database import create_core_engine, resolve_core_postgres_dsn
 
 
 class MonitorCommentStoreUnavailable(RuntimeError):
@@ -67,45 +66,13 @@ class UnavailableMonitorCommentStore:
 class MonitorCommentStore:
     def __init__(self, *, dsn: str | None = None, engine: Any | None = None) -> None:
         if engine is None:
-            normalized = str(dsn or "").strip()
-            if not normalized.startswith(("postgresql://", "postgresql+psycopg://")):
-                raise ValueError("monitor comment store 只允许 PostgreSQL DSN")
-            engine = create_engine(normalized, future=True, pool_pre_ping=True)
+            engine = create_core_engine(dsn=dsn)
         self._engine = engine
-        self._schema_ready = False
-        self._schema_lock = threading.Lock()
-
-    def ensure_schema(self) -> bool:
-        if self._schema_ready:
-            return True
-        with self._schema_lock:
-            if self._schema_ready:
-                return True
-            prediction_store = get_agent_prediction_store()
-            if hasattr(prediction_store, "ensure_schema") and not prediction_store.ensure_schema():
-                raise MonitorCommentStoreUnavailable("agent_predictions schema unavailable")
-            with self._engine.begin() as conn:
-                conn.execute(text(
-                    "CREATE TABLE IF NOT EXISTS monitor_comments ("
-                    "id UUID NOT NULL PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL, "
-                    "symbol TEXT NOT NULL, ts TIMESTAMPTZ NOT NULL, level TEXT NOT NULL, text TEXT NOT NULL, "
-                    "trigger_kind TEXT NOT NULL, trigger_detail TEXT NOT NULL, trigger_observed_at TEXT NOT NULL, "
-                    "trigger_fingerprint TEXT NOT NULL, source TEXT NOT NULL, escalated BOOLEAN NOT NULL, "
-                    "prediction_id UUID NULL, UNIQUE(user_id, session_id, trigger_fingerprint), "
-                    "FOREIGN KEY(prediction_id, user_id) REFERENCES agent_predictions(id, user_id))"
-                ))
-                conn.execute(text(
-                    "CREATE INDEX IF NOT EXISTS idx_monitor_comments_tenant_time "
-                    "ON monitor_comments(user_id, session_id, ts DESC, id DESC)"
-                ))
-            self._schema_ready = True
-        return True
 
     def create(self, *, user_id: str, session_id: str, symbol: str, ts: datetime,
                level: str, text_value: str, trigger_kind: str, trigger_detail: str,
                trigger_observed_at: str, source: str, escalated: bool,
                prediction_id: str | None = None) -> MonitorComment | None:
-        self.ensure_schema()
         item_id = str(uuid4())
         fingerprint = trigger_fingerprint(
             symbol=symbol, trigger_kind=trigger_kind,
@@ -190,8 +157,7 @@ class MonitorCommentStore:
 
 
 def _resolve_dsn() -> str:
-    return (os.getenv("MONITOR_COMMENT_POSTGRES_DSN") or os.getenv("AGENT_PREDICTION_POSTGRES_DSN")
-            or os.getenv("RAG_V2_POSTGRES_DSN") or os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN") or "").strip()
+    return resolve_core_postgres_dsn(required=False)
 
 
 _store: MonitorCommentStore | UnavailableMonitorCommentStore | None = None

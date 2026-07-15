@@ -5,9 +5,9 @@ from __future__ import annotations
 def test_report_index_store_deletes_reports_and_citations_for_session(tmp_path, monkeypatch):
     monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(tmp_path / "report_index.sqlite"))
 
-    from backend.services.report_index import ReportIndexStore
+    from backend.services.report_index import LegacyReportIndexStore
 
-    store = ReportIndexStore()
+    store = LegacyReportIndexStore()
     report = {
         "report_id": "rpt-delete-session",
         "ticker": "AAPL",

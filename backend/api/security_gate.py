@@ -13,6 +13,7 @@ from backend.utils.env import env_str
 
 import json
 import logging
+import os
 import time
 from collections import deque
 from threading import Lock
@@ -81,6 +82,21 @@ def _resolve_supabase_auth_config() -> tuple[str, str]:
 def _is_supabase_auth_configured() -> bool:
     supabase_url, publishable_key = _resolve_supabase_auth_config()
     return bool(supabase_url and publishable_key)
+
+
+def validate_runtime_auth_configuration() -> None:
+    """生产必须启用认证，且必须具备可验证 JWT 的服务端配置。"""
+    settings = security_settings()
+    mode = str(os.getenv("APP_MODE") or "development").strip().lower()
+    if mode == "production" and not settings.supabase_auth_required:
+        raise RuntimeError("production 必须设置 SUPABASE_AUTH_REQUIRED=true")
+    if settings.supabase_auth_required:
+        jwt_secret = str(os.getenv("SUPABASE_JWT_SECRET") or "").strip()
+        supabase_url = str(settings.supabase_url or settings.vite_supabase_url).strip()
+        if not jwt_secret and not supabase_url:
+            raise RuntimeError(
+                "启用强认证时必须配置 SUPABASE_JWT_SECRET 或 SUPABASE_URL"
+            )
 
 def _resolve_rag_observability_dev_auth_config() -> tuple[str, str, Optional[str]]:
     settings = security_settings()
@@ -208,9 +224,7 @@ def _require_rag_mutation_access(request: Request) -> Dict[str, Any]:
         return principal
     raise HTTPException(status_code=403, detail="RAG diagnostics is read-only for logged-in users; mutation requires internal API key")
 
-def _is_allowlisted_path(path: str) -> bool:
-    defaults = "/health,/docs,/openapi.json,/redoc,/api/reports/shared/*"
-    configured = _parse_csv(security_settings().api_public_paths or defaults)
+def _path_matches(path: str, configured: list[str]) -> bool:
     exact_paths: set[str] = set()
     prefix_paths: list[str] = []
 
@@ -229,6 +243,27 @@ def _is_allowlisted_path(path: str) -> bool:
     if path in exact_paths:
         return True
     return any(path.startswith(prefix + "/") or path == prefix for prefix in prefix_paths)
+
+
+def _is_allowlisted_path(path: str) -> bool:
+    defaults = "/health,/api/reports/shared/*"
+    configured = _parse_csv(security_settings().api_public_paths or defaults)
+    return _path_matches(path, configured)
+
+
+def _is_public_read_path(path: str) -> bool:
+    defaults = (
+        "/api/stock/price/*,/api/stock/news/*,/api/stock/kline/*,"
+        "/api/financials/*,/api/dashboard/*"
+    )
+    configured = _parse_csv(security_settings().api_public_read_paths or defaults)
+    return _path_matches(path, configured)
+
+
+def _is_public_request(request: Request) -> bool:
+    if _is_allowlisted_path(request.url.path):
+        return True
+    return request.method.upper() in {"GET", "HEAD"} and _is_public_read_path(request.url.path)
 
 class SimpleRateLimiter:
     def __init__(self, limit_per_window: int, window_seconds: int, enabled: bool = True):
@@ -315,7 +350,7 @@ def _resolve_client_ip(request: Request) -> str:
     return request.client.host if request.client else "anonymous"
 
 async def security_gate(request: Request, call_next):
-    if _is_allowlisted_path(request.url.path):
+    if _is_public_request(request):
         return await call_next(request)
 
     api_key = None
@@ -335,7 +370,7 @@ async def security_gate(request: Request, call_next):
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
     user = resolve_request_user(request)
-    if user is None and _env_bool("SUPABASE_AUTH_REQUIRED", False):
+    if user is None and security_settings().supabase_auth_required:
         return JSONResponse(
             status_code=401,
             content={"detail": "登录后才能使用，请先登录。"},

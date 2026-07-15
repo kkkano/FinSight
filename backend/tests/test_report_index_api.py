@@ -1,22 +1,50 @@
 ﻿# -*- coding: utf-8 -*-
-import importlib
-
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from backend.api.report_router import ReportRouterDeps, create_report_router
+from backend.services.report_index import LegacyReportIndexStore
 
-def _load_main_module():
-    import backend.api.main as main
 
-    importlib.reload(main)
-    return main
+class _TenantLegacyAdapter:
+    """只供旧 SQLite fixture 复用；生产 Store 不接受该回退。"""
+
+    def __init__(self, store: LegacyReportIndexStore) -> None:
+        self._store = store
+
+    def __getattr__(self, name):
+        target = getattr(self._store, name)
+
+        def call(*args, **kwargs):
+            kwargs.pop("user_id", None)
+            return target(*args, **kwargs)
+
+        return call
+
+
+def _build_client(tmp_path, monkeypatch, *, user_id: str):
+    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(tmp_path / "report_index.sqlite"))
+    store = _TenantLegacyAdapter(LegacyReportIndexStore())
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def identity(request: Request, call_next):
+        request.state.user_id = user_id
+        return await call_next(request)
+
+    app.include_router(
+        create_report_router(
+            ReportRouterDeps(
+                resolve_thread_id=lambda value: str(value),
+                get_report_index_store=lambda: store,
+            )
+        )
+    )
+    return TestClient(app), store
 
 
 def test_report_index_list_replay_and_favorite_flow(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
-
-    main = _load_main_module()
-    store = main.get_report_index_store()
+    client, store = _build_client(tmp_path, monkeypatch, user_id="user1")
 
     session_id = "tenant1:user1:thread1"
     report = {
@@ -35,8 +63,6 @@ def test_report_index_list_replay_and_favorite_flow(tmp_path, monkeypatch):
         ],
     }
     store.upsert_report(session_id=session_id, report=report, trace_digest={"span_count": 3})
-
-    client = TestClient(main.app)
 
     list_resp = client.get(
         "/api/reports/index",
@@ -70,12 +96,7 @@ def test_report_index_list_replay_and_favorite_flow(tmp_path, monkeypatch):
 
 
 def test_report_index_replay_quality_matches_index_quality_state(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
-
-    main = _load_main_module()
-    store = main.get_report_index_store()
-    client = TestClient(main.app)
+    client, store = _build_client(tmp_path, monkeypatch, user_id="user_quality")
 
     session_id = "tenant_quality:user_quality:thread_quality"
     report = {
@@ -111,12 +132,7 @@ def test_report_index_replay_quality_matches_index_quality_state(tmp_path, monke
 
 
 def test_report_index_supports_date_tag_filters_and_normalizes_source_id(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
-
-    main = _load_main_module()
-    store = main.get_report_index_store()
-    client = TestClient(main.app)
+    client, store = _build_client(tmp_path, monkeypatch, user_id="user2")
 
     session_id = "tenant2:user2:thread2"
 
@@ -202,12 +218,7 @@ def test_report_index_supports_date_tag_filters_and_normalizes_source_id(tmp_pat
 
 
 def test_report_citation_index_filters_by_source_and_query(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
-
-    main = _load_main_module()
-    store = main.get_report_index_store()
-    client = TestClient(main.app)
+    client, store = _build_client(tmp_path, monkeypatch, user_id="user3")
 
     session_id = "tenant3:user3:thread3"
 
@@ -265,12 +276,7 @@ def test_report_citation_index_filters_by_source_and_query(tmp_path, monkeypatch
 
 
 def test_report_index_hides_blocked_by_default_and_supports_include_blocked(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
-
-    main = _load_main_module()
-    store = main.get_report_index_store()
-    client = TestClient(main.app)
+    client, store = _build_client(tmp_path, monkeypatch, user_id="user4")
 
     session_id = "tenant4:user4:thread4"
     blocked_report = {
@@ -335,12 +341,7 @@ def test_report_index_hides_blocked_by_default_and_supports_include_blocked(tmp_
 
 
 def test_report_compare_supports_include_blocked(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
-
-    main = _load_main_module()
-    store = main.get_report_index_store()
-    client = TestClient(main.app)
+    client, store = _build_client(tmp_path, monkeypatch, user_id="user4")
 
     session_id = "tenant4:user4:thread-compare"
     report_a = {
