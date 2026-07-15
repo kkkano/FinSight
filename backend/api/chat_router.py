@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import traceback
 import time as _time
@@ -144,6 +145,17 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
 def _generation_enabled() -> bool:
     """P0-8: 紧急熔断开关。设 REPORTS_GENERATION_ENABLED=false 可立即停止所有报告生成（无需重启）。"""
     return str(os.getenv("REPORTS_GENERATION_ENABLED", "true")).strip().lower() not in {"false", "0", "off"}
+
+
+def _sanitize_json_payload(value: Any) -> Any:
+    """把 JSON 不支持的非有限浮点统一降级为 null。"""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(key): _sanitize_json_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_sanitize_json_payload(item) for item in value]
+    return value
 
 
 def _ensure_llm_available() -> None:
@@ -365,7 +377,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             from backend.services.execution_service import _llm_degradation
 
             degradation = _llm_degradation(state, token_acc.summary())
-            return {
+            response_payload = {
                 "success": True,
                 "schema_version": deps.chat_response_schema_version,
                 "contracts": deps.contract_info(),
@@ -386,6 +398,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                     "trace": state.get("trace"),
                 },
             }
+            return _sanitize_json_payload(jsonable_encoder(response_payload))
         except HTTPException:
             raise
         except Exception as exc:
@@ -476,14 +489,19 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                     return value.isoformat()
                 return str(value)
 
-            return _json.dumps(jsonable_encoder(item), ensure_ascii=False, default=_fallback)
+            return _json.dumps(
+                _sanitize_json_payload(jsonable_encoder(item)),
+                ensure_ascii=False,
+                allow_nan=False,
+                default=_fallback,
+            )
 
         replay_buffer.start_run(run_id)
 
         async def _pump_pipeline() -> None:
             try:
                 async for event in pipeline:
-                    payload = jsonable_encoder(event)
+                    payload = _sanitize_json_payload(jsonable_encoder(event))
                     if not isinstance(payload, dict):
                         payload = {"type": "system", "data": payload}
                     payload.setdefault("run_id", run_id)
