@@ -289,7 +289,7 @@ describe('chat SSE auto resume', () => {
     expect(tokens).toEqual(['A', 'B']);
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
-    expect(fetchMock.mock.calls[1][0]).toContain('/api/chat/stream/run-1?after_seq=1');
+    expect(fetchMock.mock.calls[1][0]).toContain('/api/execute/runs/run-1/events?after_seq=1');
     expect(connectionStates).toEqual(['reconnecting', 'connected']);
   });
 

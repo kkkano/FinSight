@@ -443,26 +443,6 @@
         "title": "Capabilities",
         "type": "object"
       },
-      "ChartDataResponse": {
-        "properties": {
-          "message": {
-            "description": "operation message",
-            "title": "Message",
-            "type": "string"
-          },
-          "success": {
-            "description": "success flag",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success",
-          "message"
-        ],
-        "title": "ChartDataResponse",
-        "type": "object"
-      },
       "ChatContext": {
         "properties": {
           "active_symbol": {
@@ -744,76 +724,6 @@
         "title": "ChatOptions",
         "type": "object"
       },
-      "ChatRequest": {
-        "properties": {
-          "context": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ChatContext"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ephemeral context"
-          },
-          "history": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ChatMessage"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "conversation history",
-            "title": "History"
-          },
-          "options": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ChatOptions"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "request options"
-          },
-          "query": {
-            "description": "user query",
-            "minLength": 1,
-            "title": "Query",
-            "type": "string"
-          },
-          "schema_version": {
-            "default": "chat.request.v1",
-            "description": "request schema version",
-            "title": "Schema Version",
-            "type": "string"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "session id",
-            "title": "Session Id"
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "title": "ChatRequest",
-        "type": "object"
-      },
       "ConfigResponse": {
         "properties": {
           "config": {
@@ -1056,105 +966,6 @@
         "title": "DashboardData",
         "type": "object"
       },
-      "DashboardDeepDiveRequest": {
-        "description": "Dashboard Tab 触发 Agent 深挖的请求体。",
-        "properties": {
-          "dashboard_snapshot": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "description": "当前 Tab 的结构化快照",
-            "title": "Dashboard Snapshot"
-          },
-          "metric": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "具体深挖指标、新闻标题或对象",
-            "title": "Metric"
-          },
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "前端事件关联 ID",
-            "title": "Run Id"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "会话 ID，沿用 execute 线程语义",
-            "title": "Session Id"
-          },
-          "symbol": {
-            "description": "Dashboard 当前标的",
-            "minLength": 1,
-            "title": "Symbol",
-            "type": "string"
-          },
-          "tab": {
-            "description": "overview/financial/news/peers/technical",
-            "enum": [
-              "overview",
-              "financial",
-              "news",
-              "peers",
-              "technical"
-            ],
-            "title": "Tab",
-            "type": "string"
-          },
-          "trace_raw": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "是否透出完整 trace 事件",
-            "title": "Trace Raw"
-          },
-          "user_question": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "用户在 Tab 上补充的追问",
-            "title": "User Question"
-          }
-        },
-        "required": [
-          "symbol",
-          "tab"
-        ],
-        "title": "DashboardDeepDiveRequest",
-        "type": "object"
-      },
       "DashboardResponse": {
         "description": "Dashboard API 响应\n\n成功响应的标准格式。",
         "properties": {
@@ -1297,7 +1108,7 @@
         "type": "object"
       },
       "ExecuteRequest": {
-        "description": "Body for ``POST /api/execute``.",
+        "description": "Chat、Dashboard handoff 与报告生成共用的执行请求。",
         "properties": {
           "agent_preferences": {
             "anyOf": [
@@ -1309,7 +1120,6 @@
                 "type": "null"
               }
             ],
-            "description": "Per-agent depth, budget, and timeout preferences from frontend UI",
             "title": "Agent Preferences"
           },
           "agents": {
@@ -1324,7 +1134,6 @@
                 "type": "null"
               }
             ],
-            "description": "Override: only run these agents",
             "title": "Agents"
           },
           "analysis_depth": {
@@ -1341,7 +1150,6 @@
                 "type": "null"
               }
             ],
-            "description": "Explicit analysis depth semantics (quick/report/deep_research)",
             "title": "Analysis Depth"
           },
           "budget": {
@@ -1355,7 +1163,6 @@
                 "type": "null"
               }
             ],
-            "description": "Max LangGraph rounds",
             "title": "Budget"
           },
           "confirmation_mode": {
@@ -1372,20 +1179,44 @@
                 "type": "null"
               }
             ],
-            "description": "Confirmation strategy override: auto/required/skip",
             "title": "Confirmation Mode"
           },
-          "ensure_all_agents": {
+          "context": {
             "anyOf": [
               {
-                "type": "boolean"
+                "$ref": "#/components/schemas/ChatContext"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Force report orchestration to keep all report agents enabled",
-            "title": "Ensure All Agents"
+            "description": "Ephemeral UI context"
+          },
+          "history": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChatMessage"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Visible conversation history",
+            "title": "History"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Chat execution options"
           },
           "output_mode": {
             "anyOf": [
@@ -1396,7 +1227,6 @@
                 "type": "null"
               }
             ],
-            "description": "chat / brief / investment_report",
             "title": "Output Mode"
           },
           "query": {
@@ -1414,7 +1244,7 @@
                 "type": "null"
               }
             ],
-            "description": "Client-provided run id for event correlation",
+            "description": "Optional correlation ID",
             "title": "Run Id"
           },
           "session_id": {
@@ -1426,7 +1256,7 @@
                 "type": "null"
               }
             ],
-            "description": "Session ID",
+            "description": "Conversation session ID",
             "title": "Session Id"
           },
           "source": {
@@ -1438,7 +1268,6 @@
                 "type": "null"
               }
             ],
-            "description": "Trigger origin (dashboard / workbench / …)",
             "title": "Source"
           },
           "tickers": {
@@ -1453,7 +1282,6 @@
                 "type": "null"
               }
             ],
-            "description": "Explicit ticker list",
             "title": "Tickers"
           },
           "trace_raw": {
@@ -1465,7 +1293,6 @@
                 "type": "null"
               }
             ],
-            "description": "Whether to include full raw trace events in SSE stream",
             "title": "Trace Raw"
           }
         },
@@ -3344,74 +3171,6 @@
         "title": "RecomputeOutcomesResponse",
         "type": "object"
       },
-      "ResumeRequest": {
-        "description": "Body for ``POST /api/execute/resume``.",
-        "properties": {
-          "resume_value": {
-            "description": "User response to the interrupt prompt",
-            "title": "Resume Value"
-          },
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Client-provided run id for event correlation",
-            "title": "Run Id"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Session ID",
-            "title": "Session Id"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Trigger origin",
-            "title": "Source"
-          },
-          "thread_id": {
-            "description": "Thread / session ID to resume",
-            "minLength": 1,
-            "title": "Thread Id",
-            "type": "string"
-          },
-          "trace_raw": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trace Raw"
-          }
-        },
-        "required": [
-          "thread_id",
-          "resume_value"
-        ],
-        "title": "ResumeRequest",
-        "type": "object"
-      },
       "RiskTier": {
         "enum": [
           "conservative",
@@ -3420,27 +3179,6 @@
         ],
         "title": "RiskTier",
         "type": "string"
-      },
-      "RunDebateRequest": {
-        "properties": {
-          "ledger": {
-            "additionalProperties": true,
-            "description": "Evidence ledger payload",
-            "title": "Ledger",
-            "type": "object"
-          },
-          "query": {
-            "default": "",
-            "description": "Research question",
-            "title": "Query",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ledger"
-        ],
-        "title": "RunDebateRequest",
-        "type": "object"
       },
       "ScreenerRunRequest": {
         "properties": {
@@ -4891,139 +4629,6 @@
         ]
       }
     },
-    "/api/chat/add-chart-data": {
-      "post": {
-        "operationId": "add_chart_data_api_chat_add_chart_data_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Request",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChartDataResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Add Chart Data",
-        "tags": [
-          "Chat"
-        ]
-      }
-    },
-    "/api/chat/stream/{run_id}": {
-      "get": {
-        "operationId": "resume_chat_stream_api_chat_stream__run_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "after_seq",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "title": "After Seq",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Resume Chat Stream",
-        "tags": [
-          "Chat"
-        ]
-      }
-    },
-    "/api/chat/stream/{run_id}/cancel": {
-      "post": {
-        "operationId": "cancel_chat_stream_api_chat_stream__run_id__cancel_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Cancel Chat Stream",
-        "tags": [
-          "Chat"
-        ]
-      }
-    },
     "/api/cn/market/concept": {
       "get": {
         "operationId": "cn_market_concept_api_cn_market_concept_get",
@@ -5565,45 +5170,6 @@
         ]
       }
     },
-    "/api/dashboard/deep-dive": {
-      "post": {
-        "operationId": "dashboard_deep_dive_endpoint_api_dashboard_deep_dive_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DashboardDeepDiveRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Dashboard Deep Dive Endpoint",
-        "tags": [
-          "Execution"
-        ]
-      }
-    },
     "/api/dashboard/health": {
       "get": {
         "description": "Dashboard 健康检查端点",
@@ -5663,19 +5229,20 @@
         ]
       }
     },
-    "/api/execute/resume": {
+    "/api/execute/runs/{run_id}/cancel": {
       "post": {
-        "operationId": "resume_endpoint_api_execute_resume_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResumeRequest"
-              }
+        "operationId": "cancel_run_api_execute_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5696,7 +5263,57 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Resume Endpoint",
+        "summary": "Cancel Run",
+        "tags": [
+          "Execution"
+        ]
+      }
+    },
+    "/api/execute/runs/{run_id}/events": {
+      "get": {
+        "operationId": "replay_events_api_execute_runs__run_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "After Seq",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replay Events",
         "tags": [
           "Execution"
         ]
@@ -7619,65 +7236,6 @@
         ]
       }
     },
-    "/api/research/debate/{report_id}": {
-      "get": {
-        "operationId": "get_research_debate_api_research_debate__report_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "report_id",
-            "required": true,
-            "schema": {
-              "title": "Report Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_blocked",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Blocked",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Research Debate",
-        "tags": [
-          "Research"
-        ]
-      }
-    },
     "/api/research/holdings/{ticker}": {
       "get": {
         "operationId": "get_research_holdings_api_research_holdings__ticker__get",
@@ -7784,45 +7342,6 @@
           }
         },
         "summary": "Get Research Ledger",
-        "tags": [
-          "Research"
-        ]
-      }
-    },
-    "/api/research/run-debate": {
-      "post": {
-        "operationId": "run_research_debate_api_research_run_debate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunDebateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Run Research Debate",
         "tags": [
           "Research"
         ]
@@ -8675,84 +8194,6 @@
         ]
       }
     },
-    "/chat/supervisor": {
-      "post": {
-        "operationId": "chat_supervisor_endpoint_chat_supervisor_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Chat Supervisor Endpoint",
-        "tags": [
-          "Chat"
-        ]
-      }
-    },
-    "/chat/supervisor/stream": {
-      "post": {
-        "operationId": "chat_supervisor_stream_endpoint_chat_supervisor_stream_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Chat Supervisor Stream Endpoint",
-        "tags": [
-          "Chat"
-        ]
-      }
-    },
     "/cost-audit": {
       "get": {
         "operationId": "cost_audit_cost_audit_get",
@@ -8810,44 +8251,6 @@
           }
         },
         "summary": "Diagnostics Orchestrator",
-        "tags": [
-          "System"
-        ]
-      }
-    },
-    "/diagnostics/planner-ab": {
-      "get": {
-        "operationId": "diagnostics_planner_ab_diagnostics_planner_ab_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Diagnostics Planner Ab",
-        "tags": [
-          "System"
-        ]
-      }
-    },
-    "/diagnostics/planner_ab": {
-      "get": {
-        "operationId": "diagnostics_planner_ab_diagnostics_planner_ab_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Diagnostics Planner Ab",
         "tags": [
           "System"
         ]

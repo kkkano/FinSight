@@ -22,10 +22,6 @@ from uuid import uuid4
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from backend.api.schemas import (
-    ChatRequest,
-)
-from backend.api.chat_router import ChatRouterDeps, create_chat_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
 from backend.api.dashboard_router import dashboard_router
@@ -57,12 +53,11 @@ from backend.services.agent_run_archive import get_agent_run_archive
 from backend.services.prediction_outcomes import get_prediction_outcome_store, run_prediction_outcome_cycle
 from backend.services.prediction_service import get_prediction_service
 from backend.services.cost_audit import check_user_quota
-from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
+from backend.contracts import SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
 from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready, reset_graph_runner
 from backend.orchestration.tools_bridge import get_global_orchestrator
-from backend.graph.nodes.planner import get_planner_ab_metrics
 from backend.rag import get_rag_observability_store, install_rag_observability_hooks
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.portfolio_store import get_positions as get_portfolio_positions
@@ -246,24 +241,6 @@ def create_app() -> FastAPI:
 
     # === API routers ===
 
-    chat_router = create_chat_router(
-        ChatRouterDeps(
-            get_graph_runner=lambda: aget_graph_runner(),
-            resolve_thread_id=_resolve_thread_id,
-            build_ui_context=_build_ui_context,
-            resolve_query_reference=_resolve_query_reference,
-            schedule_report_index=_schedule_report_index,
-            update_session_context=_update_session_context,
-            contract_info=_contract_info,
-            resolve_trace_raw_enabled=_resolve_trace_raw_enabled,
-            is_raw_trace_event=_is_raw_trace_event,
-            redact_sensitive_payload=_redact_sensitive_payload,
-            get_session_context=_get_session_context,
-            chat_response_schema_version=CHAT_RESPONSE_SCHEMA_VERSION,
-            sse_event_schema_version=SSE_EVENT_SCHEMA_VERSION,
-        )
-    )
-
     conversation_router = create_conversation_router(
         ConversationRouterDeps(
             resolve_thread_id=_resolve_thread_id,
@@ -285,7 +262,6 @@ def create_app() -> FastAPI:
             graph_runner_ready=graph_runner_ready,
             get_graph_checkpointer_info=get_graph_checkpointer_info,
             get_orchestrator_safe=_get_orchestrator_safe,
-            get_planner_ab_metrics=get_planner_ab_metrics,
             get_rag_observability_store=lambda: get_rag_observability_store(),
             get_cost_audit_store=lambda: get_cost_audit_store(),
             require_rag_read_access=lambda request: _require_rag_read_access(request),
@@ -423,7 +399,6 @@ def create_app() -> FastAPI:
     app.include_router(user_router)
     app.include_router(watchlist_router)
     app.include_router(conversation_router)
-    app.include_router(chat_router)
     app.include_router(market_router)
     app.include_router(predictions_router)
     app.include_router(subscription_router)

@@ -10,10 +10,8 @@ from typing import Any, Iterable, Mapping
 
 from backend.graph.cancellation import is_cancelled
 from backend.graph.event_bus import emit_event
-from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.research.claim_extractor import extract_claims_from_agent_output
 from backend.graph.intent.frame import AgentBrief
-from backend.config.settings import agent_settings, executor_settings
 
 logger = logging.getLogger(__name__)
 
@@ -289,83 +287,9 @@ def brief_from_inputs(
     )
 
 
-def _prediction_memory_context(*, user_id: str, agent: str, ticker: str) -> str:
-    normalized_user = str(user_id or "").strip()
-    normalized_agent = str(agent or "").strip()
-    normalized_ticker = str(ticker or "").strip().upper()
-    if not normalized_user or normalized_user == "public" or not normalized_agent or not normalized_ticker:
-        return ""
-    try:
-        from backend.services.agent_prediction_store import get_agent_prediction_store
-
-        rows = get_agent_prediction_store().prediction_history(
-            agent=normalized_agent,
-            ticker=normalized_ticker,
-            user_id=normalized_user,
-            limit=1,
-        )
-    except Exception:
-        logger.debug("agent prediction memory unavailable", exc_info=True)
-        return ""
-    if not rows or not isinstance(rows[0], dict):
-        return ""
-    row = rows[0]
-    anchor = row.get("anchor") if isinstance(row.get("anchor"), dict) else {}
-    thesis = " ".join(str(row.get("thesis") or "").split())[:60]
-    direction = str(row.get("direction") or "unknown")
-    anchor_time = str(anchor.get("time") or "未知时间")
-    anchor_price = anchor.get("price")
-    levels = f"{row.get('entry')}/{row.get('stop')}/{row.get('target1')}"
-    outcome = str(row.get("status") or "waiting")
-    return (
-        f"你上次({anchor_time})对{normalized_ticker}判断 {direction}：{thesis}；"
-        f"锚点 {anchor_price}，entry/stop/T1={levels}，当前 outcome={outcome}。"
-        "历史观点只作上下文，不得自动继承为本轮结论。"
-    )
-
-
-def _prediction_operation(*, inputs: Mapping[str, Any], state: Mapping[str, Any]) -> str:
-    objective = str(inputs.get("objective") or "").strip()
-    if objective:
-        return objective
-    if str(state.get("output_mode") or "").strip() == "investment_report":
-        return "report_generation"
-    operation = state.get("operation") if isinstance(state.get("operation"), dict) else {}
-    return str(operation.get("name") or "").strip()
-
-
-async def _maybe_submit_prediction(
-    *,
-    step_name: str,
-    inputs: Mapping[str, Any],
-    state: Mapping[str, Any],
-    output: dict[str, Any],
-    llm: Any,
-    tools_module: Any,
-) -> dict[str, Any]:
-    """迁移期薄适配：只声明资格，Prediction 必须由显式 API 触发。"""
-    from backend.agents.prediction_submit import submission_allowed
-
-    ticker = str(inputs.get("ticker") or "").strip().upper()
-    operation = _prediction_operation(inputs=inputs, state=state)
-    eligible = submission_allowed(symbol=ticker, operation=operation, agent=step_name)
-    output["prediction_eligible"] = eligible
-    if not eligible:
-        return output
-    output["prediction_trace"] = {
-        "status": "explicit_generation_required",
-        "attempts": [],
-    }
-    return output
-
-
-def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Build best-effort invokers for legacy specialist agents.
-
-    Node layer should call this adapter only; direct imports stay isolated here.
-    """
-    names = [str(n).strip() for n in (allowed_agents or []) if str(n).strip()]
+def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mapping[str, Any]) -> dict[str, Any]:
+    """构建只采集证据的确定性 collector；collector 不持有 LLM。"""
+    names = [str(n).strip() for n in (allowed_collectors or []) if str(n).strip()]
     if not names:
         return {}
 
@@ -381,17 +305,8 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
         from backend.agents.risk_agent import RiskAgent
         from backend.agents.technical_agent import TechnicalAgent
     except Exception:
-        logger.exception("agent adapter failed to import legacy agents")
+        logger.exception("collector adapter failed to import collectors")
         return {}
-
-    llm = None
-    try:  # pragma: no cover - runtime dependency path
-        from backend.llm_config import ConfiguredLLMHandle, get_endpoint_manager
-
-        get_endpoint_manager()
-        llm = ConfiguredLLMHandle(temperature=agent_settings().temperature)
-    except Exception:
-        llm = None
 
     cache = DataCache()
     agent_classes: dict[str, Any] = {
@@ -415,15 +330,6 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
         else ""
     )
     default_query = str(state.get("query") or "").strip()
-    ui_context = state.get("ui_context") if isinstance(state, Mapping) else {}
-    ui_context = ui_context if isinstance(ui_context, dict) else {}
-    authenticated_user_id = str(ui_context.get("__user_id") or "").strip()
-
-    policy = state.get("policy") if isinstance(state, Mapping) else {}
-    policy = policy if isinstance(policy, dict) else {}
-    research_config = policy.get("agent_research_config") if isinstance(policy, dict) else {}
-    research_config = research_config if isinstance(research_config, dict) else {}
-
     agents: dict[str, Any] = {}
     init_errors: dict[str, str] = {}
     for name in names:
@@ -432,35 +338,19 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
             init_errors[name] = "agent_class_not_found"
             continue
         try:
-            agent_instance = cls(llm, cache, tools_module)
-            if hasattr(agent_instance, "configure_research") and research_config:
+            agent_instance = cls(None, cache, tools_module)
+            if hasattr(agent_instance, "configure_research"):
                 agent_instance.configure_research(
-                    enable_llm_analysis=research_config.get("enable_llm_analysis"),
-                    max_reflections=research_config.get("max_reflections"),
-                    analysis_timeout_seconds=research_config.get("analysis_timeout_seconds"),
-                    token_acquire_timeout_seconds=research_config.get("token_acquire_timeout_seconds"),
+                    enable_llm_analysis=False,
+                    max_reflections=0,
                 )
             agents[name] = agent_instance
         except Exception as exc:
-            logger.exception("agent adapter failed to instantiate %s", name)
+            logger.exception("collector adapter failed to instantiate %s", name)
             init_errors[name] = f"init_failed:{exc.__class__.__name__}"
 
     invokers: dict[str, Any] = {}
-    preferred_timeout = timeout_seconds_from_state(state)
-    execution_settings = executor_settings()
-    timeout_seconds = max(
-        15.0,
-        preferred_timeout
-        if preferred_timeout is not None
-        else execution_settings.agent_invoker_timeout_seconds,
-    )
-    deep_search_timeout_seconds = max(
-        timeout_seconds,
-        execution_settings.deep_search_agent_timeout_seconds
-        if execution_settings.deep_search_agent_timeout_seconds is not None
-        else timeout_seconds,
-    )
-    max_attempts = max(1, execution_settings.agent_invoker_retry_attempts)
+    timeout_seconds = 60.0
 
     for name in names:
         agent = agents.get(name)
@@ -481,139 +371,79 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                 ticker = "N/A"
 
             await emit_event({
-                "type": "agent_start",
-                "agent": _name,
+                "type": "collector_start",
+                "collector": _name,
                 "query": query,
                 "ticker": ticker,
-                "attempt": 1,
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
 
             if _agent is None:
-                return _build_agent_fallback_output(
+                fallback = _build_agent_fallback_output(
                     step_name=_name,
                     query=query,
                     ticker=ticker,
                     error=_init_error or "agent_not_available",
                 )
+                fallback["collector_name"] = _name
+                await emit_event({"type": "collector_error", "collector": _name, "error": _init_error or "collector_not_available"})
+                return fallback
 
-            last_error = "unknown"
-            last_reason = "execution_error"
-            last_retryable = False
-            last_stage = "unknown"
-            for attempt in range(1, max_attempts + 1):
-                if is_cancelled():
-                    raise asyncio.CancelledError()
-                try:
-                    from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
-
-                    invoke_timeout = (
-                        deep_search_timeout_seconds if _name == "deep_search_agent" else timeout_seconds
-                    )
-                    brief = brief_from_inputs(
-                        inputs if isinstance(inputs, dict) else {},
-                        default_query=default_query,
-                        default_ticker=default_ticker,
-                        output_mode=str(state.get("output_mode") or "chat"),
-                    )
-                    memory_context = _prediction_memory_context(
-                        user_id=authenticated_user_id,
-                        agent=_name,
-                        ticker=ticker,
-                    )
-                    if memory_context:
-                        brief.context_digest = "\n".join(
-                            item for item in (memory_context, brief.context_digest) if item
-                        )
-                    use_brief = agent_settings().brief_enabled
-                    attribution_token = set_llm_attribution(LLMAttribution(agent=_name, layer="research"))
-                    try:
-                        result = await asyncio.wait_for(
-                            _agent.research(query=query or "N/A", ticker=ticker, brief=brief if use_brief else None),
-                            timeout=invoke_timeout,
-                        )
-                    finally:
-                        reset_llm_attribution(attribution_token)
-                    normalized = _normalize_agent_output(
-                        step_name=_name,
-                        output=result,
-                        query=query,
-                        ticker=ticker,
-                    )
-                    normalized = await _maybe_submit_prediction(
-                        step_name=_name,
-                        inputs=inputs if isinstance(inputs, dict) else {},
-                        state=state,
-                        output=normalized,
-                        llm=getattr(_agent, "llm", None),
-                        tools_module=tools_module,
-                    )
-                    if is_cancelled():
-                        raise asyncio.CancelledError()
-                    if normalized.get("summary"):
-                        await emit_event({
-                            "type": "agent_done",
-                            "agent": _name,
-                            "status": "success",
-                            "confidence": normalized.get("confidence", 0),
-                            "data_sources": normalized.get("data_sources", []),
-                            "summary_length": len(normalized.get("summary", "")),
-                            "evidence_count": len(normalized.get("evidence", [])),
-                            "attempt": attempt,
-                            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        })
-                        return normalized
-                    last_error = "empty_summary"
-                    last_reason = "confidence_skip"
-                    last_retryable = False
-                    last_stage = "parse"
-                except Exception as exc:
-                    last_error = f"{exc.__class__.__name__}: {exc}"
-                    last_reason, last_retryable, last_stage = _classify_exception(exc)
-                    await emit_event({
-                        "type": "agent_error",
-                        "agent": _name,
-                        "error": str(exc)[:300],
-                        "error_type": exc.__class__.__name__,
-                        "attempt": attempt,
-                        "max_attempts": max_attempts,
-                        "retryable": last_retryable,
-                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    })
-                    if attempt < max_attempts:
-                        log_fn = logger.info if last_retryable else logger.warning
-                        log_fn(
-                            "[AgentAdapter] %s attempt %d/%d failed (%s/%s), retrying: %s",
-                            _name,
-                            attempt,
-                            max_attempts,
-                            last_reason,
-                            last_stage,
-                            exc,
-                        )
-                        continue
-
-            await emit_event({
-                "type": "agent_done",
-                "agent": _name,
-                "status": "fallback",
-                "fallback_reason": last_reason,
-                "error": last_error[:200],
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            })
-            return _build_agent_fallback_output(
-                step_name=_name,
-                query=query,
-                ticker=ticker,
-                error=last_error,
-                fallback_reason=last_reason,
-                retryable=last_retryable,
-                error_stage=last_stage,
-            )
+            try:
+                brief = brief_from_inputs(
+                    inputs if isinstance(inputs, dict) else {},
+                    default_query=default_query,
+                    default_ticker=default_ticker,
+                    output_mode=str(state.get("output_mode") or "chat"),
+                )
+                result = await asyncio.wait_for(
+                    _agent.research(query=query or "N/A", ticker=ticker, brief=brief),
+                    timeout=timeout_seconds,
+                )
+                normalized = _normalize_agent_output(
+                    step_name=_name,
+                    output=result,
+                    query=query,
+                    ticker=ticker,
+                )
+                normalized["collector_name"] = _name
+                normalized.pop("prediction_eligible", None)
+                normalized.pop("prediction_trace", None)
+                await emit_event({
+                    "type": "collector_done",
+                    "collector": _name,
+                    "status": "success",
+                    "confidence": normalized.get("confidence", 0),
+                    "data_sources": normalized.get("data_sources", []),
+                    "evidence_count": len(normalized.get("evidence", [])),
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                })
+                return normalized
+            except Exception as exc:
+                reason, retryable, stage = _classify_exception(exc)
+                await emit_event({
+                    "type": "collector_error",
+                    "collector": _name,
+                    "error": str(exc)[:300],
+                    "error_type": exc.__class__.__name__,
+                    "retryable": retryable,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                })
+                fallback = _build_agent_fallback_output(
+                    step_name=_name,
+                    query=query,
+                    ticker=ticker,
+                    error=f"{exc.__class__.__name__}: {exc}",
+                    fallback_reason=reason,
+                    retryable=retryable,
+                    error_stage=stage,
+                )
+                fallback["collector_name"] = _name
+                return fallback
 
         invokers[name] = _invoke
 
     return invokers
 
 
-__all__ = ["build_agent_invokers", "brief_from_inputs"]
+__all__ = ["build_collector_invokers", "brief_from_inputs"]

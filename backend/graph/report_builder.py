@@ -1429,7 +1429,6 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     render_vars = artifacts.get("render_vars") if isinstance(artifacts.get("render_vars"), dict) else {}
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts.get("evidence_pool"), list) else []
     query_coverage = artifacts.get("query_coverage") if isinstance(artifacts.get("query_coverage"), dict) else {}
-    debate = artifacts.get("debate") if isinstance(artifacts.get("debate"), dict) else {}
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
     errors = artifacts.get("errors") if isinstance(artifacts.get("errors"), list) else []
     draft_markdown = _safe_str(artifacts.get("draft_markdown") or "")
@@ -1683,15 +1682,6 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     report_hints["quality"] = quality_hints
     if query_coverage:
         report_hints["query_coverage"] = query_coverage
-    if debate.get("status") == "done":
-        report_hints["has_debate"] = True
-        report_hints["debate"] = {
-            "judge_scorecard": debate.get("judge_scorecard") if isinstance(debate.get("judge_scorecard"), dict) else {},
-            "consensus": debate.get("consensus"),
-            "open_questions": debate.get("open_questions") if isinstance(debate.get("open_questions"), list) else [],
-        }
-        if "debate" not in report_tags:
-            report_tags.append("debate")
     if isinstance(verifier_result, dict) and verifier_result:
         report_hints["verifier"] = {
             "enabled": bool(verifier_result.get("enabled")),
@@ -1840,26 +1830,6 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if "conflict" not in report_tags and (has_active_conflicts or is_degraded_conflict):
             report_tags.append("conflict")
 
-    challenges = debate.get("challenges") if isinstance(debate.get("challenges"), list) else []
-    if challenges:
-        challenge_lines = ["## 风险质询"]
-        for item in challenges[:3]:
-            if not isinstance(item, dict):
-                continue
-            target = _safe_str(item.get("target_agent") or "").strip()
-            text = _safe_str(item.get("challenge_zh") or "").strip()
-            if not target or not text:
-                continue
-            try:
-                target_name = profile(target).name_zh
-            except KeyError:
-                target_name = target
-            challenge_lines.append(f"- ⚠ 对{target_name}: {text}")
-        if len(challenge_lines) > 1:
-            synthesis_report = f"{synthesis_report.rstrip()}\n\n" + "\n".join(challenge_lines) + "\n"
-            if "debate" not in report_tags:
-                report_tags.append("debate")
-
     grounding_stats = _compute_grounding_stats(
         generated_text=synthesis_report,
         citations=citations,
@@ -1977,8 +1947,6 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         validated["chart_specs"] = run_result.get("chart_specs", [])
         validated["agent_evidence"] = run_result.get("evidence", [])
         validated["agent_claims"] = run_result.get("claims", [])
-        if debate:
-            validated["debate"] = debate
         # P2-1 护城河前置：把幻觉洗涤结果暴露到 top-level，前端 FactCheckCard 消费。
         # 数据来自真实验证器输出；零问题时也展示「全部通过」状态以体现核查行为。
         validated["fact_check"] = _build_fact_check_payload(verifier_result, verifier_claims)
@@ -2005,8 +1973,6 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         meta["report_hints"] = report_hints
         meta["grounding"] = grounding_stats
         meta["query_coverage"] = query_coverage
-        if debate:
-            meta["debate"] = debate
         meta["verifier"] = verifier_result
         meta["prediction_archive"] = prediction_archive
         meta["run_id"] = run_id

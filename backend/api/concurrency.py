@@ -23,7 +23,6 @@ from backend.config.settings import security_settings
 
 # 昂贵生成端点的路径前缀（这些请求会触发多次 LLM 调用 + 长时间占用）
 GENERATION_PATH_PREFIXES: tuple[str, ...] = (
-    "/chat/supervisor",
     "/api/execute",
 )
 

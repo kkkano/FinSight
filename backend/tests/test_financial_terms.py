@@ -66,12 +66,12 @@ def test_builder_preserves_state_and_uses_same_rendered_text():
     assert result["output_mode"] == "brief"
 
 
-def test_understand_request_short_circuits_before_context_and_router(monkeypatch):
-    import backend.graph.nodes.understand_request as understand_module
+def test_route_request_short_circuits_before_context_and_collectors(monkeypatch):
+    from backend.graph.nodes.route_request import route_request
 
     monkeypatch.setenv("FINSIGHT_FINANCIAL_TERM_RESOLVER", "on")
     state = {"query": "PE 是什么？", "ui_context": {"active_symbol": "NVDA"}, "trace": {}, "artifacts": {}}
-    result = asyncio.run(understand_module(state))
+    result = asyncio.run(route_request(state))
     assert result["chat_responded"] is True
     assert result["tasks"] == []
     assert result["understanding"]["intent_frame"]["source"] == "deterministic_term_resolver"

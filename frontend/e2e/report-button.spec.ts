@@ -198,7 +198,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('finsight-portfolio-positions', JSON.stringify({ AAPL: 10 }));
   });
 
-  await page.route('**/chat/supervisor/stream', async (route) => {
+  await page.route('**/api/execute', async (route) => {
     await fulfillSSE(route);
   });
 
@@ -265,8 +265,8 @@ test.beforeEach(async ({ page }) => {
 test('ChatInput: report toggle + send uses options.output_mode=investment_report', async ({ page }) => {
   let captured: any = null;
 
-  await page.unroute('**/chat/supervisor/stream');
-  await page.route('**/chat/supervisor/stream', async (route) => {
+  await page.unroute('**/api/execute');
+  await page.route('**/api/execute', async (route) => {
     captured = parseRequestBody(route);
     await fulfillSSE(route);
   });
@@ -344,8 +344,8 @@ test('Context panel tabs can switch and panel can collapse/expand', async ({ pag
 test('Session continuity: dashboard handoff returns to the same Chat session', async ({ page }) => {
   const payloads: any[] = [];
 
-  await page.unroute('**/chat/supervisor/stream');
-  await page.route('**/chat/supervisor/stream', async (route) => {
+  await page.unroute('**/api/execute');
+  await page.route('**/api/execute', async (route) => {
     const payload = parseRequestBody(route);
     payloads.push(payload);
 
@@ -383,8 +383,8 @@ test('Session continuity: dashboard handoff returns to the same Chat session', a
 test('Selection reference: ask-from-news keeps selection context in request', async ({ page }) => {
   let captured: any = null;
 
-  await page.unroute('**/chat/supervisor/stream');
-  await page.route('**/chat/supervisor/stream', async (route) => {
+  await page.unroute('**/api/execute');
+  await page.route('**/api/execute', async (route) => {
     captured = parseRequestBody(route);
     await fulfillSSE(route);
   });

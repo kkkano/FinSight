@@ -72,7 +72,7 @@ class RiskAgent(BaseFinancialAgent):
     """Rule-based risk evaluator.
 
     The constructor intentionally follows the same signature used by
-    ``backend.graph.adapters.agent_adapter``.
+    ``backend.graph.adapters.collector_adapter``.
     """
 
     AGENT_NAME = "risk_agent"

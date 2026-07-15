@@ -169,7 +169,6 @@ async def test_lifespan_runs_startup_and_shutdown_hooks(monkeypatch: pytest.Monk
 async def test_real_graph_deep_report_path_reaches_render(monkeypatch: pytest.MonkeyPatch) -> None:
     """不替换节点，验证 deep-report 真实图路径可完整执行。"""
     for key, value in {
-        "LANGGRAPH_PLANNER_MODE": "stub",
         "LANGGRAPH_SYNTHESIZE_MODE": "stub",
         "LANGGRAPH_EXECUTE_LIVE_TOOLS": "false",
         "FINSIGHT_INTENT_FRAME": "on",

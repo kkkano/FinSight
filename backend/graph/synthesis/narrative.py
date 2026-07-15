@@ -73,7 +73,6 @@ async def generate_narrative_draft(
     artifacts = state.get("artifacts") or {}
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
-    debate = artifacts.get("debate") if isinstance(artifacts, dict) else None
     query = (state.get("query") or "").strip()
     subject = state.get("subject") or {}
     tickers = subject.get("tickers") if isinstance(subject, dict) else []
@@ -204,24 +203,11 @@ async def generate_narrative_draft(
         if ev_lines:
             evidence_text = "\n".join(ev_lines)
 
-    debate_context = ""
-    if isinstance(debate, dict) and debate.get("status") == "done":
-        debate_context = json_dumps_safe(
-            {
-                "judge_scorecard": debate.get("judge_scorecard") if isinstance(debate.get("judge_scorecard"), dict) else {},
-                "consensus": debate.get("consensus"),
-                "open_questions": debate.get("open_questions") if isinstance(debate.get("open_questions"), list) else [],
-                "challenges": debate.get("challenges") if isinstance(debate.get("challenges"), list) else [],
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-
     conversation_history = _format_conversation_history_for_synth(state)
     memory_context_block = _format_memory_context_for_synth(state)
     current_date = utc_now_iso()[:10]
     narrative_grounding_text = "\n".join(
-        part for part in [evidence_text, conflict_context, debate_context, "\n".join(agent_sections)] if part
+        part for part in [evidence_text, conflict_context, "\n".join(agent_sections)] if part
     )
     perspective_block = _skill_perspective_block(state)
 
@@ -245,8 +231,6 @@ async def generate_narrative_draft(
 {"<evidence_pool>" + chr(10) + evidence_text + chr(10) + "</evidence_pool>" if evidence_text else ""}
 
 {"<cross_agent_conflicts>" + chr(10) + conflict_context + chr(10) + "</cross_agent_conflicts>" if conflict_context else ""}
-
-{"<debate_scorecard>" + chr(10) + debate_context + chr(10) + "</debate_scorecard>" if debate_context else ""}
 
 <report_structure>
 严格按以下结构撰写，使用 Markdown 标题。每个章节必须包含实质性分析段落，禁止仅列出数据点：
@@ -308,7 +292,7 @@ async def generate_narrative_draft(
     - Chart catalog: bar / line / pie / scatter / gauge / candlestick / price_volume / rs_line / waterfall / heatmap / radar / valuation_band / bubble / drawdown / scenario。
     - 图种选择规则：价格/趋势/技术面优先 candlestick / price_volume / rs_line / drawdown；同行对比优先 bubble / heatmap / bar；财务结构优先 waterfall / 多序列 line / bar；估值优先 valuation_band / bar；风险/情景优先 scenario / drawdown；综合评分优先 radar / gauge。
     - 图表只辅助文字分析，不替代结论、证据解释和风险说明。
-11) **严格闭卷原则（高优先级）**：你唯一可用的信息来源仅限本提示中的 <agent_outputs>、<evidence_pool>、<cross_agent_conflicts>、<debate_scorecard>。
+11) **严格闭卷原则（高优先级）**：你唯一可用的信息来源仅限本提示中的 <agent_outputs>、<evidence_pool>、<cross_agent_conflicts>。
 12) 禁止引用任何未在上述标签中出现的具体事实（尤其是产品发布时间、并购、监管进展、公司战略计划、竞争对手具体动态）。
 13) 如需提及行业背景，仅允许使用泛化表述（如"行业竞争加剧"），禁止输出具体日期+事件断言。
 14) 违反闭卷原则视为编造数据，与编造财务数字同级错误。

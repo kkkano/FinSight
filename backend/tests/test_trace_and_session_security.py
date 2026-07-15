@@ -109,11 +109,11 @@ def test_redact_sensitive_payload_masks_values():
     assert redacted["nested"]["normal"] == "safe"
 
 
-def test_chat_endpoint_rejects_illegal_session_id():
+def test_execute_endpoint_rejects_illegal_session_id():
     main = _load_main_module()
     with TestClient(main.app) as client:
         resp = client.post(
-            "/chat/supervisor",
+            "/api/execute",
             json={"query": "分析影响", "session_id": "tenant:user:bad/slash"},
         )
 

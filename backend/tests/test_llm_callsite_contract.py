@@ -6,21 +6,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_CALLSITES = (
-    "backend/graph/intent/router.py",
-    "backend/graph/nodes/planner.py",
     "backend/graph/nodes/synthesize.py",
-    "backend/graph/nodes/research_debate.py",
-    "backend/graph/adapters/agent_adapter.py",
     "backend/agents/base_agent.py",
     "backend/agents/deep_search_agent.py",
     "backend/agents/news_agent.py",
     "backend/services/monitor_commentator.py",
-    "backend/api/chart_intelligence.py",
-    "backend/graph/nodes/resolve_subject.py",
+    "backend/services/prediction_service.py",
     "backend/graph/synthesis/narrative.py",
+    "backend/graph/synthesis/research_synthesis.py",
     "backend/report/verifier.py",
-    "backend/services/rebalance_llm_enhancer.py",
-    "backend/api/app_factory.py",
 )
 
 

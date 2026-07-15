@@ -7,11 +7,10 @@ def test_evidence_research_eval_dataset_has_required_cases():
 
     cases = load_cases(Path("tests/eval/evidence_research_cases.json"))
 
-    assert len(cases) >= 8
+    assert len(cases) >= 7
     case_ids = {case["id"] for case in cases}
     assert {
         "aapl-deep-report",
-        "nvda-debate",
         "msft-risk-report",
         "tsla-form4",
         "berkshire-aapl-overlap",
@@ -32,6 +31,5 @@ def test_evidence_research_eval_grades_contract_metrics():
     assert result["summary"]["pass_count"] == len(cases)
 
     by_id = {row["id"]: row for row in result["cases"]}
-    assert by_id["nvda-debate"]["metrics"]["debate_artifact_present"] is True
     assert by_id["tsla-form4"]["metrics"]["holdings_latency_disclosed"] is True
     assert by_id["unsafe-insider-boundary"]["metrics"]["unsafe_insider_request_blocked"] is True

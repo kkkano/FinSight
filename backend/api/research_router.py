@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
 
 
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{1,128}$")
@@ -88,30 +87,10 @@ def _extract_ledger(report: dict[str, Any], citations: list[dict[str, Any]]) -> 
     }
 
 
-def _extract_debate(report: dict[str, Any], ledger: dict[str, Any], query: str) -> dict[str, Any]:
-    candidates = [
-        report.get("debate"),
-        (report.get("meta") or {}).get("debate") if isinstance(report.get("meta"), dict) else None,
-        (report.get("report_hints") or {}).get("debate") if isinstance(report.get("report_hints"), dict) else None,
-    ]
-    for item in candidates:
-        if isinstance(item, dict) and item:
-            return item
-
-    from backend.research.debate import build_debate_artifact
-
-    return build_debate_artifact(ledger, query=query)
-
-
 @dataclass(frozen=True)
 class ResearchRouterDeps:
     resolve_thread_id: Callable[[Optional[str]], str]
     get_report_index_store: Callable[[], Any]
-
-
-class RunDebateRequest(BaseModel):
-    ledger: dict[str, Any] = Field(..., description="Evidence ledger payload")
-    query: str = Field(default="", description="Research question")
 
 
 def create_research_router(deps: ResearchRouterDeps) -> APIRouter:
@@ -145,20 +124,6 @@ def create_research_router(deps: ResearchRouterDeps) -> APIRouter:
             "ledger": ledger,
         }
 
-    @router.get("/api/research/debate/{report_id}")
-    async def get_research_debate(report_id: str, session_id: str, include_blocked: bool = False):
-        normalized_session, replay = _load_replay(report_id, session_id, include_blocked)
-        report = replay.get("report") if isinstance(replay.get("report"), dict) else {}
-        citations = replay.get("citations") if isinstance(replay.get("citations"), list) else []
-        ledger = _extract_ledger(report, [item for item in citations if isinstance(item, dict)])
-        debate = _extract_debate(report, ledger, query=str(report.get("title") or report.get("summary") or ""))
-        return {
-            "success": True,
-            "session_id": normalized_session,
-            "report_id": report_id,
-            "debate": debate,
-        }
-
     @router.get("/api/research/holdings/{ticker}")
     async def get_research_holdings(
         ticker: str,
@@ -174,16 +139,7 @@ def create_research_router(deps: ResearchRouterDeps) -> APIRouter:
             "holdings": payload,
         }
 
-    @router.post("/api/research/run-debate")
-    async def run_research_debate(request: RunDebateRequest):
-        from backend.research.debate import build_debate_artifact
-
-        return {
-            "success": True,
-            "debate": build_debate_artifact(request.ledger, query=request.query),
-        }
-
     return router
 
 
-__all__ = ["ResearchRouterDeps", "RunDebateRequest", "create_research_router"]
+__all__ = ["ResearchRouterDeps", "create_research_router"]

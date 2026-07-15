@@ -19,14 +19,11 @@ from uuid import uuid4
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from backend.api.schemas import (
-    ChatRequest,
-)
-from backend.api.chat_router import ChatRouterDeps, create_chat_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
 from backend.api.dashboard_router import dashboard_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
+from backend.api.schemas import ChatRequest
 from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.monitor_router import monitor_router
 from backend.api.portfolio_router import portfolio_router
@@ -44,12 +41,11 @@ from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.tools_router import create_tools_router
 from backend.api.skills_router import create_skills_router
 from backend.api.user_router import UserRouterDeps, create_user_router
-from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
+from backend.contracts import SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
 from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready, reset_graph_runner
 from backend.orchestration.tools_bridge import get_global_orchestrator
-from backend.graph.nodes.planner import get_planner_ab_metrics
 from backend.rag import get_rag_observability_store, install_rag_observability_hooks
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.portfolio_store import get_positions as get_portfolio_positions
@@ -260,7 +256,7 @@ def _normalize_session_key(session_id: Optional[str]) -> str:
         normalized.append(text)
     return ":".join(normalized)
 
-def _resolve_trace_raw_enabled(request: ChatRequest) -> bool:
+def _resolve_trace_raw_enabled(request: Any) -> bool:
     default_enabled = _env_bool("TRACE_RAW_ENABLED", True)
     override = None
     if getattr(request, "options", None):

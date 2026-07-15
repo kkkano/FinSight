@@ -16,7 +16,6 @@ class SystemRouterDeps:
     graph_runner_ready: Callable[[], bool]
     get_graph_checkpointer_info: Callable[[], Dict[str, Any]]
     get_orchestrator_safe: Callable[[], Any]
-    get_planner_ab_metrics: Callable[[], Dict[str, Any]]
     get_rag_observability_store: Callable[[], Any]
     require_rag_read_access: Callable[[Request], Dict[str, Any]]
     require_rag_mutation_access: Callable[[Request], Dict[str, Any]]
@@ -112,14 +111,6 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
             return {"status": "ok", "data": orchestrator.get_stats(), "timestamp": _now()}
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"orchestrator diagnostics failed: {exc}") from exc
-
-    @router.get("/diagnostics/planner-ab")
-    @router.get("/diagnostics/planner_ab")
-    def diagnostics_planner_ab():
-        try:
-            return {"status": "ok", "data": deps.get_planner_ab_metrics(), "timestamp": _now()}
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"planner-ab diagnostics failed: {exc}") from exc
 
     @router.get("/diagnostics/rag/status")
     def diagnostics_rag_status(request: Request):

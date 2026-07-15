@@ -188,7 +188,7 @@ test.describe('WP6 production remediation paths', () => {
   test('latest 204 keeps one primary K-line and dashboard handoff is editable before manual send', async ({ page }, testInfo) => {
     let streamCalls = 0;
     let sentPayload: Record<string, any> | null = null;
-    await page.route('**/chat/supervisor/stream', async (route) => {
+    await page.route('**/api/execute', async (route) => {
       streamCalls += 1;
       sentPayload = route.request().postDataJSON();
       await route.fulfill({

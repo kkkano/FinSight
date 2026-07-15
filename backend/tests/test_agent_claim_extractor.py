@@ -32,7 +32,7 @@ def test_infer_stance_marks_risk_or_downside_summary_as_bear_or_risk():
 
 
 def test_conflicting_claims_flow_to_ledger_contradictions_for_core_agents():
-    from backend.graph.adapters import agent_adapter
+    from backend.graph.adapters import collector_adapter
     from backend.research.claim_extractor import conflicts_to_contradictions
     from backend.research.evidence_ledger import from_agent_output
 
@@ -49,7 +49,7 @@ def test_conflicting_claims_flow_to_ledger_contradictions_for_core_agents():
         }
 
         contradictions = conflicts_to_contradictions(output)
-        normalized = agent_adapter._normalize_agent_output(
+        normalized = collector_adapter._normalize_agent_output(
             step_name=agent_name,
             output=output,
             query="Analyze NVDA",
@@ -68,9 +68,9 @@ def test_conflicting_claims_flow_to_ledger_contradictions_for_core_agents():
 
 
 def test_adapter_preserves_legacy_keys_and_adds_claims():
-    from backend.graph.adapters import agent_adapter
+    from backend.graph.adapters import collector_adapter
 
-    normalized = agent_adapter._normalize_agent_output(
+    normalized = collector_adapter._normalize_agent_output(
         step_name="fundamental_agent",
         output={
             "summary": "TSLA has improving margins and upside from deliveries.",

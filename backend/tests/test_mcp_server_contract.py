@@ -5,7 +5,6 @@ import json
 EXPECTED_TOOLS = {
     "research_company",
     "get_evidence_ledger",
-    "run_debate",
     "track_institutional_holdings",
     "get_insider_transactions",
 }
@@ -70,7 +69,7 @@ def test_mcp_server_is_disabled_by_default(monkeypatch):
     assert registry.enabled is False
     assert registry.list_tools() == []
 
-    result = registry.call_tool("run_debate", {"ledger": _ledger()})
+    result = registry.call_tool("research_company", {"ticker": "NVDA", "session_id": "s1"})
 
     assert result["isError"] is True
     assert result["error"]["code"] == "mcp_server_disabled"
@@ -124,22 +123,4 @@ def test_dispatcher_sanitizes_tool_results(monkeypatch):
     assert result["structuredContent"]["ticker"] == "NVDA"
     assert result["structuredContent"]["nested"]["value"] == 1
     assert result["structuredContent"]["nested"]["items"] == [{}, {"kept": True}]
-    _assert_no_forbidden_keys(result)
-
-
-def test_run_debate_dispatch_uses_existing_debate_artifact(monkeypatch):
-    monkeypatch.setenv("MCP_SERVER_ENABLED", "true")
-
-    from backend.protocols.mcp_server import build_tool_registry
-
-    registry = build_tool_registry()
-
-    result = registry.call_tool("run_debate", {"ledger": _ledger(), "query": "NVDA investment debate"})
-
-    assert result["isError"] is False
-    artifact = result["structuredContent"]
-    assert artifact["status"] == "done"
-    assert artifact["ledger_id"] == "ledger:test"
-    assert artifact["bull_thesis"]["claim_count"] == 1
-    assert artifact["bear_thesis"]["claim_count"] == 1
     _assert_no_forbidden_keys(result)

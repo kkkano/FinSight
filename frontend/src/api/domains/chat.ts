@@ -6,26 +6,6 @@ import type { StreamOpts } from '../sse';
 import type * as Contracts from '../contracts';
 
 export const chatApi = {
-// 发送聊天消息（协调者主入口）
-  async sendMessage(query: string, sessionId?: string, options?: Contracts.ChatOptions): Promise<Contracts.ChatResponse> {
-    try {
-      const response = await api.post<Contracts.ChatResponse>('/chat/supervisor', {
-        query,
-        session_id: sessionId,
-        options,
-      });
-
-      // 兼容性处理：如果后端返回结构不一致，确保前端不白屏
-      if (!response.data) {
-        throw new Error("Empty response from server");
-      }
-      return response.data;
-    } catch (error) {
-      console.error("sendMessage failed:", error);
-      throw error;
-    }
-  },
-
 async createConversation(
     sessionId?: string,
     payload?: {
@@ -94,7 +74,7 @@ async deleteConversation(sessionId: string): Promise<{
     callbacks: Contracts.SSECallbacks,
     opts: StreamOpts = {},
   ): Promise<void> {
-    let response = await fetch(buildApiUrl('/chat/supervisor/stream'), {
+    let response = await fetch(buildApiUrl('/api/execute'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
       body: JSON.stringify(body),
@@ -112,7 +92,7 @@ async deleteConversation(sessionId: string): Promise<{
       const activeRunId = runId;
       if (!activeRunId) return;
       void buildAuthHeaders().then((headers) => fetch(
-        buildApiUrl(`/api/chat/stream/${encodeURIComponent(activeRunId)}/cancel`),
+        buildApiUrl(`/api/execute/runs/${encodeURIComponent(activeRunId)}/cancel`),
         { method: 'POST', headers },
       )).catch(() => undefined);
     }, { once: true });
@@ -157,7 +137,7 @@ async deleteConversation(sessionId: string): Promise<{
         try {
           await waitForReconnect(reconnectDelays[attempt - 1]);
           response = await fetch(
-            buildApiUrl(`/api/chat/stream/${encodeURIComponent(runId)}?after_seq=${lastSeq}`),
+            buildApiUrl(`/api/execute/runs/${encodeURIComponent(runId)}/events?after_seq=${lastSeq}`),
             {
               method: 'GET',
               headers: await buildAuthHeaders(),

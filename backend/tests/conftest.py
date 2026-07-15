@@ -39,10 +39,8 @@ def _force_langgraph_deterministic_defaults(monkeypatch):
     Individual tests can override these env vars when explicitly testing LLM/tool modes.
     """
 
-    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("ENABLE_LANGSMITH", "false")
     clear_settings_caches()
     yield

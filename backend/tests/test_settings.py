@@ -4,22 +4,8 @@ from backend.config.settings import (
     agent_settings,
     clear_settings_caches,
     executor_settings,
-    planner_settings,
     security_settings,
 )
-
-
-def test_planner_settings_defaults_and_env_override(monkeypatch):
-    monkeypatch.delenv("LANGGRAPH_PLANNER_REPORT_TIMEOUT_SEC", raising=False)
-    clear_settings_caches()
-    assert planner_settings().report_timeout_sec == 240
-
-    monkeypatch.setenv("LANGGRAPH_PLANNER_REPORT_TIMEOUT_SEC", "321")
-    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_ENABLED", "true")
-    clear_settings_caches()
-    settings = planner_settings()
-    assert settings.report_timeout_sec == 321
-    assert settings.ab_enabled is True
 
 
 def test_executor_settings_defaults_and_env_override(monkeypatch):

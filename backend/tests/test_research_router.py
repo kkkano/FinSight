@@ -1,23 +1,36 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import importlib
-
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.api.research_router import ResearchRouterDeps, create_research_router
 
-def _load_main_module(tmp_path, monkeypatch):
-    sqlite_path = tmp_path / "research_report_index.sqlite"
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
 
-    import backend.services.report_index as report_index
+class _ReportStore:
+    def __init__(self):
+        self._reports: dict[tuple[str, str], tuple[dict, bool]] = {}
 
-    report_index._REPORT_INDEX_STORE = None
+    def add(self, *, session_id: str, report: dict, blocked: bool = False) -> None:
+        self._reports[(session_id, str(report["report_id"]))] = (report, blocked)
 
-    import backend.api.main as main
+    def get_report_replay(self, *, session_id: str, report_id: str, include_blocked: bool = False):
+        entry = self._reports.get((session_id, report_id))
+        if entry is None:
+            return None
+        report, blocked = entry
+        if blocked and not include_blocked:
+            return None
+        return {"report": report, "citations": list(report.get("citations") or [])}
 
-    importlib.reload(main)
-    return main
+
+def _build_client(store: _ReportStore) -> TestClient:
+    app = FastAPI()
+    app.include_router(create_research_router(ResearchRouterDeps(
+        resolve_thread_id=lambda value: str(value or "").strip(),
+        get_report_index_store=lambda: store,
+    )))
+    return TestClient(app)
 
 
 def _ledger() -> dict:
@@ -60,14 +73,6 @@ def _report(report_id: str, *, blocked: bool = False) -> dict:
         "summary": "summary",
         "generated_at": "2026-05-18T00:00:00Z",
         "evidence_ledger": _ledger(),
-        "debate": {
-            "enabled": True,
-            "status": "done",
-            "ledger_id": "ledger:research-router",
-            "judge_scorecard": {"evidence_balance": "mixed"},
-            "consensus": "mixed",
-            "open_questions": [],
-        },
         "citations": [],
     }
     if blocked:
@@ -87,13 +92,12 @@ def _report(report_id: str, *, blocked: bool = False) -> dict:
     return report
 
 
-def test_research_artifact_read_endpoints_use_report_replay_session_access(tmp_path, monkeypatch):
-    main = _load_main_module(tmp_path, monkeypatch)
-    store = main.get_report_index_store()
+def test_research_artifact_read_endpoints_use_report_replay_session_access():
+    store = _ReportStore()
     session_id = "tenant:user:research-thread"
-    store.upsert_report(session_id=session_id, report=_report("rpt-research-1"), trace_digest={})
+    store.add(session_id=session_id, report=_report("rpt-research-1"))
 
-    client = TestClient(main.app)
+    client = _build_client(store)
 
     ledger_resp = client.get(
         "/api/research/ledger/rpt-research-1",
@@ -105,13 +109,6 @@ def test_research_artifact_read_endpoints_use_report_replay_session_access(tmp_p
     assert ledger_payload["session_id"] == session_id
     assert ledger_payload["ledger"]["ledger_id"] == "ledger:research-router"
 
-    debate_resp = client.get(
-        "/api/research/debate/rpt-research-1",
-        params={"session_id": session_id},
-    )
-    assert debate_resp.status_code == 200
-    assert debate_resp.json()["debate"]["judge_scorecard"]["evidence_balance"] == "mixed"
-
     denied_resp = client.get(
         "/api/research/ledger/rpt-research-1",
         params={"session_id": "tenant:user:other-thread"},
@@ -119,18 +116,16 @@ def test_research_artifact_read_endpoints_use_report_replay_session_access(tmp_p
     assert denied_resp.status_code == 404
 
 
-def test_research_artifact_read_endpoints_respect_include_blocked_like_replay(tmp_path, monkeypatch):
-    main = _load_main_module(tmp_path, monkeypatch)
-    store = main.get_report_index_store()
+def test_research_artifact_read_endpoints_respect_include_blocked_like_replay():
+    store = _ReportStore()
     session_id = "tenant:user:research-blocked"
-    store.upsert_report(
+    store.add(
         session_id=session_id,
         report=_report("rpt-research-blocked", blocked=True),
-        trace_digest={},
-        include_blocked=True,
+        blocked=True,
     )
 
-    client = TestClient(main.app)
+    client = _build_client(store)
 
     default_resp = client.get(
         "/api/research/ledger/rpt-research-blocked",
@@ -146,30 +141,7 @@ def test_research_artifact_read_endpoints_respect_include_blocked_like_replay(tm
     assert include_resp.json()["ledger"]["ledger_id"] == "ledger:research-router"
 
 
-def test_run_debate_builds_artifact_from_ledger_payload_without_graph_run(tmp_path, monkeypatch):
-    main = _load_main_module(tmp_path, monkeypatch)
-
-    async def _fail_graph_runner():
-        raise AssertionError("run-debate must not start a graph run")
-
-    monkeypatch.setattr(main, "aget_graph_runner", _fail_graph_runner)
-
-    client = TestClient(main.app)
-    response = client.post(
-        "/api/research/run-debate",
-        json={"query": "NVDA debate", "ledger": _ledger()},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["success"] is True
-    assert payload["debate"]["status"] == "done"
-    assert payload["debate"]["ledger_id"] == "ledger:research-router"
-    assert payload["debate"]["bull_thesis"]["claim_count"] == 1
-    assert payload["debate"]["bear_thesis"]["claim_count"] == 1
-
-
-def test_holdings_endpoint_uses_read_only_holdings_tool(tmp_path, monkeypatch):
+def test_holdings_endpoint_uses_read_only_holdings_tool(monkeypatch):
     import backend.tools.sec_holdings as sec_holdings
 
     calls: list[tuple[str, int]] = []
@@ -186,8 +158,7 @@ def test_holdings_endpoint_uses_read_only_holdings_tool(tmp_path, monkeypatch):
         }
 
     monkeypatch.setattr(sec_holdings, "get_institution_holdings_by_ticker", _fake_holdings)
-    main = _load_main_module(tmp_path, monkeypatch)
-    client = TestClient(main.app)
+    client = _build_client(_ReportStore())
 
     response = client.get("/api/research/holdings/aapl", params={"limit": 5})
 

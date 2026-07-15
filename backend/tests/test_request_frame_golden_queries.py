@@ -6,7 +6,7 @@ import pytest
 
 from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 from backend.graph.nodes.policy_gate import policy_gate
-from backend.graph.nodes.understand_request import understand_request
+from backend.graph.nodes.route_request import route_request
 
 
 @dataclass(frozen=True)
@@ -42,17 +42,6 @@ GOLDEN_QUERY_CASES = [
         expected_evidence=["price_snapshot", "news_context", "risk_profile"],
         expected_render_shape="answer",
         must_include_steps={"get_stock_price", "get_company_news", "analyze_historical_drawdowns"},
-    ),
-    GoldenQueryCase(
-        query="backtest MACD strategy on AAPL",
-        expected_lane="action",
-        expected_relation="single",
-        expected_tickers=["AAPL"],
-        expected_required_results=["backtest_result"],
-        expected_action="backtest",
-        expected_render_shape="action_result",
-        must_include_steps={"run_strategy_backtest"},
-        must_exclude_steps={"technical_agent"},
     ),
     GoldenQueryCase(
         query="what is backtesting?",
@@ -160,7 +149,7 @@ def _run_golden_query(query: str) -> tuple[dict, dict]:
         "ui_context": {"market": "US"},
         "output_mode": "chat",
     }
-    understanding = asyncio.run(understand_request(state))
+    understanding = asyncio.run(route_request(state))
     policy_out = policy_gate({**state, **understanding})
     plan_out = planner_stub({**state, **understanding, **policy_out})
     return understanding, plan_out

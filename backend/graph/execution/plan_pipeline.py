@@ -8,7 +8,7 @@ from typing import Any
 
 from backend.config.settings import executor_settings
 from backend.graph.adapters import (
-    build_agent_invokers as _build_agent_invokers,
+    build_collector_invokers as _build_collector_invokers,
     build_tool_invokers as _build_tool_invokers,
 )
 from backend.graph.dag_executor import execute_plan_dag
@@ -91,7 +91,7 @@ __all__ = [
     "_stable_id",
     "_summarize_layer_hits",
     "_ttl_hours_for_evidence",
-    "build_agent_invokers",
+    "build_collector_invokers",
     "build_kb_vector_source_id",
     "build_subject_kb_collection",
     "build_thread_memory_collection",
@@ -113,9 +113,8 @@ def build_tool_invokers(allowed_tools: list[str]) -> dict[str, Any]:
     return _build_tool_invokers(allowed_tools=allowed_tools or [])
 
 
-def build_agent_invokers(allowed_agents: list[str], state: GraphState) -> dict[str, Any]:
-    # Backward-compatible wrapper for tests that monkeypatch this symbol.
-    return _build_agent_invokers(allowed_agents=allowed_agents or [], state=state)
+def build_collector_invokers(allowed_collectors: list[str], state: GraphState) -> dict[str, Any]:
+    return _build_collector_invokers(allowed_collectors=allowed_collectors or [], state=state)
 
 
 _EXECUTION_OWNED_ARTIFACT_KEYS = {
@@ -161,7 +160,7 @@ async def execute_plan_node(state: GraphState) -> dict:
         allowed_tools = policy.get("allowed_tools") if isinstance(policy, dict) else []
         allowed_agents = policy.get("allowed_agents") if isinstance(policy, dict) else []
         tool_invokers = build_tool_invokers(list(allowed_tools or []))
-        agent_invokers = build_agent_invokers(list(allowed_agents or []), state)
+        agent_invokers = build_collector_invokers(list(allowed_agents or []), state)
 
     if settings.dag_executor:
         context_bus: dict[str, str] | None = (

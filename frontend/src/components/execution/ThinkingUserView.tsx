@@ -28,11 +28,11 @@ const PHASES = [
     Icon: Search,
     nodes: [
       'build_initial_state', 'reset_turn', 'trim', 'summarize',
-      'normalize', 'decide_output', 'understand_request', 'chat_respond',
+      'prepare_context', 'route_request', 'collect_evidence', 'analyze',
       'resolve_subject', 'clarify', 'parse_operation',
     ],
     altStages: ['understanding', 'classifying', 'classified', 'intent_classification'],
-    doneMarker: 'understand_request',
+    doneMarker: 'route_request',
     altDoneStages: ['understanding', 'classified'],
   },
   {

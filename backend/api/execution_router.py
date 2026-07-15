@@ -1,15 +1,13 @@
-"""
-Execution router — ``POST /api/execute``
-
-A *non-chat* entry point for triggering the LangGraph pipeline from
-Dashboard cards, Workbench tasks, or any UI widget that isn't the chat
-panel.  Uses the **same** :func:`run_graph_pipeline` as the chat
-streaming endpoint so execution behaviour is never duplicated.
-"""
+"""唯一的 Chat/Report SSE 执行入口。"""
 from __future__ import annotations
 
-import json as _json
-import logging
+import asyncio
+import math
+import os
+import re
+import time
+import uuid
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from typing import Any, AsyncIterable, Awaitable, Callable, Literal, Optional
@@ -19,80 +17,44 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.dashboard.agent_bridge import (
-    DashboardDeepDiveRequest,
-    build_dashboard_deep_dive_execution,
-)
+from backend.api.schemas import ChatContext, ChatMessage, ChatOptions
+from backend.api.stream_replay import replay_buffer
 from backend.graph.confirmation_policy import parse_confirmation_mode
-from backend.services.execution_service import ExecutionDeps, run_graph_pipeline, resume_graph_pipeline
-
-logger = logging.getLogger("execution_router")
+from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
 
 
-# ---------------------------------------------------------------------------
-# Request schema
-# ---------------------------------------------------------------------------
+_SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_STREAM_TASKS: set[asyncio.Task[Any]] = set()
+_STREAM_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
+_RUN_OWNERS: OrderedDict[str, str] = OrderedDict()
+_MAX_RUN_OWNERS = 256
+
 
 class ExecuteRequest(BaseModel):
-    """Body for ``POST /api/execute``."""
+    """Chat、Dashboard handoff 与报告生成共用的执行请求。"""
 
     query: str = Field(..., min_length=1, description="Analysis query")
-    tickers: list[str] | None = Field(None, description="Explicit ticker list")
-    output_mode: str | None = Field(
-        None, description="chat / brief / investment_report",
-    )
-    confirmation_mode: Literal["auto", "required", "skip"] | None = Field(
-        None,
-        description="Confirmation strategy override: auto/required/skip",
-    )
-    analysis_depth: Literal["quick", "report", "deep_research"] | None = Field(
-        None,
-        description="Explicit analysis depth semantics (quick/report/deep_research)",
-    )
-    ensure_all_agents: bool | None = Field(
-        None,
-        description="Force report orchestration to keep all report agents enabled",
-    )
-    agents: list[str] | None = Field(
-        None, description="Override: only run these agents",
-    )
-    budget: int | None = Field(
-        None, ge=1, le=10, description="Max LangGraph rounds",
-    )
-    source: str | None = Field(
-        None, description="Trigger origin (dashboard / workbench / …)",
-    )
-    session_id: str | None = Field(None, description="Session ID")
-    run_id: str | None = Field(None, description="Client-provided run id for event correlation")
-    trace_raw: bool | None = Field(
-        None,
-        description="Whether to include full raw trace events in SSE stream",
-    )
-    agent_preferences: dict | None = Field(
-        None,
-        description="Per-agent depth, budget, and timeout preferences from frontend UI",
-    )
+    session_id: str | None = Field(None, description="Conversation session ID")
+    run_id: str | None = Field(None, description="Optional correlation ID")
+    history: list[ChatMessage] | None = Field(None, description="Visible conversation history")
+    context: ChatContext | None = Field(None, description="Ephemeral UI context")
+    options: ChatOptions | None = Field(None, description="Chat execution options")
 
+    tickers: list[str] | None = None
+    output_mode: str | None = None
+    confirmation_mode: Literal["auto", "required", "skip"] | None = None
+    analysis_depth: Literal["quick", "report", "deep_research"] | None = None
+    agents: list[str] | None = None
+    budget: int | None = Field(None, ge=1, le=10)
+    source: str | None = None
+    trace_raw: bool | None = None
+    agent_preferences: dict[str, Any] | None = None
 
-class ResumeRequest(BaseModel):
-    """Body for ``POST /api/execute/resume``."""
+    model_config = {"extra": "ignore"}
 
-    thread_id: str = Field(..., min_length=1, description="Thread / session ID to resume")
-    resume_value: Any = Field(..., description="User response to the interrupt prompt")
-    session_id: str | None = Field(None, description="Session ID")
-    run_id: str | None = Field(None, description="Client-provided run id for event correlation")
-    source: str | None = Field(None, description="Trigger origin")
-    trace_raw: bool | None = Field(None)
-
-
-# ---------------------------------------------------------------------------
-# Dependency injection
-# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class ExecutionRouterDeps:
-    """Injected from main.py — mirrors the subset needed by the router."""
-
     get_graph_runner: Callable[[], Awaitable[Any]]
     resolve_thread_id: Callable[[Optional[str]], str]
     schedule_report_index: Callable[..., None]
@@ -115,155 +77,237 @@ def _build_execution_deps(deps: ExecutionRouterDeps) -> ExecutionDeps:
     )
 
 
+def _sanitize_json_payload(value: Any) -> Any:
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {str(key): _sanitize_json_payload(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_sanitize_json_payload(item) for item in value]
+    return value
+
+
 def _serialize_sse_item(item: object) -> str:
+    import json
+
     def _fallback(value: object):
         if isinstance(value, (datetime, date, dt_time)):
             return value.isoformat()
         return str(value)
 
-    return _json.dumps(
-        jsonable_encoder(item), ensure_ascii=False, default=_fallback,
+    return json.dumps(
+        _sanitize_json_payload(jsonable_encoder(item)),
+        ensure_ascii=False,
+        allow_nan=False,
+        default=_fallback,
     )
 
 
-async def _stream_sse_pipeline(pipeline: AsyncIterable[dict[str, Any]]):
-    async for event in pipeline:
-        yield f"data: {_serialize_sse_item(event)}\n\n"
-
-
-def _sse_response(pipeline: AsyncIterable[dict[str, Any]]) -> StreamingResponse:
-    return StreamingResponse(
-        _stream_sse_pipeline(pipeline),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+def _generation_enabled() -> bool:
+    return str(os.getenv("REPORTS_GENERATION_ENABLED", "true")).strip().lower() not in {"false", "0", "off"}
 
 
 def _enforce_user_quota(http_request: Request) -> str:
-    from backend.services.cost_audit import (
-        UserDailyCostLimitExceeded,
-        check_user_quota,
-    )
+    from backend.services.cost_audit import UserDailyCostLimitExceeded, check_user_quota
 
     user_id = str(getattr(http_request.state, "user_id", "public") or "public")
     try:
         check_user_quota(user_id)
     except UserDailyCostLimitExceeded as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+        raise HTTPException(status_code=429, detail={"code": "quota_exceeded", "message": str(exc)}) from exc
     return user_id
 
 
-# ---------------------------------------------------------------------------
-# Router factory
-# ---------------------------------------------------------------------------
+def _normalize_run_id(value: str | None) -> str:
+    run_id = str(value or "").strip() or uuid.uuid4().hex
+    if not _SAFE_RUN_ID.fullmatch(run_id):
+        raise HTTPException(status_code=422, detail={"code": "invalid_run_id", "message": "run_id format invalid"})
+    return run_id
+
+
+def _register_run_owner(run_id: str, user_id: str) -> None:
+    existing = _RUN_OWNERS.get(run_id)
+    if existing is not None:
+        raise HTTPException(status_code=409, detail={"code": "run_id_conflict", "message": "run_id already exists"})
+    _RUN_OWNERS[run_id] = user_id
+    _RUN_OWNERS.move_to_end(run_id)
+    while len(_RUN_OWNERS) > _MAX_RUN_OWNERS:
+        _RUN_OWNERS.popitem(last=False)
+
+
+def _authorize_run(run_id: str, user_id: str) -> None:
+    owner = _RUN_OWNERS.get(run_id)
+    if owner is None or owner != user_id:
+        raise HTTPException(status_code=404, detail={"code": "run_not_found", "message": "stream expired or unknown"})
+
+
+def _track_stream_task(run_id: str, task: asyncio.Task[Any]) -> None:
+    _STREAM_TASKS.add(task)
+    _STREAM_TASKS_BY_RUN[run_id] = task
+
+    def _cleanup(done_task: asyncio.Task[Any]) -> None:
+        _STREAM_TASKS.discard(done_task)
+        if _STREAM_TASKS_BY_RUN.get(run_id) is done_task:
+            _STREAM_TASKS_BY_RUN.pop(run_id, None)
+
+    task.add_done_callback(_cleanup)
+
+
+async def _stream_replay(run_id: str, *, after_seq: int = 0, session_id: str | None = None):
+    cursor = max(0, int(after_seq))
+    last_keep_alive = time.monotonic()
+    while True:
+        batch = replay_buffer.replay_from(run_id, cursor)
+        if batch is None:
+            return
+        if batch:
+            for seq, payload in batch:
+                cursor = seq
+                yield f"data: {payload}\n\n"
+            last_keep_alive = time.monotonic()
+            continue
+        if replay_buffer.is_complete(run_id):
+            return
+        now = time.monotonic()
+        if now - last_keep_alive >= 15:
+            heartbeat = {"type": "keep-alive", "run_id": run_id}
+            if session_id:
+                heartbeat["session_id"] = session_id
+            yield f"data: {_serialize_sse_item(heartbeat)}\n\n"
+            last_keep_alive = now
+        await asyncio.sleep(0.1)
+
+
+def _buffered_sse_response(
+    pipeline: AsyncIterable[dict[str, Any]],
+    *,
+    run_id: str,
+    thread_id: str,
+) -> StreamingResponse:
+    replay_buffer.start_run(run_id)
+
+    async def _pump() -> None:
+        try:
+            async for event in pipeline:
+                payload = _sanitize_json_payload(jsonable_encoder(event))
+                if not isinstance(payload, dict):
+                    payload = {"type": "system", "data": payload}
+                payload.setdefault("run_id", run_id)
+                payload.setdefault("session_id", thread_id)
+                replay_buffer.append(run_id, payload)
+        except asyncio.CancelledError:
+            replay_buffer.append(run_id, {"type": "cancelled", "run_id": run_id, "session_id": thread_id})
+            raise
+        except Exception as exc:
+            replay_buffer.append(run_id, {
+                "type": "error",
+                "code": "execution_failed",
+                "message": str(exc),
+                "run_id": run_id,
+                "session_id": thread_id,
+            })
+        finally:
+            replay_buffer.mark_complete(run_id)
+
+    _track_stream_task(run_id, asyncio.create_task(_pump()))
+    return StreamingResponse(
+        _stream_replay(run_id, session_id=thread_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "X-Run-Id": run_id,
+        },
+    )
+
+
+def _request_ui_context(request: ExecuteRequest, user_id: str) -> dict[str, Any]:
+    ui_context = request.context.model_dump(exclude_none=True) if request.context else {}
+    if request.history:
+        ui_context["session_history"] = [item.model_dump() for item in request.history[-12:]]
+    if request.tickers:
+        ui_context["tickers_override"] = request.tickers
+    selected_agents = request.agents or (request.options.agents if request.options else None)
+    if selected_agents:
+        ui_context["agents_override"] = selected_agents
+    if request.budget is not None:
+        ui_context["budget_override"] = request.budget
+    if request.source:
+        ui_context["source"] = request.source
+    if request.analysis_depth:
+        ui_context["analysis_depth"] = request.analysis_depth
+    preferences = request.agent_preferences or (request.options.agent_preferences if request.options else None)
+    if preferences:
+        ui_context["agent_preferences"] = preferences
+    ui_context["__user_id"] = user_id
+    return ui_context
+
 
 def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Execution"])
 
     @router.post("/api/execute")
     async def execute_endpoint(request: ExecuteRequest, http_request: Request):
+        if not _generation_enabled():
+            raise HTTPException(status_code=503, detail={"code": "generation_disabled", "message": "生成服务维护中"})
         user_id = _enforce_user_quota(http_request)
         try:
             thread_id = deps.resolve_thread_id(request.session_id)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise HTTPException(status_code=422, detail={"code": "invalid_session_id", "message": str(exc)}) from exc
 
-        # Build ui_context from execution-specific fields
-        ui_context: dict[str, Any] = {}
-        if request.tickers:
-            ui_context["tickers_override"] = request.tickers
-        if request.agents:
-            ui_context["agents_override"] = request.agents
-        if request.budget is not None:
-            ui_context["budget_override"] = request.budget
-        if request.source:
-            ui_context["source"] = request.source
-        if request.analysis_depth:
-            ui_context["analysis_depth"] = request.analysis_depth
-        if request.agent_preferences:
-            ui_context["agent_preferences"] = request.agent_preferences
-        if request.ensure_all_agents is not None:
-            ui_context["ensure_all_agents"] = bool(request.ensure_all_agents)
-        if (request.output_mode or "").strip().lower() == "investment_report":
-            ui_context.setdefault("ensure_all_agents", True)
-
-        exec_deps = _build_execution_deps(deps)
+        run_id = _normalize_run_id(request.run_id)
+        _register_run_owner(run_id, user_id)
+        options = request.options
+        output_mode = request.output_mode or (options.output_mode if options else None)
+        confirmation_mode = request.confirmation_mode or (options.confirmation_mode if options else None) or "skip"
+        strict_selection = options.strict_selection if options else None
+        trace_raw = request.trace_raw
+        if trace_raw is None and options and options.trace_raw_override in {"on", "off"}:
+            trace_raw = options.trace_raw_override == "on"
 
         pipeline = run_graph_pipeline(
-            deps=exec_deps,
+            deps=_build_execution_deps(deps),
             query=request.query,
             thread_id=thread_id,
-            run_id=request.run_id,
-            ui_context=ui_context,
-            output_mode=request.output_mode,
-            confirmation_mode=parse_confirmation_mode(request.confirmation_mode),
-            source=request.source or "execute",
+            run_id=run_id,
+            ui_context=_request_ui_context(request, user_id),
+            output_mode=output_mode,
+            strict_selection=strict_selection,
+            confirmation_mode=parse_confirmation_mode(confirmation_mode),
+            original_query=request.query,
+            source=request.source or "chat",
             user_id=user_id,
-            trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
+            trace_raw_enabled=bool(trace_raw),
+        )
+        return _buffered_sse_response(pipeline, run_id=run_id, thread_id=thread_id)
+
+    @router.get("/api/execute/runs/{run_id}/events")
+    async def replay_events(run_id: str, http_request: Request, after_seq: int = 0):
+        normalized = _normalize_run_id(run_id)
+        user_id = str(getattr(http_request.state, "user_id", "public") or "public")
+        _authorize_run(normalized, user_id)
+        if replay_buffer.replay_from(normalized, max(0, after_seq)) is None:
+            raise HTTPException(status_code=410, detail={"code": "run_expired", "message": "stream expired"})
+        return StreamingResponse(
+            _stream_replay(normalized, after_seq=after_seq),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
 
-        return _sse_response(pipeline)
-
-    @router.post("/api/dashboard/deep-dive")
-    async def dashboard_deep_dive_endpoint(
-        request: DashboardDeepDiveRequest,
-        http_request: Request,
-    ):
-        user_id = _enforce_user_quota(http_request)
-        try:
-            thread_id = deps.resolve_thread_id(request.session_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-        bridge = build_dashboard_deep_dive_execution(request)
-        exec_deps = _build_execution_deps(deps)
-
-        pipeline = run_graph_pipeline(
-            deps=exec_deps,
-            query=bridge.query,
-            thread_id=thread_id,
-            run_id=bridge.run_id,
-            ui_context=bridge.ui_context,
-            output_mode=bridge.output_mode,
-            confirmation_mode=parse_confirmation_mode(bridge.confirmation_mode),
-            original_query=bridge.original_query,
-            source=bridge.source,
-            user_id=user_id,
-            trace_raw_enabled=True if bridge.trace_raw is None else bool(bridge.trace_raw),
-        )
-
-        return _sse_response(pipeline)
-
-    # ------------------------------------------------------------------
-    # POST /api/execute/resume — resume an interrupted graph run
-    # ------------------------------------------------------------------
-
-    @router.post("/api/execute/resume")
-    async def resume_endpoint(request: ResumeRequest, http_request: Request):
-        user_id = _enforce_user_quota(http_request)
-        thread_id = request.thread_id
-        if request.session_id:
-            try:
-                thread_id = deps.resolve_thread_id(request.session_id)
-            except ValueError:
-                logger.debug("resume request contains an invalid session_id; keeping thread_id", exc_info=True)
-
-        exec_deps = _build_execution_deps(deps)
-
-        pipeline = resume_graph_pipeline(
-            deps=exec_deps,
-            thread_id=thread_id,
-            run_id=request.run_id,
-            resume_value=request.resume_value,
-            source=request.source or "resume",
-            user_id=user_id,
-            trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
-        )
-
-        return _sse_response(pipeline)
+    @router.post("/api/execute/runs/{run_id}/cancel")
+    async def cancel_run(run_id: str, http_request: Request):
+        normalized = _normalize_run_id(run_id)
+        user_id = str(getattr(http_request.state, "user_id", "public") or "public")
+        _authorize_run(normalized, user_id)
+        task = _STREAM_TASKS_BY_RUN.get(normalized)
+        if task is None or task.done():
+            raise HTTPException(status_code=409, detail={"code": "run_not_active", "message": "run is not active"})
+        task.cancel()
+        return {"cancelled": True, "run_id": normalized}
 
     return router
+
+
+__all__ = ["ExecuteRequest", "ExecutionRouterDeps", "create_execution_router"]

@@ -200,57 +200,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/chat/add-chart-data": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Chart Data */
-        post: operations["add_chart_data_api_chat_add_chart_data_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/stream/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Resume Chat Stream */
-        get: operations["resume_chat_stream_api_chat_stream__run_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/stream/{run_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Chat Stream */
-        post: operations["cancel_chat_stream_api_chat_stream__run_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/cn/market/concept": {
         parameters: {
             query?: never;
@@ -408,23 +357,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/dashboard/deep-dive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Dashboard Deep Dive Endpoint */
-        post: operations["dashboard_deep_dive_endpoint_api_dashboard_deep_dive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/dashboard/health": {
         parameters: {
             query?: never;
@@ -462,7 +394,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/execute/resume": {
+    "/api/execute/runs/{run_id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -471,8 +403,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resume Endpoint */
-        post: operations["resume_endpoint_api_execute_resume_post"];
+        /** Cancel Run */
+        post: operations["cancel_run_api_execute_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/execute/runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Replay Events */
+        get: operations["replay_events_api_execute_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1058,23 +1007,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/research/debate/{report_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Research Debate */
-        get: operations["get_research_debate_api_research_debate__report_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/research/holdings/{ticker}": {
         parameters: {
             query?: never;
@@ -1103,23 +1035,6 @@ export interface paths {
         get: operations["get_research_ledger_api_research_ledger__report_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/run-debate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run Research Debate */
-        post: operations["run_research_debate_api_research_run_debate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1417,40 +1332,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/chat/supervisor": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Chat Supervisor Endpoint */
-        post: operations["chat_supervisor_endpoint_chat_supervisor_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/chat/supervisor/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Chat Supervisor Stream Endpoint */
-        post: operations["chat_supervisor_stream_endpoint_chat_supervisor_stream_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/cost-audit": {
         parameters: {
             query?: never;
@@ -1477,40 +1358,6 @@ export interface paths {
         };
         /** Diagnostics Orchestrator */
         get: operations["diagnostics_orchestrator_diagnostics_orchestrator_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/diagnostics/planner-ab": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Diagnostics Planner Ab */
-        get: operations["diagnostics_planner_ab_diagnostics_planner_ab_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/diagnostics/planner_ab": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Diagnostics Planner Ab */
-        get: operations["diagnostics_planner_ab_diagnostics_planner_ab_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2012,19 +1859,6 @@ export interface components {
              */
             top_constituents: boolean;
         };
-        /** ChartDataResponse */
-        ChartDataResponse: {
-            /**
-             * Message
-             * @description operation message
-             */
-            message: string;
-            /**
-             * Success
-             * @description success flag
-             */
-            success: boolean;
-        };
         /** ChatContext */
         ChatContext: {
             /**
@@ -2136,34 +1970,6 @@ export interface components {
              */
             trace_raw_override?: ("on" | "off" | "inherit") | null;
         };
-        /** ChatRequest */
-        ChatRequest: {
-            /** @description ephemeral context */
-            context?: components["schemas"]["ChatContext"] | null;
-            /**
-             * History
-             * @description conversation history
-             */
-            history?: components["schemas"]["ChatMessage"][] | null;
-            /** @description request options */
-            options?: components["schemas"]["ChatOptions"] | null;
-            /**
-             * Query
-             * @description user query
-             */
-            query: string;
-            /**
-             * Schema Version
-             * @description request schema version
-             * @default chat.request.v1
-             */
-            schema_version: string;
-            /**
-             * Session Id
-             * @description session id
-             */
-            session_id?: string | null;
-        };
         /** ConfigResponse */
         ConfigResponse: {
             /**
@@ -2236,53 +2042,6 @@ export interface components {
             valuation?: components["schemas"]["ValuationData"] | null;
             /** Valuation Fallback Reason */
             valuation_fallback_reason?: string | null;
-        };
-        /**
-         * DashboardDeepDiveRequest
-         * @description Dashboard Tab 触发 Agent 深挖的请求体。
-         */
-        DashboardDeepDiveRequest: {
-            /**
-             * Dashboard Snapshot
-             * @description 当前 Tab 的结构化快照
-             */
-            dashboard_snapshot?: unknown | null;
-            /**
-             * Metric
-             * @description 具体深挖指标、新闻标题或对象
-             */
-            metric?: string | null;
-            /**
-             * Run Id
-             * @description 前端事件关联 ID
-             */
-            run_id?: string | null;
-            /**
-             * Session Id
-             * @description 会话 ID，沿用 execute 线程语义
-             */
-            session_id?: string | null;
-            /**
-             * Symbol
-             * @description Dashboard 当前标的
-             */
-            symbol: string;
-            /**
-             * Tab
-             * @description overview/financial/news/peers/technical
-             * @enum {string}
-             */
-            tab: "overview" | "financial" | "news" | "peers" | "technical";
-            /**
-             * Trace Raw
-             * @description 是否透出完整 trace 事件
-             */
-            trace_raw?: boolean | null;
-            /**
-             * User Question
-             * @description 用户在 Tab 上补充的追问
-             */
-            user_question?: string | null;
         };
         /**
          * DashboardResponse
@@ -2362,45 +2121,31 @@ export interface components {
         };
         /**
          * ExecuteRequest
-         * @description Body for ``POST /api/execute``.
+         * @description Chat、Dashboard handoff 与报告生成共用的执行请求。
          */
         ExecuteRequest: {
-            /**
-             * Agent Preferences
-             * @description Per-agent depth, budget, and timeout preferences from frontend UI
-             */
+            /** Agent Preferences */
             agent_preferences?: {
                 [key: string]: unknown;
             } | null;
-            /**
-             * Agents
-             * @description Override: only run these agents
-             */
+            /** Agents */
             agents?: string[] | null;
-            /**
-             * Analysis Depth
-             * @description Explicit analysis depth semantics (quick/report/deep_research)
-             */
+            /** Analysis Depth */
             analysis_depth?: ("quick" | "report" | "deep_research") | null;
-            /**
-             * Budget
-             * @description Max LangGraph rounds
-             */
+            /** Budget */
             budget?: number | null;
-            /**
-             * Confirmation Mode
-             * @description Confirmation strategy override: auto/required/skip
-             */
+            /** Confirmation Mode */
             confirmation_mode?: ("auto" | "required" | "skip") | null;
+            /** @description Ephemeral UI context */
+            context?: components["schemas"]["ChatContext"] | null;
             /**
-             * Ensure All Agents
-             * @description Force report orchestration to keep all report agents enabled
+             * History
+             * @description Visible conversation history
              */
-            ensure_all_agents?: boolean | null;
-            /**
-             * Output Mode
-             * @description chat / brief / investment_report
-             */
+            history?: components["schemas"]["ChatMessage"][] | null;
+            /** @description Chat execution options */
+            options?: components["schemas"]["ChatOptions"] | null;
+            /** Output Mode */
             output_mode?: string | null;
             /**
              * Query
@@ -2409,28 +2154,19 @@ export interface components {
             query: string;
             /**
              * Run Id
-             * @description Client-provided run id for event correlation
+             * @description Optional correlation ID
              */
             run_id?: string | null;
             /**
              * Session Id
-             * @description Session ID
+             * @description Conversation session ID
              */
             session_id?: string | null;
-            /**
-             * Source
-             * @description Trigger origin (dashboard / workbench / …)
-             */
+            /** Source */
             source?: string | null;
-            /**
-             * Tickers
-             * @description Explicit ticker list
-             */
+            /** Tickers */
             tickers?: string[] | null;
-            /**
-             * Trace Raw
-             * @description Whether to include full raw trace events in SSE stream
-             */
+            /** Trace Raw */
             trace_raw?: boolean | null;
         };
         /** ExpectedImpact */
@@ -3121,59 +2857,10 @@ export interface components {
             prediction_id: string | null;
         };
         /**
-         * ResumeRequest
-         * @description Body for ``POST /api/execute/resume``.
-         */
-        ResumeRequest: {
-            /**
-             * Resume Value
-             * @description User response to the interrupt prompt
-             */
-            resume_value: unknown;
-            /**
-             * Run Id
-             * @description Client-provided run id for event correlation
-             */
-            run_id?: string | null;
-            /**
-             * Session Id
-             * @description Session ID
-             */
-            session_id?: string | null;
-            /**
-             * Source
-             * @description Trigger origin
-             */
-            source?: string | null;
-            /**
-             * Thread Id
-             * @description Thread / session ID to resume
-             */
-            thread_id: string;
-            /** Trace Raw */
-            trace_raw?: boolean | null;
-        };
-        /**
          * RiskTier
          * @enum {string}
          */
         RiskTier: "conservative" | "moderate" | "aggressive";
-        /** RunDebateRequest */
-        RunDebateRequest: {
-            /**
-             * Ledger
-             * @description Evidence ledger payload
-             */
-            ledger: {
-                [key: string]: unknown;
-            };
-            /**
-             * Query
-             * @description Research question
-             * @default
-             */
-            query: string;
-        };
         /** ScreenerRunRequest */
         ScreenerRunRequest: {
             /**
@@ -3934,105 +3621,6 @@ export interface operations {
             };
         };
     };
-    add_chart_data_api_chat_add_chart_data_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChartDataResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resume_chat_stream_api_chat_stream__run_id__get: {
-        parameters: {
-            query?: {
-                after_seq?: number;
-            };
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_chat_stream_api_chat_stream__run_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     cn_market_concept_api_cn_market_concept_get: {
         parameters: {
             query?: {
@@ -4433,39 +4021,6 @@ export interface operations {
             };
         };
     };
-    dashboard_deep_dive_endpoint_api_dashboard_deep_dive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DashboardDeepDiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     dashboard_health_api_dashboard_health_get: {
         parameters: {
             query?: never;
@@ -4519,18 +4074,49 @@ export interface operations {
             };
         };
     };
-    resume_endpoint_api_execute_resume_post: {
+    cancel_run_api_execute_runs__run_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                run_id: string;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResumeRequest"];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
+    };
+    replay_events_api_execute_runs__run_id__events_get: {
+        parameters: {
+            query?: {
+                after_seq?: number;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5684,40 +5270,6 @@ export interface operations {
             };
         };
     };
-    get_research_debate_api_research_debate__report_id__get: {
-        parameters: {
-            query: {
-                session_id: string;
-                include_blocked?: boolean;
-            };
-            header?: never;
-            path: {
-                report_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_research_holdings_api_research_holdings__ticker__get: {
         parameters: {
             query?: {
@@ -5764,39 +5316,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_research_debate_api_research_run_debate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RunDebateRequest"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6426,72 +5945,6 @@ export interface operations {
             };
         };
     };
-    chat_supervisor_endpoint_chat_supervisor_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    chat_supervisor_stream_endpoint_chat_supervisor_stream_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     cost_audit_cost_audit_get: {
         parameters: {
             query?: {
@@ -6524,46 +5977,6 @@ export interface operations {
         };
     };
     diagnostics_orchestrator_diagnostics_orchestrator_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    diagnostics_planner_ab_diagnostics_planner_ab_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    diagnostics_planner_ab_diagnostics_planner_ab_get: {
         parameters: {
             query?: never;
             header?: never;

@@ -74,8 +74,8 @@ export function withStreamGuards(
  * Parse an SSE response and dispatch callbacks.
  *
  * This function reads from a `fetch` Response body, splits SSE frames,
- * and dispatches typed callbacks.  Both `/chat/supervisor/stream` and
- * `/api/execute` return identical SSE wire format so this parser is
+ * and dispatches typed callbacks. `/api/execute` is the single SSE
+ * execution contract, so this parser is
  * fully reusable.
  */
 export async function parseSSEStream(

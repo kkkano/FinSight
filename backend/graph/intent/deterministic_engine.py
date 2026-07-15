@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# 机械拆分自 backend/graph/nodes/understand_request.py（WP3 Task3，零行为变更）。
-"""请求理解节点：一次性完成闲聊、标的、任务和阻塞项识别。"""
+"""确定性请求路由：识别闲聊、标的、任务和阻塞项，不调用 LLM。"""
 from __future__ import annotations
 
 import logging
@@ -32,10 +31,6 @@ from backend.graph.investment_intent import (
 from backend.graph.intent.router import (
     ContextBinding,
     ConversationDecision,
-    _effective_current_turn_tickers,
-    _task_hints_require_execution,
-    generate_contextual_reply,
-    route_conversation,
 )
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
@@ -79,11 +74,9 @@ from backend.graph.intent.predicates import (
     _build_subject,
     _can_use_active_symbol_fallback,
     _contains_any,
-    _direct_decision_must_project_tasks,
     _explicit_multi_ticker_compare_requested,
     _explicit_report_mode,
     _extract_urls,
-    _force_grounded_research_decision,
     _has_prior_dialogue,
     _history_tickers_from_messages,
     _is_explicit_brief_request,
@@ -179,7 +172,7 @@ async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
         }
     )
 
-async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
+async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
     query = (state.get("query") or "").strip()
     ui_context = dict(state.get("ui_context") or {}) if isinstance(state.get("ui_context"), dict) else {}
     output_mode = (decide_output_mode(state).get("output_mode") or "chat")
@@ -361,90 +354,6 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
             reason="explicit URL reference requires source-grounded document retrieval",
         )
         trace["conversation_router"] = conversation_decision.model_dump()
-
-    if query and not blocked_tasks and not _explicit_report_mode(state, output_mode) and conversation_decision is None:
-        conversation_decision = await route_conversation(state, tickers=tickers, selection_ids=selection_ids)
-        if conversation_decision is not None:
-            if tickers and conversation_decision.context_binding.source == "none":
-                tickers = _effective_current_turn_tickers(query, tickers, conversation_decision)
-            trace["conversation_router"] = conversation_decision.model_dump()
-            if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers, request_frame=request_frame):
-                    conversation_decision = _force_grounded_research_decision(conversation_decision)
-                    trace["conversation_router"] = conversation_decision.model_dump()
-                else:
-                    direct_context_refs = list(context_refs)
-                    binding = conversation_decision.context_binding
-                    if binding.source != "none":
-                        direct_context_refs.append(
-                            {
-                                "source": "conversation_context",
-                                "key": binding.source,
-                                "label": binding.subject_hint or binding.source,
-                                "value": binding.reason,
-                            }
-                        )
-                    reply = await generate_contextual_reply(state, conversation_decision)
-                    result = _direct_conversation_result(
-                        query=query,
-                        output_mode=output_mode,
-                        decision=conversation_decision,
-                        reply=reply,
-                        context_refs=direct_context_refs,
-                        artifacts=artifacts,
-                        trace=trace,
-                        memory_context=memory_context,
-                        request_frame=request_frame,
-                    )
-                    await _emit_understanding_trace(result["understanding"])
-                    return result
-            if (
-                conversation_decision.execution_route == "research"
-            ):
-                if conversation_decision.context_binding.source != "none":
-                    context_router_research_bound = _add_context_bound_research_task(
-                        tasks=tasks,
-                        context_refs=context_refs,
-                        decision=conversation_decision,
-                        query=query,
-                        ui_context=ui_context,
-                        memory_context=memory_context,
-                        current_tickers=tickers,
-                        selection_ids=selection_ids,
-                        selection_types=selection_types,
-                    )
-                if conversation_decision.task_hints:
-                    if contract_enforced:
-                        hint_bound = _add_router_task_hints_contract(
-                            tasks=tasks,
-                            context_refs=context_refs,
-                            decision=conversation_decision,
-                            query=query,
-                            output_mode=output_mode,
-                            current_tickers=tickers,
-                            selection_ids=selection_ids,
-                            selection_types=selection_types,
-                            intent_contracts=intent_contracts,
-                            request_frames=request_frames,
-                        )
-                    else:
-                        hint_bound = _add_router_task_hints(
-                            tasks=tasks,
-                            context_refs=context_refs,
-                            decision=conversation_decision,
-                            query=query,
-                            current_tickers=tickers,
-                            output_mode=output_mode,
-                            selection_ids=selection_ids,
-                            selection_types=selection_types,
-                        )
-                    context_router_research_bound = context_router_research_bound or hint_bound
-                    if contract_enforced and request_frames:
-                        request_frame = request_frames[0]
-            if conversation_decision.execution_route == "clarify":
-                blocked_tasks.append(_context_router_clarify_block(conversation_decision))
-                tickers = []
-                selection_ids = []
 
     context_binding_source = (
         conversation_decision.context_binding.source
@@ -712,15 +621,18 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
                 for operation in (contract_operations or router_operations or fallback_operations)
             ]
             if len(scoped_tickers) >= 2 and _is_lightweight_representative_compare(query):
+                representative_operation = (
+                    "investment_opinion" if query_requests_investment_opinion(query) else "qa"
+                )
                 _add_task(
                     tasks,
                     subject_type="company",
-                    operation=_operation("qa", 0.7),
+                    operation=_operation(representative_operation, 0.7),
                     query=query,
                     tickers=scoped_tickers,
                     subject_label=", ".join(scoped_tickers),
                     priority=25,
-                    reason="representative_basket_qa",
+                    reason=f"representative_basket_{representative_operation}",
                 )
             elif (
                 router_operations is None
@@ -826,120 +738,6 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
                 }
             )
 
-    if not tasks and not blocked_tasks:
-        if conversation_decision is None:
-            conversation_decision = await route_conversation(state, tickers=tickers, selection_ids=selection_ids)
-        if conversation_decision is not None:
-            trace["conversation_router"] = conversation_decision.model_dump()
-            if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers, request_frame=request_frame):
-                    conversation_decision = _force_grounded_research_decision(conversation_decision)
-                    trace["conversation_router"] = conversation_decision.model_dump()
-                else:
-                    direct_context_refs = list(context_refs)
-                    binding = conversation_decision.context_binding
-                    if binding.source != "none":
-                        direct_context_refs.append(
-                            {
-                                "source": "conversation_context",
-                                "key": binding.source,
-                                "label": binding.subject_hint or binding.source,
-                                "value": binding.reason,
-                            }
-                        )
-                    reply = await generate_contextual_reply(state, conversation_decision)
-                    result = _direct_conversation_result(
-                        query=query,
-                        output_mode=output_mode,
-                        decision=conversation_decision,
-                        reply=reply,
-                        context_refs=direct_context_refs,
-                        artifacts=artifacts,
-                        trace=trace,
-                        memory_context=memory_context,
-                        request_frame=request_frame,
-                    )
-                    await _emit_understanding_trace(result["understanding"])
-                    return result
-            if conversation_decision.execution_route == "research":
-                if conversation_decision.task_hints:
-                    if contract_enforced:
-                        hint_bound = _add_router_task_hints_contract(
-                            tasks=tasks,
-                            context_refs=context_refs,
-                            decision=conversation_decision,
-                            query=query,
-                            output_mode=output_mode,
-                            current_tickers=tickers,
-                            selection_ids=selection_ids,
-                            selection_types=selection_types,
-                            intent_contracts=intent_contracts,
-                            request_frames=request_frames,
-                        )
-                    else:
-                        hint_bound = _add_router_task_hints(
-                            tasks=tasks,
-                            context_refs=context_refs,
-                            decision=conversation_decision,
-                            query=query,
-                            current_tickers=tickers,
-                            output_mode=output_mode,
-                            selection_ids=selection_ids,
-                            selection_types=selection_types,
-                        )
-                    context_router_research_bound = context_router_research_bound or hint_bound
-                    if contract_enforced and request_frames:
-                        request_frame = request_frames[0]
-                if not tasks:
-                    _add_context_bound_research_task(
-                        tasks=tasks,
-                        context_refs=context_refs,
-                        decision=conversation_decision,
-                        query=query,
-                        ui_context=ui_context,
-                        memory_context=memory_context,
-                        current_tickers=tickers,
-                        selection_ids=selection_ids,
-                        selection_types=selection_types,
-                    )
-                if not tasks:
-                    if conversation_decision.context_binding.source == "none":
-                        _add_unbound_research_task(
-                            tasks=tasks,
-                            decision=conversation_decision,
-                            query=query,
-                        )
-                    else:
-                        blocked_tasks.append(
-                            {
-                                "id": "blocked_1",
-                                "subject_type": "unknown",
-                                "subject_label": conversation_decision.context_binding.subject_hint,
-                                "operation": _domain_intent_operation(
-                                    conversation_decision.domain_intent,
-                                    conversation_decision.confidence,
-                                ),
-                                "reason": "context_binding_unresolved",
-                                "question": conversation_decision.reply_guidance
-                                or "我理解这是接着上下文问，但还不能确定要绑定哪个对象。",
-                                "suggestions": ["补充具体公司、股票代码、选中文档、持仓，或说明你指的是哪份报告"],
-                                "fallback_allowed": False,
-                            }
-                        )
-            if not tasks and conversation_decision.execution_route == "clarify":
-                blocked_tasks.append(
-                    {
-                        "id": "blocked_1",
-                        "subject_type": "unknown",
-                        "subject_label": conversation_decision.context_binding.subject_hint,
-                        "operation": _operation("qa", 0.0),
-                        "reason": "context_router_clarify",
-                        "question": conversation_decision.reply_guidance or "我需要你补充想看的对象或上下文。",
-                        "suggestions": ["补充公司、股票代码、宏观主题、持仓，或说明你指的是哪条消息/哪份报告"],
-                        "fallback_allowed": False,
-                    }
-                )
-
     tasks = _prune_url_only_company_context_tasks(tasks, query=query, explicit_urls=explicit_urls)
 
     if (
@@ -950,7 +748,7 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
     ):
         history_tickers = _history_tickers_from_messages(state, query)
         conversation_decision = ConversationDecision(
-            execution_route="direct_answer",
+            execution_route="research",
             context_binding=ContextBinding(
                 source="last_turn",
                 confidence=0.62,
@@ -959,25 +757,22 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
             ),
             relation="follow_up",
             domain_intent="analysis",
-            confidence=0.58,
-            needs_tools=False,
-            reason="deterministic same-thread direct fallback without tools",
+            confidence=0.72,
+            needs_tools=True,
+            reason="same-thread history deterministically binds the research subject",
         )
         trace["conversation_router"] = conversation_decision.model_dump()
-        reply = await generate_contextual_reply(state, conversation_decision)
-        result = _direct_conversation_result(
+        _add_task(
+            tasks,
+            subject_type="company",
+            subject_label=", ".join(history_tickers[:3]),
+            operation=_operation("qa", 0.72),
             query=query,
-            output_mode=output_mode,
-            decision=conversation_decision,
-            reply=reply,
-            context_refs=[*context_refs, _binding_context_ref(conversation_decision.context_binding)],
-            artifacts=artifacts,
-            trace=trace,
-            memory_context=memory_context,
-            request_frame=request_frame,
+            tickers=history_tickers[:3],
+            priority=45,
+            reason="same_thread_subject_binding",
         )
-        await _emit_understanding_trace(result["understanding"])
-        return result
+        context_refs.append(_binding_context_ref(conversation_decision.context_binding))
 
     if (
         not tasks
@@ -999,7 +794,7 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
             reason="request-frame answer contract without evidence obligations",
         )
         trace["conversation_router"] = conversation_decision.model_dump()
-        reply = await generate_contextual_reply(state, conversation_decision)
+        reply = _direct_reply(query)
         result = _direct_conversation_result(
             query=query,
             output_mode=output_mode,
@@ -1031,7 +826,7 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
             reason="deterministic finance concept fallback without tools",
         )
         trace["conversation_router"] = conversation_decision.model_dump()
-        reply = await generate_contextual_reply(state, conversation_decision)
+        reply = _direct_reply(query)
         result = _direct_conversation_result(
             query=query,
             output_mode=output_mode,

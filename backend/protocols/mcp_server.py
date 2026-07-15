@@ -120,20 +120,6 @@ def _tool_specs() -> tuple[ToolSpec, ...]:
             open_world=False,
         ),
         ToolSpec(
-            name="run_debate",
-            description="基于证据账本生成无副作用的多空辩论 artifact。",
-            input_schema=_schema(
-                {
-                    "ledger": {"type": "object", "description": "证据账本 payload。"},
-                    "query": _text_property("辩论对应的问题或研究主题。", min_length=0),
-                },
-                required=["ledger"],
-            ),
-            output_schema=generic_output,
-            handler_name="run_debate",
-            open_world=False,
-        ),
-        ToolSpec(
             name="track_institutional_holdings",
             description="读取机构或 holder CIK 的公开 SEC 13F 持仓披露。",
             input_schema=_schema(
@@ -430,12 +416,6 @@ def _get_evidence_ledger(*, session_id: str, report_id: str) -> dict[str, Any]:
     }
 
 
-def _run_debate(*, ledger: dict[str, Any], query: str = "") -> dict[str, Any]:
-    from backend.research.debate import build_debate_artifact
-
-    return build_debate_artifact(ledger, query=str(query or ""))
-
-
 def _track_institutional_holdings(
     *,
     holder_cik_or_name: str = "",
@@ -469,7 +449,6 @@ def _default_handlers() -> dict[str, Handler]:
     return {
         "research_company": _research_company,
         "get_evidence_ledger": _get_evidence_ledger,
-        "run_debate": _run_debate,
         "track_institutional_holdings": _track_institutional_holdings,
         "get_insider_transactions": _get_insider_transactions,
     }

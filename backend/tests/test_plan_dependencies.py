@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from backend.graph.dag_executor import execute_plan_dag
-from backend.graph.nodes.planner import _enforce_policy
 from backend.graph.nodes.policy_gate import policy_gate
 from backend.graph.planning.rule_planner import rule_based_planner
 from backend.graph.planning.steps import finalize_step_dependencies
@@ -69,41 +68,6 @@ def test_rule_planner_emits_dependencies_between_serial_groups() -> None:
     assert q2_roots and q2_agents
     assert set(q2_agents[0]["depends_on"]) == q2_roots
     assert all(step["depends_on"] == [] for step in steps if step.get("parallel_group") == "q3")
-
-
-def test_llm_plan_sanitizer_preserves_explicit_depends_on() -> None:
-    state = {
-        "query": "AAPL price then news",
-        "output_mode": "chat",
-        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
-        "policy": {
-            "allowed_tools": ["get_stock_price", "get_company_news"],
-            "allowed_agents": [],
-            "budget": {"max_rounds": 3, "max_tools": 4},
-        },
-    }
-    payload = {
-        "goal": state["query"],
-        "subject": state["subject"],
-        "output_mode": "chat",
-        "steps": [
-            {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "AAPL"}},
-            {
-                "id": "s2",
-                "kind": "tool",
-                "name": "get_company_news",
-                "inputs": {"ticker": "AAPL"},
-                "depends_on": ["s1"],
-            },
-        ],
-        "synthesis": {"style": "concise", "sections": []},
-        "budget": {"max_rounds": 3, "max_tools": 4},
-    }
-
-    plan, _budget = _enforce_policy(payload, state)
-    by_id = {step["id"]: step for step in plan["steps"]}
-
-    assert by_id["s2"]["depends_on"] == ["s1"]
 
 
 def _mixed_task_dependency_steps() -> list[dict]:

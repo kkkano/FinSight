@@ -465,7 +465,6 @@ async def synthesize(state: GraphState) -> dict:
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
     evidence_ledger = artifacts.get("evidence_ledger") if isinstance(artifacts, dict) else None
     query_coverage = artifacts.get("query_coverage") if isinstance(artifacts, dict) else None
-    debate = artifacts.get("debate") if isinstance(artifacts, dict) else None
 
     # Build separated evidence sections for structured prompt
     evidence_pool_list = evidence_pool if isinstance(evidence_pool, list) else []
@@ -480,7 +479,6 @@ async def synthesize(state: GraphState) -> dict:
         "step_results": step_results if isinstance(step_results, dict) else {},
         "evidence_ledger": evidence_ledger if isinstance(evidence_ledger, dict) else {},
         "query_coverage": query_coverage if isinstance(query_coverage, dict) else {},
-        "debate": debate if isinstance(debate, dict) else {},
     }
 
     # Format evidence sections with XML tags
@@ -509,7 +507,6 @@ async def synthesize(state: GraphState) -> dict:
             json_dumps_safe(evidence_pool_list[:20], ensure_ascii=False),
             json_dumps_safe(rag_context_list[:20], ensure_ascii=False),
             json_dumps_safe(step_results if isinstance(step_results, dict) else {}, ensure_ascii=False),
-            json_dumps_safe(debate if isinstance(debate, dict) else {}, ensure_ascii=False),
         ] if part
     )
 
@@ -553,7 +550,7 @@ summary, highlights, analysis.
 </field_quality_guidelines>
 
 <constraints>
-1) 严格闭卷：仅可使用 <realtime_evidence>、<historical_knowledge>、<inputs.step_results>、<inputs.evidence_ledger>、<inputs.debate> 中已出现的信息。
+1) 严格闭卷：仅可使用 <realtime_evidence>、<historical_knowledge>、<inputs.step_results>、<inputs.evidence_ledger> 中已出现的信息。
 2) 禁止引用任何未在上述标签中出现的具体事实（尤其是产品发布时间、并购、监管进展、公司战略计划、竞争对手具体动态）。
 3) 如需提及行业背景，仅允许泛化表述，禁止输出具体日期+事件断言。
 4) 数据不足时明确标注"[数据缺失]"或"数据有限"，禁止补写训练知识中的细节。

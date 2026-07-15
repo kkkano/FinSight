@@ -2,7 +2,7 @@
 import asyncio
 
 from backend.graph.request_facets import derive_request_facets
-from backend.graph.nodes.understand_request import understand_request
+from backend.graph.nodes.route_request import route_request
 
 
 def test_derive_facets_for_earnings_price_impact():
@@ -31,11 +31,11 @@ def test_derive_facets_keeps_price_short_path_narrow():
     assert facets["analysis_need"] == ["price"]
 
 
-def test_understand_request_outputs_valuation_facets(monkeypatch):
+def test_route_request_outputs_valuation_facets(monkeypatch):
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
 
     result = asyncio.run(
-        understand_request(
+        route_request(
             {
                 "query": "NVDA 现在估值贵不贵，和增长匹配吗",
                 "ui_context": {},

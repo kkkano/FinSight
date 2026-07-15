@@ -107,7 +107,7 @@ test('chat conversations can be created, restored, and deleted from the rail', a
   page.on('dialog', async (dialog) => {
     await dialog.accept();
   });
-  await page.route('**/chat/supervisor/stream', fulfillTraceStream);
+  await page.route('**/api/execute', fulfillTraceStream);
 
   await page.goto('/chat');
   const chat = page.locator('#chat-scroll-container');
@@ -147,7 +147,7 @@ test('chat conversations can be created, restored, and deleted from the rail', a
 });
 
 test('user trace view shows concrete backend understanding summaries', async ({ page }) => {
-  await page.route('**/chat/supervisor/stream', fulfillTraceStream);
+  await page.route('**/api/execute', fulfillTraceStream);
 
   await page.goto('/chat');
   const query = '你好，今天天气不错，帮我看看谷歌今天咋样，然后微软呢？';
@@ -161,7 +161,7 @@ test('user trace view shows concrete backend understanding summaries', async ({ 
 });
 
 test('running chat streams can be stopped from the input control', async ({ page }) => {
-  await page.route('**/chat/supervisor/stream', async (route: any) => {
+  await page.route('**/api/execute', async (route: any) => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     try {
       await fulfillTraceStream(route);

@@ -14,7 +14,7 @@ const NODE_USER_MESSAGES: Record<string, string> = {
   langgraph_summarize_history_start: '正在回顾历史对话...',
   langgraph_normalize_ui_context_start: '正在理解你的操作意图...',
   langgraph_decide_output_mode_start: '正在判断最佳输出方式...',
-  langgraph_understand_request_start: '正在拆解你的问题...',
+  langgraph_route_request_start: '正在拆解你的问题...',
   langgraph_chat_respond_start: '正在思考回复...',
   langgraph_resolve_subject_start: '正在识别你关注的标的...',
   langgraph_clarify_start: '需要进一步确认你的意图...',
@@ -27,7 +27,7 @@ const NODE_USER_MESSAGES: Record<string, string> = {
   langgraph_render_start: '正在生成最终报告...',
   // _done 事件复用同一消息（前端可自行追加"完成"后缀）
   langgraph_build_initial_state_done: '分析环境准备完成',
-  langgraph_understand_request_done: '请求理解完成',
+  langgraph_route_request_done: '请求理解完成',
   langgraph_resolve_subject_done: '已识别分析标的',
   langgraph_parse_operation_done: '操作分析完成',
   langgraph_policy_gate_done: '分析策略已制定',

@@ -40,7 +40,6 @@ _SHARED_REPORT_KEYS = {
     "report_quality",
     "report_hints",
     "evidence_ledger",
-    "debate",
     "holdings_insight",
     "query_coverage",
     "conflict_disclosure",

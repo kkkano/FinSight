@@ -22,22 +22,6 @@ def test_timeout_preference_overrides_execution_timeout(monkeypatch):
     ) == 75
 
 
-def test_timeout_preference_overrides_planner_llm_timeout(monkeypatch):
-    from backend.graph.nodes.planner import _planner_llm_limits
-
-    monkeypatch.setenv("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", "150")
-
-    limits = _planner_llm_limits(
-        {
-            "output_mode": "chat",
-            "ui_context": {"agent_preferences": {"timeoutSeconds": 75}},
-        }
-    )
-
-    assert limits["request_timeout"] == 75
-    assert limits["acquire_timeout"] == 75.0
-
-
 def test_timeout_preference_reader_ignores_system_default_value():
     from backend.graph.preference_timeouts import timeout_seconds_from_preferences
 

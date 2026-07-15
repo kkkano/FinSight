@@ -11,7 +11,6 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from backend.api.chat_router import ChatRouterDeps, create_chat_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 from backend.services import cost_audit
 from backend.services.cost_audit import (
@@ -201,81 +200,6 @@ def test_execution_entry_allows_over_limit_user_when_quota_disabled(
     )
     assert response.status_code == 200
     assert seen_user_ids == ["alice"]
-
-
-def _chat_client(monkeypatch, seen_user_ids: list[str]) -> TestClient:
-    async def fake_pipeline(**kwargs):
-        seen_user_ids.append(kwargs["user_id"])
-        yield {"type": "done", "response": "ok"}
-
-    monkeypatch.setattr(
-        "backend.services.execution_service.run_graph_pipeline",
-        fake_pipeline,
-    )
-    monkeypatch.setattr("backend.api.chat_router._ensure_llm_available", lambda: None)
-
-    class EmptyContext:
-        def get_last_n_turns(self, _limit):
-            return []
-
-    async def unused_runner():
-        raise AssertionError("配额路由测试不应启动真实图或 LLM")
-
-    app = FastAPI()
-
-    @app.middleware("http")
-    async def inject_test_user(request: Request, call_next):
-        request.state.user_id = request.headers.get("X-Test-User", "public")
-        return await call_next(request)
-
-    app.include_router(
-        create_chat_router(
-            ChatRouterDeps(
-                get_graph_runner=unused_runner,
-                resolve_thread_id=lambda value: value or "session-test",
-                build_ui_context=lambda _request: {},
-                resolve_query_reference=lambda query, _thread_id: query,
-                schedule_report_index=lambda **_kwargs: None,
-                update_session_context=lambda **_kwargs: None,
-                contract_info=lambda: {},
-                resolve_trace_raw_enabled=lambda _request: False,
-                is_raw_trace_event=lambda _event: False,
-                redact_sensitive_payload=lambda value: value,
-                get_session_context=lambda _thread_id: EmptyContext(),
-                chat_response_schema_version="test",
-                sse_event_schema_version="test",
-            )
-        )
-    )
-    return TestClient(app)
-
-
-def test_chat_stream_entry_enforces_same_user_quota(quota_store, monkeypatch):
-    quota_store.record(
-        session_id="alice-cost",
-        source="chat",
-        summary=_summary(1.0),
-        user_id="alice",
-    )
-    monkeypatch.setenv("USER_DAILY_COST_LIMIT_USD", "1.0")
-    seen_user_ids: list[str] = []
-    client = _chat_client(monkeypatch, seen_user_ids)
-
-    blocked = client.post(
-        "/chat/supervisor/stream",
-        headers={"X-Test-User": "alice"},
-        json={"query": "不会进入下游"},
-    )
-    assert blocked.status_code == 429
-    assert seen_user_ids == []
-
-    allowed = client.post(
-        "/chat/supervisor/stream",
-        headers={"X-Test-User": "bob"},
-        json={"query": "允许进入离线桩"},
-    )
-    assert allowed.status_code == 200
-    assert seen_user_ids == ["bob"]
 
 
 def test_execution_pipeline_records_cost_for_current_user(monkeypatch):

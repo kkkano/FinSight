@@ -71,7 +71,7 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
             "type": str(row.get("type") or "").strip(),
         }
         # P0-9-2: 保留 NewsAgent 完整快照（meta.snapshot）。EvidenceItem 经
-        # agent_adapter 的 asdict 序列化后 meta 仍在；下游 _render_news_brief_block
+        # collector_adapter 的 asdict 序列化后 meta 仍在；下游 _render_news_brief_block
         # 据此把快照从新闻列表剥离，并优先于轻量快照渲染标题/催化。
         meta = row.get("meta")
         if isinstance(meta, dict):

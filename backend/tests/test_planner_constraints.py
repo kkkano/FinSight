@@ -243,13 +243,13 @@ def test_planner_chat_compare_with_current_subtasks_skips_historical_performance
     assert names.count("get_company_news") == 2
 
 
-def test_understand_lightweight_representative_query_stays_chat_without_current_data_request():
+def test_route_representative_investment_query_requires_grounded_research():
     import asyncio
 
-    from backend.graph.nodes.understand_request import understand_request
+    from backend.graph.nodes.route_request import route_request
 
     result = asyncio.run(
-        understand_request(
+        route_request(
             {
                 "query": "先别长篇，半导体 ETF 能不能看？如果不知道就按 NVDA、AMD、TSM 这几个代表说。",
                 "output_mode": "chat",
@@ -259,9 +259,10 @@ def test_understand_lightweight_representative_query_stays_chat_without_current_
         )
     )
     tasks = result.get("tasks") or []
-    assert tasks == []
-    assert (result.get("understanding") or {}).get("route") == "direct"
-    assert (result.get("reply_contract") or {}).get("lane") == "chat_answer"
+    assert len(tasks) == 1
+    assert tasks[0].get("tickers") == ["NVDA", "AMD", "TSM"]
+    assert (tasks[0].get("operation") or {}).get("name") == "investment_opinion"
+    assert (result.get("understanding") or {}).get("route") == "research"
 
 
 def test_planner_stub_report_analysis_depth_excludes_deep_search(monkeypatch):

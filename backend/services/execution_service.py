@@ -1,7 +1,7 @@
 """
 Shared graph pipeline execution service.
 
-Both ``/chat/supervisor/stream`` and ``/api/execute`` delegate to
+``/api/execute`` delegates to
 :func:`run_graph_pipeline` so that streaming logic is never duplicated.
 """
 from __future__ import annotations

@@ -104,7 +104,7 @@ test.beforeEach(async ({ page }) => {
       count: 0,
     });
   });
-  await page.route('**/chat/supervisor/stream**', async (route) => {
+  await page.route('**/api/execute**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',

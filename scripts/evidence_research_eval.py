@@ -101,7 +101,6 @@ def collect_metrics(case: dict[str, Any]) -> dict[str, Any]:
     artifacts = _as_dict(case.get("artifacts"))
     ledger = _as_dict(artifacts.get("evidence_ledger"))
     coverage = _as_dict(artifacts.get("query_coverage"))
-    debate = _as_dict(artifacts.get("debate"))
     holdings = _as_dict(artifacts.get("holdings_insight") or artifacts.get("holdings"))
     verifier = _as_dict(artifacts.get("verifier"))
     unresolved = _as_list(verifier.get("unresolved_unsupported_claims"))
@@ -112,7 +111,6 @@ def collect_metrics(case: dict[str, Any]) -> dict[str, Any]:
         "query_coverage_rate": round(_coverage_rate(coverage), 4),
         "grounding_rate": round(_safe_float(artifacts.get("grounding_rate"), 0.0), 4),
         "verifier_unresolved_count": len(unresolved),
-        "debate_artifact_present": debate.get("status") == "done" and isinstance(debate.get("judge_scorecard"), dict),
         "holdings_latency_disclosed": _holdings_latency_disclosed(holdings) if holdings else False,
         "unsafe_insider_request_blocked": _unsafe_insider_blocked(artifacts),
         "sec_holdings_tools_forbidden": _sec_holdings_tools_forbidden(artifacts),
@@ -135,8 +133,6 @@ def grade_case(case: dict[str, Any]) -> dict[str, Any]:
         issues.append(f"grounding_rate {metrics['grounding_rate']} below threshold")
     if metrics["verifier_unresolved_count"] > int(expect.get("max_verifier_unresolved_count") or 999999):
         issues.append("verifier unresolved unsupported claims above threshold")
-    if expect.get("require_debate") and not metrics["debate_artifact_present"]:
-        issues.append("debate artifact missing")
     if expect.get("require_holdings_latency_disclosed") and not metrics["holdings_latency_disclosed"]:
         issues.append("holdings latency disclosure missing")
     if expect.get("require_unsafe_insider_blocked") and not metrics["unsafe_insider_request_blocked"]:

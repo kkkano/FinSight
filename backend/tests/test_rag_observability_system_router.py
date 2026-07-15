@@ -137,7 +137,6 @@ def _build_client(store: _FakeRagStore) -> TestClient:
                 graph_runner_ready=lambda: True,
                 get_graph_checkpointer_info=lambda: {'backend': 'memory'},
                 get_orchestrator_safe=lambda: None,
-                get_planner_ab_metrics=lambda: {'enabled': False, 'split_percent': 0, 'variants': {'A': 0, 'B': 0}},
                 get_rag_observability_store=lambda: store,
                 require_rag_read_access=lambda _request: {'user_id': 'user-test', 'auth_type': 'test', 'role': 'reader'},
                 require_rag_mutation_access=lambda _request: {'user_id': 'internal', 'auth_type': 'test', 'role': 'internal'},
@@ -248,4 +247,3 @@ def test_rag_db_browser_endpoint_returns_rows_and_passes_filters():
         'source_doc_id': 'doc-1',
         'layer': None,
     }
-

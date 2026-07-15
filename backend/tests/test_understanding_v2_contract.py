@@ -26,13 +26,13 @@ def _ops_by_ticker(result: dict) -> set[tuple[tuple[str, ...], str]]:
 def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatch):
     from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
-    from backend.graph.nodes.understand_request import understand_request
+    from backend.graph.nodes.route_request import route_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
-    understanding = _run(understand_request(state))
+    understanding = _run(route_request(state))
 
     v2 = understanding.get("understanding_v2") or {}
     assert v2.get("schema_version") == "understanding.v2"
@@ -83,13 +83,13 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
 
 
 def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypatch):
-    from backend.graph.nodes.understand_request import understand_request
+    from backend.graph.nodes.route_request import route_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
 
     result = _run(
-        understand_request(
+        route_request(
             {
                 "query": "GOOGL 和 MSFT 哪个技术面更强",
                 "ui_context": {},
@@ -111,13 +111,13 @@ def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypat
 def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch):
     from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
-    from backend.graph.nodes.understand_request import understand_request
+    from backend.graph.nodes.route_request import route_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
-    understanding = _run(understand_request(state))
+    understanding = _run(route_request(state))
     v2_only_state = {
         **state,
         "subject": understanding["subject"],
@@ -143,14 +143,14 @@ def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch
 
 
 def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
-    from backend.graph.nodes.understand_request import understand_request
+    from backend.graph.nodes.route_request import route_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
     monkeypatch.setenv("FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT", "2")
 
     result = _run(
-        understand_request(
+        route_request(
             {
                 "query": "NVDA AMD TSM MSFT which valuation is more reasonable",
                 "ui_context": {},
@@ -179,13 +179,13 @@ def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
 
 
 def test_understanding_v2_can_be_disabled(monkeypatch):
-    from backend.graph.nodes.understand_request import understand_request
+    from backend.graph.nodes.route_request import route_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("FINSIGHT_UNDERSTANDING_V2_MODE", "off")
 
     result = _run(
-        understand_request(
+        route_request(
             {
                 "query": "NVDA 和 AMD 哪个估值更合理",
                 "ui_context": {},

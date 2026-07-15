@@ -4,7 +4,7 @@ import importlib
 
 
 def test_hints_have_single_source():
-    ur = importlib.import_module("backend.graph.nodes.understand_request")
+    ur = importlib.import_module("backend.graph.intent.deterministic_engine")
     kw = importlib.import_module("backend.graph.intent.keywords")
     # identity 断言：消费方与 keywords 是同一对象，不是两份拷贝
     assert ur._TECHNICAL_HINTS is kw._TECHNICAL_HINTS

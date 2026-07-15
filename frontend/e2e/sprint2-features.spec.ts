@@ -95,7 +95,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.removeItem('finsight-session-id');
   });
 
-  await page.route('**/chat/supervisor/stream', async (route) => fulfillSSE(route));
+  await page.route('**/api/execute', async (route) => fulfillSSE(route));
   await page.route('**/api/dashboard**', async (route) => {
     const url = new URL(route.request().url());
     const symbol = url.searchParams.get('symbol') || 'AAPL';

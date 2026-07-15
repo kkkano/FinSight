@@ -11,27 +11,6 @@ class _DomainSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
 
 
-class PlannerSettings(_DomainSettings):
-    mode: str = Field("llm", validation_alias="LANGGRAPH_PLANNER_MODE")
-    report_timeout_sec: int = Field(240, validation_alias="LANGGRAPH_PLANNER_REPORT_TIMEOUT_SEC")
-    report_max_tokens: int = Field(6000, validation_alias="LANGGRAPH_PLANNER_REPORT_MAX_TOKENS")
-    report_max_attempts: int = Field(3, validation_alias="LANGGRAPH_PLANNER_REPORT_MAX_ATTEMPTS")
-    report_acquire_timeout_sec: int = Field(
-        180, validation_alias="LANGGRAPH_PLANNER_REPORT_ACQUIRE_TIMEOUT_SEC"
-    )
-    chat_timeout_sec: int = Field(150, validation_alias="LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC")
-    chat_max_tokens: int = Field(3000, validation_alias="LANGGRAPH_PLANNER_CHAT_MAX_TOKENS")
-    chat_max_attempts: int = Field(2, validation_alias="LANGGRAPH_PLANNER_CHAT_MAX_ATTEMPTS")
-    chat_acquire_timeout_sec: int = Field(
-        120, validation_alias="LANGGRAPH_PLANNER_CHAT_ACQUIRE_TIMEOUT_SEC"
-    )
-    ab_enabled: bool = Field(False, validation_alias="LANGGRAPH_PLANNER_AB_ENABLED")
-    ab_split: int = Field(50, validation_alias="LANGGRAPH_PLANNER_AB_SPLIT")
-    ab_salt: str = Field("planner-ab-v1", validation_alias="LANGGRAPH_PLANNER_AB_SALT")
-    temperature: float = Field(0.2, validation_alias="LANGGRAPH_PLANNER_TEMPERATURE")
-    json_repair_attempts: int = Field(2, validation_alias="LANGGRAPH_PLANNER_JSON_REPAIR_ATTEMPTS")
-
-
 class ExecutorSettings(_DomainSettings):
     live_tools: bool = Field(False, validation_alias="LANGGRAPH_EXECUTE_LIVE_TOOLS")
     progress_heartbeat_seconds: float = Field(
@@ -111,11 +90,6 @@ class SecuritySettings(_DomainSettings):
 
 
 @lru_cache(maxsize=1)
-def planner_settings() -> PlannerSettings:
-    return PlannerSettings()
-
-
-@lru_cache(maxsize=1)
 def executor_settings() -> ExecutorSettings:
     return ExecutorSettings()
 
@@ -131,7 +105,6 @@ def security_settings() -> SecuritySettings:
 
 
 def clear_settings_caches() -> None:
-    planner_settings.cache_clear()
     executor_settings.cache_clear()
     agent_settings.cache_clear()
     security_settings.cache_clear()
@@ -140,11 +113,9 @@ def clear_settings_caches() -> None:
 __all__ = [
     "AgentSettings",
     "ExecutorSettings",
-    "PlannerSettings",
     "SecuritySettings",
     "agent_settings",
     "clear_settings_caches",
     "executor_settings",
-    "planner_settings",
     "security_settings",
 ]
