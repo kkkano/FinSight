@@ -1,8 +1,9 @@
 # FinSight 生产质量修复实施规范
 
-状态：待实施（规范性 Spec）
-版本：1.0
+状态：已实施、已部署并归档（一次性验收完成；24 小时连续观察未完成）
+版本：1.1
 审计基线日期：2026-07-14
+实施归档日期：2026-07-15
 适用范围：生产网络与健康检查、LLM 韧性、请求理解、任务合成、报告合成、Dashboard、Workbench 与 Chat 入口
 
 > 本文是本轮质量修复的实施权威。实现者不得把本文当作方向性建议，也不得用“等价实现”为由改变接口、状态、顺序、失败语义或验收标准。本文与当前代码冲突时，当前代码代表“现状”，本文代表“目标”；实施完成后必须同步当前架构事实文档并将本文归档。
@@ -1701,3 +1702,52 @@ FINSIGHT_STRUCTURED_SYNTHESIS=off|shadow|on
 6. 生产只读验收的原始计数、样本窗口和限制，不做无数据外推。
 
 本文没有待实现者自行决定的产品问题。若现实代码无法满足某项精确合同，实施者必须暂停该工作包并提交冲突证据，不得自行放宽状态码、字段、证据门槛、章节顺序或安全边界。
+
+## 20. 实施与发布记录（2026-07-15）
+
+本节是一次性收口证据，不作为当前运行时事实源。当前架构和运维合同以 `docs/01_ARCHITECTURE.md`、`docs/LANGGRAPH_FLOW.md`、`docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md` 与 `docs/11_PRODUCTION_RUNBOOK.md` 为准。
+
+### 20.1 实现基线
+
+- WP0-WP6 主实现提交为 `8d5e59b`；部署前又合入 `8d5b6f7`、`8011628`、`5d0db25`、`6de54bc`、`5387bc8` 与 `7480ac8` 六个请求期稳定性修复。
+- 最终部署提交为 `7480ac8`，backend 镜像摘要前缀为 `4d9a11d6715b`，frontend 镜像摘要前缀为 `aa14b07d819b`。
+- 生产启用 `FINSIGHT_STRUCTURED_SYNTHESIS=on`，RAG 使用 `hash` embedding 与 `1024` 维度；真实值通过服务器安全配置维护，未写入仓库。
+- 未执行数据库 migration、建表、回填、seed 或 Prediction 插入；未修改数据库 volume。
+
+### 20.2 代码验证
+
+- WP0-WP6 聚焦后端与前端合同测试、前端 build/e2e、OpenAPI 快照和文档同步在主实现阶段完成。
+- 最后两轮事件循环、RAG 与 chunker 聚焦组通过 20 项；chunker 单独通过 11 项；`compileall` 与 `git diff --check` 通过。
+- 广泛后端静态门禁仍记录一个实施前偏差：`backend/rag/execution_pipeline.py` 为 910 行，而既有门限为 900 行。本轮未修改该文件，不能把这一项记录为通过，也不能把它误归因于本轮修复。
+- Windows 本地 BGE/Torch 原生路径曾出现访问冲突；按生产实际 `hash/1024` 配置验证后不再触发该路径。
+
+### 20.3 灰度与正式冒烟
+
+- 最终 canary 冷态报告：279 秒、HTTP 200、严格 JSON、无非有限数值、`success=true`；138 次健康探针中 1 次在启动后第 2 秒达到 2 秒超时，其后全部 200。
+- 同一 canary 预热后新 session：254 秒、HTTP 200、严格 JSON、无非有限数值、`success=true`；127 次健康探针全部 200。最后 Agent 到 RAG/合成窗口未复现原约 66 秒事件循环冻结。
+- 正式公开 health：HTTP 200，顶层字段仅为 `status`、`components`、`timestamp`；敏感词递归扫描命中 0。
+- 纯 PE 定义：1 秒、HTTP 200、`success=true`、未降级。
+- NVDA/AMD compare + macro：响应记录 `374429ms`、HTTP 200、严格 JSON、无非有限数值、`success=true`；118 次独立健康探针全部 200。外部 LLM 输出未通过结构校验，按合同降级为 `llm_output_invalid`，但 `quality=pass`、`publishable=true`。
+- NVDA + 不存在标的 ZZZZZZ 报告：252 秒、HTTP 200、严格 JSON、无非有限数值、`success=true`、`publishable=true`、`quality_blocked=false`；126 次健康探针全部 200。最终合成因外部 LLM 暂时不可用降级为 `llm_unavailable`，正文明确披露数据缺口，`synthesis_gate` 为 `degraded` 而非 `block`。
+- 正式 backend 自切换起记录 14 次 `llm.attempt`：13 次成功、1 次失败、0 次 `synthesis_gate=block`；只观察到 1 个 failure domain，因此状态必须称为 `single_endpoint`，不得宣称高可用。当前日志未产生独立 `llm.call` 事件，不能用 attempt 数伪装逻辑调用数。
+
+### 20.4 浏览器验收
+
+- 公网 Welcome、匿名 Chat、Dashboard、Workbench 均可访问；页面无 JavaScript `pageerror`。
+- Dashboard AAPL 技术面只有 1 个 `dashboard-primary-candlestick`，显示“日线快照”；真实 K 线像素非空。
+- Dashboard“问 AI”跳转到主 Chat，草稿为“关于 AAPL 的技术面，”，URL 中一次性参数已清理，未自动发送；页面只有 1 个 textarea 和 1 条发送管线。
+- Workbench 的“今日 / 持仓 / 研究 / 监控”四个 tab 均可达，“今日”显示“最多 3 条”合同。
+- 390px 移动端 `scrollWidth=390`、`innerWidth=390`，无页面级横向溢出。
+- 匿名验收观察到 1 个预期鉴权 401、1 个 30 秒行情超时，以及页面切换时被 abort 的请求；它们未造成页面崩溃，但属于后续观测项。
+
+### 20.5 发布、回滚与容量
+
+- 切换前分别为旧 backend 和 frontend 创建 `rollback-pre-7480ac8-20260715` 回滚标签；正式容器切换后均为 healthy。
+- 清理前根盘 40 GB、已用 36 GB、可用 2.6 GB、使用率 94%；清理后已用 33 GB、可用 5.5 GB、使用率 86%。
+- canary 已删除；全部未使用 Docker build cache 从 27 项清为 0，释放约 2.712 GB；另删除 5 个未被容器引用的 FinSight 旧 remediation/历史 rollback 镜像。
+- 实际清理时 FinSight dangling 镜像计数为 0，因此没有虚构“删除 16 个”的结果。postgres、volumes、当前正式镜像、本次部署前回滚镜像与其他项目资源均保留。
+
+### 20.6 限制
+
+- 本记录是部署后约半小时的一次性窗口，不代表 24 小时可用性结论；没有足够样本时不外推成功率。
+- `single_endpoint`、一次结构化输出降级、一次 provider 不可用降级、匿名行情超时和既有 910/900 静态门禁偏差均保留为后续观测事项。
