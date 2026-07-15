@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -90,6 +91,7 @@ async def test_lifespan_runs_startup_and_shutdown_hooks(monkeypatch: pytest.Monk
         "install_rag_observability_hooks",
         "get_rag_observability_store",
         "aget_graph_runner",
+        "assert_core_schema_current",
         "flush_langfuse",
         "shutdown_langfuse",
         "reset_graph_runner",
@@ -119,6 +121,11 @@ async def test_lifespan_runs_startup_and_shutdown_hooks(monkeypatch: pytest.Monk
     )
     monkeypatch.setattr(lifespan_module, "get_rag_observability_store", lambda: _Store())
     monkeypatch.setattr(lifespan_module, "aget_graph_runner", _aget_graph_runner)
+    monkeypatch.setattr(
+        lifespan_module,
+        "assert_core_schema_current",
+        lambda: SimpleNamespace(configured=False),
+    )
     monkeypatch.setattr(lifespan_module, "flush_langfuse", lambda: calls.append("langfuse_flush"))
     monkeypatch.setattr(lifespan_module, "shutdown_langfuse", lambda: calls.append("langfuse_stop"))
     monkeypatch.setattr(lifespan_module, "reset_graph_runner", lambda: calls.append("graph_stop"))
@@ -134,7 +141,6 @@ async def test_lifespan_runs_startup_and_shutdown_hooks(monkeypatch: pytest.Monk
         "NEWS_ALERT_SCHEDULER_ENABLED",
         "RISK_ALERT_SCHEDULER_ENABLED",
         "HEALTH_PROBE_ENABLED",
-        "MONITOR_SCAN_ENABLED",
         "MONITOR_REALTIME_ENABLED",
         "PREDICTION_OUTCOME_SCHEDULER_ENABLED",
         "RAG_OBSERVABILITY_RETENTION_ENABLED",

@@ -564,46 +564,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/monitor/findings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Findings Endpoint
-         * @description 返回 session 的盯盘发现（按时间倒序，可按状态过滤）。
-         */
-        get: operations["list_findings_endpoint_api_monitor_findings_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/monitor/findings/{finding_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Finding Endpoint
-         * @description 更新某条 finding 的状态（new/viewed/acted）。
-         */
-        patch: operations["update_finding_endpoint_api_monitor_findings__finding_id__patch"];
-        trace?: never;
-    };
     "/api/monitor/leases": {
         parameters: {
             query?: never;
@@ -637,120 +597,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/monitor/macro-calendar": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Macro Calendar Endpoint
-         * @description 聚合该 session 的财报 + 宏观事件日历（缓存 1 小时，外部 API 全挂返回空列表）。
-         */
-        get: operations["macro_calendar_endpoint_api_monitor_macro_calendar_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/monitor/scan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Scan Endpoint
-         * @description 手动触发该 session 的 L1 规则扫描，返回本次新产生的 findings。
-         *
-         *     enable_l2 默认 True：手动扫描时附带 L2 agent 深析（受同样的成本护栏限制）。
-         */
-        post: operations["scan_endpoint_api_monitor_scan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/monitor/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Settings Endpoint
-         * @description 返回 session 的通知设置 + SMTP 是否已配置。
-         */
-        get: operations["get_settings_endpoint_api_monitor_settings_get"];
-        /**
-         * Upsert Settings Endpoint
-         * @description 更新 session 的通知设置（邮箱格式校验 + SMTP 未配置时禁止启用通知）。
-         */
-        put: operations["upsert_settings_endpoint_api_monitor_settings_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/monitor/targets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Targets Endpoint
-         * @description 返回 session 的盯盘标的列表。
-         */
-        get: operations["list_targets_endpoint_api_monitor_targets_get"];
-        put?: never;
-        /**
-         * Create Target Endpoint
-         * @description 新建盯盘标的（id / created_at 由服务端生成）。
-         */
-        post: operations["create_target_endpoint_api_monitor_targets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/monitor/targets/{target_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Target Endpoint
-         * @description 删除盯盘标的（session 隔离）。
-         */
-        delete: operations["delete_target_endpoint_api_monitor_targets__target_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Patch Target Endpoint
-         * @description 更新盯盘标的的 config / enabled（部分字段）。
-         */
-        patch: operations["patch_target_endpoint_api_monitor_targets__target_id__patch"];
         trace?: never;
     };
     "/api/morning-brief/generate": {
@@ -2344,27 +2190,6 @@ export interface components {
             /** Weight */
             weight: number;
         };
-        /** CreateTargetRequest */
-        CreateTargetRequest: {
-            /** Config */
-            config?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Enabled
-             * @default true
-             */
-            enabled: boolean;
-            /** Session Id */
-            session_id: string;
-            /** Ticker */
-            ticker?: string | null;
-            /**
-             * Type
-             * @default custom
-             */
-            type: string;
-        };
         /**
          * DashboardData
          * @description Dashboard 聚合数据 (v2)
@@ -2843,15 +2668,6 @@ export interface components {
              * @enum {string}
              */
             status: "viewed" | "dismissed" | "sent_to_chat";
-        };
-        /** PatchTargetRequest */
-        PatchTargetRequest: {
-            /** Config */
-            config?: {
-                [key: string]: unknown;
-            } | null;
-            /** Enabled */
-            enabled?: boolean | null;
         };
         /**
          * PeerComparisonData
@@ -3656,11 +3472,6 @@ export interface components {
              */
             ticker?: string | null;
         };
-        /** UpdateFindingRequest */
-        UpdateFindingRequest: {
-            /** Status */
-            status: string;
-        };
         /**
          * UpdatePositionRequest
          * @description Upsert a single position.
@@ -3671,24 +3482,8 @@ export interface components {
             /** Shares */
             shares: number;
         };
-        /** UpsertSettingsRequest */
-        UpsertSettingsRequest: {
-            /** Notify Email */
-            notify_email?: string | null;
-            /**
-             * Notify Enabled
-             * @default false
-             */
-            notify_enabled: boolean;
-            /** Session Id */
-            session_id: string;
-        };
         /** ValidationError */
         ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
@@ -4858,6 +4653,7 @@ export interface operations {
         parameters: {
             query: {
                 session_id: string;
+                symbol: string;
                 day?: string | null;
                 cursor?: string | null;
                 limit?: number;
@@ -4892,6 +4688,7 @@ export interface operations {
         parameters: {
             query: {
                 session_id: string;
+                symbol: string;
                 last_event_id?: string | null;
             };
             header?: never;
@@ -4899,76 +4696,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_findings_endpoint_api_monitor_findings_get: {
-        parameters: {
-            query: {
-                session_id: string;
-                status?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_finding_endpoint_api_monitor_findings__finding_id__patch: {
-        parameters: {
-            query: {
-                session_id: string;
-            };
-            header?: never;
-            path: {
-                finding_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateFindingRequest"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5070,268 +4797,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LeaseTokenRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    macro_calendar_endpoint_api_monitor_macro_calendar_get: {
-        parameters: {
-            query: {
-                session_id: string;
-                days_ahead?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    scan_endpoint_api_monitor_scan_post: {
-        parameters: {
-            query: {
-                session_id: string;
-                enable_l2?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_settings_endpoint_api_monitor_settings_get: {
-        parameters: {
-            query: {
-                session_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_settings_endpoint_api_monitor_settings_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpsertSettingsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_targets_endpoint_api_monitor_targets_get: {
-        parameters: {
-            query: {
-                session_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_target_endpoint_api_monitor_targets_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateTargetRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_target_endpoint_api_monitor_targets__target_id__delete: {
-        parameters: {
-            query: {
-                session_id: string;
-            };
-            header?: never;
-            path: {
-                target_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    patch_target_endpoint_api_monitor_targets__target_id__patch: {
-        parameters: {
-            query: {
-                session_id: string;
-            };
-            header?: never;
-            path: {
-                target_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchTargetRequest"];
             };
         };
         responses: {

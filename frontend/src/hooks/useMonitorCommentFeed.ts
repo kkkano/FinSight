@@ -34,20 +34,39 @@ export function classifyMonitorStreamResponse(
   return 'stream';
 }
 
-export function useMonitorCommentFeed(sessionId: string | null | undefined) {
+export function buildMonitorCommentStreamPath(
+  sessionId: string,
+  symbol: string,
+  lastEventId = '',
+): string {
+  const params = new URLSearchParams({
+    session_id: sessionId,
+    symbol: symbol.trim().toUpperCase(),
+  });
+  if (lastEventId) params.set('last_event_id', lastEventId);
+  return `/api/monitor/comments/stream?${params.toString()}`;
+}
+
+export function useMonitorCommentFeed(
+  sessionId: string | null | undefined,
+  symbol: string | null | undefined,
+) {
   const [comments, setComments] = useState<MonitorComment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const userId = useStore((state) => state.authIdentity?.userId);
   const isAvailable = isAuthenticatedMonitorSession(userId);
+  const normalizedSymbol = (symbol || '').trim().toUpperCase();
 
   useEffect(() => {
-    if (!sessionId || !isAvailable) {
+    if (!sessionId || !normalizedSymbol || !isAvailable) {
       setComments([]);
       setError(null);
       setUnavailable(false);
       return undefined;
     }
+    setComments([]);
+    setError(null);
     setUnavailable(false);
     const controller = new AbortController();
     let retries = 0;
@@ -56,16 +75,15 @@ export function useMonitorCommentFeed(sessionId: string | null | undefined) {
 
     const connect = async () => {
       try {
-        const suffix = lastEventId ? `&last_event_id=${encodeURIComponent(lastEventId)}` : '';
         const response = await fetch(
-          buildApiUrl(`/api/monitor/comments/stream?session_id=${encodeURIComponent(sessionId)}${suffix}`),
+          buildApiUrl(buildMonitorCommentStreamPath(sessionId, normalizedSymbol, lastEventId)),
           { headers: await buildAuthHeaders(), signal: controller.signal },
         );
         const responseKind = classifyMonitorStreamResponse(response);
         if (responseKind === 'terminal_unavailable') {
           if (retryTimer) clearTimeout(retryTimer);
           setUnavailable(true);
-          setError('该数据源暂不可用');
+          setError('实时点评服务不可用');
           return;
         }
         if (responseKind === 'retryable_error' || !response.body) throw new Error(`HTTP ${response.status}`);
@@ -107,7 +125,7 @@ export function useMonitorCommentFeed(sessionId: string | null | undefined) {
       controller.abort();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [isAvailable, sessionId]);
+  }, [isAvailable, normalizedSymbol, sessionId]);
 
   return { comments, error, isAvailable, unavailable };
 }

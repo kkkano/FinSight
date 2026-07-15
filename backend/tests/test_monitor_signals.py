@@ -57,10 +57,12 @@ def test_level_and_day_level_cross_details_are_deterministic():
     triggers = detect_triggers(previous=previous, current=current, prediction=_prediction())
 
     assert [(item.kind, item.detail) for item in triggers[:3]] == [
-        ("level_break", "entry 上穿：104.0000 → 111.0000，命中价位 105.0000"),
+        ("prediction_level_break", "entry 上穿：104.0000 → 111.0000，命中价位 105.0000"),
         ("level_break", "pivot 上穿：104.0000 → 111.0000，命中价位 105.0000"),
         ("day_level_break", "previous_day_high 上穿：104.0000 → 111.0000，命中价位 110.0000"),
     ]
+    assert triggers[0].escalates_prediction is True
+    assert triggers[1].escalates_prediction is False
 
     downward = detect_triggers(
         previous=_snapshot(price=106.0),

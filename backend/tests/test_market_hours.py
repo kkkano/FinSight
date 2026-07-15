@@ -6,8 +6,6 @@
 - 夏令时(EDT, UTC-4) vs 冬令时(EST, UTC-5) 的北京时间换算正确性
 - 周六/周日 → closed
 - NYSE 节假日 → closed
-- 扫描间隔（默认 + 环境变量覆盖）
-- price_rules_active
 """
 
 from __future__ import annotations
@@ -18,11 +16,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from backend.services import market_hours
-from backend.services.market_hours import (
-    get_market_session,
-    get_scan_interval_minutes,
-    price_rules_active,
-)
+from backend.services.market_hours import get_market_session
 
 _NY = ZoneInfo("America/New_York")
 _BJ = ZoneInfo("Asia/Shanghai")
@@ -155,51 +149,3 @@ def test_new_year_is_closed():
 def test_holiday_set_contains_all_2026():
     assert len(market_hours.NYSE_HOLIDAYS_2026) == 10
     assert "2026-11-26" in market_hours.NYSE_HOLIDAYS_2026  # 感恩节
-
-
-# ── 扫描间隔 ───────────────────────────────────────────────────
-
-
-def test_default_intervals():
-    assert get_scan_interval_minutes("pre_market") == 10.0
-    assert get_scan_interval_minutes("regular") == 15.0
-    assert get_scan_interval_minutes("after_hours") == 30.0
-    assert get_scan_interval_minutes("closed") == 60.0
-
-
-def test_interval_env_override(monkeypatch):
-    monkeypatch.setenv("MONITOR_INTERVAL_PRE_MARKET", "7")
-    monkeypatch.setenv("MONITOR_INTERVAL_REGULAR", "20")
-    monkeypatch.setenv("MONITOR_INTERVAL_AFTER_HOURS", "45")
-    monkeypatch.setenv("MONITOR_INTERVAL_CLOSED", "90")
-    assert get_scan_interval_minutes("pre_market") == 7.0
-    assert get_scan_interval_minutes("regular") == 20.0
-    assert get_scan_interval_minutes("after_hours") == 45.0
-    assert get_scan_interval_minutes("closed") == 90.0
-
-
-def test_interval_invalid_env_falls_back_to_default(monkeypatch):
-    monkeypatch.setenv("MONITOR_INTERVAL_REGULAR", "not-a-number")
-    assert get_scan_interval_minutes("regular") == 15.0
-
-
-def test_interval_nonpositive_env_falls_back(monkeypatch):
-    # 0 或负数会导致狂扫，应回退默认（诚实兜底）
-    monkeypatch.setenv("MONITOR_INTERVAL_PRE_MARKET", "0")
-    assert get_scan_interval_minutes("pre_market") == 10.0
-    monkeypatch.setenv("MONITOR_INTERVAL_PRE_MARKET", "-5")
-    assert get_scan_interval_minutes("pre_market") == 10.0
-
-
-def test_interval_unknown_session_defaults_to_regular():
-    assert get_scan_interval_minutes("weird") == 15.0
-
-
-# ── price_rules_active ─────────────────────────────────────────
-
-
-def test_price_rules_active_by_session():
-    assert price_rules_active("pre_market") is True
-    assert price_rules_active("regular") is True
-    assert price_rules_active("after_hours") is True
-    assert price_rules_active("closed") is False

@@ -28,6 +28,7 @@ import { useChatHandoff } from '../hooks/useChatHandoff';
 import { usePredictionGeneration } from '../hooks/usePredictionGeneration';
 import { usePredictionEligibility } from '../hooks/usePredictionEligibility';
 import { PredictionTrack } from '../components/dashboard/PredictionTrack';
+import { MonitorActivityFeed } from '../components/dashboard/MonitorActivityFeed';
 
 interface DashboardProps {
   initialSymbol?: string;
@@ -43,7 +44,7 @@ const formatClock = (): string =>
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: DashboardProps) {
   const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
-  const { theme, setTheme, entryMode, authIdentity } = useStore();
+  const { theme, setTheme, entryMode, authIdentity, sessionId } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -322,6 +323,11 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
             isGenerating={predictionGeneration.isGenerating}
             onGenerate={() => { void predictionGeneration.generate(); }}
             onAsk={handleAskAi}
+          />
+
+          <MonitorActivityFeed
+            sessionId={sessionId}
+            symbol={activeAsset?.symbol || currentSymbol}
           />
 
           <DashboardTabs predictionOverlay={prediction.overlay} />

@@ -5,11 +5,9 @@ from __future__ import annotations
 import json
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-import pytest
 
 from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morning_brief_router
 from backend.api.watchlist_router import WatchlistRouterDeps, create_watchlist_router
-from backend.services import monitor_engine
 from backend.services.watchlist_store import LegacyWatchlistStore as WatchlistStore
 
 
@@ -97,41 +95,6 @@ def test_morning_brief_prefers_watchlist_over_positions():
     assert response.status_code == 200
     assert fetched == ["NVDA"]
     assert response.json()["brief"]["ticker_count"] == 1
-
-
-@pytest.mark.asyncio
-async def test_monitor_uses_watchlist_as_default_targets(monkeypatch):
-    captured: dict[str, dict] = {}
-
-    class FakeStore:
-        def list_targets(self, _session_id, user_id="public"):
-            return []
-
-    async def capture_sentiment(_session, _store, _positions, config_map, user_id="public"):
-        captured.update(config_map)
-        return []
-
-    async def no_findings(*_args, **_kwargs):
-        return []
-
-    monkeypatch.setattr(monitor_engine, "get_monitor_store", lambda: FakeStore())
-    monkeypatch.setattr(monitor_engine, "_get_positions_for_user", lambda *_args: [])
-    monkeypatch.setattr(monitor_engine, "list_watchlist", lambda user_id="public": [{"ticker": "AAPL"}])
-    monkeypatch.setattr(monitor_engine, "price_rules_active", lambda _session: False)
-    monkeypatch.setattr(monitor_engine, "_scan_concentration", no_findings)
-    monkeypatch.setattr(monitor_engine, "_scan_sentiment_shift", capture_sentiment)
-    monkeypatch.setattr(monitor_engine, "_scan_earnings_near", no_findings)
-    monkeypatch.setattr(monitor_engine, "_scan_macro_event", no_findings)
-
-    result = await monitor_engine.run_l1_scan(
-        "session",
-        enable_l2=False,
-        market_session="closed",
-        user_id="alice",
-    )
-
-    assert result == []
-    assert "AAPL" in captured
 
 
 def test_watchlist_migrates_legacy_memory_profiles(tmp_path):

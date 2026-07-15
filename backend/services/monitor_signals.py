@@ -15,6 +15,7 @@ class MonitorTrigger:
     detail: str
     observed_at: str
     severity: str
+    escalates_prediction: bool = False
 
 
 @dataclass(frozen=True)
@@ -90,19 +91,19 @@ def _named_zones(
     previous: MarketSnapshot,
     current: MarketSnapshot,
     prediction: AgentPrediction | None,
-) -> list[tuple[str, float, float]]:
-    zones: dict[str, tuple[float, float]] = {}
+) -> list[tuple[str, float, float, bool]]:
+    zones: dict[str, tuple[float, float, bool]] = {}
     for source in (previous.zones, current.zones):
         for name, raw_range in source.items():
             if not isinstance(raw_range, (tuple, list)) or len(raw_range) != 2:
                 continue
             low, high = _finite_number(raw_range[0]), _finite_number(raw_range[1])
             if low is not None and high is not None and low < high:
-                zones[str(name)] = (low, high)
+                zones[str(name)] = (low, high, False)
     if prediction is not None and prediction.direction == "neutral":
         low, high = _finite_number(prediction.range_low), _finite_number(prediction.range_high)
         if low is not None and high is not None and low < high:
-            zones["prediction_range"] = (low, high)
+            zones["prediction_range"] = (low, high, True)
     return [(name, *zones[name]) for name in sorted(zones)]
 
 
@@ -143,7 +144,18 @@ def detect_triggers(
     triggers: list[MonitorTrigger] = []
     observed_at = current.observed_at
 
-    for name, level in [*_prediction_levels(prediction), *_named_levels(current)]:
+    for name, level in _prediction_levels(prediction):
+        direction = _cross_direction(before, after, level)
+        if direction:
+            triggers.append(MonitorTrigger(
+                kind="prediction_level_break",
+                detail=_level_detail(name, direction, before, after, level),
+                observed_at=observed_at,
+                severity="alert",
+                escalates_prediction=True,
+            ))
+
+    for name, level in _named_levels(current):
         direction = _cross_direction(before, after, level)
         if direction:
             triggers.append(MonitorTrigger(
@@ -168,20 +180,21 @@ def detect_triggers(
                 severity="alert",
             ))
 
-    for name, low, high in _named_zones(previous, current, prediction):
+    for name, low, high, prediction_related in _named_zones(previous, current, prediction):
         was_inside = low <= before <= high
         is_inside = low <= after <= high
         if was_inside == is_inside:
             continue
         action = "进入" if is_inside else "离开"
         triggers.append(MonitorTrigger(
-            kind="zone_break",
+            kind="prediction_range_break" if prediction_related else "zone_break",
             detail=(
                 f"{action} {name}：{before:.4f} → {after:.4f}，"
                 f"区间 [{low:.4f}, {high:.4f}]"
             ),
             observed_at=observed_at,
             severity="warn",
+            escalates_prediction=prediction_related,
         ))
 
     previous_macd = _finite_number(previous.macd_hist)

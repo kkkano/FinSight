@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyMonitorStreamResponse } from './useMonitorCommentFeed';
+import {
+  buildMonitorCommentStreamPath,
+  classifyMonitorStreamResponse,
+} from './useMonitorCommentFeed';
 
 describe('useMonitorCommentFeed response policy', () => {
   it('treats 503 as terminal unavailable while retaining retries for transient failures', () => {
@@ -10,5 +13,12 @@ describe('useMonitorCommentFeed response policy', () => {
       .toBe('retryable_error');
     expect(classifyMonitorStreamResponse({ status: 200, ok: true, body: {} as ReadableStream }))
       .toBe('stream');
+  });
+
+  it('binds every stream to the current normalized symbol', () => {
+    expect(buildMonitorCommentStreamPath('session:1', ' aapl '))
+      .toBe('/api/monitor/comments/stream?session_id=session%3A1&symbol=AAPL');
+    expect(buildMonitorCommentStreamPath('session:1', 'msft', 'event-1'))
+      .toContain('symbol=MSFT&last_event_id=event-1');
   });
 });

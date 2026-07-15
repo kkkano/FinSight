@@ -163,26 +163,6 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
 
-    # Workbench: 交易时段感知 L1 盯盘调度（零 LLM 成本）
-    # 调度心跳固定 5 分钟，实际扫描频率由 dispatcher 按时段间隔节流
-    # （盘前 10 / 盘中 15 / 盘后 30 / 闭市 60 分钟）。
-    monitor_enabled = _env_bool("MONITOR_SCAN_ENABLED", True)
-    if monitor_enabled:
-        from backend.services.monitor_engine import run_monitor_dispatch_cycle
-
-        heartbeat_interval = float(os.getenv("MONITOR_DISPATCH_HEARTBEAT_MINUTES", "5"))
-        sched = start_interval_scheduler(
-            run_monitor_dispatch_cycle,
-            interval_minutes=heartbeat_interval,
-            enabled=True,
-            job_id="monitor_l1_dispatch",
-            job_label="workbench L1 session-aware monitor dispatch",
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] MONITOR_SCAN_ENABLED is false; skip start.")
-
     # 页面可见时的高频监控：固定 60 秒 tick；函数内部再由 PostgreSQL lease + advisory lock 门控。
     realtime_monitor_enabled = _env_bool("MONITOR_REALTIME_ENABLED", True)
     if realtime_monitor_enabled:

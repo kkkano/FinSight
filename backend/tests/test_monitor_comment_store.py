@@ -17,16 +17,18 @@ NOW = datetime(2026, 7, 11, 0, 0, tzinfo=timezone.utc)
 
 
 class Result:
-    def __init__(self, rows=None, rowcount=1): self.rows, self.rowcount = rows or [], rowcount
+    def __init__(self, rows=None, rowcount=1, scalar_value=None):
+        self.rows, self.rowcount, self.scalar_value = rows or [], rowcount, scalar_value
     def mappings(self): return self
     def all(self): return self.rows
+    def scalar(self): return self.scalar_value
 
 
 class Connection:
-    def __init__(self): self.calls, self.rows, self.rowcount = [], [], 1
+    def __init__(self): self.calls, self.rows, self.rowcount, self.scalar_value = [], [], 1, None
     def execute(self, statement, params=None):
         self.calls.append((str(statement), params or {}))
-        return Result(self.rows, self.rowcount)
+        return Result(self.rows, self.rowcount, self.scalar_value)
 
 
 class Engine:
@@ -82,13 +84,16 @@ def test_list_supports_date_filter_desc_order_and_opaque_cursor():
          "trigger_detail": "cross", "trigger_observed_at": NOW.isoformat(), "source": "agent",
          "escalated": False, "prediction_id": None},
     ]
-    items, cursor = store.list(user_id="alice", session_id="s1", day=NOW.date(), limit=1)
+    items, cursor = store.list(
+        user_id="alice", session_id="s1", symbol="aapl", day=NOW.date(), limit=1,
+    )
     assert [item.text for item in items] == ["new"]
     assert cursor and "alice" not in cursor
-    store.list(user_id="alice", session_id="s1", cursor=cursor, limit=1)
+    store.list(user_id="alice", session_id="s1", symbol="AAPL", cursor=cursor, limit=1)
     sql, params = engine.conn.calls[-1]
     assert "(ts, id) <" in sql
     assert params["user_id"] == "alice" and params["session_id"] == "s1"
+    assert params["symbol"] == "AAPL" and "symbol=:symbol" in sql
 
 
 def test_list_and_list_after_are_read_only_without_schema_helpers(monkeypatch):
@@ -101,10 +106,11 @@ def test_list_and_list_after_are_read_only_without_schema_helpers(monkeypatch):
         raising=False,
     )
 
-    assert store.list(user_id="alice", session_id="s1") == ([], None)
+    assert store.list(user_id="alice", session_id="s1", symbol="AAPL") == ([], None)
     assert store.list_after(
         user_id="alice",
         session_id="s1",
+        symbol="AAPL",
         last_event_id="11111111-1111-1111-1111-111111111111",
     ) == []
     assert engine.begin_calls == 0
@@ -121,27 +127,52 @@ def test_read_failure_is_stable_store_unavailable():
     store = MonitorCommentStore(engine=engine)
 
     with pytest.raises(MonitorCommentStoreUnavailable, match="read unavailable"):
-        store.list(user_id="alice", session_id="s1")
+        store.list(user_id="alice", session_id="s1", symbol="AAPL")
+
+
+def test_latest_comment_and_escalation_are_symbol_scoped():
+    engine = Engine()
+    engine.conn.scalar_value = NOW
+    store = MonitorCommentStore(engine=engine)
+
+    assert store.latest_comment_at(user_id="alice", session_id="s1", symbol="aapl") == NOW
+    assert store.latest_escalation_at(user_id="alice", session_id="s1", symbol="AAPL") == NOW
+    regular_sql, regular_params = engine.conn.calls[-2]
+    escalation_sql, escalation_params = engine.conn.calls[-1]
+    assert regular_params["symbol"] == escalation_params["symbol"] == "AAPL"
+    assert "escalated IS TRUE" not in regular_sql
+    assert "escalated IS TRUE" in escalation_sql
 
 
 @pytest.mark.asyncio
-async def test_producer_validates_output_and_writes_system_error_for_foreign_prediction():
+async def test_producer_rejects_llm_owned_server_fields_and_keeps_server_escalation():
     captured = []
     store = SimpleNamespace(create=lambda **kwargs: captured.append(kwargs) or kwargs)
     target = SimpleNamespace(user_id="alice", session_id="s1", symbol="AAPL")
     snapshot = MarketSnapshot("AAPL", NOW.isoformat(), 101.0)
-    trigger = MonitorTrigger("level_break", "突破 100", NOW.isoformat(), "alert")
+    trigger = MonitorTrigger(
+        "prediction_level_break", "突破 100", NOW.isoformat(), "alert", True,
+    )
     prediction = SimpleNamespace(id="11111111-1111-1111-1111-111111111111")
 
     async def foreign(_prompt):
         return {"level": "alert", "text": "突破", "source": "agent", "escalated": True,
                 "prediction_id": "22222222-2222-2222-2222-222222222222"}
 
-    assert await produce_monitor_comments(target, snapshot, [trigger], prediction, generator=foreign, store=store) == 1
+    assert await produce_monitor_comments(
+        target,
+        snapshot,
+        [trigger],
+        prediction,
+        prediction_escalated=True,
+        generator=foreign,
+        store=store,
+    ) == 1
     assert captured[0]["source"] == "system"
     assert captured[0]["level"] == "error"
-    assert captured[0]["prediction_id"] is None
-    assert captured[0]["trigger_kind"] == "level_break"
+    assert captured[0]["escalated"] is True
+    assert captured[0]["prediction_id"] == prediction.id
+    assert captured[0]["trigger_kind"] == "prediction_level_break"
 
 
 @pytest.mark.asyncio
@@ -154,8 +185,7 @@ async def test_heartbeat_must_be_info_and_valid_comment_keeps_prediction():
     prediction = SimpleNamespace(id="11111111-1111-1111-1111-111111111111")
 
     async def valid(_prompt):
-        return {"level": "info", "text": "价格平稳", "source": "agent", "escalated": False,
-                "prediction_id": prediction.id}
+        return {"level": "info", "text": "价格平稳"}
 
     assert await produce_monitor_comments(target, snapshot, [trigger], prediction, generator=valid, store=store) == 1
     assert captured[0]["level"] == "info"

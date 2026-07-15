@@ -643,6 +643,7 @@ class PredictionService:
         self._run_slots = asyncio.Semaphore(max(1, min(16, int(max_concurrent_runs))))
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._recovery_task: asyncio.Task[None] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     async def generate(self, *, user_id: str, symbol: str, timeframe: str = "1d") -> tuple[PredictionRun, bool]:
         if not self.enabled:
@@ -714,7 +715,37 @@ class PredictionService:
             days=days,
         )
 
+    def enqueue(
+        self,
+        *,
+        user_id: str,
+        symbol: str,
+        timeframe: str = "1d",
+    ) -> tuple[PredictionRun, bool]:
+        """从调度器线程创建 run，并安全投递给 FastAPI 主事件循环。"""
+        if not self.enabled:
+            raise PredictionServiceUnavailable("prediction generation disabled")
+        normalized_user = str(user_id or "").strip()
+        if not normalized_user or normalized_user == "public":
+            raise ValueError("auth_required")
+        normalized_symbol = normalize_prediction_symbol(symbol)
+        if timeframe != "1d":
+            raise ValueError("unsupported prediction timeframe")
+        loop = self._loop
+        if loop is None or loop.is_closed() or not loop.is_running():
+            raise PredictionServiceUnavailable("prediction worker unavailable")
+        run, created = self.store.create_or_get_active(
+            user_id=normalized_user,
+            symbol=normalized_symbol,
+            timeframe=timeframe,
+            prompt_version=self.prompt_version,
+        )
+        if created:
+            loop.call_soon_threadsafe(self._schedule, run.id)
+        return run, created
+
     async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
         if self._recovery_task is None or self._recovery_task.done():
             self._recovery_task = asyncio.create_task(self._recovery_loop())
 
@@ -729,6 +760,7 @@ class PredictionService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
+        self._loop = None
 
     def _schedule(self, run_id: str) -> None:
         current = self._tasks.get(run_id)

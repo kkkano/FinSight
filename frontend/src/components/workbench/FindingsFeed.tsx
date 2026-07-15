@@ -12,11 +12,9 @@ import { Loader2, RadarIcon, RefreshCw } from 'lucide-react';
 import type { UseFindingsResult } from '../../hooks/useFindings';
 import { EmptyState } from '../ui';
 import { FindingCard } from './FindingCard';
-import { MonitorCommentFeed } from './MonitorCommentFeed';
 
 interface FindingsFeedProps {
   controller: UseFindingsResult;
-  sessionId: string | null | undefined;
   /** 行动按钮跳转 Chat 深挖 */
   onNavigateToChat?: (ticker: string, prompt: string) => void;
   /** 行动按钮联动调仓卡片（滚动 + 高亮） */
@@ -29,7 +27,6 @@ type FeedFilter = 'all' | 'unread';
 
 export function FindingsFeed({
   controller,
-  sessionId,
   onNavigateToChat,
   onNavigateToRebalance,
   onConfigureMonitor,
@@ -109,8 +106,6 @@ export function FindingsFeed({
           </button>
         </div>
       </div>
-
-      <MonitorCommentFeed sessionId={sessionId} />
 
       {/* 错误提示 */}
       {error && (

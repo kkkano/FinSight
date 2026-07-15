@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -211,6 +212,31 @@ async def test_generate_returns_queued_run_without_market_or_llm_and_reuses_acti
     assert (first_created, second_created) == (True, False)
     assert scheduled == [RUN_ID]
     assert gateway.kline_calls == gateway.news_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_scheduler_thread_enqueue_uses_the_running_service_loop():
+    store = _Store()
+    service = PredictionService(store=store, market_gateway=_Gateway(_market()))
+    scheduled: list[str] = []
+    service._schedule = scheduled.append  # type: ignore[method-assign]
+    service._loop = asyncio.get_running_loop()
+
+    first, first_created = await asyncio.to_thread(
+        service.enqueue,
+        user_id="alice",
+        symbol="aapl",
+    )
+    second, second_created = await asyncio.to_thread(
+        service.enqueue,
+        user_id="alice",
+        symbol="AAPL",
+    )
+    await asyncio.sleep(0)
+
+    assert first.id == second.id == RUN_ID
+    assert (first_created, second_created) == (True, False)
+    assert scheduled == [RUN_ID]
 
 
 @pytest.mark.asyncio

@@ -47,6 +47,26 @@ try:
         "Grounding rate observed in report quality evaluation",
         ["source"],
     )
+    MONITOR_TICK = Counter(
+        "finsight_monitor_tick_total",
+        "Realtime monitor tick outcomes",
+        ["outcome"],
+    )
+    MONITOR_TRIGGER = Counter(
+        "finsight_monitor_trigger_total",
+        "Deterministic realtime monitor triggers",
+        ["kind", "severity"],
+    )
+    MONITOR_COMMENT = Counter(
+        "finsight_monitor_comment_total",
+        "Realtime monitor comment outcomes",
+        ["source", "level", "result"],
+    )
+    MONITOR_ESCALATION = Counter(
+        "finsight_monitor_escalation_total",
+        "Prediction escalation outcomes from realtime monitor triggers",
+        ["outcome"],
+    )
 except Exception:  # pragma: no cover - optional dependency
     METRICS_ENABLED = False
 
@@ -67,6 +87,10 @@ except Exception:  # pragma: no cover - optional dependency
     REPORT_QUALITY_STATE = _Noop()
     REPORT_QUALITY_REASON = _Noop()
     REPORT_QUALITY_GROUNDING = _Noop()
+    MONITOR_TICK = _Noop()
+    MONITOR_TRIGGER = _Noop()
+    MONITOR_COMMENT = _Noop()
+    MONITOR_ESCALATION = _Noop()
     CONTENT_TYPE_LATEST = "text/plain"
 
     def generate_latest():  # type: ignore[override]
@@ -103,6 +127,22 @@ def observe_report_quality_grounding_rate(*, grounding_rate: float, source: str)
     if grounding_rate < 0:
         return
     REPORT_QUALITY_GROUNDING.labels(source=source).observe(grounding_rate)
+
+
+def increment_monitor_tick(outcome: str) -> None:
+    MONITOR_TICK.labels(outcome=outcome).inc()
+
+
+def increment_monitor_trigger(kind: str, severity: str) -> None:
+    MONITOR_TRIGGER.labels(kind=kind, severity=severity).inc()
+
+
+def increment_monitor_comment(*, source: str, level: str, result: str) -> None:
+    MONITOR_COMMENT.labels(source=source, level=level, result=result).inc()
+
+
+def increment_monitor_escalation(outcome: str) -> None:
+    MONITOR_ESCALATION.labels(outcome=outcome).inc()
 
 
 def metrics_payload() -> Tuple[bytes, str]:

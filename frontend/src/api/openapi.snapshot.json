@@ -877,45 +877,6 @@
         "title": "ContributionItem",
         "type": "object"
       },
-      "CreateTargetRequest": {
-        "properties": {
-          "config": {
-            "additionalProperties": true,
-            "title": "Config",
-            "type": "object"
-          },
-          "enabled": {
-            "default": true,
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "session_id": {
-            "title": "Session Id",
-            "type": "string"
-          },
-          "ticker": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ticker"
-          },
-          "type": {
-            "default": "custom",
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "session_id"
-        ],
-        "title": "CreateTargetRequest",
-        "type": "object"
-      },
       "DashboardData": {
         "description": "Dashboard 聚合数据 (v2)\n\nv1 字段: snapshot, charts, news\nv2 新增: valuation, financials, technicals, peers (可空 + fallback_reason)",
         "properties": {
@@ -2109,35 +2070,6 @@
           "status"
         ],
         "title": "PatchSuggestionRequest",
-        "type": "object"
-      },
-      "PatchTargetRequest": {
-        "properties": {
-          "config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Config"
-          },
-          "enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enabled"
-          }
-        },
-        "title": "PatchTargetRequest",
         "type": "object"
       },
       "PeerComparisonData": {
@@ -4238,20 +4170,6 @@
         "title": "UnsubscribeRequest",
         "type": "object"
       },
-      "UpdateFindingRequest": {
-        "properties": {
-          "status": {
-            "pattern": "^(new|viewed|acted)$",
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "UpdateFindingRequest",
-        "type": "object"
-      },
       "UpdatePositionRequest": {
         "description": "Upsert a single position.",
         "properties": {
@@ -4278,44 +4196,8 @@
         "title": "UpdatePositionRequest",
         "type": "object"
       },
-      "UpsertSettingsRequest": {
-        "properties": {
-          "notify_email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notify Email"
-          },
-          "notify_enabled": {
-            "default": false,
-            "title": "Notify Enabled",
-            "type": "boolean"
-          },
-          "session_id": {
-            "title": "Session Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "session_id"
-        ],
-        "title": "UpsertSettingsRequest",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [
@@ -5952,7 +5834,22 @@
             "name": "session_id",
             "required": true,
             "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
               "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9^][A-Za-z0-9._:^=-]{0,31}$",
+              "title": "Symbol",
               "type": "string"
             }
           },
@@ -5995,6 +5892,8 @@
             "required": false,
             "schema": {
               "default": 50,
+              "maximum": 100,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -6035,7 +5934,22 @@
             "name": "session_id",
             "required": true,
             "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
               "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9^][A-Za-z0-9._:^=-]{0,31}$",
+              "title": "Symbol",
               "type": "string"
             }
           },
@@ -6077,133 +5991,6 @@
           }
         },
         "summary": "Stream Monitor Comments",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/findings": {
-      "get": {
-        "description": "返回 session 的盯盘发现（按时间倒序，可按状态过滤）。",
-        "operationId": "list_findings_endpoint_api_monitor_findings_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Findings Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/findings/{finding_id}": {
-      "patch": {
-        "description": "更新某条 finding 的状态（new/viewed/acted）。",
-        "operationId": "update_finding_endpoint_api_monitor_findings__finding_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "finding_id",
-            "required": true,
-            "schema": {
-              "title": "Finding Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateFindingRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Finding Endpoint",
         "tags": [
           "Monitor"
         ]
@@ -6343,374 +6130,6 @@
           }
         },
         "summary": "Renew Monitor Lease",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/macro-calendar": {
-      "get": {
-        "description": "聚合该 session 的财报 + 宏观事件日历（缓存 1 小时，外部 API 全挂返回空列表）。",
-        "operationId": "macro_calendar_endpoint_api_monitor_macro_calendar_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "days_ahead",
-            "required": false,
-            "schema": {
-              "default": 14,
-              "title": "Days Ahead",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Macro Calendar Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/scan": {
-      "post": {
-        "description": "手动触发该 session 的 L1 规则扫描，返回本次新产生的 findings。\n\nenable_l2 默认 True：手动扫描时附带 L2 agent 深析（受同样的成本护栏限制）。",
-        "operationId": "scan_endpoint_api_monitor_scan_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "enable_l2",
-            "required": false,
-            "schema": {
-              "default": true,
-              "title": "Enable L2",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Scan Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/settings": {
-      "get": {
-        "description": "返回 session 的通知设置 + SMTP 是否已配置。",
-        "operationId": "get_settings_endpoint_api_monitor_settings_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Settings Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      },
-      "put": {
-        "description": "更新 session 的通知设置（邮箱格式校验 + SMTP 未配置时禁止启用通知）。",
-        "operationId": "upsert_settings_endpoint_api_monitor_settings_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpsertSettingsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Upsert Settings Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/targets": {
-      "get": {
-        "description": "返回 session 的盯盘标的列表。",
-        "operationId": "list_targets_endpoint_api_monitor_targets_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Targets Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      },
-      "post": {
-        "description": "新建盯盘标的（id / created_at 由服务端生成）。",
-        "operationId": "create_target_endpoint_api_monitor_targets_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTargetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Target Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      }
-    },
-    "/api/monitor/targets/{target_id}": {
-      "delete": {
-        "description": "删除盯盘标的（session 隔离）。",
-        "operationId": "delete_target_endpoint_api_monitor_targets__target_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "target_id",
-            "required": true,
-            "schema": {
-              "title": "Target Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Target Endpoint",
-        "tags": [
-          "Monitor"
-        ]
-      },
-      "patch": {
-        "description": "更新盯盘标的的 config / enabled（部分字段）。",
-        "operationId": "patch_target_endpoint_api_monitor_targets__target_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "target_id",
-            "required": true,
-            "schema": {
-              "title": "Target Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchTargetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Patch Target Endpoint",
         "tags": [
           "Monitor"
         ]

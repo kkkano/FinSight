@@ -74,13 +74,14 @@ class MonitorCommentStore:
                trigger_observed_at: str, source: str, escalated: bool,
                prediction_id: str | None = None) -> MonitorComment | None:
         item_id = str(uuid4())
+        normalized_symbol = str(symbol or "").strip().upper()
         fingerprint = trigger_fingerprint(
-            symbol=symbol, trigger_kind=trigger_kind,
+            symbol=normalized_symbol, trigger_kind=trigger_kind,
             trigger_detail=trigger_detail, observed_at=trigger_observed_at,
         )
         params = {
             "id": item_id, "user_id": user_id, "session_id": session_id,
-            "symbol": symbol.upper(), "ts": ts, "level": level, "text": text_value,
+            "symbol": normalized_symbol, "ts": ts, "level": level, "text": text_value,
             "trigger_kind": trigger_kind, "trigger_detail": trigger_detail,
             "trigger_observed_at": trigger_observed_at, "trigger_fingerprint": fingerprint,
             "source": source, "escalated": bool(escalated), "prediction_id": prediction_id,
@@ -96,17 +97,22 @@ class MonitorCommentStore:
         if int(result.rowcount or 0) != 1:
             return None
         return MonitorComment(
-            id=item_id, session_id=session_id, symbol=symbol.upper(), ts=ts,
+            id=item_id, session_id=session_id, symbol=normalized_symbol, ts=ts,
             level=level, text=text_value,
             trigger={"kind": trigger_kind, "detail": trigger_detail, "observed_at": trigger_observed_at},
             source=source, escalated=escalated, prediction_id=prediction_id,
         )
 
-    def list(self, *, user_id: str, session_id: str, day: date | None = None,
+    def list(self, *, user_id: str, session_id: str, symbol: str, day: date | None = None,
              cursor: str | None = None, limit: int = 50) -> tuple[list[MonitorComment], str | None]:
         page_size = max(1, min(int(limit), 100))
-        params: dict[str, Any] = {"user_id": user_id, "session_id": session_id, "limit": page_size + 1}
-        where = ["user_id=:user_id", "session_id=:session_id"]
+        params: dict[str, Any] = {
+            "user_id": user_id,
+            "session_id": session_id,
+            "symbol": str(symbol or "").strip().upper(),
+            "limit": page_size + 1,
+        }
+        where = ["user_id=:user_id", "session_id=:session_id", "symbol=:symbol"]
         if day is not None:
             start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
             params.update({"start": start, "end": start + timedelta(days=1)})
@@ -127,17 +133,66 @@ class MonitorCommentStore:
         except Exception as exc:
             raise MonitorCommentStoreUnavailable("monitor comment store read unavailable") from exc
 
-    def list_after(self, *, user_id: str, session_id: str, last_event_id: str, limit: int = 100) -> list[MonitorComment]:
+    def list_after(self, *, user_id: str, session_id: str, symbol: str,
+                   last_event_id: str, limit: int = 100) -> list[MonitorComment]:
+        normalized_symbol = str(symbol or "").strip().upper()
         try:
             with self._engine.connect() as conn:
                 rows = conn.execute(text(
                     "SELECT c.* FROM monitor_comments c JOIN monitor_comments anchor "
-                    "ON anchor.id=CAST(:last_id AS uuid) AND anchor.user_id=:user_id AND anchor.session_id=:session_id "
-                    "WHERE c.user_id=:user_id AND c.session_id=:session_id AND (c.ts,c.id)>(anchor.ts,anchor.id) "
+                    "ON anchor.id=CAST(:last_id AS uuid) AND anchor.user_id=:user_id "
+                    "AND anchor.session_id=:session_id AND anchor.symbol=:symbol "
+                    "WHERE c.user_id=:user_id AND c.session_id=:session_id AND c.symbol=:symbol "
+                    "AND (c.ts,c.id)>(anchor.ts,anchor.id) "
                     "ORDER BY c.ts,c.id LIMIT :limit"
                 ), {"last_id": last_event_id, "user_id": user_id, "session_id": session_id,
+                    "symbol": normalized_symbol,
                     "limit": max(1, min(int(limit), 200))}).mappings().all()
             return [self._row(row) for row in rows]
+        except MonitorCommentStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise MonitorCommentStoreUnavailable("monitor comment store read unavailable") from exc
+
+    def latest_comment_at(self, *, user_id: str, session_id: str, symbol: str) -> datetime | None:
+        return self._latest_timestamp(
+            user_id=user_id,
+            session_id=session_id,
+            symbol=symbol,
+            escalated_only=False,
+        )
+
+    def latest_escalation_at(self, *, user_id: str, session_id: str, symbol: str) -> datetime | None:
+        return self._latest_timestamp(
+            user_id=user_id,
+            session_id=session_id,
+            symbol=symbol,
+            escalated_only=True,
+        )
+
+    def _latest_timestamp(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        symbol: str,
+        escalated_only: bool,
+    ) -> datetime | None:
+        where = " AND escalated IS TRUE" if escalated_only else ""
+        try:
+            with self._engine.connect() as conn:
+                return conn.execute(
+                    text(
+                        "SELECT MAX(ts) FROM monitor_comments "
+                        "WHERE user_id=:user_id AND session_id=:session_id AND symbol=:symbol"
+                        + where
+                    ),
+                    {
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "symbol": str(symbol or "").strip().upper(),
+                    },
+                ).scalar()
         except MonitorCommentStoreUnavailable:
             raise
         except Exception as exc:

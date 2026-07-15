@@ -443,7 +443,6 @@ export function Workbench({ symbol, fromDashboard = false }: WorkbenchProps) {
           <div className="grid gap-4 xl:grid-cols-2">
             <FindingsFeed
               controller={findingsController}
-              sessionId={sessionId}
               onNavigateToChat={handleFindingChat}
               onNavigateToRebalance={handleNavigateToRebalance}
               onConfigureMonitor={handleConfigureMonitor}

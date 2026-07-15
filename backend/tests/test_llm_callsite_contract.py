@@ -19,7 +19,6 @@ PRODUCTION_CALLSITES = (
     "backend/graph/nodes/resolve_subject.py",
     "backend/graph/synthesis/narrative.py",
     "backend/report/verifier.py",
-    "backend/services/monitor_l2.py",
     "backend/services/rebalance_llm_enhancer.py",
     "backend/api/app_factory.py",
 )

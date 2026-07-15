@@ -23,15 +23,12 @@ tempfile.tempdir = str(_PYTEST_TMP)
 # These are HARD isolation guarantees: force-override even when the outer shell
 # already exports them. Using setdefault here was a silent footgun — an external
 # env (e.g. a dev shell with LANGGRAPH_CHECKPOINTER_BACKEND=postgres or
-# MONITOR_SCAN_ENABLED=true) would make the whole suite connect to the real
-# Postgres checkpointer / fire real price-API scans during TestClient startup.
+# MONITOR_REALTIME_ENABLED=true) would make the suite connect to real services.
 os.environ["LANGGRAPH_CHECKPOINTER_BACKEND"] = "memory"
 os.environ["LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK"] = "true"
 
-# 工作台 L1 盯盘扫描器默认开启（生产），测试里强制关掉后台自动扫描，
-# 避免 TestClient 启动时触发真实价格抓取（网络）/读真实 portfolio.db。
-# 手动 /api/monitor/scan 端点不受此开关影响。
-os.environ["MONITOR_SCAN_ENABLED"] = "false"
+# 测试默认不启动页面 lease 调度器；实时链路由定向测试显式调用。
+os.environ["MONITOR_REALTIME_ENABLED"] = "false"
 
 
 @pytest.fixture(autouse=True)
