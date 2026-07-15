@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
+import asyncio
 import os
 import pandas as pd
 
@@ -99,18 +100,18 @@ class TechnicalAgent(BaseFinancialAgent):
         cache_key = f"{ticker}:technical:kline"
         cached = self.cache.get(cache_key)
         if isinstance(cached, dict):
-            return self._enrich_with_side_signals(cached, ticker)
+            return await asyncio.to_thread(self._enrich_with_side_signals, cached, ticker)
 
         fetch = getattr(self.tools, "get_stock_historical_data", None)
         if not fetch:
             return {"error": "missing_kline_tool", "ticker": ticker}
 
-        data = fetch(ticker, period="6mo", interval="1d")
+        data = await asyncio.to_thread(fetch, ticker, period="6mo", interval="1d")
         if isinstance(data, dict):
             data.setdefault("ticker", ticker)
             if data.get("kline_data"):
                 self.cache.set(cache_key, data, self.CACHE_TTL)
-            return self._enrich_with_side_signals(data, ticker)
+            return await asyncio.to_thread(self._enrich_with_side_signals, data, ticker)
         return data
 
     async def _first_summary(self, data: Any) -> str:

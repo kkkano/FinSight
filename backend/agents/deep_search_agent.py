@@ -196,7 +196,8 @@ class DeepSearchAgent(BaseFinancialAgent):
         results: List[Dict[str, Any]] = []
         for q in queries:
             logger.info(f"[DeepSearch] search: {q}")
-            for rank, item in enumerate(self._search_web(q), 1):
+            search_results = await asyncio.to_thread(self._search_web, q)
+            for rank, item in enumerate(search_results, 1):
                 enriched = dict(item or {})
                 enriched["search_query"] = q
                 enriched["deepsearch_phase"] = "initial"

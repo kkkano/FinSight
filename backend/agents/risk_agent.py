@@ -9,6 +9,7 @@ This module provides:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -538,14 +539,26 @@ class RiskAgent(BaseFinancialAgent):
 
         clean_ticker = str(ticker or "").strip().upper() or "N/A"
         get_stock_price = getattr(self.tools, "get_stock_price", None)
-        quote, raw_payload = resolve_live_quote(clean_ticker, get_stock_price)
+        quote, raw_payload = await asyncio.to_thread(
+            resolve_live_quote,
+            clean_ticker,
+            get_stock_price,
+        )
         assessment = self.evaluate_ticker_risk_lightweight(clean_ticker, quote or {})
 
         positions = [{"ticker": clean_ticker, "weight": 1.0}]
         get_factor_exposure = getattr(self.tools, "get_factor_exposure", None)
         run_stress_test = getattr(self.tools, "run_portfolio_stress_test", None)
-        factor_payload = get_factor_exposure(positions, lookback_days=252) if get_factor_exposure else {}
-        stress_payload = run_stress_test(positions, lookback_days=252) if run_stress_test else {}
+        factor_payload = (
+            await asyncio.to_thread(get_factor_exposure, positions, lookback_days=252)
+            if get_factor_exposure
+            else {}
+        )
+        stress_payload = (
+            await asyncio.to_thread(run_stress_test, positions, lookback_days=252)
+            if run_stress_test
+            else {}
+        )
         if not isinstance(factor_payload, dict):
             factor_payload = {"error": "invalid_factor_payload"}
         if not isinstance(stress_payload, dict):

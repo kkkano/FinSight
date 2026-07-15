@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass, field
 from math import sqrt
 from typing import Any, Optional
+import asyncio
 import os
 import re
 from datetime import datetime
@@ -172,11 +173,21 @@ class PriceAgent(BaseFinancialAgent):
             quote_payload = await self._fetch_realtime_quote(ticker)
             self.cache.set(cache_key, quote_payload, self.CACHE_TTL)
 
-        option_metrics = self._load_option_metrics(ticker)
-        history_payload = self._load_history_payload(ticker, period="1y", interval="1d")
-        benchmark_histories = self._load_benchmark_histories()
-        drawdown_summary = self._load_drawdown_summary(ticker)
-        event_explanation = self._load_event_explanation(query, ticker, quote_payload)
+        option_metrics = await asyncio.to_thread(self._load_option_metrics, ticker)
+        history_payload = await asyncio.to_thread(
+            self._load_history_payload,
+            ticker,
+            period="1y",
+            interval="1d",
+        )
+        benchmark_histories = await asyncio.to_thread(self._load_benchmark_histories)
+        drawdown_summary = await asyncio.to_thread(self._load_drawdown_summary, ticker)
+        event_explanation = await asyncio.to_thread(
+            self._load_event_explanation,
+            query,
+            ticker,
+            quote_payload,
+        )
 
         snapshot = self._build_price_behavior_snapshot(
             ticker=ticker,
@@ -829,7 +840,7 @@ class PriceAgent(BaseFinancialAgent):
             tool_func = getattr(self.tools, "_search_for_price", None)
 
         if tool_func:
-            return tool_func(ticker)
+            return await asyncio.to_thread(tool_func, ticker)
         return None
 
     async def _first_summary(self, data: Any) -> str:

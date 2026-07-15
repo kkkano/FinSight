@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -101,7 +102,7 @@ class MacroAgent(BaseFinancialAgent):
         fred_payload: Dict[str, Any] = {}
         try:
             if hasattr(self.tools, "get_fred_data"):
-                payload = self.tools.get_fred_data()
+                payload = await asyncio.to_thread(self.tools.get_fred_data)
                 if isinstance(payload, dict) and payload.get("status") == "data_unavailable":
                     # FRED 不可用（如无 API key）：明确走 fallback 路径，不把空 payload 当数据用（P0-1）
                     logger.info("[MacroAgent] FRED unavailable: %s", payload.get("unavailable_reason"))
@@ -128,7 +129,11 @@ class MacroAgent(BaseFinancialAgent):
         official_releases: List[Dict[str, Any]] = []
         try:
             if hasattr(self.tools, "get_official_macro_releases"):
-                payload = self.tools.get_official_macro_releases(query=query, max_results=8)
+                payload = await asyncio.to_thread(
+                    self.tools.get_official_macro_releases,
+                    query=query,
+                    max_results=8,
+                )
                 if isinstance(payload, dict):
                     official_payload = payload
                     rows = payload.get("releases")
@@ -150,7 +155,9 @@ class MacroAgent(BaseFinancialAgent):
         market_sentiment = ""
         try:
             if hasattr(self.tools, "get_market_sentiment"):
-                market_sentiment = str(self.tools.get_market_sentiment() or "").strip()
+                market_sentiment = str(
+                    await asyncio.to_thread(self.tools.get_market_sentiment) or ""
+                ).strip()
                 if market_sentiment:
                     source_health["market_sentiment"] = "ok"
                     used_sources.append("market_sentiment")
@@ -165,7 +172,9 @@ class MacroAgent(BaseFinancialAgent):
         economic_events = ""
         try:
             if hasattr(self.tools, "get_economic_events"):
-                economic_events = str(self.tools.get_economic_events() or "").strip()
+                economic_events = str(
+                    await asyncio.to_thread(self.tools.get_economic_events) or ""
+                ).strip()
                 if economic_events:
                     source_health["economic_events"] = "ok"
                     used_sources.append("economic_events")
@@ -182,7 +191,10 @@ class MacroAgent(BaseFinancialAgent):
         try:
             if hasattr(self.tools, "search"):
                 cross_check_text = str(
-                    self.tools.search("latest US CPI federal funds rate unemployment 10Y Treasury yield")
+                    await asyncio.to_thread(
+                        self.tools.search,
+                        "latest US CPI federal funds rate unemployment 10Y Treasury yield",
+                    )
                     or ""
                 )
                 cross_check_metrics = self._extract_numeric_metrics_from_text(cross_check_text)
@@ -684,4 +696,3 @@ class MacroAgent(BaseFinancialAgent):
 
     def _format_percentage_value(self, value: float, *, digits: int = 2) -> str:
         return f"{value:.{digits}f}%"
-

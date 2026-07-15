@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
+import asyncio
 import os
 import logging
 import json
@@ -828,8 +829,12 @@ class NewsAgent(BaseFinancialAgent):
         if isinstance(cached, list):
             annotated_cached = self._annotate_reliability(cached)
             self._last_reliability_summary = self._summarize_reliability(annotated_cached)
-            self._last_event_calendar = self._load_event_calendar(ticker)
-            self._last_sentiment_snapshot = self._build_sentiment_snapshot(ticker, annotated_cached)
+            self._last_event_calendar = await asyncio.to_thread(self._load_event_calendar, ticker)
+            self._last_sentiment_snapshot = await asyncio.to_thread(
+                self._build_sentiment_snapshot,
+                ticker,
+                annotated_cached,
+            )
             return annotated_cached
 
         results = []
@@ -838,7 +843,7 @@ class NewsAgent(BaseFinancialAgent):
         finnhub_news = getattr(self.tools, "_fetch_with_finnhub_news", None)
         if finnhub_news and self.circuit_breaker.can_call("finnhub"):
             try:
-                finnhub_items = finnhub_news(ticker)
+                finnhub_items = await asyncio.to_thread(finnhub_news, ticker)
                 if isinstance(finnhub_items, list):
                     for item in finnhub_items:
                         if not isinstance(item, dict):
@@ -857,7 +862,7 @@ class NewsAgent(BaseFinancialAgent):
             try:
                 get_news = getattr(self.tools, "get_company_news", None)
                 if get_news:
-                    news_data = get_news(ticker)
+                    news_data = await asyncio.to_thread(get_news, ticker)
                     if isinstance(news_data, list):
                         for item in news_data:
                             if not isinstance(item, dict):
@@ -880,7 +885,7 @@ class NewsAgent(BaseFinancialAgent):
             try:
                 search_news = getattr(self.tools, "_search_company_news", None)
                 if search_news:
-                    t_results = search_news(f"{ticker} stock news")
+                    t_results = await asyncio.to_thread(search_news, f"{ticker} stock news")
                     if isinstance(t_results, list):
                         for item in t_results:
                             if not isinstance(item, dict):
@@ -899,7 +904,7 @@ class NewsAgent(BaseFinancialAgent):
             try:
                 search_func = getattr(self.tools, "search", None)
                 if search_func:
-                    search_text = search_func(f"{ticker} stock news latest")
+                    search_text = await asyncio.to_thread(search_func, f"{ticker} stock news latest")
                     if search_text and isinstance(search_text, str):
                         parsed_search = self._parse_search_results(search_text, ticker)
                         if parsed_search:
@@ -956,7 +961,8 @@ class NewsAgent(BaseFinancialAgent):
                 feed_tool = getattr(self.tools, "get_authoritative_media_news", None)
                 if callable(feed_tool):
                     try:
-                        payload = feed_tool(
+                        payload = await asyncio.to_thread(
+                            feed_tool,
                             query=f"{ticker} earnings outlook",
                             max_results=5,
                             authoritative_only=True,
@@ -994,8 +1000,12 @@ class NewsAgent(BaseFinancialAgent):
 
         unique_results = self._annotate_reliability(unique_results)
         self._last_reliability_summary = self._summarize_reliability(unique_results)
-        self._last_event_calendar = self._load_event_calendar(ticker)
-        self._last_sentiment_snapshot = self._build_sentiment_snapshot(ticker, unique_results)
+        self._last_event_calendar = await asyncio.to_thread(self._load_event_calendar, ticker)
+        self._last_sentiment_snapshot = await asyncio.to_thread(
+            self._build_sentiment_snapshot,
+            ticker,
+            unique_results,
+        )
 
         if unique_results:
             self.cache.set(cache_key, unique_results, self.CACHE_TTL)

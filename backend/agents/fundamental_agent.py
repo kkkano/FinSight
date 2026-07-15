@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import os
 from typing import Any, Dict, List, Optional, Tuple
@@ -115,10 +116,22 @@ class FundamentalAgent(BaseFinancialAgent):
         earnings_func = getattr(self.tools, "get_earnings_estimates", None)
         eps_revision_func = getattr(self.tools, "get_eps_revisions", None)
 
-        financials = financials_func(ticker) if financials_func else {"error": "missing_financials_tool"}
-        company_info = company_func(ticker) if company_func else ""
-        earnings_estimates = earnings_func(ticker) if earnings_func else {"error": "missing_earnings_estimates_tool"}
-        eps_revisions = eps_revision_func(ticker) if eps_revision_func else {"error": "missing_eps_revisions_tool"}
+        financials = (
+            await asyncio.to_thread(financials_func, ticker)
+            if financials_func
+            else {"error": "missing_financials_tool"}
+        )
+        company_info = await asyncio.to_thread(company_func, ticker) if company_func else ""
+        earnings_estimates = (
+            await asyncio.to_thread(earnings_func, ticker)
+            if earnings_func
+            else {"error": "missing_earnings_estimates_tool"}
+        )
+        eps_revisions = (
+            await asyncio.to_thread(eps_revision_func, ticker)
+            if eps_revision_func
+            else {"error": "missing_eps_revisions_tool"}
+        )
 
         if not isinstance(earnings_estimates, dict):
             earnings_estimates = {"error": "invalid_earnings_estimates_payload"}
