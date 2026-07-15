@@ -2,6 +2,7 @@
 """Prediction 的确定性 outcome 解析、PostgreSQL 归档与日更入口。"""
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Any, Iterable, Mapping
 
@@ -15,6 +16,10 @@ from backend.agents.prediction_submit import _crossed_entry
 
 
 TERMINAL_OUTCOMES = frozenset({"hit_target", "hit_stop", "held_range", "broke_range", "invalidated"})
+OUTCOME_ALGORITHM_VERSION = "prediction-outcome-v1"
+MARKET_DATA_UNAVAILABLE = "market_data_unavailable"
+
+logger = logging.getLogger(__name__)
 
 
 class PredictionOutcome(BaseModel):
@@ -29,6 +34,9 @@ class PredictionOutcome(BaseModel):
     pct_since_anchor: float | None = None
     resolution_reason: str | None = None
     evaluated_through: str | None = None
+    market_provider: str | None = None
+    market_as_of: str | None = None
+    algorithm_version: str = OUTCOME_ALGORITHM_VERSION
 
 
 def _number(bar: Mapping[str, Any], key: str) -> float:
@@ -65,6 +73,9 @@ def resolve_prediction_outcome(
     *,
     prediction_id: str | None = None,
     user_id: str | None = None,
+    market_provider: str | None = None,
+    market_as_of: str | None = None,
+    algorithm_version: str = OUTCOME_ALGORITHM_VERSION,
 ) -> PredictionOutcome:
     """只读可信 OHLC，零 LLM；相同输入始终得到相同结果。"""
     future = _future_bars(prediction, bars)
@@ -78,6 +89,9 @@ def resolve_prediction_outcome(
         "user_id": str(user_id or getattr(prediction, "user_id", "") or "unknown"),
         "pct_since_anchor": pct,
         "evaluated_through": str(last["time"]) if last else None,
+        "market_provider": str(market_provider or "").strip() or None,
+        "market_as_of": str(market_as_of or "").strip() or None,
+        "algorithm_version": str(algorithm_version or OUTCOME_ALGORITHM_VERSION),
     }
 
     if prediction.direction == "neutral":
@@ -180,12 +194,16 @@ class PredictionOutcomeStore:
             conn.execute(text(
                 "INSERT INTO agent_prediction_outcomes ("
                 "prediction_id,user_id,status,resolved_at,entry_time,entry_price,pct_since_anchor,"
-                "resolution_reason,evaluated_through,updated_at) VALUES ("
+                "resolution_reason,evaluated_through,market_provider,market_as_of,algorithm_version,updated_at) VALUES ("
                 "CAST(:prediction_id AS uuid),:user_id,:status,CAST(:resolved_at AS timestamptz),"
                 "CAST(:entry_time AS timestamptz),:entry_price,:pct_since_anchor,:resolution_reason,"
-                "CAST(:evaluated_through AS timestamptz),now()) "
+                "CAST(:evaluated_through AS timestamptz),:market_provider,CAST(:market_as_of AS timestamptz),"
+                ":algorithm_version,now()) "
                 "ON CONFLICT(prediction_id,user_id) DO UPDATE SET "
-                "status=CASE WHEN agent_prediction_outcomes.evaluated_through IS NULL "
+                "status=CASE WHEN agent_prediction_outcomes.status IN "
+                "('hit_target','hit_stop','held_range','broke_range','invalidated') "
+                "THEN agent_prediction_outcomes.status WHEN excluded.status='data_pending' "
+                "THEN excluded.status WHEN agent_prediction_outcomes.evaluated_through IS NULL "
                 "OR excluded.evaluated_through >= agent_prediction_outcomes.evaluated_through "
                 "THEN excluded.status ELSE agent_prediction_outcomes.status END,"
                 "resolved_at=COALESCE(excluded.resolved_at,agent_prediction_outcomes.resolved_at),"
@@ -194,23 +212,49 @@ class PredictionOutcomeStore:
                 "pct_since_anchor=CASE WHEN agent_prediction_outcomes.evaluated_through IS NULL "
                 "OR excluded.evaluated_through >= agent_prediction_outcomes.evaluated_through "
                 "THEN excluded.pct_since_anchor ELSE agent_prediction_outcomes.pct_since_anchor END,"
-                "resolution_reason=COALESCE(excluded.resolution_reason,agent_prediction_outcomes.resolution_reason),"
+                "resolution_reason=CASE WHEN agent_prediction_outcomes.status IN "
+                "('hit_target','hit_stop','held_range','broke_range','invalidated') "
+                "THEN agent_prediction_outcomes.resolution_reason WHEN excluded.status='data_pending' "
+                "THEN excluded.resolution_reason WHEN agent_prediction_outcomes.evaluated_through IS NULL "
+                "OR excluded.evaluated_through >= agent_prediction_outcomes.evaluated_through "
+                "THEN excluded.resolution_reason ELSE agent_prediction_outcomes.resolution_reason END,"
                 "evaluated_through=CASE WHEN excluded.evaluated_through IS NULL THEN agent_prediction_outcomes.evaluated_through "
                 "WHEN agent_prediction_outcomes.evaluated_through IS NULL THEN excluded.evaluated_through "
-                "ELSE GREATEST(agent_prediction_outcomes.evaluated_through,excluded.evaluated_through) END,updated_at=now()"
+                "ELSE GREATEST(agent_prediction_outcomes.evaluated_through,excluded.evaluated_through) END,"
+                "market_provider=excluded.market_provider,market_as_of=excluded.market_as_of,"
+                "algorithm_version=excluded.algorithm_version,updated_at=now()"
             ), outcome.model_dump())
         return outcome
 
-    def pending_predictions(self, *, limit: int = 500) -> list[AgentPrediction]:
+    def pending_predictions(
+        self,
+        *,
+        user_id: str | None = None,
+        prediction_id: str | None = None,
+        limit: int = 500,
+    ) -> list[AgentPrediction]:
+        filters = [
+            "(o.status IS NULL OR o.status NOT IN "
+            "('hit_target','hit_stop','held_range','broke_range','invalidated'))"
+        ]
+        params: dict[str, Any] = {"limit": max(1, min(5000, int(limit)))}
+        if user_id is not None:
+            normalized_user = str(user_id or "").strip()
+            if not normalized_user or normalized_user == "public":
+                return []
+            filters.append("p.user_id=:user_id")
+            params["user_id"] = normalized_user
+        if prediction_id is not None:
+            filters.append("p.id=CAST(:prediction_id AS uuid)")
+            params["prediction_id"] = str(prediction_id)
         with self._engine.connect() as conn:
             rows = conn.execute(text(
                 "SELECT p.* FROM agent_predictions p "
                 "LEFT JOIN agent_prediction_outcomes o "
                 "ON o.prediction_id=p.id AND o.user_id=p.user_id "
-                "WHERE o.status IS NULL OR o.status NOT IN "
-                "('hit_target','hit_stop','held_range','broke_range','invalidated') "
+                "WHERE " + " AND ".join(filters) + " "
                 "ORDER BY p.created_at ASC LIMIT :limit"
-            ), {"limit": max(1, min(5000, int(limit)))}).mappings().all()
+            ), params).mappings().all()
         from backend.services.agent_prediction_store import _prediction_from_row
 
         return [_prediction_from_row(row) for row in rows]
@@ -294,32 +338,93 @@ def get_prediction_outcome_store() -> PredictionOutcomeStore:
     return _store
 
 
-def run_prediction_outcome_cycle() -> int:
-    """日更调度入口；逐条读取真实 K 线，缺数据不判 miss。"""
-    from backend.tools import get_stock_historical_data
+def _data_pending_outcome(
+    prediction: AgentPrediction,
+    *,
+    market: Mapping[str, Any] | None = None,
+    reason: str = MARKET_DATA_UNAVAILABLE,
+) -> PredictionOutcome:
+    payload = market if isinstance(market, Mapping) else {}
+    return PredictionOutcome(
+        prediction_id=prediction.id,
+        user_id=prediction.user_id,
+        status="data_pending",
+        resolution_reason=str(reason or MARKET_DATA_UNAVAILABLE)[:200],
+        market_provider=str(payload.get("provider") or "").strip() or None,
+        market_as_of=str(payload.get("as_of") or "").strip() or None,
+        algorithm_version=OUTCOME_ALGORITHM_VERSION,
+    )
 
-    store = get_prediction_outcome_store()
+
+def run_prediction_outcome_cycle(
+    *,
+    user_id: str | None = None,
+    prediction_id: str | None = None,
+    limit: int = 500,
+    store: PredictionOutcomeStore | None = None,
+    market_gateway: Any | None = None,
+) -> int:
+    """日更与受保护补跑入口；只用可信 K 线，缺数据明确写 data_pending。"""
+    from backend.services.market_data_gateway import get_market_data_gateway
+
+    outcome_store = store or get_prediction_outcome_store()
+    gateway = market_gateway or get_market_data_gateway()
     evaluated = 0
-    for prediction in store.pending_predictions(limit=500):
+    predictions = outcome_store.pending_predictions(
+        user_id=user_id,
+        prediction_id=prediction_id,
+        limit=limit,
+    )
+    for prediction in predictions:
+        raw: Mapping[str, Any] | None = None
         try:
-            raw = get_stock_historical_data(prediction.symbol, period="1y", interval="1d")
-            if not isinstance(raw, dict) or raw.get("quality") != "trusted" or raw.get("error_code"):
+            result = gateway.get_kline(prediction.symbol, period="1y", interval="1d")
+            raw = result if isinstance(result, Mapping) else None
+            if (
+                raw is None
+                or raw.get("quality") != "trusted"
+                or raw.get("error_code")
+                or not raw.get("provider")
+                or not raw.get("as_of")
+            ):
+                reason = str((raw or {}).get("error_code") or MARKET_DATA_UNAVAILABLE)
+                outcome_store.upsert(_data_pending_outcome(prediction, market=raw, reason=reason))
+                evaluated += 1
                 continue
-            if not raw.get("provider") or not raw.get("as_of"):
-                continue
-            bars = raw.get("kline_data") if isinstance(raw, dict) else None
+            bars = raw.get("kline_data")
             if not isinstance(bars, list) or not bars:
+                outcome_store.upsert(_data_pending_outcome(prediction, market=raw))
+                evaluated += 1
                 continue
-            outcome = resolve_prediction_outcome(prediction, bars)
-            store.upsert(outcome)
+            outcome = resolve_prediction_outcome(
+                prediction,
+                bars,
+                market_provider=str(raw["provider"]),
+                market_as_of=str(raw["as_of"]),
+                algorithm_version=OUTCOME_ALGORITHM_VERSION,
+            )
+            outcome_store.upsert(outcome)
             evaluated += 1
-        except Exception:
-            continue
+        except Exception as exc:
+            logger.warning(
+                "prediction outcome market evaluation failed prediction_id=%s error_type=%s",
+                prediction.id,
+                type(exc).__name__,
+            )
+            try:
+                outcome_store.upsert(_data_pending_outcome(prediction, market=raw))
+                evaluated += 1
+            except Exception:
+                logger.exception(
+                    "prediction outcome data_pending write failed prediction_id=%s",
+                    prediction.id,
+                )
     return evaluated
 
 
 __all__ = [
-    "PredictionOutcome", "PredictionOutcomeStore", "PredictionOutcomeStoreUnavailable",
+    "MARKET_DATA_UNAVAILABLE", "OUTCOME_ALGORITHM_VERSION", "PredictionOutcome",
+    "PredictionOutcomeStore", "PredictionOutcomeStoreUnavailable",
     "TERMINAL_OUTCOMES", "get_prediction_outcome_store", "resolve_prediction_outcome",
     "run_prediction_outcome_cycle", "summarize_track_record",
 ]

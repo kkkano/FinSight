@@ -83,6 +83,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[Database] development 模式未配置核心 PostgreSQL，跳过 revision 检查")
 
+    prediction_service = None
+    if schema_status.configured and _env_bool("PREDICTION_GENERATION_ENABLED", True):
+        from backend.services.prediction_service import get_prediction_service
+
+        prediction_service = get_prediction_service()
+        await prediction_service.start()
+        logger.info("[Prediction] generation worker and recovery scan started")
+
     # Ensure a working default LLM config exists on first boot.
     _init_default_user_config()
 
@@ -248,6 +256,12 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if prediction_service is not None:
+            try:
+                await prediction_service.stop()
+                logger.info("[Prediction] generation worker stopped")
+            except Exception as exc:
+                logger.info("[Prediction] shutdown error: %s", exc)
         try:
             flush_langfuse()
             shutdown_langfuse()

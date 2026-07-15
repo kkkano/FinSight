@@ -19,6 +19,7 @@ PredictionStatus = Literal[
     "waiting", "open", "triggered", "invalidated", "hit_target", "hit_stop",
     "held_range", "broke_range",
 ]
+PredictionSource = Literal["ai", "manual"]
 
 
 class PredictionAnchor(BaseModel):
@@ -120,6 +121,10 @@ class AgentPrediction(PredictionDraft):
     run_id: str = Field(min_length=1, max_length=256)
     report_id: str | None = Field(default=None, max_length=256)
     status: PredictionStatus = "waiting"
+    prompt_version: str = Field(default="legacy", min_length=1, max_length=128)
+    evidence_provider: str | None = Field(default=None, max_length=128)
+    evidence_as_of: datetime | None = None
+    source_type: PredictionSource = "ai"
     created_at: datetime
     updated_at: datetime
 
@@ -135,5 +140,5 @@ class PredictionEvaluation(BaseModel):
 
 __all__ = [
     "AgentPrediction", "Direction", "EntryType", "PredictionAnchor", "PredictionDraft",
-    "PredictionEvaluation", "PredictionScenario", "PredictionStatus",
+    "PredictionEvaluation", "PredictionScenario", "PredictionSource", "PredictionStatus",
 ]

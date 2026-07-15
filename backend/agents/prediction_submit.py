@@ -24,6 +24,7 @@ SCORABLE_OPERATIONS = frozenset({
 })
 SCORABLE_AGENTS = frozenset({
     "price_agent", "fundamental_agent", "technical_agent", "risk_agent",
+    "prediction_analyst",
 })
 _NON_CONCRETE_SYMBOLS = frozenset({"", "UNKNOWN", "N/A", "NONE", "MARKET", "MACRO"})
 
@@ -83,8 +84,35 @@ def submit_prediction(
     operation: str,
     fetch_bars: Callable[..., Any],
     store: Any,
+    prompt_version: str = "legacy",
 ) -> AgentPrediction:
     """校验模型白名单后，用服务端上下文和最后一根真实 bar 覆盖可信字段。"""
+    raw_bars = fetch_bars(normalize_ticker(symbol), period="1mo", interval="1d")
+    prediction = build_prediction(
+        raw_prediction,
+        symbol=symbol,
+        agent=agent,
+        user_id=user_id,
+        run_id=run_id,
+        operation=operation,
+        raw_bars=raw_bars,
+        prompt_version=prompt_version,
+    )
+    return store.create(prediction)
+
+
+def build_prediction(
+    raw_prediction: Mapping[str, Any],
+    *,
+    symbol: str,
+    agent: str,
+    user_id: str,
+    run_id: str,
+    operation: str,
+    raw_bars: Mapping[str, Any],
+    prompt_version: str,
+) -> AgentPrediction:
+    """构建经过服务端锚定的 Prediction；持久化由调用方决定事务边界。"""
     if not submission_allowed(symbol=symbol, operation=operation, agent=agent):
         raise ValueError("当前步骤不允许提交可计分 prediction")
     normalized_user = str(user_id or "").strip()
@@ -96,7 +124,6 @@ def submit_prediction(
 
     draft = PredictionDraft.model_validate(raw_prediction)
     normalized_symbol = normalize_ticker(symbol)
-    raw_bars = fetch_bars(normalized_symbol, period="1mo", interval="1d")
     bars, timeframe = _normalized_bars(raw_bars)
     anchor_bar = bars[-1]
     submitted_anchor_time = str(draft.anchor.time or "").strip()
@@ -129,10 +156,14 @@ def submit_prediction(
         "user_id": normalized_user,
         "run_id": normalized_run,
         "status": "waiting",
+        "prompt_version": str(prompt_version or "").strip() or "legacy",
+        "evidence_provider": str(raw_bars.get("provider") or "").strip() or None,
+        "evidence_as_of": str(raw_bars.get("as_of") or "").strip() or None,
+        "source_type": "ai",
         "created_at": now,
         "updated_at": now,
     })
-    return store.create(prediction)
+    return prediction
 
 
 def submit_prediction_with_correction(
@@ -319,7 +350,7 @@ def evaluate_prediction_bars(
 
 
 __all__ = [
-    "SCORABLE_AGENTS", "SCORABLE_OPERATIONS", "evaluate_prediction_bars", "prediction_json_from_llm_content",
+    "SCORABLE_AGENTS", "SCORABLE_OPERATIONS", "build_prediction", "evaluate_prediction_bars", "prediction_json_from_llm_content",
     "submission_allowed", "submit_prediction", "submit_prediction_with_async_correction",
     "submit_prediction_with_correction", "validate_prediction_submission",
 ]

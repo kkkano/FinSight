@@ -39,6 +39,17 @@ class UnavailableAgentPredictionStore:
     def attach_report(self, prediction_id: str, *, user_id: str, report_id: str) -> bool:
         raise PredictionStoreUnavailable(self.reason)
 
+    def get_by_anchor(
+        self,
+        *,
+        user_id: str,
+        symbol: str,
+        timeframe: str,
+        anchor_time: str,
+        prompt_version: str,
+    ) -> AgentPrediction | None:
+        raise PredictionStoreUnavailable(self.reason)
+
 
 class AgentPredictionStore:
     def __init__(self, *, dsn: str | None = None, engine: Any | None = None) -> None:
@@ -47,26 +58,8 @@ class AgentPredictionStore:
         self._engine = engine
 
     def create(self, prediction: AgentPrediction) -> AgentPrediction:
-        data = prediction.model_dump(exclude={"anchor", "risk_reward"}) | {
-            "anchor_timeframe": prediction.anchor.timeframe,
-            "anchor_time": prediction.anchor.time,
-            "anchor_price": prediction.anchor.price,
-            "scenarios": json.dumps(
-                [item.model_dump(mode="json") for item in prediction.scenarios],
-                ensure_ascii=False,
-            ),
-        }
-        columns = (
-            "id, user_id, run_id, symbol, agent, direction, confidence, thesis, "
-            "anchor_timeframe, anchor_time, anchor_price, entry_type, entry, stop, target1, target2, "
-            "invalidation_price, range_low, range_high, scenarios, report_id, status, created_at, updated_at"
-        )
-        values = ", ".join(
-            "CAST(:scenarios AS jsonb)" if name.strip() == "scenarios" else f":{name.strip()}"
-            for name in columns.split(",")
-        )
         with self._engine.begin() as conn:
-            conn.execute(text(f"INSERT INTO agent_predictions ({columns}) VALUES ({values})"), data)
+            insert_prediction(conn, prediction)
         return prediction
 
     def get(self, prediction_id: str, *, user_id: str) -> AgentPrediction | None:
@@ -101,6 +94,38 @@ class AgentPredictionStore:
             if row is None:
                 return None
             return _prediction_from_row(row)
+        except PredictionStoreUnavailable:
+            raise
+        except Exception as exc:
+            raise PredictionStoreUnavailable("prediction store read unavailable") from exc
+
+    def get_by_anchor(
+        self,
+        *,
+        user_id: str,
+        symbol: str,
+        timeframe: str,
+        anchor_time: str,
+        prompt_version: str,
+    ) -> AgentPrediction | None:
+        normalized_user = str(user_id or "").strip()
+        normalized_symbol = str(symbol or "").strip().upper()
+        if not normalized_user or normalized_user == "public" or not normalized_symbol:
+            return None
+        try:
+            with self._engine.connect() as conn:
+                row = conn.execute(text(
+                    "SELECT * FROM agent_predictions WHERE user_id=:user_id AND symbol=:symbol "
+                    "AND anchor_timeframe=:timeframe AND anchor_time=:anchor_time "
+                    "AND prompt_version=:prompt_version ORDER BY created_at DESC LIMIT 1"
+                ), {
+                    "user_id": normalized_user,
+                    "symbol": normalized_symbol,
+                    "timeframe": str(timeframe),
+                    "anchor_time": str(anchor_time),
+                    "prompt_version": str(prompt_version),
+                }).mappings().first()
+            return _prediction_from_row(row) if row is not None else None
         except PredictionStoreUnavailable:
             raise
         except Exception as exc:
@@ -197,6 +222,37 @@ def _prediction_from_row(row: Any) -> AgentPrediction:
     return AgentPrediction.model_validate(payload)
 
 
+def prediction_record(prediction: AgentPrediction) -> dict[str, Any]:
+    return prediction.model_dump(exclude={"anchor", "risk_reward"}) | {
+        "anchor_timeframe": prediction.anchor.timeframe,
+        "anchor_time": prediction.anchor.time,
+        "anchor_price": prediction.anchor.price,
+        "scenarios": json.dumps(
+            [item.model_dump(mode="json") for item in prediction.scenarios],
+            ensure_ascii=False,
+        ),
+    }
+
+
+def insert_prediction(conn: Any, prediction: AgentPrediction) -> None:
+    columns = (
+        "id, user_id, run_id, symbol, agent, direction, confidence, thesis, "
+        "anchor_timeframe, anchor_time, anchor_price, entry_type, entry, stop, target1, target2, "
+        "invalidation_price, range_low, range_high, scenarios, report_id, status, prompt_version, "
+        "evidence_provider, evidence_as_of, source_type, created_at, updated_at"
+    )
+    values = ", ".join(
+        "CAST(:scenarios AS jsonb)" if name.strip() == "scenarios"
+        else "CAST(:evidence_as_of AS timestamptz)" if name.strip() == "evidence_as_of"
+        else f":{name.strip()}"
+        for name in columns.split(",")
+    )
+    conn.execute(
+        text(f"INSERT INTO agent_predictions ({columns}) VALUES ({values})"),
+        prediction_record(prediction),
+    )
+
+
 def _resolve_dsn() -> str:
     return resolve_core_postgres_dsn(required=False)
 
@@ -265,6 +321,7 @@ def prediction_history(*, agent: str, ticker: str, user_id: str, limit: int = 5)
 
 __all__ = [
     "AgentPredictionStore", "PredictionStoreUnavailable", "UnavailableAgentPredictionStore",
-    "get_agent_prediction_store", "latest_predictions", "prediction_history", "record_prediction",
+    "get_agent_prediction_store", "insert_prediction", "latest_predictions", "prediction_history",
+    "prediction_record", "record_prediction",
     "reset_agent_prediction_store_cache",
 ]

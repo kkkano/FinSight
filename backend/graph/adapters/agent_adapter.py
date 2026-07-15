@@ -4,9 +4,7 @@ from __future__ import annotations
 import asyncio
 import copy
 from dataclasses import asdict, is_dataclass
-import json
 import logging
-import os
 import time
 from typing import Any, Iterable, Mapping
 
@@ -345,11 +343,8 @@ async def _maybe_submit_prediction(
     llm: Any,
     tools_module: Any,
 ) -> dict[str, Any]:
-    from backend.agents.prediction_submit import (
-        prediction_json_from_llm_content,
-        submission_allowed,
-        submit_prediction_with_async_correction,
-    )
+    """迁移期薄适配：只声明资格，Prediction 必须由显式 API 触发。"""
+    from backend.agents.prediction_submit import submission_allowed
 
     ticker = str(inputs.get("ticker") or "").strip().upper()
     operation = _prediction_operation(inputs=inputs, state=state)
@@ -357,116 +352,10 @@ async def _maybe_submit_prediction(
     output["prediction_eligible"] = eligible
     if not eligible:
         return output
-
-    enabled = str(os.getenv("FINSIGHT_PREDICTION_SUBMIT_ENABLED", "true")).strip().lower() in {
-        "1", "true", "yes", "on",
-    }
-    if not enabled:
-        output["prediction_trace"] = {"status": "disabled", "attempts": []}
-        return output
-
-    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
-    user_id = str(ui_context.get("__user_id") or "").strip()
-    run_id = str(ui_context.get("run_id") or state.get("run_id") or "").strip()
-    fetch_bars = getattr(tools_module, "get_stock_historical_data", None)
-    if not user_id or user_id == "public" or not run_id or llm is None or not callable(fetch_bars):
-        output["prediction_trace"] = {"status": "prediction_missing", "attempts": []}
-        return output
-
-    try:
-        raw_bars = await asyncio.to_thread(fetch_bars, ticker, period="1mo", interval="1d")
-        if not isinstance(raw_bars, dict) or raw_bars.get("quality") != "trusted":
-            raise ValueError("trusted market data unavailable")
-        if raw_bars.get("error_code") or not raw_bars.get("provider") or not raw_bars.get("as_of"):
-            raise ValueError("trusted market data provenance unavailable")
-        bars = raw_bars.get("kline_data") if isinstance(raw_bars, dict) else None
-        anchor_bar = bars[-1] if isinstance(bars, list) and bars and isinstance(bars[-1], dict) else None
-        anchor_time = str(anchor_bar.get("time") or "").strip() if anchor_bar else ""
-        anchor_price = anchor_bar.get("close") if anchor_bar else None
-        if not anchor_time or anchor_price is None:
-            raise ValueError("trusted anchor unavailable")
-        from backend.services.agent_prediction_store import get_agent_prediction_store
-
-        store = get_agent_prediction_store()
-    except Exception:
-        output["prediction_trace"] = {"status": "prediction_missing", "attempts": []}
-        return output
-
-    evidence = output.get("evidence") if isinstance(output.get("evidence"), list) else []
-    evidence_titles = [
-        str(item.get("title") or item.get("text") or "").strip()[:120]
-        for item in evidence[:6]
-        if isinstance(item, dict) and str(item.get("title") or item.get("text") or "").strip()
-    ]
-    from backend.services.llm_retry import LLMCallContext
-
-    prediction_call_context = LLMCallContext.create(
-        stage="agent_analyze", agent=step_name, layer="analysis", max_provider_attempts=3,
-    )
-
-    async def _generate(feedback: list[dict[str, Any]] | None) -> dict[str, Any] | None:
-        from langchain_core.messages import HumanMessage
-        from backend.services.llm_retry import ainvoke_configured_llm
-        from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
-
-        correction = (
-            "\n上次提交未通过，必须逐项修正：\n" + json.dumps(feedback, ensure_ascii=False, default=str)
-            if feedback else ""
-        )
-        prompt = f"""你是 {step_name}，现在必须调用一次终结工具 submit_prediction。
-只返回一个 JSON 对象，不要 markdown。symbol/agent 会被服务端覆盖，但仍填写当前值。
-可信最新完整 bar：timeframe=1d, time={anchor_time}, close={anchor_price}；anchor 必须原样回填。
-direction 只能 long/short/neutral；confidence 0-1；thesis 最多 400 字。
-long/short 必须给 entry_type(market/limit/stop)、entry、stop、target1、invalidation_price；RR>=1；target2 可选。
-neutral 不得给方向价位，必须给包含 anchor 的 range_low/range_high。
-scenarios 必须 2-4 条，每条含 name/probability/invalidation，概率和在 90-110。
-禁止 bars/candles/series/ohlc/data/user_id/run_id。
-本轮摘要：{str(output.get('summary') or '')[:1600]}
-证据标题：{json.dumps(evidence_titles, ensure_ascii=False)}{correction}"""
-        try:
-            attribution_token = set_llm_attribution(LLMAttribution(
-                agent=step_name, layer="prediction_submit",
-            ))
-            try:
-                response = await asyncio.wait_for(
-                    ainvoke_configured_llm(
-                        [HumanMessage(content=prompt)],
-                        context=prediction_call_context,
-                        temperature=float(getattr(llm, "temperature", 0.3) or 0.3),
-                    ),
-                    timeout=30.0,
-                )
-            finally:
-                reset_llm_attribution(attribution_token)
-        except Exception:
-            return None
-        return prediction_json_from_llm_content(response)
-
-    try:
-        prediction, attempts = await submit_prediction_with_async_correction(
-            _generate,
-            symbol=ticker,
-            agent=step_name,
-            user_id=user_id,
-            run_id=run_id,
-            operation=operation,
-            fetch_bars=lambda *_args, **_kwargs: raw_bars,
-            store=store,
-        )
-    except Exception:
-        output["prediction_trace"] = {"status": "prediction_missing", "attempts": []}
-        return output
     output["prediction_trace"] = {
-        "status": "submitted" if prediction is not None else "prediction_validation_failed",
-        "attempts": attempts,
+        "status": "explicit_generation_required",
+        "attempts": [],
     }
-    if prediction is not None:
-        from backend.services.llm_usage import bind_current_llm_usage_prediction
-
-        bind_current_llm_usage_prediction(agent=step_name, prediction_id=prediction.id)
-        output["prediction"] = prediction.model_dump(
-            mode="json", exclude={"risk_reward", "user_id", "run_id"}
-        )
     return output
 
 

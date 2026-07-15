@@ -882,6 +882,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/predictions/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Prediction */
+        post: operations["generate_prediction_api_predictions_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predictions/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prediction History */
+        get: operations["get_prediction_history_api_predictions_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predictions/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Latest Prediction */
+        get: operations["get_latest_prediction_api_predictions_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predictions/outcomes/recompute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recompute Outcomes */
+        post: operations["recompute_outcomes_api_predictions_outcomes_recompute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predictions/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prediction Run */
+        get: operations["get_prediction_run_api_predictions_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predictions/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prediction Stats */
+        get: operations["get_prediction_stats_api_predictions_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/predictions/{prediction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prediction */
+        get: operations["get_prediction_api_predictions__prediction_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rebalance/suggestions": {
         parameters: {
             query?: never;
@@ -2604,6 +2723,25 @@ export interface components {
             /** Total Liabilities */
             total_liabilities?: (number | null)[];
         };
+        /** GeneratePredictionRequest */
+        GeneratePredictionRequest: {
+            /** Symbol */
+            symbol: string;
+            /**
+             * Timeframe
+             * @default 1d
+             * @constant
+             */
+            timeframe: "1d";
+        };
+        /** GeneratePredictionResponse */
+        GeneratePredictionResponse: {
+            /** Created */
+            created: boolean;
+            /** Idempotent Reuse */
+            idempotent_reuse: boolean;
+            run: components["schemas"]["PredictionRunView"];
+        };
         /** GenerateRebalanceRequest */
         GenerateRebalanceRequest: {
             constraints?: components["schemas"]["RebalanceConstraints"];
@@ -2940,6 +3078,264 @@ export interface components {
             /** Trailing Pe */
             trailing_pe?: number | null;
         };
+        /** PredictionAnchor */
+        PredictionAnchor: {
+            /** Price */
+            price: number;
+            /** Time */
+            time: string;
+            /** Timeframe */
+            timeframe: string;
+        };
+        /** PredictionHistoryItem */
+        PredictionHistoryItem: {
+            outcome?: components["schemas"]["PredictionOutcomeView"] | null;
+            prediction: components["schemas"]["PredictionView"];
+        };
+        /** PredictionHistoryResponse */
+        PredictionHistoryResponse: {
+            /** Items */
+            items: components["schemas"]["PredictionHistoryItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** PredictionOutcomeView */
+        PredictionOutcomeView: {
+            /** Algorithm Version */
+            algorithm_version: string;
+            /** Entry Price */
+            entry_price?: number | null;
+            /** Entry Time */
+            entry_time?: string | null;
+            /** Evaluated Through */
+            evaluated_through?: string | null;
+            /** Market As Of */
+            market_as_of?: string | null;
+            /** Market Provider */
+            market_provider?: string | null;
+            /** Pct Since Anchor */
+            pct_since_anchor?: number | null;
+            /** Prediction Id */
+            prediction_id: string;
+            /** Resolution Reason */
+            resolution_reason?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** PredictionPriceRange */
+        PredictionPriceRange: {
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
+        };
+        /** PredictionResponse */
+        PredictionResponse: {
+            outcome?: components["schemas"]["PredictionOutcomeView"] | null;
+            prediction: components["schemas"]["PredictionView"] | null;
+        };
+        /** PredictionRunResponse */
+        PredictionRunResponse: {
+            run: components["schemas"]["PredictionRunView"];
+        };
+        /** PredictionRunView */
+        PredictionRunView: {
+            /** Anchor Price */
+            anchor_price?: number | null;
+            /** Anchor Time */
+            anchor_time?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Completion Tokens
+             * @default 0
+             */
+            completion_tokens: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Failure Code */
+            failure_code?: string | null;
+            /** Failure Detail */
+            failure_detail?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Latency Ms
+             * @default 0
+             */
+            latency_ms: number;
+            /** Llm Model */
+            llm_model?: string | null;
+            /** Llm Provider */
+            llm_provider?: string | null;
+            /** Market As Of */
+            market_as_of?: string | null;
+            /** Market Provider */
+            market_provider?: string | null;
+            /** Prediction Id */
+            prediction_id?: string | null;
+            /**
+             * Prompt Tokens
+             * @default 0
+             */
+            prompt_tokens: number;
+            /** Prompt Version */
+            prompt_version: string;
+            /**
+             * Provider Attempts
+             * @default 0
+             */
+            provider_attempts: number;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "unavailable" | "failed" | "cancelled";
+            /** Symbol */
+            symbol: string;
+            /** Timeframe */
+            timeframe: string;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PredictionScenario */
+        PredictionScenario: {
+            /** Invalidation */
+            invalidation: string;
+            /** Name */
+            name: string;
+            /** Probability */
+            probability: number;
+        };
+        /** PredictionStatBucket */
+        PredictionStatBucket: {
+            /** Hit Rate */
+            hit_rate: number | null;
+            /** Hits */
+            hits: number;
+            /** Invalidated */
+            invalidated: number;
+            /** Misses */
+            misses: number;
+            /** Predictions */
+            predictions: number;
+            /** Resolved */
+            resolved: number;
+        };
+        /** PredictionStatsResponse */
+        PredictionStatsResponse: {
+            stats: components["schemas"]["PredictionStatsView"];
+        };
+        /** PredictionStatsView */
+        PredictionStatsView: {
+            /** By Direction */
+            by_direction: {
+                [key: string]: components["schemas"]["PredictionStatBucket"];
+            };
+            /** By Source */
+            by_source: {
+                [key: string]: components["schemas"]["PredictionStatBucket"];
+            };
+            /** Days */
+            days: number;
+            /** Hit Rate */
+            hit_rate: number | null;
+            /** Hits */
+            hits: number;
+            /** Invalidated */
+            invalidated: number;
+            /** Misses */
+            misses: number;
+            /** Predictions */
+            predictions: number;
+            /** Resolved */
+            resolved: number;
+            /** Symbol */
+            symbol: string | null;
+        };
+        /** PredictionView */
+        PredictionView: {
+            /** Agent */
+            agent: string;
+            anchor: components["schemas"]["PredictionAnchor"];
+            /** Confidence */
+            confidence: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "long" | "short" | "neutral";
+            /** Entry */
+            entry?: number | null;
+            /** Entry Type */
+            entry_type?: ("market" | "limit" | "stop") | null;
+            /** Evidence As Of */
+            evidence_as_of?: string | null;
+            /** Evidence Provider */
+            evidence_provider?: string | null;
+            /** Invalidation Price */
+            invalidation_price?: number | null;
+            /** Prediction Id */
+            prediction_id: string;
+            /** Prompt Version */
+            prompt_version: string;
+            range?: components["schemas"]["PredictionPriceRange"] | null;
+            /** Range High */
+            range_high?: number | null;
+            /** Range Low */
+            range_low?: number | null;
+            /** Run Id */
+            run_id: string;
+            /** Scenarios */
+            scenarios: components["schemas"]["PredictionScenario"][];
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "ai" | "manual";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "waiting" | "open" | "triggered" | "invalidated" | "hit_target" | "hit_stop" | "held_range" | "broke_range";
+            /** Stop */
+            stop?: number | null;
+            /** Symbol */
+            symbol: string;
+            /** Target1 */
+            target1?: number | null;
+            /** Target2 */
+            target2?: number | null;
+            /** Thesis */
+            thesis: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** RebalanceAction */
         RebalanceAction: {
             action: components["schemas"]["ActionType"];
@@ -3072,6 +3468,23 @@ export interface components {
              * @default 0
              */
             strong_sell: number;
+        };
+        /** RecomputeOutcomesRequest */
+        RecomputeOutcomesRequest: {
+            /**
+             * Limit
+             * @default 500
+             */
+            limit: number;
+            /** Prediction Id */
+            prediction_id?: string | null;
+        };
+        /** RecomputeOutcomesResponse */
+        RecomputeOutcomesResponse: {
+            /** Evaluated */
+            evaluated: number;
+            /** Prediction Id */
+            prediction_id: string | null;
         };
         /**
          * ResumeRequest
@@ -3491,10 +3904,6 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
@@ -5382,6 +5791,231 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_prediction_api_predictions_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneratePredictionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratePredictionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_prediction_history_api_predictions_history_get: {
+        parameters: {
+            query?: {
+                symbol?: string | null;
+                direction?: ("long" | "short" | "neutral") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_latest_prediction_api_predictions_latest_get: {
+        parameters: {
+            query: {
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recompute_outcomes_api_predictions_outcomes_recompute_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecomputeOutcomesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecomputeOutcomesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_prediction_run_api_predictions_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_prediction_stats_api_predictions_stats_get: {
+        parameters: {
+            query?: {
+                symbol?: string | null;
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionStatsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_prediction_api_predictions__prediction_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prediction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictionResponse"];
                 };
             };
             /** @description Validation Error */

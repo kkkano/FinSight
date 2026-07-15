@@ -5,7 +5,13 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from backend.agents.prediction_contract import AgentPrediction
-from backend.services.prediction_outcomes import PredictionOutcomeStore, resolve_prediction_outcome, summarize_track_record
+from backend.services.prediction_outcomes import (
+    OUTCOME_ALGORITHM_VERSION,
+    PredictionOutcomeStore,
+    resolve_prediction_outcome,
+    run_prediction_outcome_cycle,
+    summarize_track_record,
+)
 
 
 NOW = datetime(2026, 7, 10, tzinfo=timezone.utc)
@@ -78,6 +84,18 @@ def test_outcome_resolution_is_idempotent_and_ignores_invalid_or_pre_anchor_bars
     assert first.evaluated_through == "2026-07-12"
 
 
+def test_outcome_records_market_provenance_and_algorithm_version():
+    outcome = resolve_prediction_outcome(
+        _prediction(),
+        [_bar(11, high=112, low=99)],
+        market_provider="fixture-provider",
+        market_as_of="2026-07-11T21:00:00Z",
+    )
+    assert outcome.market_provider == "fixture-provider"
+    assert outcome.market_as_of == "2026-07-11T21:00:00Z"
+    assert outcome.algorithm_version == OUTCOME_ALGORITHM_VERSION
+
+
 def test_track_record_excludes_invalidated_and_hides_rate_below_five_samples():
     sparse = summarize_track_record([
         {"direction": "long", "status": "hit_target", "count": 2, "latest": "2026-07-12"},
@@ -138,8 +156,87 @@ def test_outcome_store_has_no_ddl_and_queries_are_tenant_safe():
     assert "o.status NOT IN" in pending_sql
     assert pending_params == {"limit": 20}
 
+    store.pending_predictions(
+        user_id="alice",
+        prediction_id="00000000-0000-0000-0000-000000000001",
+        limit=7,
+    )
+    scoped_sql, scoped_params = engine.conn.calls[-1]
+    assert "p.user_id=:user_id" in scoped_sql
+    assert "p.id=CAST(:prediction_id AS uuid)" in scoped_sql
+    assert scoped_params == {
+        "limit": 7,
+        "user_id": "alice",
+        "prediction_id": "00000000-0000-0000-0000-000000000001",
+    }
+
     store.track_record(user_id="alice", agent="technical_agent", days=90)
     track_sql, track_params = engine.conn.calls[-1]
     assert "o.user_id=:user_id AND p.agent=:agent" in track_sql
     assert ":days * interval '1 day'" in track_sql
     assert track_params == {"user_id": "alice", "agent": "technical_agent", "days": 90}
+
+
+class _CycleStore:
+    def __init__(self):
+        self.predictions = [
+            _prediction(),
+            _prediction(id="00000000-0000-0000-0000-000000000002", symbol="MSFT"),
+        ]
+        self.pending_kwargs = None
+        self.outcomes = []
+
+    def pending_predictions(self, **kwargs):
+        self.pending_kwargs = kwargs
+        return self.predictions
+
+    def upsert(self, outcome):
+        self.outcomes.append(outcome)
+        return outcome
+
+
+class _CycleGateway:
+    def __init__(self):
+        self.calls = 0
+
+    def get_kline(self, _symbol, **_kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            return {
+                "quality": "trusted",
+                "error_code": None,
+                "provider": "fixture-provider",
+                "as_of": "2026-07-11T21:00:00Z",
+                "kline_data": [_bar(11, high=112, low=99)],
+            }
+        return {
+            "quality": "degraded",
+            "error_code": "market_data_unavailable",
+            "provider": None,
+            "as_of": None,
+            "kline_data": [],
+        }
+
+
+def test_outcome_cycle_uses_gateway_scopes_recompute_and_writes_data_pending():
+    store = _CycleStore()
+    gateway = _CycleGateway()
+    processed = run_prediction_outcome_cycle(
+        user_id="alice",
+        prediction_id="00000000-0000-0000-0000-000000000001",
+        limit=10,
+        store=store,
+        market_gateway=gateway,
+    )
+
+    assert processed == 2
+    assert store.pending_kwargs == {
+        "user_id": "alice",
+        "prediction_id": "00000000-0000-0000-0000-000000000001",
+        "limit": 10,
+    }
+    assert store.outcomes[0].status == "hit_target"
+    assert store.outcomes[0].market_provider == "fixture-provider"
+    assert store.outcomes[1].status == "data_pending"
+    assert store.outcomes[1].resolution_reason == "market_data_unavailable"
+    assert all(item.algorithm_version == OUTCOME_ALGORITHM_VERSION for item in store.outcomes)

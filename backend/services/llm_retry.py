@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Collection, Mapping, Optional
 
 from backend.llm_config import (
     AllEndpointsCoolingDown,
@@ -82,10 +82,26 @@ class LLMCallContext:
     agent: str
     layer: str
     budget: LLMAttemptBudget = field(compare=False)
+    on_attempt: Callable[[Mapping[str, Any]], None] | None = field(default=None, compare=False)
 
     @classmethod
-    def create(cls, *, stage: str, agent: str = "unattributed", layer: str = "unknown", max_provider_attempts: int = 3) -> "LLMCallContext":
-        return cls(str(uuid.uuid4()), stage, agent, layer, LLMAttemptBudget(max_provider_attempts))
+    def create(
+        cls,
+        *,
+        stage: str,
+        agent: str = "unattributed",
+        layer: str = "unknown",
+        max_provider_attempts: int = 3,
+        on_attempt: Callable[[Mapping[str, Any]], None] | None = None,
+    ) -> "LLMCallContext":
+        return cls(
+            str(uuid.uuid4()),
+            stage,
+            agent,
+            layer,
+            LLMAttemptBudget(max_provider_attempts),
+            on_attempt,
+        )
 
 
 def _status_from_exception(exc: BaseException) -> int | None:
@@ -175,6 +191,41 @@ def _emit(event: str, payload: dict[str, Any]) -> None:
     logger.info("%s", payload)
 
 
+def _observe_attempt(context: LLMCallContext, payload: Mapping[str, Any]) -> None:
+    observer = context.on_attempt
+    if observer is None:
+        return
+    try:
+        observer(dict(payload))
+    except Exception:
+        logger.debug("LLM attempt observer failed", exc_info=True)
+
+
+def _filtered_endpoint_manager(
+    manager: EndpointManager,
+    endpoint_names: Collection[str] | None,
+) -> EndpointManager:
+    if endpoint_names is None:
+        return manager
+
+    requested = tuple(dict.fromkeys(str(name or "").strip() for name in endpoint_names))
+    requested = tuple(name for name in requested if name)
+    if not requested:
+        raise ValueError("No LLM endpoint names configured")
+
+    runtimes = {runtime.cfg.name: runtime for runtime in manager.endpoints if runtime.cfg.enabled}
+    missing = tuple(name for name in requested if name not in runtimes)
+    if missing:
+        raise ValueError(f"Configured LLM endpoint unavailable: {','.join(missing)}")
+
+    # 过滤视图复用全局运行时冷却和锁，但不改写全局 endpoint 集合。
+    return EndpointManager(
+        endpoints=[runtimes[name] for name in requested],
+        fingerprint=manager.fingerprint,
+        lock=manager.lock,
+    )
+
+
 async def ainvoke_llm(
     *,
     messages: Any,
@@ -215,27 +266,33 @@ async def ainvoke_llm(
             prompt_tokens, completion_tokens = _usage_or_none(result)
             record_llm_usage(result, getattr(client, "model_name", endpoint.model), count_call=False)
             record_llm_attempt(model=getattr(client, "model_name", endpoint.model), status="success", duration_ms=int((perf_counter() - started) * 1000), response=result)
-            _emit("llm.attempt", {
+            attempt_payload = {
                 "logical_call_id": context.logical_call_id, "stage": context.stage, "agent": context.agent, "layer": context.layer,
-                "endpoint_name": endpoint.name, "failure_domain": endpoint.failure_domain, "model": endpoint.model,
+                "endpoint_name": endpoint.name, "provider": endpoint.provider,
+                "failure_domain": endpoint.failure_domain, "model": endpoint.model,
                 "attempt": attempt, "max_attempts": context.budget.max_provider_attempts, "status": "success",
                 "error_kind": None, "error_code": None, "http_status": None, "retryable": False,
                 "duration_ms": int((perf_counter() - started) * 1000),
                 "usage_state": "reported" if prompt_tokens is not None else "not_reported",
                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
-            })
+            }
+            _emit("llm.attempt", attempt_payload)
+            _observe_attempt(context, attempt_payload)
             return result
         except Exception as exc:
             classification = classify_llm_error(exc)
             record_llm_attempt(model=getattr(client, "model_name", endpoint.model), status="failed", duration_ms=int((perf_counter() - started) * 1000))
-            _emit("llm.attempt", {
+            attempt_payload = {
                 "logical_call_id": context.logical_call_id, "stage": context.stage, "agent": context.agent, "layer": context.layer,
-                "endpoint_name": endpoint.name, "failure_domain": endpoint.failure_domain, "model": endpoint.model,
+                "endpoint_name": endpoint.name, "provider": endpoint.provider,
+                "failure_domain": endpoint.failure_domain, "model": endpoint.model,
                 "attempt": attempt, "max_attempts": context.budget.max_provider_attempts, "status": "failed",
                 "error_kind": classification.kind, "error_code": classification.code, "http_status": classification.http_status,
                 "retryable": classification.retryable, "duration_ms": int((perf_counter() - started) * 1000),
                 "usage_state": "unavailable_due_to_failure", "prompt_tokens": None, "completion_tokens": None,
-            })
+            }
+            _emit("llm.attempt", attempt_payload)
+            _observe_attempt(context, attempt_payload)
             if not classification.retryable or context.budget.remaining <= 0 or (single_endpoint and attempt >= 2):
                 if classification.endpoint_failure:
                     endpoint_manager.report_failure(
@@ -270,6 +327,7 @@ async def ainvoke_configured_llm(
     acquire_token: bool = True,
     acquire_timeout_seconds: float | None = None,
     client_transform: Callable[[Any], Any] | None = None,
+    endpoint_names: Collection[str] | None = None,
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> Any:
     """Invoke the configured provider through the single endpoint state machine."""
@@ -287,7 +345,10 @@ async def ainvoke_configured_llm(
             raise RuntimeError("llm_rate_limit_acquire_timeout")
         context.budget.rate_limit_token_acquired = True
 
-    manager = get_endpoint_manager(provider=provider, model=model)
+    manager = _filtered_endpoint_manager(
+        get_endpoint_manager(provider=provider, model=model),
+        endpoint_names,
+    )
     enabled_count = len([endpoint for endpoint in manager.endpoints if endpoint.cfg.enabled])
     allowed_attempts = min(3, max(2, enabled_count))
     context.budget.max_provider_attempts = min(context.budget.max_provider_attempts, allowed_attempts)

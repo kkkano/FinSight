@@ -33,6 +33,7 @@ from backend.api.execution_router import ExecutionRouterDeps, create_execution_r
 from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.monitor_router import monitor_router
 from backend.api.portfolio_router import portfolio_router
+from backend.api.predictions_router import PredictionsRouterDeps, create_predictions_router
 from backend.api.attribution_router import attribution_router
 from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
@@ -53,7 +54,9 @@ from backend.api.watchlist_router import WatchlistRouterDeps, create_watchlist_r
 from backend.services.watchlist_store import get_watchlist_store
 from backend.services.agent_prediction_store import get_agent_prediction_store
 from backend.services.agent_run_archive import get_agent_run_archive
-from backend.services.prediction_outcomes import get_prediction_outcome_store
+from backend.services.prediction_outcomes import get_prediction_outcome_store, run_prediction_outcome_cycle
+from backend.services.prediction_service import get_prediction_service
+from backend.services.cost_audit import check_user_quota
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
@@ -363,6 +366,12 @@ def create_app() -> FastAPI:
         get_outcome_store=get_prediction_outcome_store,
         get_run_archive=get_agent_run_archive,
     ))
+    predictions_router = create_predictions_router(PredictionsRouterDeps(
+        get_service=get_prediction_service,
+        check_user_quota=check_user_quota,
+        run_outcome_cycle=run_prediction_outcome_cycle,
+        is_internal_authorized=_is_internal_api_key_authorized,
+    ))
 
     morning_brief_router = create_morning_brief_router(
         MorningBriefRouterDeps(
@@ -416,6 +425,7 @@ def create_app() -> FastAPI:
     app.include_router(conversation_router)
     app.include_router(chat_router)
     app.include_router(market_router)
+    app.include_router(predictions_router)
     app.include_router(subscription_router)
     app.include_router(alerts_router)
     app.include_router(screener_router)

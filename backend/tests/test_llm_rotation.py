@@ -251,6 +251,46 @@ def test_retry_prefers_another_failure_domain_and_caps_attempts():
     assert used == ["a", "b"]
 
 
+def test_configured_invoke_filters_endpoints_without_mutating_shared_manager(monkeypatch):
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoints = [
+        llm_config.EndpointConfig("primary", "openai_compatible", "https://a.example.test/v1", "key", "m-a"),
+        llm_config.EndpointConfig("backup", "openai_compatible", "https://b.example.test/v1", "key", "m-b"),
+    ]
+    manager = llm_config.EndpointManager(
+        endpoints=[llm_config.EndpointRuntime(cfg=endpoint) for endpoint in endpoints]
+    )
+    used: list[str] = []
+
+    class Client:
+        def __init__(self, endpoint):
+            self.endpoint = endpoint
+            self.model_name = endpoint.model
+
+        async def ainvoke(self, _messages):
+            used.append(self.endpoint.name)
+            return {"ok": True}
+
+    monkeypatch.setattr(llm_retry, "check_token_budget", lambda: None)
+    monkeypatch.setattr(llm_retry, "get_endpoint_manager", lambda **_kwargs: manager)
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", lambda endpoint, **_kwargs: Client(endpoint))
+    monkeypatch.setattr(llm_retry, "record_llm_usage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(llm_retry, "record_llm_attempt", lambda *_args, **_kwargs: None)
+
+    result = asyncio.run(llm_retry.ainvoke_configured_llm(
+        ["x"],
+        context=llm_retry.LLMCallContext.create(stage="prediction", max_provider_attempts=2),
+        endpoint_names=("primary",),
+        acquire_token=False,
+    ))
+
+    assert result == {"ok": True}
+    assert used == ["primary"]
+    assert [runtime.cfg.name for runtime in manager.endpoints] == ["primary", "backup"]
+
+
 def test_retry_helper_reports_failure_and_success(monkeypatch):
     import backend.services.llm_retry as llm_retry
 

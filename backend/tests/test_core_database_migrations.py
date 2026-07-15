@@ -44,7 +44,7 @@ class _Engine:
 
 
 def test_alembic_head_and_core_tables_are_declared_once():
-    assert alembic_heads() == ("20260715_0001",)
+    assert alembic_heads() == ("20260715_0002",)
     source = (
         Path(__file__).resolve().parents[2]
         / "migrations"
@@ -72,7 +72,7 @@ def test_alembic_head_and_core_tables_are_declared_once():
 def test_schema_revision_mismatch_fails_fast():
     with pytest.raises(DatabaseSchemaMismatch, match="schema revision 不匹配"):
         assert_core_schema_current(engine=_Engine(["old-revision"]))
-    status = assert_core_schema_current(engine=_Engine(["20260715_0001"]))
+    status = assert_core_schema_current(engine=_Engine(["20260715_0002"]))
     assert status.is_current
 
 
