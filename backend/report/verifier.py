@@ -28,6 +28,10 @@ def _synth():
 
 logger = logging.getLogger(__name__)
 
+_DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC = 45
+_DEEP_VERIFIER_MAX_ATTEMPTS = 1
+_DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC = 20
+
 
 def _normalize_verifier_claims(raw_claims: Any, *, max_items: int) -> list[dict[str, str]]:
     if not isinstance(raw_claims, list):
@@ -171,16 +175,16 @@ async def _run_deep_report_verifier(
             stage="report_verify",
             agent="deep_report_verifier",
             layer="synthesis",
-            max_provider_attempts=_synth()._DEEP_VERIFIER_MAX_ATTEMPTS,
+            max_provider_attempts=_DEEP_VERIFIER_MAX_ATTEMPTS,
         )
         resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
             context=context,
             temperature=0.0,
             max_tokens=verifier_tokens,
-            request_timeout=_synth()._DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC,
+            request_timeout=_DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC,
             acquire_token=True,
-            acquire_timeout_seconds=float(_synth()._DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC),
+            acquire_timeout_seconds=float(_DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC),
         )
         content = resp.content if hasattr(resp, "content") else str(resp)
         payload = json.loads(_synth()._extract_json_object(str(content)))
