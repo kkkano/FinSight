@@ -149,6 +149,9 @@ async def test_prediction_terminal_submission_corrects_once_and_only_stores_vali
             return {
                 "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
                 "interval": "1d",
+                "quality": "trusted",
+                "provider": "fixture",
+                "as_of": "2026-07-10T00:00:00Z",
             }
 
     class Store:

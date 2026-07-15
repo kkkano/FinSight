@@ -339,13 +339,41 @@ export interface ReportIR {
   }>;
 }
 
-export interface KlineResponse {
+export type MarketDataQuality = 'trusted' | 'degraded';
+
+export interface MarketDataEnvelope<T> {
+  data: T;
+  capability: 'quote' | 'kline' | 'news' | 'financial';
+  provider: string | null;
+  source: string | null;
+  as_of: string | null;
+  freshness_seconds: number | null;
+  quality: MarketDataQuality;
+  degraded: boolean;
+  error_code: string | null;
+  error?: string;
+  attempted_providers: string[];
+  provider_failures?: string[];
+  cached: boolean;
+}
+
+export interface MarketDataResponse<T> {
   ticker: string;
-  data: {
+  data: MarketDataEnvelope<T>;
+  cached?: boolean;
+  error?: string | null;
+}
+
+export interface QuoteData {
+  price: number;
+  change: number | null;
+  change_percent: number | null;
+}
+
+export interface KlineResponse extends MarketDataResponse<KlineData[]> {
+  ticker: string;
+  data: MarketDataEnvelope<KlineData[]> & {
     kline_data?: KlineData[];
-    error?: string;
-    source?: string;
-    as_of?: string;
     period?: string;
     interval?: string;
   };

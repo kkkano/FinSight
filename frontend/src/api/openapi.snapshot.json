@@ -2976,6 +2976,51 @@
         "title": "SelectionContext",
         "type": "object"
       },
+      "StockDataResponse": {
+        "properties": {
+          "cached": {
+            "default": false,
+            "description": "cached flag",
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "stock data",
+            "title": "Data"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "error",
+            "title": "Error"
+          },
+          "ticker": {
+            "description": "ticker",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "title": "StockDataResponse",
+        "type": "object"
+      },
       "SubscriptionListResponse": {
         "properties": {
           "count": {
@@ -5218,7 +5263,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StockDataResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7572,13 +7619,25 @@
               "title": "Ticker",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StockDataResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7618,7 +7677,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StockDataResponse"
+                }
               }
             },
             "description": "Successful Response"

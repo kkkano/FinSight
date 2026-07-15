@@ -375,6 +375,10 @@ async def _maybe_submit_prediction(
 
     try:
         raw_bars = await asyncio.to_thread(fetch_bars, ticker, period="1mo", interval="1d")
+        if not isinstance(raw_bars, dict) or raw_bars.get("quality") != "trusted":
+            raise ValueError("trusted market data unavailable")
+        if raw_bars.get("error_code") or not raw_bars.get("provider") or not raw_bars.get("as_of"):
+            raise ValueError("trusted market data provenance unavailable")
         bars = raw_bars.get("kline_data") if isinstance(raw_bars, dict) else None
         anchor_bar = bars[-1] if isinstance(bars, list) and bars and isinstance(bars[-1], dict) else None
         anchor_time = str(anchor_bar.get("time") or "").strip() if anchor_bar else ""

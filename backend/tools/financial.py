@@ -1,11 +1,9 @@
-import json
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from urllib.parse import quote
 
-import requests
 from .yfinance_client import create_ticker
 
 from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY, finnhub_client
@@ -130,17 +128,8 @@ def _fetch_financials_from_sec_companyfacts(ticker: str) -> dict | None:
         logger.info(f"[Financials] SEC companyfacts fallback failed for {ticker}: {exc}")
         return None
 
-def get_financial_statements(ticker: str) -> dict:
-    """
-    获取公司的财务报表数据（财报）
-    包括：损益表、资产负债表、现金流量表
-
-    Args:
-        ticker: 股票代码
-
-    Returns:
-        dict: 包含 financials, balance_sheet, cashflow 的字典
-    """
+def _fetch_financials_from_yfinance(ticker: str) -> dict:
+    """只从 yfinance 获取财报表，不在 provider 内继续跨源回退。"""
     try:
         stock = create_ticker(ticker)
 
@@ -187,7 +176,7 @@ def get_financial_statements(ticker: str) -> dict:
 
         result['financials'] = _fetch_with_fallbacks(
             '损益表',
-            ['financials', 'income_stmt', 'quarterly_financials', 'quarterly_income_stmt'],
+            ['quarterly_income_stmt', 'quarterly_financials', 'income_stmt', 'financials'],
         )
         result['balance_sheet'] = _fetch_with_fallbacks(
             '资产负债表',
@@ -199,9 +188,6 @@ def get_financial_statements(ticker: str) -> dict:
         )
 
         if not result['financials'] and not result['balance_sheet'] and not result['cashflow']:
-            sec_fallback = _fetch_financials_from_sec_companyfacts(ticker)
-            if isinstance(sec_fallback, dict):
-                return sec_fallback
             result['error'] = "无法获取任何财报数据，请检查股票代码是否正确"
         else:
             # 只要拿到任意一张主表，就不把局部失败升级为全局 error
@@ -211,12 +197,6 @@ def get_financial_statements(ticker: str) -> dict:
 
     except Exception as e:
         logger.info(f"[Financials] 获取财报数据失败: {e}")
-        sec_fallback = _fetch_financials_from_sec_companyfacts(ticker)
-        if isinstance(sec_fallback, dict):
-            warnings = sec_fallback.get("warnings")
-            if isinstance(warnings, list):
-                warnings.append(f"yfinance_error:{e.__class__.__name__}")
-            return sec_fallback
         return {
             'ticker': ticker,
             'timestamp': datetime.now().isoformat(),
@@ -226,6 +206,43 @@ def get_financial_statements(ticker: str) -> dict:
             'error': f"获取财报数据失败: {str(e)}",
             'warnings': [str(e)],
         }
+
+
+def get_financial_statements(ticker: str) -> dict:
+    """通过统一网关获取财报，并保留旧工具消费者需要的表结构。"""
+    from backend.services.market_data_gateway import get_market_data_gateway
+
+    result = get_market_data_gateway().get_financials(ticker)
+    data = result.get("data") if isinstance(result, dict) else None
+    if isinstance(data, dict) and not result.get("error_code"):
+        payload = dict(data)
+        payload.update(
+            {
+                "provider": result.get("provider"),
+                "source": result.get("provider"),
+                "as_of": result.get("as_of"),
+                "freshness_seconds": result.get("freshness_seconds"),
+                "quality": result.get("quality"),
+                "degraded": result.get("degraded"),
+                "error_code": None,
+            }
+        )
+        return payload
+    return {
+        "ticker": str(ticker or "").strip().upper(),
+        "timestamp": datetime.now().isoformat(),
+        "financials": None,
+        "balance_sheet": None,
+        "cashflow": None,
+        "provider": None,
+        "source": None,
+        "as_of": None,
+        "quality": "degraded",
+        "degraded": True,
+        "error_code": "market_data_unavailable",
+        "error": "market_data_unavailable",
+        "warnings": list(result.get("provider_failures") or []) if isinstance(result, dict) else [],
+    }
 
 
 def get_financial_statements_summary(ticker: str) -> str:

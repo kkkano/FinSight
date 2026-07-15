@@ -65,9 +65,11 @@ export const InlineChart: React.FC<InlineChartProps> = ({
 }) => {
   const chartTheme = useChartTheme();
   const [data, setData] = useState<KlineData[]>([]);
-  // 数据来源标记：price_fallback* 表示后端全源失败后生成的合成占位 K 线（非真实行情）
   const [dataSource, setDataSource] = useState<string | null>(null);
   const [dataAsOf, setDataAsOf] = useState<string | null>(null);
+  const [dataQuality, setDataQuality] = useState<'trusted' | 'degraded' | null>(null);
+  const [dataDegraded, setDataDegraded] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -88,15 +90,21 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         const res = await apiClient.fetchKline(ticker, period, interval);
         const responseData = res as any;
         const kline = responseData?.data?.kline_data ?? responseData?.kline_data ?? [];
-        // 读取后端 source 标记（price_fallback / price_fallback_hourly = 合成占位行情）
-        const source = responseData?.data?.source ?? responseData?.source ?? null;
+        const source = responseData?.data?.provider ?? responseData?.data?.source
+          ?? responseData?.provider ?? responseData?.source ?? null;
         const asOf = responseData?.data?.as_of ?? responseData?.as_of ?? null;
+        const quality = responseData?.data?.quality ?? responseData?.quality ?? null;
+        const degraded = responseData?.data?.degraded ?? responseData?.degraded ?? false;
+        const responseErrorCode = responseData?.data?.error_code ?? responseData?.error_code ?? null;
 
         if (!active) return;
         setData(kline);
         setDataSource(typeof source === 'string' ? source : null);
         setDataAsOf(typeof asOf === 'string' ? asOf : null);
-        if (kline.length) {
+        setDataQuality(quality === 'trusted' || quality === 'degraded' ? quality : null);
+        setDataDegraded(Boolean(degraded));
+        setErrorCode(typeof responseErrorCode === 'string' ? responseErrorCode : null);
+        if (kline.length && quality === 'trusted') {
           const summary = generateDataSummary(ticker, kline);
           if (summary && summary !== lastSummaryRef.current) {
             lastSummaryRef.current = summary;
@@ -129,19 +137,21 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   }
 
   if (data.length === 0) {
+    const noDataMessage = errorCode === 'market_data_unavailable'
+      ? '真实行情源暂时不可用，未生成任何占位数据。'
+      : '行情源没有返回有效 K 线。';
     return (
       <div className="my-4 rounded-lg border border-fin-border bg-fin-panel px-4">
         <EmptyState
           icon={ChartNoAxesCombined}
-          message={loadError ? '行情图暂不可用，请稍后重试。' : '行情图暂不可用：数据源没有返回有效行情。'}
+          message={loadError ? '行情请求失败，请稍后重试。' : noDataMessage}
           action={{ label: '重试', onClick: () => setRetryKey((value) => value + 1) }}
         />
       </div>
     );
   }
 
-  // 合成占位数据：后端全源失败后用最新价生成的等值序列，非真实行情，必须显著标注
-  const isSynthetic = typeof dataSource === 'string' && dataSource.startsWith('price_fallback');
+  const isDegraded = dataDegraded || dataQuality !== 'trusted';
 
   const effectiveValueMode = chartType === 'candlestick' ? 'close' : valueMode;
   const smartData = buildKlineSmartChartData(data, effectiveValueMode);
@@ -165,13 +175,12 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         <SourceBadge
           source={dataSource ?? undefined}
           asOf={dataAsOf}
-          synthetic={isSynthetic}
-          degraded={isSynthetic}
+          degraded={isDegraded}
         />
       </div>
-      {isSynthetic && (
+      {isDegraded && (
         <div className="mb-2 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-600 text-xs font-medium">
-          ⚠ 合成占位 · 非真实行情：实时数据源全部失败，下图为按最新价生成的等值占位序列，仅供形态参考，不可用于交易决策。
+          降级行情仅供查看，不会用于 AI Prediction 或 Outcome。
         </div>
       )}
       <ReactECharts

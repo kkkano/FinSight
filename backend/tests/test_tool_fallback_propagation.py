@@ -14,6 +14,8 @@ import pytest
 
 from backend.tools import price as price_tools
 from backend.agents.price_agent import PriceAgent
+from backend.services import market_data_gateway as gateway_module
+from backend.services.market_data_gateway import MarketDataGateway
 
 
 class _Cache:
@@ -31,24 +33,43 @@ class _Cache:
 def _clear_fetch_info():
     """每个用例前后清空模块级取数注册表，避免用例间串味。"""
     price_tools._last_fetch_info.clear()
+    gateway_module.reset_market_data_gateway()
     yield
     price_tools._last_fetch_info.clear()
+    gateway_module.reset_market_data_gateway()
+
+
+def _install_quote_gateway(monkeypatch, primary, secondary, *, trusted=None) -> None:
+    gateway = MarketDataGateway(
+        providers={},
+        primary_provider="",
+        cache_ttl_seconds=0,
+        quote_providers={"primary": primary, "secondary": secondary},
+        quote_primary_provider="primary",
+        quote_secondary_provider="secondary",
+        quote_trusted_providers=set(trusted or {"primary", "secondary"}),
+        quote_cache_ttl_seconds=0,
+    )
+    monkeypatch.setattr(gateway_module, "_gateway", gateway)
+
+
+def _quote(price: float = 107.0) -> dict:
+    return {
+        "data": {"price": price, "change": 1.0, "change_percent": 0.94},
+        "as_of": "2026-07-15T00:00:00Z",
+    }
 
 
 def test_get_last_fetch_info_marks_degraded_when_first_source_fails(monkeypatch):
     """第一个源失败、第二个源成功 → is_degraded=True，attempt=2。"""
 
     def _boom(_ticker):
-        # 模拟首选源异常（走 except 分支，不 sleep）
         raise RuntimeError("primary source down")
 
     def _ok(_ticker):
-        # 模拟备用源成功返回（含 $ 价格，触发 ladder 逻辑）
-        return "AAPL Current Price: $107.00 | Change: $1.00 (+0.94%)"
+        return _quote()
 
-    # 普通美股源链首两个为 _fetch_yahoo_api_v8 / _fetch_with_stooq_price
-    monkeypatch.setattr(price_tools, "_fetch_yahoo_api_v8", _boom)
-    monkeypatch.setattr(price_tools, "_fetch_with_stooq_price", _ok)
+    _install_quote_gateway(monkeypatch, _boom, _ok)
 
     result = price_tools.get_stock_price("AAPL")
 
@@ -59,16 +80,16 @@ def test_get_last_fetch_info_marks_degraded_when_first_source_fails(monkeypatch)
     assert info is not None
     assert info["is_degraded"] is True
     assert info["attempt"] == 2
-    assert info["source"] == "_ok"  # 第二个源成功，记录其函数名
+    assert info["source"] == "secondary"
 
 
 def test_get_last_fetch_info_not_degraded_when_first_source_succeeds(monkeypatch):
     """第一个源直接成功 → is_degraded=False，attempt=1。"""
 
     def _ok(_ticker):
-        return "AAPL Current Price: $107.00 | Change: $1.00 (+0.94%)"
+        return _quote()
 
-    monkeypatch.setattr(price_tools, "_fetch_yahoo_api_v8", _ok)
+    _install_quote_gateway(monkeypatch, _ok, lambda _ticker: None)
 
     result = price_tools.get_stock_price("AAPL")
     assert "Current Price" in result
@@ -77,16 +98,16 @@ def test_get_last_fetch_info_not_degraded_when_first_source_succeeds(monkeypatch
     assert info is not None
     assert info["is_degraded"] is False
     assert info["attempt"] == 1
-    assert info["source"] == "_ok"
+    assert info["source"] == "primary"
 
 
 def test_get_last_fetch_info_key_is_upper_stripped(monkeypatch):
     """注册表 key 统一大写 strip：用小写带空格的 ticker 也能查到。"""
 
     def _ok(_ticker):
-        return "AAPL Current Price: $107.00 | Change: $1.00 (+0.94%)"
+        return _quote()
 
-    monkeypatch.setattr(price_tools, "_fetch_yahoo_api_v8", _ok)
+    _install_quote_gateway(monkeypatch, _ok, lambda _ticker: None)
     price_tools.get_stock_price("  aapl  ")
 
     # 用任意大小写 / 空格组合查询都应命中
@@ -100,21 +121,7 @@ def test_get_last_fetch_info_all_sources_failed(monkeypatch):
     def _boom(_ticker):
         raise RuntimeError("down")
 
-    # 把普通美股源链涉及的源全部替换为抛异常（覆盖所有可能被调用的）
-    for name in (
-        "_fetch_yahoo_api_v8",
-        "_fetch_with_stooq_price",
-        "_scrape_google_finance",
-        "_scrape_cnbc",
-        "_fetch_with_pandas_datareader",
-        "_fetch_with_yfinance",
-        "_fetch_with_alpha_vantage",
-        "_fetch_with_finnhub",
-        "_fetch_with_twelve_data_price",
-        "_scrape_yahoo_finance",
-        "_search_for_price",
-    ):
-        monkeypatch.setattr(price_tools, name, _boom)
+    _install_quote_gateway(monkeypatch, _boom, _boom)
 
     result = price_tools.get_stock_price("ZZZZ")
     assert result.startswith("Error:")

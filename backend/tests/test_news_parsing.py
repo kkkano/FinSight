@@ -6,7 +6,17 @@ Tests for news parsing utilities.
 
 from datetime import datetime
 
+import pytest
+
 from backend import tools
+from backend.services.market_data_gateway import reset_market_data_gateway
+
+
+@pytest.fixture(autouse=True)
+def _reset_gateway():
+    reset_market_data_gateway()
+    yield
+    reset_market_data_gateway()
 
 
 def test_format_search_news_items_detects_recent_items():
@@ -108,7 +118,7 @@ def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
     assert items[0]["url"] == "https://finance.yahoo.com/news/nested-article.html"
 
 
-def test_get_company_news_leaves_url_empty_when_source_has_no_article_url(monkeypatch):
+def test_get_company_news_rejects_item_without_article_url(monkeypatch):
     from backend.tools import news as news_mod
 
     class _Ticker:
@@ -132,8 +142,7 @@ def test_get_company_news_leaves_url_empty_when_source_has_no_article_url(monkey
 
     items = news_mod.get_company_news("NVDA", limit=1)
 
-    assert items
-    assert items[0]["url"] == ""
+    assert items == []
 
 
 def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypatch):
@@ -232,7 +241,7 @@ def test_get_company_news_prefers_finnhub_when_configured(monkeypatch):
     assert items[0]["source"] == "Finnhub"
 
 
-def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monkeypatch):
+def test_get_company_news_does_not_add_third_search_provider(monkeypatch):
     from backend.tools import news as news_mod
 
     class _Ticker:
@@ -271,6 +280,4 @@ def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monk
 
     items = news_mod.get_company_news("AAPL", limit=1)
 
-    assert items
-    assert items[0]["title"] == "Apple AAPL supplier story with direct link"
-    assert items[0]["url"] == "https://finance.yahoo.com/news/apple-supplier-story.html"
+    assert items == []

@@ -369,6 +369,15 @@ export type SaveConfigRequest = paths['/api/config']['post']['requestBody']['con
 export type SaveConfigResponse = ApiResponse;
 
 
-export type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType, ReportIR, ThinkingStep } from '../types/index';
+export type {
+  ChatResponse,
+  KlineResponse,
+  MarketDataResponse,
+  QuoteData,
+  RawSSEEvent,
+  RawEventType,
+  ReportIR,
+  ThinkingStep,
+} from '../types/index';
 export type { SelectionItem, DashboardInsightsResponse } from '../types/dashboard';
 export type { FindingStatus, FindingsResponse, MonitorScanResponse, MonitorTargetsResponse, MonitorTargetResponse, CreateMonitorTargetParams, PatchMonitorTargetParams, MacroCalendarResponse, MonitorSettingsResponse, UpdateMonitorSettingsResponse } from '../types/monitor';

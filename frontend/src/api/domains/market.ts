@@ -28,8 +28,10 @@ export const marketApi = {
     return response.data;
   },
 
-async fetchStockPrice(ticker: string): Promise<Contracts.ApiResponse> {
-    const response = await api.get(`/api/stock/price/${encodeURIComponent(ticker)}`);
+async fetchStockPrice(ticker: string): Promise<Contracts.MarketDataResponse<Contracts.QuoteData>> {
+    const response = await api.get<Contracts.MarketDataResponse<Contracts.QuoteData>>(
+      `/api/stock/price/${encodeURIComponent(ticker)}`,
+    );
     return response.data;
   },
 

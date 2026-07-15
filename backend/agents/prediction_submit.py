@@ -47,6 +47,10 @@ def _bar_number(bar: Mapping[str, Any], key: str) -> float:
 
 def _normalized_bars(raw: Any) -> tuple[list[dict[str, Any]], str]:
     payload = raw if isinstance(raw, Mapping) else {}
+    if payload.get("quality") != "trusted" or payload.get("error_code"):
+        raise ValueError("无法取得真实行情锚点：可信行情不可用，prediction 未落库")
+    if not str(payload.get("provider") or "").strip() or not str(payload.get("as_of") or "").strip():
+        raise ValueError("可信行情缺少 provider/as_of，prediction 未落库")
     bars = payload.get("kline_data")
     if not isinstance(bars, list) or not bars:
         raise ValueError("无法取得真实行情锚点，prediction 未落库")

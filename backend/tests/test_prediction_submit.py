@@ -58,6 +58,9 @@ def test_submit_overrides_identity_symbol_agent_run_and_anchor_from_real_bar():
                 {"time": "2026-07-10", "open": 100, "high": 104, "low": 99, "close": 103},
             ],
             "interval": "1d",
+            "quality": "trusted",
+            "provider": "fixture",
+            "as_of": "2026-07-10T00:00:00Z",
         },
         store=store,
     )
@@ -112,6 +115,9 @@ def test_submit_rejects_forged_anchor_before_server_overwrite(anchor):
             fetch_bars=lambda *_args, **_kwargs: {
                 "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
                 "interval": "1d",
+                "quality": "trusted",
+                "provider": "fixture",
+                "as_of": "2026-07-10T00:00:00Z",
             },
             store=RecordingStore(),
         )
@@ -132,6 +138,9 @@ def test_invalid_prediction_gets_one_correction_then_stores_or_returns_none():
         fetch_bars=lambda *_args, **_kwargs: {
             "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
             "interval": "1d",
+            "quality": "trusted",
+            "provider": "fixture",
+            "as_of": "2026-07-10T00:00:00Z",
         },
         store=store,
     )
@@ -168,6 +177,9 @@ async def test_async_submission_returns_structured_issues_then_accepts_one_corre
         fetch_bars=lambda *_args, **_kwargs: {
             "kline_data": [{"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}],
             "interval": "1d",
+            "quality": "trusted",
+            "provider": "fixture",
+            "as_of": "2026-07-10T00:00:00Z",
         },
         store=store,
     )
@@ -176,6 +188,26 @@ async def test_async_submission_returns_structured_issues_then_accepts_one_corre
     assert [item["ok"] for item in trace] == [False, True]
     assert trace[0]["issues"][0]["field"]
     assert feedbacks[1] == trace[0]["issues"]
+
+
+def test_submit_rejects_degraded_market_data_even_when_bars_are_present():
+    with pytest.raises(ValueError, match="可信行情"):
+        submit_prediction(
+            _draft(anchor={"timeframe": "1d", "time": "2026-07-10", "price": 102.0}),
+            symbol="AAPL",
+            agent="technical_agent",
+            user_id="alice",
+            run_id="run",
+            operation="technical",
+            fetch_bars=lambda *_args, **_kwargs: {
+                "kline_data": [
+                    {"time": "2026-07-10", "open": 100, "high": 103, "low": 99, "close": 102}
+                ],
+                "interval": "1d",
+                "quality": "degraded",
+            },
+            store=RecordingStore(),
+        )
 
 
 def test_bar_rules_limit_market_stop_invalidation_gap_and_same_bar_conservative():

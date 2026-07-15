@@ -66,6 +66,7 @@ from backend.services.portfolio_store import get_positions as get_portfolio_posi
 from backend.services.report_index import get_report_index_store
 from backend.services.conversation_store import get_conversation_store
 from backend.services.cost_audit import get_cost_audit_store
+from backend.services.market_data_gateway import get_market_data_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -303,12 +304,8 @@ def create_app() -> FastAPI:
 
     market_router = create_market_router(
         MarketRouterDeps(
-            get_orchestrator_safe=_get_orchestrator_safe,
-            get_stock_price=globals().get("get_stock_price") or (lambda _ticker: {"error": "price tool unavailable"}),
-            get_company_news=globals().get("get_company_news") or (lambda _ticker: {"error": "news tool unavailable"}),
-            get_financial_statements=globals().get("get_financial_statements") or (lambda _ticker: {"error": "financials tool unavailable"}),
+            get_market_data_gateway=get_market_data_gateway,
             get_financial_statements_summary=globals().get("get_financial_statements_summary") or (lambda _ticker: {"error": "financials summary tool unavailable"}),
-            get_stock_historical_data=globals().get("get_stock_historical_data") or (lambda _ticker, **_kwargs: {"error": "history tool unavailable"}),
             detect_chart_type=(ChartTypeDetector.detect_chart_type if ChartTypeDetector else None),
             logger=logger,
         )

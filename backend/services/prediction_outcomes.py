@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import threading
-from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict
@@ -342,6 +341,10 @@ def run_prediction_outcome_cycle() -> int:
     for prediction in store.pending_predictions(limit=500):
         try:
             raw = get_stock_historical_data(prediction.symbol, period="1y", interval="1d")
+            if not isinstance(raw, dict) or raw.get("quality") != "trusted" or raw.get("error_code"):
+                continue
+            if not raw.get("provider") or not raw.get("as_of"):
+                continue
             bars = raw.get("kline_data") if isinstance(raw, dict) else None
             if not isinstance(bars, list) or not bars:
                 continue

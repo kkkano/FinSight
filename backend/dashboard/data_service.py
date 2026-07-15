@@ -647,43 +647,25 @@ def _parse_news_text(text: str) -> list[dict[str, Any]]:
 
 def fetch_news(symbol: str, limit: int = 20) -> dict[str, Any]:
     try:
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-        from backend.tools.news import get_company_news, get_market_news_headlines
+        from backend.services.market_data_gateway import get_market_data_gateway
 
-        impact_items: list[Any] = []
-        market_items: list[Any] = []
-
-        # Parallel fetch: company news + market headlines
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            f_impact = pool.submit(get_company_news, symbol, limit)
-            f_market = pool.submit(get_market_news_headlines, limit)
-
-            try:
-                raw_impact = f_impact.result(timeout=30)
-                if isinstance(raw_impact, list):
-                    impact_items = raw_impact
-                elif isinstance(raw_impact, str):
-                    impact_items = _parse_news_text(raw_impact)
-            except (FuturesTimeout, Exception) as exc:
-                logger.warning("[DataService] get_company_news failed for %s: %s", symbol, exc)
-
-            try:
-                raw_market = f_market.result(timeout=30)
-                if isinstance(raw_market, list):
-                    market_items = raw_market
-                elif isinstance(raw_market, str):
-                    market_items = _parse_news_text(raw_market)
-            except (FuturesTimeout, Exception) as exc:
-                logger.warning("[DataService] get_market_news_headlines failed: %s", exc)
-
-        market_raw = [_to_news_item(item) for item in market_items[:limit]]
-        impact_raw = [_to_news_item(item) for item in impact_items[:limit]]
+        gateway_result = get_market_data_gateway().get_news(symbol, limit=limit)
+        rows = gateway_result.get("data") if isinstance(gateway_result, dict) else None
+        if not isinstance(rows, list) or gateway_result.get("error_code"):
+            return None
+        impact_raw = [_to_news_item(item) for item in rows[:limit]]
 
         result = {
-            "market": _rank_news_items(market_raw, limit, symbol=symbol, mode="market"),
+            "market": [],
             "impact": _rank_news_items(impact_raw, limit, symbol=symbol, mode="impact"),
-            "market_raw": market_raw,
+            "market_raw": [],
             "impact_raw": impact_raw,
+            "provider": gateway_result.get("provider"),
+            "as_of": gateway_result.get("as_of"),
+            "freshness_seconds": gateway_result.get("freshness_seconds"),
+            "quality": gateway_result.get("quality"),
+            "degraded": gateway_result.get("degraded"),
+            "error_code": None,
             "ranking_meta": {
                 "version": "v2",
                 "formula": "sum(weight_i * factor_i) - source_penalty",
@@ -813,67 +795,27 @@ def _build_ohlcv_frame_from_rows(rows: list[dict[str, Any]]) -> Optional[pd.Data
 
 
 def _load_ohlcv_frame(symbol: str, period: str = "1y", interval: str = "1d") -> Optional[pd.DataFrame]:
-    """Load OHLCV frame with yfinance primary + shared multi-source fallback."""
-    market = _infer_equity_market(symbol)
-    if market in {"CN", "HK"}:
-        try:
-            from backend.tools.cn_hk_market import fetch_cn_hk_kline
-
-            cn_hk_rows = fetch_cn_hk_kline(symbol, limit=300)
-            frame = _build_ohlcv_frame_from_rows(cn_hk_rows)
-            if frame is not None and not frame.empty:
-                return frame
-        except Exception as exc:
-            logger.warning("[DataService] CN/HK OHLCV fallback failed for %s: %s", symbol, exc)
-
+    """只通过统一行情网关加载 OHLCV；Dashboard 可展示 degraded，但不得消费伪造数据。"""
     try:
+        from backend.services.market_data_gateway import get_market_data_gateway
 
-        hist = _create_ticker(symbol).history(period=period, interval=interval)
-        if hist is not None and not hist.empty:
-            return hist
-    except Exception as exc:
-        logger.warning("[DataService] yfinance OHLCV failed for %s: %s", symbol, exc)
-
-    # Fast fallback: Stooq is usually quicker than the full multi-source pipeline
-    # and helps avoid technical tab timeouts when yfinance is rate-limited.
-    try:
-        from backend.tools.price import _fetch_with_stooq_history
-
-        payload = _fetch_with_stooq_history(symbol, period=period, interval=interval)
-        if isinstance(payload, dict):
-            rows = payload.get("kline_data") or []
-            frame = _build_ohlcv_frame_from_rows(rows)
-            if frame is not None and not frame.empty:
-                logger.info(
-                    "[DataService] OHLCV fallback hit for %s via Stooq (%s rows)",
-                    symbol,
-                    len(frame),
-                )
-                return frame
-    except Exception as exc:
-        logger.warning("[DataService] Stooq OHLCV fallback failed for %s: %s", symbol, exc)
-
-    try:
-        from backend.tools.price import get_stock_historical_data
-
-        payload = get_stock_historical_data(symbol, period=period, interval=interval)
-        if not isinstance(payload, dict):
-            return None
-        rows = payload.get("kline_data") or []
+        payload = get_market_data_gateway().get_kline(symbol, period=period, interval=interval)
+        rows = payload.get("kline_data") if isinstance(payload, dict) else None
         if not isinstance(rows, list) or not rows:
             return None
-
         frame = _build_ohlcv_frame_from_rows(rows)
         if frame is None or frame.empty:
             return None
         logger.info(
-            "[DataService] OHLCV fallback hit for %s via price pipeline (%s rows)",
+            "[DataService] OHLCV gateway hit symbol=%s provider=%s quality=%s rows=%s",
             symbol,
+            payload.get("provider"),
+            payload.get("quality"),
             len(frame),
         )
         return frame
     except Exception as exc:
-        logger.warning("[DataService] fallback OHLCV failed for %s: %s", symbol, exc)
+        logger.warning("[DataService] OHLCV gateway failed for %s: %s", symbol, exc)
         return None
 
 
@@ -995,274 +937,6 @@ def _match_report_value(
     return None
 
 
-def _fetch_financial_statements_from_sec_companyfacts(symbol: str, periods: int = 8) -> dict[str, Any] | None:
-    try:
-        from backend.tools.sec import get_sec_company_facts_quarterly
-
-        payload = get_sec_company_facts_quarterly(symbol, limit=periods)
-        if not isinstance(payload, dict) or payload.get("error"):
-            return None
-        result = {
-            "periods": payload.get("periods") or [],
-            "revenue": payload.get("revenue") or [],
-            "gross_profit": payload.get("gross_profit") or [],
-            "operating_income": payload.get("operating_income") or [],
-            "net_income": payload.get("net_income") or [],
-            "eps": payload.get("eps") or [],
-            "total_assets": payload.get("total_assets") or [],
-            "total_liabilities": payload.get("total_liabilities") or [],
-            "operating_cash_flow": payload.get("operating_cash_flow") or [],
-            "free_cash_flow": payload.get("free_cash_flow") or [],
-        }
-        metric_fields = [
-            "revenue",
-            "gross_profit",
-            "operating_income",
-            "net_income",
-            "eps",
-            "total_assets",
-            "total_liabilities",
-            "operating_cash_flow",
-            "free_cash_flow",
-        ]
-        has_any_value = any(
-            any(value is not None for value in (result.get(field) or []))
-            for field in metric_fields
-        )
-        return result if has_any_value else None
-    except Exception as exc:
-        logger.warning("[DataService] SEC companyfacts fallback failed for %s: %s", symbol, exc)
-        return None
-
-
-def _fetch_financial_statements_from_cn_hk_market(symbol: str, periods: int = 8) -> dict[str, Any] | None:
-    try:
-        from backend.tools.cn_hk_market import fetch_cn_hk_financial_statements
-
-        payload = fetch_cn_hk_financial_statements(symbol, periods=periods)
-        if not isinstance(payload, dict):
-            return None
-        result = {
-            "periods": payload.get("periods") or [],
-            "revenue": payload.get("revenue") or [],
-            "gross_profit": payload.get("gross_profit") or [],
-            "operating_income": payload.get("operating_income") or [],
-            "net_income": payload.get("net_income") or [],
-            "eps": payload.get("eps") or [],
-            "total_assets": payload.get("total_assets") or [],
-            "total_liabilities": payload.get("total_liabilities") or [],
-            "operating_cash_flow": payload.get("operating_cash_flow") or [],
-            "free_cash_flow": payload.get("free_cash_flow") or [],
-        }
-        metric_fields = [
-            "revenue",
-            "gross_profit",
-            "operating_income",
-            "net_income",
-            "eps",
-            "total_assets",
-            "total_liabilities",
-            "operating_cash_flow",
-            "free_cash_flow",
-        ]
-        has_any_value = any(
-            any(value is not None for value in (result.get(field) or []))
-            for field in metric_fields
-        )
-        return result if has_any_value else None
-    except Exception as exc:
-        logger.warning("[DataService] CN/HK financials fallback failed for %s: %s", symbol, exc)
-        return None
-
-
-def _fetch_financial_statements_from_finnhub(symbol: str, periods: int = 8) -> dict[str, Any] | None:
-    """Fallback quarterly statements fetch using Finnhub financial reports."""
-    payload = _finnhub_request("stock/financials-reported", {"symbol": symbol})
-    rows = payload.get("data") if isinstance(payload, dict) else None
-    if not isinstance(rows, list) or not rows:
-        return None
-
-    parsed: list[dict[str, Any]] = []
-    for item in rows:
-        if not isinstance(item, dict):
-            continue
-        report = item.get("report")
-        if not isinstance(report, dict):
-            continue
-        year = int(item.get("year") or 0)
-        quarter = int(item.get("quarter") or 0)
-        if year <= 0:
-            continue
-        label = f"{year}Q{quarter}" if quarter > 0 else f"{year}FY"
-        parsed.append(
-            {
-                "period": label,
-                "year": year,
-                "quarter": quarter,
-                "report": report,
-            }
-        )
-
-    if not parsed:
-        return None
-
-    quarterly = [entry for entry in parsed if entry["quarter"] > 0]
-    selected_source = quarterly if quarterly else parsed
-    selected_source = sorted(
-        selected_source,
-        key=lambda entry: (entry["year"], entry["quarter"]),
-        reverse=True,
-    )
-
-    deduped: list[dict[str, Any]] = []
-    seen_periods: set[str] = set()
-    for entry in selected_source:
-        period = entry["period"]
-        if period in seen_periods:
-            continue
-        seen_periods.add(period)
-        deduped.append(entry)
-        if len(deduped) >= max(1, periods):
-            break
-
-    if not deduped:
-        return None
-
-    period_labels: list[str] = []
-    revenue: list[Optional[float]] = []
-    gross_profit: list[Optional[float]] = []
-    operating_income: list[Optional[float]] = []
-    net_income: list[Optional[float]] = []
-    eps: list[Optional[float]] = []
-    total_assets: list[Optional[float]] = []
-    total_liabilities: list[Optional[float]] = []
-    operating_cash_flow: list[Optional[float]] = []
-    free_cash_flow: list[Optional[float]] = []
-
-    for entry in deduped:
-        report = entry["report"]
-        ic_rows = report.get("ic") if isinstance(report.get("ic"), list) else []
-        bs_rows = report.get("bs") if isinstance(report.get("bs"), list) else []
-        cf_rows = report.get("cf") if isinstance(report.get("cf"), list) else []
-
-        period_labels.append(entry["period"])
-
-        revenue.append(
-            _match_report_value(
-                ic_rows,
-                label_terms=("net sales", "total revenue", "revenue"),
-                concept_terms=("revenue", "salesrevenue"),
-            )
-        )
-        gross_profit.append(
-            _match_report_value(
-                ic_rows,
-                label_terms=("gross profit",),
-                concept_terms=("grossprofit",),
-            )
-        )
-        operating_income.append(
-            _match_report_value(
-                ic_rows,
-                label_terms=("operating income",),
-                concept_terms=("operatingincomeloss",),
-            )
-        )
-        net_income.append(
-            _match_report_value(
-                ic_rows,
-                label_terms=("net income",),
-                concept_terms=("netincomeloss",),
-            )
-        )
-        eps.append(
-            _match_report_value(
-                ic_rows,
-                label_terms=("diluted earnings per share", "basic earnings per share", "earnings per share"),
-                concept_terms=("earningspersharediluted", "earningspersharebasic"),
-            )
-        )
-        total_assets.append(
-            _match_report_value(
-                bs_rows,
-                label_terms=("total assets",),
-                concept_terms=("assets",),
-            )
-        )
-        total_liabilities.append(
-            _match_report_value(
-                bs_rows,
-                label_terms=("total liabilities",),
-                concept_terms=("liabilities",),
-            )
-        )
-
-        ocf_value = _match_report_value(
-            cf_rows,
-            label_terms=(
-                "net cash provided by operating activities",
-                "net cash from operating activities",
-                "cash generated by operating activities",
-            ),
-            concept_terms=(
-                "netcashprovidedbyusedinoperatingactivities",
-                "netcashprovidedbyusedinoperatingactivitiescontinuingoperations",
-            ),
-        )
-        operating_cash_flow.append(ocf_value)
-
-        fcf_value = _match_report_value(
-            cf_rows,
-            label_terms=("free cash flow",),
-            concept_terms=("freecashflow",),
-        )
-        if fcf_value is None:
-            capex = _match_report_value(
-                cf_rows,
-                label_terms=(
-                    "payments to acquire property, plant and equipment",
-                    "capital expenditures",
-                    "purchase of property and equipment",
-                ),
-                concept_terms=(
-                    "paymentstoacquirepropertyplantandequipment",
-                    "capitalexpenditures",
-                ),
-            )
-            if ocf_value is not None and capex is not None:
-                fcf_value = ocf_value + capex if capex < 0 else ocf_value - capex
-        free_cash_flow.append(fcf_value)
-
-    result: dict[str, Any] = {
-        "periods": period_labels,
-        "revenue": revenue,
-        "gross_profit": gross_profit,
-        "operating_income": operating_income,
-        "net_income": net_income,
-        "eps": eps,
-        "total_assets": total_assets,
-        "total_liabilities": total_liabilities,
-        "operating_cash_flow": operating_cash_flow,
-        "free_cash_flow": free_cash_flow,
-    }
-    metric_fields = [
-        "revenue",
-        "gross_profit",
-        "operating_income",
-        "net_income",
-        "eps",
-        "total_assets",
-        "total_liabilities",
-        "operating_cash_flow",
-        "free_cash_flow",
-    ]
-    has_any_value = any(
-        any(value is not None for value in (result.get(field) or []))
-        for field in metric_fields
-    )
-    return result if has_any_value else None
-
-
 def fetch_valuation(symbol: str) -> dict[str, Any] | None:
     """Fetch valuation metrics from yfinance Ticker.info.
 
@@ -1309,116 +983,96 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
     return None
 
 
-def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] | None:
-    """Fetch quarterly financial statements from yfinance.
+def _financial_table_series(
+    table: Any,
+    candidates: tuple[str, ...],
+    columns: list[str],
+) -> list[Optional[float]]:
+    if not isinstance(table, dict):
+        return [None for _ in columns]
+    index = list(table.get("index") or [])
+    rows = list(table.get("data") or [])
+    lookup = {str(name).strip().lower(): position for position, name in enumerate(index)}
+    position = next((lookup[name.lower()] for name in candidates if name.lower() in lookup), None)
+    if position is None or position >= len(rows) or not isinstance(rows[position], dict):
+        return [None for _ in columns]
+    row = rows[position]
+    return [safe_float(row.get(column)) for column in columns]
 
-    Returns a dict matching the FinancialStatement schema, or None on
-    failure.
-    """
-    market = _infer_equity_market(symbol)
-    if market in {"CN", "HK"}:
-        cn_hk_payload = _fetch_financial_statements_from_cn_hk_market(symbol, periods=periods)
-        if cn_hk_payload:
-            logger.info("[DataService] financials fallback via CN/HK source for %s", symbol)
-            return cn_hk_payload
 
+def _financial_period_label(value: str) -> str:
+    text = str(value or "").strip()
     try:
+        parsed = pd.to_datetime(text)
+        return f"{parsed.year}Q{(parsed.month - 1) // 3 + 1}"
+    except Exception:
+        return text[:10]
 
-        ticker = _create_ticker(symbol)
 
-        def _period_label(col: Any) -> str:
-            if isinstance(col, pd.Timestamp):
-                return f"{col.year}Q{(col.month - 1) // 3 + 1}"
-            text = str(col).strip()
-            if len(text) >= 10 and text[4] == "-" and text[7] == "-":
-                try:
-                    dt = pd.to_datetime(text)
-                    return f"{dt.year}Q{(dt.month - 1) // 3 + 1}"
-                except Exception:
-                    return text[:10]
-            return text[:10]
+def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] | None:
+    """通过统一网关取财报，并转换为 Dashboard 现有序列合同。"""
+    try:
+        from backend.services.market_data_gateway import get_market_data_gateway
 
-        def _valid_frame(frame: Optional[pd.DataFrame]) -> bool:
-            return frame is not None and hasattr(frame, "empty") and not frame.empty
-
-        def _build_label_map(frame: Optional[pd.DataFrame]) -> dict[str, Any]:
-            if not _valid_frame(frame):
-                return {}
-            mapping: dict[str, Any] = {}
-            for col in frame.columns:
-                label = _period_label(col)
-                if label and label not in mapping:
-                    mapping[label] = col
-            return mapping
-
-        def _locate_row(frame: Optional[pd.DataFrame], candidates: list[str]) -> Optional[pd.Series]:
-            if not _valid_frame(frame):
-                return None
-            index_lookup = {str(idx).strip().lower(): idx for idx in frame.index}
-            for candidate in candidates:
-                key = candidate.strip().lower()
-                if key in index_lookup:
-                    return frame.loc[index_lookup[key]]
+        gateway_result = get_market_data_gateway().get_financials(symbol)
+        payload = gateway_result.get("data") if isinstance(gateway_result, dict) else None
+        if not isinstance(payload, dict) or gateway_result.get("error_code"):
+            return None
+        tables = [payload.get("financials"), payload.get("balance_sheet"), payload.get("cashflow")]
+        columns: list[str] = []
+        for table in tables:
+            if not isinstance(table, dict):
+                continue
+            for column in table.get("columns") or []:
+                text = str(column)
+                if text not in columns:
+                    columns.append(text)
+        columns = columns[: max(1, int(periods))]
+        if not columns:
             return None
 
-        def _extract_series(frame: Optional[pd.DataFrame], candidates: list[str], labels: list[str]) -> list[Optional[float]]:
-            if not labels:
-                return []
-            row = _locate_row(frame, candidates)
-            if row is None:
-                return [None for _ in labels]
-            label_map = _build_label_map(frame)
-            output: list[Optional[float]] = []
-            for label in labels:
-                col = label_map.get(label)
-                output.append(safe_float(row.get(col)) if col is not None else None)
-            return output
-
-        income = getattr(ticker, "quarterly_income_stmt", None)
-        if income is None or (hasattr(income, "empty") and income.empty):
-            income = getattr(ticker, "quarterly_financials", None)
-        balance = getattr(ticker, "quarterly_balance_sheet", None)
-        cashflow = getattr(ticker, "quarterly_cashflow", None)
-
-        label_candidates: list[str] = []
-        for frame in (income, balance, cashflow):
-            for label in _build_label_map(frame).keys():
-                if label not in label_candidates:
-                    label_candidates.append(label)
-
-        period_labels = label_candidates[:periods]
-        if not period_labels:
-            sec_fallback = _fetch_financial_statements_from_sec_companyfacts(symbol, periods=periods)
-            if sec_fallback:
-                logger.info("[DataService] financials fallback via SEC companyfacts for %s", symbol)
-                return sec_fallback
-            fallback = _fetch_financial_statements_from_finnhub(symbol, periods=periods)
-            if fallback:
-                logger.info("[DataService] financials fallback via Finnhub for %s", symbol)
-                return fallback
-            return None
-
+        income = payload.get("financials")
+        balance = payload.get("balance_sheet")
+        cashflow = payload.get("cashflow")
         result: dict[str, Any] = {
-            "periods": period_labels,
-            "revenue": _extract_series(income, ["Total Revenue", "Revenue", "Net Sales", "Operating Revenue"], period_labels),
-            "gross_profit": _extract_series(income, ["Gross Profit"], period_labels),
-            "operating_income": _extract_series(income, ["Operating Income", "Operating Income Loss"], period_labels),
-            "net_income": _extract_series(income, ["Net Income", "Net Income Common Stockholders"], period_labels),
-            "eps": _extract_series(income, ["Basic EPS", "Diluted EPS"], period_labels),
-            "total_assets": _extract_series(balance, ["Total Assets", "Total Asset"], period_labels),
-            "total_liabilities": _extract_series(
+            "periods": [_financial_period_label(column) for column in columns],
+            "revenue": _financial_table_series(
+                income,
+                ("Total Revenue", "Revenue", "Net Sales", "Operating Revenue"),
+                columns,
+            ),
+            "gross_profit": _financial_table_series(income, ("Gross Profit",), columns),
+            "operating_income": _financial_table_series(
+                income,
+                ("Operating Income", "Operating Income Loss"),
+                columns,
+            ),
+            "net_income": _financial_table_series(
+                income,
+                ("Net Income", "Net Income Common Stockholders"),
+                columns,
+            ),
+            "eps": _financial_table_series(income, ("Basic EPS", "Diluted EPS"), columns),
+            "total_assets": _financial_table_series(balance, ("Total Assets", "Total Asset"), columns),
+            "total_liabilities": _financial_table_series(
                 balance,
-                ["Total Liabilities Net Minority Interest", "Total Liabilities", "Total Liab", "Liabilities"],
-                period_labels,
+                ("Total Liabilities Net Minority Interest", "Total Liabilities", "Total Liab", "Liabilities"),
+                columns,
             ),
-            "operating_cash_flow": _extract_series(
+            "operating_cash_flow": _financial_table_series(
                 cashflow,
-                ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities", "Operating Cash Flow"],
-                period_labels,
+                ("Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
+                columns,
             ),
-            "free_cash_flow": _extract_series(cashflow, ["Free Cash Flow"], period_labels),
+            "free_cash_flow": _financial_table_series(cashflow, ("Free Cash Flow",), columns),
+            "provider": gateway_result.get("provider"),
+            "as_of": gateway_result.get("as_of"),
+            "freshness_seconds": gateway_result.get("freshness_seconds"),
+            "quality": gateway_result.get("quality"),
+            "degraded": gateway_result.get("degraded"),
+            "error_code": None,
         }
-        metric_fields = [
+        metric_keys = (
             "revenue",
             "gross_profit",
             "operating_income",
@@ -1428,34 +1082,10 @@ def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] 
             "total_liabilities",
             "operating_cash_flow",
             "free_cash_flow",
-        ]
-        has_any_value = any(
-            any(value is not None for value in (result.get(field) or []))
-            for field in metric_fields
         )
-        if has_any_value:
-            return result
-
-        sec_fallback = _fetch_financial_statements_from_sec_companyfacts(symbol, periods=periods)
-        if sec_fallback:
-            logger.info("[DataService] financials fallback via SEC companyfacts for %s", symbol)
-            return sec_fallback
-
-        fallback = _fetch_financial_statements_from_finnhub(symbol, periods=periods)
-        if fallback:
-            logger.info("[DataService] financials fallback via Finnhub for %s", symbol)
-            return fallback
-        return None
+        return result if any(any(value is not None for value in result[key]) for key in metric_keys) else None
     except Exception as exc:
-        logger.warning("[DataService] fetch_financial_statements failed for %s: %s", symbol, exc)
-        sec_fallback = _fetch_financial_statements_from_sec_companyfacts(symbol, periods=periods)
-        if sec_fallback:
-            logger.info("[DataService] financials fallback via SEC companyfacts for %s", symbol)
-            return sec_fallback
-        fallback = _fetch_financial_statements_from_finnhub(symbol, periods=periods)
-        if fallback:
-            logger.info("[DataService] financials fallback via Finnhub for %s", symbol)
-            return fallback
+        logger.warning("[DataService] financial gateway failed for %s: %s", symbol, exc)
         return None
 
 

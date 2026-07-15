@@ -8,20 +8,15 @@ from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException
 
-from backend.api.schemas import KlineResponse
-from backend.utils.quote import parse_quote_payload, resolve_live_quote
+from backend.api.schemas import KlineResponse, StockDataResponse
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class MarketRouterDeps:
-    get_orchestrator_safe: Callable[[], Any]
-    get_stock_price: Callable[[str], Any]
-    get_company_news: Callable[[str], Any]
-    get_financial_statements: Callable[[str], Any]
+    get_market_data_gateway: Callable[[], Any]
     get_financial_statements_summary: Callable[[str], Any]
-    get_stock_historical_data: Callable[..., Any]
     detect_chart_type: Callable[[str, str | None], dict[str, Any]] | None
     logger: Any
 
@@ -283,51 +278,47 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
         # 其它 data_kind 暂不支持（kline/technical 走 InlineChart 自有数据源）。
         return {"success": False, "reason": "unsupported_data_kind"}
 
-    @router.get("/api/stock/price/{ticker}")
+    @router.get("/api/stock/price/{ticker}", response_model=StockDataResponse)
     def get_price(ticker: str):
         normalized_ticker = _validate_ticker_or_400(ticker)
         try:
-            orchestrator = deps.get_orchestrator_safe()
-            if orchestrator:
-                cache_key = f"price:{normalized_ticker}"
-                cached_data = orchestrator.cache.get(cache_key)
-                if cached_data is not None:
-                    deps.logger.info("[API] price cache hit %s", normalized_ticker)
-                    normalized = parse_quote_payload(cached_data)
-                    return {"ticker": normalized_ticker, "data": normalized or cached_data, "cached": True}
-
-            quote, raw_payload = resolve_live_quote(normalized_ticker, deps.get_stock_price)
-            if quote is not None:
-                if orchestrator:
-                    orchestrator.cache.set(f"price:{normalized_ticker}", quote, ttl=60)
-                return {"ticker": normalized_ticker, "data": quote}
-
-            if orchestrator and raw_payload:
-                orchestrator.cache.set(f"price:{normalized_ticker}", raw_payload, ttl=60)
-            return {"ticker": normalized_ticker, "data": raw_payload or {"error": "price unavailable"}}
+            result = deps.get_market_data_gateway().get_quote(normalized_ticker)
+            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
             deps.logger.warning("[API] get_price failed for %s: %s", normalized_ticker, exc)
-            raise HTTPException(status_code=502, detail=f"无法获取 {normalized_ticker} 价格数据") from exc
+            return {
+                "ticker": normalized_ticker,
+                "data": {"data": {}, "error": "market_data_unavailable", "error_code": "market_data_unavailable"},
+                "cached": False,
+            }
 
-    @router.get("/api/stock/news/{ticker}")
-    def get_news(ticker: str):
+    @router.get("/api/stock/news/{ticker}", response_model=StockDataResponse)
+    def get_news(ticker: str, limit: int = 5):
         normalized_ticker = _validate_ticker_or_400(ticker)
         try:
-            news = deps.get_company_news(normalized_ticker)
-            return {"ticker": normalized_ticker, "data": news}
+            result = deps.get_market_data_gateway().get_news(normalized_ticker, limit=limit)
+            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
             deps.logger.warning("[API] get_news failed for %s: %s", normalized_ticker, exc)
-            raise HTTPException(status_code=502, detail=f"无法获取 {normalized_ticker} 新闻数据") from exc
+            return {
+                "ticker": normalized_ticker,
+                "data": {"data": [], "error": "market_data_unavailable", "error_code": "market_data_unavailable"},
+                "cached": False,
+            }
 
-    @router.get("/api/financials/{ticker}")
+    @router.get("/api/financials/{ticker}", response_model=StockDataResponse)
     def get_financials(ticker: str):
         normalized_ticker = _validate_ticker_or_400(ticker)
         try:
-            financials_data = deps.get_financial_statements(normalized_ticker)
-            return financials_data
+            result = deps.get_market_data_gateway().get_financials(normalized_ticker)
+            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
             deps.logger.warning("[API] get_financials failed for %s: %s", normalized_ticker, exc)
-            raise HTTPException(status_code=502, detail=f"无法获取 {normalized_ticker} 财务数据") from exc
+            return {
+                "ticker": normalized_ticker,
+                "data": {"data": {}, "error": "market_data_unavailable", "error_code": "market_data_unavailable"},
+                "cached": False,
+            }
 
     @router.get("/api/financials/{ticker}/summary")
     def get_financials_summary(ticker: str):
@@ -343,24 +334,25 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
         normalized_ticker = _validate_ticker_or_400(ticker)
         try:
-            orchestrator = deps.get_orchestrator_safe()
-            if orchestrator:
-                cache_key = f"kline:{normalized_ticker}:{period}:{interval}"
-                cached_data = orchestrator.cache.get(cache_key)
-                if cached_data is not None:
-                    deps.logger.info("[API] kline cache hit %s (%s,%s)", normalized_ticker, period, interval)
-                    return {"ticker": normalized_ticker, "data": cached_data, "cached": True}
-
-            kline_data = deps.get_stock_historical_data(normalized_ticker, period=period, interval=interval)
-            if "error" not in kline_data and orchestrator:
-                cache_key = f"kline:{normalized_ticker}:{period}:{interval}"
-                orchestrator.cache.set(cache_key, kline_data, ttl=3600)
-
-            return {"ticker": normalized_ticker, "data": kline_data, "cached": False}
+            result = deps.get_market_data_gateway().get_kline(
+                normalized_ticker,
+                period=period,
+                interval=interval,
+            )
+            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
             # 内部异常只进日志，对外用通用错误描述，不回传原始 str(exc)。
             deps.logger.error("[Market] get_kline_data 失败 %s: %s", normalized_ticker, exc, exc_info=True)
-            return {"ticker": normalized_ticker, "data": {"error": "K线数据获取失败"}, "cached": False}
+            return {
+                "ticker": normalized_ticker,
+                "data": {
+                    "data": [],
+                    "kline_data": [],
+                    "error": "market_data_unavailable",
+                    "error_code": "market_data_unavailable",
+                },
+                "cached": False,
+            }
 
     @router.post("/api/export/pdf")
     async def export_pdf(request: dict):

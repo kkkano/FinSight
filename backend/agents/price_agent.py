@@ -201,28 +201,13 @@ class PriceAgent(BaseFinancialAgent):
         return snapshot.to_dict()
 
     async def _fetch_realtime_quote(self, ticker: str) -> Any:
-        sources = ["yfinance", "finnhub", "alpha_vantage", "tavily"]
-        last_error = None
-
-        for source in sources:
-            if self.circuit_breaker.can_call(source):
-                try:
-                    result = await self._fetch_from_source(source, ticker)
-                    if self._is_quote_success(result):
-                        self.circuit_breaker.record_success(source)
-                        return result
-                except Exception as e:
-                    last_error = e
-                    self.circuit_breaker.record_failure(source)
-
-        try:
-            fallback_result = await self._fetch_from_source("search", ticker)
-            if self._is_quote_success(fallback_result):
-                return fallback_result
-        except Exception:
-            pass
-
-        raise AllSourcesFailedError(f"All sources failed for {ticker}. Last error: {last_error}")
+        quote_func = getattr(self.tools, "get_stock_price", None)
+        if quote_func is None:
+            raise AllSourcesFailedError(f"market_data_unavailable for {ticker}")
+        result = await asyncio.to_thread(quote_func, ticker)
+        if self._is_quote_success(result):
+            return result
+        raise AllSourcesFailedError(f"market_data_unavailable for {ticker}")
 
     def _is_supported_payload(self, payload: Any) -> bool:
         return isinstance(payload, (dict, list, str))

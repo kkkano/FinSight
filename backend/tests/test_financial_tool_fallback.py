@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+import pytest
+
+from backend.services.market_data_gateway import reset_market_data_gateway
 from backend.tools import financial
+
+
+@pytest.fixture(autouse=True)
+def _reset_gateway():
+    reset_market_data_gateway()
+    yield
+    reset_market_data_gateway()
 
 
 def test_convert_sec_companyfacts_payload_builds_agent_tables():

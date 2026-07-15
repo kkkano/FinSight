@@ -3245,6 +3245,32 @@ export interface components {
              */
             url?: string | null;
         };
+        /** StockDataResponse */
+        StockDataResponse: {
+            /**
+             * Cached
+             * @description cached flag
+             * @default false
+             */
+            cached: boolean;
+            /**
+             * Data
+             * @description stock data
+             */
+            data?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Error
+             * @description error
+             */
+            error?: string | null;
+            /**
+             * Ticker
+             * @description ticker
+             */
+            ticker: string;
+        };
         /** SubscriptionListResponse */
         SubscriptionListResponse: {
             /**
@@ -4623,7 +4649,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StockDataResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6067,7 +6093,9 @@ export interface operations {
     };
     get_news_api_stock_news__ticker__get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path: {
                 ticker: string;
@@ -6082,7 +6110,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StockDataResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6113,7 +6141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StockDataResponse"];
                 };
             };
             /** @description Validation Error */

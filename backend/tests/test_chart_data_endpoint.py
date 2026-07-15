@@ -21,20 +21,26 @@ from backend.api.market_router import MarketRouterDeps, create_market_router
 
 
 def _build_client() -> TestClient:
+    class Gateway:
+        def get_quote(self, _ticker: str):
+            return {"data": {"price": 100.0}, "error_code": None, "cached": False}
+
+        def get_news(self, _ticker: str, *, limit: int = 5):
+            del limit
+            return {"data": [], "error_code": "market_data_unavailable", "cached": False}
+
+        def get_financials(self, _ticker: str):
+            return {"data": {}, "error_code": "market_data_unavailable", "cached": False}
+
+        def get_kline(self, _ticker: str, *, period: str = "1y", interval: str = "1d"):
+            return {"kline_data": [], "period": period, "interval": interval, "cached": False}
+
     app = FastAPI()
     app.include_router(
         create_market_router(
             MarketRouterDeps(
-                get_orchestrator_safe=lambda: None,
-                get_stock_price=lambda _ticker: {"price": 100.0},
-                get_company_news=lambda _ticker: [],
-                get_financial_statements=lambda _ticker: {},
+                get_market_data_gateway=lambda: Gateway(),
                 get_financial_statements_summary=lambda _ticker: {},
-                get_stock_historical_data=lambda _ticker, period="1y", interval="1d": {
-                    "kline_data": [],
-                    "period": period,
-                    "interval": interval,
-                },
                 detect_chart_type=None,
                 logger=logging.getLogger("test_chart_data"),
             )

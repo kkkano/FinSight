@@ -16,18 +16,34 @@ def _build_client(
     get_stock_historical_data=None,
     detect_chart_type=None,
 ) -> TestClient:
+    stock_price = get_stock_price or (lambda _ticker: {"price": 100.0})
+    company_news = get_company_news or (lambda _ticker: [])
+    financials = get_financial_statements or (lambda _ticker: {})
+    historical = get_stock_historical_data or (
+        lambda _ticker, period="1y", interval="1d": {"kline_data": [], "period": period, "interval": interval}
+    )
+
+    class Gateway:
+        def get_quote(self, ticker: str):
+            return {"data": stock_price(ticker), "provider": "test", "error_code": None, "cached": False}
+
+        def get_news(self, ticker: str, *, limit: int = 5):
+            del limit
+            return {"data": company_news(ticker), "provider": "test", "error_code": None, "cached": False}
+
+        def get_financials(self, ticker: str):
+            return {"data": financials(ticker), "provider": "test", "error_code": None, "cached": False}
+
+        def get_kline(self, ticker: str, *, period: str = "1y", interval: str = "1d"):
+            return historical(ticker, period=period, interval=interval)
+
     app = FastAPI()
     app.include_router(
         create_market_router(
-            MarketRouterDeps(
-                get_orchestrator_safe=lambda: None,
-                get_stock_price=get_stock_price or (lambda _ticker: {"price": 100.0}),
-                get_company_news=get_company_news or (lambda _ticker: []),
-                get_financial_statements=get_financial_statements or (lambda _ticker: {}),
-                get_financial_statements_summary=get_financial_statements_summary or (lambda _ticker: {}),
-                get_stock_historical_data=get_stock_historical_data
-                or (lambda _ticker, period="1y", interval="1d": {"kline_data": [], "period": period, "interval": interval}),
-                detect_chart_type=detect_chart_type,
+                MarketRouterDeps(
+                    get_market_data_gateway=lambda: Gateway(),
+                    get_financial_statements_summary=get_financial_statements_summary or (lambda _ticker: {}),
+                    detect_chart_type=detect_chart_type,
                 logger=logging.getLogger("test_market_router"),
             )
         )

@@ -809,7 +809,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     friendly_name = MARKET_INDICES.get(ticker, ticker.replace('^', ''))
 
     logger.info(f"  → Detected market index: {friendly_name}")
-    logger.info(f"  → Using specialized search strategy for index news...")
+    logger.info("  → Using specialized search strategy for index news...")
 
     # 策略1: 搜索指数最近表现和分析
     current_date = datetime.now().strftime('%B %Y')
@@ -940,6 +940,42 @@ def _get_finnhub_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
         return []
 
 
+def _get_yfinance_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
+    """只调用一次 yfinance news provider，并输出可追溯的真实新闻条目。"""
+    if not _yfinance_news_available():
+        return []
+    try:
+        rows = create_ticker(ticker).news
+        items: List[Dict[str, Any]] = []
+        for article in rows or []:
+            if not isinstance(article, dict):
+                continue
+            title = _extract_article_title(article)
+            snippet = _extract_article_snippet(article)
+            if not _headline_is_useful(title, snippet):
+                continue
+            if not _is_market_index(ticker) and not _company_news_is_relevant(ticker, title, snippet):
+                continue
+            item = _build_news_item(
+                title=title,
+                source=_extract_article_source(article),
+                url=_extract_article_url(article),
+                published_at=_extract_article_published_at(article),
+                snippet=snippet,
+                ticker=ticker,
+                confidence=0.7,
+            )
+            if item:
+                items.append(item)
+            if len(items) >= limit:
+                break
+        return items
+    except Exception as exc:
+        logger.info("yfinance news provider failed for %s: %s", ticker, exc)
+        _mark_yfinance_news_unavailable(exc)
+        return []
+
+
 def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
     try:
         rows = search_authoritative_feeds(
@@ -985,232 +1021,29 @@ def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, A
 
 
 def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Dict[str, Any]]:
-    """
-    智能获取新闻：自动识别是公司股票还是市场指数（结构化输出）。
-    - 公司股票：使用 API (yfinance, Finnhub, Alpha Vantage)
-    - 市场指数：使用搜索策略获取宏观市场新闻
-    """
-    try:
-        limit = int(limit) if limit is not None else 5
-    except Exception:
-        limit = 5
-    limit = max(1, min(limit, 20))
-    if fast:
-        return _fast_company_news_links(ticker, limit=limit)
-    # 🔍 关键判断：这是指数还是公司股票？
-    if _is_market_index(ticker):
-        # 优先用 alert_scheduler 的新闻抓取（含48h过滤）
-        try:
-            from backend.services.alert_scheduler import fetch_news_articles
-            articles = fetch_news_articles(ticker)
-            if articles:
-                items: List[Dict[str, Any]] = []
-                for a in articles:
-                    title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
-                    snippet = a.get("summary") or a.get("description") or ""
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    source = a.get("source") or a.get("publisher") or "Unknown"
-                    published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
-                    url = a.get("url") or a.get("link") or ""
-                    item = _build_news_item(
-                        title=title,
-                        source=source,
-                        url=url,
-                        published_at=published_at,
-                        snippet=snippet,
-                        ticker=ticker,
-                        confidence=0.7,
-                    )
-                    if item:
-                        items.append(item)
-                    if len(items) >= limit:
-                        break
-                if items:
-                    return items
-        except Exception as e:
-            logger.info(f"index news via alert_scheduler failed: {e}")
+    """通过统一网关获取公司新闻；`fast` 仅为旧调用签名兼容，不生成搜索占位条目。"""
+    del fast
+    from backend.services.market_data_gateway import get_market_data_gateway
 
-        # 先试 yfinance 的新闻（部分指数也有）
-        if _yfinance_news_available():
-            try:
-                stock = create_ticker(ticker)
-                news = stock.news
-                if news:
-                    items = []
-                    for article in news:
-                        title = _extract_article_title(article)
-                        snippet = _extract_article_snippet(article)
-                        if not _headline_is_useful(title, snippet):
-                            continue
-                        publisher = _extract_article_source(article)
-                        pub_time = _extract_article_published_at(article)
-                        url = _extract_article_url(article)
-                        item = _build_news_item(
-                            title=title,
-                            source=publisher,
-                            url=url,
-                            published_at=pub_time,
-                            snippet=snippet,
-                            ticker=ticker,
-                            confidence=0.7,
-                        )
-                        if item:
-                            items.append(item)
-                        if len(items) >= limit:
-                            break
-                    if items:
-                        return items
-            except Exception as e:
-                logger.info(f"yfinance index news error for {ticker}: {e}")
-                _mark_yfinance_news_unavailable(e)
-
-        # 再退回搜索策略
-        return _get_index_news(ticker, limit=limit)
-
-    deferred_company_news_items: List[Dict[str, Any]] = []
-
-    if finnhub_client:
-        items = _get_finnhub_company_news(ticker, limit)
-        if items:
-            linked_items = [item for item in items if str(item.get("url") or "").strip()]
-            if linked_items:
-                return linked_items[:limit]
-            deferred_company_news_items = items
-
-    authoritative_items = _get_authoritative_company_news(ticker, limit)
-    if authoritative_items:
-        return authoritative_items
-
-    # --- 以下是原有的公司新闻获取逻辑 ---
-
-    # 方法1: yfinance
-    if _yfinance_news_available():
-        try:
-            stock = create_ticker(ticker)
-            news = stock.news
-            if news:
-                items = []
-                for article in news:
-                    title = _extract_article_title(article)
-                    snippet = _extract_article_snippet(article)
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    if not _company_news_is_relevant(ticker, title, snippet):
-                        continue
-                    publisher = _extract_article_source(article)
-                    pub_time = _extract_article_published_at(article)
-                    url = _extract_article_url(article)
-                    item = _build_news_item(
-                        title=title,
-                        source=publisher,
-                        url=url,
-                        published_at=pub_time,
-                        snippet=snippet,
-                        ticker=ticker,
-                        confidence=0.7,
-                    )
-                    if item:
-                        items.append(item)
-                    if len(items) >= limit:
-                        break
-                if items:
-                    return items
-        except Exception as e:
-            logger.info(f"yfinance news error for {ticker}: {e}")
-            _mark_yfinance_news_unavailable(e)
-
-    # 方法2: Finnhub
-    if finnhub_client:
-        try:
-            logger.info(f"Trying Finnhub news for {ticker}")
-            to_date = date.today().strftime("%Y-%m-%d")
-            from_date = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
-            news = finnhub_client.company_news(ticker, _from=from_date, to=to_date)
-            if news:
-                items = []
-                for article in news:
-                    title = article.get('headline', 'No title')
-                    snippet = article.get('summary') or ""
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    if not _company_news_is_relevant(ticker, title, snippet):
-                        continue
-                    source = article.get('source', 'Unknown')
-                    pub_time = article.get('datetime', 0)
-                    url = article.get('url') or ''
-                    item = _build_news_item(
-                        title=title,
-                        source=source,
-                        url=url,
-                        published_at=pub_time,
-                        snippet=snippet,
-                        ticker=ticker,
-                        confidence=0.8,
-                    )
-                    if item:
-                        items.append(item)
-                    if len(items) >= limit:
-                        break
-                if items:
-                    return items
-        except Exception as e:
-            logger.info(f"Finnhub news fetch failed: {e}")
-
-    # 方法3: Alpha Vantage
-    try:
-        logger.info(f"Trying Alpha Vantage news for {ticker}")
-        url = "https://www.alphavantage.co/query"
-        params = {'function': 'NEWS_SENTIMENT', 'tickers': ticker, 'limit': 5, 'apikey': ALPHA_VANTAGE_API_KEY}
-        response = _http_get(url, params=params, timeout=10)
-        data = response.json()
-        if 'feed' in data and data['feed']:
-            items = []
-            for article in data['feed']:
-                title = article.get('title', 'No title')
-                source = article.get('source', 'Unknown')
-                date_str = article.get('time_published', '')[:8]
-                if date_str:
-                    date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-                snippet = article.get('summary') or ""
-                if not _headline_is_useful(title, snippet):
-                    continue
-                if not _company_news_is_relevant(ticker, title, snippet):
-                    continue
-                url = article.get('url') or article.get('link') or ''
-                item = _build_news_item(
-                    title=title,
-                    source=source,
-                    url=url,
-                    published_at=date_str,
-                    snippet=snippet,
-                    ticker=ticker,
-                    confidence=0.8,
-                )
-                if item:
-                    items.append(item)
-                if len(items) >= limit:
-                    break
-            if items:
-                return items
-    except Exception as e:
-        logger.info(f"Alpha Vantage news fetch failed: {e}")
-
-    # 方法4: 回退到公司特定搜索
-    logger.info(f"Falling back to search for {ticker} news")
-    fallback_text = search(f"{ticker} company latest news stock")
-    items = _build_search_news_items(fallback_text, limit=limit, max_age_days=7)
-    if items:
-        relevant_items = []
-        for item in items:
-            if isinstance(item, dict):
-                if not _company_news_is_relevant(ticker, str(item.get("title") or item.get("headline") or ""), str(item.get("snippet") or "")):
-                    continue
-                item.setdefault("ticker", ticker)
-                relevant_items.append(item)
-        if relevant_items:
-            return relevant_items
-    return []
+    result = get_market_data_gateway().get_news(ticker, limit=limit)
+    rows = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(rows, list) or result.get("error_code"):
+        return []
+    output: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        item.update(
+            {
+                "provider": result.get("provider"),
+                "as_of": result.get("as_of"),
+                "quality": result.get("quality"),
+                "degraded": result.get("degraded"),
+            }
+        )
+        output.append(item)
+    return output
 
 
 
