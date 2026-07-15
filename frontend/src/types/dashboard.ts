@@ -444,56 +444,6 @@ export interface GenerateRebalanceParams {
   use_llm_enhancement?: boolean;
 }
 
-// === AI Insights (Phase F) ===
-export interface InsightKeyMetric {
-  label: string;
-  value: string;
-}
-
-export interface ScoreBreakdownItem {
-  factor_key: string;
-  label: string;
-  weight: number;
-  value: number;
-  contribution: number;
-  rationale: string;
-}
-
-export interface InsightCard {
-  agent_name: string;
-  scorer_name?: string;      // preferred semantic identifier, e.g. technical_scorer
-  source_type?: string;      // quick_score=快速评分 / agent_deep=Agent 深度分析
-  analyst?: {
-    key: string;
-    name_zh: string;
-    short_zh: string;
-    glyph: string;
-    color_token: string;
-    mandate_zh: string;
-  } | null;
-  tab: string;
-  score: number;             // 0-10
-  score_label: string;       // 弱势 | 偏空 | 中性 | 偏多 | 强势
-  summary: string;
-  key_points: string[];
-  risks: string[];
-  key_metrics?: InsightKeyMetric[] | null;   // 结构化关键指标
-  score_breakdown?: ScoreBreakdownItem[];
-  sub_scores?: Record<string, number>;
-  confidence: number;
-  as_of: string;
-  model_generated: boolean;
-}
-
-export interface DashboardInsightsResponse {
-  success: boolean;
-  symbol: string;
-  insights: Record<string, InsightCard>;
-  generated_at: string;
-  cached: boolean;
-  cache_age_seconds: number;
-}
-
 // === localStorage 键 ===
 export const STORAGE_KEYS = {
   ACTIVE_ASSET: 'fs_dashboard_active_v1',
@@ -502,7 +452,6 @@ export const STORAGE_KEYS = {
   NEWS_SUB_TAB: 'fs_dashboard_news_sub_tab_v1',
   NEWS_TAG_FILTER: 'fs_dashboard_news_tag_filter_v1',
   NEWS_TIME_RANGE: 'fs_dashboard_news_time_range_v1',
-  DEEP_ANALYSIS_INCLUDE_DEEPSEARCH: 'fs_dashboard_deep_analysis_include_deepsearch_v1',
 } as const;
 
 // === Widget ID 常量 ===

@@ -5,11 +5,11 @@
  * - Topic tags (computed client-side via computeNewsTags)
  * - Impact level badge (high/medium/low)
  * - Source reliability indicator
- * - "问这条" (Ask about) + "分析影响" (Analyze impact) action buttons
+ * - “问这条”统一跳转主 Chat，不在 Dashboard 启动第二条 Agent 执行链
  * - Selection checkbox for MiniChat context
  * - Relative time display
  */
-import { ExternalLink, Loader2, MessageCircleQuestion, Sparkles } from 'lucide-react';
+import { ExternalLink, MessageCircleQuestion } from 'lucide-react';
 
 import type { NewsItem, SelectionItem } from '../../../../types/dashboard';
 import { generateNewsId } from '../../../../utils/hash';
@@ -22,8 +22,6 @@ interface NewsCardProps {
   isSelected?: boolean;
   onToggleSelect?: (selection: SelectionItem) => void;
   onAskAbout?: (selection: SelectionItem) => void;
-  onAnalyze?: (title: string) => void;
-  isAnalyzing?: boolean;
 }
 
 // Impact level badge styles
@@ -75,8 +73,6 @@ export function NewsCard({
   isSelected = false,
   onToggleSelect,
   onAskAbout,
-  onAnalyze,
-  isAnalyzing = false,
 }: NewsCardProps) {
   const newsId = generateNewsId(news.title, news.source, news.ts);
   const tags = computeNewsTags(news);
@@ -175,7 +171,7 @@ export function NewsCard({
           {typeof news.ranking_score === 'number' && (
             <>
               <span>·</span>
-              <span className="text-fin-primary">评分 {news.ranking_score.toFixed(2)}</span>
+              <span className="text-fin-primary">规则排序 {news.ranking_score.toFixed(2)}</span>
             </>
           )}
           {typeof news.asset_relevance === 'number' && news.asset_relevance > 0 && (
@@ -187,24 +183,6 @@ export function NewsCard({
         </div>
 
         <div className="flex items-center gap-0.5">
-          {/* Analyze impact */}
-          {onAnalyze && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onAnalyze(news.title); }}
-              disabled={isAnalyzing}
-              title="分析影响"
-              aria-label={`分析 ${news.title} 的市场影响`}
-              className={`p-1.5 rounded-lg transition-all ${
-                isAnalyzing
-                  ? 'text-fin-muted opacity-50 cursor-not-allowed'
-                  : 'text-fin-muted opacity-0 group-hover:opacity-100 hover:bg-amber-500/10 hover:text-amber-400'
-              }`}
-            >
-              {isAnalyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            </button>
-          )}
-
           {/* Ask about */}
           {onAskAbout && (
             <button

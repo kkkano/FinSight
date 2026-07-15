@@ -1,33 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
-  Bell,
   Command,
-  Filter,
-  FlaskConical,
+  History,
   LayoutDashboard,
-  LineChart,
   Menu,
   MessageSquare,
   Settings,
   X,
-  FileText,
 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
-
-import { apiClient } from '../api/client';
-import { usePortfolioSummary, buildPositionsMap } from '../hooks/usePortfolioSummary';
+import { useLocation } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
-import { useToast } from './ui';
 
 interface SidebarProps {
   onSettingsClick?: () => void;
-  onSubscribeClick?: () => void;
   onDashboardClick?: (symbol: string) => void;
   onChatClick?: () => void;
-  onWorkbenchClick?: () => void;
-  onCnMarketClick?: () => void;
-  currentView?: 'chat' | 'dashboard' | 'workbench' | 'cn-market';
+  onHistoryClick?: () => void;
+  currentView?: 'chat' | 'dashboard' | 'history';
   isMobileOpen?: boolean;
   onMobileOpen?: () => void;
   onMobileClose?: () => void;
@@ -46,69 +36,37 @@ const readStoredDashboardSymbol = (): string => {
 
 const Sidebar: React.FC<SidebarProps> = ({
   onSettingsClick,
-  onSubscribeClick,
   onDashboardClick,
   onChatClick,
-  onWorkbenchClick,
-  onCnMarketClick,
+  onHistoryClick,
   currentView,
   isMobileOpen = false,
   onMobileOpen,
   onMobileClose,
 }) => {
-  const [alertCount, setAlertCount] = useState(0);
-  const { toast } = useToast();
   const location = useLocation();
-  const navigate = useNavigate();
-  const { subscriptionEmail, currentTicker, sessionId } = useStore();
-  const { data: portfolioData } = usePortfolioSummary(sessionId);
-  const portfolioPositions = useMemo(() => buildPositionsMap(portfolioData), [portfolioData]);
+  const { currentTicker } = useStore();
   const { watchlist, initWatchlist, activeAsset: lastDashboardAsset } = useDashboardStore();
 
   const compactMobile = !isMobileOpen;
-  const activeKey = location.pathname.startsWith('/screener')
-    ? 'screener'
-    : location.pathname.startsWith('/backtest')
-      ? 'backtest'
-      : currentView ?? 'chat';
-
-  const loadAlertCount = useCallback(async () => {
-    if (!subscriptionEmail) {
-      setAlertCount(0);
-      return;
-    }
-    try {
-      const response = await apiClient.listSubscriptions(subscriptionEmail);
-      const subscriptions = Array.isArray(response?.subscriptions) ? response.subscriptions : [];
-      setAlertCount(subscriptions.length);
-    } catch {
-      setAlertCount(0);
-    }
-  }, [subscriptionEmail]);
+  const activeKey = currentView ?? (location.pathname.startsWith('/history') ? 'history' : 'chat');
 
   useEffect(() => {
     initWatchlist();
-    void loadAlertCount();
-  }, [initWatchlist, loadAlertCount]);
+  }, [initWatchlist]);
 
   const closeMobile = () => onMobileClose?.();
 
   const openDashboard = () => {
     if (!onDashboardClick) return;
-    const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
     const fallbackSymbol = (
       lastDashboardAsset?.symbol
       || currentTicker
       || readStoredDashboardSymbol()
-      || firstPositionSymbol
       || watchlist[0]?.symbol
       || 'AAPL'
     ).toString().trim();
 
-    if (!fallbackSymbol) {
-      toast({ type: 'info', title: '还没有可用标的', message: '请先添加股票，例如 AAPL' });
-      return;
-    }
     onDashboardClick(fallbackSymbol);
     closeMobile();
   };
@@ -173,18 +131,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <nav className="mt-1 flex min-h-0 flex-1 flex-col">
-          <NavGroupLabel compact={compactMobile}>工作区</NavGroupLabel>
-          <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
+          <NavGroupLabel compact={compactMobile}>主工作区</NavGroupLabel>
           <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
-          <NavItem icon={<FileText size={16} />} label="工作台" active={activeKey === 'workbench'} compact={compactMobile} testId="sidebar-nav-workbench" onClick={() => { onWorkbenchClick?.(); closeMobile(); }} />
-          <NavItem icon={<LineChart size={16} />} label="A股市场" active={activeKey === 'cn-market'} compact={compactMobile} testId="sidebar-nav-cn-market" onClick={() => { onCnMarketClick?.(); closeMobile(); }} />
-
-          <NavGroupLabel compact={compactMobile}>工具</NavGroupLabel>
-          <NavItem icon={<Filter size={16} />} label="筛选器" active={activeKey === 'screener'} compact={compactMobile} testId="sidebar-nav-screener" onClick={() => { navigate('/screener'); closeMobile(); }} />
-          <NavItem icon={<FlaskConical size={16} />} label="回测" active={activeKey === 'backtest'} compact={compactMobile} testId="sidebar-nav-backtest" onClick={() => { navigate('/backtest'); closeMobile(); }} />
+          <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
+          <NavItem icon={<History size={16} />} label="历史" active={activeKey === 'history'} compact={compactMobile} testId="sidebar-nav-history" onClick={() => { onHistoryClick?.(); closeMobile(); }} />
 
           <div className="mt-auto border-t border-t-border pt-2">
-            <NavItem icon={<Bell size={16} />} label="订阅与提醒" active={false} compact={compactMobile} testId="sidebar-nav-subscriptions" badge={alertCount > 0 ? String(alertCount) : undefined} onClick={() => { onSubscribeClick?.(); closeMobile(); }} />
             <NavItem icon={<Settings size={16} />} label="设置" active={false} compact={compactMobile} testId="sidebar-nav-settings" onClick={() => { onSettingsClick?.(); closeMobile(); }} />
           </div>
         </nav>

@@ -13,7 +13,6 @@ export interface AgentProfileView {
   glyph: string;
   color_token: string;
   mandate: string;
-  scorer_key?: string | null;
   dashboard_tabs?: string[];
   insert_text: string;
   track_record?: AgentTrackRecord;

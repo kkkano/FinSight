@@ -1194,52 +1194,6 @@
         "title": "DashboardDeepDiveRequest",
         "type": "object"
       },
-      "DashboardInsightsResponse": {
-        "description": "Dashboard Insights API 响应\n\n包含各 Tab 的 AI 洞察卡片。",
-        "properties": {
-          "cache_age_seconds": {
-            "default": 0,
-            "description": "缓存年龄（秒）",
-            "title": "Cache Age Seconds",
-            "type": "number"
-          },
-          "cached": {
-            "default": false,
-            "description": "是否来自缓存",
-            "title": "Cached",
-            "type": "boolean"
-          },
-          "generated_at": {
-            "default": "",
-            "description": "生成时间 ISO 格式",
-            "title": "Generated At",
-            "type": "string"
-          },
-          "insights": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/InsightCard"
-            },
-            "description": "tab_name → InsightCard",
-            "title": "Insights",
-            "type": "object"
-          },
-          "success": {
-            "default": true,
-            "title": "Success",
-            "type": "boolean"
-          },
-          "symbol": {
-            "description": "资产代码",
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "symbol"
-        ],
-        "title": "DashboardInsightsResponse",
-        "type": "object"
-      },
       "DashboardResponse": {
         "description": "Dashboard API 响应\n\n成功响应的标准格式。",
         "properties": {
@@ -1924,192 +1878,6 @@
           }
         },
         "title": "IndicatorSeries",
-        "type": "object"
-      },
-      "InsightAnalyst": {
-        "description": "评分卡绑定的统一 AgentProfile 身份快照。",
-        "properties": {
-          "color_token": {
-            "title": "Color Token",
-            "type": "string"
-          },
-          "glyph": {
-            "title": "Glyph",
-            "type": "string"
-          },
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "mandate_zh": {
-            "title": "Mandate Zh",
-            "type": "string"
-          },
-          "name_zh": {
-            "title": "Name Zh",
-            "type": "string"
-          },
-          "short_zh": {
-            "title": "Short Zh",
-            "type": "string"
-          }
-        },
-        "required": [
-          "key",
-          "name_zh",
-          "short_zh",
-          "glyph",
-          "color_token",
-          "mandate_zh"
-        ],
-        "title": "InsightAnalyst",
-        "type": "object"
-      },
-      "InsightCard": {
-        "description": "单个维度的 AI 洞察卡片\n\n由 DashboardScorer 生成，包含评分、摘要、要点和风险。\n兼容说明：`agent_name` 沿用历史命名，不影响缓存与前端映射。\n当 LLM 不可用时，由确定性评分逻辑生成（model_generated=False）。",
-        "properties": {
-          "agent_name": {
-            "description": "生成该卡片的历史标识名（兼容字段）",
-            "title": "Agent Name",
-            "type": "string"
-          },
-          "analyst": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/InsightAnalyst"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "与深挖 Agent 同源的分析师身份"
-          },
-          "as_of": {
-            "default": "",
-            "description": "数据时间 ISO 格式",
-            "title": "As Of",
-            "type": "string"
-          },
-          "confidence": {
-            "default": 0.5,
-            "description": "置信度",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence",
-            "type": "number"
-          },
-          "key_metrics": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "结构化关键指标 [{label, value}]，如 [{label:'市盈率', value:'33.24'}]",
-            "title": "Key Metrics"
-          },
-          "key_points": {
-            "description": "3-5 条要点",
-            "items": {
-              "type": "string"
-            },
-            "title": "Key Points",
-            "type": "array"
-          },
-          "model_generated": {
-            "default": true,
-            "description": "True=LLM 生成, False=规则 fallback",
-            "title": "Model Generated",
-            "type": "boolean"
-          },
-          "risks": {
-            "description": "1-3 条风险",
-            "items": {
-              "type": "string"
-            },
-            "title": "Risks",
-            "type": "array"
-          },
-          "score": {
-            "description": "综合评分 (0-10)",
-            "maximum": 10.0,
-            "minimum": 0.0,
-            "title": "Score",
-            "type": "number"
-          },
-          "score_breakdown": {
-            "description": "评分拆解明细",
-            "items": {
-              "$ref": "#/components/schemas/ScoreBreakdownItem"
-            },
-            "title": "Score Breakdown",
-            "type": "array"
-          },
-          "score_label": {
-            "description": "评分标签 (弱势/偏空/中性/偏多/强势)",
-            "title": "Score Label",
-            "type": "string"
-          },
-          "scorer_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Dashboard scorer semantic identifier, e.g. technical_scorer",
-            "title": "Scorer Name"
-          },
-          "source_type": {
-            "default": "quick_score",
-            "description": "卡片来源类型：quick_score=快速评分(规则+单次 LLM) / agent_deep=Agent 深度分析",
-            "title": "Source Type",
-            "type": "string"
-          },
-          "sub_scores": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "number"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "子维度评分 (仅 overview)",
-            "title": "Sub Scores"
-          },
-          "summary": {
-            "default": "",
-            "description": "200-400 字中文分析摘要",
-            "title": "Summary",
-            "type": "string"
-          },
-          "tab": {
-            "description": "对应的 Dashboard Tab 名称",
-            "title": "Tab",
-            "type": "string"
-          }
-        },
-        "required": [
-          "agent_name",
-          "tab",
-          "score",
-          "score_label"
-        ],
-        "title": "InsightCard",
         "type": "object"
       },
       "KlineResponse": {
@@ -3742,53 +3510,6 @@
         "title": "RunDebateRequest",
         "type": "object"
       },
-      "ScoreBreakdownItem": {
-        "description": "Deterministic score factor item.",
-        "properties": {
-          "contribution": {
-            "description": "对总分贡献（-5~5）",
-            "title": "Contribution",
-            "type": "number"
-          },
-          "factor_key": {
-            "description": "因子键",
-            "title": "Factor Key",
-            "type": "string"
-          },
-          "label": {
-            "description": "因子名称",
-            "title": "Label",
-            "type": "string"
-          },
-          "rationale": {
-            "default": "",
-            "description": "贡献解释",
-            "title": "Rationale",
-            "type": "string"
-          },
-          "value": {
-            "description": "因子原始值",
-            "title": "Value",
-            "type": "number"
-          },
-          "weight": {
-            "description": "权重",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Weight",
-            "type": "number"
-          }
-        },
-        "required": [
-          "factor_key",
-          "label",
-          "weight",
-          "value",
-          "contribution"
-        ],
-        "title": "ScoreBreakdownItem",
-        "type": "object"
-      },
       "ScreenerRunRequest": {
         "properties": {
           "filters": {
@@ -4588,6 +4309,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -6009,64 +5737,6 @@
           }
         },
         "summary": "Dashboard Health",
-        "tags": [
-          "Dashboard"
-        ]
-      }
-    },
-    "/api/dashboard/insights": {
-      "get": {
-        "description": "AI 洞察端点 — 为 Dashboard 各标签页提供 LLM 生成的分析卡片。\n\n独立于主 Dashboard API 以隔离 LLM 延迟（3-6s）。\n前端应与 GET /api/dashboard 并行请求此端点。\n\n缓存策略: Fresh (<1h) 直接返回 / Stale (1-4h) 返回旧值+后台刷新 / Expired 重新生成",
-        "operationId": "get_dashboard_insights_api_dashboard_insights_get",
-        "parameters": [
-          {
-            "description": "资产代码",
-            "in": "query",
-            "name": "symbol",
-            "required": true,
-            "schema": {
-              "description": "资产代码",
-              "minLength": 1,
-              "title": "Symbol",
-              "type": "string"
-            }
-          },
-          {
-            "description": "强制刷新缓存",
-            "in": "query",
-            "name": "force",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "强制刷新缓存",
-              "title": "Force",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DashboardInsightsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Dashboard Insights",
         "tags": [
           "Dashboard"
         ]

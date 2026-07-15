@@ -39,7 +39,6 @@ from backend.dashboard.schemas import (
     AnalystTargets,
     Capabilities,
     DashboardData,
-    DashboardInsightsResponse,
     DashboardResponse,
     DashboardState,
     EarningsHistoryEntry,
@@ -817,28 +816,6 @@ async def get_dashboard(
         state.debug["data_construction_error"] = str(exc)
 
     return DashboardResponse(success=True, state=state, data=data)
-
-
-@dashboard_router.get("/insights", response_model=DashboardInsightsResponse)
-async def get_dashboard_insights(
-    symbol: str = Query(..., min_length=1, description="资产代码"),
-    force: bool = Query(False, description="强制刷新缓存"),
-):
-    """
-    AI 洞察端点 — 为 Dashboard 各标签页提供 LLM 生成的分析卡片。
-
-    独立于主 Dashboard API 以隔离 LLM 延迟（3-6s）。
-    前端应与 GET /api/dashboard 并行请求此端点。
-
-    缓存策略: Fresh (<1h) 直接返回 / Stale (1-4h) 返回旧值+后台刷新 / Expired 重新生成
-    """
-    if not is_valid_symbol(symbol):
-        raise symbol_not_found(symbol)
-
-    from backend.dashboard.insights_engine import get_insights_orchestrator
-
-    orchestrator = get_insights_orchestrator()
-    return await orchestrator.generate(symbol, force=force)
 
 
 @dashboard_router.get("/health")

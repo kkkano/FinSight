@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { MouseEvent } from 'react';
 import { AlertTriangle, WifiOff } from 'lucide-react';
 import Sidebar from '../Sidebar';
@@ -11,13 +11,12 @@ import { useMarketQuotes } from '../../hooks/useMarketQuotes';
 import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
-import { WorkbenchWorkspace } from './WorkbenchWorkspace';
-import { CNMarketWorkspace } from './CNMarketWorkspace';
+import { HistoryWorkspace } from './HistoryWorkspace';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
 import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
 
-export type WorkspaceView = 'chat' | 'dashboard' | 'workbench' | 'cn-market';
+export type WorkspaceView = 'chat' | 'dashboard' | 'history';
 
 type WorkspaceShellProps = {
   view: WorkspaceView;
@@ -26,8 +25,7 @@ type WorkspaceShellProps = {
   initialChatDraft?: string | null;
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
-  navigateToWorkbench: () => void;
-  navigateToCnMarket: () => void;
+  navigateToHistory: () => void;
 };
 
 const DEFAULT_PANEL_WIDTH = 380;
@@ -57,14 +55,9 @@ export function WorkspaceShell({
   initialChatDraft,
   navigateToChat,
   navigateToDashboard,
-  navigateToWorkbench,
-  navigateToCnMarket,
+  navigateToHistory,
 }: WorkspaceShellProps) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const workbenchParams = new URLSearchParams(location.search);
-  const fromDashboard = workbenchParams.get('from') === 'dashboard';
-  const workbenchSymbol = (workbenchParams.get('symbol') || '').trim() || null;
 
   const isMobile = useIsMobileLayout();
   const { theme, setTheme, showRightPanel, setShowRightPanel } = useStore();
@@ -92,9 +85,6 @@ export function WorkspaceShell({
   useEffect(() => {
     if (isMobile) setShowRightPanel(false);
   }, [isMobile, setShowRightPanel]);
-  // No AAPL fallback — empty string means "no symbol selected"
-  const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || '';
-
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -193,11 +183,9 @@ export function WorkspaceShell({
     <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
       <Sidebar
         onSettingsClick={() => setIsSettingsOpen(true)}
-        onSubscribeClick={() => setIsSubscribeOpen(true)}
         onDashboardClick={(s) => { openDashboard(s); setIsSidebarOpen(false); }}
         onChatClick={() => { navigateToChat(); setIsSidebarOpen(false); }}
-        onWorkbenchClick={() => { navigateToWorkbench(); setIsSidebarOpen(false); }}
-        onCnMarketClick={() => { navigateToCnMarket(); setIsSidebarOpen(false); }}
+        onHistoryClick={() => { navigateToHistory(); setIsSidebarOpen(false); }}
         currentView={view}
         isMobileOpen={isSidebarOpen}
         onMobileOpen={() => setIsSidebarOpen(true)}
@@ -238,25 +226,10 @@ export function WorkspaceShell({
               symbol={dashboardSymbol}
               onBackToChat={navigateToChat}
               onSymbolChange={openDashboard}
-              onGoWorkbench={(symbol) => {
-                const normalized = symbol.trim();
-                if (!normalized) {
-                  navigate('/workbench?from=dashboard');
-                  return;
-                }
-                navigate(`/workbench?from=dashboard&symbol=${encodeURIComponent(normalized)}`);
-              }}
               contextPanel={contextPanelProps}
             />
-          ) : view === 'workbench' ? (
-            <WorkbenchWorkspace
-              isMobile={isMobile}
-              symbol={preferredSymbol}
-              fromDashboard={fromDashboard}
-              contextPanel={contextPanelProps}
-            />
-          ) : view === 'cn-market' ? (
-            <CNMarketWorkspace />
+          ) : view === 'history' ? (
+            <HistoryWorkspace />
           ) : (
             <ChatWorkspace
               isMobile={isMobile}

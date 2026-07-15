@@ -16,16 +16,10 @@ import type {
   NewsTimeRange,
   DashboardData,
   SelectionItem,
-  InsightCard,
 } from '../types/dashboard';
 import { STORAGE_KEYS } from '../types/dashboard';
 import { apiClient } from '../api/client';
 import { useStore } from './useStore';
-import {
-  buildDashboardOverlayKey,
-  type DashboardAgentOverlay,
-  type DashboardDeepDiveTab,
-} from '../utils/dashboardDeepDiveOverlay';
 
 // === Store 接口 ===
 interface DashboardStore {
@@ -39,21 +33,10 @@ interface DashboardStore {
   newsTagFilter: NewsTagGroup;      // Phase H: 主题筛选
   newsTimeRange: NewsTimeRange;     // Phase H: 时间范围
   dashboardData: DashboardData | null;
-  agentOverlaysBySymbolTab: Record<string, DashboardAgentOverlay>;
   isLoading: boolean;
   error: string | null;
   activeSelection: SelectionItem | null;  // 单选兼容：用于旧 UI（MiniChat pill）
   activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻多选引用
-
-  // AI Insights 状态 (Phase F)
-  insightsData: Record<string, InsightCard> | null;
-  insightsLoading: boolean;
-  insightsError: string | null;
-  insightsStale: boolean;
-  insightsCachedAt: string | null;
-  deepAnalysisIncludeDeepSearch: boolean;
-  /** Callback injected by Dashboard.tsx to force-refresh insights */
-  insightsRefetch: (() => void) | null;
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -69,28 +52,12 @@ interface DashboardStore {
   setNewsTagFilter: (tag: NewsTagGroup) => void;
   setNewsTimeRange: (range: NewsTimeRange) => void;
   setDashboardData: (data: DashboardData) => void;
-  setOverlay: (
-    symbol: string,
-    tab: DashboardDeepDiveTab,
-    overlay: DashboardAgentOverlay | null,
-  ) => void;
-  getOverlay: (symbol: string, tab: DashboardDeepDiveTab) => DashboardAgentOverlay | null;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setActiveSelection: (selection: SelectionItem | null) => void;
   toggleSelection: (selection: SelectionItem) => void;
   setSelections: (selections: SelectionItem[]) => void;
   clearSelection: () => void;
-
-  // AI Insights actions (Phase F)
-  setInsightsData: (data: Record<string, InsightCard>) => void;
-  setInsightsLoading: (loading: boolean) => void;
-  setInsightsError: (error: string | null) => void;
-  setInsightsStale: (stale: boolean) => void;
-  setInsightsCachedAt: (cachedAt: string | null) => void;
-  clearInsights: () => void;
-  setDeepAnalysisIncludeDeepSearch: (enabled: boolean) => void;
-  setInsightsRefetch: (fn: (() => void) | null) => void;
 
   // Watchlist API methods (API-first, replace localStorage persistence)
   initWatchlist: () => Promise<void>;
@@ -158,7 +125,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   newsTagFilter: loadFromStorage<NewsTagGroup>(STORAGE_KEYS.NEWS_TAG_FILTER, '全部'),
   newsTimeRange: loadFromStorage<NewsTimeRange>(STORAGE_KEYS.NEWS_TIME_RANGE, '7d'),
   dashboardData: null,
-  agentOverlaysBySymbolTab: {},
   isLoading: false,
   error: null,
   activeSelection: null,  // 当前选中的新闻/报告
@@ -167,19 +133,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   _isWatchlistLoaded: false,
   _watchlistOwnerId: null,
 
-  // AI Insights 初始状态
-  insightsData: null,
-  insightsLoading: false,
-  insightsError: null,
-  insightsStale: false,
-  insightsCachedAt: null,
-  insightsRefetch: null,
-  deepAnalysisIncludeDeepSearch: loadFromStorage(
-    STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH,
-    false,
-  ),
-
-  // 设置当前资产（同时清除 selection、insights、dashboardData，
+  // 设置当前资产（同时清除 selection 和 dashboardData，
   // 因为切换股票后之前的数据不再有效，必须等新请求返回才渲染）
   setActiveAsset: (asset) => {
     const prev = get().activeAsset;
@@ -192,10 +146,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
       error: null,
       activeSelection: null,
       activeSelections: [],
-      insightsData: null,
-      insightsError: null,
-      insightsStale: false,
-      insightsCachedAt: null,
       ...(symbolChanged ? { dashboardData: null } : {}),
     });
   },
@@ -285,22 +235,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // 设置聚合数据
   setDashboardData: (data) => set({ dashboardData: data }),
 
-  // 设置/读取 Dashboard Tab Agent 深挖回填结果
-  setOverlay: (symbol, tab, overlay) =>
-    set((state) => {
-      const key = buildDashboardOverlayKey(symbol, tab);
-      const next = { ...state.agentOverlaysBySymbolTab };
-      if (overlay) {
-        next[key] = overlay;
-      } else {
-        delete next[key];
-      }
-      return { agentOverlaysBySymbolTab: next };
-    }),
-  getOverlay: (symbol, tab) => (
-    get().agentOverlaysBySymbolTab[buildDashboardOverlayKey(symbol, tab)] ?? null
-  ),
-
   // 设置加载状态
   setLoading: (loading) => set({ isLoading: loading }),
 
@@ -341,25 +275,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
 
   // 清除当前选择
   clearSelection: () => set({ activeSelection: null, activeSelections: [] }),
-
-  // --- AI Insights actions (Phase F) ---
-  setInsightsData: (data) => set({ insightsData: data, insightsError: null }),
-  setInsightsLoading: (loading) => set({ insightsLoading: loading }),
-  setInsightsError: (error) => set({ insightsError: error }),
-  setInsightsStale: (stale) => set({ insightsStale: stale }),
-  setInsightsCachedAt: (cachedAt) => set({ insightsCachedAt: cachedAt }),
-  clearInsights: () => set({
-    insightsData: null,
-    insightsLoading: false,
-    insightsError: null,
-    insightsStale: false,
-    insightsCachedAt: null,
-  }),
-  setDeepAnalysisIncludeDeepSearch: (enabled) => {
-    saveToStorage(STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH, enabled);
-    set({ deepAnalysisIncludeDeepSearch: enabled });
-  },
-  setInsightsRefetch: (fn) => set({ insightsRefetch: fn }),
 
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 

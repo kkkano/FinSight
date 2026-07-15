@@ -9,7 +9,6 @@ type DashboardWorkspaceProps = {
   symbol: string | null;
   onBackToChat: () => void;
   onSymbolChange: (symbol: string) => void;
-  onGoWorkbench: (symbol: string) => void;
   contextPanel: {
     panelWidth: number;
     isExpanded: boolean;
@@ -27,7 +26,6 @@ export function DashboardWorkspace({
   symbol,
   onBackToChat,
   onSymbolChange,
-  onGoWorkbench,
   contextPanel,
 }: DashboardWorkspaceProps) {
   const [developerMode] = useDeveloperMode();
@@ -39,7 +37,6 @@ export function DashboardWorkspace({
           initialSymbol={symbol ?? undefined}
           onBackToChat={onBackToChat}
           onSymbolChange={onSymbolChange}
-          onGoWorkbench={onGoWorkbench}
         />
         {developerMode && (
           <div className="shrink-0 px-4 pb-4 max-lg:px-3 max-lg:pb-3">

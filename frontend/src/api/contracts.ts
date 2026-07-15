@@ -10,7 +10,7 @@ import type { paths } from './schema';
 export interface ChatContext {
   active_symbol?: string;
   view?: string;
-  source_view?: 'dashboard' | 'workbench' | 'command_palette';
+  source_view?: 'dashboard' | 'history' | 'workbench' | 'command_palette';
   source_tab?: string;
   selection?: SelectionItem;
   selections?: SelectionItem[];
@@ -379,5 +379,5 @@ export type {
   ReportIR,
   ThinkingStep,
 } from '../types/index';
-export type { SelectionItem, DashboardInsightsResponse } from '../types/dashboard';
+export type { SelectionItem } from '../types/dashboard';
 export type { FindingStatus, FindingsResponse, MonitorScanResponse, MonitorTargetsResponse, MonitorTargetResponse, CreateMonitorTargetParams, PatchMonitorTargetParams, MacroCalendarResponse, MonitorSettingsResponse, UpdateMonitorSettingsResponse } from '../types/monitor';

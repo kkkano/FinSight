@@ -16,7 +16,6 @@ PRODUCTION_CALLSITES = (
     "backend/agents/news_agent.py",
     "backend/services/monitor_commentator.py",
     "backend/api/chart_intelligence.py",
-    "backend/dashboard/scorers.py",
     "backend/graph/nodes/resolve_subject.py",
     "backend/graph/synthesis/narrative.py",
     "backend/report/verifier.py",

@@ -1,6 +1,6 @@
 import type { SelectionItem } from './dashboard';
 
-export type ChatHandoffSourceView = 'dashboard' | 'workbench' | 'command_palette';
+export type ChatHandoffSourceView = 'dashboard' | 'history' | 'workbench' | 'command_palette';
 
 export interface ChatHandoff {
   draft: string;

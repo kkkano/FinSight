@@ -45,20 +45,6 @@ export const dashboardApi = {
     return response.data;
   },
 
-// --- Dashboard Insights ---
-  async getDashboardInsights(
-    symbol: string,
-    opts?: { force?: boolean; signal?: AbortSignal },
-  ): Promise<Contracts.DashboardInsightsResponse> {
-    const params: Record<string, string | boolean> = { symbol };
-    if (opts?.force) params.force = true;
-    const response = await api.get<Contracts.DashboardInsightsResponse>('/api/dashboard/insights', {
-      params,
-      signal: opts?.signal,
-    });
-    return response.data;
-  },
-
 // --- Monitor（Agent 盯盘中心）---
 
   /** 获取发现列表 —— GET /api/monitor/findings */

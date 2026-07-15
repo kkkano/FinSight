@@ -5,9 +5,8 @@
  * live price with change data, and action buttons for watchlist toggle,
  * quick analysis, and report generation.
  */
-import { FileText, Loader2, Star, Zap } from 'lucide-react';
+import { Star } from 'lucide-react';
 
-import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
 import { formatMarketCapForMarket, formatPriceForMarket } from '../../utils/format';
@@ -62,10 +61,7 @@ export function StockHeader({
     watchlist,
     addWatchItemApi,
     removeWatchItemApi,
-    deepAnalysisIncludeDeepSearch,
-    setDeepAnalysisIncludeDeepSearch,
   } = useDashboardStore();
-  const { execute, isRunning, runId } = useExecuteAgent();
   const { toast } = useToast();
 
   // Watchlist toggle state
@@ -88,32 +84,6 @@ export function StockHeader({
         message,
       });
     }
-  };
-
-  const handleQuickAnalysis = () => {
-    if (!ticker || isRunning) return;
-    execute({
-      query: `快速分析 ${ticker}`,
-      tickers: [ticker],
-      outputMode: 'brief',
-      analysisDepth: 'quick',
-      budget: 3,
-      source: 'dashboard_header',
-    });
-  };
-
-  const handleDeepAnalysis = () => {
-    if (!ticker || isRunning) return;
-    const includeDeepSearch = deepAnalysisIncludeDeepSearch;
-    execute({
-      query: includeDeepSearch
-        ? `对 ${ticker} 做深度搜索，输出可追溯证据与关键结论`
-        : `生成 ${ticker} 投资报告`,
-      tickers: [ticker],
-      outputMode: 'investment_report',
-      analysisDepth: includeDeepSearch ? 'deep_research' : 'report',
-      source: includeDeepSearch ? 'dashboard_deep_search' : 'dashboard_header',
-    });
   };
 
   // Derive price from snapshot or chart fallback
@@ -177,44 +147,6 @@ export function StockHeader({
           <Star size={16} fill={isInWatchlist ? 'currentColor' : 'none'} />
         </button>
 
-        {/* Quick Analysis */}
-        <button
-          type="button"
-          onClick={handleQuickAnalysis}
-          disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRunning && runId ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Zap size={12} />
-          )}
-          快速分析
-        </button>
-
-        {/* Deep analysis toggle + action */}
-        <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
-          <input
-            type="checkbox"
-            className="accent-fin-primary"
-            checked={deepAnalysisIncludeDeepSearch}
-            onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
-          />
-          含 deepsearch
-        </label>
-        <button
-          type="button"
-          onClick={handleDeepAnalysis}
-          disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:border-t-accent/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRunning && runId ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <FileText size={12} />
-          )}
-          深度分析
-        </button>
       </div>
     </div>
   );

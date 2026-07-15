@@ -445,31 +445,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/dashboard/insights": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Dashboard Insights
-         * @description AI 洞察端点 — 为 Dashboard 各标签页提供 LLM 生成的分析卡片。
-         *
-         *     独立于主 Dashboard API 以隔离 LLM 延迟（3-6s）。
-         *     前端应与 GET /api/dashboard 并行请求此端点。
-         *
-         *     缓存策略: Fresh (<1h) 直接返回 / Stale (1-4h) 返回旧值+后台刷新 / Expired 重新生成
-         */
-        get: operations["get_dashboard_insights_api_dashboard_insights_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/execute": {
         parameters: {
             query?: never;
@@ -2485,49 +2460,6 @@ export interface components {
             user_question?: string | null;
         };
         /**
-         * DashboardInsightsResponse
-         * @description Dashboard Insights API 响应
-         *
-         *     包含各 Tab 的 AI 洞察卡片。
-         */
-        DashboardInsightsResponse: {
-            /**
-             * Cache Age Seconds
-             * @description 缓存年龄（秒）
-             * @default 0
-             */
-            cache_age_seconds: number;
-            /**
-             * Cached
-             * @description 是否来自缓存
-             * @default false
-             */
-            cached: boolean;
-            /**
-             * Generated At
-             * @description 生成时间 ISO 格式
-             * @default
-             */
-            generated_at: string;
-            /**
-             * Insights
-             * @description tab_name → InsightCard
-             */
-            insights?: {
-                [key: string]: components["schemas"]["InsightCard"];
-            };
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            /**
-             * Symbol
-             * @description 资产代码
-             */
-            symbol: string;
-        };
-        /**
          * DashboardResponse
          * @description Dashboard API 响应
          *
@@ -2788,120 +2720,6 @@ export interface components {
             macd_signal?: (number | null)[];
             /** Rsi */
             rsi?: (number | null)[];
-        };
-        /**
-         * InsightAnalyst
-         * @description 评分卡绑定的统一 AgentProfile 身份快照。
-         */
-        InsightAnalyst: {
-            /** Color Token */
-            color_token: string;
-            /** Glyph */
-            glyph: string;
-            /** Key */
-            key: string;
-            /** Mandate Zh */
-            mandate_zh: string;
-            /** Name Zh */
-            name_zh: string;
-            /** Short Zh */
-            short_zh: string;
-        };
-        /**
-         * InsightCard
-         * @description 单个维度的 AI 洞察卡片
-         *
-         *     由 DashboardScorer 生成，包含评分、摘要、要点和风险。
-         *     兼容说明：`agent_name` 沿用历史命名，不影响缓存与前端映射。
-         *     当 LLM 不可用时，由确定性评分逻辑生成（model_generated=False）。
-         */
-        InsightCard: {
-            /**
-             * Agent Name
-             * @description 生成该卡片的历史标识名（兼容字段）
-             */
-            agent_name: string;
-            /** @description 与深挖 Agent 同源的分析师身份 */
-            analyst?: components["schemas"]["InsightAnalyst"] | null;
-            /**
-             * As Of
-             * @description 数据时间 ISO 格式
-             * @default
-             */
-            as_of: string;
-            /**
-             * Confidence
-             * @description 置信度
-             * @default 0.5
-             */
-            confidence: number;
-            /**
-             * Key Metrics
-             * @description 结构化关键指标 [{label, value}]，如 [{label:'市盈率', value:'33.24'}]
-             */
-            key_metrics?: {
-                [key: string]: string;
-            }[] | null;
-            /**
-             * Key Points
-             * @description 3-5 条要点
-             */
-            key_points?: string[];
-            /**
-             * Model Generated
-             * @description True=LLM 生成, False=规则 fallback
-             * @default true
-             */
-            model_generated: boolean;
-            /**
-             * Risks
-             * @description 1-3 条风险
-             */
-            risks?: string[];
-            /**
-             * Score
-             * @description 综合评分 (0-10)
-             */
-            score: number;
-            /**
-             * Score Breakdown
-             * @description 评分拆解明细
-             */
-            score_breakdown?: components["schemas"]["ScoreBreakdownItem"][];
-            /**
-             * Score Label
-             * @description 评分标签 (弱势/偏空/中性/偏多/强势)
-             */
-            score_label: string;
-            /**
-             * Scorer Name
-             * @description Dashboard scorer semantic identifier, e.g. technical_scorer
-             */
-            scorer_name?: string | null;
-            /**
-             * Source Type
-             * @description 卡片来源类型：quick_score=快速评分(规则+单次 LLM) / agent_deep=Agent 深度分析
-             * @default quick_score
-             */
-            source_type: string;
-            /**
-             * Sub Scores
-             * @description 子维度评分 (仅 overview)
-             */
-            sub_scores?: {
-                [key: string]: number;
-            } | null;
-            /**
-             * Summary
-             * @description 200-400 字中文分析摘要
-             * @default
-             */
-            summary: string;
-            /**
-             * Tab
-             * @description 对应的 Dashboard Tab 名称
-             */
-            tab: string;
         };
         /** KlineResponse */
         KlineResponse: {
@@ -3540,43 +3358,6 @@ export interface components {
              */
             query: string;
         };
-        /**
-         * ScoreBreakdownItem
-         * @description Deterministic score factor item.
-         */
-        ScoreBreakdownItem: {
-            /**
-             * Contribution
-             * @description 对总分贡献（-5~5）
-             */
-            contribution: number;
-            /**
-             * Factor Key
-             * @description 因子键
-             */
-            factor_key: string;
-            /**
-             * Label
-             * @description 因子名称
-             */
-            label: string;
-            /**
-             * Rationale
-             * @description 贡献解释
-             * @default
-             */
-            rationale: string;
-            /**
-             * Value
-             * @description 因子原始值
-             */
-            value: number;
-            /**
-             * Weight
-             * @description 权重
-             */
-            weight: number;
-        };
         /** ScreenerRunRequest */
         ScreenerRunRequest: {
             /**
@@ -3904,6 +3685,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
@@ -4902,40 +4687,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_dashboard_insights_api_dashboard_insights_get: {
-        parameters: {
-            query: {
-                /** @description 资产代码 */
-                symbol: string;
-                /** @description 强制刷新缓存 */
-                force?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DashboardInsightsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

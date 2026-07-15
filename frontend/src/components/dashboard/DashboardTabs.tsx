@@ -15,8 +15,6 @@ import { OverviewTab } from './tabs/OverviewTab.tsx';
 import { FinancialTab } from './tabs/FinancialTab.tsx';
 import { TechnicalTab } from './tabs/TechnicalTab.tsx';
 import { NewsTab } from './tabs/NewsTab.tsx';
-import { ResearchTab } from './tabs/ResearchTab.tsx';
-import { PeersTab } from './tabs/PeersTab.tsx';
 import type { PredictionOverlay } from '../../types/chartPrediction';
 
 // --- Tab Definition ---
@@ -25,9 +23,7 @@ export type DashboardTabKey =
   | 'overview'
   | 'financial'
   | 'technical'
-  | 'news'
-  | 'research'
-  | 'peers';
+  | 'news';
 
 interface TabDef {
   key: DashboardTabKey;
@@ -39,8 +35,6 @@ const TABS: readonly TabDef[] = [
   { key: 'financial', label: '财务报表' },
   { key: 'technical', label: '技术面' },
   { key: 'news', label: '新闻动态' },
-  { key: 'research', label: '深度研究' },
-  { key: 'peers', label: '同行对比' },
 ] as const;
 
 const VALID_KEYS = new Set<string>(TABS.map((t) => t.key));
@@ -80,7 +74,7 @@ export function DashboardTabs({ predictionOverlay }: DashboardTabsProps) {
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden max-lg:min-h-[520px] max-lg:flex-none">
       {/* Tab bar */}
       <Tabs
         items={TABS.map((tab) => ({
@@ -103,8 +97,6 @@ export function DashboardTabs({ predictionOverlay }: DashboardTabsProps) {
           {activeTab === 'financial' && <FinancialTab />}
           {activeTab === 'technical' && <TechnicalTab predictionOverlay={predictionOverlay} />}
           {activeTab === 'news' && <NewsTab />}
-          {activeTab === 'research' && <ResearchTab />}
-          {activeTab === 'peers' && <PeersTab />}
         </div>
       </div>
     </div>

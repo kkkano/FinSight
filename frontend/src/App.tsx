@@ -9,10 +9,6 @@ import { CommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
 import { getRagInspectorDevIdentity, isRagInspectorDevAuthActive } from './auth/devAuth';
-import { RagInspectorPage } from './pages/RagInspectorPage';
-import { CostAuditPage } from './pages/CostAuditPage';
-import { BacktestPage } from './pages/BacktestPage';
-import { ScreenerPage } from './pages/ScreenerPage';
 import { SharedReportPage } from './pages/SharedReportPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 import { useDashboardStore } from './store/dashboardStore';
@@ -84,8 +80,7 @@ function ChatRoute() {
       initialChatDraft={initialHandoffRef.current.draft}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
+      navigateToHistory={() => navigate('/history')}
     />
   );
 }
@@ -99,36 +94,20 @@ function DashboardRoute() {
       dashboardSymbol={decodeSymbolParam(symbol)}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
+      navigateToHistory={() => navigate('/history')}
     />
   );
 }
 
-function WorkbenchRoute() {
+function HistoryRoute() {
   const navigate = useNavigate();
   return (
     <WorkspaceShell
-      view="workbench"
+      view="history"
       dashboardSymbol={null}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
-    />
-  );
-}
-
-function CnMarketRoute() {
-  const navigate = useNavigate();
-  return (
-    <WorkspaceShell
-      view="cn-market"
-      dashboardSymbol={null}
-      navigateToChat={() => navigate('/chat')}
-      navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
+      navigateToHistory={() => navigate('/history')}
     />
   );
 }
@@ -286,15 +265,8 @@ function App() {
         <Route path="/welcome" element={<WelcomeRoute />} />
         <Route path="/share/r/:token" element={<SharedReportPage />} />
         <Route path="/chat" element={<AuthenticatedGuard><ChatRoute /></AuthenticatedGuard>} />
-        <Route path="/workbench" element={<AuthenticatedGuard><WorkbenchRoute /></AuthenticatedGuard>} />
-        <Route path="/cn-market" element={<AuthenticatedGuard><CnMarketRoute /></AuthenticatedGuard>} />
-        <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
-        <Route path="/cost-audit" element={<AuthenticatedGuard><CostAuditPage /></AuthenticatedGuard>} />
-        <Route path="/screener" element={<AuthenticatedGuard><ScreenerPage /></AuthenticatedGuard>} />
-        <Route path="/backtest" element={<AuthenticatedGuard><BacktestPage /></AuthenticatedGuard>} />
-        <Route path="/phase-labs" element={<AuthenticatedGuard><Navigate to="/screener" replace /></AuthenticatedGuard>} />
-        <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
-        <Route path="/dashboard/:symbol" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
+        <Route path="/history" element={<AuthenticatedGuard><HistoryRoute /></AuthenticatedGuard>} />
+        <Route path="/dashboard/:symbol?" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
 

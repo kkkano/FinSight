@@ -2,14 +2,10 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { FC, KeyboardEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Bot,
   ArrowUpDown,
-  Filter,
-  FlaskConical,
   Gauge,
   GitCompare,
-  LayoutDashboard,
-  LineChart,
+  History,
   MessageSquarePlus,
   MessageCircleQuestion,
   Moon,
@@ -19,11 +15,9 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
-import { useAgentProfiles } from '../hooks/useAgentProfiles';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
 import { getMiniChatRouteSymbol } from '../utils/miniChatRouteContext';
 import { useChatHandoff } from '../hooks/useChatHandoff';
-import { buildExpertCommandDescriptors, runExpertCommand } from './commandPaletteExperts';
 import { Dialog } from './ui/Dialog';
 
 interface CommandAction {
@@ -53,7 +47,6 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
   } = useStore();
   const handoffToChat = useChatHandoff();
   const activeAsset = useDashboardStore((state) => state.activeAsset);
-  const { profiles } = useAgentProfiles();
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -92,26 +85,9 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
           onClose();
         },
       },
-      ...buildExpertCommandDescriptors(profiles).map((command) => ({
-        id: command.id,
-        label: command.label,
-        icon: Bot,
-        keywords: command.keywords,
-        execute: () => runExpertCommand(command, { setDraft, navigate, close: onClose }),
-      })),
-      {
-        id: 'open-workbench',
-        label: '打开工作台',
-        icon: LayoutDashboard,
-        keywords: ['workbench'],
-        execute: () => {
-          navigate('/workbench');
-          onClose();
-        },
-      },
       {
         id: 'open-dashboard',
-        label: '打开仪表盘',
+        label: '打开看板',
         icon: Gauge,
         keywords: ['dashboard'],
         execute: () => {
@@ -120,32 +96,12 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         },
       },
       {
-        id: 'open-cn-market',
-        label: '打开 A股市场',
-        icon: LineChart,
-        keywords: ['cn', 'china', 'a股', '市场'],
+        id: 'open-history',
+        label: '打开历史',
+        icon: History,
+        keywords: ['history', 'prediction', 'report', '历史', '预测', '报告'],
         execute: () => {
-          navigate('/cn-market');
-          onClose();
-        },
-      },
-      {
-        id: 'open-screener',
-        label: '打开筛选器',
-        icon: Filter,
-        keywords: ['screener', 'filter', '筛选'],
-        execute: () => {
-          navigate('/screener');
-          onClose();
-        },
-      },
-      {
-        id: 'open-backtest',
-        label: '打开回测',
-        icon: FlaskConical,
-        keywords: ['backtest', '回测'],
-        execute: () => {
-          navigate('/backtest');
+          navigate('/history');
           onClose();
         },
       },
@@ -170,16 +126,6 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
           const seed = currentTicker?.trim().toUpperCase();
           setDraft(seed ? `/compare ${seed} vs SPY` : '/compare AAPL vs MSFT');
           navigate('/chat');
-          onClose();
-        },
-      },
-      {
-        id: 'cmd-agents',
-        label: '/agents Agent 设置',
-        icon: Bot,
-        keywords: ['agents', 'settings', '偏好'],
-        execute: () => {
-          window.dispatchEvent(new CustomEvent('finsight:open-settings'));
           onClose();
         },
       },
@@ -212,7 +158,6 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
       location.search,
       navigate,
       onClose,
-      profiles,
       setDraft,
       setColorConvention,
       handoffToChat,

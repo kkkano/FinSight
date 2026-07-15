@@ -14,7 +14,6 @@ class AgentProfile:
     color_token: str
     mandate_zh: str
     tools: tuple[str, ...]
-    scorer_key: str | None
     dashboard_tabs: tuple[str, ...] = ()
 
 
@@ -36,7 +35,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_performance_comparison",
             "get_option_chain_metrics",
         ),
-        scorer_key="peers",
         dashboard_tabs=("technical", "peers", "overview"),
     ),
     "news_agent": AgentProfile(
@@ -53,7 +51,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_event_calendar",
             "score_news_source_reliability",
         ),
-        scorer_key="news",
         dashboard_tabs=("news", "overview"),
     ),
     "fundamental_agent": AgentProfile(
@@ -70,7 +67,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_earnings_estimates",
             "get_eps_revisions",
         ),
-        scorer_key="financial",
         dashboard_tabs=("financial", "peers", "overview"),
     ),
     "technical_agent": AgentProfile(
@@ -87,7 +83,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_option_chain_metrics",
             "get_market_sentiment",
         ),
-        scorer_key="technical",
         dashboard_tabs=("technical", "overview"),
     ),
     "macro_agent": AgentProfile(
@@ -104,7 +99,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_market_sentiment",
             "get_economic_events",
         ),
-        scorer_key="overview",
         dashboard_tabs=("overview",),
     ),
     "risk_agent": AgentProfile(
@@ -121,7 +115,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_factor_exposure",
             "run_portfolio_stress_test",
         ),
-        scorer_key=None,
         dashboard_tabs=("peers", "overview"),
     ),
     "deep_search_agent": AgentProfile(
@@ -132,28 +125,13 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
         color_token="t-text-2",
         mandate_zh="研报、监管文件与长文档的证据化深度调研",
         tools=("search",),
-        scorer_key=None,
         dashboard_tabs=(),
     ),
 }
 
 
-_SCORER_PROFILES = {
-    item.scorer_key: item
-    for item in AGENT_PROFILES.values()
-    if item.scorer_key is not None
-}
-assert len(_SCORER_PROFILES) == sum(
-    item.scorer_key is not None for item in AGENT_PROFILES.values()
-), "scorer_key must bind to exactly one AgentProfile"
-
-
 def profile(key: str) -> AgentProfile:
     return AGENT_PROFILES[key]
-
-
-def profile_for_scorer(scorer_key: str) -> AgentProfile | None:
-    return _SCORER_PROFILES.get(scorer_key)
 
 
 def lead_agent_for_operation(operation: str) -> str:
@@ -183,5 +161,4 @@ __all__ = [
     "AgentProfile",
     "lead_agent_for_operation",
     "profile",
-    "profile_for_scorer",
 ]

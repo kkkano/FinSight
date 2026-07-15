@@ -10,9 +10,6 @@
 import { useMemo } from 'react';
 
 import { useDashboardStore } from '../../../store/dashboardStore';
-import { useLatestReport } from '../../../hooks/useLatestReport';
-import { useExecuteAgent } from '../../../hooks/useExecuteAgent';
-import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
 import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import type { NewsItem, SelectionItem, NewsTagGroup } from '../../../types/dashboard';
 import { NEWS_TAG_GROUP_MAP } from '../../../types/dashboard';
@@ -23,15 +20,11 @@ import {
 } from '../../../utils/news';
 import { generateNewsId } from '../../../utils/hash';
 import { SentimentStatsBar } from './news/SentimentStatsBar';
-import { AiNewsSummaryCard } from './news/AiNewsSummaryCard';
-import { AiInsightCard } from './shared/AiInsightCard';
 import { NewsSubTabs } from './news/NewsSubTabs';
 import { NewsTagChips } from './news/NewsTagChips';
 import { NewsTimeRange } from './news/NewsTimeRange';
 import { NewsCard } from './news/NewsCard';
 import { NewsSentimentOverview } from './news/NewsSentimentOverview';
-import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
-import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
 
 // ---------------------------------------------------------------------------
 // Deduplicate news items by title+source key
@@ -96,47 +89,11 @@ export function NewsTab() {
   const activeSelections = useDashboardStore((s) => s.activeSelections);
   const toggleSelection = useDashboardStore((s) => s.toggleSelection);
   const handoffToChat = useChatHandoff();
-  const insightsData = useDashboardStore((s) => s.insightsData);
-  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
-  const insightsError = useDashboardStore((s) => s.insightsError);
-  const insightsStale = useDashboardStore((s) => s.insightsStale);
-
-  // --- Report fallback ---
   const ticker = activeAsset?.symbol ?? null;
-  const { data: reportData, loading: reportLoading } = useLatestReport(ticker, {
-    sourceType: 'dashboard',
-    fallbackToAnySource: false,
-  });
-  const rawNewsInsight = insightsData?.news ?? null;
-
-  // --- Agent execution for "分析影响" ---
-  const { execute: executeAnalysis, isRunning: isAnalyzing } = useExecuteAgent();
 
   // --- Raw data arrays ---
   const marketNews = useMemo(() => dashboardData?.news?.market ?? [], [dashboardData]);
   const impactNews = useMemo(() => dashboardData?.news?.impact ?? [], [dashboardData]);
-  const totalNewsCount = marketNews.length + impactNews.length;
-  const newsInsight = useMemo(() => {
-    if (!rawNewsInsight) return null;
-    if (totalNewsCount === 0) return rawNewsInsight;
-    const emptyNewsPattern =
-      /(?:\u6682\u65e0.*\u65b0\u95fb|\u65e0.*\u65b0\u95fb|no\s+recent\s+news|news\s+unavailable|no\s+news\s+data|news\s+data\s+unavailable)/i;
-    const keyPoints = Array.isArray(rawNewsInsight.key_points)
-      ? rawNewsInsight.key_points.filter((point) => !emptyNewsPattern.test(String(point ?? '').trim()))
-      : [];
-    if (keyPoints.length === (rawNewsInsight.key_points?.length ?? 0)) {
-      return rawNewsInsight;
-    }
-    return {
-      ...rawNewsInsight,
-      key_points: keyPoints.length > 0 ? keyPoints : ['新闻数据已更新，请刷新洞察获取最新摘要'],
-    };
-  }, [rawNewsInsight, totalNewsCount]);
-  const deepDive = useDashboardDeepDive({
-    tab: 'news',
-    metric: newsInsight?.score_label ?? newsTagFilter,
-    insight: newsInsight,
-  });
 
   // --- Sub-tab counts (before time/tag filtering) ---
   const allCombined = useMemo(
@@ -193,16 +150,6 @@ export function NewsTab() {
     });
   };
 
-  const handleAnalyze = (title: string) => {
-    if (isAnalyzing || !ticker) return;
-    executeAnalysis({
-      query: `分析这条新闻的市场影响: ${title}`,
-      tickers: [ticker],
-      agents: ['news_agent'],
-      source: 'dashboard_news',
-    });
-  };
-
   const handleToggleSelect = (selection: SelectionItem) => {
     toggleSelection(selection);
   };
@@ -219,12 +166,6 @@ export function NewsTab() {
   // --- Render ---
   return (
     <div className="space-y-4">
-      <ResidentAnalystBar
-        tab="news"
-        onDeepDive={() => deepDive.startDeepDive()}
-        deepDiveRunning={deepDive.isRunning}
-      />
-
       {/* 舆情总览：REST 未暴露 NewsSentimentSnapshot 时，先用新闻列表做客户端聚合。 */}
       <NewsSentimentOverview
         news={overviewNews}
@@ -232,24 +173,9 @@ export function NewsTab() {
         ticker={ticker ?? undefined}
       />
 
-      {/* AI News Insight Card (Phase F) */}
-      <AiInsightCard
-        tab="news"
-        insight={newsInsight}
-        loading={insightsLoading}
-        error={insightsError}
-        stale={insightsStale}
-        onAskAbout={handleAskAbout}
-        onDeepDive={deepDive.startDeepDive}
-        deepDiveRunning={deepDive.isRunning}
-        deepDiveProgress={deepDive.progress}
-        deepDiveCurrentStep={deepDive.currentStep}
-      />
-      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
-      {/* Fallback: report-based summary */}
-      {!newsInsight && !insightsLoading && (
-        <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />
-      )}
+      <div className="border-y border-t-border py-2 text-2xs text-t-text3">
+        新闻排序与情绪统计为确定性规则；需要观点时使用“问这条”进入主对话。
+      </div>
 
       {/* Sub-tabs: stock / market / breaking */}
       <NewsSubTabs
@@ -315,8 +241,6 @@ export function NewsTab() {
               )}
               onToggleSelect={handleToggleSelect}
               onAskAbout={handleAskAbout}
-              onAnalyze={handleAnalyze}
-              isAnalyzing={isAnalyzing}
             />
           ))}
         </div>

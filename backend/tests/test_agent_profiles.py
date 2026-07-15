@@ -9,10 +9,8 @@ from backend.agents.profiles import (
     AGENT_PROFILES,
     lead_agent_for_operation,
     profile,
-    profile_for_scorer,
 )
 from backend.dashboard.agent_bridge import _TAB_AGENTS
-from backend.dashboard import insights_scorer
 from backend.graph.capability_registry import AGENT_CAPABILITIES, REPORT_AGENT_CANDIDATES
 
 
@@ -42,25 +40,6 @@ def test_profiles_cover_every_report_agent_with_complete_identity():
         assert re.fullmatch(r"t-[a-z0-9-]+", item.color_token)
         assert item.mandate_zh
         assert item.tools
-
-
-def test_profile_scorers_cover_dashboard_score_functions():
-    expected_scorers = {
-        name.removeprefix("score_")
-        for name in dir(insights_scorer)
-        if name.startswith("score_") and not name.endswith("_details")
-    }
-    scorer_keys = {
-        item.scorer_key
-        for item in AGENT_PROFILES.values()
-        if item.scorer_key is not None
-    }
-    assert scorer_keys == expected_scorers
-    for scorer_key in expected_scorers:
-        item = profile_for_scorer(scorer_key)
-        assert item is not None
-        assert item.scorer_key == scorer_key
-    assert profile_for_scorer("unknown") is None
 
 
 def test_profile_dashboard_tabs_are_exact_inverse_of_bridge_registry():

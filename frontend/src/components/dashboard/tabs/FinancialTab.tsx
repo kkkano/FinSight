@@ -9,40 +9,17 @@
  * Row 4: BalanceSheetSummary
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
-import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
-import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import { IncomeTable } from './financial/IncomeTable';
 import { ProfitabilityChart } from './financial/ProfitabilityChart';
 import { ValuationGrid } from './financial/ValuationGrid';
 import { BalanceSheetSummary } from './financial/BalanceSheetSummary';
 import { EarningsSurpriseChart } from './financial/EarningsSurpriseChart';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
-import { AiInsightCard } from './shared/AiInsightCard';
-import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
-import { ResidentAnalystBar } from './shared/ResidentAnalystBar';
-import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
 
 export function FinancialTab() {
   const dashboardData = useDashboardStore((s) => s.dashboardData);
-  const activeAsset = useDashboardStore((s) => s.activeAsset);
-  const insightsData = useDashboardStore((s) => s.insightsData);
-  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
-  const insightsError = useDashboardStore((s) => s.insightsError);
-  const insightsStale = useDashboardStore((s) => s.insightsStale);
-  const handoffToChat = useChatHandoff();
-
-  const handleAskAbout = (selection: SelectionItem) => {
-    const symbol = activeAsset?.symbol?.trim().toUpperCase();
-    handoffToChat({
-      draft: `请结合已选内容分析${symbol ? ` ${symbol}` : ''}：${selection.title}`,
-      activeSymbol: symbol,
-      selections: [selection],
-      sourceView: 'dashboard',
-      sourceTab: 'financial',
-    });
-  };
 
   const financials = dashboardData?.financials;
   const valuation = dashboardData?.valuation;
@@ -50,35 +27,12 @@ export function FinancialTab() {
   const analystTargets = dashboardData?.analyst_targets;
   const recommendations = dashboardData?.recommendations;
   const currentPrice = dashboardData?.technicals?.close ?? dashboardData?.snapshot?.index_level ?? null;
-  const financialInsight = insightsData?.financial ?? null;
-  const deepDive = useDashboardDeepDive({
-    tab: 'financial',
-    metric: financialInsight?.score_label ?? null,
-    insight: financialInsight,
-  });
 
   return (
     <div className="flex flex-col gap-4">
-      <ResidentAnalystBar
-        tab="financial"
-        onDeepDive={() => deepDive.startDeepDive()}
-        deepDiveRunning={deepDive.isRunning}
-      />
-
-      {/* AI Financial Analysis Card */}
-      <AiInsightCard
-        tab="financial"
-        insight={financialInsight}
-        loading={insightsLoading}
-        error={insightsError}
-        stale={insightsStale}
-        onAskAbout={handleAskAbout}
-        onDeepDive={deepDive.startDeepDive}
-        deepDiveRunning={deepDive.isRunning}
-        deepDiveProgress={deepDive.progress}
-        deepDiveCurrentStep={deepDive.currentStep}
-      />
-      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
+      <div className="border-y border-t-border py-2 text-2xs text-t-text3">
+        财务事实 · 来自结构化财报与行情供应商，不是 AI 评分
+      </div>
 
       {/* Row 1: Income table full width */}
       <IncomeTable financials={financials} />

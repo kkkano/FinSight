@@ -5,7 +5,6 @@ import pytest
 
 import backend.api.dashboard_router as dashboard_router_module
 from backend.dashboard.cache import DashboardCache
-from backend.dashboard.insights_engine import InsightsOrchestrator
 
 
 def test_dashboard_failure_marker_roundtrip():
@@ -34,28 +33,6 @@ async def test_dashboard_singleflight_deduplicates_same_key():
     assert second == {"ok": True}
     assert call_count == 1
     assert "MSFT:valuation" not in dashboard_router_module._singleflight_tasks
-
-
-def test_insights_collect_data_ignores_failure_marker():
-    cache = DashboardCache()
-    cache.set(
-        "AAPL",
-        "technicals",
-        {"__dashboard_failure__": True, "reason": "technicals_unavailable"},
-        ttl=60,
-    )
-    cache.set(
-        "AAPL",
-        "news",
-        {"market": [{"title": "Macro easing"}], "impact": []},
-        ttl=60,
-    )
-
-    orchestrator = InsightsOrchestrator(cache=cache)
-    data = orchestrator._collect_dashboard_data("AAPL")
-
-    assert data["technicals"] == {}
-    assert len(data["news"].get("market", [])) == 1
 
 
 @pytest.mark.asyncio

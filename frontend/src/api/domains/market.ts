@@ -21,9 +21,15 @@ export const marketApi = {
   },
 
 // 获取 K 线数据
-  async fetchKline(ticker: string, period: string = "1y", interval: string = "1d"): Promise<Contracts.KlineResponse> {
+  async fetchKline(
+    ticker: string,
+    period: string = '1y',
+    interval: string = '1d',
+    signal?: AbortSignal,
+  ): Promise<Contracts.KlineResponse> {
     const response = await api.get<Contracts.KlineResponse>(`/api/stock/kline/${ticker}`, {
-      params: { period, interval }
+      params: { period, interval },
+      signal,
     });
     return response.data;
   },
