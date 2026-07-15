@@ -1,6 +1,6 @@
 # FinSight 生产部署 Runbook
 
-更新时间：2026-07-14
+更新时间：2026-07-15
 
 ## 1. 当前拓扑
 
@@ -22,6 +22,10 @@ flowchart TB
 服务器本地 `.env.server` 是 secret 文件，不进入 Git、镜像层、文档或部署证据。至少需要：
 
 ```env
+APP_MODE=production
+SUPABASE_AUTH_REQUIRED=true
+SUPABASE_URL=https://project.example.supabase.co
+SUPABASE_PUBLISHABLE_KEY=...
 OPENAI_COMPATIBLE_API_KEY=...
 OPENAI_COMPATIBLE_API_BASE=https://provider.example/v1
 OPENAI_COMPATIBLE_MODEL=model-id
@@ -52,6 +56,17 @@ LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK=false
 
 不得把真实 key 作为 Docker build arg、命令行参数或提交内容。轮换时只修改服务器 `.env.server` 或受控配置存储并重启相关服务。
 
+生产环境不得把认证、Prediction、Outcome 或页面 lease 隐式降级为匿名模式。启动前至少检查以下组合，但检查命令只能输出布尔状态，不能回显值：
+
+```text
+APP_MODE=production
+SUPABASE_AUTH_REQUIRED=true
+SUPABASE_URL 与 SUPABASE_PUBLISHABLE_KEY 同时存在
+OPENAI_COMPATIBLE_API_KEY / API_BASE / MODEL 同时存在
+FINSIGHT_PREDICTION_SUBMIT_ENABLED=true
+PREDICTION_OUTCOME_SCHEDULER_ENABLED=true
+```
+
 ### 2.1 代理隔离
 
 `YFINANCE_PROXY` 只由 yfinance 使用，`SEARCH_PROXY` 只由搜索客户端使用；两者不得写入或覆盖
@@ -62,6 +77,42 @@ LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK=false
 改变，必须修改 `.env.server` 后重启 backend，不能在运行中热改。
 
 ## 3. 发布前门禁
+
+### 3.1 基线、备份与恢复验证
+
+先在代码工作区生成不读取环境变量、不输出 secret 的静态基线：
+
+```bash
+python scripts/audit_product_baseline.py --output .omx/evidence/product-baseline.json
+```
+
+数据库迁移或大规模删除前必须同时备份 PostgreSQL、`backend_data` volume、仍待迁移的 SQLite/JSON、`.env.server` 和运行镜像元数据。备份目录权限设为 `0700`，文件权限设为 `0600`。PostgreSQL dump 不能只运行 `pg_restore --list`，还必须恢复到临时数据库，并核对 public 表数量后删除临时库。
+
+```bash
+umask 077
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_dir="$HOME/finsight-backups/$stamp"
+mkdir -p "$backup_dir"
+docker exec finsight-postgres sh -lc \
+  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+  > "$backup_dir/postgres.dump"
+docker exec finsight-backend tar -C /app/data -czf - . \
+  > "$backup_dir/backend-data.tar.gz"
+cp .env.server docker-compose.yml "$backup_dir/"
+docker inspect finsight-postgres finsight-backend finsight-frontend \
+  > "$backup_dir/docker-inspect.json"
+sha256sum "$backup_dir"/* > "$backup_dir/SHA256SUMS"
+chmod 700 "$backup_dir"
+chmod 600 "$backup_dir"/*
+```
+
+恢复演练必须使用独立临时库，禁止覆盖生产库。演练完成后确认临时库已删除，并保存源库/恢复库表数和 checksum 作为发布证据。
+
+### 3.2 SSH 门禁
+
+生产只允许已登记的 ED25519 公钥登录。变更 SSH 配置时按固定顺序执行：先确认现有密钥指纹，写入 `PasswordAuthentication no`、`KbdInteractiveAuthentication no`、`PermitRootLogin no`，运行 `sshd -t`，重载服务，在第二个新会话中验证密钥登录，最后锁定旧密码。任何一步失败都不得关闭当前会话。
+
+每次发布检查最近七天 SSH 失败次数和成功认证方式。异常暴增时先保存 `journalctl -u ssh` 与云厂商审计证据，再继续发布。
 
 先执行只读磁盘门禁：
 
