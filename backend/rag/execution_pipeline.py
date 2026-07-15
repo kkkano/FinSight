@@ -73,8 +73,14 @@ async def run_execution_rag_pipeline(
     rag_fallback_records: list[Any] = []
     rag_final_update: dict[str, Any] | None = None
 
-    def _store_call(*_args: Any, **_kwargs: Any) -> Any:
-        return safe_store_call(rag_obs_store, *_args, logger=logger, **_kwargs)
+    async def _store_call(*_args: Any, **_kwargs: Any) -> Any:
+        return await asyncio.to_thread(
+            safe_store_call,
+            rag_obs_store,
+            *_args,
+            logger=logger,
+            **_kwargs,
+        )
 
     try:
         from backend.rag.chunker import chunk_document
@@ -102,7 +108,10 @@ async def run_execution_rag_pipeline(
             try:
                 from backend.graph.store import load_memory_context
 
-                memory_context = load_memory_context(thread_id=thread_id)
+                memory_context = await asyncio.to_thread(
+                    load_memory_context,
+                    thread_id=thread_id,
+                )
             except Exception as exc:
                 logger.debug("load_memory_context for RAG failed: %s", exc)
                 memory_context = {}
@@ -126,9 +135,9 @@ async def run_execution_rag_pipeline(
                 query_text=query_text,
                 started_at=rag_started_at,
             )
-            rag_obs_store = get_rag_observability_store()
+            rag_obs_store = await asyncio.to_thread(get_rag_observability_store)
 
-            _store_call("ensure_schema")
+            await _store_call("ensure_schema")
 
             def _append_rag_event(event_type: str, stage: str, payload: dict[str, Any] | list[Any] | str) -> None:
                 if not rag_run_id:
@@ -145,7 +154,7 @@ async def run_execution_rag_pipeline(
                     )
                 )
 
-            _store_call(
+            await _store_call(
                 "start_query_run",
                 QueryRunRecord(
                     id=rag_run_id,
@@ -219,7 +228,8 @@ async def run_execution_rag_pipeline(
                     "latency_ms": (finished_at - rag_started_at).total_seconds() * 1000.0,
                 }
         elif query_text:
-            rag = get_rag_service()
+            # 首次构造服务会导入 FlagEmbedding，并可能探测 PostgreSQL 向量维度。
+            rag = await asyncio.to_thread(get_rag_service)
             subject_type = str((subject or {}).get("subject_type") or "unknown")
             collection = _collection_from_thread_id(thread_id)
             kb_collection = _kb_collection_from_subject(subject)
@@ -599,8 +609,8 @@ async def run_execution_rag_pipeline(
                         )
                         promoted_chunk_count += 1
 
-            _store_call("append_source_docs", source_doc_records)
-            _store_call("append_chunks", chunk_records)
+            await _store_call("append_source_docs", source_doc_records)
+            await _store_call("append_chunks", chunk_records)
             _append_rag_event("source_doc_created", "source_docs", {"source_doc_count": len(source_doc_records)})
             _append_rag_event(
                 "chunk_created",
@@ -694,7 +704,7 @@ async def run_execution_rag_pipeline(
                     run_id=rag_run_id,
                     rerank_top_n=rerank_top_n,
                 )
-                _store_call("append_retrieval_hits", retrieval_records)
+                await _store_call("append_retrieval_hits", retrieval_records)
                 _append_rag_event(
                     "retrieval_done",
                     "retrieval",
@@ -714,7 +724,7 @@ async def run_execution_rag_pipeline(
                     run_id=rag_run_id,
                     input_rank_by_chunk_id=input_rank_by_chunk_id,
                 )
-                _store_call("append_rerank_hits", rerank_records)
+                await _store_call("append_rerank_hits", rerank_records)
                 _append_rag_event(
                     "rerank_done",
                     "rerank",
@@ -892,9 +902,9 @@ async def run_execution_rag_pipeline(
     finally:
         if rag_run_id:
             if rag_event_records:
-                _store_call("append_query_events", rag_event_records)
+                await _store_call("append_query_events", rag_event_records)
             for fallback_record in rag_fallback_records:
-                _store_call("append_fallback_event", fallback_record)
+                await _store_call("append_fallback_event", fallback_record)
             if rag_final_update:
-                _store_call("update_query_run", rag_run_id, **rag_final_update)
+                await _store_call("update_query_run", rag_run_id, **rag_final_update)
     return rag_trace
