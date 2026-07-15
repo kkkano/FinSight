@@ -3,11 +3,11 @@
 
 Dispatches to the appropriate splitter based on document type:
 
-- **filing**: SEC filings / earnings reports → RecursiveCharacterTextSplitter (1000/200)
+- **filing**: SEC filings / earnings reports → Recursive character splitting (1000/200)
 - **transcript**: Earnings call transcripts → Custom Q&A-aware splitting (800/100)
 - **news**: Short news articles ≤ 2000 chars → No splitting (preserve integrity)
-- **research**: Research documents → RecursiveCharacterTextSplitter (1200/200)
-- **web_page**: Web-scraped content → RecursiveCharacterTextSplitter (1200/200)
+- **research**: Research documents → Recursive character splitting (1200/200)
+- **web_page**: Web-scraped content → Recursive character splitting (1200/200)
 - **table**: Markdown tables → No splitting (tables lose meaning when split)
 """
 from __future__ import annotations
@@ -15,10 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -42,58 +39,164 @@ class ChunkResult:
 # Splitter helpers
 # ---------------------------------------------------------------------------
 
-def _get_recursive_splitter(
+def _split_with_separator(text: str, separator: str) -> list[str]:
+    """Split on a literal separator and retain it at the next segment's start."""
+    if not separator:
+        return list(text)
+
+    parts = re.split(f"({re.escape(separator)})", text)
+    splits = [parts[index] + parts[index + 1] for index in range(1, len(parts), 2)]
+    if len(parts) % 2 == 0:
+        splits += parts[-1:]
+    return [part for part in [parts[0], *splits] if part]
+
+
+def _join_splits(splits: list[str]) -> str | None:
+    text = "".join(splits).strip()
+    return text or None
+
+
+def _merge_splits(
+    splits: list[str],
     *,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
-    separators: list[str] | None = None,
-) -> RecursiveCharacterTextSplitter:
-    """Lazily import and return a LangChain RecursiveCharacterTextSplitter."""
-    try:
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
-    except ImportError:
-        raise ImportError(
-            "langchain-text-splitters is required for chunking. "
-            "Install with: pip install langchain-text-splitters"
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[str]:
+    """Merge small segments while retaining the configured character overlap."""
+    chunks: list[str] = []
+    current: list[str] = []
+    total = 0
+
+    for split in splits:
+        split_length = len(split)
+        if total + split_length > chunk_size:
+            if current:
+                chunk = _join_splits(current)
+                if chunk is not None:
+                    chunks.append(chunk)
+                while total > chunk_overlap or (
+                    total + split_length > chunk_size and total > 0
+                ):
+                    total -= len(current[0])
+                    current = current[1:]
+        current.append(split)
+        total += split_length
+
+    chunk = _join_splits(current)
+    if chunk is not None:
+        chunks.append(chunk)
+    return chunks
+
+
+def _split_recursive(
+    text: str,
+    separators: list[str],
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[str]:
+    separator = separators[-1]
+    remaining_separators: list[str] = []
+    for index, candidate in enumerate(separators):
+        if not candidate:
+            separator = candidate
+            break
+        if candidate in text:
+            separator = candidate
+            remaining_separators = separators[index + 1 :]
+            break
+
+    final_chunks: list[str] = []
+    good_splits: list[str] = []
+    for split in _split_with_separator(text, separator):
+        if len(split) < chunk_size:
+            good_splits.append(split)
+            continue
+
+        if good_splits:
+            final_chunks.extend(
+                _merge_splits(
+                    good_splits,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                )
+            )
+            good_splits = []
+        if remaining_separators:
+            final_chunks.extend(
+                _split_recursive(
+                    split,
+                    remaining_separators,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                )
+            )
+        else:
+            final_chunks.append(split)
+
+    if good_splits:
+        final_chunks.extend(
+            _merge_splits(
+                good_splits,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+            )
         )
-    return RecursiveCharacterTextSplitter(
+    return final_chunks
+
+
+def _split_text(
+    text: str,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+    separators: list[str],
+) -> list[str]:
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be > 0, got {chunk_size}")
+    if chunk_overlap < 0:
+        raise ValueError(f"chunk_overlap must be >= 0, got {chunk_overlap}")
+    if chunk_overlap > chunk_size:
+        raise ValueError(
+            f"chunk_overlap ({chunk_overlap}) must not exceed chunk_size ({chunk_size})"
+        )
+    return _split_recursive(
+        text,
+        separators,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=separators or ["\n\n", "\n", ". ", " ", ""],
-        length_function=len,
-        is_separator_regex=False,
     )
 
 
 def _chunk_filing(content: str, *, max_chunk_size: int, overlap: int) -> list[str]:
     """Split SEC-style filings respecting paragraph boundaries."""
-    splitter = _get_recursive_splitter(
+    return _split_text(
+        content,
         chunk_size=max_chunk_size,
         chunk_overlap=overlap,
         separators=["\n\n", "\n", ". ", " ", ""],
     )
-    return splitter.split_text(content)
 
 
 def _chunk_transcript(content: str, *, max_chunk_size: int, overlap: int) -> list[str]:
     """Split earnings call transcripts by Q&A turns first, then fallback."""
-    splitter = _get_recursive_splitter(
+    return _split_text(
+        content,
         chunk_size=max_chunk_size,
         chunk_overlap=overlap,
         # Prefer splitting at Q&A boundaries
         separators=["\nQ:", "\nA:", "\n\n", "\n", ". ", " ", ""],
     )
-    return splitter.split_text(content)
 
 
 def _chunk_long_text(content: str, *, max_chunk_size: int, overlap: int) -> list[str]:
     """Generic splitting for research docs / web pages."""
-    splitter = _get_recursive_splitter(
+    return _split_text(
+        content,
         chunk_size=max_chunk_size,
         chunk_overlap=overlap,
         separators=["\n\n", "\n", ". ", " ", ""],
     )
-    return splitter.split_text(content)
 
 
 # ---------------------------------------------------------------------------
