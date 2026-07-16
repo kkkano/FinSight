@@ -17,7 +17,6 @@ langgraph==1.0.7
 # 1.0.8 是只 import Runtime、兼容 core 1.0.7 的最后一版。
 langgraph-prebuilt==1.0.8
 langgraph-checkpoint==3.0.0
-langgraph-checkpoint-sqlite==3.0.3
 langgraph-checkpoint-postgres==3.0.4
 
 # LLM 服务 & 数据抓取
@@ -85,11 +84,7 @@ fastapi==0.122.0
 uvicorn[standard]==0.38.0
 APScheduler==3.10.4
 
-# Email Service
-# 使用 Python 内置 smtplib，无需额外依赖
-
-# PDF Export
-reportlab==4.2.5
+# PDF evidence extraction
 pypdf==4.2.0
 
 # Testing (CI needs these)

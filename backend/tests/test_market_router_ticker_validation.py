@@ -12,9 +12,7 @@ def _build_client(
     get_stock_price=None,
     get_company_news=None,
     get_financial_statements=None,
-    get_financial_statements_summary=None,
     get_stock_historical_data=None,
-    detect_chart_type=None,
 ) -> TestClient:
     stock_price = get_stock_price or (lambda _ticker: {"price": 100.0})
     company_news = get_company_news or (lambda _ticker: [])
@@ -40,10 +38,8 @@ def _build_client(
     app = FastAPI()
     app.include_router(
         create_market_router(
-                MarketRouterDeps(
-                    get_market_data_gateway=lambda: Gateway(),
-                    get_financial_statements_summary=get_financial_statements_summary or (lambda _ticker: {}),
-                    detect_chart_type=detect_chart_type,
+            MarketRouterDeps(
+                get_market_data_gateway=lambda: Gateway(),
                 logger=logging.getLogger("test_market_router"),
             )
         )
@@ -74,7 +70,6 @@ def test_price_endpoint_normalizes_ticker_before_fetch():
         "/api/stock/kline/GOOGL%20VS%20GOOGLE",
         "/api/stock/news/GOOGL%20VS%20GOOGLE",
         "/api/financials/GOOGL%20VS%20GOOGLE",
-        "/api/financials/GOOGL%20VS%20GOOGLE/summary",
     ],
 )
 def test_market_endpoints_reject_phrase_like_ticker(path: str):
@@ -100,18 +95,3 @@ def test_kline_endpoint_normalizes_special_symbol():
     payload = response.json()
     assert payload["ticker"] == "GC=F"
     assert called == ["GC=F"]
-
-
-def test_chart_detect_returns_dynamic_ticker_candidates():
-    client = _build_client()
-    response = client.post(
-        "/api/chart/detect",
-        json={"query": "compare google and TSLA trend", "ticker": "aapl"},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert isinstance(payload.get("ticker_candidates"), list)
-    assert "AAPL" in payload["ticker_candidates"]
-    assert "TSLA" in payload["ticker_candidates"]
-    assert payload.get("resolved_ticker") == payload["ticker_candidates"][0]

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { Message } from '../types';
-import { findRetryQuery, normalizePortfolioPositionsForChat } from './useChatStream';
+import { findRetryQuery } from './useChatStream';
 
 const messages: Message[] = [
   { id: 'u1', role: 'user', content: 'AAPL first', timestamp: 1 },
@@ -22,27 +22,6 @@ describe('findRetryQuery', () => {
   });
 });
 
-describe('normalizePortfolioPositionsForChat', () => {
-  it('keeps real positive holdings and normalizes ticker casing', () => {
-    expect(normalizePortfolioPositionsForChat([
-      {
-        ticker: ' aapl ',
-        shares: 12,
-        avg_cost: 150,
-        market_value: 2188.8,
-        cost_basis: 1800,
-      },
-      { ticker: 'MSFT', shares: 0, market_value: 0, cost_basis: 0 },
-    ])).toEqual([{
-      ticker: 'AAPL',
-      shares: 12,
-      avg_cost: 150,
-      market_value: 2188.8,
-      cost_basis: 1800,
-    }]);
-  });
-});
-
 describe('SSE 异步终态竞态契约', () => {
   it('主聊天在流返回后等待 onError 的异步恢复逻辑', () => {
     const source = readFileSync(new URL('./useChatStream.ts', import.meta.url), 'utf8');
@@ -50,13 +29,5 @@ describe('SSE 异步终态竞态契约', () => {
     expect(source).toContain('terminalHandlingPromise =');
     expect(source).toContain('const pendingTerminalHandling = terminalHandlingPromise;');
     expect(source).toContain('if (pendingTerminalHandling) await pendingTerminalHandling;');
-  });
-
-  it('MiniChat 不再拥有发送、消息写入或 AbortController', () => {
-    const source = readFileSync(new URL('../components/MiniChat.tsx', import.meta.url), 'utf8');
-    expect(source).not.toContain('sendMessageStream');
-    expect(source).not.toContain('AbortController');
-    expect(source).not.toContain('addMessage');
-    expect(source).toContain('useChatHandoff');
   });
 });

@@ -5,26 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def test_graph_builder_resolves_execute_node_from_runner_patch(monkeypatch) -> None:
+def test_graph_builder_resolves_collect_node_from_runner_patch(monkeypatch) -> None:
     import backend.graph.runner as runner_module
 
     captured: dict[str, object] = {}
 
-    async def injected_execute(_state):
+    async def injected_collect(_state):
         return {"artifacts": {"evidence_pool": [{"title": "fixture"}]}, "trace": {}}
 
     original_with_trace = runner_module.with_node_trace
 
     def capture_with_trace(name, node):
-        if name == "execute_plan":
+        if name == "collect_evidence":
             captured["node"] = node
         return original_with_trace(name, node)
 
-    monkeypatch.setattr(runner_module, "execute_plan_node", injected_execute)
+    monkeypatch.setattr(runner_module, "collect_evidence", injected_collect)
     monkeypatch.setattr(runner_module, "with_node_trace", capture_with_trace)
     runner_module._build_graph(checkpointer=None)
 
-    assert captured["node"] is injected_execute
+    assert captured["node"] is injected_collect
 
 
 def test_rag_quality_scripts_patch_runner_binding() -> None:
@@ -37,5 +37,5 @@ def test_rag_quality_scripts_patch_runner_binding() -> None:
 
     for relative in scripts:
         source = (repo_root / relative).read_text(encoding="utf-8-sig")
-        assert '"backend.graph.runner.execute_plan_node"' in source, relative
+        assert '"backend.graph.runner.collect_evidence"' in source, relative
         assert '"backend.graph.nodes.execute_plan_node.execute_plan_node"' not in source, relative

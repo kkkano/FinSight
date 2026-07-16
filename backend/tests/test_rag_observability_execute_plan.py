@@ -194,21 +194,12 @@ def test_execute_plan_stub_searches_memory_working_set_and_kb(monkeypatch):
         "thread_id": "tenant1:userA:thread-rag-3layer",
         "query": "GOOGL watchlist capex margin services outlook",
         "memory_context": {
-            "watchlist": ["GOOGL"],
-            "last_focus": {
+            "current_thread_focus": {
                 "ticker": "GOOGL",
                 "query": "Alphabet capex margin",
                 "summary": "Watch capex discipline and margin expansion for GOOGL.",
                 "updated_at": "2026-03-07T10:00:00Z",
             },
-            "recent_focuses": [
-                {
-                    "ticker": "GOOGL",
-                    "query": "Alphabet services outlook",
-                    "summary": "Services and advertising demand are improving.",
-                    "updated_at": "2026-03-07T11:00:00Z",
-                }
-            ],
         },
         "plan_ir": {
             "goal": "x",
@@ -303,25 +294,13 @@ def test_execute_plan_stub_surfaces_memory_ws_kb_layers(monkeypatch):
         "thread_id": thread_id,
         "query": "?? AI ????????????????",
         "memory_context": {
-            "risk_tolerance": "high",
-            "investment_style": "growth",
-            "watchlist": ["AAPL", "MSFT"],
-            "last_focus": {
+            "current_thread_focus": {
                 "ticker": "AAPL",
                 "query": "Apple AI capital expenditure",
                 "summary": "??????????????????",
                 "sentiment": "bullish",
                 "updated_at": "2026-03-01T00:00:00Z",
             },
-            "recent_focuses": [
-                {
-                    "ticker": "AAPL",
-                    "query": "Apple services demand",
-                    "summary": "????????????",
-                    "sentiment": "positive",
-                    "updated_at": "2026-03-02T00:00:00Z",
-                }
-            ],
         },
         "plan_ir": {
             "goal": "x",

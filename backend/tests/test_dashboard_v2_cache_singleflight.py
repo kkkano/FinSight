@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-import backend.api.dashboard_router as dashboard_router_module
+import backend.dashboard.snapshot as dashboard_router_module
 from backend.dashboard.cache import DashboardCache
 
 

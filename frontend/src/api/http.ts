@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/runtime';
-import { getRagInspectorDevAccessToken } from '../auth/devAuth';
 import { getSupabaseClient } from './supabaseClient';
 
 export const api = axios.create({
@@ -23,12 +22,8 @@ export async function buildAuthHeaders(): Promise<Record<string, string>> {
       const { data } = await client.auth.getSession();
       accessToken = data.session?.access_token || null;
     } catch {
-      // Session probing is best-effort; fall back to the local dev token below.
+      // Session probing is best-effort; unauthenticated requests continue without a token.
     }
-  }
-
-  if (!accessToken) {
-    accessToken = getRagInspectorDevAccessToken();
   }
 
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
@@ -43,12 +38,8 @@ api.interceptors.request.use(async (config) => {
       const { data } = await client.auth.getSession();
       accessToken = data.session?.access_token || null;
     } catch {
-      // Session probing is best-effort; fall back to the local dev token below.
+      // Session probing is best-effort; unauthenticated requests continue without a token.
     }
-  }
-
-  if (!accessToken) {
-    accessToken = getRagInspectorDevAccessToken();
   }
 
   if (!accessToken) return config;

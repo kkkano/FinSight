@@ -19,7 +19,6 @@ from pydantic import BaseModel, Field
 
 from backend.api.schemas import ChatContext, ChatMessage, ChatOptions
 from backend.api.stream_replay import replay_buffer
-from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
 
 
@@ -42,13 +41,10 @@ class ExecuteRequest(BaseModel):
 
     tickers: list[str] | None = None
     output_mode: str | None = None
-    confirmation_mode: Literal["auto", "required", "skip"] | None = None
     analysis_depth: Literal["quick", "report", "deep_research"] | None = None
-    agents: list[str] | None = None
     budget: int | None = Field(None, ge=1, le=10)
     source: str | None = None
     trace_raw: bool | None = None
-    agent_preferences: dict[str, Any] | None = None
 
     model_config = {"extra": "ignore"}
 
@@ -108,13 +104,22 @@ def _generation_enabled() -> bool:
 
 
 def _enforce_user_quota(http_request: Request) -> str:
-    from backend.services.cost_audit import UserDailyCostLimitExceeded, check_user_quota
+    from backend.services.llm_usage_store import (
+        LLMUsageStoreUnavailable,
+        UserDailyCostLimitExceeded,
+        check_user_quota,
+    )
 
     user_id = str(getattr(http_request.state, "user_id", "public") or "public")
     try:
         check_user_quota(user_id)
     except UserDailyCostLimitExceeded as exc:
-        raise HTTPException(status_code=429, detail={"code": "quota_exceeded", "message": str(exc)}) from exc
+        raise HTTPException(status_code=429, detail={"code": "llm_quota_exceeded", "message": str(exc)}) from exc
+    except LLMUsageStoreUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "store_unavailable", "message": "AI 额度暂时无法检查"},
+        ) from exc
     return user_id
 
 
@@ -228,18 +233,12 @@ def _request_ui_context(request: ExecuteRequest, user_id: str) -> dict[str, Any]
         ui_context["session_history"] = [item.model_dump() for item in request.history[-12:]]
     if request.tickers:
         ui_context["tickers_override"] = request.tickers
-    selected_agents = request.agents or (request.options.agents if request.options else None)
-    if selected_agents:
-        ui_context["agents_override"] = selected_agents
     if request.budget is not None:
         ui_context["budget_override"] = request.budget
     if request.source:
         ui_context["source"] = request.source
     if request.analysis_depth:
         ui_context["analysis_depth"] = request.analysis_depth
-    preferences = request.agent_preferences or (request.options.agent_preferences if request.options else None)
-    if preferences:
-        ui_context["agent_preferences"] = preferences
     ui_context["__user_id"] = user_id
     return ui_context
 
@@ -251,17 +250,16 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
     async def execute_endpoint(request: ExecuteRequest, http_request: Request):
         if not _generation_enabled():
             raise HTTPException(status_code=503, detail={"code": "generation_disabled", "message": "生成服务维护中"})
-        user_id = _enforce_user_quota(http_request)
         try:
             thread_id = deps.resolve_thread_id(request.session_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail={"code": "invalid_session_id", "message": str(exc)}) from exc
 
         run_id = _normalize_run_id(request.run_id)
+        user_id = _enforce_user_quota(http_request)
         _register_run_owner(run_id, user_id)
         options = request.options
         output_mode = request.output_mode or (options.output_mode if options else None)
-        confirmation_mode = request.confirmation_mode or (options.confirmation_mode if options else None) or "skip"
         strict_selection = options.strict_selection if options else None
         trace_raw = request.trace_raw
         if trace_raw is None and options and options.trace_raw_override in {"on", "off"}:
@@ -275,7 +273,6 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             ui_context=_request_ui_context(request, user_id),
             output_mode=output_mode,
             strict_selection=strict_selection,
-            confirmation_mode=parse_confirmation_mode(confirmation_mode),
             original_query=request.query,
             source=request.source or "chat",
             user_id=user_id,

@@ -16,9 +16,11 @@ def test_cn_research_skill_selects_for_a_share_research_but_not_price_only():
     }
     research_policy = policy_gate(research_state)["policy"]
 
-    assert (research_policy.get("skill_selection") or {}).get("selected_skill") == "eastmoney-a-share-research"
+    assert (research_policy.get("skill_selection") or {}).get("selected_skill") == "a-share-company-research"
     assert "get_local_market_filings" in research_policy.get("allowed_tools", [])
-    assert "get_cn_market_fund_flow" in research_policy.get("allowed_tools", [])
+    assert "get_company_news" in research_policy.get("allowed_tools", [])
+    assert "get_cn_market_fund_flow" not in research_policy.get("allowed_tools", [])
+    assert "get_cn_market_northbound" not in research_policy.get("allowed_tools", [])
 
     price_operation = {"name": "price", "confidence": 0.9, "params": {}}
     price_state = {

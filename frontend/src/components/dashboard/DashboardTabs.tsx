@@ -1,12 +1,4 @@
-/**
- * DashboardTabs - Tab navigation for the v2 dashboard.
- *
- * Provides 6 tabs synced with the URL query param `?tab=`:
- *   overview | financial | technical | news | research | peers
- *
- * Tabs 4-6 (news, research, peers) render real panel components;
- * Tabs 1-3 (overview, financial, technical) also render real panel components.
- */
+/** Dashboard tabs synchronized with the URL `tab` query parameter. */
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs } from '../ui/Tabs';

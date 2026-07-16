@@ -50,7 +50,6 @@ def test_report_build_crash_is_reported_as_execution_error(monkeypatch):
         ui_context=None,
         output_mode=None,
         strict_selection=None,
-        confirmation_mode=None,
     ):
         return {
             "thread_id": thread_id,
@@ -118,7 +117,6 @@ def test_normal_quality_block_is_reported_as_quality_gate(monkeypatch):
         ui_context=None,
         output_mode=None,
         strict_selection=None,
-        confirmation_mode=None,
     ):
         return {
             "thread_id": thread_id,
@@ -186,60 +184,3 @@ def test_normal_quality_block_is_reported_as_quality_gate(monkeypatch):
     blocked = blocked_events[0]
     assert blocked.get("failure_kind") == "quality_gate"
     assert blocked.get("failure_detail") is None
-
-
-def test_resume_report_build_crash_is_reported_as_execution_error(monkeypatch):
-    """P1-4: resume 路径同样需要区分执行失败 vs 质量拦截"""
-    execution_service = importlib.import_module("backend.services.execution_service")
-    report_builder_module = importlib.import_module("backend.graph.report_builder")
-
-    class _Runner:
-        async def resume(self, *, thread_id: str, resume_value):
-            yield {
-                "event": "on_chain_end",
-                "data": {
-                    "output": {
-                        "thread_id": thread_id,
-                        "query": "resume query",
-                        "output_mode": "investment_report",
-                        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
-                        "trace": {},
-                        "artifacts": {"draft_markdown": "resume partial markdown"},
-                    }
-                },
-            }
-
-    def _crashing_build_report(**kwargs):
-        raise ValueError("citation index corrupted")
-
-    monkeypatch.setattr(report_builder_module, "build_report_payload", _crashing_build_report)
-
-    indexed: list[dict] = []
-    updated_context: list[dict] = []
-
-    async def _fake_get_graph_runner():
-        return _Runner()
-
-    deps = _make_deps(execution_service, indexed, updated_context, _fake_get_graph_runner)
-
-    events = _run(
-        _collect_events(
-            execution_service.resume_graph_pipeline(
-                deps=deps,
-                thread_id="tenant:user:thread",
-                resume_value="确认执行",
-                source="resume_test",
-            )
-        )
-    )
-
-    blocked_events = [
-        event for event in events
-        if isinstance(event, dict) and event.get("type") == "quality_blocked"
-    ]
-    assert blocked_events, "resume execution failure should still emit a blocking event"
-
-    blocked = blocked_events[0]
-    assert blocked.get("failure_kind") == "execution_error"
-    assert "citation index corrupted" in str(blocked.get("failure_detail") or "")
-    assert "quality gate" not in str(blocked.get("message") or "").lower()

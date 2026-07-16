@@ -47,7 +47,6 @@ def test_planner_prompt_includes_new_tool_allowlist_entries():
                 "get_eps_revisions",
                 "get_option_chain_metrics",
                 "get_factor_exposure",
-                "run_portfolio_stress_test",
                 "get_event_calendar",
                 "score_news_source_reliability",
             ],

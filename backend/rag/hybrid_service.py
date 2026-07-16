@@ -619,82 +619,38 @@ class _PostgresHybridStore:
                     model_name=self._embedder.model_name,
                 )
             )
-    @staticmethod
-    def _has_vector_type(conn: Any) -> bool:
-        try:
-            value = conn.execute(text("SELECT to_regtype('vector') IS NOT NULL")).scalar()
-        except Exception:
-            return False
-        return bool(value)
-
     def _ensure_schema(self) -> None:
         if self._schema_ready:
             return
         with self._schema_lock:
             if self._schema_ready:
                 return
-            with self._engine.begin() as conn:
-                if _env_bool("RAG_V2_RESET", False):
-                    conn.execute(text("DROP TABLE IF EXISTS rag_documents_v2 CASCADE"))
-
-                conn.execute(
-                    text(
-                        f"""
-                        CREATE TABLE IF NOT EXISTS rag_documents_v2 (
-                            id BIGSERIAL PRIMARY KEY,
-                            collection TEXT NOT NULL,
-                            layer TEXT NULL,
-                            entity_scope TEXT NULL,
-                            entity_key TEXT NULL,
-                            scope TEXT NOT NULL,
-                            source_id TEXT NOT NULL,
-                            content TEXT NOT NULL,
-                            title TEXT NULL,
-                            url TEXT NULL,
-                            source TEXT NULL,
-                            ingest_source TEXT NULL,
-                            promotion_status TEXT NULL,
-                            doc_fingerprint TEXT NULL,
-                            parent_collection TEXT NULL,
-                            parent_run_id TEXT NULL,
-                            metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                            embedding VECTOR({self._vector_dim}) NOT NULL,
-                            search_vector tsvector,
-                            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                            expires_at TIMESTAMPTZ NULL,
-                            UNIQUE(collection, source_id)
-                        )
-                        """
-                    )
-                )
-                for ddl in (
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS layer TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS entity_scope TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS entity_key TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS ingest_source TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS promotion_status TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS doc_fingerprint TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS parent_collection TEXT NULL",
-                    "ALTER TABLE rag_documents_v2 ADD COLUMN IF NOT EXISTS parent_run_id TEXT NULL",
-                ):
-                    conn.execute(text(ddl))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_collection ON rag_documents_v2(collection)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_layer ON rag_documents_v2(layer)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_scope ON rag_documents_v2(scope)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_entity_scope ON rag_documents_v2(entity_scope)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_entity_key ON rag_documents_v2(entity_key)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_doc_fingerprint ON rag_documents_v2(doc_fingerprint)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_expires_at ON rag_documents_v2(expires_at)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_search_vector ON rag_documents_v2 USING GIN(search_vector)"))
-                try:
+            try:
+                with self._engine.connect() as conn:
                     conn.execute(
                         text(
-                            "CREATE INDEX IF NOT EXISTS idx_rag_v2_embedding "
-                            "ON rag_documents_v2 USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+                            "SELECT collection,layer,entity_scope,entity_key,scope,source_id,content,"
+                            "ingest_source,promotion_status,doc_fingerprint,parent_collection,parent_run_id,"
+                            "metadata,embedding,search_vector,created_at,expires_at "
+                            "FROM rag_documents_v2 WHERE false"
                         )
                     )
-                except Exception as exc:  # pragma: no cover - depends on pgvector runtime config
-                    logger.warning("RAG v2 ivfflat index skipped: %s", exc)
+                    existing_vector_dim = self._check_vector_dimension(conn)
+            except Exception as exc:
+                raise RuntimeError(
+                    "rag_document_schema_unavailable: 请先执行 alembic upgrade head"
+                ) from exc
+            if existing_vector_dim is None:
+                raise RuntimeError("rag_document_schema_invalid: embedding vector dimension 不可读取")
+            if int(existing_vector_dim) != int(self._vector_dim):
+                raise ValueError(
+                    _vector_dim_mismatch_message(
+                        store_dim=int(existing_vector_dim),
+                        vector_dim=int(self._vector_dim),
+                        embedder_dim=int(self._embedder.dim),
+                        model_name=self._embedder.model_name,
+                    )
+                )
             self._schema_ready = True
 
     @staticmethod

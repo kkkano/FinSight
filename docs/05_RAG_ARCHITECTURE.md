@@ -1,6 +1,6 @@
 # FinSight RAG 架构
 
-更新时间：2026-07-12
+更新时间：2026-07-16
 
 ## 1. 当前生产基线
 
@@ -8,7 +8,7 @@
 - 向量：BGE-M3，1024 维。
 - 分层：memory、working set、knowledge base。
 - 入口：`backend/rag/`；执行层接入位于 `backend/graph/execution/`。
-- 观测：RAG Inspector 与后端 diagnostics API；生产访问受认证约束。
+- 观测：PostgreSQL 观测表、结构化日志和指标；排障通过受保护的运维/评估命令完成，不提供用户侧 Inspector 或 diagnostics API。
 - 降级：允许配置内存回退，但生产事实存储仍是 PostgreSQL。
 
 ```mermaid
@@ -57,5 +57,5 @@ flowchart LR
 - 摄取、去重、scope 隔离；
 - 1024 维向量与数据库 schema 一致；
 - 检索相关性、引用覆盖和空结果降级；
-- RAG Inspector 不泄露其他用户或敏感元数据；
+- 运维查询、日志和评估产物不泄露其他用户或敏感元数据；
 - PostgreSQL 不可用时的明确失败/受控回退。

@@ -92,13 +92,8 @@ export const zh = {
     generatingReport: '生成报告中…',
     renderingStream: '正在渲染 Markdown 流',
     doneEvent: '执行完成',
-    awaitingConfirmation: '等待确认…',
     streamEndedUnexpectedly: '执行流意外结束（缺少完成事件）',
     failed: '执行失败',
     cancelled: '执行已取消',
-    resuming: '正在恢复执行…',
-    resumeEvent: '恢复执行',
-    resumeFailed: '恢复执行失败',
-    resumeStreamEndedUnexpectedly: '恢复执行流意外结束（缺少完成事件）',
   },
 } as const;

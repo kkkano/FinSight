@@ -10,7 +10,6 @@ from typing import Any
 from urllib.parse import quote_plus
 
 from backend.graph.state import GraphState
-from backend.graph.renderers.portfolio import _portfolio_positions
 from backend.graph.renderers.shared import _has_contract_facet, _subject_types, _tasks, _tickers
 
 
@@ -33,24 +32,6 @@ def _macro_mechanism_lines(state: GraphState) -> list[str]:
         f"所以 {target} 更敏感，后面要看利率预期是否继续压低估值倍数，以及业绩指引能不能抵消这部分压力。",
         "这类问题我不硬给单点结论，先看利率预期、业绩指引和价格反应能否互相验证。",
     ]
-
-def _focus_task_present(state: GraphState) -> bool:
-    if _portfolio_positions(state):
-        return False
-    for task in _tasks(state):
-        if str(task.get("subject_type") or "").strip().lower() != "portfolio":
-            continue
-        op = task.get("operation") if isinstance(task.get("operation"), dict) else {}
-        if str(op.get("name") or "").strip().lower() == "qa":
-            return True
-    return False
-
-def _focus_line(state: GraphState) -> str:
-    tickers = _tickers(state)
-    ticker_label = "/".join(tickers[:3]) if tickers else "相关标的"
-    if _has_macro_context(state):
-        return f"一句话：先关注利率和通胀预期是否继续压估值，再看 {ticker_label} 的业绩指引和价格反应能不能抵消压力。"
-    return f"一句话：先关注 {ticker_label} 的价格反应是否被后续新闻、财报指引和成交量确认。"
 
 def _external_entity_impact_fallback_lines(
     state: GraphState,

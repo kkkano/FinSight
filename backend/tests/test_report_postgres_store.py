@@ -61,7 +61,6 @@ def _report_row():
         "summary": "summary",
         "generated_at": now,
         "confidence_score": 0.8,
-        "is_favorite": False,
         "tags": ["ai"],
         "source_type": "ai_generated",
         "quality_state": "pass",
@@ -86,7 +85,6 @@ def test_postgres_history_and_replay_queries_are_tenant_scoped():
     items = store.list_reports(
         session_id="web:alice:thread-1",
         user_id="alice",
-        tag="ai",
     )
     replay = store.get_report_replay(
         session_id="web:alice:thread-1",

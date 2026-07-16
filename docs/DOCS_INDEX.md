@@ -10,7 +10,7 @@
 2. [`01_ARCHITECTURE.md`](01_ARCHITECTURE.md)：代码边界、数据边界和主运行时。
 3. [`LANGGRAPH_FLOW.md`](LANGGRAPH_FLOW.md)：当前 LangGraph 节点与分支。
 4. [`LANGGRAPH_PIPELINE_DEEP_DIVE.md`](LANGGRAPH_PIPELINE_DEEP_DIVE.md)：状态、规划、执行、证据与合成的实现细节。
-5. [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)：7 个 Agent Profile 与公共质量合同。
+5. [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)：两个业务 LLM 角色、内部 Collector 与公共质量合同。
 6. [`05_RAG_ARCHITECTURE.md`](05_RAG_ARCHITECTURE.md)：PostgreSQL/pgvector RAG。
 7. [`11_PRODUCTION_RUNBOOK.md`](11_PRODUCTION_RUNBOOK.md)：部署、验证、冒烟和回滚。
 
@@ -18,7 +18,7 @@
 
 | 文档 | 作用 |
 |---|---|
-| [`06a_LANGGRAPH_DESIGN_SPEC.md`](06a_LANGGRAPH_DESIGN_SPEC.md) | 当前 LangGraph 设计约束与完成状态 |
+| [`06a_LANGGRAPH_DESIGN_SPEC.md`](06a_LANGGRAPH_DESIGN_SPEC.md) | 当前六节点 LangGraph 设计约束与变更门禁 |
 | [`execution-event-contract.md`](execution-event-contract.md) | 后端事件、SSE 和前端消费边界 |
 | [`REPORT_CHART_SPEC.md`](REPORT_CHART_SPEC.md) | 报告图表与 `chart_ref` 合同 |
 | [`HALLUCINATION_MITIGATION.md`](HALLUCINATION_MITIGATION.md) | 证据、引用和降级治理 |

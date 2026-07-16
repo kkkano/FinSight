@@ -307,58 +307,6 @@ export const extractMetrics = (sections: ReportSection[]): { label: string; valu
 };
 
 /* ------------------------------------------------------------------ */
-/*  Report message builder (for PDF export)                            */
-/* ------------------------------------------------------------------ */
-
-export const buildReportMessages = (report: ReportIR): { role: string; content: string; timestamp: string }[] => {
-  const lines: string[] = [];
-  const title = `${report.title} (${report.ticker})`;
-  lines.push(title);
-  lines.push(`Summary: ${report.summary}`);
-  if (report.recommendation) {
-    lines.push(`Recommendation: ${report.recommendation}`);
-  }
-  if (report.risks && report.risks.length > 0) {
-    lines.push(`Risks: ${report.risks.join('; ')}`);
-  }
-
-  report.sections.forEach((section) => {
-    lines.push('');
-    lines.push(`${section.order}. ${section.title}`);
-    section.contents.forEach((content) => {
-      if (content.type === 'text') {
-        lines.push(String(content.content));
-      } else if (content.type === 'table') {
-        lines.push(formatTable(content.content));
-      } else if (content.type === 'chart') {
-        lines.push('[Chart]');
-      } else if (content.type === 'image') {
-        lines.push('[Image]');
-      }
-      if (content.citation_refs && content.citation_refs.length > 0) {
-        lines.push(`Sources: ${content.citation_refs.join(', ')}`);
-      }
-    });
-  });
-
-  if (report.citations && report.citations.length > 0) {
-    lines.push('');
-    lines.push('References:');
-    report.citations.forEach((citation) => {
-      lines.push(`${citation.source_id}. ${citation.title} - ${citation.url}`);
-    });
-  }
-
-  return [
-    {
-      role: 'assistant',
-      content: lines.join('\n'),
-      timestamp: report.generated_at || new Date().toISOString(),
-    },
-  ];
-};
-
-/* ------------------------------------------------------------------ */
 /*  Chart option builder                                               */
 /* ------------------------------------------------------------------ */
 

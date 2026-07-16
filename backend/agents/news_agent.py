@@ -60,7 +60,6 @@ class NewsSentimentSnapshot:
 class NewsAgent(BaseFinancialAgent):
     AGENT_NAME = "NewsAgent"
     CACHE_TTL = 600  # 10 minutes
-    MAX_REFLECTIONS = 1  # ReAct: one Reason-Act cycle for deeper investigation
     _AUTHORITATIVE_DOMAIN_HINTS = (
         "sec.gov",
         "reuters.com",
@@ -89,49 +88,6 @@ class NewsAgent(BaseFinancialAgent):
         self._last_event_calendar: Dict[str, Any] = {}
         self._last_reliability_summary: Dict[str, Any] = {}
         self._last_sentiment_snapshot: Optional[NewsSentimentSnapshot] = None
-
-    def _get_tool_registry(self) -> dict:
-        """NewsAgent tool registry: news APIs + search for ReAct reflection."""
-        registry = {}
-        tools = self.tools
-        if not tools:
-            return registry
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "通用网络搜索，查询任意新闻/事件",
-                "call_with": "query",
-            }
-        news_fn = getattr(tools, "get_company_news", None)
-        if news_fn:
-            registry["get_company_news"] = {
-                "func": news_fn,
-                "description": "获取公司新闻列表(ticker)，返回结构化新闻数据",
-                "call_with": "ticker",
-            }
-        sentiment_fn = getattr(tools, "get_news_sentiment", None)
-        if sentiment_fn:
-            registry["get_news_sentiment"] = {
-                "func": sentiment_fn,
-                "description": "获取新闻情绪分析(ticker)，返回情绪评分和标签",
-                "call_with": "ticker",
-            }
-        event_fn = getattr(tools, "get_event_calendar", None)
-        if event_fn:
-            registry["get_event_calendar"] = {
-                "func": event_fn,
-                "description": "获取财报/分红/宏观事件日历",
-                "call_with": "ticker",
-            }
-        reliability_fn = getattr(tools, "score_news_source_reliability", None)
-        if reliability_fn:
-            registry["score_news_source_reliability"] = {
-                "func": reliability_fn,
-                "description": "评估新闻来源可靠度",
-                "call_with": "none",
-            }
-        return registry
 
     def _is_finance_research_intent(self, query: str) -> bool:
         text = str(query or "").lower()
@@ -1088,39 +1044,12 @@ class NewsAgent(BaseFinancialAgent):
         return results[:5]  # 限制数量
 
     async def _first_summary(self, data: List[Any]) -> str:
-        """P0-9: 输出舆情简报（确定性骨架 + LLM 观点段）"""
+        """输出只由已采集证据构成的确定性舆情简报。"""
         if not data:
             return "未找到相关新闻。"
 
         snapshot = self._last_sentiment_snapshot
         snapshot_dict = asdict(snapshot) if isinstance(snapshot, NewsSentimentSnapshot) else {}
-
-        # LLM 观点段（唯一的 LLM 依赖，失败时为 None -> 骨架照常输出）
-        opinion = None
-        if self.llm is not None:
-            news_context_parts = []
-            for item in data[:8]:
-                if not isinstance(item, dict):
-                    continue
-                headline = item.get("headline", item.get("title", ""))
-                source = item.get("source", "")
-                date = item.get("datetime", item.get("published_at", ""))
-                meta = f" ({source}" + (f", {date}" if date else "") + ")" if source else ""
-                news_context_parts.append(f"- {headline}{meta}")
-            news_context = "\n".join(news_context_parts)
-            snapshot_summary = self._snapshot_text(snapshot) if isinstance(snapshot, NewsSentimentSnapshot) else ""
-
-            opinion = await self._llm_analyze(
-                f"舆情快照：{snapshot_summary}\n\n新闻列表：\n{news_context}",
-                role="资深舆情分析师",
-                focus=(
-                    "基于舆情快照和新闻列表，输出 2-4 句核心观点：\n"
-                    "1. 识别 1-2 条驱动舆情的主线事件\n"
-                    "2. 说明事件对标的的影响路径\n"
-                    "3. 给出短期方向判断（结合情绪与价格关系）\n"
-                    "要求：连贯段落、不用列表、不复述新闻标题、中文输出。"
-                ),
-            )
 
         # 风险（来源可靠度警告）
         extra_risks: List[str] = []
@@ -1130,7 +1059,7 @@ class NewsAgent(BaseFinancialAgent):
             extra_risks.append("新闻来源整体可靠度偏低，关键结论建议以官方披露为准")
 
         if snapshot_dict:
-            return render_stock_brief(snapshot_dict, list(data), opinion, extra_risks=extra_risks)
+            return render_stock_brief(snapshot_dict, list(data), None, extra_risks=extra_risks)
         return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: List[Any]) -> str:
@@ -1458,218 +1387,3 @@ class NewsAgent(BaseFinancialAgent):
                 )
             )
         return claims[:9]
-
-    async def analyze_stream(self, query: str, ticker: str):
-        """
-        NewsAgent 专属流式分析
-        实时显示各数据源搜索状态和新闻摘要生成
-        """
-        import json
-        
-        # 1. 通知开始
-        yield json.dumps({
-            "type": "agent_start",
-            "agent": self.AGENT_NAME,
-            "message": f"正在搜索 {ticker} 相关新闻..."
-        }, ensure_ascii=False)
-        
-        # 2. 检查缓存
-        cache_key = f"{ticker}:news:24h"
-        cached = self.cache.get(cache_key)
-        if cached:
-            yield json.dumps({
-                "type": "cache_hit",
-                "agent": self.AGENT_NAME,
-                "count": len(cached)
-            }, ensure_ascii=False)
-            results = cached
-        else:
-            results = []
-            
-            # 3. 逐个数据源搜索
-            # Finnhub
-            yield json.dumps({
-                "type": "source_start",
-                "source": "finnhub",
-                "message": "正在检索 Finnhub 新闻..."
-            }, ensure_ascii=False)
-            
-            if self.circuit_breaker.can_call("finnhub"):
-                try:
-                    finnhub_news = getattr(self.tools, "_fetch_with_finnhub_news", None)
-                    if finnhub_news:
-                        news_items = finnhub_news(ticker)
-                        if news_items:
-                            results.extend(news_items)
-                            self.circuit_breaker.record_success("finnhub")
-                            yield json.dumps({
-                                "type": "source_done",
-                                "source": "finnhub",
-                                "count": len(news_items),
-                                "status": "success"
-                            }, ensure_ascii=False)
-                        else:
-                            yield json.dumps({
-                                "type": "source_done",
-                                "source": "finnhub",
-                                "count": 0,
-                                "status": "empty"
-                            }, ensure_ascii=False)
-                except Exception as e:
-                    self.circuit_breaker.record_failure("finnhub")
-                    yield json.dumps({
-                        "type": "source_done",
-                        "source": "finnhub",
-                        "status": "error",
-                        "message": str(e)
-                    }, ensure_ascii=False)
-            else:
-                yield json.dumps({
-                    "type": "source_done",
-                    "source": "finnhub",
-                    "status": "circuit_open",
-                    "message": "熔断器开启，跳过"
-                }, ensure_ascii=False)
-            
-            # Tavily
-            if not results or len(results) < 3:
-                yield json.dumps({
-                    "type": "source_start",
-                    "source": "tavily",
-                    "message": "正在检索 Tavily 新闻..."
-                }, ensure_ascii=False)
-                
-                if self.circuit_breaker.can_call("tavily"):
-                    try:
-                        tavily_news = getattr(self.tools, "_search_company_news", None)
-                        if tavily_news:
-                            t_results = tavily_news(f"{ticker} stock news")
-                            if t_results:
-                                results.extend(t_results)
-                                self.circuit_breaker.record_success("tavily")
-                                yield json.dumps({
-                                    "type": "source_done",
-                                    "source": "tavily",
-                                    "count": len(t_results),
-                                    "status": "success"
-                                }, ensure_ascii=False)
-                    except Exception as e:
-                        self.circuit_breaker.record_failure("tavily")
-                        yield json.dumps({
-                            "type": "source_done",
-                            "source": "tavily",
-                            "status": "error"
-                        }, ensure_ascii=False)
-            
-            # 去重并缓存
-            seen_urls = set()
-            unique_results = []
-            for item in results:
-                url = item.get("url")
-                if url and url not in seen_urls:
-                    seen_urls.add(url)
-                    unique_results.append(item)
-            results = unique_results
-            
-            if results:
-                self.cache.set(cache_key, results, self.CACHE_TTL)
-        
-        # 4. 报告搜索结果
-        yield json.dumps({
-            "type": "search_result",
-            "agent": self.AGENT_NAME,
-            "count": len(results)
-        }, ensure_ascii=False)
-        
-        # 5. 生成摘要
-        yield json.dumps({
-            "type": "summary_start",
-            "agent": self.AGENT_NAME
-        }, ensure_ascii=False)
-        
-        summary_buffer = ""
-        async for token in self._stream_summary(results):
-            summary_buffer += token
-            yield json.dumps({
-                "type": "token",
-                "content": token
-            }, ensure_ascii=False)
-        
-        # 6. 完成
-        output = self._format_output(summary_buffer, results)
-        yield json.dumps({
-            "type": "done",
-            "agent": self.AGENT_NAME,
-            "output": {
-                "agent_name": output.agent_name,
-                "summary": output.summary,
-                "confidence": output.confidence,
-                "evidence_count": len(output.evidence),
-                "data_sources": output.data_sources,
-                "as_of": output.as_of
-            }
-        }, ensure_ascii=False)
-
-    async def _stream_summary(self, data: List[Any]):
-        """
-        流式生成新闻摘要
-        如果 LLM 可用则使用流式输出，否则使用简单方法
-        """
-        if not data:
-            yield "未找到相关新闻。"
-            return
-        
-        # 构建新闻列表
-        news_list = []
-        for item in data[:5]:
-            headline = item.get("headline", item.get("title", ""))
-            source = item.get("source", "")
-            if headline:
-                news_list.append(f"- {headline} ({source})")
-        
-        # 生产 provider 请求统一走受控入口；上游仍接收异步文本流接口。
-        if self.llm:
-            try:
-                from langchain_core.messages import HumanMessage
-                from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
-                prompt = f"""<role>资深金融新闻分析师</role>
-
-<task>基于以下新闻列表，输出一份专业的中文新闻摘要分析（150-250字）。</task>
-
-<news>
-{chr(10).join(news_list)}
-</news>
-
-<requirements>
-- 提炼 3-5 条核心要点，每条包含：事实 + 市场影响判断
-- 识别新闻间的关联性（如多条新闻指向同一趋势）
-- 明确标注 1-2 个潜在风险或不确定性
-- 区分短期噪音和中长期趋势信号
-</requirements>
-
-<constraints>
-- 禁止复述新闻标题原文，必须提炼和解读
-- 禁止开场白，直接输出分析内容
-- 专业简洁，避免冗余表述
-</constraints>"""
-                resp = await ainvoke_configured_llm(
-                    [HumanMessage(content=prompt)],
-                    context=LLMCallContext.create(
-                        stage="agent_analyze",
-                        agent=self.AGENT_NAME,
-                        layer="analysis",
-                        max_provider_attempts=max(1, int(os.getenv("NEWS_LLM_MAX_ATTEMPTS", "3"))),
-                    ),
-                    provider=os.getenv("LLM_PROVIDER", "openai_compatible"),
-                    temperature=float(os.getenv("NEWS_LLM_TEMPERATURE", "0.3")),
-                    request_timeout=int(os.getenv("NEWS_LLM_REQUEST_TIMEOUT", "600")),
-                )
-                text = str(resp.content if hasattr(resp, "content") else resp).strip()
-                if text:
-                    yield text
-                    return
-            except Exception as invoke_exc:
-                logger.info(f"[NewsAgent] invoke summary fallback failed: {invoke_exc}")
-        
-        # 简单方法：直接拼接标题
-        yield f"近期新闻包括：{'; '.join([item.get('headline', item.get('title', '')) for item in data[:3]])}"

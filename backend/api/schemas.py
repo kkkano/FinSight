@@ -1,16 +1,11 @@
-"""
-FinSight API Pydantic Schemas
-"""
+"""Pydantic contracts used by the converged public API."""
+from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.contracts import CHAT_REQUEST_SCHEMA_VERSION, CHAT_RESPONSE_SCHEMA_VERSION
-
-
-# ==================== Request Models ====================
+from backend.contracts import CHAT_REQUEST_SCHEMA_VERSION
 
 
 class ChatMessage(BaseModel):
@@ -19,350 +14,70 @@ class ChatMessage(BaseModel):
 
 
 class SelectionContext(BaseModel):
-    type: Literal["news", "filing", "doc", "report", "risk", "insight", "url", "web", "article"] = Field(
-        ...,
-        description="selection type",
-    )
-    id: str = Field(..., description="selection id")
-    title: str = Field(..., description="selection title")
-    url: Optional[str] = Field(None, description="selection url")
-    source: Optional[str] = Field(None, description="selection source")
-    ts: Optional[str] = Field(None, description="selection timestamp")
-    snippet: Optional[str] = Field(None, description="selection snippet")
+    type: Literal["news", "filing", "doc", "report", "risk", "insight", "url", "web", "article"]
+    id: str
+    title: str
+    url: str | None = None
+    source: str | None = None
+    ts: str | None = None
+    snippet: str | None = None
 
     @field_validator("type", mode="before")
     @classmethod
-    def normalize_type(cls, v):
-        if not isinstance(v, str):
-            return v
-        lowered = v.strip().lower()
-        if lowered == "report":
-            return "doc"
-        return lowered
+    def normalize_type(cls, value):
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower()
+        return "doc" if normalized == "report" else normalized
 
 
 class ChatContext(BaseModel):
-    active_symbol: Optional[str] = Field(None, description="active symbol")
-    view: Optional[str] = Field(None, description="ui view")
-    source_view: Optional[Literal["dashboard", "workbench", "command_palette"]] = Field(
-        None, description="one-shot handoff source view",
-    )
-    source_tab: Optional[str] = Field(
+    active_symbol: str | None = None
+    view: str | None = None
+    source_view: Literal["dashboard", "command_palette"] | None = None
+    source_tab: str | None = Field(
         None,
         min_length=1,
         max_length=64,
         pattern=r"^[^\x00-\x1F\x7F]+$",
-        description="one-shot handoff source tab",
     )
-    selection: Optional[SelectionContext] = Field(None, description="single selection")
-    selections: Optional[list[SelectionContext]] = Field(None, description="multi selection")
-    user_email: Optional[str] = Field(None, description="user email for alert actions")
-    positions: Optional[list[dict[str, Any]]] = Field(None, description="portfolio positions")
-    holdings: Optional[list[dict[str, Any]]] = Field(None, description="portfolio holdings")
-    portfolio: Optional[dict[str, Any] | list[dict[str, Any]]] = Field(None, description="portfolio context")
+    selection: SelectionContext | None = None
+    selections: list[SelectionContext] | None = None
 
 
 class ChatOptions(BaseModel):
-    output_mode: Optional[Literal["chat", "brief", "investment_report"]] = Field(
-        None,
-        description="output mode",
-    )
-    strict_selection: Optional[bool] = Field(
-        None,
-        description="strict selection mode",
-    )
-    confirmation_mode: Optional[Literal["auto", "required", "skip"]] = Field(
-        None,
-        description="confirmation strategy",
-    )
-    locale: Optional[str] = Field(None, description="locale")
-    trace_raw_override: Optional[Literal["on", "off", "inherit"]] = Field(
-        None,
-        description="raw trace visibility override",
-    )
-    agent_preferences: Optional[dict[str, Any]] = Field(
-        None,
-        description="validated agent/runtime preferences from the frontend",
-    )
-    agents: Optional[list[str]] = Field(
-        None,
-        description="Override: only run these agents (from @agent manual selection)",
-    )
+    output_mode: Literal["chat", "brief", "investment_report"] | None = None
+    strict_selection: bool | None = None
+    locale: str | None = None
+    trace_raw_override: Literal["on", "off", "inherit"] | None = None
 
 
 class ChatRequest(BaseModel):
-    schema_version: str = Field(
-        default=CHAT_REQUEST_SCHEMA_VERSION,
-        description="request schema version",
-    )
-    query: str = Field(..., min_length=1, description="user query")
-    session_id: Optional[str] = Field(None, description="session id")
-    history: Optional[list[ChatMessage]] = Field(None, description="conversation history")
-    context: Optional[ChatContext] = Field(None, description="ephemeral context")
-    options: Optional[ChatOptions] = Field(None, description="request options")
+    schema_version: str = CHAT_REQUEST_SCHEMA_VERSION
+    query: str = Field(..., min_length=1)
+    session_id: str | None = None
+    history: list[ChatMessage] | None = None
+    context: ChatContext | None = None
+    options: ChatOptions | None = None
 
     model_config = {"extra": "ignore"}
 
     @field_validator("schema_version", mode="before")
     @classmethod
-    def normalize_schema_version(cls, v):
-        if not isinstance(v, str) or not v.strip():
+    def normalize_schema_version(cls, value):
+        if not isinstance(value, str) or not value.strip():
             return CHAT_REQUEST_SCHEMA_VERSION
-        return v.strip()
-
-
-class AnalysisRequest(BaseModel):
-    query: str = Field(..., description="analysis query")
-    user_id: str = Field("default_user", description="user id")
-
-
-class SubscriptionRequest(BaseModel):
-    email: str = Field(..., min_length=3, description="email")
-    ticker: str = Field(..., min_length=1, description="ticker")
-    alert_types: Optional[list[str]] = Field(None, description="alert types")
-    price_threshold: Optional[float] = Field(None, description="price threshold")
-    alert_mode: Optional[Literal["price_change_pct", "price_target"]] = Field(
-        "price_change_pct",
-        description="alert trigger mode",
-    )
-    price_target: Optional[float] = Field(None, description="target absolute price")
-    direction: Optional[Literal["above", "below"]] = Field(
-        None,
-        description="target direction",
-    )
-    risk_threshold: Optional[str] = Field("high", description="risk threshold")
-
-    @field_validator("alert_types", mode="before")
-    @classmethod
-    def default_alert_types(cls, v):
-        return v or ["price_change", "news"]
-
-    @field_validator("alert_types")
-    @classmethod
-    def validate_alert_types(cls, v):
-        allowed = {"price_change", "news", "report", "risk"}
-        invalid = [x for x in v if x not in allowed]
-        if invalid:
-            raise ValueError(f"unsupported alert_types: {invalid}")
-        return v
-
-    @field_validator("price_threshold")
-    @classmethod
-    def validate_price_threshold(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("price_threshold must be positive")
-        return v
-
-    @field_validator("price_target")
-    @classmethod
-    def validate_price_target(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("price_target must be positive")
-        return v
-
-    @field_validator("risk_threshold")
-    @classmethod
-    def validate_risk_threshold(cls, v):
-        if v is None:
-            return "high"
-        normalized = str(v).strip().lower()
-        allowed = {"low", "medium", "high", "critical"}
-        if normalized not in allowed:
-            raise ValueError(f"unsupported risk_threshold: {v}")
-        return normalized
-
-
-class ScreenerRunRequest(BaseModel):
-    market: Literal["US", "CN", "HK"] = Field("US", description="market scope")
-    filters: dict[str, Any] = Field(default_factory=dict, description="screener filters")
-    limit: int = Field(20, ge=1, le=200, description="rows per page")
-    page: int = Field(1, ge=1, le=100, description="page index from 1")
-    sort_by: str = Field("marketCap", description="sort key")
-    sort_order: Literal["asc", "desc"] = Field("desc", description="sort order")
-
-
-class CNMarketQueryRequest(BaseModel):
-    limit: int = Field(20, ge=1, le=200, description="max rows")
-    keyword: Optional[str] = Field(None, description="optional keyword filter")
-
-
-class BacktestRequest(BaseModel):
-    ticker: str = Field(..., min_length=1, description="ticker")
-    strategy: Literal["buy_and_hold", "ma_cross", "macd", "rsi_mean_reversion"] = Field(
-        "ma_cross",
-        description="strategy id",
-    )
-    params: dict[str, Any] = Field(default_factory=dict, description="strategy params")
-    start_date: Optional[str] = Field(None, description="YYYY-MM-DD")
-    end_date: Optional[str] = Field(None, description="YYYY-MM-DD")
-    initial_cash: float = Field(100000.0, gt=0, description="initial cash")
-    fee_bps: Optional[float] = Field(None, ge=0, description="fee basis points")
-    slippage_bps: Optional[float] = Field(None, ge=0, description="slippage basis points")
-    t_plus_one: bool = Field(True, description="enable T+1 sell restriction")
-    market: Optional[Literal["US", "CN", "HK"]] = Field(None, description="market hint")
-
-
-class BacktestPrefillRequest(BaseModel):
-    report_id: str = Field(..., min_length=1, max_length=200, description="report id")
-
-
-class UnsubscribeRequest(BaseModel):
-    email: str = Field(..., min_length=3, description="email")
-    ticker: Optional[str] = Field(None, min_length=1, description="ticker")
-
-
-class ToggleSubscriptionRequest(BaseModel):
-    email: str = Field(..., min_length=3, description="email")
-    ticker: str = Field(..., min_length=1, description="ticker")
-    enabled: bool = Field(..., description="enable flag")
-
-
-class UserProfileUpdateRequest(BaseModel):
-    user_id: str = Field("default_user", description="user id")
-    profile: dict[str, Any] = Field(default_factory=dict, description="profile payload")
-
-
-class WatchlistRequest(BaseModel):
-    user_id: str = Field("default_user", description="user id")
-    ticker: str = Field(..., description="ticker")
-
-
-class ChartDetectRequest(BaseModel):
-    query: str = Field(..., description="query")
-    ticker: Optional[str] = Field(None, description="ticker")
-
-
-class ChartDataRequest(BaseModel):
-    ticker: str = Field(..., description="ticker")
-    summary: str = Field(..., description="chart summary")
-
-
-class ConfigRequest(BaseModel):
-    llm_provider: Optional[str] = None
-    llm_model: Optional[str] = None
-    llm_api_key: Optional[str] = None
-    llm_api_base: Optional[str] = None
-    llm_endpoints: Optional[list[dict[str, Any]]] = None
-    layout_mode: str = Field("centered", description="layout mode")
-
-    model_config = {"extra": "allow"}
-
-
-class ExportPdfRequest(BaseModel):
-    messages: list[dict[str, Any]] = Field(..., description="messages")
-    charts: list[dict[str, Any]] = Field(default_factory=list, description="charts")
-    title: str = Field("FinSight 对话记录", description="pdf title")
-
-
-# ==================== Response Models ====================
-
-
-class BaseResponse(BaseModel):
-    success: bool = Field(..., description="success flag")
-
-
-class ErrorResponse(BaseResponse):
-    success: bool = False
-    error: str = Field(..., description="error message")
-
-
-class ClassificationInfo(BaseModel):
-    method: Optional[str] = Field(None, description="classification method")
-    confidence: Optional[float] = Field(None, description="classification confidence")
-
-
-class ThinkingStep(BaseModel):
-    stage: str = Field(..., description="stage name")
-    message: str = Field(..., description="stage message")
-    timestamp: str = Field(..., description="timestamp")
-    result: Optional[dict[str, Any]] = Field(None, description="stage result")
-
-
-class ChatResponse(BaseResponse):
-    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="response schema version")
-    response: str = Field(..., description="assistant response")
-    intent: Optional[str] = Field(None, description="intent")
-    current_focus: Optional[str] = Field(None, description="current focus")
-    response_time_ms: int = Field(0, description="response time ms")
-    session_id: str = Field(..., description="session id")
-    thinking: list[dict[str, Any]] = Field(default_factory=list, description="thinking trace")
-    report: Optional[dict[str, Any]] = Field(None, description="report payload")
-    data: Optional[dict[str, Any]] = Field(None, description="extra data")
-    metadata: Optional[dict[str, Any]] = Field(None, description="metadata")
-    method: Optional[str] = Field(None, description="execution method")
-
-
-class SupervisorResponse(BaseResponse):
-    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="response schema version")
-    response: str = Field(..., description="assistant response")
-    intent: Optional[str] = Field(None, description="intent")
-    classification: Optional[ClassificationInfo] = Field(None, description="classification")
-    session_id: str = Field(..., description="session id")
-
-
-class ComponentStatus(BaseModel):
-    status: str = Field(..., description="component status")
-    available: Optional[bool] = None
-    reason: Optional[str] = None
-
-
-class HealthResponse(BaseModel):
-    status: str = Field(..., description="overall status")
-    components: dict[str, ComponentStatus] = Field(..., description="components")
-    timestamp: str = Field(..., description="timestamp")
-
-
-class RootResponse(BaseModel):
-    status: str = Field(..., description="service status")
-    message: str = Field(..., description="service message")
-    timestamp: str = Field(..., description="timestamp")
-
-
-class DiagnosticsResponse(BaseModel):
-    status: str = Field(..., description="diagnostics status")
-    data: dict[str, Any] = Field(..., description="diagnostics payload")
-    timestamp: str = Field(..., description="timestamp")
-
-
-class UserProfileResponse(BaseResponse):
-    profile: Optional[dict[str, Any]] = Field(None, description="user profile")
-
-
-class SubscriptionResponse(BaseResponse):
-    message: str = Field(..., description="operation message")
-    email: str = Field(..., description="email")
-    ticker: str = Field(..., description="ticker")
-
-
-class SubscriptionListResponse(BaseResponse):
-    subscriptions: list[dict[str, Any]] = Field(..., description="subscriptions")
-    count: int = Field(..., description="count")
+        return value.strip()
 
 
 class StockDataResponse(BaseModel):
-    ticker: str = Field(..., description="ticker")
-    data: Optional[dict[str, Any]] = Field(None, description="stock data")
-    cached: bool = Field(False, description="cached flag")
-    error: Optional[str] = Field(None, description="error")
+    ticker: str
+    data: dict | None = None
+    cached: bool = False
+    error: str | None = None
 
 
 class KlineResponse(BaseModel):
-    ticker: str = Field(..., description="ticker")
-    data: dict[str, Any] = Field(..., description="kline data")
-    cached: bool = Field(False, description="cached flag")
-
-
-class ConfigResponse(BaseResponse):
-    config: dict[str, Any] = Field(..., description="config")
-
-
-class ChartDetectResponse(BaseResponse):
-    should_generate: bool = Field(False, description="should generate chart")
-    chart_type: str = Field("none", description="chart type")
-    data_dimension: str = Field("none", description="data dimension")
-    confidence: float = Field(0.0, description="confidence")
-    reason: str = Field("", description="reason")
-
-
-class ChartDataResponse(BaseResponse):
-    message: str = Field(..., description="operation message")
+    ticker: str
+    data: dict
+    cached: bool = False

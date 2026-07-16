@@ -14,8 +14,6 @@ GOLDEN_QUERIES = {
     "greeting": "你好",
     "vague_no_subject": "帮我分析一下",
     "url_doc": "总结一下 https://example.com/a-16k-filing 的要点",
-    "alert": "AAPL 涨到 250 提醒我",
-    "portfolio_no_context": "我的持仓该怎么调仓",
     "cn_ticker": "600036 走势如何",
 }
 

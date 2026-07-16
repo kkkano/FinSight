@@ -1,19 +1,19 @@
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Callable
-from datetime import datetime
-import asyncio
+from __future__ import annotations
+
 from contextvars import ContextVar
-import json
+from dataclasses import dataclass, field
+from datetime import datetime
 import logging
-import os
 import time
-from backend.services.circuit_breaker import CircuitBreaker
-from backend.orchestration.trace_schema import create_trace_event
+from typing import Any, Callable, Dict, List, Optional
+
 from backend.orchestration.trace_emitter import get_trace_emitter
-from backend.graph.intent.frame import AgentBrief
-from backend.config.settings import agent_settings
+from backend.orchestration.trace_schema import create_trace_event
+from backend.services.circuit_breaker import CircuitBreaker
+
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class EvidenceItem:
@@ -21,23 +21,26 @@ class EvidenceItem:
     source: str
     url: Optional[str] = None
     timestamp: Optional[str] = None
-    confidence: float = 1.0  # 0-1
+    confidence: float = 1.0
     title: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
 
+
 @dataclass
 class ConflictClaim:
-    """A single conflict between two data sources."""
-    claim: str                          # What is in conflict (e.g. "CPI inflation rate")
-    source_a: str                       # First source name
-    value_a: str                        # Value from source A
-    source_b: str                       # Second source name
-    value_b: str                        # Value from source B
-    severity: str = "medium"            # low / medium / high
-    resolved: bool = False              # Whether this conflict was adjudicated
-    resolution: Optional[str] = None    # How it was resolved (if resolved)
-    timestamp_a: Optional[str] = None   # When source A provided data
-    timestamp_b: Optional[str] = None   # When source B provided data
+    """两个数据源之间的一项冲突。"""
+
+    claim: str
+    source_a: str
+    value_a: str
+    source_b: str
+    value_b: str
+    severity: str = "medium"
+    resolved: bool = False
+    resolution: Optional[str] = None
+    timestamp_a: Optional[str] = None
+    timestamp_b: Optional[str] = None
+
 
 @dataclass
 class AgentOutput:
@@ -54,21 +57,30 @@ class AgentOutput:
     fallback_used: bool = False
     risks: List[str] = field(default_factory=list)
     trace: List[Dict[str, Any]] = field(default_factory=list)
-    # --- Conflict tracking (new) ---
     conflict_flags: List[str] = field(default_factory=list)
     conflicting_claims: List[ConflictClaim] = field(default_factory=list)
-    # --- Fallback observability (new) ---
     fallback_reason: Optional[str] = None
     retryable: bool = True
     error_stage: Optional[str] = None
-    requests: List[Dict[str, Any]] = field(default_factory=list)
+
 
 class BaseFinancialAgent:
-    AGENT_NAME = "base"
-    MAX_REFLECTIONS = 0
+    """确定性 evidence collector 的公共执行骨架。
 
-    def __init__(self, llm, cache, tools_module=None, circuit_breaker: Optional[CircuitBreaker] = None):
-        self.llm = llm
+    `llm` 参数仅用于兼容既有 collector 构造签名，实例不会保存或调用它。业务分析统一由
+    Graph synthesis 的 ResearchAnalyst 完成。
+    """
+
+    AGENT_NAME = "base"
+
+    def __init__(
+        self,
+        llm: Any,
+        cache: Any,
+        tools_module: Any = None,
+        circuit_breaker: Optional[CircuitBreaker] = None,
+    ) -> None:
+        del llm
         self.cache = cache
         self.tools = tools_module
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
@@ -79,22 +91,6 @@ class BaseFinancialAgent:
         self.__current_ticker: ContextVar[Optional[str]] = ContextVar(
             f"{type(self).__name__}._current_ticker",
             default=None,
-        )
-        self.__current_brief: ContextVar[Optional["AgentBrief"]] = ContextVar(
-            f"{type(self).__name__}._current_brief",
-            default=None,
-        )
-        self.__current_requests: ContextVar[List[Dict[str, Any]]] = ContextVar(
-            f"{type(self).__name__}._current_requests",
-            default=[],
-        )
-        self._llm_analyze_enabled_override: Optional[bool] = None
-        self._llm_analyze_timeout_override: Optional[float] = None
-        self._llm_analyze_call_timeout_override: Optional[float] = None
-        configured_reflections = agent_settings().base_max_reflections
-        self.max_reflections = max(
-            0,
-            self.MAX_REFLECTIONS if configured_reflections is None else configured_reflections,
         )
 
     @property
@@ -113,314 +109,96 @@ class BaseFinancialAgent:
     def _current_ticker(self, value: Optional[str]) -> None:
         self.__current_ticker.set(value)
 
-    @property
-    def _current_brief(self) -> Optional["AgentBrief"]:
-        return self.__current_brief.get()
-
-    @_current_brief.setter
-    def _current_brief(self, value: Optional["AgentBrief"]) -> None:
-        self.__current_brief.set(value)
-
-    def configure_research(
-        self,
-        *,
-        enable_llm_analysis: Optional[bool] = None,
-        max_reflections: Optional[int] = None,
-        analysis_timeout_seconds: Optional[int] = None,
-        token_acquire_timeout_seconds: Optional[int] = None,
-    ) -> None:
-        if enable_llm_analysis is not None:
-            self._llm_analyze_enabled_override = bool(enable_llm_analysis)
-        if max_reflections is not None:
-            self.max_reflections = max(0, min(3, int(max_reflections)))
-        if analysis_timeout_seconds is not None and analysis_timeout_seconds > 0:
-            self._llm_analyze_call_timeout_override = float(max(5, min(120, analysis_timeout_seconds)))
-        if token_acquire_timeout_seconds is not None and token_acquire_timeout_seconds > 0:
-            self._llm_analyze_timeout_override = float(max(3, min(60, token_acquire_timeout_seconds)))
-
-    def _reflection_token_timeout(self) -> float:
-        override = self._llm_analyze_timeout_override
-        if override is not None and override > 0:
-            return override
-        return max(3.0, agent_settings().reflection_token_timeout_seconds)
-
-    def _llm_analyze_timeout(self) -> float:
-        override = self._llm_analyze_timeout_override
-        if override is not None and override > 0:
-            return override
-        env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_TIMEOUT_SECONDS"
-        try:
-            return max(1.0, float(os.getenv(env_key, str(agent_settings().llm_analyze_timeout_seconds))))
-        except Exception:
-            return 8.0
-
-    def _llm_analyze_call_timeout(self) -> float:
-        override = self._llm_analyze_call_timeout_override
-        if override is not None and override > 0:
-            return override
-        env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_CALL_TIMEOUT_SECONDS"
-        try:
-            return max(0.05, float(os.getenv(env_key, str(agent_settings().llm_analyze_call_timeout_seconds))))
-        except Exception:
-            return 8.0
-
-    def _get_tool_registry(self) -> dict:
-        """Return available tools for this agent's reflection loop.
-
-        Subclasses override to expose domain-specific tools (e.g. get_company_news,
-        get_financial_statements).  The base class provides only ``search``.
-
-        Format::
-
-            {
-                "tool_name": {
-                    "func": callable,
-                    "description": "Human-readable tool description",
-                    "call_with": "query" | "ticker" | "none",
-                },
-            }
-        """
-        tools = getattr(self, "tools", None)
-        search_fn = getattr(tools, "search", None) if tools else None
-        if not search_fn:
-            return {}
-        return {
-            "search": {
-                "func": search_fn,
-                "description": "通用网络搜索，可查询任意信息",
-                "call_with": "query",
-            },
-        }
-
-    async def _llm_analyze(
-        self,
-        raw_data_summary: str,
-        *,
-        role: str,
-        focus: str,
-    ) -> Optional[str]:
-        """
-        Use LLM to produce analytical insights from a deterministic data summary.
-
-        Returns the analysis text on success, or *None* if the LLM is
-        unavailable / the call fails — callers should fall back to the
-        deterministic summary.
-        """
-        if not self.llm:
-            return None
-
-        override = self._llm_analyze_enabled_override
-        if override is not None:
-            enabled = bool(override)
-        else:
-            agent_enabled = os.getenv(f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_ENABLED")
-            enabled_raw = agent_enabled if agent_enabled is not None else agent_settings().llm_analyze_enabled
-            enabled = str(enabled_raw).lower() in (
-                "true", "1", "yes", "on",
-            )
-        if not enabled:
-            return None
-
-        ticker = self._current_ticker or ""
-        query = self._current_query or ""
-        brief = self._current_brief
-
-        prompt = f"""<role>{role}</role>
-
-<task>
-基于以下数据摘要，撰写一段专业的分析评论。不要重复罗列原始数据，而是解读数据背后的含义、趋势与风险。
-</task>
-
-<context>
-<query>{query}</query>
-<ticker>{ticker}</ticker>
-<objective>{(brief.objective if brief else "")}</objective>
-<required_evidence>{", ".join(brief.required_evidence) if brief else ""}</required_evidence>
-<peers_findings>
-{(brief.context_digest if brief else "")[:1200]}
-</peers_findings>
-</context>
-
-<data_summary>
-{raw_data_summary[:3000]}
-</data_summary>
-
-<analysis_focus>{focus}</analysis_focus>
-
-<output_rules>
-- 输出 200-500 字中文分析段落
-- 必须包含：数据解读 + 趋势/方向判断 + 关键风险提示
-- 引用具体数值支撑论点（不可编造数字）
-- 区分事实与推断，推断标注"预计"/"可能"
-- 禁止：标题、列表符号、分隔线、开场白
-- 直接输出分析正文
-</output_rules>"""
-
-        try:
-            from langchain_core.messages import HumanMessage
-            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
-
-            token_timeout = self._llm_analyze_timeout()
-
-            trace_emitter = get_trace_emitter()
-            trace_emitter.emit_llm_start(
-                model=getattr(self.llm, "model_name", None),
-                prompt_preview=f"[_llm_analyze:{self.AGENT_NAME}] {focus[:80]}",
-                agent=self.AGENT_NAME,
-            )
-            start_time = time.perf_counter()
-
-            response = await asyncio.wait_for(
-                ainvoke_configured_llm(
-                    [HumanMessage(content=prompt)],
-                    context=LLMCallContext.create(
-                        stage="agent_analyze", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=3,
-                    ),
-                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
-                    acquire_timeout_seconds=token_timeout,
-                ),
-                timeout=self._llm_analyze_call_timeout(),
-            )
-
-            content = getattr(response, "content", None)
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-
-            # Validate: content must be a real string (not a Mock) with enough substance
-            if not isinstance(content, str) or len(content.strip()) < 80:
-                trace_emitter.emit_llm_end(
-                    model=getattr(self.llm, "model_name", None),
-                    duration_ms=duration_ms,
-                    success=False,
-                    error="response content too short or invalid type",
-                    agent=self.AGENT_NAME,
-                )
-                return None
-
-            trace_emitter.emit_llm_end(
-                model=getattr(self.llm, "model_name", None),
-                duration_ms=duration_ms,
-                success=True,
-                agent=self.AGENT_NAME,
-            )
-            return content.strip()
-        except Exception as exc:
-            logger.info("[%s] _llm_analyze failed: %s", self.AGENT_NAME, exc)
-            try:
-                get_trace_emitter().emit_llm_end(
-                    model=getattr(self.llm, "model_name", None) if self.llm else None,
-                    success=False,
-                    error=str(exc),
-                    agent=self.AGENT_NAME,
-                )
-            except Exception:
-                pass
-            return None
-
     async def research(
         self,
         query: str,
         ticker: str,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
-        brief: Optional[AgentBrief] = None,
     ) -> AgentOutput:
-        """
-        Standard research flow:
-        1. Initial search
-        2. First summary
-        3. Reflection loop (optional, implemented by subclasses)
-        4. Format output
-        """
+        """执行一次采集、确定性摘要和质量合同，不启动内部 LLM 或补充搜索循环。"""
+
         self._current_query = query
         self._current_ticker = ticker
-        self._current_brief = brief
         trace: List[Dict[str, Any]] = []
         global_emitter = get_trace_emitter()
         start_time = time.perf_counter()
 
-        def _log_event(event_type: str, details: Dict[str, Any]):
+        def log_event(event_type: str, details: Dict[str, Any]) -> None:
             trace.append(create_trace_event(event_type, agent=self.AGENT_NAME, **details))
-            # 发射到全局 TraceEmitter
             if event_type == "agent_start":
-                global_emitter.emit_agent_start(self.AGENT_NAME, query=details.get("query"), ticker=details.get("ticker"))
+                global_emitter.emit_agent_start(
+                    self.AGENT_NAME,
+                    query=details.get("query"),
+                    ticker=details.get("ticker"),
+                )
             elif event_type == "agent_end":
-                duration_ms = int((time.perf_counter() - start_time) * 1000)
                 global_emitter.emit_agent_done(
                     self.AGENT_NAME,
                     success=True,
-                    duration_ms=duration_ms,
-                    summary=f"confidence={details.get('confidence')}, evidence={details.get('evidence_count')}"
+                    duration_ms=int((time.perf_counter() - start_time) * 1000),
+                    summary=(
+                        f"confidence={details.get('confidence')}, "
+                        f"evidence={details.get('evidence_count')}"
+                    ),
                 )
             else:
                 global_emitter.emit_agent_step(self.AGENT_NAME, event_type, details)
 
             if on_event:
-                # Bridge internal trace events to external listener
                 try:
-                    on_event({
-                        "event": "agent_execution",
-                        "agent": self.AGENT_NAME,
-                        "details": {"type": event_type, **details},
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    on_event(
+                        {
+                            "event": "agent_execution",
+                            "agent": self.AGENT_NAME,
+                            "details": {"type": event_type, **details},
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                 except Exception:
-                    logger.debug("[%s] on_event callback failed", self.AGENT_NAME, exc_info=True)
+                    logger.debug(
+                        "[%s] on_event callback failed",
+                        self.AGENT_NAME,
+                        exc_info=True,
+                    )
 
-        _log_event("agent_start", {"query": query, "ticker": ticker})
-        self.__current_requests.set([])
-
-        # 1. 初始搜索
+        log_event("agent_start", {"query": query, "ticker": ticker})
         if on_event:
             try:
-                on_event({
-                    "event": "agent_action", 
-                    "agent": self.AGENT_NAME, 
-                    "details": {"message": f"正在搜索: {query[:30]}..."}
-                })
-            except: logger.debug("[%s] on_event callback error in search notification", self.AGENT_NAME, exc_info=True)
-            
+                on_event(
+                    {
+                        "event": "agent_action",
+                        "agent": self.AGENT_NAME,
+                        "details": {"message": f"正在采集: {query[:30]}..."},
+                    }
+                )
+            except Exception:
+                logger.debug(
+                    "[%s] on_event callback failed",
+                    self.AGENT_NAME,
+                    exc_info=True,
+                )
+
         results = await self._initial_search(query, ticker)
-        result_count = None
         try:
-            result_count = len(results)  # type: ignore[arg-type]
+            result_count: int | None = len(results)
         except Exception:
             result_count = None
-            
-        _log_event("search_result", {"result_count": result_count, "result_type": type(results).__name__})
+        log_event(
+            "search_result",
+            {"result_count": result_count, "result_type": type(results).__name__},
+        )
 
         summary = await self._first_summary(results)
         if summary:
-            _log_event("summary_init", {
-                "summary_preview": str(summary)[:200],
-                "summary_length": len(str(summary)),
-            })
-
-        # 2. 反思循环 (默认空实现，由子类覆盖)
-        for i in range(self.max_reflections):
-            gaps = await self._identify_gaps(summary)
-            if not gaps:
-                break
-            
-            if on_event:
-                try: on_event({"event": "agent_action", "agent": self.AGENT_NAME, "details": {"message": f"发现信息缺口，进行第 {i+1} 轮补充搜索..."}})
-                except: logger.debug("[%s] on_event callback error in search notification", self.AGENT_NAME, exc_info=True)
-
-            _log_event("reflection_gap", {"round": i + 1, "gaps": gaps})
-            new_data = await self._targeted_search(gaps, ticker)
-            
-            _log_event("reflection_search", {
-                "round": i + 1,
-                "new_data_preview": str(new_data)[:300] if new_data is not None else "",
-            })
-            summary = await self._update_summary(summary, new_data)
-            if summary:
-                _log_event("summary_update", {
-                    "round": i + 1,
+            log_event(
+                "summary_init",
+                {
                     "summary_preview": str(summary)[:200],
                     "summary_length": len(str(summary)),
-                })
+                },
+            )
 
         output = self._format_output(summary, results)
-        output.requests = list(self.__current_requests.get())[:1]
         try:
             from backend.research.agent_quality_contract import apply_agent_quality_contract
             from backend.research.agent_research_loop import apply_agent_self_check
@@ -429,330 +207,25 @@ class BaseFinancialAgent:
             output = apply_agent_self_check(output, query=query, ticker=ticker)
         except Exception as exc:
             logger.debug("[%s] agent quality contract failed: %s", self.AGENT_NAME, exc)
-        _log_event("agent_end", {
-            "confidence": getattr(output, "confidence", None),
-            "evidence_count": len(getattr(output, "evidence", []) or []),
-        })
-        existing_trace = getattr(output, "trace", None) or []
-        output.trace = trace + existing_trace
+
+        log_event(
+            "agent_end",
+            {
+                "confidence": getattr(output, "confidence", None),
+                "evidence_count": len(getattr(output, "evidence", []) or []),
+            },
+        )
+        output.trace = trace + (getattr(output, "trace", None) or [])
         return output
 
     async def _initial_search(self, query: str, ticker: str) -> Any:
         raise NotImplementedError
 
     async def _first_summary(self, data: Any) -> str:
-        # Default simple summary, subclasses should implement LLM summary
         return str(data)
 
-    async def _identify_gaps(self, summary: str) -> List:
-        """Use LLM to identify missing information, with tool-aware suggestions.
-
-        Returns a list of gap items.  Each item is either:
-        - ``dict`` with keys ``gap``, ``tool``, ``query`` (new structured format)
-        - ``str`` (legacy plain-text search phrase, used as fallback)
-
-        The downstream ``_targeted_search`` handles both formats transparently.
-        """
-        if not self.llm:
-            return []
-        query = self._current_query or ""
-        ticker = self._current_ticker or ""
-        brief = self._current_brief
-
-        # Build tool catalogue for the prompt
-        registry = self._get_tool_registry()
-        tool_catalogue = "\n".join(
-            f"- {name}: {entry.get('description', '')}"
-            for name, entry in registry.items()
-        ) or "- search: 通用网络搜索"
-
-        prompt = f"""<role>金融分析师 — 信息缺口检测器</role>
-
-<task>
-评估以下摘要相对于用户查询的信息完整性，识别关键缺失信息并建议使用哪个工具补充。
-</task>
-
-<input>
-<query>{query}</query>
-<ticker>{ticker}</ticker>
-<objective>{(brief.objective if brief else "")}</objective>
-<peers_findings>
-{(brief.context_digest if brief else "")[:1200]}
-</peers_findings>
-<summary>{summary}</summary>
-</input>
-
-<available_tools>
-{tool_catalogue}
-</available_tools>
-
-<evaluation_dimensions>
-逐一检查以下维度是否已覆盖：
-- 关键财务数据（营收、利润、估值指标如 PE/PB）
-- 风险因素（公司特有风险 + 行业/系统性风险）
-- 行业对比（竞争格局、市场份额）
-- 时效性信息（最新财报、近期公告、重大事件）
-- 用户查询的核心关注点是否已回答
-</evaluation_dimensions>
-
-<output_format>
-每行一条 JSON，格式: {{"gap": "缺失信息描述", "tool": "建议工具名", "query": "搜索/调用参数"}}
-- tool 必须是 available_tools 中列出的工具名之一
-- 若工具类型为 ticker 类（非 search），query 填写股票代码即可
-- 输出 1-3 条，优先补充与用户查询最相关的缺失信息
-- 若信息已充分覆盖用户查询，输出: {{"complete": true}}
-</output_format>
-
-<constraints>
-- 禁止：开场白、解释、编号前缀
-- 禁止：重复摘要已有信息的搜索词
-- 直接输出 JSON，每行一条
-</constraints>"""
-        try:
-            from langchain_core.messages import HumanMessage
-            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
-
-            token_timeout = self._reflection_token_timeout()
-
-            trace_emitter = get_trace_emitter()
-            trace_emitter.emit_llm_start(
-                model=getattr(self.llm, "model_name", None),
-                prompt_preview=prompt[:100] + "...",
-                agent=self.AGENT_NAME
-            )
-            start_time = time.perf_counter()
-
-            response = await asyncio.wait_for(
-                ainvoke_configured_llm(
-                    [HumanMessage(content=prompt)],
-                    context=LLMCallContext.create(
-                        stage="agent_analyze", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=3,
-                    ),
-                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
-                    acquire_timeout_seconds=token_timeout,
-                ),
-                timeout=self._llm_analyze_call_timeout(),
-            )
-            text = response.content if hasattr(response, "content") else str(response)
-
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            trace_emitter.emit_llm_end(
-                model=getattr(self.llm, "model_name", None),
-                duration_ms=duration_ms,
-                success=True,
-                agent=self.AGENT_NAME
-            )
-        except Exception as e:
-            trace_emitter = get_trace_emitter()
-            trace_emitter.emit_llm_end(
-                model=getattr(self.llm, "model_name", None) if self.llm else None,
-                success=False,
-                error=str(e),
-                agent=self.AGENT_NAME
-            )
-            return []
-
-        # Parse response: try JSON per line, fall back to plain text
-        gaps: List = []
-        for line in str(text).splitlines():
-            cleaned = line.strip()
-            if not cleaned:
-                continue
-            # Try JSON parse first (new structured format)
-            try:
-                obj = json.loads(cleaned)
-                if isinstance(obj, dict):
-                    if obj.get("complete"):
-                        return []  # LLM says info is sufficient
-                    if obj.get("type") == "delegate":
-                        evidence = str(obj.get("evidence") or "").strip()
-                        reason = str(obj.get("reason") or obj.get("gap") or "").strip()
-                        if evidence:
-                            requests = list(self.__current_requests.get())
-                            if not requests:
-                                requests.append({
-                                    "type": "delegate",
-                                    "evidence": evidence,
-                                    "reason": reason[:240],
-                                })
-                                self.__current_requests.set(requests)
-                        continue
-                    if obj.get("gap") or obj.get("query"):
-                        gaps.append(obj)
-                    continue
-            except (json.JSONDecodeError, ValueError):
-                pass
-            # Fallback: treat as plain text search phrase (backward compat)
-            cleaned = cleaned.lstrip("-*0123456789. ").strip()
-            if cleaned and "无缺口" not in cleaned and "complete" not in cleaned.lower():
-                gaps.append(cleaned)
-        return gaps[:4]
-
-    async def _targeted_search(self, gaps: List, ticker: str) -> Any:
-        """Execute targeted tool calls based on gap analysis.
-
-        Each gap can be:
-        - ``dict`` with ``tool`` + ``query`` (tool-aware mode)
-        - ``str`` (legacy mode — always uses ``search``)
-
-        Falls back to ``search`` if the suggested tool is unavailable.
-        """
-        registry = self._get_tool_registry()
-        if not gaps or not registry:
-            return None
-
-        trace_emitter = get_trace_emitter()
-        results = []
-        for gap_item in gaps[:3]:
-            # Resolve tool name and query from gap item
-            if isinstance(gap_item, dict):
-                tool_name = str(gap_item.get("tool", "search")).strip()
-                gap_query = str(gap_item.get("query", gap_item.get("gap", ""))).strip()
-                gap_desc = str(gap_item.get("gap", tool_name)).strip()
-            else:
-                tool_name = "search"
-                gap_query = str(gap_item).strip()
-                gap_desc = gap_query
-
-            # Look up tool; fall back to search if not found
-            tool_entry = registry.get(tool_name)
-            if not tool_entry:
-                tool_entry = registry.get("search")
-                tool_name = "search"
-            if not tool_entry:
-                continue
-
-            func = tool_entry["func"]
-            call_with = tool_entry.get("call_with", "query")
-
-            # Emit trace: tool dispatch start
-            trace_emitter.emit_tool_start(tool_name, {"query": gap_desc}, agent=self.AGENT_NAME)
-
-            try:
-                if call_with == "query":
-                    # Search-style: combine ticker + query
-                    search_query = f"{ticker} {gap_query}".strip() if gap_query else ticker
-                    result = func(search_query)
-                elif call_with == "ticker":
-                    result = func(ticker)
-                elif call_with == "positions":
-                    result = func([{"ticker": ticker, "weight": 1.0}])
-                else:
-                    # No-args tools (e.g. get_fred_data)
-                    result = func()
-
-                # Validate result — only accept str/list/dict (reject mock objects in tests)
-                if result is not None and isinstance(result, (str, list, dict)):
-                    result_str = str(result) if not isinstance(result, str) else result
-                    if len(result_str) > 50:
-                        results.append(result_str)
-                        trace_emitter.emit_tool_end(tool_name, success=True, agent=self.AGENT_NAME)
-                        logger.info(
-                            "[%s] Tool-aware search success: %s(%s) → %d chars",
-                            self.AGENT_NAME, tool_name, gap_desc[:40], len(result_str),
-                        )
-                    else:
-                        trace_emitter.emit_tool_end(tool_name, success=False, agent=self.AGENT_NAME)
-                else:
-                    trace_emitter.emit_tool_end(tool_name, success=False, agent=self.AGENT_NAME)
-            except Exception as e:
-                logger.warning("[%s] Tool %s failed for '%s': %s", self.AGENT_NAME, tool_name, gap_desc[:40], e)
-                trace_emitter.emit_tool_end(tool_name, success=False, error=str(e), agent=self.AGENT_NAME)
-                # Fallback to search if a specialized tool fails
-                if tool_name != "search":
-                    search_entry = registry.get("search")
-                    if search_entry:
-                        try:
-                            fallback_query = f"{ticker} {gap_query}".strip()
-                            fb_result = search_entry["func"](fallback_query)
-                            if fb_result and isinstance(fb_result, str) and len(fb_result) > 30:
-                                results.append(fb_result)
-                                logger.info("[%s] Fallback search success for: %s", self.AGENT_NAME, gap_desc[:40])
-                        except Exception:
-                            pass
-                continue
-        return "\n\n---\n\n".join(results) if results else None
-
-    async def _update_summary(self, summary: str, new_data: Any) -> str:
-        if not new_data or not self.llm:
-            return summary
-        prompt = f"""<role>金融分析师 — 信息整合专家</role>
-
-<task>将新检索到的信息有机整合到现有摘要中，提升摘要的完整性和分析深度。</task>
-
-<current_summary>
-{summary}
-</current_summary>
-
-<new_information>
-{new_data}
-</new_information>
-
-<integration_rules>
-- 仅整合有实质价值的新信息（新数据点、新视角、新风险）
-- 新旧信息冲突时，优先采用更新、更权威的数据，并标注更新
-- 保持原摘要的结构和逻辑框架
-- 整合后总长度不超过原摘要的 1.5 倍
-- 无有价值的新信息时，原样返回现有摘要
-</integration_rules>
-
-<constraints>
-- 直接输出整合后的摘要正文
-- 禁止任何标题、前缀、开场白
-- 禁止"更新后的摘要"、"整合后的内容"等元信息
-- 禁止编造数据
-- 禁止任何格式标记
-</constraints>"""
-        try:
-            from langchain_core.messages import HumanMessage
-            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
-
-            token_timeout = self._reflection_token_timeout()
-
-            # 发射 LLM 调用开始事件
-            trace_emitter = get_trace_emitter()
-            trace_emitter.emit_llm_start(
-                model=getattr(self.llm, "model_name", None),
-                prompt_preview="[update_summary] " + prompt[:80] + "...",
-                agent=self.AGENT_NAME
-            )
-            start_time = time.perf_counter()
-
-            response = await asyncio.wait_for(
-                ainvoke_configured_llm(
-                    [HumanMessage(content=prompt)],
-                    context=LLMCallContext.create(
-                        stage="agent_analyze", agent=self.AGENT_NAME, layer="analysis", max_provider_attempts=3,
-                    ),
-                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
-                    acquire_timeout_seconds=token_timeout,
-                ),
-                timeout=self._llm_analyze_call_timeout(),
-            )
-            updated = response.content if hasattr(response, "content") else str(response)
-
-            # 发射 LLM 调用结束事件
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            trace_emitter.emit_llm_end(
-                model=getattr(self.llm, "model_name", None),
-                duration_ms=duration_ms,
-                success=True,
-                agent=self.AGENT_NAME
-            )
-            return updated.strip() or summary
-        except Exception as e:
-            # 发射 LLM 调用失败事件
-            trace_emitter = get_trace_emitter()
-            trace_emitter.emit_llm_end(
-                model=getattr(self.llm, "model_name", None) if self.llm else None,
-                success=False,
-                error=str(e),
-                agent=self.AGENT_NAME
-            )
-            return summary
-
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
-        # Basic implementation, override for more specific formatting
+        del raw_data
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -761,101 +234,5 @@ class BaseFinancialAgent:
             data_sources=[],
             as_of=datetime.now().isoformat(),
             fallback_used=False,
-            risks=[]
+            risks=[],
         )
-
-    async def analyze_stream(self, query: str, ticker: str):
-        """
-        流式分析接口，实时返回搜索结果和 LLM tokens
-        
-        Yields:
-            dict: 包含 type 和相关数据的字典
-            - type='agent_start': Agent 开始工作
-            - type='search_start': 开始搜索
-            - type='search_result': 搜索结果计数
-            - type='summary_start': 开始生成摘要
-            - type='token': LLM token
-            - type='done': 完成，包含最终输出
-        """
-        import json
-        
-        # 1. 通知 Agent 开始
-        yield json.dumps({
-            "type": "agent_start", 
-            "agent": self.AGENT_NAME,
-            "message": f"{self.AGENT_NAME} 开始分析..."
-        }, ensure_ascii=False)
-        
-        # 2. 执行搜索
-        yield json.dumps({
-            "type": "search_start",
-            "agent": self.AGENT_NAME
-        }, ensure_ascii=False)
-        
-        try:
-            results = await self._initial_search(query, ticker)
-            result_count = len(results) if isinstance(results, list) else 1
-            
-            yield json.dumps({
-                "type": "search_result",
-                "agent": self.AGENT_NAME,
-                "count": result_count
-            }, ensure_ascii=False)
-        except Exception as e:
-            yield json.dumps({
-                "type": "error",
-                "agent": self.AGENT_NAME,
-                "message": f"搜索失败: {str(e)}"
-            }, ensure_ascii=False)
-            return
-        
-        # 3. 流式生成摘要
-        yield json.dumps({
-            "type": "summary_start",
-            "agent": self.AGENT_NAME
-        }, ensure_ascii=False)
-        
-        summary_buffer = ""
-        async for token in self._stream_summary(results):
-            summary_buffer += token
-            yield json.dumps({
-                "type": "token",
-                "content": token
-            }, ensure_ascii=False)
-        
-        # 如果没有流式输出，使用同步方法
-        if not summary_buffer:
-            summary_buffer = await self._first_summary(results)
-            yield json.dumps({
-                "type": "token",
-                "content": summary_buffer
-            }, ensure_ascii=False)
-        
-        # 4. 格式化最终输出
-        output = self._format_output(summary_buffer, results)
-        
-        yield json.dumps({
-            "type": "done",
-            "agent": self.AGENT_NAME,
-            "output": {
-                "agent_name": output.agent_name,
-                "summary": output.summary,
-                "confidence": output.confidence,
-                "data_sources": output.data_sources,
-                "as_of": output.as_of
-            }
-        }, ensure_ascii=False)
-
-    async def _stream_summary(self, data: Any):
-        """
-        流式生成摘要的辅助方法
-        子类应重写此方法以实现真正的流式 LLM 输出
-        
-        默认实现：使用同步摘要方法，一次性返回
-        
-        Yields:
-            str: 摘要 token
-        """
-        # 默认实现：非流式，直接返回完整摘要
-        summary = await self._first_summary(data)
-        yield summary

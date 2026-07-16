@@ -1538,39 +1538,7 @@ def get_market_news_headlines(limit: int = 5) -> str:
     if finnhub_ok:
         return "最近48小时市场要闻(Finnhub):\n" + "\n".join(finnhub_lines[:limit])
 
-    # 2) 尝试用 alert_scheduler 的新闻抓取（已含48h过滤），优先指数与代表性ETF
-    try:
-        from backend.services.alert_scheduler import fetch_news_articles
-        for idx_ticker in ["^GSPC", "^IXIC", "SPY", "QQQ", "DIA", "IWM"]:
-            try:
-                articles = fetch_news_articles(idx_ticker)
-            except Exception as inner:
-                logger.info(f"[MarketNews] fetch_news_articles failed for {idx_ticker}: {inner}")
-                continue
-            if articles:
-                lines = []
-                for a in articles:
-                    title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
-                    snippet = a.get("summary") or a.get("description") or ""
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    source = a.get("source") or a.get("publisher") or "Unknown"
-                    published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
-                    if isinstance(published_at, str):
-                        date_str = published_at.split("T")[0]
-                    else:
-                        date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
-                    url = a.get("url") or a.get("link") or ""
-                    line = _format_headline_line(date_str, title, source, url, snippet)
-                    lines.append(f"{len(lines) + 1}. {line}")
-                    if len(lines) >= limit:
-                        break
-                if lines:
-                    return "最近48小时市场要闻:\n" + "\n".join(lines)
-    except Exception as e:
-        logger.info(f"[MarketNews] fetch via alert_scheduler failed: {e}")
-
-    # 3) 搜索聚合兜底
+    # 2) 搜索聚合兜底
     queries = [
         "global stock market breaking news today",
         "US stock market headlines today",

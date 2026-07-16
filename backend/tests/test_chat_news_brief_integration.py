@@ -232,7 +232,7 @@ def test_chat_news_brief_does_not_break_price_only():
 # ──────────────────────────────────────────────────────────────
 # P0-9-2 双快照打架修复：NewsAgent 完整快照 > 轻量快照
 #
-# 现象（FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true 时）：
+# 历史现象：
 # - NewsAgent 完整快照以 evidence(source=news_sentiment_snapshot) 混进新闻流
 # - chat_renderer 把快照文本当新闻渲染，却用轻量快照渲染标题/催化
 # 修复目标：

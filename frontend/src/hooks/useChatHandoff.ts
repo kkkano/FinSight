@@ -5,8 +5,15 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import type { ChatHandoff } from '../types/chatHandoff';
 
-const SOURCE_TAB_CONTROL_PATTERN = /[\u0000-\u001F\u007F]/;
 const SYMBOL_PATTERN = /^(?=.{1,32}$)(?:\^[A-Z0-9][A-Z0-9.-]*|[A-Z0-9][A-Z0-9.-]*(?:=[A-Z])?)$/;
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
 
 function normalizeSymbol(value: string | undefined): string | undefined {
   const normalized = String(value ?? '').trim().toUpperCase();
@@ -15,7 +22,7 @@ function normalizeSymbol(value: string | undefined): string | undefined {
 
 function normalizeSourceTab(value: string | undefined): string | undefined {
   const normalized = String(value ?? '').trim();
-  return normalized && normalized.length <= 64 && !SOURCE_TAB_CONTROL_PATTERN.test(normalized)
+  return normalized && normalized.length <= 64 && !hasControlCharacter(normalized)
     ? normalized
     : undefined;
 }

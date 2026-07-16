@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 
@@ -42,7 +44,9 @@ def test_security_gate_allowlisted_path_bypasses_auth(monkeypatch):
     with TestClient(main.app) as client:
         response = client.get("/health")
 
-    assert response.status_code == 200
+    assert response.status_code in {200, 503}
+    assert response.status_code != 401
+    assert response.json().get("status") in {"healthy", "degraded"}
 
 
 def test_security_gate_dashboard_is_anonymous_read_only_by_default(monkeypatch):
@@ -83,7 +87,13 @@ def test_security_gate_rate_limit_blocks_second_request(monkeypatch):
     from backend.api import main
 
     monkeypatch.setenv("API_AUTH_ENABLED", "false")
-    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=1, window_seconds=60, enabled=True))
+    import backend.api.security_gate as _sg
+    monkeypatch.setattr(
+        _sg,
+        "resolve_request_user",
+        lambda _request: SimpleNamespace(user_id="rl-check", email=""),
+    )
+    monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=1, window_seconds=60, enabled=True))
 
     with TestClient(main.app) as client:
         first = client.get("/api/user/profile", params={"user_id": "rl-check"})
@@ -118,8 +128,8 @@ def test_rate_limited_response_carries_cors_headers(monkeypatch):
     origin = {"Origin": "https://finsight-ai.chat"}
 
     # 第一个请求通过，第二个触发限流
-    client.get("/api/portfolio/summary?session_id=cors-test", headers=origin)
-    resp = client.get("/api/portfolio/summary?session_id=cors-test", headers=origin)
+    client.get("/api/user/profile", headers=origin)
+    resp = client.get("/api/user/profile", headers=origin)
 
     assert resp.status_code == 429
     # 关键断言：429 响应必须带 CORS 头（CORS middleware 在最外层）

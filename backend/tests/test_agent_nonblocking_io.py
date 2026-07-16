@@ -145,8 +145,6 @@ async def test_evidence_normalization_does_not_block_event_loop(monkeypatch) -> 
 
     class Settings:
         live_tools = False
-        dag_executor = True
-        evidence_bus = False
         research_ledger_enabled = False
 
     monkeypatch.setattr(plan_pipeline, "executor_settings", lambda: Settings())

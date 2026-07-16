@@ -11,8 +11,6 @@ from urllib.parse import quote_plus
 
 from backend.graph.state import GraphState
 from backend.graph.renderers.macro import (
-    _focus_line,
-    _focus_task_present,
     _has_macro_context,
     _macro_mechanism_lines,
 )
@@ -125,7 +123,6 @@ def render_url_context(state: GraphState, ctx: dict[str, Any]) -> str | None:
         or analysis_block
         or next_watch
         or _has_macro_context(state)
-        or _focus_task_present(state)
     )
     if _url_fetch_all_failed(state) and not has_other_answerable_tasks:
         if not lines:
@@ -139,9 +136,9 @@ def render_url_context(state: GraphState, ctx: dict[str, Any]) -> str | None:
         if lines and lines[-1] != "":
             lines.append("")
         lines.extend(_macro_mechanism_lines(state))
-    if lines and "关注" not in "\n".join(lines):
+    if next_watch and "关注" not in "\n".join(lines):
         lines.append("")
-        lines.append(_focus_line(state))
+        lines.append(next_watch)
     if not lines:
         lines.append("这个链接和宏观问题需要更多可读证据；我先不按 URL 字面内容硬下结论。")
     _append_sources_for_state(lines, news or evidence_items, state)

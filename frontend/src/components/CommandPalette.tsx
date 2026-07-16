@@ -16,7 +16,7 @@ import {
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
-import { getMiniChatRouteSymbol } from '../utils/miniChatRouteContext';
+import { getDashboardRouteSymbol } from '../utils/dashboardRouteContext';
 import { useChatHandoff } from '../hooks/useChatHandoff';
 import { Dialog } from './ui/Dialog';
 
@@ -71,7 +71,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         icon: MessageCircleQuestion,
         keywords: ['ask', 'ai', 'context', '提问', '上下文'],
         execute: () => {
-          const symbol = getMiniChatRouteSymbol(
+          const symbol = getDashboardRouteSymbol(
             location.pathname,
             activeAsset?.symbol || currentTicker,
           );

@@ -63,10 +63,8 @@ def test_yfinance_callers_do_not_import_or_bypass_the_helper() -> None:
         "backend/dashboard/peer_service.py",
         "backend/dashboard/data_service.py",
         "backend/tools/financial.py",
-        "backend/tools/screener.py",
         "backend/tools/price.py",
         "backend/tools/news.py",
-        "backend/services/alert_scheduler.py",
     )
     for relative_path in files:
         source = (root / relative_path).read_text(encoding="utf-8")

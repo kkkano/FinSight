@@ -83,12 +83,6 @@ def _build_store_client() -> tuple[TestClient, dict[str, dict]]:
         records[session_id] = current
         return dict(current)
 
-    def patch_record(session_id: str, payload: dict, _user_id: str):
-        current = dict(records.get(session_id) or {"session_id": session_id, "messages": []})
-        current.update(payload)
-        records[session_id] = current
-        return dict(current)
-
     app = FastAPI()
     app.include_router(
         create_conversation_router(
@@ -100,7 +94,6 @@ def _build_store_client() -> tuple[TestClient, dict[str, dict]]:
                 list_conversation_records=lambda _user_id: list(records.values()),
                 get_conversation_record=lambda session_id, _user_id: records.get(session_id),
                 upsert_conversation_record=upsert_record,
-                patch_conversation_record=patch_record,
                 delete_conversation_record=lambda session_id, _user_id: records.pop(session_id, None) is not None,
             )
         )
@@ -132,7 +125,7 @@ def test_conversation_router_create_get_list_and_delete_flow():
     assert cleared == ["public:user:thread"]
 
 
-def test_conversation_router_persists_messages_and_patches_metadata():
+def test_conversation_router_persists_messages_and_deletes_record():
     client, records = _build_store_client()
 
     created = client.post(
@@ -149,17 +142,11 @@ def test_conversation_router_persists_messages_and_patches_metadata():
     assert created["conversation"]["message_count"] == 1
     assert records["public:user:thread"]["messages"][0]["content"] == "GOOGL news"
 
-    patched = client.patch(
-        "/api/conversations/public:user:thread",
-        json={"title": "Updated title", "pinned": True, "archived": False},
-    ).json()
-
-    assert patched["success"] is True
-    assert patched["conversation"]["title"] == "Updated title"
-    assert patched["conversation"]["pinned"] is True
-
     listed = client.get("/api/conversations").json()
-    assert any(item["session_id"] == "public:user:thread" and item["title"] == "Updated title" for item in listed["items"])
+    assert any(
+        item["session_id"] == "public:user:thread" and item["title"] == "Google follow-up"
+        for item in listed["items"]
+    )
 
     deleted = client.delete("/api/conversations/public:user:thread").json()
     assert deleted["cleared"]["conversation_store"] == 1

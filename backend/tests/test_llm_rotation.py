@@ -164,7 +164,6 @@ def test_recovery_after_cooldown(monkeypatch):
 
 def test_get_llm_config_raises_when_all_sources_empty(monkeypatch):
     llm_config = _reload_llm_config()
-    monkeypatch.setattr(llm_config, '_load_user_config', lambda: {})
     monkeypatch.setattr(llm_config, '_parse_env_endpoints', lambda provider, model: [])
 
     with pytest.raises(RuntimeError) as exc:
@@ -692,25 +691,3 @@ def test_auto_detect_full_chat_completions_url_without_raw_flag():
     full_url = 'https://x666.me/v1/chat/completions'
     result = llm_config._normalize_api_base(full_url, raw=False)
     assert result == full_url
-
-
-def test_parse_user_endpoints_auto_sets_raw_url_for_full_endpoint():
-    llm_config = _reload_llm_config()
-
-    payload = {
-        'llm_endpoints': [
-            {
-                'name': 'primary',
-                'provider': 'openai_compatible',
-                'api_base': 'https://x666.me/v1/chat/completions',
-                'api_key': 'sk-test-1234567890',
-                'model': 'gemini-3-pro-high',
-                'enabled': True,
-            }
-        ]
-    }
-
-    endpoints = llm_config._parse_user_endpoints(payload, 'openai_compatible', None)
-    assert len(endpoints) == 1
-    assert endpoints[0].raw_url is True
-    assert endpoints[0].api_base == 'https://x666.me/v1/chat/completions'

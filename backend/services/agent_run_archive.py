@@ -33,7 +33,7 @@ class AgentRunArchive:
             return 0
         written = 0
         with self._engine.begin() as conn:
-            for raw in rows:
+            for attempt, raw in enumerate(rows, start=1):
                 if not isinstance(raw, Mapping):
                     continue
                 model = str(raw.get("model") or "unknown")
@@ -66,6 +66,24 @@ class AgentRunArchive:
                     "cost_usd=excluded.cost_usd,call_count=excluded.call_count,"
                     "failed_call_count=excluded.failed_call_count,duration_ms=excluded.duration_ms,status=excluded.status"
                 ), params)
+                conn.execute(text(
+                    "INSERT INTO llm_usage (run_id,user_id,logical_role,attempt,provider,model,prompt_version,"
+                    "prediction_id,prompt_tokens,completion_tokens,total_tokens,cost_usd,latency_ms,status,error_code) "
+                    "VALUES (:run_id,:user_id,:logical_role,:attempt,'configured',:model,NULL,"
+                    "CAST(:prediction_id AS uuid),:prompt_tokens,:completion_tokens,:total_tokens,:cost_usd,"
+                    ":duration_ms,:usage_status,:error_code) "
+                    "ON CONFLICT(run_id,user_id,logical_role,attempt) DO UPDATE SET "
+                    "model=excluded.model,prediction_id=excluded.prediction_id,"
+                    "prompt_tokens=excluded.prompt_tokens,completion_tokens=excluded.completion_tokens,"
+                    "total_tokens=excluded.total_tokens,cost_usd=excluded.cost_usd,"
+                    "latency_ms=excluded.latency_ms,status=excluded.status,error_code=excluded.error_code"
+                ), {
+                    **params,
+                    "logical_role": f"{params['agent']}:{params['layer']}",
+                    "attempt": attempt,
+                    "usage_status": "partial" if params["failed_call_count"] else str(status or "completed"),
+                    "error_code": "llm_call_failed" if params["failed_call_count"] else None,
+                })
                 written += 1
         return written
 

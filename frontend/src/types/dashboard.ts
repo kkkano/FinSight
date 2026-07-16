@@ -3,7 +3,7 @@
  */
 
 // === 资产类型 ===
-export type AssetType = 'equity' | 'index' | 'etf' | 'crypto' | 'portfolio';
+export type AssetType = 'equity' | 'index' | 'etf' | 'crypto';
 
 export interface ActiveAsset {
   symbol: string;
@@ -158,7 +158,7 @@ export interface MacroSnapshotData {
   status?: string;
 }
 
-// === 选中对象（用于 MiniChat 上下文引用） ===
+// === 选中对象（用于 Chat 上下文引用） ===
 export interface SelectionItem {
   type: 'news' | 'filing' | 'doc' | 'insight' | 'risk';
   id: string;           // hash(title + source + ts)
@@ -217,52 +217,6 @@ export interface DashboardErrorDetail {
 export interface DashboardErrorResponse {
   success: false;
   error: DashboardErrorDetail;
-}
-
-// === 持仓头寸（含成本） ===
-export interface PortfolioPosition {
-  /** 股票代码（大写） */
-  symbol: string;
-  /** 持有股数 */
-  shares: number;
-  /** 平均成本价（可选，用于 P&L 计算） */
-  avgCost?: number;
-}
-
-// === 单个持仓 P&L 计算结果 ===
-export interface PositionPnL {
-  /** 股票代码 */
-  symbol: string;
-  /** 持有股数 */
-  shares: number;
-  /** 平均成本价 */
-  avgCost: number;
-  /** 当前价格（报价缺失时为 null） */
-  currentPrice: number | null;
-  /** 未实现盈亏金额（报价缺失时为 null） */
-  unrealizedPnL: number | null;
-  /** 未实现盈亏百分比（报价缺失时为 null） */
-  pnlPercent: number | null;
-  /** 持仓市值（报价缺失时为 null） */
-  marketValue: number | null;
-  /** 持仓成本 */
-  costBasis: number;
-}
-
-// === 投资组合 P&L 汇总结果 ===
-export interface PortfolioPnLResult {
-  /** 各持仓明细 */
-  positions: readonly PositionPnL[];
-  /** 组合总市值（仅含有报价的持仓） */
-  totalValue: number;
-  /** 组合总成本（仅含有报价的持仓） */
-  totalCost: number;
-  /** 组合总盈亏金额 */
-  totalPnL: number;
-  /** 组合总盈亏百分比 */
-  totalPnLPercent: number;
-  /** 是否有部分持仓缺失报价 */
-  hasPartialData: boolean;
 }
 
 // === v2 Valuation Data ===
@@ -379,69 +333,6 @@ export interface IndicatorSeries {
   bb_upper: (number | null)[];
   bb_middle: (number | null)[];
   bb_lower: (number | null)[];
-}
-
-// === Rebalance Types ===
-export type ActionType = 'buy' | 'sell' | 'hold' | 'reduce' | 'increase';
-export type RiskTier = 'conservative' | 'moderate' | 'aggressive';
-export type SuggestionStatus = 'draft' | 'viewed' | 'dismissed' | 'sent_to_chat';
-
-export interface RebalanceConstraints {
-  max_single_position_pct: number;
-  max_turnover_pct: number;
-  sector_concentration_limit: number;
-  min_action_delta_pct: number;
-}
-
-export interface EvidenceSnapshot {
-  evidence_id: string;
-  source: string;
-  quote: string;
-  report_id: string;
-  captured_at: string;
-}
-
-export interface RebalanceAction {
-  ticker: string;
-  action: ActionType;
-  current_weight: number;
-  target_weight: number;
-  delta_weight: number;
-  reason: string;
-  priority: number;
-  evidence_ids: string[];
-  evidence_snapshots: EvidenceSnapshot[];
-}
-
-export interface ExpectedImpact {
-  diversification_delta: string;
-  risk_delta: string;
-  estimated_turnover_pct: number;
-}
-
-export interface RebalanceSuggestion {
-  suggestion_id: string;
-  mode: 'suggestion_only';
-  executable: false;
-  risk_tier: RiskTier;
-  constraints: RebalanceConstraints;
-  summary: string;
-  actions: RebalanceAction[];
-  expected_impact: ExpectedImpact;
-  warnings: string[];
-  disclaimer: string;
-  status: SuggestionStatus;
-  created_at: string;
-  degraded_mode?: boolean;
-  fallback_reason?: string | null;
-}
-
-export interface GenerateRebalanceParams {
-  session_id: string;
-  portfolio: { ticker: string; shares: number; avgCost?: number }[];
-  risk_tier?: RiskTier;
-  constraints?: Partial<RebalanceConstraints>;
-  use_llm_enhancement?: boolean;
 }
 
 // === localStorage 键 ===

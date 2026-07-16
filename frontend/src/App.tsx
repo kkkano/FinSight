@@ -8,7 +8,6 @@ import { RateLimitToastListener } from './components/common/RateLimitToastListen
 import { CommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
-import { getRagInspectorDevIdentity, isRagInspectorDevAuthActive } from './auth/devAuth';
 import { SharedReportPage } from './pages/SharedReportPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 import { useDashboardStore } from './store/dashboardStore';
@@ -39,15 +38,15 @@ function ChatRoute() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const reportId = searchParams.get('report_id') || null;
-  const initialHandoffRef = useRef({
+  const [initialHandoff] = useState(() => ({
     draft: searchParams.get('prompt') || null,
     symbol: searchParams.get('context_symbol') || null,
-  });
+  }));
   const consumedRef = useRef(false);
 
   useEffect(() => {
     if (consumedRef.current) return;
-    const { draft, symbol } = initialHandoffRef.current;
+    const { draft, symbol } = initialHandoff;
     if (!draft && !symbol) return;
     consumedRef.current = true;
 
@@ -70,14 +69,14 @@ function ChatRoute() {
       { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : '', hash: location.hash },
       { replace: true },
     );
-  }, [location.hash, location.pathname, location.search, navigate]);
+  }, [initialHandoff, location.hash, location.pathname, location.search, navigate]);
 
   return (
     <WorkspaceShell
       view="chat"
       dashboardSymbol={null}
       initialReportId={reportId}
-      initialChatDraft={initialHandoffRef.current.draft}
+      initialChatDraft={initialHandoff.draft}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
       navigateToHistory={() => navigate('/history')}
@@ -166,21 +165,11 @@ function App() {
   const setAuthIdentity = useStore((state) => state.setAuthIdentity);
   const setEntryMode = useStore((state) => state.setEntryMode);
   const setSessionId = useStore((state) => state.setSessionId);
-  const setSubscriptionEmail = useStore((state) => state.setSubscriptionEmail);
 
   useEffect(() => {
     const client = getSupabaseClient();
     if (!client) {
-      const devIdentity = isRagInspectorDevAuthActive() ? getRagInspectorDevIdentity() : null;
-      if (devIdentity) {
-        markWelcomeGatePassed();
-        setAuthIdentity(devIdentity);
-        setEntryMode('authenticated');
-        setSessionId(buildUserSessionId(devIdentity.userId));
-        if (devIdentity.email) setSubscriptionEmail(devIdentity.email);
-      } else {
-        setAuthIdentity(null);
-      }
+      setAuthIdentity(null);
       return;
     }
 
@@ -197,7 +186,6 @@ function App() {
         setAuthIdentity({ userId, email });
         setEntryMode('authenticated');
         setSessionId(buildUserSessionId(userId));
-        if (email) setSubscriptionEmail(email);
         return;
       }
 
@@ -225,7 +213,7 @@ function App() {
       isMounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [setAuthIdentity, setEntryMode, setSessionId, setSubscriptionEmail]);
+  }, [setAuthIdentity, setEntryMode, setSessionId]);
 
   const handleToggleCommandPalette = useCallback(() => {
     setIsCommandPaletteOpen((prev) => !prev);

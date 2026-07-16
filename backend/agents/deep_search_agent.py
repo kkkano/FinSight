@@ -2,7 +2,6 @@ from typing import Dict, Any, List, Optional, Tuple, Callable
 from datetime import datetime, timezone
 import asyncio
 import hashlib
-import json
 import os
 import re
 import logging
@@ -18,9 +17,7 @@ try:
 except ImportError:
     PdfReader = None
 
-from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
-from backend.graph.intent.frame import AgentBrief
 from backend.agents.chart_specs_extra import build_deepsearch_chart_specs
 from backend.orchestration.trace_schema import create_trace_event
 from backend.security.ssrf import is_safe_url
@@ -30,22 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 class DeepSearchAgent(BaseFinancialAgent):
-    """
-    DeepSearchAgent - Deep research with real retrieval, PDF parsing, and Self-RAG.
-    """
+    """单轮真实检索、文档解析和证据质量评估 collector。"""
+
     AGENT_NAME = "deep_search"
-    MAX_REFLECTIONS = int(os.getenv("DEEPSEARCH_MAX_REFLECTIONS", "1"))
     CACHE_TTL = 3600  # 1 hour
     MAX_RESULTS = int(os.getenv("DEEPSEARCH_MAX_RESULTS", "8"))
     MAX_DOCS = int(os.getenv("DEEPSEARCH_MAX_DOCS", "4"))
-    MAX_GAP_QUERIES = max(0, int(os.getenv("DEEPSEARCH_MAX_GAP_QUERIES", "1")))
     MIN_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MIN_TEXT_CHARS", "400"))
     MAX_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MAX_TEXT_CHARS", "12000"))
     HTTP_RETRIES = max(0, int(os.getenv("DEEPSEARCH_HTTP_RETRIES", "0")))
     FETCH_TIMEOUT_SECONDS = max(2.0, float(os.getenv("DEEPSEARCH_FETCH_TIMEOUT_SECONDS", "10")))
-    LLM_TOKEN_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_TOKEN_TIMEOUT_SECONDS", "20"))
-    LLM_CALL_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_CALL_TIMEOUT_SECONDS", "45"))
-    LLM_MAX_ATTEMPTS = max(1, int(os.getenv("DEEPSEARCH_LLM_MAX_ATTEMPTS", "1")))
     _POSITIVE_SIGNAL_TERMS = (
         "beat",
         "strong",
@@ -172,14 +163,66 @@ class DeepSearchAgent(BaseFinancialAgent):
         query: str,
         ticker: str,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
-        brief: Optional[AgentBrief] = None,
     ) -> AgentOutput:
-        """Run DeepSearch through the deterministic research flow facade."""
-        from backend.research.deep_research_flow import run_deep_research_flow
+        """执行一次安全检索和确定性证据整理。"""
 
-        self._current_brief = brief
-        result = await run_deep_research_flow(self, query, ticker, on_event=on_event)
-        return result.output
+        self._current_query = query
+        self._current_ticker = ticker
+        trace: List[Dict[str, Any]] = []
+
+        def emit(event_type: str, details: Dict[str, Any]) -> None:
+            trace.append(self._trace_step(event_type, details))
+            if not on_event:
+                return
+            try:
+                on_event(
+                    {
+                        "event": "agent_execution",
+                        "agent": self.AGENT_NAME,
+                        "details": {"type": event_type, **details},
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+            except Exception:
+                logger.debug("[DeepSearch] on_event callback failed", exc_info=True)
+
+        queries = self._build_queries(query, ticker)
+        emit("search_start", {"queries": queries})
+        docs = await self._initial_search(query, ticker, queries=queries)
+        self._log_documents(docs, "initial")
+        emit("search_result", self._build_trace_payload(queries, docs))
+
+        summary = await self._first_summary(docs)
+        emit("summary", {"summary_preview": self._trim_text(summary, 400)})
+
+        evidence_quality = self._compute_evidence_quality(docs)
+        emit("evidence_quality", evidence_quality)
+
+        rag_observability = await self._record_rag_observability(
+            query=query,
+            ticker=ticker,
+            docs=docs,
+        )
+        if rag_observability:
+            emit("rag_observability", rag_observability)
+
+        output = self._format_output(
+            summary,
+            docs,
+            trace=trace,
+            evidence_quality=evidence_quality,
+            query=query,
+            ticker=ticker,
+        )
+        try:
+            from backend.research.agent_quality_contract import apply_agent_quality_contract
+            from backend.research.agent_research_loop import apply_agent_self_check
+
+            output = apply_agent_quality_contract(output, query=query, ticker=ticker)
+            output = apply_agent_self_check(output, query=query, ticker=ticker)
+        except Exception as exc:
+            logger.debug("[DeepSearch] agent quality contract failed: %s", exc)
+        return output
 
     async def _initial_search(
         self,
@@ -200,7 +243,6 @@ class DeepSearchAgent(BaseFinancialAgent):
             for rank, item in enumerate(search_results, 1):
                 enriched = dict(item or {})
                 enriched["search_query"] = q
-                enriched["deepsearch_phase"] = "initial"
                 enriched["search_rank"] = rank
                 results.append(enriched)
 
@@ -226,121 +268,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         return docs
 
     async def _first_summary(self, data: List[Dict[str, Any]]) -> str:
-        return await self._summarize_docs(data)
-
-    async def _identify_gaps(self, summary: str) -> List[str]:
-        if not self.llm:
-            return []
-
-        prompt = f"""<role>金融深度研究 Self-RAG 控制器</role>
-
-<task>评估当前研究摘要的信息完整性，决定是否需要补充检索轮次。</task>
-
-<current_summary>
-{summary}
-</current_summary>
-
-<evaluation_criteria>
-需要补充检索 (needs_more=true) 的情况：
-- 关键财务指标缺失（营收增长率、利润率、估值 PE/PB/PS）
-- 风险因素分析不完整（仅提到 1 类风险或无具体数据支撑）
-- 竞争格局描述模糊（缺乏市场份额或对手对比）
-- 缺乏时效性信息（无最近 1 个月的财报/公告/事件）
-- 核心投资论点缺乏 2 个以上独立数据源支撑
-
-信息充足 (needs_more=false) 的情况：
-- 核心投资逻辑清晰，有数据支撑
-- 至少覆盖 3 个分析维度（估值/基本面/技术面/宏观/情绪）
-- 风险与机会均有实质性覆盖
-- 关键数据点有来源引用
-</evaluation_criteria>
-
-<output_format>
-仅返回 JSON，禁止任何解释、前言或 markdown：
-{{"needs_more": true/false, "queries": ["具体检索词1", "具体检索词2"]}}
-
-queries 要求：
-- 最多 3 个，每个需具体明确
-- 中英文混合以提高召回率（如"AAPL 2024年Q4财报 revenue growth"）
-- 聚焦摘要中已识别的具体信息缺口
-- 禁止宽泛查询（如"公司近况"），必须针对性
-</output_format>"""
-        raw = await self._call_llm(prompt)
-        payload = self._extract_json(raw)
-        if not payload or not isinstance(payload, dict):
-            return []
-        needs_more = payload.get("needs_more", False)
-        if isinstance(needs_more, str):
-            needs_more = needs_more.strip().lower() in ("true", "yes", "1")
-        if not needs_more:
-            return []
-        queries = payload.get("queries", [])
-        if not isinstance(queries, list):
-            return []
-        cleaned = [str(q).strip() for q in queries if str(q).strip()]
-        return cleaned[: self.MAX_GAP_QUERIES]
-
-    async def _targeted_search(self, gaps: List[str], ticker: str) -> Any:
-        if not gaps:
-            return []
-        results: List[Dict[str, Any]] = []
-        for gap in gaps[: self.MAX_GAP_QUERIES]:
-            query = self._sanitize_gap_query(gap, ticker)
-            for rank, item in enumerate(self._search_web(query), 1):
-                enriched = dict(item or {})
-                enriched["search_query"] = query
-                enriched["gap_query"] = gap
-                enriched["deepsearch_phase"] = "targeted"
-                enriched["search_rank"] = rank
-                results.append(enriched)
-        results = self._dedupe_results(results)
-        results = self._reject_unsafe_results(results)
-        sanitized_gaps = [self._sanitize_gap_query(gap, ticker) for gap in gaps if str(gap).strip()]
-        synthesized_query = " ".join(dict.fromkeys(sanitized_gaps).keys()).strip()
-        results = self._filter_results(
-            results,
-            query=synthesized_query or ticker,
-            ticker=ticker,
-        )[:self.MAX_RESULTS]
-        return await asyncio.to_thread(self._fetch_documents, results)
-
-    def _sanitize_gap_query(self, gap: str, ticker: str) -> str:
-        text = " ".join(str(gap or "").split())
-        ticker_upper = str(ticker or "").strip().upper()
-        lower = text.lower()
-        terms: List[str] = []
-
-        if any(k in lower for k in ["arrow lake", "product roadmap", "roadmap", "产品", "路线图"]):
-            terms.append("Arrow Lake product roadmap")
-        if any(k in lower for k in ["earnings", "revenue", "margin", "guidance", "财报", "业绩", "利润", "指引"]):
-            terms.append("latest earnings revenue margin guidance")
-        if any(k in lower for k in ["analyst", "rating", "price target", "分析师", "评级", "目标价"]):
-            terms.append("analyst rating price target")
-
-        peers = self._extract_peer_tickers_from_query(text, ticker_upper)
-        if peers or any(k in lower for k in ["competition", "competitor", "competitive", "market share", "竞争", "对手", "市场份额"]):
-            peer_text = " ".join(peers)
-            terms.append(f"{peer_text} competitive landscape".strip())
-        if any(k in lower for k in ["valuation", "multiple", "dcf", "估值", "pe", "pb", "ps"]):
-            terms.append("valuation multiples")
-        if any(k in lower for k in ["risk", "opportunity", "downside", "upside", "风险", "机会"]):
-            terms.append("6-12 month risks opportunities")
-
-        if not terms:
-            ascii_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9+./&-]{1,}", text)
-            terms.extend(ascii_terms[:8])
-
-        deduped_terms = " ".join(dict.fromkeys(term for term in terms if term).keys()).strip()
-        if not deduped_terms:
-            deduped_terms = "latest analysis report"
-
-        query = f"{ticker_upper} {deduped_terms}".strip()
-        return query[:180].rstrip()
-
-    async def _update_summary(self, summary: str, new_data: Any) -> str:
-        if not new_data:
-            return summary
-        return await self._summarize_docs(new_data, previous_summary=summary)
+        return self._build_degraded_summary(data)
 
     def _format_output(
         self,
@@ -953,16 +881,12 @@ queries 要求：
             if url not in deduped_by_url:
                 merged = dict(item)
                 merged["search_queries"] = self._merge_unique_strings([], [item.get("search_query")])
-                merged["gap_queries"] = self._merge_unique_strings([], [item.get("gap_query")])
-                merged["deepsearch_phases"] = self._merge_unique_strings([], [item.get("deepsearch_phase")])
                 deduped_by_url[url] = merged
                 order.append(url)
                 continue
 
             merged = deduped_by_url[url]
             merged["search_queries"] = self._merge_unique_strings(merged.get("search_queries") or [], [item.get("search_query")])
-            merged["gap_queries"] = self._merge_unique_strings(merged.get("gap_queries") or [], [item.get("gap_query")])
-            merged["deepsearch_phases"] = self._merge_unique_strings(merged.get("deepsearch_phases") or [], [item.get("deepsearch_phase")])
             merged["search_rank"] = min(
                 int(merged.get("search_rank") or 10**9),
                 int(item.get("search_rank") or 10**9),
@@ -997,10 +921,6 @@ queries 要求：
                 "is_pdf": False,
                 "search_query": item.get("search_query"),
                 "search_queries": item.get("search_queries") or [],
-                "gap_query": item.get("gap_query"),
-                "gap_queries": item.get("gap_queries") or [],
-                "deepsearch_phase": item.get("deepsearch_phase"),
-                "deepsearch_phases": item.get("deepsearch_phases") or [],
                 "search_rank": item.get("search_rank"),
                 "confidence": 0.5,  # 降级文档置信度较低
                 "degraded": True,
@@ -1149,10 +1069,6 @@ queries 要求：
             "is_pdf": is_pdf,
             "search_query": item.get("search_query"),
             "search_queries": item.get("search_queries") or [],
-            "gap_query": item.get("gap_query"),
-            "gap_queries": item.get("gap_queries") or [],
-            "deepsearch_phase": item.get("deepsearch_phase"),
-            "deepsearch_phases": item.get("deepsearch_phases") or [],
             "search_rank": item.get("search_rank"),
             "confidence": confidence,
             "degraded": used_snippet_fallback,
@@ -1184,10 +1100,6 @@ queries 要求：
                 "ticker": ticker,
                 "search_query": item.get("search_query"),
                 "search_queries": item.get("search_queries") or [],
-                "gap_query": item.get("gap_query"),
-                "gap_queries": item.get("gap_queries") or [],
-                "deepsearch_phase": item.get("deepsearch_phase"),
-                "deepsearch_phases": item.get("deepsearch_phases") or [],
                 "search_rank": item.get("search_rank"),
                 "is_pdf": bool(item.get("is_pdf")),
                 "published_date": item.get("published_date"),
@@ -1296,111 +1208,6 @@ queries 要求：
         parsed = urlparse(url)
         return parsed.netloc or "web"
 
-    async def _summarize_docs(self, docs: List[Dict[str, Any]], previous_summary: Optional[str] = None) -> str:
-        if not docs:
-            return "未找到深度研究数据源。"
-
-        chunks = []
-        for idx, doc in enumerate(docs, 1):
-            content = doc.get("content", "")
-            snippet = content[:800] if content else doc.get("snippet", "")
-            chunks.append(
-                f"[{idx}] {doc.get('title', '')}\nURL: {doc.get('url', '')}\n{snippet}"
-            )
-        bundle = "\n\n".join(chunks)
-
-        if not self.llm:
-            titles = ", ".join([doc.get("title", "") for doc in docs[:3]])
-            return f"已检索到深度研究来源: {titles}。"
-
-        prev_section = f"\n<previous_summary>\n{previous_summary}\n</previous_summary>" if previous_summary else ""
-        prompt = f"""<role>资深金融研究分析师 — 深度研究备忘录撰写</role>
-
-<task>基于多源检索结果撰写结构化深度研究备忘录，提供可操作的投资洞察。</task>
-{prev_section}
-<sources>
-{bundle}
-</sources>
-
-<requirements>
-- 语言：简体中文
-- 输出 4-6 条核心洞察，每条包含：
-  · 事实发现（含具体数据点）
-  · 影响判断（对标的/行业的潜在影响）
-  · 来源引用 [1]、[2]（对应源编号）
-- 标注 1-2 条不确定性或风险点，附置信度评估
-- 明确标注信息缺口（如有），指明还需要什么数据
-- 若有前次摘要，需与新信息交叉验证，标注一致/冲突
-</requirements>
-
-<output_format>
-## 核心发现
-1. [发现] — [影响判断] [1]
-2. ...
-
-## 影响与解读
-[2-3 句综合解读，强调跨源信息的交叉印证，以及对投资决策的具体含义]
-
-## 风险提示
-- [风险描述] [置信度: High/Medium/Low]
-
-## 信息缺口
-[尚需补充的具体信息，无则写"暂无明显缺口"]
-</output_format>
-
-<constraints>
-- 禁止开场白、寒暄、总结性陈述
-- 直接输出结构化内容
-- 专业商务语气，避免口语化表达
-- 数据冲突时必须标注并说明哪个更可信
-</constraints>"""
-
-        result = await self._call_llm(prompt)
-        if result and result.strip():
-            return result.strip()
-        # Degraded fallback: build summary from doc titles and snippets
-        return self._build_degraded_summary(docs)
-
-    async def _call_llm(self, prompt: str) -> str:
-        """Call LLM with outer retry layer for DeepSearch resilience.
-
-        DeepSearch runs after other agents in the concurrent pipeline, so
-        external rate-limit windows may already be hot.  The outer retry
-        gives endpoints extra time to recover.
-        """
-        try:
-            from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
-
-            response = await asyncio.wait_for(
-                ainvoke_configured_llm(
-                    [HumanMessage(content=prompt)],
-                    context=LLMCallContext.create(
-                        stage="agent_analyze",
-                        agent=self.AGENT_NAME,
-                        layer="analysis",
-                        max_provider_attempts=min(3, max(1, int(self.LLM_MAX_ATTEMPTS))),
-                    ),
-                    temperature=float(getattr(self.llm, "temperature", 0.3) or 0.3),
-                    acquire_timeout_seconds=max(1.0, float(self.LLM_TOKEN_TIMEOUT_SECONDS)),
-                ),
-                timeout=max(1.0, float(self.LLM_CALL_TIMEOUT_SECONDS)),
-            )
-            return getattr(response, "content", "") if response is not None else ""
-        except Exception as exc:
-            logger.warning("[DeepSearch] LLM call failed (%s): %s", type(exc).__name__, exc)
-            return ""
-
-    def _extract_json(self, text: str) -> Dict[str, Any]:
-        if not text:
-            return {}
-        match = re.search(r"\{.*\}", text, flags=re.S)
-        if not match:
-            return {}
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return {}
-
     def _clean_degraded_text(self, text: str) -> str:
         cleaned = str(text or "")
         cleaned = re.sub(r"https?://\S+", "", cleaned)
@@ -1454,7 +1261,7 @@ queries 要求：
         return f"- {snippet} {ref}".strip()
 
     def _build_degraded_summary(self, docs: List[Dict[str, Any]]) -> str:
-        """Build a degraded summary from doc titles/snippets when LLM is unavailable."""
+        """从文档标题和片段构建不越过证据边界的确定性摘要。"""
         if not docs:
             return "未找到深度研究数据源。"
         lines: List[str] = ["## 核心发现"]
@@ -1493,7 +1300,7 @@ queries 要求：
 
         lines.append("")
         lines.append("## 信息缺口")
-        lines.append("- 当前为降级摘要模式（LLM/正文抽取受限），缺少可核验的结构化财务明细与上下文。")
+        lines.append("- 当前检索证据缺少可核验的结构化财务明细与完整上下文。")
         lines.append("- 建议补充：最新财报原文、业绩会纪要、估值模型假设与可追溯数据表。")
         return "\n".join(lines)
 

@@ -3,10 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
 import type { ChatContext } from '../api/client';
-import type { PortfolioSummaryPosition } from '../api/contracts';
-import { getAgentPreferences } from '../components/settings/AgentControlPanel';
 import { useToast } from '../components/ui';
-import { queryClient } from '../queryClient';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useExecutionStore } from '../store/executionStore';
 import { useStore } from '../store/useStore';
@@ -14,12 +11,10 @@ import { zh } from '../locales/zh';
 import type { AgentLogSource, Message, ThinkingStep } from '../types';
 import { injectChartMarkers, shouldGenerateChart } from '../utils/chartIntent';
 import { extractTicker, extractTickers } from '../utils/ticker';
-import { parseAgentMentions } from './useAgentMention';
 
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 
 export interface SendChatStreamOptions {
-  agentsOverride?: string[];
   outputMode?: 'chat' | 'investment_report';
 }
 
@@ -101,20 +96,6 @@ export const findRetryQuery = (messages: Message[], messageId: string): string |
   return lastUser?.content?.trim() || null;
 };
 
-export const normalizePortfolioPositionsForChat = (
-  positions: PortfolioSummaryPosition[] | null | undefined,
-): PortfolioSummaryPosition[] => (Array.isArray(positions) ? positions : [])
-  .filter((position) => {
-    const ticker = String(position?.ticker || '').trim();
-    const shares = Number(position?.shares);
-    return Boolean(ticker) && Number.isFinite(shares) && shares > 0;
-  })
-  .map((position) => ({
-    ...position,
-    ticker: position.ticker.trim().toUpperCase(),
-    shares: Number(position.shares),
-  }));
-
 export function useChatStream(sessionId: string): UseChatStreamResult {
   const { toast } = useToast();
 
@@ -130,11 +111,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       : -1;
     if (retryMessageId && retryIndex < 0) return;
 
-    const parsedAgents = parseAgentMentions(userMsgContent);
-    const selectedAgents = opts.agentsOverride ?? parsedAgents;
-    const queryToSend = parsedAgents.length
-      ? (userMsgContent.replace(/(?:^|\s)@[A-Za-z_]+/g, ' ').replace(/\s+/g, ' ').trim() || userMsgContent)
-      : userMsgContent;
     const guessedTicker = extractTicker(userMsgContent);
 
     // 1. 模糊查询守卫：重试已有问题时不重复插入澄清消息。
@@ -269,36 +245,18 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       }
       if (dashboard.activeSelections.length === 1) context.selection = dashboard.activeSelections[0];
       if (dashboard.activeSelections.length > 1) context.selections = dashboard.activeSelections;
-      if (requestSessionId) {
-        try {
-          const portfolioSummary = await queryClient.fetchQuery({
-            queryKey: ['portfolio-summary', requestSessionId],
-            queryFn: () => apiClient.getPortfolioSummary(requestSessionId),
-            staleTime: 30_000,
-          });
-          const positions = normalizePortfolioPositionsForChat(portfolioSummary.positions);
-          if (positions.length > 0) context.positions = positions;
-        } catch {
-          // 持仓不可用时不阻断普通聊天，也不伪造空持仓。
-        }
-      }
-      if (initialState.subscriptionEmail) context.user_email = initialState.subscriptionEmail;
       const streamContext = Object.keys(context).length > 0 ? context : undefined;
-      const agentPreferences = getAgentPreferences();
 
       // 4. 所有发送/重试共用同一个 SSE 管线。
       await apiClient.sendMessageStream(
         {
-          query: queryToSend,
+          query: userMsgContent,
           history,
           context: streamContext,
           options: {
             output_mode: outputMode,
             ...(outputMode === 'investment_report' ? { strict_selection: false } : {}),
-            confirmation_mode: 'skip',
             trace_raw_override: initialState.traceRawEnabled ? 'on' : 'off',
-            agent_preferences: agentPreferences,
-            agents: selectedAgents.length ? selectedAgents : undefined,
           },
           session_id: requestSessionId || undefined,
         },
@@ -391,17 +349,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                   });
                   if (withMarkers !== patched && tickers.length === 1) useStore.getState().setTicker(tickers[0]);
                   patched = withMarkers;
-                } else if (chartInfo.smartChart && !forceMulti) {
-                  const smartTicker = tickers[0] || nextFocus || initialState.currentTicker || null;
-                  if (smartTicker && !/<chart\s+/i.test(patched)) {
-                    const { chartType, dataKind, title } = chartInfo.smartChart;
-                    const result = await apiClient.getChartData(smartTicker, dataKind);
-                    if (result?.success && result.data && Array.isArray(result.data.values) && result.data.values.length > 0) {
-                      const safeTitle = (title || zh.chat.chartTitle(smartTicker)).replace(/"/g, '');
-                      patched += `\n\n<chart type="${chartType}" title="${safeTitle}">${JSON.stringify(result.data)}</chart>`;
-                      useStore.getState().setTicker(smartTicker);
-                    }
-                  }
                 }
                 if (patched !== fullContent) updateScopedMessage(aiMsgId, { content: patched });
               } catch (error) {

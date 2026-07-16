@@ -32,31 +32,6 @@ def test_akshare_spot_formats_price_and_change(monkeypatch):
     assert "source: akshare/eastmoney" in result
 
 
-def test_a_share_spot_ladder_tries_akshare_first(monkeypatch):
-    calls: list[str] = []
-
-    def source(name, result=None):
-        def fetch(_ticker):
-            calls.append(name)
-            return result
-
-        return fetch
-
-    monkeypatch.setattr(price, "_fetch_with_akshare_spot", source("akshare"))
-    monkeypatch.setattr(price, "_fetch_with_yfinance", source("yfinance"))
-    monkeypatch.setattr(price, "_fetch_yahoo_api_v8", source("yahoo_v8"))
-    monkeypatch.setattr(
-        price,
-        "_search_for_price",
-        source("search", "600036.SS Current Price: $42.31"),
-    )
-
-    result = price.get_stock_price("600036")
-
-    assert calls == ["akshare", "yfinance", "yahoo_v8", "search"]
-    assert "$42.31" in result
-
-
 def test_akshare_history_maps_chinese_columns(monkeypatch):
     captured: dict[str, str] = {}
 
@@ -107,24 +82,6 @@ def test_akshare_history_maps_chinese_columns(monkeypatch):
         "interval": "1d",
         "source": "akshare/eastmoney",
     }
-
-
-def test_a_share_history_uses_akshare_before_yfinance(monkeypatch):
-    expected = {
-        "kline_data": [{"time": "2026-07-11 00:00", "close": 42.31}],
-        "period": "1y",
-        "interval": "1d",
-        "source": "akshare/eastmoney",
-    }
-    monkeypatch.setattr(price, "_fetch_with_akshare_hist", lambda *_args, **_kwargs: expected)
-
-    class ForbiddenTicker:
-        def __init__(self, *_args, **_kwargs):
-            raise AssertionError("akshare 命中后不应调用 yfinance")
-
-    monkeypatch.setattr(price, "create_ticker", ForbiddenTicker)
-
-    assert price.get_stock_historical_data("600036") == expected
 
 
 def test_akshare_lazy_import_missing_is_safe(monkeypatch):

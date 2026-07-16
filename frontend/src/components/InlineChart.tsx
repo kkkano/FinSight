@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { ChartNoAxesCombined, Loader2 } from 'lucide-react';
 
@@ -19,7 +19,6 @@ interface InlineChartProps {
   chartType?: ChartType;
   /** 价格语义图使用 close；旧的收益率快捷图保持 return。 */
   valueMode?: 'close' | 'return';
-  onDataReady?: (data: KlineData[], summary: string) => void;
 }
 
 const chartLabels: Partial<Record<ChartType, string>> = {
@@ -33,35 +32,11 @@ const chartLabels: Partial<Record<ChartType, string>> = {
   tree: 'Hierarchy',
 };
 
-const generateDataSummary = (ticker: string, data: KlineData[]): string => {
-  if (!data.length) return '';
-
-  const first = data[0];
-  const last = data[data.length - 1];
-  const prices = data.map((d) => d.close);
-  const high = Math.max(...prices);
-  const low = Math.min(...prices);
-  const change = last.close - first.close;
-  const changePercent = (change / first.close) * 100;
-
-  return `
-[${ticker} Historical Snapshot]
-Range: ${first.time} -> ${last.time}
-Start: $${first.close.toFixed(2)}
-Last: $${last.close.toFixed(2)}
-High: $${high.toFixed(2)}
-Low: $${low.toFixed(2)}
-Return: ${change >= 0 ? '+' : ''}$${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)
-Points: ${data.length}
-`;
-};
-
 export const InlineChart: React.FC<InlineChartProps> = ({
   ticker,
   period = '1y',
   chartType = 'line',
   valueMode = 'return',
-  onDataReady,
 }) => {
   const chartTheme = useChartTheme();
   const [data, setData] = useState<KlineData[]>([]);
@@ -73,13 +48,6 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const onDataReadyRef = useRef(onDataReady);
-  const lastSummaryRef = useRef<string>('');
-
-  useEffect(() => {
-    onDataReadyRef.current = onDataReady;
-  }, [onDataReady]);
-
   useEffect(() => {
     let active = true;
     const loadData = async () => {
@@ -104,13 +72,6 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         setDataQuality(quality === 'trusted' || quality === 'degraded' ? quality : null);
         setDataDegraded(Boolean(degraded));
         setErrorCode(typeof responseErrorCode === 'string' ? responseErrorCode : null);
-        if (kline.length && quality === 'trusted') {
-          const summary = generateDataSummary(ticker, kline);
-          if (summary && summary !== lastSummaryRef.current) {
-            lastSummaryRef.current = summary;
-            onDataReadyRef.current?.(kline, summary);
-          }
-        }
       } catch (err) {
         console.error('Inline chart load failed:', err);
         if (active) setLoadError(true);

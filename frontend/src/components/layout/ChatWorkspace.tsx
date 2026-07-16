@@ -1,4 +1,4 @@
-import { Eraser, Moon, Plus, Sun, Bell, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
+import { Eraser, Moon, Plus, Sun, PanelRightOpen, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
@@ -22,9 +22,7 @@ type ChatWorkspaceProps = {
     onExpand: () => void;
     onCollapse: () => void;
     onResizeStart: (event: MouseEvent) => void;
-    onSubscribeClick: () => void;
     autoSwitchExecution?: boolean;
-    onNavigateToChat?: () => void;
   };
   marketQuotes: MarketQuote[];
   initialReportId?: string | null;
@@ -105,7 +103,7 @@ export function ChatWorkspace({
     apiClient
       .getReportReplay({ sessionId, reportId: initialReportId })
       .then((data) => {
-        if (data.success && data.report) {
+        if (data.report) {
           const { addMessage } = useStore.getState();
           addMessage({
             id: `replay-${initialReportId}-${Date.now()}`,
@@ -186,16 +184,10 @@ export function ChatWorkspace({
             type="button"
             onClick={contextPanel.onExpand}
             className="relative min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
-            title="告警与订阅"
-            aria-label="告警与订阅"
+            title="展开市场与执行面板"
+            aria-label="展开市场与执行面板"
           >
-            <Bell size={16} />
-          </button>
-          <button
-            type="button"
-            className="min-h-11 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text whitespace-nowrap"
-          >
-            导出 PDF
+            <PanelRightOpen size={16} />
           </button>
         </div>
       </header>
@@ -292,9 +284,7 @@ export function ChatWorkspace({
           onExpand={contextPanel.onExpand}
           onCollapse={contextPanel.onCollapse}
           onResizeStart={contextPanel.onResizeStart}
-          onSubscribeClick={contextPanel.onSubscribeClick}
           autoSwitchExecution={contextPanel.autoSwitchExecution}
-          onNavigateToChat={contextPanel.onNavigateToChat}
         />
       </div>
     </div>

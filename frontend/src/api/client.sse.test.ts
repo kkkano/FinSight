@@ -136,20 +136,6 @@ describe('parseSSEStream', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('does not report missing done when resume stream was aborted', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const onError = vi.fn();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([{ type: 'token', content: 'partial' }])));
-
-    await apiClient.resumeExecution(
-      { thread_id: 'public:user:thread', resume_value: 'continue' },
-      { onError },
-      { signal: controller.signal },
-    );
-
-    expect(onError).not.toHaveBeenCalled();
-  });
 });
 
 describe('SSE read timeout (P1-2)', () => {

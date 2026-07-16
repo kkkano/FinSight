@@ -63,11 +63,6 @@ const getInitialColorConvention = (): ColorConvention => {
   return window.localStorage.getItem('finsight-color-convention') === 'cn' ? 'cn' : 'intl';
 };
 
-const getInitialSubscriptionEmail = (): string => {
-  if (typeof window === 'undefined') return '';
-  return window.localStorage.getItem('finsight-subscription-email') || '';
-};
-
 const getInitialEntryMode = (): EntryMode => {
   if (typeof window === 'undefined') return 'pending';
   const raw = window.localStorage.getItem('finsight-entry-mode');
@@ -159,7 +154,6 @@ export const applyColorConventionClass = (colorConvention: ColorConvention) => {
 const initialTheme = getInitialTheme();
 const initialColorConvention = getInitialColorConvention();
 const initialLayout = getInitialLayout();
-const initialSubscriptionEmail = getInitialSubscriptionEmail();
 const initialEntryMode = getInitialEntryMode();
 const initialSessionId = getInitialSessionId() || buildAnonymousSessionId();
 const initialTraceRawEnabled = getInitialTraceRawEnabled();
@@ -214,8 +208,6 @@ interface AppState {
   pendingChatHandoffContextBySession: Record<string, PendingChatHandoffContext | undefined>;
   setPendingChatHandoffContext: (sessionId: string, value: PendingChatHandoffContext) => void;
   takePendingChatHandoffContext: (sessionId: string) => PendingChatHandoffContext | undefined;
-  subscriptionEmail: string;
-  setSubscriptionEmail: (email: string) => void;
   entryMode: EntryMode;
   setEntryMode: (mode: EntryMode) => void;
   sessionId: string;
@@ -634,7 +626,6 @@ export const useStore = create<AppState>((set) => ({
   colorConvention: initialColorConvention,
   layoutMode: initialLayout,
   chatStyle: getInitialChatStyle(),
-  subscriptionEmail: initialSubscriptionEmail,
   entryMode: initialEntryMode,
   sessionId: initialSessionId,
   authIdentity: null,
@@ -653,7 +644,7 @@ export const useStore = create<AppState>((set) => ({
     toolTotalCalls: 0,
     updatedAt: null,
   },
-  // 右侧面板默认收起（告警进顶部铃铛，按需展开）
+  // 右侧市场与执行面板默认收起，按需展开。
   showRightPanel: false,
 
   addMessage: (message) =>
@@ -1009,14 +1000,6 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-chat-style', style);
       }
       return { chatStyle: style };
-    }),
-
-  setSubscriptionEmail: (email) =>
-    set(() => {
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('finsight-subscription-email', email);
-      }
-      return { subscriptionEmail: email };
     }),
 
   setEntryMode: (mode) =>

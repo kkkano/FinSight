@@ -5,15 +5,12 @@
  * - 渲染自选列表（含实时价格）
  * - 点击切换激活资产
  * - 添加/删除自选项
- * - 内联编辑持仓股数
  * - 外链到 Yahoo Finance
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, ExternalLink, X, RefreshCw, Package, Check } from 'lucide-react';
+import { Plus, ExternalLink, X, RefreshCw } from 'lucide-react';
 import { useDashboardStore } from '../../store/dashboardStore';
-import { useStore } from '../../store/useStore';
 import { apiClient } from '../../api/client';
-import { usePortfolioSummary, buildPositionsMap } from '../../hooks/usePortfolioSummary';
 import type { WatchItem, ActiveAsset } from '../../types/dashboard';
 // 共享 UI 组件
 import { Button, Input, useToast } from '../ui';
@@ -65,10 +62,6 @@ interface WatchlistProps {
 export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
   const { watchlist, addWatchItemApi, removeWatchItemApi, setActiveAsset } =
     useDashboardStore();
-  // 持仓统一读后端单一真相源（portfolio.db），不再读 localStorage
-  const sessionId = useStore((s) => s.sessionId);
-  const { data: portfolioData, refresh: refreshPortfolio } = usePortfolioSummary(sessionId);
-  const portfolioPositions = buildPositionsMap(portfolioData);
   const { toast } = useToast();
 
   // 添加模式状态
@@ -79,11 +72,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
   // 价格数据状态
   const [quotes, setQuotes] = useState<Record<string, QuoteData>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // 持仓编辑状态：正在编辑哪个 symbol（null 表示不在编辑）
-  const [editingSymbol, setEditingSymbol] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState('');
-  const holdingsInputRef = useRef<HTMLInputElement>(null);
 
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{
@@ -130,14 +118,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
     }
   }, [isAdding]);
 
-  // 持仓编辑：聚焦输入框
-  useEffect(() => {
-    if (editingSymbol && holdingsInputRef.current) {
-      holdingsInputRef.current.focus();
-      holdingsInputRef.current.select();
-    }
-  }, [editingSymbol]);
-
   // 点击外部关闭右键菜单
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
@@ -149,9 +129,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
 
   // 处理条目点击
   const handleItemClick = (item: WatchItem) => {
-    // 如果正在编辑持仓，点击条目不切换资产
-    if (editingSymbol) return;
-
     const asset: ActiveAsset = {
       symbol: item.symbol,
       type: item.type as ActiveAsset['type'],
@@ -219,54 +196,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
     } else if (e.key === 'Escape') {
       setIsAdding(false);
       setNewSymbol('');
-    }
-  };
-
-  // --- 持仓编辑 ---
-  const startEditHoldings = (symbol: string) => {
-    const key = symbol.toUpperCase();
-    const current = portfolioPositions[key] || 0;
-    setEditingSymbol(symbol);
-    setEditingValue(current > 0 ? String(current) : '');
-  };
-
-  const saveHoldings = async () => {
-    if (!editingSymbol) return;
-    const key = editingSymbol.toUpperCase();
-    const parsed = Number(editingValue);
-    const shouldRemove = !editingValue.trim() || Number.isNaN(parsed) || parsed <= 0;
-
-    // 先收起编辑态，写后端真相源（portfolio.db），成功后刷新共享缓存
-    setEditingSymbol(null);
-    setEditingValue('');
-
-    try {
-      if (shouldRemove) {
-        await apiClient.deletePortfolioPosition(sessionId, key);
-      } else {
-        await apiClient.updatePortfolioPosition(sessionId, key, parsed);
-      }
-      await refreshPortfolio();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '保存失败，请稍后重试';
-      toast({
-        type: 'error',
-        title: '保存持仓失败',
-        message,
-      });
-    }
-  };
-
-  const cancelEditHoldings = () => {
-    setEditingSymbol(null);
-    setEditingValue('');
-  };
-
-  const handleHoldingsKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      void saveHoldings();
-    } else if (e.key === 'Escape') {
-      cancelEditHoldings();
     }
   };
 
@@ -359,10 +288,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
               const quote = quotes[item.symbol] || {};
               const hasPrice = typeof quote.price === 'number';
               const isUp = (quote.changePct ?? 0) >= 0;
-              const symbolKey = item.symbol.toUpperCase();
-              const shares = portfolioPositions[symbolKey] || 0;
-              const isEditingThis = editingSymbol === item.symbol;
-
               return (
                 <li
                   key={item.symbol}
@@ -402,20 +327,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
 
                     {/* 右侧：操作按钮（悬浮显示） */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                      {/* 持仓编辑按钮 */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEditHoldings(item.symbol);
-                        }}
-                        aria-label={`设置 ${item.symbol} 持仓`}
-                        className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-primary"
-                        title="设置持仓"
-                      >
-                        <Package size={12} />
-                      </Button>
                       {/* 外链按钮 */}
                       <Button
                         variant="ghost"
@@ -447,62 +358,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                     </div>
                   </div>
 
-                  {/* 持仓徽章（非编辑态） */}
-                  {shares > 0 && !isEditingThis && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startEditHoldings(item.symbol);
-                      }}
-                      className="mt-1 text-2xs text-fin-primary bg-fin-primary/10 px-1.5 py-0.5 rounded-full w-fit hover:bg-fin-primary/20 transition-colors"
-                    >
-                      持仓 {shares} 股
-                    </button>
-                  )}
-
-                  {/* 持仓内联编辑 */}
-                  {isEditingThis && (
-                    <div
-                      className="flex items-center gap-1.5 mt-1.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Package size={10} className="text-fin-muted shrink-0" />
-                      <input
-                        ref={holdingsInputRef}
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="1"
-                        value={editingValue}
-                        onChange={(e) => setEditingValue(e.target.value)}
-                        onKeyDown={handleHoldingsKeyDown}
-                        onBlur={() => void saveHoldings()}
-                        placeholder="股数（0=清除）"
-                        className="flex-1 min-w-0 px-1.5 py-0.5 text-2xs rounded border border-fin-primary/50 bg-fin-bg text-fin-text text-right focus:outline-none focus:border-fin-primary"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void saveHoldings()}
-                        aria-label="确认持仓"
-                        className="p-0.5 text-fin-success hover:text-fin-success"
-                        title="确认"
-                      >
-                        <Check size={12} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelEditHoldings}
-                        aria-label="取消编辑"
-                        className="p-0.5 text-fin-muted hover:text-fin-danger"
-                        title="取消"
-                      >
-                        <X size={12} />
-                      </Button>
-                    </div>
-                  )}
                 </li>
               );
             })}
@@ -516,18 +371,6 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
           className="fixed z-50 bg-fin-card border border-fin-border rounded-lg shadow-[var(--t-shadow-card)] py-1 min-w-[140px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              startEditHoldings(contextMenu.symbol);
-              setContextMenu(null);
-            }}
-            className="w-full px-3 py-1.5 text-left text-xs justify-start"
-          >
-            <Package size={12} />
-            设置持仓
-          </Button>
           <Button
             variant="ghost"
             size="sm"

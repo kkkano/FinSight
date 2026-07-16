@@ -29,14 +29,7 @@ from backend.graph.investment_intent import (
     query_requests_comparative_investment_opinion,
     query_requests_investment_opinion,
 )
-from backend.graph.intent.router import (
-    ContextBinding,
-    ConversationDecision,
-    _effective_current_turn_tickers,
-    _task_hints_require_execution,
-    generate_contextual_reply,
-    route_conversation,
-)
+from backend.graph.intent.decision import ConversationDecision
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
@@ -285,7 +278,7 @@ def _time_scope(query: str) -> dict[str, Any]:
     return {"kind": "unspecified", "label": ""}
 
 def _subject_type_for_decision(decision: ConversationDecision) -> str:
-    if decision.context_binding.source == "portfolio":
+    if decision.domain_intent == "portfolio":
         return "portfolio"
     if decision.context_binding.source == "selection":
         return "research_doc"
@@ -332,75 +325,11 @@ def _query_explicitly_requests_price_data(query: str) -> bool:
         )
     )
 
-def _direct_decision_contract_requires_evidence(
-    query: str,
-    decision: ConversationDecision,
-    *,
-    current_tickers: list[str] | None = None,
-) -> bool:
-    tickers = dedup_tickers(
-        list(current_tickers or [])
-        or [
-            str(ticker)
-            for ticker in (extract_tickers(_strip_urls(query)).get("tickers") or [])
-            if str(ticker).strip()
-        ]
-    )
-    if not tickers:
-        return False
-    contract = derive_intent_contract(
-        query=query,
-        tickers=tickers,
-        output_mode="chat",
-        comparison_requested=False,
-        domain_intent=decision.domain_intent,
-        subject_type="company",
-        frame_id="direct_projection_probe",
-    )
-    facets = {str(facet) for facet in (contract.get("facets") or []) if str(facet).strip()}
-    return bool("external_entity_impact" in facets and contract.get("required_evidence"))
-
-def _direct_decision_must_project_tasks(
-    query: str,
-    decision: ConversationDecision,
-    *,
-    current_tickers: list[str] | None = None,
-    request_frame: dict[str, Any] | None = None,
-) -> bool:
-    """Prevent an LLM direct route from swallowing explicit tool/data requests."""
-    if _request_frame_blocks_direct_answer(request_frame):
-        return True
-    if wants_no_news_or_links(query):
-        return False
-    return bool(
-        _extract_urls(query)
-        or query_explicitly_requests_sources(query)
-        or _contains_any(query, _NEWS_HINTS)
-        or _contains_any(query, _TECHNICAL_HINTS)
-        or query_requests_investment_opinion(query)
-        or _query_explicitly_requests_price_data(query)
-        or _contains_any(query, _PORTFOLIO_HINTS)
-        or decision.needs_tools
-        or _task_hints_require_execution(decision.task_hints, query, allow_subject_label_refs=True)
-        or (
-            intent_contract_mode() == "enforce"
-            and _direct_decision_contract_requires_evidence(query, decision, current_tickers=current_tickers)
-        )
-        or (decision.domain_intent == "quote" and _query_explicitly_requests_price_data(query))
-        or decision.domain_intent in {"news", "doc_qa", "portfolio", "alert"}
-    )
-
 def _request_frame_requires_execution(request_frame: dict[str, Any] | None) -> bool:
     if not isinstance(request_frame, dict):
         return False
     evidence = request_frame.get("evidence_obligations")
-    results = request_frame.get("required_results")
-    action = request_frame.get("workflow_action")
-    return bool(
-        (isinstance(evidence, list) and evidence)
-        or (isinstance(results, list) and results)
-        or isinstance(action, dict)
-    )
+    return bool(isinstance(evidence, list) and evidence)
 
 def _request_frame_is_authoritative_direct_answer(
     request_frame: dict[str, Any] | None,
@@ -433,10 +362,6 @@ def _request_frame_blocks_direct_answer(request_frame: dict[str, Any] | None) ->
         return False
     if not isinstance(request_frame, dict):
         return False
-    results = request_frame.get("required_results")
-    action = request_frame.get("workflow_action")
-    if (isinstance(results, list) and results) or isinstance(action, dict):
-        return True
     relation = str(request_frame.get("relation") or "").strip().lower()
     render_contract = request_frame.get("render_contract")
     render_shape = (
@@ -534,15 +459,6 @@ def _selection_urls(ui_context: dict[str, Any]) -> list[str]:
         urls.append(url)
     return urls[:3]
 
-def _portfolio_context_available(query: str, ui_context: dict[str, Any]) -> bool:
-    if "我持有" in query or "持有" in query and bool(extract_tickers(query).get("tickers")):
-        return True
-    for key in ("portfolio", "positions", "holdings"):
-        value = ui_context.get(key)
-        if isinstance(value, (list, tuple, dict)) and len(value) > 0:
-            return True
-    return False
-
 def _extract_tickers_from_text(text: str) -> list[str]:
     if not str(text or "").strip():
         return []
@@ -554,75 +470,11 @@ def _extract_tickers_from_text(text: str) -> list[str]:
         ]
     )
 
-def _portfolio_tickers_from_context(ui_context: dict[str, Any]) -> list[str]:
-    raw_items: list[Any] = []
-    for key in ("portfolio", "positions", "holdings"):
-        value = ui_context.get(key)
-        if isinstance(value, dict):
-            raw_items.extend(value.keys())
-            raw_items.extend(value.values())
-        elif isinstance(value, (list, tuple)):
-            raw_items.extend(value)
-
-    candidates: list[str] = []
-    for item in raw_items:
-        if isinstance(item, dict):
-            candidates.extend(
-                str(item.get(key) or "")
-                for key in ("ticker", "symbol", "asset", "id")
-                if item.get(key)
-            )
-        elif isinstance(item, str):
-            candidates.append(item)
-
-    tickers: list[str] = []
-    for candidate in candidates:
-        tickers.extend(_extract_tickers_from_text(candidate) or [normalize_ticker(candidate)])
-    return dedup_tickers([ticker for ticker in tickers if ticker])
-
-def _positions_from_ui_context(ui_context: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return normalized visible portfolio positions without inventing holdings."""
-    rows: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    for key in ("positions", "holdings", "portfolio"):
-        value = ui_context.get(key)
-        if isinstance(value, dict):
-            iterable: list[Any] = []
-            for raw_key, raw_value in value.items():
-                if isinstance(raw_value, dict):
-                    item = dict(raw_value)
-                    item.setdefault("ticker", raw_key)
-                    iterable.append(item)
-                else:
-                    iterable.append({"ticker": raw_key, "weight": raw_value})
-        elif isinstance(value, (list, tuple)):
-            iterable = list(value)
-        else:
-            continue
-
-        for item in iterable:
-            if isinstance(item, dict):
-                ticker = normalize_ticker(str(item.get("ticker") or item.get("symbol") or item.get("asset") or item.get("id") or ""))
-                if not ticker or ticker in seen:
-                    continue
-                normalized = dict(item)
-                normalized["ticker"] = ticker
-                rows.append(normalized)
-                seen.add(ticker)
-            elif isinstance(item, str):
-                ticker = normalize_ticker(item)
-                if ticker and ticker not in seen:
-                    rows.append({"ticker": ticker})
-                    seen.add(ticker)
-    return rows
-
-def _holdings_portfolio_context_available(
+def _explicit_portfolio_holdings_requested(
     query: str,
-    ui_context: dict[str, Any],
     tickers: list[str],
 ) -> bool:
-    if _portfolio_context_available(query, ui_context):
+    if ("我持有" in query or "持有" in query) and bool(tickers):
         return True
     lowered = str(query or "").lower()
     if tickers and ("我的" in query or "my " in lowered) and _contains_any(query, ("组合", "portfolio")):

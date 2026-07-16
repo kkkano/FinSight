@@ -198,7 +198,7 @@ def _append_agent_step(ctx,
             existing["task_ids"] = merged
             existing["task_id"] = merged[0]
         return
-    # WP2-T6: agent step 携带 AgentBrief 素材（objective/required_evidence/time_scope）。
+    # 计划步骤保留覆盖校验和渲染所需的 evidence/time scope 元数据。
     # 注意 dedup key 用原始 inputs 计算，保持既有合并行为不变。
     brief_task = next(
         (ctx.ready_tasks_by_id[tid] for tid in normalized_task_ids if tid in ctx.ready_tasks_by_id),

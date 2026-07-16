@@ -9,7 +9,6 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
-from backend.graph.cancellation import get_cancel_event
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
@@ -117,7 +116,7 @@ def _identity_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
 
 @dataclass
 class StepContext:
-    """单步执行所需的共享状态，供 execute_plan 与 execute_plan_dag 共用（WP2 Task5）。"""
+    """DAG 单步执行所需的共享状态。"""
 
     steps: list[dict[str, Any]]
     async_tools: dict[str, AsyncInvoker]
@@ -128,10 +127,8 @@ class StepContext:
     exec_events: list[dict[str, Any]]
     raise_if_cancelled: Callable[[], Awaitable[None]]
     emit_cancelled_stage: Callable[[], Awaitable[None]]
-    # cache key 前对 inputs 的投影；旧执行器保持恒等（__escalation_stage 等历史上就参与 key）
+    # cache key 前对 inputs 的投影。
     cache_key_inputs: Callable[[dict[str, Any]], dict[str, Any]] = _identity_inputs
-    # 证据黑板（WP2 Task7 接线；None=不启用）
-    context_bus: dict[str, Any] | None = None
 
 
 def step_task_ids(step: dict[str, Any]) -> list[str]:
@@ -586,7 +583,7 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
 
 
 def aggregate_task_results(steps: list[dict[str, Any]], artifacts: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """按 task_id 聚合 step_results 与 errors（两个执行器共用的收尾逻辑）。"""
+    """按 task_id 聚合 step_results 与 errors。"""
     task_results: dict[str, dict[str, Any]] = {}
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
     for step in steps:
@@ -641,122 +638,7 @@ def new_artifacts() -> dict[str, Any]:
     }
 
 
-async def execute_plan(
-    plan_ir: dict[str, Any],
-    *,
-    tool_invokers: Mapping[str, Callable[[dict[str, Any]], Any]] | None = None,
-    agent_invokers: Mapping[str, Callable[[dict[str, Any]], Any]] | None = None,
-    dry_run: bool = True,
-    cache: MutableMapping[str, Any] | None = None,
-    cancel_event: asyncio.Event | None = None,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """
-    Execute a PlanIR `steps` list with:
-    - parallel_group concurrency
-    - step-level cache/dedupe
-    - optional-step failure tolerance
-
-    Returns (artifacts, exec_trace_events).
-    """
-    steps = plan_ir.get("steps") or []
-    if not isinstance(steps, list):
-        steps = []
-    execution_started_at = time.perf_counter()
-    cancel_event = cancel_event or get_cancel_event()
-    cancelled_stage_emitted = False
-
-    async def _emit_cancelled_stage() -> None:
-        nonlocal cancelled_stage_emitted
-        if cancelled_stage_emitted:
-            return
-        cancelled_stage_emitted = True
-        await emit_event(
-            {
-                "type": "pipeline_stage",
-                "stage": "cancelled",
-                "status": "cancelled",
-                "message": "Executor cancelled by client",
-                "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
-        )
-
-    async def _raise_if_cancelled() -> None:
-        if cancel_event is not None and cancel_event.is_set():
-            await _emit_cancelled_stage()
-            raise asyncio.CancelledError()
-
-    await emit_event(
-        {
-            "type": "pipeline_stage",
-            "stage": "executing",
-            "status": "start",
-            "message": "Executor started",
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
-    )
-
-    async_tools, async_agents = build_invoker_maps(tool_invokers, agent_invokers)
-    cache = cache if cache is not None else {}
-    artifacts = new_artifacts()
-    exec_events: list[dict[str, Any]] = []
-
-    ctx = StepContext(
-        steps=steps,
-        async_tools=async_tools,
-        async_agents=async_agents,
-        dry_run=dry_run,
-        cache=cache,
-        artifacts=artifacts,
-        exec_events=exec_events,
-        raise_if_cancelled=_raise_if_cancelled,
-        emit_cancelled_stage=_emit_cancelled_stage,
-    )
-
-    groups = group_steps_by_parallel_group(steps)
-    aborted_by_required_error = False
-    try:
-        await _raise_if_cancelled()
-        for group in groups:
-            await _raise_if_cancelled()
-            await asyncio.gather(*[run_single_step(step, ctx) for step in group])
-            await _raise_if_cancelled()
-    except asyncio.CancelledError:
-        await _emit_cancelled_stage()
-        raise
-    except Exception as exc:
-        # Required step failed; stop further execution but return partial artifacts.
-        aborted_by_required_error = True
-        await emit_event(
-            {
-                "type": "pipeline_stage",
-                "stage": "executing",
-                "status": "error",
-                "message": "Executor aborted by required step failure",
-                "error": str(exc)[:300],
-                "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
-        )
-
-    if not aborted_by_required_error:
-        await emit_event(
-            {
-                "type": "pipeline_stage",
-                "stage": "executing",
-                "status": "done",
-                "message": "Executor completed",
-                "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
-        )
-
-    artifacts["task_results"] = aggregate_task_results(steps, artifacts)
-    return artifacts, exec_events
-
-
 __all__ = [
-    "execute_plan",
     "group_steps_by_parallel_group",
     "step_cache_key",
     "run_single_step",

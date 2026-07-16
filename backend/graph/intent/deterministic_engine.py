@@ -28,10 +28,7 @@ from backend.graph.investment_intent import (
     query_requests_comparative_investment_opinion,
     query_requests_investment_opinion,
 )
-from backend.graph.intent.router import (
-    ContextBinding,
-    ConversationDecision,
-)
+from backend.graph.intent.decision import ContextBinding, ConversationDecision
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
@@ -82,9 +79,6 @@ from backend.graph.intent.predicates import (
     _is_explicit_brief_request,
     _is_lightweight_representative_compare,
     _normalize_selection,
-    _portfolio_context_available,
-    _portfolio_tickers_from_context,
-    _positions_from_ui_context,
     _query_can_fallback_to_direct_finance_answer,
     _query_requests_company_side_data,
     _request_frame_is_authoritative_direct_answer,
@@ -112,10 +106,8 @@ logger = logging.getLogger(__name__)
 
 
 from backend.graph.intent.keywords import (  # noqa: F401 —— 关键词单一来源（WP2-T2）
-    _ALERT_HINTS,
     _ASSET_DEICTIC_HINTS,
     _COMPARE_HINTS,
-    _FALLBACK_HINTS,
     _FORBIDDEN_DIRECT_REPLY_MARKERS,
     _GLOBAL_CHAT_VIEWS,
     _HOLDINGS_HINTS,
@@ -125,7 +117,6 @@ from backend.graph.intent.keywords import (  # noqa: F401 —— 关键词单一
     _MACRO_HINTS,
     _NEWS_HINTS,
     _NON_ASSET_TOKENS,
-    _PORTFOLIO_HINTS,
     _PRICE_HINTS,
     _PRIVATE_INSIDER_INFO_HINTS,
     _PUBLIC_INSIDER_DISCLOSURE_HINTS,
@@ -243,42 +234,6 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
                 "fallback_allowed": False,
             }
         )
-
-    workflow_action = request_frame.get("workflow_action") if isinstance(request_frame, dict) else None
-    if (
-        query
-        and not blocked_tasks
-        and isinstance(workflow_action, dict)
-        and workflow_action.get("name") == "backtest"
-    ):
-        slots = workflow_action.get("slots") if isinstance(workflow_action.get("slots"), dict) else {}
-        action_ticker = normalize_ticker(str(slots.get("ticker") or (tickers[0] if tickers else "")))
-        operation = dict(request_frame.get("legacy_operation") or _operation("backtest", 0.9))
-        params = dict(operation.get("params") or {})
-        operation["params"] = params
-        _add_task(
-            tasks,
-            subject_type="company",
-            subject_label=action_ticker,
-            operation=operation,
-            query=query,
-            tickers=[action_ticker] if action_ticker else [],
-            priority=8,
-            reason="request_frame_action",
-            params=params,
-        )
-        conversation_decision = ConversationDecision(
-            execution_route="research",
-            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint=action_ticker),
-            relation="new_topic",
-            domain_intent="analysis",
-            confidence=0.9,
-            needs_tools=True,
-            reason="request_frame workflow action requires deterministic execution",
-        )
-        trace["conversation_router"] = conversation_decision.model_dump()
-        context_router_research_bound = True
-        request_frames.append(request_frame)
 
     if query and not blocked_tasks and is_casual_chat(query):
         # Keep this local path only for obvious social turns. Broader open-chat
@@ -601,17 +556,6 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
                 )
                 else []
             )
-            if contract_operations:
-                contract_operation_names = {
-                    str(operation.get("name") or "").strip()
-                    for operation in contract_operations
-                    if isinstance(operation, dict)
-                }
-                for operation in fallback_operations:
-                    op_name = str((operation or {}).get("name") or "").strip()
-                    if op_name == "alert_set" and op_name not in contract_operation_names:
-                        contract_operations.append(operation)
-                        contract_operation_names.add(op_name)
             router_operations = None if contract_operations else _router_directed_company_operations(
                 conversation_decision,
                 fallback_operations=fallback_operations,
@@ -693,49 +637,6 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
                 query=query,
                 priority=35,
                 reason="theme_hint",
-            )
-
-    has_portfolio = _contains_any(query, _PORTFOLIO_HINTS)
-    if not blocked_tasks and not holdings_intent_handled and not context_router_research_bound and has_portfolio:
-        if _portfolio_context_available(query, ui_context):
-            portfolio_tickers = tickers or _portfolio_tickers_from_context(ui_context)
-            positions = _positions_from_ui_context(ui_context)
-            _add_task(
-                tasks,
-                subject_type="portfolio",
-                subject_label="当前持仓",
-                operation=_operation("rebalance_check" if "调仓" in query else "portfolio_impact", 0.74),
-                query=query,
-                tickers=portfolio_tickers,
-                priority=40,
-                reason="portfolio_context_available",
-                params={"positions": positions},
-            )
-        elif _contains_any(query, _FALLBACK_HINTS):
-            fallback_assumptions.append("用户允许在缺少持仓明细时使用查询中的替代假设。")
-            _add_task(
-                tasks,
-                subject_type="portfolio",
-                subject_label="持仓替代假设",
-                operation=_operation("portfolio_fallback", 0.58),
-                query=query,
-                tickers=tickers,
-                priority=80,
-                reason="user_allowed_fallback",
-                params={"fallback": True},
-            )
-        else:
-            blocked_tasks.append(
-                {
-                    "id": f"blocked_{len(blocked_tasks) + 1}",
-                    "subject_type": "portfolio",
-                    "subject_label": "我的持仓",
-                    "operation": _operation("portfolio_impact", 0.0),
-                    "reason": "missing_portfolio_holdings",
-                    "question": "要判断持仓影响或调仓，需要你的持仓列表、权重或允许我按假设组合估算。",
-                    "suggestions": ["补充持仓和大致权重", "或说明按等权科技股组合估算"],
-                    "fallback_allowed": True,
-                }
             )
 
     tasks = _prune_url_only_company_context_tasks(tasks, query=query, explicit_urls=explicit_urls)
@@ -841,15 +742,8 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
         await _emit_understanding_trace(result["understanding"])
         return result
 
-    has_alert_task = any((task.get("operation") or {}).get("name") == "alert_set" for task in tasks)
-    pending_research_after_alert = has_alert_task and any(
-        (task.get("operation") or {}).get("name") != "alert_set" for task in tasks
-    )
-
     if not tasks and blocked_tasks:
         route = "clarify"
-    elif tasks and has_alert_task and (pending_research_after_alert or all((task.get("operation") or {}).get("name") == "alert_set" for task in tasks)):
-        route = "alert"
     elif tasks or _request_frame_requires_execution(request_frame):
         route = "research"
     else:
@@ -1010,7 +904,6 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
         "output_mode": output_mode,
         "clarify": clarify,
         "chat_responded": route == "direct",
-        "pending_research_after_alert": pending_research_after_alert,
         "artifacts": artifacts,
         "trace": trace,
     }

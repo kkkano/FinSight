@@ -4,7 +4,6 @@ import type { MouseEvent } from 'react';
 import { AlertTriangle, WifiOff } from 'lucide-react';
 import Sidebar from '../Sidebar';
 import { SettingsModal } from '../SettingsModal';
-import { SubscribeModal } from '../SubscribeModal';
 import { useStore } from '../../store/useStore';
 import { useIsMobileLayout } from '../../hooks/useIsMobileLayout';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
@@ -86,7 +85,6 @@ export function WorkspaceShell({
     if (isMobile) setShowRightPanel(false);
   }, [isMobile, setShowRightPanel]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
@@ -174,9 +172,7 @@ export function WorkspaceShell({
     onExpand: () => setShowRightPanel(true),
     onCollapse: () => setShowRightPanel(false),
     onResizeStart: handleResizeStart,
-    onSubscribeClick: () => setIsSubscribeOpen(true),
     autoSwitchExecution: true,
-    onNavigateToChat: navigateToChat,
   };
 
   return (
@@ -246,7 +242,6 @@ export function WorkspaceShell({
       </div>
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      <SubscribeModal isOpen={isSubscribeOpen} onClose={() => setIsSubscribeOpen(false)} />
     </div>
   );
 }

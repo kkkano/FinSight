@@ -1,7 +1,8 @@
-import { Activity, Bell, RefreshCw, Sparkles, TrendingUp, X } from 'lucide-react';
+import { Sparkles, TrendingUp, X } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
-import type { RightPanelTab } from './types';
+
 import { Tooltip } from '../ui/Tooltip';
+import type { RightPanelTab } from './types';
 
 const TabButton: FC<{
   active: boolean;
@@ -10,7 +11,7 @@ const TabButton: FC<{
   icon: ReactNode;
   badge?: number;
   pulse?: boolean;
-  testId?: string;
+  testId: string;
 }> = ({ active, onClick, title, icon, badge, pulse = false, testId }) => (
   <Tooltip content={title}>
     <button
@@ -25,14 +26,9 @@ const TabButton: FC<{
       }`}
     >
       {icon}
-      {pulse && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
-          <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-fin-primary/50 opacity-80" />
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-fin-primary" />
-        </span>
-      )}
+      {pulse && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-fin-primary" />}
       {badge !== undefined && badge > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-fin-danger text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-fin-danger px-1 text-[9px] font-bold text-white">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
@@ -42,43 +38,22 @@ const TabButton: FC<{
 
 type RightPanelHeaderProps = {
   activeTab: RightPanelTab;
-  alertsCount: number;
   executionCount: number;
   hasUnseenExecution: boolean;
-  loading: boolean;
   onTabChange: (tab: RightPanelTab) => void;
-  onRefresh: () => void;
   onCollapse: () => void;
 };
 
 export function RightPanelHeader({
   activeTab,
-  alertsCount,
   executionCount,
   hasUnseenExecution,
-  loading,
   onTabChange,
-  onRefresh,
   onCollapse,
 }: RightPanelHeaderProps) {
   return (
-    <div className="flex items-center justify-between px-2 py-1.5 border-b border-fin-border bg-fin-bg/50">
+    <div className="flex items-center justify-between border-b border-fin-border bg-fin-bg/50 px-2 py-1.5">
       <div className="flex items-center gap-1">
-        <TabButton
-          active={activeTab === 'alerts'}
-          onClick={() => onTabChange('alerts')}
-          title="消息中心"
-          icon={<Bell size={14} />}
-          badge={alertsCount}
-          testId="context-tab-alerts"
-        />
-        <TabButton
-          active={activeTab === 'portfolio'}
-          onClick={() => onTabChange('portfolio')}
-          title="资产组合"
-          icon={<Activity size={14} />}
-          testId="context-tab-portfolio"
-        />
         <TabButton
           active={activeTab === 'chart'}
           onClick={() => onTabChange('chart')}
@@ -96,28 +71,16 @@ export function RightPanelHeader({
           testId="context-tab-execution"
         />
       </div>
-      <div className="flex items-center gap-1">
-        <Tooltip content="Refresh">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
-            aria-label="Refresh"
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </Tooltip>
-        <Tooltip content="Collapse">
-          <button
-            type="button"
-            onClick={onCollapse}
-            className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
-            aria-label="Collapse"
-          >
-            <X size={12} />
-          </button>
-        </Tooltip>
-      </div>
+      <Tooltip content="收起">
+        <button
+          type="button"
+          onClick={onCollapse}
+          className="p-1.5 text-fin-muted transition-colors hover:bg-fin-hover hover:text-fin-text"
+          aria-label="收起"
+        >
+          <X size={12} />
+        </button>
+      </Tooltip>
     </div>
   );
 }

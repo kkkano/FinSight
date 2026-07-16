@@ -29,7 +29,6 @@ class FundamentalAgent(BaseFinancialAgent):
     AGENT_NAME = "fundamental"
     CACHE_TTL = 86400  # 24 hours
     ERROR_CACHE_TTL = int(os.getenv("FUNDAMENTAL_ERROR_CACHE_TTL_SECONDS", "300"))
-    MAX_REFLECTIONS = 1  # Chain-of-Thought: one reflection to check for missed risk signals
 
     _METRIC_DEFINITIONS: List[Dict[str, Any]] = [
         {"key": "revenue", "label": "营收", "table": "income", "candidates": ["total revenue", "revenue"]},
@@ -39,49 +38,6 @@ class FundamentalAgent(BaseFinancialAgent):
         {"key": "total_assets", "label": "总资产", "table": "balance", "candidates": ["total assets"]},
         {"key": "total_liabilities", "label": "总负债", "table": "balance", "candidates": ["total liabilities"]},
     ]
-
-    def _get_tool_registry(self) -> dict:
-        """FundamentalAgent tool registry: financial APIs + search for CoT reflection."""
-        registry = {}
-        tools = self.tools
-        if not tools:
-            return registry
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "通用网络搜索，查询公司基本面、行业对比等",
-                "call_with": "query",
-            }
-        financials_fn = getattr(tools, "get_financial_statements", None)
-        if financials_fn:
-            registry["get_financial_statements"] = {
-                "func": financials_fn,
-                "description": "获取财务报表(ticker)，包含利润表、资产负债表、现金流量表",
-                "call_with": "ticker",
-            }
-        company_fn = getattr(tools, "get_company_info", None)
-        if company_fn:
-            registry["get_company_info"] = {
-                "func": company_fn,
-                "description": "获取公司概况(ticker)，包含行业、市值、主营业务",
-                "call_with": "ticker",
-            }
-        earnings_fn = getattr(tools, "get_earnings_estimates", None)
-        if earnings_fn:
-            registry["get_earnings_estimates"] = {
-                "func": earnings_fn,
-                "description": "Get earnings estimates and EPS revision trend",
-                "call_with": "ticker",
-            }
-        eps_revision_fn = getattr(tools, "get_eps_revisions", None)
-        if eps_revision_fn:
-            registry["get_eps_revisions"] = {
-                "func": eps_revision_fn,
-                "description": "Get EPS revisions summary signal",
-                "call_with": "ticker",
-            }
-        return registry
 
     @staticmethod
     def _has_financial_tables(financials: Any) -> bool:
@@ -161,57 +117,7 @@ class FundamentalAgent(BaseFinancialAgent):
         return data
 
     async def _first_summary(self, data: Any) -> str:
-        """True Chain-of-Thought: 2-step LLM analysis with chained dependency.
-
-        Step 1: Profitability quality + financial health analysis.
-        Step 2: Growth sustainability + risk signals (builds on Step 1 output).
-
-        If any step fails, gracefully degrades to the previous step or deterministic.
-        """
-        deterministic = self._deterministic_summary(data)
-        if not isinstance(data, dict):
-            return deterministic
-
-        # Build rich context: deterministic metrics + raw financial hints
-        context_parts = [deterministic]
-        company_info = data.get("company_info", "")
-        if isinstance(company_info, str) and company_info.strip():
-            context_parts.append(f"\n公司概况: {company_info[:500]}")
-        base_context = "\n".join(context_parts)
-
-        # ── Step 1: Profitability & Financial Health ──
-        step1 = await self._llm_analyze(
-            base_context,
-            role="资深卖方基本面分析师（Chain-of-Thought 推理模式 — 第一步）",
-            focus=(
-                "按链式推理（CoT）进行第一阶段分析：\n"
-                "1. 盈利质量：营收与净利润的增长是否可持续？利润率趋势如何？\n"
-                "2. 财务健康：杠杆水平、现金流覆盖能力、偿债风险\n"
-                "3. 关键发现：最值得注意的 1-2 个财务信号\n"
-                "输出一段连贯的财务分析文本，为后续分析奠定基础。"
-            ),
-        )
-        if not step1:
-            return deterministic
-
-        # ── Step 2: Growth + Valuation + Risk (chains on Step 1) ──
-        step2_input = f"{base_context}\n\n--- 第一步分析结果 ---\n{step1}"
-        step2 = await self._llm_analyze(
-            step2_input,
-            role="资深卖方基本面分析师（Chain-of-Thought 推理模式 — 第二步）",
-            focus=(
-                "基于第一步的盈利质量和财务健康分析，继续推理：\n"
-                "1. 增长持续性：同比/环比趋势是加速还是减速？关键驱动因素是什么？\n"
-                "2. 估值含义：当前财务表现对估值倍数的支撑或压力\n"
-                "3. 风险信号：是否存在盈利粉饰、现金流与利润背离、异常一次性项目\n"
-                "4. 综合判断：整合第一步和第二步的分析，给出整体评价\n"
-                "输出一段连贯的分析文本，体现从第一步到第二步的推理链条。"
-            ),
-        )
-        if not step2:
-            return step1  # Degrade to step1 if step2 fails
-
-        return f"{step1}\n\n{step2}"
+        return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: Any) -> str:
         """Deterministic metrics-based summary (fallback)."""

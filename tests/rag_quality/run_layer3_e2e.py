@@ -407,7 +407,7 @@ async def _run_pipeline_for_case(
     try:
         # Step 2 & 3: monkeypatch + 构建 graph
         with mock.patch(
-            "backend.graph.runner.execute_plan_node",
+            "backend.graph.runner.collect_evidence",
             side_effect=_injected_execute_plan_stub,
         ):
             # 导入必须在 patch context 内完成，确保 runner 使用 patched 版本

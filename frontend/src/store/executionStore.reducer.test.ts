@@ -50,7 +50,6 @@ function buildRun(overrides: Partial<ExecutionRun> = {}): ExecutionRun {
     completedAt: null,
     abortController: null,
     bridgedToChat: false,
-    interruptData: null,
     ...overrides,
   };
 }

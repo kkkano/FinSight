@@ -67,22 +67,6 @@ export interface EvidenceLedger {
   [key: string]: unknown;
 }
 
-export interface DebateArtifact {
-  enabled?: boolean;
-  status?: 'ready' | 'skipped' | 'error' | 'disabled' | string;
-  reason?: string;
-  bull_score?: number;
-  bear_score?: number;
-  judge_score?: number;
-  winner?: 'bull' | 'bear' | 'balanced' | 'unknown' | string;
-  key_disagreements?: string[];
-  open_questions?: string[];
-  bull_claim_ids?: string[];
-  bear_claim_ids?: string[];
-  summary?: string;
-  [key: string]: unknown;
-}
-
 export interface InstitutionalHoldingRow {
   issuer_name?: string;
   ticker?: string;
@@ -169,7 +153,6 @@ export interface Message {
   tried_sources?: string[];
   report?: ReportIR;  // Phase 2: 深度研报数据
   evidence_pool?: EvidenceItem[];  // Evidence/citations pool
-  via?: 'main' | 'mini';  // 消息来源入口：主聊天区 or 右侧面板 MiniChat
 }
 
 export interface KlineData {
@@ -284,12 +267,10 @@ export interface ReportIR {
     query_coverage?: QueryCoverage;
   };
   evidence_ledger?: EvidenceLedger;
-  debate?: DebateArtifact;
   holdings_insight?: HoldingsInsight;
   query_coverage?: QueryCoverage;
   artifacts?: {
     evidence_ledger?: EvidenceLedger;
-    debate?: DebateArtifact;
     holdings_insight?: HoldingsInsight;
     holdings?: HoldingsInsight;
     query_coverage?: QueryCoverage;

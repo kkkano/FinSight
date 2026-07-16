@@ -14,7 +14,6 @@ class AgentProfile:
     color_token: str
     mandate_zh: str
     tools: tuple[str, ...]
-    dashboard_tabs: tuple[str, ...] = ()
 
 
 AGENT_PROFILES: dict[str, AgentProfile] = {
@@ -35,7 +34,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_performance_comparison",
             "get_option_chain_metrics",
         ),
-        dashboard_tabs=("technical", "peers", "overview"),
     ),
     "news_agent": AgentProfile(
         key="news_agent",
@@ -51,7 +49,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_event_calendar",
             "score_news_source_reliability",
         ),
-        dashboard_tabs=("news", "overview"),
     ),
     "fundamental_agent": AgentProfile(
         key="fundamental_agent",
@@ -67,7 +64,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_earnings_estimates",
             "get_eps_revisions",
         ),
-        dashboard_tabs=("financial", "peers", "overview"),
     ),
     "technical_agent": AgentProfile(
         key="technical_agent",
@@ -83,7 +79,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_option_chain_metrics",
             "get_market_sentiment",
         ),
-        dashboard_tabs=("technical", "overview"),
     ),
     "macro_agent": AgentProfile(
         key="macro_agent",
@@ -99,7 +94,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
             "get_market_sentiment",
             "get_economic_events",
         ),
-        dashboard_tabs=("overview",),
     ),
     "risk_agent": AgentProfile(
         key="risk_agent",
@@ -107,15 +101,13 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
         short_zh="风险",
         glyph="R",
         color_token="t-down",
-        mandate_zh="波动率、回撤、因子敞口、压力测试与下行风险",
+        mandate_zh="波动率、回撤、因子敞口与下行风险",
         tools=(
             "search",
             "get_stock_price",
             "analyze_historical_drawdowns",
             "get_factor_exposure",
-            "run_portfolio_stress_test",
         ),
-        dashboard_tabs=("peers", "overview"),
     ),
     "deep_search_agent": AgentProfile(
         key="deep_search_agent",
@@ -125,7 +117,6 @@ AGENT_PROFILES: dict[str, AgentProfile] = {
         color_token="t-text-2",
         mandate_zh="研报、监管文件与长文档的证据化深度调研",
         tools=("search",),
-        dashboard_tabs=(),
     ),
 }
 
@@ -149,8 +140,6 @@ def lead_agent_for_operation(operation: str) -> str:
         return "fundamental_agent"
     if name.startswith("macro_"):
         return "macro_agent"
-    if name.startswith("portfolio_") or name == "rebalance_check":
-        return "risk_agent"
     if name == "qa":
         return "deep_search_agent"
     return "fundamental_agent"

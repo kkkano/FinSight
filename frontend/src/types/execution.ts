@@ -105,28 +105,8 @@ export interface TimelineEvent {
 
 // --- Execution run status ---
 
-export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled' | 'interrupted';
+export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled';
 export type AnalysisDepth = 'quick' | 'report' | 'deep_research';
-export type AgentPreferenceDepth = 'standard' | 'deep' | 'off';
-
-export interface ToolCapability {
-  name: string;
-  group: string;
-  markets: string[];
-  operations: string[];
-  depths: string[];
-  riskLevel: string;
-  selected: boolean;
-  envReady: boolean;
-  missingEnv: string[];
-}
-
-export interface AnalysisConfig {
-  analysisDepth: AnalysisDepth;
-  budget: number;
-  agentDepths: Record<string, AgentPreferenceDepth>;
-  concurrentMode: boolean;
-}
 
 export interface ExecutionRun {
   runId: string;
@@ -186,20 +166,6 @@ export interface ExecutionRun {
   abortController: AbortController | null;
   /** Set of runIds that have been bridged to chat (prevent duplicate). */
   bridgedToChat?: boolean;
-  /** Interrupt data when status is 'interrupted' (human-in-the-loop). */
-  interruptData?: {
-    thread_id: string;
-    prompt?: string;
-    options?: string[];
-    plan_summary?: string;
-    required_agents?: string[];
-    gate_reason_code?: string;
-    gate_reason?: string;
-    option_effects?: Record<string, string>;
-    option_intents?: Record<string, string>;
-    output_mode?: string;
-    confirmation_mode?: string;
-  } | null;
 }
 
 // --- Start execution parameters (camelCase) ---
@@ -209,21 +175,12 @@ export interface StartExecutionParams {
   tickers?: string[];
   /** Maps to API `output_mode` at request time. */
   outputMode?: string;
-  /** Maps to API `confirmation_mode` at request time. */
-  confirmationMode?: 'auto' | 'required' | 'skip';
   /** Explicit depth semantics to avoid query-text coupling. */
   analysisDepth?: AnalysisDepth;
-  agents?: string[];
   source: string;
   budget?: number;
   /** Optional SSE endpoint override. Defaults to `/api/execute`. */
   endpoint?: string;
   /** Extra request body fields for endpoint-specific bridges. */
   requestBody?: Record<string, unknown>;
-  agentPreferencesOverride?: {
-    agents?: Record<string, AgentPreferenceDepth>;
-    maxRounds?: number;
-    concurrentMode?: boolean;
-    timeoutSeconds?: number;
-  };
 }

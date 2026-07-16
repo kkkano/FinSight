@@ -15,7 +15,6 @@ _RESEARCH_ANALYST_OPERATIONS = frozenset({
     "earnings_impact",
     "investment_opinion",
     "news_impact",
-    "portfolio_impact",
     "qa",
 })
 

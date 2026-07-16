@@ -74,7 +74,11 @@ def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
             "evidence": [{"text": "Revenue: $100B", "source": "yfinance", "timestamp": "2025-12-31"}],
         }
 
-    monkeypatch.setattr(execute_mod, "build_agent_invokers", lambda allowed_agents, state: {"fundamental_agent": _fake_agent})
+    monkeypatch.setattr(
+        execute_mod,
+        "build_collector_invokers",
+        lambda allowed_collectors, state: {"fundamental_agent": _fake_agent},
+    )
 
     from backend.graph.nodes.execute_plan_node import execute_plan_node
 

@@ -2,17 +2,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Optional
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command
 
 from backend.graph.checkpointer import aget_graph_checkpointer, get_graph_checkpointer_info
 from backend.graph.nodes import analyze, collect_evidence, prepare_context, render, route_request, validate
-from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.graph.state import GraphState
 from backend.graph.trace import with_node_trace
 from backend.services.langfuse_tracer import langfuse_observe
@@ -64,7 +61,6 @@ class GraphRunner:
         ui_context: Optional[dict] = None,
         output_mode: Optional[str] = None,
         strict_selection: Optional[bool] = None,
-        confirmation_mode: Optional[str] = None,
     ) -> dict:
         state: dict = {
             "thread_id": thread_id,
@@ -77,42 +73,8 @@ class GraphRunner:
             state["output_mode"] = output_mode
         if strict_selection is not None:
             state["strict_selection"] = bool(strict_selection)
-        # Always reset confirmation controls for a new run so checkpointed
-        # thread state cannot leak stale values across requests.
-        normalized_mode = parse_confirmation_mode(confirmation_mode) or "auto"
-        state["confirmation_mode"] = normalized_mode
-        if normalized_mode == "required":
-            state["require_confirmation"] = True
-        elif normalized_mode == "skip":
-            state["require_confirmation"] = False
-        else:
-            state["require_confirmation"] = None
-
         config = {"configurable": {"thread_id": thread_id}}
         return await self._graph.ainvoke(state, config=config)
-
-    async def resume(
-        self,
-        *,
-        thread_id: str,
-        resume_value: Any,
-        config: dict[str, Any] | None = None,
-    ) -> AsyncIterator[dict]:
-        """Resume an interrupted graph via ``Command(resume=...)``.
-
-        Returns an async iterator of stream events (``astream_events v2``),
-        consistent with the SSE pipeline used by ``run_graph_pipeline``.
-        """
-        merged_config: dict[str, Any] = {
-            "configurable": {"thread_id": thread_id},
-            **(config or {}),
-        }
-        async for event in self._graph.astream_events(
-            Command(resume=resume_value),
-            config=merged_config,
-            version="v2",
-        ):
-            yield event
 
     @staticmethod
     def checkpointer_info() -> dict[str, Any]:
@@ -184,7 +146,6 @@ async def run_graph_traced(
     ui_context: dict | None = None,
     output_mode: str | None = None,
     strict_selection: bool | None = None,
-    confirmation_mode: str | None = None,
 ) -> dict:
     """
     带 Langfuse Trace 的图执行入口。
@@ -200,7 +161,6 @@ async def run_graph_traced(
         ui_context=ui_context,
         output_mode=output_mode,
         strict_selection=strict_selection,
-        confirmation_mode=confirmation_mode,
     )
 
 

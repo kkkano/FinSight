@@ -17,7 +17,6 @@ import re
 from typing import Any, Dict, Iterable, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
-from backend.graph.intent.frame import AgentBrief
 from backend.agents.chart_specs_extra import build_risk_chart_specs
 from backend.research.agent_quality_contract import (
     apply_agent_quality_contract,
@@ -163,55 +162,6 @@ class RiskAgent(BaseFinancialAgent):
         RiskLevel.HIGH: 3,
         RiskLevel.CRITICAL: 4,
     }
-
-    def _get_tool_registry(self) -> dict:
-        """RiskAgent tool registry: quote, drawdown, factor and stress signals."""
-        registry: dict[str, dict[str, Any]] = {}
-        tools = self.tools
-        if not tools:
-            return registry
-
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "搜索公司特有风险、监管事件、行业冲击和风险披露。",
-                "call_with": "query",
-            }
-
-        quote_fn = getattr(tools, "get_stock_price", None)
-        if quote_fn:
-            registry["get_stock_price"] = {
-                "func": quote_fn,
-                "description": "获取当前报价和涨跌幅，用于校准短期风险暴露。",
-                "call_with": "ticker",
-            }
-
-        drawdown_fn = getattr(tools, "analyze_historical_drawdowns", None)
-        if drawdown_fn:
-            registry["analyze_historical_drawdowns"] = {
-                "func": drawdown_fn,
-                "description": "分析历史回撤、波动和极端下行情景。",
-                "call_with": "ticker",
-            }
-
-        factor_fn = getattr(tools, "get_factor_exposure", None)
-        if factor_fn:
-            registry["get_factor_exposure"] = {
-                "func": factor_fn,
-                "description": "估算单标的等权持仓的因子暴露。",
-                "call_with": "positions",
-            }
-
-        stress_fn = getattr(tools, "run_portfolio_stress_test", None)
-        if stress_fn:
-            registry["run_portfolio_stress_test"] = {
-                "func": stress_fn,
-                "description": "对单标的等权持仓运行压力测试。",
-                "call_with": "positions",
-            }
-
-        return registry
 
     @classmethod
     def risk_level_meets_threshold(cls, actual: RiskLevel, threshold: RiskLevel) -> bool:
@@ -460,11 +410,10 @@ class RiskAgent(BaseFinancialAgent):
             assessed_at=assessed_at,
         )
 
-    def _build_portfolio_signals(
+    def _build_factor_signals(
         self,
         ticker: str,
         factor_payload: Any,
-        stress_payload: Any,
     ) -> list[RiskSignal]:
         signals: list[RiskSignal] = []
 
@@ -478,7 +427,7 @@ class RiskAgent(BaseFinancialAgent):
                         RiskSignal(
                             source_agent=self.AGENT_NAME,
                             category="macro",
-                            description=f"{ticker} portfolio market beta={market_beta:.2f}, downside sensitivity elevated.",
+                            description=f"{ticker} market beta={market_beta:.2f}, downside sensitivity elevated.",
                             severity=0.65,
                         )
                     )
@@ -487,7 +436,7 @@ class RiskAgent(BaseFinancialAgent):
                         RiskSignal(
                             source_agent=self.AGENT_NAME,
                             category="technical",
-                            description=f"{ticker} portfolio growth-factor tilt is high (beta={growth_beta:.2f}).",
+                            description=f"{ticker} growth-factor tilt is high (beta={growth_beta:.2f}).",
                             severity=0.55,
                         )
                     )
@@ -503,26 +452,6 @@ class RiskAgent(BaseFinancialAgent):
                     )
                 )
 
-        if isinstance(stress_payload, dict) and not stress_payload.get("error"):
-            worst_case = safe_float(stress_payload.get("worst_case_return"))
-            if worst_case is not None and worst_case <= -0.12:
-                signals.append(
-                    RiskSignal(
-                        source_agent=self.AGENT_NAME,
-                        category="fundamental",
-                        description=f"{ticker} stress test worst-case return {worst_case:.1%} indicates fragile downside profile.",
-                        severity=0.75,
-                    )
-                )
-            elif worst_case is not None and worst_case <= -0.08:
-                signals.append(
-                    RiskSignal(
-                        source_agent=self.AGENT_NAME,
-                        category="fundamental",
-                        description=f"{ticker} stress test worst-case return {worst_case:.1%}; monitor drawdown risk.",
-                        severity=0.55,
-                    )
-                )
         return signals
 
     async def research(
@@ -530,12 +459,10 @@ class RiskAgent(BaseFinancialAgent):
         query: str,
         ticker: str,
         on_event: Optional[Any] = None,
-        brief: Optional[AgentBrief] = None,
     ) -> AgentOutput:
         """Adapter-compatible entrypoint for report pipeline."""
         query_text = str(query or "")
         del on_event
-        self._current_brief = brief
 
         clean_ticker = str(ticker or "").strip().upper() or "N/A"
         get_stock_price = getattr(self.tools, "get_stock_price", None)
@@ -548,26 +475,17 @@ class RiskAgent(BaseFinancialAgent):
 
         positions = [{"ticker": clean_ticker, "weight": 1.0}]
         get_factor_exposure = getattr(self.tools, "get_factor_exposure", None)
-        run_stress_test = getattr(self.tools, "run_portfolio_stress_test", None)
         factor_payload = (
             await asyncio.to_thread(get_factor_exposure, positions, lookback_days=252)
             if get_factor_exposure
             else {}
         )
-        stress_payload = (
-            await asyncio.to_thread(run_stress_test, positions, lookback_days=252)
-            if run_stress_test
-            else {}
-        )
         if not isinstance(factor_payload, dict):
             factor_payload = {"error": "invalid_factor_payload"}
-        if not isinstance(stress_payload, dict):
-            stress_payload = {"error": "invalid_stress_payload"}
 
-        extra_signals = self._build_portfolio_signals(
+        extra_signals = self._build_factor_signals(
             ticker=clean_ticker,
             factor_payload=factor_payload,
-            stress_payload=stress_payload,
         )
         if extra_signals:
             merged_signals = list(assessment.signals) + extra_signals
@@ -611,7 +529,7 @@ class RiskAgent(BaseFinancialAgent):
         ):
             evidence.append(
                 EvidenceItem(
-                    text="Portfolio factor exposure snapshot.",
+                    text="Single-symbol factor exposure snapshot.",
                     source=str(factor_payload.get("source") or "factor_model"),
                     timestamp=assessment.assessed_at,
                     meta=factor_payload,
@@ -619,24 +537,7 @@ class RiskAgent(BaseFinancialAgent):
             )
             data_sources.append(str(factor_payload.get("source") or "factor_model"))
 
-        if (
-            isinstance(stress_payload, dict)
-            and not stress_payload.get("error")
-            and isinstance(stress_payload.get("scenarios"), list)
-        ):
-            evidence.append(
-                EvidenceItem(
-                    text="Portfolio stress-test snapshot.",
-                    source=str(stress_payload.get("source") or "stress_model"),
-                    timestamp=assessment.assessed_at,
-                    meta=stress_payload,
-                )
-            )
-            data_sources.append(str(stress_payload.get("source") or "stress_model"))
-
         if not isinstance(factor_payload, dict) or factor_payload.get("error"):
-            fallback_used = True
-        if not isinstance(stress_payload, dict) or stress_payload.get("error"):
             fallback_used = True
 
         assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
@@ -646,7 +547,6 @@ class RiskAgent(BaseFinancialAgent):
             assessment=assessment,
             evidence=evidence,
             factor_payload=factor_payload,
-            stress_payload=stress_payload,
             confidence=0.75 if quote is not None else 0.45,
         )
 
@@ -683,7 +583,6 @@ class RiskAgent(BaseFinancialAgent):
         assessment: RiskAssessment,
         evidence: list[EvidenceItem],
         factor_payload: dict[str, Any],
-        stress_payload: dict[str, Any],
         confidence: float,
     ) -> list[dict[str, Any]]:
         source_ids = [
@@ -702,7 +601,7 @@ class RiskAgent(BaseFinancialAgent):
                     evidence_ids=[source_ids[0]],
                     stance="risk",
                     confidence=confidence,
-                    limitations=["基于规则的综合风险评分，调仓前请核实驱动因素。"],
+                    limitations=["基于规则的综合风险评分，形成判断前请核实驱动因素。"],
                     metadata={"claim_type": "risk_score", "risk_level": assessment.risk_level.value},
                 )
             )
@@ -721,25 +620,8 @@ class RiskAgent(BaseFinancialAgent):
                     evidence_ids=[source_ids[1]],
                     stance="risk",
                     confidence=confidence,
-                    limitations=["因子暴露基于模型快照，应与组合权重核对。"],
+                    limitations=["因子暴露基于历史模型快照，不代表未来表现。"],
                     metadata={"claim_type": "factor_exposure"},
-                )
-            )
-
-        if len(source_ids) >= 3 and isinstance(stress_payload.get("scenarios"), list):
-            worst_case = safe_float(stress_payload.get("worst_case_return"))
-            worst_text = f"{worst_case:.1%}" if worst_case is not None else "数据已获取"
-            claims.append(
-                build_agent_claim(
-                    agent_name=self.AGENT_NAME,
-                    ticker=ticker,
-                    query=query,
-                    claim=f"{ticker} 压力测试下行幅度为 {worst_text}，反映情景下的损失敏感度。",
-                    evidence_ids=[source_ids[2]],
-                    stance="risk",
-                    confidence=confidence,
-                    limitations=["压力测试基于情景假设，并非预测。"],
-                    metadata={"claim_type": "stress_test"},
                 )
             )
         return claims

@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
@@ -25,11 +26,6 @@ SKIP_PARTS = {
     "__pycache__",
 }
 
-ROUTE_DECORATOR_RE = re.compile(
-    r"^\s*@(?:router|app)\.(?:get|post|put|patch|delete|options|head)\(",
-    re.MULTILINE,
-)
-INCLUDE_ROUTER_RE = re.compile(r"\binclude_router\(\s*([A-Za-z_][\w.]*)")
 FRONTEND_ROUTE_RE = re.compile(r"<Route\b[^>]*\bpath=[\"']([^\"']+)[\"']")
 
 PRODUCTION_MARKERS = {
@@ -38,6 +34,10 @@ PRODUCTION_MARKERS = {
     "legacy_intent_engine": re.compile(r"legacy_engine"),
     "dashboard_llm_scorer": re.compile(r"(?:insights_engine|dashboard\.scorers)"),
     "research_debate": re.compile(r"research_debate"),
+    "removed_report_actions": re.compile(
+        r"(?:exportPDF|/api/export/pdf|setReportFavorite|checkPriceDrift|compareReports|"
+        r"/api/reports/(?:compare|price-drift)|is_favorite)"
+    ),
 }
 
 STORAGE_SUFFIXES = {".db", ".json", ".sqlite", ".sqlite3"}
@@ -93,24 +93,41 @@ def _locations(root: Path, pattern: re.Pattern[str], roots: Iterable[str]) -> li
 
 
 def _router_baseline(root: Path) -> dict[str, object]:
+    from fastapi.routing import APIRoute
+
+    root_text = str(root)
+    if root_text not in sys.path:
+        sys.path.insert(0, root_text)
+    from backend.api.app_factory import create_app
+
     api_root = root / "backend" / "api"
     route_files = sorted(api_root.glob("*_router.py"))
-    decorator_count = sum(len(ROUTE_DECORATOR_RE.findall(_read(path))) for path in route_files)
-    factory_path = api_root / "app_factory.py"
-    factory_text = _read(factory_path) if factory_path.exists() else ""
-    registrations = INCLUDE_ROUTER_RE.findall(factory_text)
+    routes = [
+        route
+        for route in create_app().routes
+        if isinstance(route, APIRoute) and route.include_in_schema
+    ]
+    router_tags = sorted({tag for route in routes for tag in (route.tags or [])})
     return {
         "router_modules": len(route_files),
-        "registered_routers": registrations,
-        "registered_router_count": len(registrations),
-        "declared_endpoint_count": decorator_count,
+        "registered_routers": router_tags,
+        "registered_router_count": len(router_tags),
+        "public_path_count": len({route.path for route in routes}),
+        "public_operation_count": len(routes),
     }
 
 
 def _frontend_baseline(root: Path) -> dict[str, object]:
     app_path = root / "frontend" / "src" / "App.tsx"
     paths = FRONTEND_ROUTE_RE.findall(_read(app_path)) if app_path.exists() else []
-    return {"route_count": len(paths), "routes": paths}
+    redirect_routes = [path for path in paths if path in {"/", "*"}]
+    product_routes = [path for path in paths if path not in {"/", "*"}]
+    return {
+        "route_count": len(product_routes),
+        "routes": product_routes,
+        "redirect_route_count": len(redirect_routes),
+        "redirect_routes": redirect_routes,
+    }
 
 
 def _storage_baseline(root: Path) -> list[dict[str, object]]:

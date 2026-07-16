@@ -24,7 +24,13 @@ _async_bundle_loop_id: Optional[int] = None
 
 
 def _resolve_backend() -> str:
-    return (os.getenv("LANGGRAPH_CHECKPOINTER_BACKEND", "sqlite") or "sqlite").strip().lower()
+    backend = (os.getenv("LANGGRAPH_CHECKPOINTER_BACKEND", "memory") or "memory").strip().lower()
+    if str(os.getenv("APP_MODE") or "development").strip().lower() == "production":
+        if backend != "postgres":
+            raise ValueError("production 的 LANGGRAPH_CHECKPOINTER_BACKEND 必须为 postgres")
+        if _env_bool("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", False):
+            raise ValueError("production 禁止 LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK")
+    return backend
 
 
 @dataclass(frozen=True)
@@ -88,44 +94,6 @@ def _memory_bundle(*, reason: Optional[str], fallback_used: bool) -> Checkpointe
     return CheckpointerBundle(saver=MemorySaver(), info=info)
 
 
-def _create_sync_sqlite_bundle(sqlite_path: str) -> CheckpointerBundle:
-    from langgraph.checkpoint.sqlite import SqliteSaver
-
-    resolved = os.path.abspath(sqlite_path)
-    os.makedirs(os.path.dirname(resolved), exist_ok=True)
-    stack = ExitStack()
-    saver = stack.enter_context(SqliteSaver.from_conn_string(resolved))
-    saver.setup()
-    info = CheckpointerInfo(
-        schema_version=CHECKPOINTER_SCHEMA_VERSION,
-        backend="sqlite",
-        persistent=True,
-        location=resolved,
-        fallback_used=False,
-        fallback_reason=None,
-    )
-    return CheckpointerBundle(saver=saver, info=info, _stack=stack)
-
-
-async def _create_async_sqlite_bundle(sqlite_path: str) -> CheckpointerBundle:
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-    resolved = os.path.abspath(sqlite_path)
-    os.makedirs(os.path.dirname(resolved), exist_ok=True)
-    cm = AsyncSqliteSaver.from_conn_string(resolved)
-    saver = await cm.__aenter__()
-    await saver.setup()
-    info = CheckpointerInfo(
-        schema_version=CHECKPOINTER_SCHEMA_VERSION,
-        backend="sqlite",
-        persistent=True,
-        location=resolved,
-        fallback_used=False,
-        fallback_reason=None,
-    )
-    return CheckpointerBundle(saver=saver, info=info, _async_cm=cm)
-
-
 def _create_sync_postgres_bundle(dsn: str, *, pipeline: bool) -> CheckpointerBundle:
     from langgraph.checkpoint.postgres import PostgresSaver
 
@@ -166,12 +134,6 @@ def _build_sync_bundle() -> CheckpointerBundle:
     try:
         if backend == "memory":
             bundle = _memory_bundle(reason=None, fallback_used=False)
-        elif backend == "sqlite":
-            sqlite_path = os.getenv(
-                "LANGGRAPH_CHECKPOINT_SQLITE_PATH",
-                os.path.join("data", "langgraph", "checkpoints.sqlite"),
-            )
-            bundle = _create_sync_sqlite_bundle(sqlite_path)
         elif backend == "postgres":
             dsn = (os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN") or "").strip()
             if not dsn:
@@ -196,12 +158,6 @@ async def _build_async_bundle() -> CheckpointerBundle:
     try:
         if backend == "memory":
             bundle = _memory_bundle(reason=None, fallback_used=False)
-        elif backend == "sqlite":
-            sqlite_path = os.getenv(
-                "LANGGRAPH_CHECKPOINT_SQLITE_PATH",
-                os.path.join("data", "langgraph", "checkpoints.sqlite"),
-            )
-            bundle = await _create_async_sqlite_bundle(sqlite_path)
         elif backend == "postgres":
             dsn = (os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN") or "").strip()
             if not dsn:
@@ -243,8 +199,7 @@ async def aget_checkpointer_bundle() -> CheckpointerBundle:
         if _async_bundle is not None and _async_bundle_loop_id == loop_id:
             return _async_bundle
         if _async_bundle is not None and _async_bundle_loop_id != loop_id:
-            # AsyncSqliteSaver binds to loop/thread; reuse across loops causes
-            # "ValueError: no active connection" in tests/reloads.
+            # Async savers bind to an event loop and cannot be reused across reloads.
             old_bundle = _async_bundle
             _async_bundle = None
             _async_bundle_loop_id = None

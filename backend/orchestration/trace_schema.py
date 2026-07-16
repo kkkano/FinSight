@@ -17,9 +17,6 @@ class TraceEventType(str, Enum):
     # 搜索相关
     SEARCH_START = "search_start"
     SEARCH_RESULT = "search_result"
-    # 反思循环
-    REFLECTION_GAP = "reflection_gap"
-    REFLECTION_SEARCH = "reflection_search"
     # 收敛相关
     CONVERGENCE_CHECK = "convergence_check"
     CONVERGENCE_STOP = "convergence_stop"

@@ -15,9 +15,6 @@ from backend.graph.intent_contract import (
     is_valuation_contract,
 )
 from backend.graph.policy.runtime import (
-    _agent_research_config as _agent_research_config,
-)
-from backend.graph.policy.runtime import (
     _append_missing as _append_missing,
 )
 from backend.graph.policy.runtime import (
@@ -57,9 +54,6 @@ from backend.graph.policy.runtime import (
     _request_frame_evidence_from_state as _request_frame_evidence_from_state,
 )
 from backend.graph.policy.runtime import (
-    _request_frame_results_from_state as _request_frame_results_from_state,
-)
-from backend.graph.policy.runtime import (
     _request_frames_from_state as _request_frames_from_state,
 )
 from backend.graph.policy.runtime import (
@@ -78,9 +72,6 @@ from backend.graph.policy.runtime import (
     _task_subject_type as _task_subject_type,
 )
 from backend.graph.policy.tools import (
-    _ACTION_RESULT_TOOLS as _ACTION_RESULT_TOOLS,
-)
-from backend.graph.policy.tools import (
     _SEC_HOLDINGS_TOOL_NAMES as _SEC_HOLDINGS_TOOL_NAMES,
 )
 from backend.graph.policy.tools import (
@@ -91,9 +82,6 @@ from backend.graph.policy.tools import (
 )
 from backend.graph.policy.tools import (
     _legacy_select_tools as _legacy_select_tools,
-)
-from backend.graph.policy.tools import (
-    _tools_for_required_results as _tools_for_required_results,
 )
 from backend.graph.policy.tools import (
     _valuation_compare_light_tool_floor as _valuation_compare_light_tool_floor,
@@ -185,7 +173,6 @@ def policy_gate(state: GraphState) -> dict:
     Responsibilities:
     - Provide a per-request "allowed tools/agents" whitelist
     - Provide a per-request budget (max rounds/tools)
-    - Apply user agent_preferences (depth filtering, budget override)
 
     Later phases will make this stricter (tool schemas, per-subject budgets, safety gates).
     """
@@ -219,8 +206,6 @@ def policy_gate(state: GraphState) -> dict:
     if analysis_depth is None and output_mode == "investment_report":
         query_text = str(state.get("query") or "")
         analysis_depth = "deep_research" if _contains_any(query_text, _DEEP_RESEARCH_HINTS) else "report"
-    raw_prefs = ui_context.get("agent_preferences") or {}
-    agent_preferences: dict = raw_prefs if isinstance(raw_prefs, dict) else {}
     explicit_skill = (
         str(ui_context.get("skill") or ui_context.get("selected_skill") or "").strip()
         if isinstance(ui_context, dict)
@@ -269,7 +254,6 @@ def policy_gate(state: GraphState) -> dict:
     request_frame_evidence = _request_frame_evidence_from_state(state)
     if request_frame_evidence:
         required_evidence = canonical_evidence_kinds(list(required_evidence) + list(request_frame_evidence))
-    required_results = _request_frame_results_from_state(state)
     v2_profiles = set(evidence_profiles(state.get("understanding_v2")))
     v2_profiles.update(_task_param_profiles(ready_tasks))
     valuation_compare_light = VALUATION_COMPARE_LIGHT_PROFILE in v2_profiles
@@ -402,11 +386,6 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = _append_missing(list(allowed_tools), tuple(evidence_tools + ["get_current_datetime", "search"]))
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(evidence_tools) + len(ready_tasks) + 2))
 
-    action_tools = _tools_for_required_results(required_results)
-    if action_tools:
-        allowed_tools = _append_missing(list(allowed_tools), tuple(action_tools))
-        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(action_tools) + len(ready_tasks) + 2))
-
     if earnings_impact_requested:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
@@ -455,7 +434,7 @@ def policy_gate(state: GraphState) -> dict:
 
     # Agent whitelist:
     # Priority: agents_override (explicit) > evidence contract > v2 shadow profile
-    # > agent_preferences (depth) > default selection.
+    # > deterministic default selection.
     allowed_agents: list[str] = []
     agent_selection: dict[str, object] = {}
     evidence_agents = [
@@ -538,24 +517,6 @@ def policy_gate(state: GraphState) -> dict:
                 "reasons": {name: reasons.get(name) for name in allowed_agents},
             }
 
-            valid_depths = {"standard", "deep", "off"}
-            pref_agents = agent_preferences.get("agents")
-            if isinstance(pref_agents, dict):
-                removed_by_prefs: list[str] = []
-                for name, depth in pref_agents.items():
-                    if not isinstance(name, str) or name not in REPORT_AGENT_CANDIDATES:
-                        continue
-                    depth_str = str(depth) if depth else "standard"
-                    if depth_str not in valid_depths:
-                        depth_str = "standard"
-                    if depth_str == "off" and name in allowed_agents:
-                        allowed_agents.remove(name)
-                        removed_by_prefs.append(name)
-                    elif depth_str == "deep":
-                        budget["max_rounds"] = min(budget["max_rounds"] + 1, 10)
-                if removed_by_prefs:
-                    agent_selection["removed_by_prefs"] = removed_by_prefs
-
         if (
             analysis_depth == "report"
             and not bool(agent_selection.get("force_all_agents"))
@@ -604,30 +565,6 @@ def policy_gate(state: GraphState) -> dict:
         budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), int(config.get("max_rounds") or 4))
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), int(config.get("max_tools") or 4))
 
-        pref_agents = agent_preferences.get("agents")
-        if isinstance(pref_agents, dict):
-            removed_by_prefs: list[str] = []
-            for name in list(allowed_agents):
-                if str(pref_agents.get(name) or "").strip().lower() == "off":
-                    allowed_agents.remove(name)
-                    removed_by_prefs.append(name)
-            if removed_by_prefs:
-                agent_selection["selected"] = list(allowed_agents)
-                agent_selection["required"] = [
-                    name for name in (agent_selection.get("required") or []) if name not in removed_by_prefs
-                ]
-                agent_selection["removed_by_prefs"] = removed_by_prefs
-    elif agent_preferences:
-        if agent_preferences.get("include_all"):
-            allowed_agents = list(REPORT_AGENT_CANDIDATES)
-        else:
-            requested = agent_preferences.get("agents")
-            if isinstance(requested, list):
-                allowed_agents = [
-                    a for a in requested
-                    if isinstance(a, str) and a in REPORT_AGENT_CANDIDATES
-                ]
-        agent_selection = {"selected": list(allowed_agents), "preferences": True}
     else:
         allowed_agents = []
         agent_selection = {"selected": [], "reason": "brief_or_tool_only"}
@@ -681,7 +618,6 @@ def policy_gate(state: GraphState) -> dict:
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
-        "required_results": list(required_results),
         "required_evidence": list(required_evidence),
         "evidence_plan": evidence_plan_for_contract(intent_contract, market=market)
         if intent_contract
@@ -703,7 +639,6 @@ def policy_gate(state: GraphState) -> dict:
             }
             for name in allowed_agents
         },
-        "agent_research_config": _agent_research_config(agent_preferences),
     }
 
     trace = state.get("trace") or {}
@@ -715,7 +650,6 @@ def policy_gate(state: GraphState) -> dict:
                 "budget": budget,
                 "allowed_tools": allowed_tools,
                 "allowed_agents": allowed_agents,
-                "required_results": list(required_results),
                 "analysis_depth": analysis_depth,
                 "market": market,
                 "tool_selection_fallback": fallback_reason,

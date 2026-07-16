@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.agents.prediction_contract import AgentPrediction
 from backend.api.predictions_router import PredictionsRouterDeps, create_predictions_router
-from backend.services.cost_audit import UserDailyCostLimitExceeded
+from backend.services.llm_usage_store import UserDailyCostLimitExceeded
 from backend.services.prediction_service import PredictionRun
 
 

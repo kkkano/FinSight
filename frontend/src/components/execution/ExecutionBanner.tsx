@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
-  PauseCircle,
   StopCircle,
   XCircle,
 } from 'lucide-react';
@@ -122,7 +121,6 @@ export const ExecutionBanner: React.FC = () => {
   const isDone = displayRun.status === 'done';
   const isQualityBlocked = isDone && displayRun.qualityBlocked === true;
   const isError = displayRun.status === 'error';
-  const isInterrupted = displayRun.status === 'interrupted';
 
   const tickerText = displayRun.tickers.length > 0
     ? displayRun.tickers.join(', ')
@@ -139,9 +137,7 @@ export const ExecutionBanner: React.FC = () => {
               ? 'border-emerald-800/30 bg-emerald-950/20'
               : isError
                 ? 'border-red-800/30 bg-red-950/20'
-                : isInterrupted
-                  ? 'border-amber-800/30 bg-amber-950/20'
-                  : 'border-fin-border bg-fin-bg/50'
+                : 'border-fin-border bg-fin-bg/50'
       }`}
     >
       <div className="flex items-center gap-3 px-4 py-2">
@@ -153,8 +149,6 @@ export const ExecutionBanner: React.FC = () => {
           <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
         ) : isError ? (
           <XCircle size={14} className="text-red-400 shrink-0" />
-        ) : isInterrupted ? (
-          <PauseCircle size={14} className="text-amber-400 shrink-0" />
         ) : (
           <StopCircle size={14} className="text-fin-muted shrink-0" />
         )}
@@ -185,7 +179,7 @@ export const ExecutionBanner: React.FC = () => {
 
         {!isRunning && (
           <span className="text-2xs text-fin-muted ml-auto shrink-0">
-            {isQualityBlocked ? '质量拦截' : isDone ? '执行完成' : isError ? '执行失败' : isInterrupted ? '等待确认' : '已取消'}
+            {isQualityBlocked ? '质量拦截' : isDone ? '执行完成' : isError ? '执行失败' : '已取消'}
           </span>
         )}
 
@@ -199,12 +193,12 @@ export const ExecutionBanner: React.FC = () => {
             {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
 
-          {(isRunning || isInterrupted) && (
+          {isRunning && (
             <button
               type="button"
               onClick={() => cancelExecution(displayRun.runId)}
               className="p-1 rounded hover:bg-red-900/30 text-fin-muted hover:text-red-400 transition-colors"
-              title={isInterrupted ? '取消等待' : '取消执行'}
+              title="取消执行"
             >
               <XCircle size={12} />
             </button>

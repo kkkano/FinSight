@@ -21,7 +21,6 @@ _OPENAI_COMPATIBLE_ENV = (
 def _clear_endpoint_sources(monkeypatch, llm_config) -> None:
     for key in _OPENAI_COMPATIBLE_ENV:
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr(llm_config, "_load_user_config", lambda: {})
 
 
 def test_create_llm_fails_loudly_without_endpoint(monkeypatch):

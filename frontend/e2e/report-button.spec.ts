@@ -1,36 +1,19 @@
-﻿import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const E2E_SESSION_ID = 'sess-e2e-001';
+const SESSION_ID = 'user:e2e-user:report-flow';
 
-const fulfillJson = async (route: any, payload: unknown) => {
+const fulfillJson = async (route: any, payload: unknown, status = 200) => {
   await route.fulfill({
-    status: 200,
+    status,
     contentType: 'application/json',
     body: JSON.stringify(payload),
   });
 };
 
-const fulfillSSE = async (route: any, donePayload: Record<string, unknown> = {}) => {
-  const body = [
-    `data: ${JSON.stringify({ type: 'token', content: 'ok' })}\n\n`,
-    `data: ${JSON.stringify({ type: 'done', ...donePayload })}\n\n`,
-  ].join('');
-
-  await route.fulfill({
-    status: 200,
-    contentType: 'text/event-stream',
-    body,
-  });
-};
-
-const buildDashboardPayload = (symbol = 'AAPL') => ({
+const dashboardPayload = (symbol = 'AAPL') => ({
   success: true,
   state: {
-    active_asset: {
-      symbol,
-      type: 'equity',
-      display_name: symbol,
-    },
+    active_asset: { symbol, type: 'equity', display_name: symbol },
     capabilities: {
       revenue_trend: true,
       segment_mix: true,
@@ -39,25 +22,17 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
       holdings: true,
       market_chart: true,
     },
-    watchlist: [
-      { symbol: 'AAPL', type: 'equity', name: 'Apple' },
-      { symbol: 'MSFT', type: 'equity', name: 'Microsoft' },
-    ],
+    watchlist: [{ symbol: 'AAPL', type: 'equity', name: 'Apple' }],
     layout_prefs: { hidden_widgets: [], order: [] },
     news_mode: { mode: 'market' },
     debug: {},
   },
   data: {
-    snapshot: {
-      revenue: 100,
-      eps: 3.2,
-      gross_margin: 40,
-      fcf: 10,
-    },
+    snapshot: { revenue: 100, eps: 3.2, gross_margin: 40, fcf: 10 },
     charts: {
       market_chart: [
-        { time: Date.now() / 1000 - 86400, close: 180 },
-        { time: Date.now() / 1000, close: 182 },
+        { time: 1783814400, open: 178, high: 183, low: 177, close: 181, volume: 1_100_000 },
+        { time: 1783900800, open: 181, high: 184, low: 180, close: 182, volume: 1_250_000 },
       ],
       revenue_trend: [],
       segment_mix: [],
@@ -66,79 +41,19 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
       holdings: [],
     },
     news: {
-      market: [
-        {
-          title: 'Apple launches major AI update',
-          url: 'https://example.com/apple-ai',
-          source: 'E2E News',
-          ts: new Date().toISOString(),
-          summary: 'Apple announced a major AI update that may impact revenue growth.',
-        },
-      ],
-      impact: [
-        {
-          title: 'AAPL receives positive analyst outlook',
-          url: 'https://example.com/aapl-outlook',
-          source: 'E2E News',
-          ts: new Date().toISOString(),
-          summary: 'Analysts upgraded long-term outlook after strong earnings guidance.',
-        },
-      ],
+      market: [],
+      impact: [{
+        title: 'Apple launches major AI update',
+        url: 'https://example.com/apple-ai',
+        source: 'E2E News',
+        ts: '2026-07-16T08:00:00Z',
+        summary: 'Apple announced a major AI update.',
+      }],
     },
   },
 });
 
-const buildWorkbenchReport = (
-  reportId: string,
-  overrides: Record<string, unknown> = {},
-) => ({
-  report_id: reportId,
-  ticker: 'AAPL',
-  title: 'AAPL 深度报告',
-  summary: '报告摘要',
-  sentiment: 'neutral',
-  confidence_score: 0.72,
-  grounding_rate: 0.82,
-  generated_at: '2026-02-18T00:00:00Z',
-  report_hints: {
-    quality: {
-      deep_report_required: true,
-      qualified: true,
-      missing_requirements: [],
-    },
-    grounding: {
-      grounding_rate: 0.82,
-      claim_count: 6,
-      grounded_count: 5,
-    },
-    verifier: {
-      enabled: true,
-      checked: true,
-      unsupported_count: 0,
-      unsupported_claims: [],
-    },
-  },
-  citations: [
-    {
-      source_id: 'src_1',
-      source: 'Reuters',
-      title: 'Reuters note',
-      snippet: 'Sample evidence snippet',
-      url: 'https://example.com/reuters-note',
-      published_date: '2026-02-17T00:00:00Z',
-    },
-  ],
-  sections: [],
-  risks: [],
-  recommendation: 'HOLD',
-  meta: {
-    source_type: 'workbench',
-    source_trigger: 'workbench_deep_search',
-  },
-  ...overrides,
-});
-
-const parseRequestBody = (route: any) => {
+const parseBody = (route: any): Record<string, any> => {
   try {
     return JSON.parse(route.request().postData() || '{}');
   } catch {
@@ -146,133 +61,67 @@ const parseRequestBody = (route: any) => {
   }
 };
 
-// The right context panel defaults to collapsed (store `showRightPanel: false`).
-// On desktop a collapsed panel renders a `context-panel-expand` toggle.
-const ensureRightPanelExpanded = async (page: any) => {
-  const expandButton = page.getByTestId('context-panel-expand');
-  try {
-    await expandButton.waitFor({ state: 'visible', timeout: 8000 });
-    await expandButton.click();
-  } catch {
-    // Panel already expanded — nothing to do.
-  }
-  await expect(page.getByTestId('context-panel')).toBeVisible();
+const fulfillDoneStream = async (route: any, payload: Record<string, unknown> = {}) => {
+  await route.fulfill({
+    status: 200,
+    contentType: 'text/event-stream',
+    body: [
+      `data: ${JSON.stringify({ type: 'token', content: 'ok' })}\n\n`,
+      `data: ${JSON.stringify({ type: 'done', ...payload })}\n\n`,
+    ].join(''),
+  });
 };
 
 test.beforeEach(async ({ page }) => {
-  let workbenchIndexItems: any[] = [
-    {
-      report_id: 'wb-rpt-1',
-      ticker: 'AAPL',
-      analysis_depth: 'deep_research',
-      source_trigger: 'workbench_deep_search',
-      title: 'AAPL 工作台深度报告',
-      summary: 'summary',
-      generated_at: '2026-02-18T00:00:00Z',
-    },
-  ];
-  let workbenchReplayById: Record<string, any> = {
-    'wb-rpt-1': buildWorkbenchReport('wb-rpt-1'),
-  };
-
-  await page.exposeFunction('__setWorkbenchReports', (payload: { items?: any[]; replayById?: Record<string, any> }) => {
-    if (Array.isArray(payload?.items)) {
-      workbenchIndexItems = payload.items;
-    }
-    if (payload?.replayById && typeof payload.replayById === 'object') {
-      workbenchReplayById = payload.replayById;
-    }
-  });
-
-  await page.addInitScript(() => {
+  await page.addInitScript((sessionId) => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'anonymous');
-    localStorage.setItem('finsight-session-id', E2E_SESSION_ID);
+    localStorage.setItem('finsight-entry-mode', 'authenticated');
+    localStorage.setItem('finsight-session-id', String(sessionId));
     localStorage.setItem(
       'fs_dashboard_active_v1',
       JSON.stringify({ symbol: 'AAPL', type: 'equity', display_name: 'Apple' }),
     );
     localStorage.setItem('fs_dashboard_layout_v1', JSON.stringify({ hidden_widgets: [], order: [] }));
     localStorage.setItem('fs_dashboard_news_mode_v1', JSON.stringify('market'));
-    localStorage.setItem('finsight-portfolio-positions', JSON.stringify({ AAPL: 10 }));
-  });
+  }, SESSION_ID);
 
-  await page.route('**/api/execute', async (route) => {
-    await fulfillSSE(route);
-  });
-
+  await page.route('**/api/execute', (route) => fulfillDoneStream(route));
   await page.route('**/api/dashboard**', async (route) => {
-    const url = new URL(route.request().url());
-    const symbol = url.searchParams.get('symbol') || 'AAPL';
-    await fulfillJson(route, buildDashboardPayload(symbol));
+    const symbol = new URL(route.request().url()).searchParams.get('symbol') || 'AAPL';
+    await fulfillJson(route, dashboardPayload(symbol));
   });
-
-  await page.route('**/api/user/profile**', async (route) => {
-    await fulfillJson(route, {
-      profile: {
-        name: 'E2E User',
-        risk_preference: 'balanced',
-        watchlist: ['AAPL', 'MSFT'],
-      },
-    });
-  });
-
-  await page.route('**/api/user/watchlist/add', async (route) => {
-    await fulfillJson(route, { success: true });
-  });
-
-  await page.route('**/api/user/watchlist/remove', async (route) => {
-    await fulfillJson(route, { success: true });
-  });
-
-  await page.route('**/api/subscriptions**', async (route) => {
-    await fulfillJson(route, { subscriptions: [] });
-  });
-
-  await page.route('**/api/stock/price/**', async (route) => {
-    await fulfillJson(route, { success: true, data: { price: 180.5, change_percent: 1.2 } });
-  });
-
-  await page.route('**/api/reports/index**', async (route) => {
-    await fulfillJson(route, {
-      success: true,
-      session_id: E2E_SESSION_ID,
-      count: workbenchIndexItems.length,
-      items: workbenchIndexItems,
-    });
-  });
-
-  await page.route('**/api/reports/replay/**', async (route) => {
-    const url = new URL(route.request().url());
-    const reportId = decodeURIComponent(url.pathname.split('/').pop() || '');
-    const report = workbenchReplayById[reportId] || buildWorkbenchReport(reportId);
-    await fulfillJson(route, {
-      success: true,
-      session_id: E2E_SESSION_ID,
-      report,
-      citations: Array.isArray(report?.citations) ? report.citations : [],
-      trace_digest: {},
-    });
-  });
-
-  await page.route('**/health', async (route) => {
-    await fulfillJson(route, { status: 'ok' });
-  });
-
+  await page.route('**/api/user/profile**', (route) => fulfillJson(route, {
+    profile: { name: 'E2E User', watchlist: ['AAPL'] },
+  }));
+  await page.route('**/api/watchlist**', (route) => fulfillJson(route, {
+    items: [{ ticker: 'AAPL', note: '', added_at: '2026-07-16T08:00:00Z' }],
+  }));
+  await page.route('**/api/stock/price/**', (route) => fulfillJson(route, {
+    ticker: 'AAPL',
+    data: { price: 182, change_percent: 1.1, provider: 'e2e', as_of: '2026-07-16T08:00:00Z' },
+  }));
+  await page.route('**/api/predictions/latest**', (route) => fulfillJson(route, {
+    prediction: null,
+    outcome: null,
+  }));
+  await page.route('**/api/reports/index**', (route) => fulfillJson(route, {
+    session_id: SESSION_ID,
+    count: 0,
+    items: [],
+  }));
+  await page.route('**/health', (route) => fulfillJson(route, { status: 'ok' }));
 });
 
-test('ChatInput: report toggle + send uses options.output_mode=investment_report', async ({ page }) => {
-  let captured: any = null;
-
+test('报告模式通过唯一 Chat 执行入口发送', async ({ page }) => {
+  let captured: Record<string, any> | null = null;
   await page.unroute('**/api/execute');
   await page.route('**/api/execute', async (route) => {
-    captured = parseRequestBody(route);
-    await fulfillSSE(route);
+    captured = parseBody(route);
+    await fulfillDoneStream(route);
   });
 
   await page.goto('/chat');
-
   await page.locator('#chat-input').fill('分析 AAPL 影响');
   await page.getByTestId('chat-report-toggle-btn').click();
   await page.getByTestId('chat-send-btn').click();
@@ -281,286 +130,49 @@ test('ChatInput: report toggle + send uses options.output_mode=investment_report
   expect(captured?.options?.output_mode).toBe('investment_report');
 });
 
-test('Dashboard and Workbench do not mount MiniChat; Chat owns the send controls', async ({ page }) => {
+test('Dashboard 不挂载第二套聊天输入，Chat 保留唯一发送控件', async ({ page }) => {
   await page.goto('/dashboard/AAPL');
-  await ensureRightPanelExpanded(page);
-  await expect(page.getByTestId('mini-chat-input')).toHaveCount(0);
-  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
-  await expect(page.getByTestId('mini-chat-report-toggle-btn')).toHaveCount(0);
-
-  await page.goto('/workbench?symbol=AAPL');
   await expect(page.getByTestId('mini-chat-input')).toHaveCount(0);
   await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
 
   await page.goto('/chat');
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
   await expect(page.getByTestId('chat-report-toggle-btn')).toBeVisible();
-  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
 });
 
-test('Legacy /?symbol=AAPL route redirects to dashboard route', async ({ page }) => {
-  await page.goto('/?symbol=AAPL');
-
-  await expect(page).toHaveURL(/\/dashboard\/AAPL(?:\?symbol=AAPL)?$/);
-  await expect(page.getByTestId('dashboard-ask-ai')).toBeVisible();
-  await expect(page.getByTestId('mini-chat-input')).toHaveCount(0);
-  await expect(page.getByTestId('mini-chat-send-btn')).toHaveCount(0);
-});
-
-test('Route switch: sidebar can switch between chat and dashboard', async ({ page }) => {
+test('侧边栏只在当前产品路由间切换', async ({ page }) => {
   await page.goto('/chat');
-
   await page.getByTestId('sidebar-nav-dashboard').click();
   await expect(page).toHaveURL(/\/dashboard\/[A-Z0-9._-]+$/);
 
   await page.getByTestId('dashboard-back-chat').click();
   await expect(page).toHaveURL('/chat');
+  await page.getByTestId('sidebar-nav-history').click();
+  await expect(page).toHaveURL('/history');
 });
 
-test('Context panel tabs can switch and panel can collapse/expand', async ({ page }) => {
-  await page.goto('/dashboard/AAPL');
-  await ensureRightPanelExpanded(page);
-
-  const panel = page.getByTestId('context-panel');
-  await expect(panel).toBeVisible();
-
-  await page.getByTestId('context-tab-chart').click();
-  await expect(panel.getByText('Market Chart')).toBeVisible();
-
-  await page.getByTestId('context-tab-portfolio').click();
-  await expect(panel.getByText('Portfolio', { exact: true })).toBeVisible();
-
-  await panel.locator('button[aria-label="Collapse"]').click();
-  await expect(page.getByTestId('context-panel-shell')).toHaveCount(0);
-
-  const expandButton = page.getByTestId('context-panel-expand');
-  await expect(expandButton).toBeVisible();
-  await expandButton.click();
-
-  await expect(page.getByTestId('context-panel-shell')).toBeVisible();
-  await expect(page.getByTestId('context-panel')).toBeVisible();
-});
-
-test('Session continuity: dashboard handoff returns to the same Chat session', async ({ page }) => {
-  const payloads: any[] = [];
-
+test('Dashboard 新闻 handoff 进入同一 Chat 会话并保留选择上下文', async ({ page }) => {
+  let captured: Record<string, any> | null = null;
   await page.unroute('**/api/execute');
   await page.route('**/api/execute', async (route) => {
-    const payload = parseRequestBody(route);
-    payloads.push(payload);
-
-    if (payloads.length === 1) {
-      await fulfillSSE(route, { session_id: payload.session_id });
-      return;
-    }
-
-    await fulfillSSE(route);
-  });
-
-  await page.goto('/chat');
-
-  await page.locator('#chat-input').fill('先来一条普通消息');
-  await page.getByTestId('chat-send-btn').click();
-  await expect.poll(() => payloads.length).toBeGreaterThanOrEqual(1);
-
-  await page.getByTestId('sidebar-nav-dashboard').click();
-  await expect(page).toHaveURL(/\/dashboard\/[A-Z0-9._-]+$/);
-  await page.getByTestId('dashboard-ask-ai').click();
-  await expect(page).toHaveURL(/\/chat(?:\?|$)/);
-  await expect(page.locator('#chat-input')).toBeFocused();
-  await expect(page.locator('#chat-input')).not.toHaveValue('');
-  expect(payloads).toHaveLength(1);
-
-  await page.locator('#chat-input').fill('再来一条消息');
-  await page.getByTestId('chat-send-btn').click();
-  await expect.poll(() => payloads.length).toBeGreaterThanOrEqual(2);
-
-  expect(typeof payloads[0]?.session_id).toBe('string');
-  expect(payloads[0]?.session_id).not.toBe('');
-  expect(payloads[1]?.session_id).toBe(payloads[0]?.session_id);
-});
-
-test('Selection reference: ask-from-news keeps selection context in request', async ({ page }) => {
-  let captured: any = null;
-
-  await page.unroute('**/api/execute');
-  await page.route('**/api/execute', async (route) => {
-    captured = parseRequestBody(route);
-    await fulfillSSE(route);
+    captured = parseBody(route);
+    await fulfillDoneStream(route);
   });
 
   await page.goto('/dashboard/AAPL');
   await page.getByTestId('dashboard-tab-news').click();
-  const askButton = page.locator('[data-testid^="news-ask-"]').first();
-  await expect(askButton).toBeVisible();
-  await askButton.click();
+  await page.locator('[data-testid^="news-ask-"]').first().click();
 
   await expect(page).toHaveURL(/\/chat(?:\?|$)/);
-  await expect(page.locator('#chat-input')).toBeFocused();
   await expect(page.locator('#chat-input')).toHaveValue(/请结合已选内容分析 AAPL/);
-  expect(captured).toBeNull();
-
   await page.getByTestId('chat-send-btn').click();
 
   await expect.poll(() => captured).not.toBeNull();
-  expect(captured?.context?.active_symbol).toBe('AAPL');
-  expect(captured?.context?.source_view).toBe('dashboard');
-  expect(captured?.context?.source_tab).toBe('news');
+  expect(captured?.session_id).toBe(SESSION_ID);
+  expect(captured?.context).toEqual(expect.objectContaining({
+    active_symbol: 'AAPL',
+    source_view: 'dashboard',
+    source_tab: 'news',
+  }));
   expect(captured?.context?.selection?.type).toBe('news');
-  expect(String(captured?.context?.selection?.title || '')).toMatch(
-    /(Apple launches major AI update|AAPL receives positive analyst outlook)/,
-  );
-});
-
-test('Workbench: report list shows ticker/depth/source tags', async ({ page }) => {
-  await page.goto('/workbench?symbol=AAPL');
-  await page.getByTestId('workbench-tab-research').click();
-
-  await expect(page.getByTestId('workbench-report-tag-ticker-wb-rpt-1')).toBeVisible();
-  await expect(page.getByTestId('workbench-report-tag-depth-wb-rpt-1')).toBeVisible();
-  await expect(page.getByTestId('workbench-report-tag-trigger-wb-rpt-1')).toBeVisible();
-});
-
-test('Workbench: hard-blocks report conclusion when ticker mismatches', async ({ page }) => {
-  const mismatchReport = {
-    ...buildWorkbenchReport('wb-rpt-mismatch'),
-    ticker: 'GOOG',
-    title: 'GOOG 工作台深度报告',
-  };
-  await page.evaluate(async (payload) => {
-    await (window as any).__setWorkbenchReports(payload);
-  }, {
-    items: [
-      {
-        report_id: 'wb-rpt-mismatch',
-        ticker: 'GOOG',
-        analysis_depth: 'deep_research',
-        source_trigger: 'workbench_deep_search',
-        title: 'GOOG 工作台深度报告',
-        summary: 'summary',
-        generated_at: '2026-02-18T00:00:00Z',
-      },
-    ],
-    replayById: {
-      'wb-rpt-mismatch': mismatchReport,
-    },
-  });
-
-  await page.goto('/workbench?symbol=AAPL&report=wb-rpt-mismatch');
-
-  await expect(page.getByTestId('workbench-report-ticker-mismatch')).toBeVisible();
-  await expect(page.getByTestId('workbench-report-conclusion-disabled')).toBeVisible();
-});
-
-test('Workbench: quality gap can jump to evidence snippets via diagnostic drawer', async ({ page }) => {
-  const qualityGapReport = buildWorkbenchReport('wb-rpt-quality-gap', {
-    grounding_rate: 0.48,
-    report_hints: {
-      quality: {
-        deep_report_required: true,
-        qualified: false,
-        missing_requirements: ['缺少可识别 10-K 引用'],
-      },
-      grounding: {
-        grounding_rate: 0.48,
-        claim_count: 10,
-        grounded_count: 4,
-      },
-      verifier: {
-        enabled: true,
-        checked: true,
-        unsupported_count: 0,
-        unsupported_claims: [],
-      },
-    },
-    citations: [
-      {
-        source_id: 'src_10k',
-        source: 'SEC',
-        title: 'Apple 10-K Filing',
-        snippet: 'Form 10-K annual report details',
-        url: 'https://www.sec.gov/example-10k',
-        published_date: '2026-02-10T00:00:00Z',
-      },
-    ],
-  });
-  await page.evaluate(async (payload) => {
-    await (window as any).__setWorkbenchReports(payload);
-  }, {
-    items: [
-      {
-        report_id: 'wb-rpt-quality-gap',
-        ticker: 'AAPL',
-        analysis_depth: 'deep_research',
-        source_trigger: 'workbench_deep_search',
-        title: 'AAPL 质量缺口报告',
-        summary: 'summary',
-        generated_at: '2026-02-18T00:00:00Z',
-      },
-    ],
-    replayById: {
-      'wb-rpt-quality-gap': qualityGapReport,
-    },
-  });
-
-  await page.goto('/workbench?symbol=AAPL&report=wb-rpt-quality-gap');
-
-  await expect(page.getByTestId('workbench-report-grounding-warning')).toBeVisible();
-  await expect(page.getByTestId('workbench-report-quality-gap')).toBeVisible();
-  await page.getByRole('button', { name: '查看引用片段' }).click();
-  await expect(page.getByTestId('workbench-quality-drawer')).toBeVisible();
-  await expect(page.getByTestId('workbench-quality-snippet-item').first()).toBeVisible();
-});
-
-test('Workbench: verifier gap is visible in report view and diagnostics drawer', async ({ page }) => {
-  const verifierGapReport = buildWorkbenchReport('wb-rpt-verifier-gap', {
-    report_hints: {
-      quality: {
-        deep_report_required: true,
-        qualified: true,
-        missing_requirements: [],
-      },
-      grounding: {
-        grounding_rate: 0.78,
-        claim_count: 8,
-        grounded_count: 6,
-      },
-      verifier: {
-        enabled: true,
-        checked: true,
-        unsupported_count: 1,
-        unsupported_claims: [
-          {
-            claim: 'Gemini 2.0 预计 2026Q2 发布',
-            reason: '证据池中未找到明确支撑',
-          },
-        ],
-      },
-    },
-  });
-  await page.evaluate(async (payload) => {
-    await (window as any).__setWorkbenchReports(payload);
-  }, {
-    items: [
-      {
-        report_id: 'wb-rpt-verifier-gap',
-        ticker: 'AAPL',
-        analysis_depth: 'deep_research',
-        source_trigger: 'workbench_deep_search',
-        title: 'AAPL Verifier Gap 报告',
-        summary: 'summary',
-        generated_at: '2026-02-18T00:00:00Z',
-      },
-    ],
-    replayById: {
-      'wb-rpt-verifier-gap': verifierGapReport,
-    },
-  });
-
-  await page.goto('/workbench?symbol=AAPL&report=wb-rpt-verifier-gap');
-
-  await expect(page.getByTestId('workbench-report-verifier-gap')).toBeVisible();
-  await page.getByTestId('workbench-quality-open-drawer').click();
-  await expect(page.getByTestId('workbench-quality-drawer')).toBeVisible();
-  await expect(page.getByText('Gemini 2.0 预计 2026Q2 发布')).toBeVisible();
 });

@@ -51,9 +51,10 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
+    localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'anonymous');
-    localStorage.setItem('finsight-session-id', 'public:anonymous:e2e-trace');
+    localStorage.setItem('finsight-entry-mode', 'authenticated');
+    localStorage.setItem('finsight-session-id', 'user:e2e-user:e2e-trace');
     localStorage.setItem(
       'fs_dashboard_active_v1',
       JSON.stringify({ symbol: 'AAPL', type: 'equity', display_name: 'Apple' }),
@@ -67,41 +68,21 @@ test.beforeEach(async ({ page }) => {
     const symbol = url.searchParams.get('symbol') || 'AAPL';
     await fulfillJson(route, buildDashboardPayload(symbol));
   });
-  await page.route('**/api/dashboard/insights**', async (route) => {
-    await fulfillJson(route, {
-      success: true,
-      symbol: 'AAPL',
-      insights: {},
-      generated_at: new Date().toISOString(),
-    });
-  });
   await page.route('**/api/user/profile**', async (route) => {
     await fulfillJson(route, { profile: { name: 'E2E User', watchlist: ['AAPL'] } });
-  });
-  await page.route('**/api/subscriptions**', async (route) => {
-    await fulfillJson(route, { subscriptions: [] });
   });
   await page.route('**/api/stock/price/**', async (route) => {
     await fulfillJson(route, { success: true, data: { price: 180.5, change_percent: 1.2 } });
   });
   await page.route('**/api/reports/index**', async (route) => {
-    await fulfillJson(route, { success: true, session_id: 'public:anonymous:e2e-trace', count: 0, items: [] });
+    await fulfillJson(route, { session_id: 'user:e2e-user:e2e-trace', count: 0, items: [] });
   });
   await page.route('**/api/reports/replay/**', async (route) => {
     await fulfillJson(route, {
-      success: true,
-      session_id: 'public:anonymous:e2e-trace',
+      session_id: 'user:e2e-user:e2e-trace',
       report: null,
       citations: [],
       trace_digest: {},
-    });
-  });
-  await page.route('**/api/tasks/daily**', async (route) => {
-    await fulfillJson(route, {
-      success: true,
-      session_id: 'public:anonymous:e2e-trace',
-      tasks: [],
-      count: 0,
     });
   });
   await page.route('**/api/execute**', async (route) => {
@@ -116,18 +97,18 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('原始 AgentLogPanel 默认隐藏，设置开启开发者模式后即时显示', async ({ page }) => {
+test('原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示', async ({ page }) => {
   await page.goto('/dashboard/AAPL');
+  await expect(page.getByTestId('context-panel-expand')).toBeVisible();
   await expect(page.getByText('Console', { exact: true })).toHaveCount(0);
 
-  await page.getByTestId('sidebar-nav-settings').click();
-  await page.getByRole('button', { name: '高级设置' }).click();
-  await expect(page.locator('[data-testid^="settings-trace-view-"]')).toHaveCount(0);
-  await page.getByTestId('settings-developer-mode-toggle').click();
-  await page.getByRole('button', { name: '关闭设置' }).click();
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    localStorage.setItem('finsight_dev', '1');
+    window.dispatchEvent(new Event('finsight-dev-mode-change'));
+  });
 
   await expect(page.getByText('Console', { exact: true })).toBeVisible();
-  await page.screenshot({ path: 'test-results/task5-three-tier.png', fullPage: true });
 });
 
 test('右侧过程页签展示专家执行面板并消费计划/决策事件', async ({ page }) => {
@@ -168,7 +149,9 @@ test('右侧过程页签展示专家执行面板并消费计划/决策事件', a
       { type: 'pipeline_stage', stage: 'rendering', status: 'done', message: 'Rendering completed' },
       { type: 'done', response: 'ok' },
     ];
-    const body = frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('');
+    const body = frames
+      .map((frame) => `data: ${JSON.stringify({ ...frame, run_id: 'e2e-trace-detail' })}\n\n`)
+      .join('');
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
@@ -176,8 +159,9 @@ test('右侧过程页签展示专家执行面板并消费计划/决策事件', a
     });
   });
 
-  await page.goto('/dashboard/AAPL');
-  await page.getByRole('button', { name: '快速分析' }).click();
+  await page.goto('/chat');
+  await page.locator('#chat-input').fill('分析 AAPL 新闻');
+  await page.getByTestId('chat-send-btn').click();
   await openExecutionPanel(page);
 
   await expect(page.getByText('计划摘要')).toBeVisible();
@@ -213,7 +197,9 @@ test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) =>
       { type: 'pipeline_stage', stage: 'executing', status: 'done', message: 'Executor completed' },
       { type: 'done', response: 'ok' },
     ];
-    const body = frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('');
+    const body = frames
+      .map((frame) => `data: ${JSON.stringify({ ...frame, run_id: 'e2e-trace-summary' })}\n\n`)
+      .join('');
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
@@ -221,37 +207,11 @@ test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) =>
     });
   });
 
-  await page.goto('/dashboard/AAPL');
-  await page.getByRole('button', { name: '快速分析' }).click();
+  await page.goto('/chat');
+  await page.locator('#chat-input').fill('分析 AAPL 新闻');
+  await page.getByTestId('chat-send-btn').click();
   await openExecutionPanel(page);
 
   await expect(page.getByText('Planner selection summary')).toBeVisible();
   await expect(page.getByText('Planner selected one agent.')).toBeVisible();
-});
-
-test('interrupt 事件会停在等待确认状态', async ({ page }) => {
-  await page.route('**/api/execute', async (route) => {
-    const frames = [
-      { type: 'pipeline_stage', stage: 'planning', status: 'start', message: 'Planner started' },
-      {
-        type: 'interrupt',
-        thread_id: 'thread-1',
-        prompt: 'Need confirmation to continue',
-        options: ['continue', 'cancel'],
-        required_agents: ['financial_agent'],
-      },
-    ];
-    const body = frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('');
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream',
-      body,
-    });
-  });
-
-  await page.goto('/dashboard/AAPL');
-  await page.getByRole('button', { name: '快速分析' }).click();
-  await openExecutionPanel(page);
-
-  await expect(page.getByText('Need confirmation to continue').first()).toBeVisible();
 });

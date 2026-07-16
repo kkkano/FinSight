@@ -1,5 +1,5 @@
-export function buildWorkbenchReportHref(reportId: string): string {
-  return `/workbench?report=${encodeURIComponent(reportId.trim())}`;
+export function buildHistoryReportHref(reportId: string): string {
+  return `/history?report=${encodeURIComponent(reportId.trim())}`;
 }
 
 export function buildReportFollowUpPrompt(title: string, reportId: string): string {

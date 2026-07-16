@@ -6,10 +6,13 @@ import inspect
 import json
 import os
 import re
-import sqlite3
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable, Mapping
+
+from backend.services.report_index import (
+    ReportIndexStoreUnavailable,
+    get_report_index_store,
+)
 
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -222,32 +225,6 @@ def _safe_float(value: Any, default: float = 0.5) -> float:
         return default
 
 
-def _report_index_path() -> Path:
-    return Path(os.getenv("REPORT_INDEX_SQLITE_PATH", "backend/data/report_index.sqlite")).resolve()
-
-
-def _connect_report_index_readonly() -> sqlite3.Connection | None:
-    path = _report_index_path()
-    if not path.exists():
-        return None
-    uri = f"file:{path.as_posix()}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def _decode_json_object(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return dict(value)
-    if not isinstance(value, str) or not value.strip():
-        return {}
-    try:
-        parsed = json.loads(value)
-    except Exception:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-
 def _extract_ledger_from_report(report: dict[str, Any], *, citations: list[dict[str, Any]]) -> dict[str, Any]:
     candidates: list[Any] = [
         report.get("evidence_ledger"),
@@ -302,39 +279,14 @@ def _extract_ledger_from_report(report: dict[str, Any], *, citations: list[dict[
 def _read_report_replay(*, session_id: str, report_id: str) -> dict[str, Any] | None:
     session_id = _validate_id(session_id, "session_id")
     report_id = _validate_id(report_id, "report_id")
-    conn = _connect_report_index_readonly()
-    if conn is None:
-        return None
     try:
-        row = conn.execute(
-            """
-            SELECT report_json
-            FROM report_index
-            WHERE session_id = ? AND report_id = ? AND publishable = 1
-            """,
-            (session_id, report_id),
-        ).fetchone()
-        if not row:
-            return None
-        citation_rows = conn.execute(
-            """
-            SELECT citation_json
-            FROM citation_index
-            WHERE session_id = ? AND report_id = ?
-            ORDER BY row_id ASC
-            """,
-            (session_id, report_id),
-        ).fetchall()
-    finally:
-        conn.close()
-
-    report = _decode_json_object(row["report_json"])
-    citations: list[dict[str, Any]] = []
-    for citation_row in citation_rows:
-        citation = _decode_json_object(citation_row["citation_json"])
-        if citation:
-            citations.append(citation)
-    return {"report": report, "citations": citations}
+        replay = get_report_index_store().get_report_replay(
+            session_id=session_id,
+            report_id=report_id,
+        )
+    except ReportIndexStoreUnavailable:
+        return None
+    return replay if isinstance(replay, dict) else None
 
 
 def _research_company(*, ticker: str, session_id: str = "", limit: int = 5) -> dict[str, Any]:
@@ -351,47 +303,19 @@ def _research_company(*, ticker: str, session_id: str = "", limit: int = 5) -> d
         }
     session_id = _validate_id(session_id, "session_id")
     limit_value = _bounded_int(limit, default=5, minimum=1, maximum=25)
-    conn = _connect_report_index_readonly()
-    if conn is None:
+    try:
+        reports = get_report_index_store().list_reports(
+            session_id=session_id,
+            ticker=ticker,
+            limit=limit_value,
+        )
+    except ReportIndexStoreUnavailable:
         return {
             "ticker": ticker,
             "reports": [],
             "error": "report_index_unavailable",
-            "message": "No readable report index database is configured.",
+            "message": "No readable PostgreSQL report store is configured.",
         }
-    try:
-        rows = conn.execute(
-            """
-            SELECT report_id, ticker, title, summary, generated_at, confidence_score, tags_json
-            FROM report_index
-            WHERE session_id = ? AND ticker = ? AND publishable = 1
-            ORDER BY generated_at DESC
-            LIMIT ?
-            """,
-            (session_id, ticker, limit_value),
-        ).fetchall()
-    finally:
-        conn.close()
-
-    reports: list[dict[str, Any]] = []
-    for row in rows:
-        tags: list[Any] = []
-        try:
-            parsed_tags = json.loads(row["tags_json"] or "[]")
-            tags = parsed_tags if isinstance(parsed_tags, list) else []
-        except Exception:
-            tags = []
-        reports.append(
-            {
-                "report_id": row["report_id"],
-                "ticker": row["ticker"],
-                "title": row["title"],
-                "summary": row["summary"],
-                "generated_at": row["generated_at"],
-                "confidence_score": row["confidence_score"],
-                "tags": tags,
-            }
-        )
     return {"ticker": ticker, "reports": reports, "count": len(reports), "error": None}
 
 

@@ -31,9 +31,7 @@ def test_derive_facets_keeps_price_short_path_narrow():
     assert facets["analysis_need"] == ["price"]
 
 
-def test_route_request_outputs_valuation_facets(monkeypatch):
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
-
+def test_route_request_outputs_valuation_facets():
     result = asyncio.run(
         route_request(
             {

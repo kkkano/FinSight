@@ -7,7 +7,6 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -57,7 +56,7 @@ class BlockedIntent(BaseModel):
 
 class IntentFrame(BaseModel):
     schema_version: str = "intent_frame/v1"
-    route: str                                  # research | direct | clarify | alert
+    route: str                                  # research | direct | clarify
     query: str
     output_mode: str = "chat"
     language: str = "zh"
@@ -68,19 +67,6 @@ class IntentFrame(BaseModel):
     reply_plan: dict[str, Any] = Field(default_factory=dict)
     confidence: float = 0.5
     source: str = "rules_fallback"              # llm_router | rules_fallback | mixed
-
-
-@dataclass
-class AgentBrief:
-    """agent 的完整任务简报（WP2 D4）——取代裸 (query, ticker) 双参调用。"""
-
-    query: str
-    ticker: str
-    objective: str = ""
-    required_evidence: list[str] = field(default_factory=list)
-    time_scope: dict[str, Any] = field(default_factory=dict)
-    output_mode: str = "chat"
-    context_digest: str = ""
 
 
 def _task_from_legacy(raw: dict[str, Any]) -> IntentTask:
@@ -240,7 +226,6 @@ def legacy_understanding_from_frame(frame: IntentFrame) -> dict[str, Any]:
 
 
 __all__ = [
-    "AgentBrief",
     "BlockedIntent",
     "IntentFrame",
     "IntentTask",

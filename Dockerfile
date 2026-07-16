@@ -50,7 +50,7 @@ RUN PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 
 COPY . .
 
 # Create persistent data directories
-RUN mkdir -p data/langgraph data/memory backend/data logs
+RUN mkdir -p data/langgraph backend/data logs
 
 # Model cache stays in a named volume (mounted at runtime)
 ENV HF_HOME=/app/.cache/huggingface

@@ -20,11 +20,6 @@ _VALUATION_COMPARE_LIGHT_TOOLS: tuple[str, ...] = (
     "search",
 )
 
-_ACTION_RESULT_TOOLS: dict[str, tuple[str, ...]] = {
-    "backtest_result": ("run_strategy_backtest", "get_current_datetime", "search"),
-}
-
-
 def _valuation_compare_light_tool_floor(required_evidence: list[str], *, market: str) -> tuple[str, ...]:
     """Light profile 可裁增强项，但不能裁契约声明的最低证据工具。"""
     market_norm = str(market or "US").strip().upper() or "US"
@@ -43,18 +38,6 @@ def _valuation_compare_light_tool_floor(required_evidence: list[str], *, market:
     for kind in canonical_evidence_kinds(required_evidence):
         required_tools.extend(minimum_tools_by_evidence.get(kind, ()))
     return tuple(_append_missing(list(_VALUATION_COMPARE_LIGHT_TOOLS), tuple(required_tools)))
-
-
-def _tools_for_required_results(required_results: list[str]) -> list[str]:
-    tools: list[str] = []
-    seen: set[str] = set()
-    for result in required_results:
-        for tool_name in _ACTION_RESULT_TOOLS.get(str(result or "").strip(), ()):
-            if tool_name in seen:
-                continue
-            seen.add(tool_name)
-            tools.append(tool_name)
-    return tools
 
 
 def _with_us_holdings_tools(tools: list[str], *, subject_type: str, op_name: str, market: str) -> list[str]:
@@ -133,22 +116,6 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "get_current_datetime",
             "search",
         ]
-    if op_name == "screen":
-        return ["screen_stocks", "search", "get_current_datetime"]
-    if op_name == "cn_market":
-        return [
-            "get_cn_market_fund_flow",
-            "get_cn_market_northbound",
-            "get_cn_limit_board",
-            "get_cn_lhb",
-            "get_cn_concept_map",
-            "search",
-            "get_current_datetime",
-        ]
-    if op_name == "backtest":
-        return ["run_strategy_backtest", "search", "get_current_datetime"]
-    if op_name == "morning_brief":
-        return ["get_stock_price", "get_company_news", "get_current_datetime"]
     if subject_type in ("news_item", "news_set"):
         return [
             "fetch_url_content",
@@ -215,7 +182,6 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "get_eps_revisions",
             "analyze_historical_drawdowns",
             "get_factor_exposure",
-            "run_portfolio_stress_test",
             "get_current_datetime",
             "search",
         ]

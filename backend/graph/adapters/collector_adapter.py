@@ -11,14 +11,13 @@ from typing import Any, Iterable, Mapping
 from backend.graph.cancellation import is_cancelled
 from backend.graph.event_bus import emit_event
 from backend.research.claim_extractor import extract_claims_from_agent_output
-from backend.graph.intent.frame import AgentBrief
 
 logger = logging.getLogger(__name__)
 
 
 def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
     if output is None:
-        return {"agent_name": step_name, "summary": "", "evidence": [], "requests": []}
+        return {"agent_name": step_name, "summary": "", "evidence": []}
 
     if isinstance(output, dict):
         return output
@@ -42,7 +41,6 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
     risks = getattr(output, "risks", None)
     trace = getattr(output, "trace", None)
     chart_specs = getattr(output, "chart_specs", None)
-    requests = getattr(output, "requests", None)
 
     serialized_evidence: list[dict[str, Any]] = []
     for item in evidence[:12]:
@@ -79,7 +77,6 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
         "trace": trace,
         "chart_specs": chart_specs if isinstance(chart_specs, list) else [],
         "evidence": serialized_evidence,
-        "requests": requests if isinstance(requests, list) else [],
     }
 
 
@@ -97,14 +94,14 @@ def _classify_exception(exc: Exception) -> tuple[str, bool, str]:
     exc_name = type(exc).__name__.lower()
     exc_msg = str(exc).lower()
 
-    # Timeout → likely waiting for rate-limit token
+    # Collector timeout always belongs to external data/tool execution.
     if isinstance(exc, asyncio.TimeoutError):
-        return "rate_limit_timeout", True, "token_acquire"
+        return "rate_limit_timeout", True, "tool"
 
-    # Known rate-limit / quota errors from LLM providers
+    # Known rate-limit / quota errors from market and search providers.
     rate_limit_keywords = ("rate_limit", "ratelimit", "429", "quota", "too many requests", "resource_exhausted")
     if any(kw in exc_name or kw in exc_msg for kw in rate_limit_keywords):
-        return "rate_limit_timeout", True, "llm_invoke"
+        return "rate_limit_timeout", True, "tool"
 
     # Parse / validation errors
     parse_keywords = ("json", "parse", "decode", "validation", "pydantic", "schema")
@@ -134,7 +131,7 @@ def _build_agent_fallback_output(
     safe_ticker = str(ticker or "N/A").strip().upper() or "N/A"
     safe_error = str(error or "unknown")[:300]
     summary = (
-        f"{step_name} 已降级：{safe_ticker} 的分析暂不可用，"
+        f"{step_name} 已降级：{safe_ticker} 的证据采集暂不可用，"
         f"系统已返回最小可用结果（query={safe_query or 'N/A'}）。"
     )
     return {
@@ -155,7 +152,6 @@ def _build_agent_fallback_output(
         "trace": [{"event": "agent_fallback", "agent": step_name, "error": safe_error}],
         "chart_specs": [],
         "evidence": [],
-        "requests": [],
     }
 
 
@@ -172,6 +168,7 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
     # 原始 Claim 是结构化 synthesis 的信任边界；外部自带 raw_claims 不可信。
     payload["raw_claims"] = copy.deepcopy(payload.get("claims")) if isinstance(payload.get("claims"), list) else []
     payload["agent_name"] = step_name
+    payload.pop("requests", None)
 
     summary = str(payload.get("summary") or "").strip()
     if not summary:
@@ -232,59 +229,9 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
         and isinstance(item.get("data"), dict)
     ]
 
-    requests = payload.get("requests")
-    normalized_requests: list[dict[str, str]] = []
-    if isinstance(requests, list):
-        for item in requests[:1]:
-            if not isinstance(item, dict) or str(item.get("type") or "").strip() != "delegate":
-                continue
-            evidence_name = str(item.get("evidence") or "").strip()[:80]
-            if not evidence_name:
-                continue
-            normalized_requests.append(
-                {
-                    "type": "delegate",
-                    "evidence": evidence_name,
-                    "reason": str(item.get("reason") or "").strip()[:240],
-                }
-            )
-    payload["requests"] = normalized_requests
-
     payload["claims"] = extract_claims_from_agent_output(payload, query=query, ticker=ticker)
 
     return payload
-
-
-def brief_from_inputs(
-    inputs: Mapping[str, Any],
-    *,
-    default_query: str,
-    default_ticker: str,
-    output_mode: str,
-) -> AgentBrief:
-    """从 plan step inputs 构造 AgentBrief（WP2 D4）。"""
-    data = inputs if isinstance(inputs, Mapping) else {}
-    query = data.get("query")
-    query = str(query).strip() if isinstance(query, str) and query.strip() else default_query
-    ticker = data.get("ticker")
-    ticker = (
-        str(ticker).strip().upper()
-        if isinstance(ticker, str) and ticker.strip()
-        else default_ticker
-    )
-    required_evidence = data.get("required_evidence")
-    required_evidence = [str(item) for item in required_evidence] if isinstance(required_evidence, list) else []
-    time_scope = data.get("time_scope")
-    time_scope = dict(time_scope) if isinstance(time_scope, dict) else {}
-    return AgentBrief(
-        query=query,
-        ticker=ticker,
-        objective=str(data.get("objective") or ""),
-        required_evidence=required_evidence,
-        time_scope=time_scope,
-        output_mode=str(output_mode or "chat"),
-        context_digest=str(data.get("__context_digest") or ""),
-    )
 
 
 def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mapping[str, Any]) -> dict[str, Any]:
@@ -339,11 +286,6 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
             continue
         try:
             agent_instance = cls(None, cache, tools_module)
-            if hasattr(agent_instance, "configure_research"):
-                agent_instance.configure_research(
-                    enable_llm_analysis=False,
-                    max_reflections=0,
-                )
             agents[name] = agent_instance
         except Exception as exc:
             logger.exception("collector adapter failed to instantiate %s", name)
@@ -390,14 +332,8 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
                 return fallback
 
             try:
-                brief = brief_from_inputs(
-                    inputs if isinstance(inputs, dict) else {},
-                    default_query=default_query,
-                    default_ticker=default_ticker,
-                    output_mode=str(state.get("output_mode") or "chat"),
-                )
                 result = await asyncio.wait_for(
-                    _agent.research(query=query or "N/A", ticker=ticker, brief=brief),
+                    _agent.research(query=query or "N/A", ticker=ticker),
                     timeout=timeout_seconds,
                 )
                 normalized = _normalize_agent_output(
@@ -446,4 +382,4 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
     return invokers
 
 
-__all__ = ["build_collector_invokers", "brief_from_inputs"]
+__all__ = ["build_collector_invokers"]

@@ -209,7 +209,7 @@ export const AgentLogPanel: React.FC = () => {
     }
 
     return events;
-  }, [displayEvents, consoleLens, selectedAgents, availableAgents, typeFilter, searchText, showTokens]);
+  }, [displayEvents, consoleLens, selectedAgents, typeFilter, searchText, showTokens]);
 
   // Compute stats
   const stats: EventStats = useMemo(() => {

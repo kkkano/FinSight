@@ -21,7 +21,6 @@ from backend.graph.planning.builders.earnings import (
 )
 from backend.graph.planning.builders.holdings import _append_holdings_task_steps
 from backend.graph.planning.builders.macro import _append_macro_task_steps
-from backend.graph.planning.builders.portfolio import _append_portfolio_task_steps
 from backend.graph.planning.builders.theme import _append_theme_task_steps
 from backend.graph.planning.builders.url_docs import _append_document_task_steps
 from backend.graph.planning.builders.valuation import _append_valuation_sanity_steps
@@ -29,7 +28,6 @@ from backend.graph.planning.context import PlanContext
 from backend.graph.planning.frames import (
     _append_request_frame_steps,
     _frame_required_evidence,
-    _frame_required_results,
     _frame_subject,
     _frame_tickers,
     _request_frames_authoritatively_need_no_plan_steps,
@@ -57,7 +55,6 @@ TASK_BUILDERS = {
     "index": _append_company_task_steps,
     "commodity": _append_company_task_steps,
     "macro": _append_macro_task_steps,
-    "portfolio": _append_portfolio_task_steps,
     "theme": _append_theme_task_steps,
     "research_doc": _append_document_task_steps,
     "filing": _append_document_task_steps,
@@ -263,7 +260,7 @@ def rule_based_planner(state: GraphState) -> dict:
                     or frame_subject.get("type")
                     or f"frame_{index}"
                 )
-                obligations = "+".join(_frame_required_evidence(ctx, frame) + _frame_required_results(ctx, frame)) or "contract"
+                obligations = "+".join(_frame_required_evidence(ctx, frame)) or "contract"
                 task_sections.append(f"{label}:{obligations}")
         for task in ctx.ready_tasks[:8]:
             label = str(task.get("subject_label") or ", ".join(_task_tickers(ctx, task)) or task.get("subject_type") or "任务")
@@ -348,119 +345,6 @@ def rule_based_planner(state: GraphState) -> dict:
             optional=True,
         )
 
-    # Morning brief: per-ticker price + news in parallel.
-    if operation == "morning_brief":
-        brief_tickers = [t for t in (ctx.tickers if isinstance(ctx.tickers, list) else []) if isinstance(t, str) and t.strip()]
-        if not brief_tickers and isinstance(ctx.primary_ticker, str) and ctx.primary_ticker.strip():
-            brief_tickers = [ctx.primary_ticker]
-        for ticker in brief_tickers[:6]:
-            if "get_stock_price" in ctx.allowed_tools:
-                ctx.steps.append(
-                    {
-                        "id": f"s{ctx.step_id}",
-                        "kind": "tool",
-                        "name": "get_stock_price",
-                        "inputs": {"ticker": ticker},
-                        "parallel_group": "brief_data",
-                        "why": f"晨报：获取 {ticker} 最新价格",
-                        "optional": False,
-                    }
-                )
-                ctx.step_id += 1
-            if "get_company_news" in ctx.allowed_tools:
-                ctx.steps.append(
-                    {
-                        "id": f"s{ctx.step_id}",
-                        "kind": "tool",
-                        "name": "get_company_news",
-                        "inputs": {"ticker": ticker, "fast": True, "limit": 3},
-                        "parallel_group": "brief_data",
-                        "why": f"晨报：获取 {ticker} 最新新闻",
-                        "optional": False,
-                    }
-                )
-                ctx.step_id += 1
-        if "get_current_datetime" in ctx.allowed_tools:
-            ctx.steps.append(
-                {
-                    "id": f"s{ctx.step_id}",
-                    "kind": "tool",
-                    "name": "get_current_datetime",
-                    "inputs": {},
-                    "why": "晨报：获取当前日期时间用于报告标题",
-                    "optional": True,
-                }
-            )
-            ctx.step_id += 1
-
-    if operation == "screen":
-        screen_inputs = {
-            "market": str((state.get("ui_context") or {}).get("market") or "US").upper(),
-            "filters": {},
-            "limit": 20,
-            "page": 1,
-            "sort_by": "marketCap",
-            "sort_order": "desc",
-        }
-        if "screen_stocks" in ctx.allowed_tools:
-            ctx.steps.append(
-                {
-                    "id": f"s{ctx.step_id}",
-                    "kind": "tool",
-                    "name": "screen_stocks",
-                    "inputs": screen_inputs,
-                    "why": "筛选类请求直接调用 screener 工具生成候选池。",
-                    "optional": False,
-                }
-            )
-            ctx.step_id += 1
-
-    if operation == "cn_market":
-        _append_tool_step(ctx, 
-            "get_cn_market_fund_flow",
-            {"limit": 20},
-            why="A股市场请求先给出资金流向快照。",
-            optional=False,
-        )
-        _append_tool_step(ctx, 
-            "get_cn_market_northbound",
-            {"limit": 20},
-            why="补充北向资金维度。",
-            optional=True,
-        )
-        _append_tool_step(ctx, 
-            "get_cn_limit_board",
-            {"limit": 20},
-            why="补充涨跌停板块异动。",
-            optional=True,
-        )
-        _append_tool_step(ctx, 
-            "get_cn_lhb",
-            {"limit": 20},
-            why="补充龙虎榜交易信息。",
-            optional=True,
-        )
-        _append_tool_step(ctx, 
-            "get_cn_concept_map",
-            {"keyword": "", "limit": 20},
-            why="补充概念板块信息。",
-            optional=True,
-        )
-
-    if operation == "backtest":
-        ticker_for_backtest = ctx.primary_ticker or ((ctx.tickers or [None])[0] if isinstance(ctx.tickers, list) else None) or ""
-        _append_tool_step(ctx, 
-            "run_strategy_backtest",
-            {
-                "ticker": ticker_for_backtest,
-                "strategy": str(operation_params.get("strategy") or "ma_cross").strip() or "ma_cross",
-                "params": dict(operation_params.get("strategy_params") or operation_params.get("params") or {}),
-                "initial_cash": float(operation_params.get("initial_cash") or 100000.0),
-                "t_plus_one": bool(operation_params.get("t_plus_one", True)),
-            },
-            why="回测类请求调用策略回测工具并返回指标与交易明细。",
-            optional=False,
-        )
 
     # Rule-based minimal plan (Phase 3 scaffolding).
     if operation == "fetch" and ctx.primary_ticker and "get_company_news" in ctx.allowed_tools:
@@ -661,30 +545,6 @@ def rule_based_planner(state: GraphState) -> dict:
             "get_sec_risk_factors",
             {"ticker": ctx.primary_ticker},
             why="关键词命中风险因子分析，从最新 10-K/10-Q 提取 Item 1A 摘要。",
-        )
-
-    if normalized_tickers and _contains_any(ctx, 
-        (
-            "factor exposure",
-            "stress test",
-            "scenario shock",
-            "volatility shock",
-            "drawdown shock",
-            "beta exposure",
-            "risk factor",
-        )
-    ):
-        weight = round(1.0 / len(normalized_tickers), 4)
-        positions = [{"ticker": ticker, "weight": weight} for ticker in normalized_tickers[:6]]
-        _append_tool_step(ctx, 
-            "get_factor_exposure",
-            {"positions": positions, "lookback_days": 252},
-            why="关键词命中因子暴露分析，生成组合 beta 与因子敞口。",
-        )
-        _append_tool_step(ctx, 
-            "run_portfolio_stress_test",
-            {"positions": positions, "lookback_days": 252},
-            why="关键词命中压力测试，生成情景冲击下的收益敏感性。",
         )
 
     if ctx.primary_ticker and _contains_any(ctx, 

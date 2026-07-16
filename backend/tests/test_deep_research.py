@@ -38,7 +38,7 @@ async def test_deep_search_agent():
     assert len(result.evidence) == 1
 
 @pytest.mark.asyncio
-async def test_deep_search_agent_self_rag_merges_docs():
+async def test_deep_search_agent_runs_one_search_round():
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     agent = DeepSearchAgent(None, mock_cache, mock_tools)
@@ -51,28 +51,18 @@ async def test_deep_search_agent_self_rag_merges_docs():
         "source": "tavily",
         "is_pdf": False,
     }]
-    extra_docs = [{
-        "title": "Gap Doc",
-        "url": "https://example.com/gap",
-        "snippet": "Gap snippet",
-        "content": "Gap content.",
-        "source": "search",
-        "is_pdf": True,
-    }]
-
     agent._initial_search = AsyncMock(return_value=base_docs)
-    agent._identify_gaps = AsyncMock(side_effect=[["competitors"], []])
-    agent._targeted_search = AsyncMock(return_value=extra_docs)
     agent._first_summary = AsyncMock(return_value="Initial summary")
-    agent._update_summary = AsyncMock(return_value="Updated summary")
+    agent._record_rag_observability = AsyncMock(return_value={})
 
     result = await agent.research("NVDA investment thesis", "NVDA")
 
     assert isinstance(result, AgentOutput)
-    assert result.summary == "Updated summary"
-    assert len(result.evidence) == 2
+    assert result.summary == "Initial summary"
+    assert len(result.evidence) == 1
     assert "tavily" in result.data_sources
-    assert "search" in result.data_sources
+    agent._initial_search.assert_awaited_once()
+    agent._first_summary.assert_awaited_once_with(base_docs)
 
 
 @pytest.mark.asyncio
@@ -106,7 +96,6 @@ async def test_deep_search_agent_outputs_evidence_quality_and_conflict_flags():
 
     agent._initial_search = AsyncMock(return_value=docs)
     agent._first_summary = AsyncMock(return_value="Initial summary")
-    agent._identify_gaps = AsyncMock(return_value=[])
 
     result = await agent.research("AAPL deep analysis", "AAPL")
 
@@ -257,7 +246,7 @@ def test_deep_search_filter_results_finance_mode_blocks_untrusted_domains(monkey
 
 
 @pytest.mark.asyncio
-async def test_deep_search_targeted_search_applies_domain_filter(monkeypatch):
+async def test_deep_search_initial_search_applies_domain_filter(monkeypatch):
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())
     monkeypatch.setenv("DEEPSEARCH_STRICT_FINANCE_SOURCES", "true")
 
@@ -276,7 +265,7 @@ async def test_deep_search_targeted_search_applies_domain_filter(monkeypatch):
 
     agent._fetch_documents = MagicMock(side_effect=_fake_fetch)
 
-    docs = await agent._targeted_search(["10-K filing"], "AAPL")
+    docs = await agent._initial_search("AAPL 10-K filing", "AAPL", queries=["AAPL 10-K filing"])
     urls = [item.get("url") for item in captured.get("results", [])]
 
     assert trusted_url in urls

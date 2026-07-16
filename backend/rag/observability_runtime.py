@@ -94,15 +94,23 @@ class SQLRAGObservabilityStore:
         with self._schema_lock:
             if self._schema_ready:
                 return True
-            with self._engine.begin() as conn:
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_query_runs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL, thread_id TEXT NULL, query_text TEXT NOT NULL, query_text_redacted TEXT NULL, query_hash TEXT NOT NULL, route_name TEXT NULL, router_decision TEXT NULL, backend_requested TEXT NOT NULL, backend_actual TEXT NOT NULL, collection TEXT NULL, retrieval_k INTEGER NOT NULL DEFAULT 0, rerank_top_n INTEGER NOT NULL DEFAULT 0, source_doc_count INTEGER NOT NULL DEFAULT 0, chunk_count INTEGER NOT NULL DEFAULT 0, retrieval_hit_count INTEGER NOT NULL DEFAULT 0, rerank_hit_count INTEGER NOT NULL DEFAULT 0, fallback_reason TEXT NULL, status TEXT NOT NULL DEFAULT 'running', error_message TEXT NULL, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, started_at TIMESTAMPTZ NOT NULL, finished_at TIMESTAMPTZ NULL, latency_ms DOUBLE PRECISION NULL, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"))
-                conn.execute(text("ALTER TABLE rag_query_runs ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_query_events (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, seq_no INTEGER NOT NULL, event_type TEXT NOT NULL, stage TEXT NOT NULL, payload_json JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, UNIQUE(run_id, seq_no))"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_source_docs (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, source_id TEXT NOT NULL, source_type TEXT NOT NULL, source_name TEXT NULL, url TEXT NULL, title TEXT NULL, published_at TIMESTAMPTZ NULL, content_raw TEXT NOT NULL, content_preview TEXT NULL, content_length INTEGER NOT NULL DEFAULT 0, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(run_id, source_id))"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_chunks (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, source_doc_id TEXT NOT NULL REFERENCES rag_source_docs(id) ON DELETE CASCADE, chunk_index INTEGER NOT NULL, total_chunks INTEGER NOT NULL, chunk_text TEXT NOT NULL, chunk_length INTEGER NOT NULL, doc_type TEXT NOT NULL, chunk_strategy TEXT NOT NULL, chunk_size INTEGER NOT NULL, chunk_overlap INTEGER NOT NULL, char_start INTEGER NULL, char_end INTEGER NULL, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(source_doc_id, chunk_index))"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_retrieval_hits (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, chunk_id TEXT NULL, collection TEXT NULL, source_id TEXT NULL, source_doc_id TEXT NULL, scope TEXT NULL, dense_rank INTEGER NULL, dense_score DOUBLE PRECISION NULL, sparse_rank INTEGER NULL, sparse_score DOUBLE PRECISION NULL, rrf_score DOUBLE PRECISION NULL, selected_for_rerank BOOLEAN NOT NULL DEFAULT false, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL)"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_rerank_hits (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, chunk_id TEXT NULL, input_rank INTEGER NOT NULL, output_rank INTEGER NOT NULL, rerank_score DOUBLE PRECISION NULL, selected_for_answer BOOLEAN NOT NULL DEFAULT false, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL, UNIQUE(run_id, input_rank), UNIQUE(run_id, output_rank))"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_fallback_events (id TEXT PRIMARY KEY, run_id TEXT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, reason_code TEXT NOT NULL, reason_text TEXT NULL, backend_before TEXT NULL, backend_after TEXT NOT NULL, payload_json JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL)"))
+            required_tables = (
+                "rag_query_runs",
+                "rag_query_events",
+                "rag_source_docs",
+                "rag_chunks",
+                "rag_retrieval_hits",
+                "rag_rerank_hits",
+                "rag_fallback_events",
+            )
+            try:
+                with self._engine.connect() as conn:
+                    for table_name in required_tables:
+                        conn.execute(text(f"SELECT 1 FROM {table_name} WHERE false"))
+            except Exception as exc:
+                raise RuntimeError(
+                    "rag_observability_schema_unavailable: 请先执行 alembic upgrade head"
+                ) from exc
             self._schema_ready = True
         return True
 

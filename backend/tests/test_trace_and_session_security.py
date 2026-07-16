@@ -109,13 +109,18 @@ def test_redact_sensitive_payload_masks_values():
     assert redacted["nested"]["normal"] == "safe"
 
 
-def test_execute_endpoint_rejects_illegal_session_id():
+def test_execute_endpoint_rejects_illegal_session_id(monkeypatch):
+    monkeypatch.setenv("API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "false")
+    from backend.config.settings import security_settings
+
+    security_settings.cache_clear()
     main = _load_main_module()
-    with TestClient(main.app) as client:
-        resp = client.post(
-            "/api/execute",
-            json={"query": "分析影响", "session_id": "tenant:user:bad/slash"},
-        )
+    client = TestClient(main.app)
+    resp = client.post(
+        "/api/execute",
+        json={"query": "分析影响", "session_id": "tenant:user:bad/slash"},
+    )
 
     assert resp.status_code == 422
     detail = resp.json().get("detail") or ""

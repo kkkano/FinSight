@@ -6,8 +6,6 @@ import hashlib
 from langchain_core.messages import AIMessage, HumanMessage
 
 from backend.contracts import GRAPH_STATE_SCHEMA_VERSION, TRACE_SCHEMA_VERSION
-from backend.graph.confirmation_policy import parse_confirmation_mode
-from backend.graph.store import load_memory_context
 from backend.graph.state import GraphState
 
 
@@ -29,14 +27,6 @@ def build_initial_state(state: GraphState) -> dict:
     thread_id = str(state.get("thread_id") or "").strip() or "default"
     if not state.get("thread_id"):
         updates["thread_id"] = thread_id
-
-    memory_context = load_memory_context(thread_id=thread_id)
-    if memory_context:
-        updates["memory_context"] = memory_context
-
-    confirmation_mode = parse_confirmation_mode(state.get("confirmation_mode"))
-    if confirmation_mode is not None:
-        updates["confirmation_mode"] = confirmation_mode
 
     existing_messages = list(state.get("messages") or [])
     recovered_messages = []

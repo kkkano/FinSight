@@ -6,7 +6,6 @@
 - index: 显示行业权重、成分股排行、K线图
 - etf: 显示行业权重、持仓明细、K线图
 - crypto: 仅显示K线图
-- portfolio: 显示持仓明细
 """
 from backend.dashboard.schemas import ActiveAsset, Capabilities
 
@@ -16,16 +15,16 @@ def select_capabilities(asset: ActiveAsset) -> Capabilities:
     根据资产类型返回仪表盘能力集。
 
     规则矩阵:
-    ┌──────────────┬────────────┬─────────┬─────────────┬───────────┬──────────┐
-    │ 能力          │ equity     │ index   │ etf         │ crypto    │ portfolio│
-    ├──────────────┼────────────┼─────────┼─────────────┼───────────┼──────────┤
-    │ revenue_trend │ ✅         │ ❌      │ ❌          │ ❌        │ ❌       │
-    │ segment_mix   │ ✅         │ ❌      │ ❌          │ ❌        │ ❌       │
-    │ sector_weights│ ❌         │ ✅      │ ✅          │ ❌        │ ❌       │
-    │ top_constit.  │ ❌         │ ✅      │ ❌          │ ❌        │ ❌       │
-    │ holdings      │ ❌         │ ❌      │ ✅          │ ❌        │ ✅       │
-    │ market_chart  │ ✅         │ ✅      │ ✅          │ ✅        │ ❌       │
-    └──────────────┴────────────┴─────────┴─────────────┴───────────┴──────────┘
+    ┌──────────────┬────────────┬─────────┬─────────────┬───────────┐
+    │ 能力          │ equity     │ index   │ etf         │ crypto    │
+    ├──────────────┼────────────┼─────────┼─────────────┼───────────┤
+    │ revenue_trend │ ✅         │ ❌      │ ❌          │ ❌        │
+    │ segment_mix   │ ✅         │ ❌      │ ❌          │ ❌        │
+    │ sector_weights│ ❌         │ ✅      │ ✅          │ ❌        │
+    │ top_constit.  │ ❌         │ ✅      │ ❌          │ ❌        │
+    │ holdings      │ ❌         │ ❌      │ ✅          │ ❌        │
+    │ market_chart  │ ✅         │ ✅      │ ✅          │ ✅        │
+    └──────────────┴────────────┴─────────┴─────────────┴───────────┘
 
     Args:
         asset: 已解析的资产对象
@@ -52,10 +51,10 @@ def select_capabilities(asset: ActiveAsset) -> Capabilities:
         sector_weights=(t in ("index", "etf")),
         # 成分股排行：仅指数有
         top_constituents=(t == "index"),
-        # 持仓明细：ETF 和投资组合有
-        holdings=(t in ("etf", "portfolio")),
-        # K线图：除投资组合外都有
-        market_chart=(t != "portfolio"),
+        # 持仓明细：仅 ETF 有
+        holdings=(t == "etf"),
+        # 所有支持的资产类型都有行情图
+        market_chart=True,
     )
 
 
@@ -96,11 +95,6 @@ def get_widget_order(asset_type: str) -> list[str]:
     elif asset_type == "crypto":
         return base_order + [
             "market_chart",
-            "news_feed",
-        ]
-    elif asset_type == "portfolio":
-        return base_order + [
-            "holdings",
             "news_feed",
         ]
     else:

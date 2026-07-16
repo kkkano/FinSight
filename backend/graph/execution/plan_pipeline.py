@@ -13,7 +13,6 @@ from backend.graph.adapters import (
 )
 from backend.graph.dag_executor import execute_plan_dag
 from backend.graph.execution.evidence_pipeline import normalize_execution_evidence
-from backend.graph.executor import execute_plan
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.state import GraphState
 from backend.rag.execution_pipeline import run_execution_rag_pipeline
@@ -43,7 +42,6 @@ from backend.rag.ingestion import (
     _kb_collection_from_subject,
     _memory_collection_from_thread,
     _normalize_memory_focus_list,
-    _normalize_watchlist_items,
     _resolve_hit_layer,
     _sanitize_collection_segment,
     _summarize_layer_hits,
@@ -81,7 +79,6 @@ __all__ = [
     "_kb_collection_from_subject",
     "_memory_collection_from_thread",
     "_normalize_memory_focus_list",
-    "_normalize_watchlist_items",
     "_parse_datetime",
     "_resolve_hit_layer",
     "_resolve_rag_user_id",
@@ -162,24 +159,12 @@ async def execute_plan_node(state: GraphState) -> dict:
         tool_invokers = build_tool_invokers(list(allowed_tools or []))
         agent_invokers = build_collector_invokers(list(allowed_agents or []), state)
 
-    if settings.dag_executor:
-        context_bus: dict[str, str] | None = (
-            {} if settings.evidence_bus else None
-        )
-        artifacts, exec_events = await execute_plan_dag(
-            plan_ir,
-            tool_invokers=tool_invokers,
-            agent_invokers=agent_invokers,
-            dry_run=not live_tools,
-            context_bus=context_bus,
-        )
-    else:
-        artifacts, exec_events = await execute_plan(
-            plan_ir,
-            tool_invokers=tool_invokers,
-            agent_invokers=agent_invokers,
-            dry_run=not live_tools,
-        )
+    artifacts, exec_events = await execute_plan_dag(
+        plan_ir,
+        tool_invokers=tool_invokers,
+        agent_invokers=agent_invokers,
+        dry_run=not live_tools,
+    )
     artifacts = _merge_prior_artifacts(state.get("artifacts"), artifacts)
 
     # Evidence normalization may enrich short snippets through synchronous

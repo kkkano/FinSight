@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import pytest
 
@@ -13,33 +12,27 @@ def _reset_bundle() -> None:
     checkpointer_mod.reset_checkpointer_caches()
 
 
-def test_checkpointer_sqlite_persistent(tmp_path, monkeypatch):
-    sqlite_file = tmp_path / "checkpoints.sqlite"
-    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "sqlite")
-    monkeypatch.setenv("LANGGRAPH_CHECKPOINT_SQLITE_PATH", str(sqlite_file))
-    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "true")
+def test_checkpointer_memory_nonpersistent(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
     _reset_bundle()
     try:
         info = checkpointer_mod.get_graph_checkpointer_info()
-        assert info["backend"] == "sqlite"
-        assert info["persistent"] is True
-        assert Path(info["location"]).name == "checkpoints.sqlite"
+        assert info["backend"] == "memory"
+        assert info["persistent"] is False
+        assert info["location"] is None
     finally:
         _reset_bundle()
 
 
-def test_async_checkpointer_sqlite_persistent(tmp_path, monkeypatch):
-    sqlite_file = tmp_path / "async-checkpoints.sqlite"
-    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "sqlite")
-    monkeypatch.setenv("LANGGRAPH_CHECKPOINT_SQLITE_PATH", str(sqlite_file))
-    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "true")
+def test_async_checkpointer_memory_nonpersistent(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
     _reset_bundle()
     try:
         bundle = asyncio.run(checkpointer_mod.aget_checkpointer_bundle())
-        assert bundle.info.backend == "sqlite"
-        assert bundle.info.persistent is True
+        assert bundle.info.backend == "memory"
+        assert bundle.info.persistent is False
         info = checkpointer_mod.get_graph_checkpointer_info()
-        assert Path(info["location"]).name == "async-checkpoints.sqlite"
+        assert info["location"] is None
     finally:
         _reset_bundle()
 
@@ -76,6 +69,29 @@ def test_checkpointer_postgres_requires_dsn(monkeypatch):
     _reset_bundle()
     try:
         with pytest.raises(ValueError, match="LANGGRAPH_CHECKPOINT_POSTGRES_DSN"):
+            checkpointer_mod.get_checkpointer_bundle()
+    finally:
+        _reset_bundle()
+
+
+def test_production_rejects_memory_backend(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "production")
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
+    _reset_bundle()
+    try:
+        with pytest.raises(ValueError, match="必须为 postgres"):
+            checkpointer_mod.get_checkpointer_bundle()
+    finally:
+        _reset_bundle()
+
+
+def test_production_rejects_memory_fallback(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "production")
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "postgres")
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "true")
+    _reset_bundle()
+    try:
+        with pytest.raises(ValueError, match="禁止 LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK"):
             checkpointer_mod.get_checkpointer_bundle()
     finally:
         _reset_bundle()

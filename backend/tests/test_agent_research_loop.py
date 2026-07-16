@@ -2,12 +2,10 @@
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
-from backend.graph.intent.frame import AgentBrief
 from backend.research.agent_quality_contract import apply_agent_quality_contract, build_agent_claim
 from backend.research.agent_research_loop import (
     apply_agent_self_check,
@@ -138,146 +136,17 @@ async def test_base_agent_keeps_research_context_isolated_per_async_task() -> No
             return {
                 "query": self._current_query or "",
                 "ticker": self._current_ticker or "",
-                "objective": self._current_brief.objective if self._current_brief else "",
             }
 
         async def _first_summary(self, data: dict[str, str]) -> str:
-            return "|".join((data["query"], data["ticker"], data["objective"]))
+            return "|".join((data["query"], data["ticker"]))
 
     agent = _ConcurrentAgent()
-    apple_brief = AgentBrief(query="apple query", ticker="AAPL", objective="apple objective")
-    microsoft_brief = AgentBrief(query="microsoft query", ticker="MSFT", objective="microsoft objective")
 
     apple_output, microsoft_output = await asyncio.gather(
-        agent.research("apple query", "AAPL", brief=apple_brief),
-        agent.research("microsoft query", "MSFT", brief=microsoft_brief),
+        agent.research("apple query", "AAPL"),
+        agent.research("microsoft query", "MSFT"),
     )
 
-    assert apple_output.summary == "apple query|AAPL|apple objective"
-    assert microsoft_output.summary == "microsoft query|MSFT|microsoft objective"
-
-
-@pytest.mark.asyncio
-async def test_agent_llm_analysis_is_opt_in_by_default(monkeypatch) -> None:
-    class _UnexpectedLLM:
-        model_name = "unexpected-fixture"
-
-        async def ainvoke(self, _messages):
-            raise AssertionError("agent LLM analysis should be disabled by default")
-
-    class _OptInAgent(BaseFinancialAgent):
-        AGENT_NAME = "optin_agent"
-
-    monkeypatch.delenv("AGENT_LLM_ANALYZE_ENABLED", raising=False)
-    monkeypatch.delenv("OPTIN_AGENT_LLM_ANALYZE_ENABLED", raising=False)
-
-    agent = _OptInAgent(llm=_UnexpectedLLM(), cache=None)
-
-    assert await agent._llm_analyze("price 10", role="fixture", focus="fixture") is None
-
-
-@pytest.mark.asyncio
-async def test_agent_llm_analysis_has_hard_call_timeout(monkeypatch) -> None:
-    class _SlowLLM:
-        model_name = "slow-fixture"
-
-        async def ainvoke(self, _messages):
-            await asyncio.sleep(2.0)
-            return type("_Resp", (), {"content": "这段内容不应该在超时后返回。"})()
-
-    class _TimeoutAgent(BaseFinancialAgent):
-        AGENT_NAME = "timeout_agent"
-
-    monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
-    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "0.1")
-    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
-    monkeypatch.setattr(
-        "backend.services.rate_limiter.acquire_llm_token",
-        lambda *args, **kwargs: asyncio.sleep(0, result=True),
-    )
-
-    agent = _TimeoutAgent(llm=_SlowLLM(), cache=None)
-
-    start = time.perf_counter()
-    result = await agent._llm_analyze(
-        "price 10, MA20 9, RSI 55",
-        role="fixture",
-        focus="fixture",
-    )
-    elapsed = time.perf_counter() - start
-
-    assert result is None
-    assert elapsed < 0.8
-
-
-@pytest.mark.asyncio
-async def test_agent_reflection_gap_detection_has_hard_call_timeout(monkeypatch) -> None:
-    class _SlowLLM:
-        model_name = "slow-fixture"
-
-        async def ainvoke(self, _messages):
-            await asyncio.sleep(2.0)
-            return type("_Resp", (), {"content": "{\"complete\": true}"})()
-
-    class _TimeoutAgent(BaseFinancialAgent):
-        AGENT_NAME = "timeout_agent"
-
-    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
-    monkeypatch.setattr(
-        "backend.services.rate_limiter.acquire_llm_token",
-        lambda *args, **kwargs: asyncio.sleep(0, result=True),
-    )
-
-    agent = _TimeoutAgent(llm=_SlowLLM(), cache=None)
-    agent._current_query = "AAPL technical"
-    agent._current_ticker = "AAPL"
-
-    start = time.perf_counter()
-    result = await agent._identify_gaps("AAPL has price and RSI evidence.")
-    elapsed = time.perf_counter() - start
-
-    assert result == []
-    assert elapsed < 0.8
-
-
-@pytest.mark.asyncio
-async def test_agent_reflection_can_emit_one_delegation_request(monkeypatch) -> None:
-    class _DelegateLLM:
-        model_name = "delegate-fixture"
-
-        async def ainvoke(self, _messages):
-            return type(
-                "_Resp",
-                (),
-                {"content": '{"type":"delegate","evidence":"peer_tickers","reason":"缺少同行基准"}'},
-            )()
-
-    class _DelegateAgent(BaseFinancialAgent):
-        AGENT_NAME = "delegate_agent"
-
-        async def _initial_search(self, query: str, ticker: str) -> dict[str, str]:
-            return {"query": query, "ticker": ticker}
-
-        async def _first_summary(self, data: object) -> str:
-            del data
-            return "已有价格判断，但同行基准不足。"
-
-    monkeypatch.setattr(
-        "backend.services.rate_limiter.acquire_llm_token",
-        lambda *args, **kwargs: asyncio.sleep(0, result=True),
-    )
-    agent = _DelegateAgent(llm=_DelegateLLM(), cache=None)
-    async def invoke_with_fixture(messages, **_kwargs):
-        return await agent.llm.ainvoke(messages)
-
-    monkeypatch.setattr(
-        "backend.services.llm_retry.ainvoke_configured_llm",
-        invoke_with_fixture,
-    )
-    agent.configure_research(max_reflections=1)
-
-    output = await agent.research("分析 AAPL", "AAPL")
-
-    assert output.requests == [
-        {"type": "delegate", "evidence": "peer_tickers", "reason": "缺少同行基准"}
-    ]
+    assert apple_output.summary == "apple query|AAPL"
+    assert microsoft_output.summary == "microsoft query|MSFT"

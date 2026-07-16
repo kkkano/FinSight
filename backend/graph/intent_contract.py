@@ -195,7 +195,7 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
         "risk_profile",
         scope="per_ticker",
         producer="tool_then_agent",
-        tools=("analyze_historical_drawdowns", "get_factor_exposure", "run_portfolio_stress_test"),
+        tools=("analyze_historical_drawdowns", "get_factor_exposure"),
         agents=("risk_agent",),
         markets=("US", "CN"),
     ),

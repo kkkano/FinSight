@@ -2,6 +2,7 @@ from dataclasses import asdict, dataclass, field
 from math import sqrt
 from typing import Any, Optional
 import asyncio
+import json
 import os
 import re
 from datetime import datetime
@@ -84,7 +85,6 @@ class PriceBehaviorSnapshot:
 class PriceAgent(BaseFinancialAgent):
     AGENT_NAME = "PriceAgent"
     CACHE_TTL = 30  # 30 seconds for real-time price
-    MAX_REFLECTIONS = 1  # Enable one reflection round for gap-filling
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
         if circuit_breaker is None:
@@ -95,72 +95,6 @@ class PriceAgent(BaseFinancialAgent):
             )
         super().__init__(llm, cache, tools_module, circuit_breaker)
         self._last_option_metrics: dict[str, Any] = {}
-
-    def _get_tool_registry(self) -> dict:
-        """PriceAgent tool registry: quote + price-behavior side signals."""
-        registry = {}
-        tools = self.tools
-        if not tools:
-            return registry
-
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "搜索价格补充信息、价格异动新闻和催化事件。TODO: 当前没有专门的价格异动归因工具，search 仅作兜底。",
-                "call_with": "query",
-            }
-
-        quote_fn = getattr(tools, "get_stock_price", None)
-        if quote_fn:
-            registry["get_stock_price"] = {
-                "func": quote_fn,
-                "description": "获取当前报价、涨跌幅和时间戳，校准价格判断。",
-                "call_with": "ticker",
-            }
-
-        history_fn = getattr(tools, "get_stock_historical_data", None)
-        if history_fn:
-            registry["get_stock_historical_data"] = {
-                "func": lambda ticker: self._load_history_payload(ticker, period="1y", interval="1d"),
-                "description": "获取多周期历史价（日线），用于计算1周/1月/3月/6月/1年收益、动量、量价、ATR和回撤。",
-                "call_with": "ticker",
-            }
-            registry["get_market_benchmark_history"] = {
-                "func": lambda _ticker: self._load_benchmark_histories(),
-                "description": "获取 SPY/QQQ 大盘 benchmark 历史价，用于相对强弱 RS。TODO: 当前没有自动同行发现工具。",
-                "call_with": "ticker",
-            }
-            registry["get_relative_strength"] = {
-                "func": lambda ticker: self._build_relative_strength_snapshot(ticker),
-                "description": "基于现有历史价工具计算目标相对 SPY/QQQ 的1月/3月相对强弱。",
-                "call_with": "ticker",
-            }
-
-        drawdown_fn = getattr(tools, "analyze_historical_drawdowns", None)
-        if drawdown_fn:
-            registry["analyze_historical_drawdowns"] = {
-                "func": drawdown_fn,
-                "description": "获取历史最大回撤文本摘要，补充波动率/回撤结构。",
-                "call_with": "ticker",
-            }
-
-        performance_fn = getattr(tools, "get_performance_comparison", None)
-        if performance_fn:
-            registry["get_performance_comparison"] = {
-                "func": lambda ticker: performance_fn({"target": ticker, "SPY": "SPY", "QQQ": "QQQ"}),
-                "description": "获取目标与 SPY/QQQ 的区间表现对比文本，作为 RS 交叉验证。",
-                "call_with": "ticker",
-            }
-
-        option_metrics_fn = getattr(tools, "get_option_chain_metrics", None)
-        if option_metrics_fn:
-            registry["get_option_chain_metrics"] = {
-                "func": option_metrics_fn,
-                "description": "获取期权链衍生指标（ATM IV、PCR、25D Skew）。TODO: 当前工具未提供 IV rank 和完整期限结构。",
-                "call_with": "ticker",
-            }
-        return registry
 
     async def _initial_search(self, query: str, ticker: str) -> Any:
         cache_key = f"{ticker}:price:realtime"
@@ -829,15 +763,7 @@ class PriceAgent(BaseFinancialAgent):
         return None
 
     async def _first_summary(self, data: Any) -> str:
-        deterministic = self._deterministic_summary(data)
-        if isinstance(data, dict) and data.get("snapshot_type") == "PriceBehaviorSnapshot":
-            return deterministic
-        analysis = await self._llm_analyze(
-            deterministic,
-            role="资深量化交易分析师",
-            focus="解读当前价格与日内变动，并结合期权IV/PCR/Skew判断短线风险偏好和交易拥挤度。",
-        )
-        return analysis if analysis else deterministic
+        return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: Any) -> str:
         """Build a human-readable price snapshot from raw data (fallback)."""

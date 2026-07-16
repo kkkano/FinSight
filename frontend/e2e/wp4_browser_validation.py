@@ -269,7 +269,7 @@ def install_api_mock(page: Page) -> dict[str, bool]:
                 {
                     "lease": {
                         "id": "44444444-4444-4444-8444-444444444444",
-                        "session_id": "public:wp4-browser-user:default",
+                        "session_id": "user:wp4-browser-user:default",
                         "symbol": "AAPL",
                         "lease_token": "local-lease-token",
                         "expires_at": "2026-07-15T09:00:00Z",
@@ -310,11 +310,11 @@ def install_api_mock(page: Page) -> dict[str, bool]:
                 route,
                 {
                     "success": True,
-                    "session_id": "public:wp4-browser-user:default",
+                    "session_id": "user:wp4-browser-user:default",
                     "items": [
                         {
                             "report_id": REPORT_ID,
-                            "session_id": "public:wp4-browser-user:default",
+                            "session_id": "user:wp4-browser-user:default",
                             "ticker": "AAPL",
                             "title": "AAPL 证据化研究报告",
                             "summary": "真实行情与公开材料支持当前核心结论。",
@@ -331,7 +331,7 @@ def install_api_mock(page: Page) -> dict[str, bool]:
                 route,
                 {
                     "success": True,
-                    "session_id": "public:wp4-browser-user:default",
+                    "session_id": "user:wp4-browser-user:default",
                     "report": report_payload(),
                     "citations": [],
                     "trace_digest": {},
@@ -349,9 +349,8 @@ def prepare_page(page: Page, console_errors: list[str]) -> None:
     page.on("pageerror", lambda error: console_errors.append(str(error)))
     page.add_init_script(
         """
-        localStorage.setItem('finsight-rag-dev-auth-enabled', '1');
         localStorage.setItem('finsight-entry-mode', 'authenticated');
-        localStorage.setItem('finsight-session-id', 'public:wp4-browser-user:default');
+        localStorage.setItem('finsight-session-id', 'user:wp4-browser-user:default');
         sessionStorage.setItem('finsight-welcome-gate-passed', '1');
         """
     )

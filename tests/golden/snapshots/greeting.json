@@ -1,7 +1,7 @@
 {
   "blocked_reasons": [],
-  "output_mode": null,
+  "output_mode": "chat",
   "plan_steps": [],
-  "route": null,
+  "route": "direct",
   "tasks": []
 }

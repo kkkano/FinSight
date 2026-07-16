@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Target,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { apiClient, type ReportIndexItem } from '../api/client';
 import type { PredictionHistoryItem, PredictionStatBucket } from '../api/domains/predictions';
@@ -270,11 +270,11 @@ function PredictionHistoryPanel() {
   );
 }
 
-function ReportsHistoryPanel() {
+function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | null }) {
   const navigate = useNavigate();
   const sessionId = useStore((state) => state.sessionId);
   const [items, setItems] = useState<ReportIndexItem[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialReportId);
   const [report, setReport] = useState<ReportIR | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -399,7 +399,13 @@ function ReportsHistoryPanel() {
 }
 
 export function HistoryPage() {
-  const [tab, setTab] = useState<HistoryTab>('predictions');
+  const [searchParams] = useSearchParams();
+  const reportId = searchParams.get('report')?.trim() || null;
+  const [tab, setTab] = useState<HistoryTab>(reportId ? 'reports' : 'predictions');
+
+  useEffect(() => {
+    if (reportId) setTab('reports');
+  }, [reportId]);
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-t-bg" data-testid="history-page">
@@ -440,7 +446,7 @@ export function HistoryPage() {
           {tab === 'predictions' ? <Database size={12} /> : <CalendarClock size={12} />}
           {tab === 'predictions' ? '统计窗口：最近 90 天' : '按生成时间倒序'}
         </div>
-        {tab === 'predictions' ? <PredictionHistoryPanel /> : <ReportsHistoryPanel />}
+        {tab === 'predictions' ? <PredictionHistoryPanel /> : <ReportsHistoryPanel initialReportId={reportId} />}
       </div>
     </main>
   );

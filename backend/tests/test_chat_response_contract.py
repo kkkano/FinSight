@@ -1050,48 +1050,6 @@ def test_news_chat_answer_uses_clean_citations() -> None:
     assert "[Tesla shares move after delivery update](https://example.com/tesla-delivery)" in markdown
 
 
-def test_chat_renderer_preserves_alert_markdown_with_followup_news() -> None:
-    markdown = _render_chat(
-        {
-            "query": "give recent news links",
-            "subject": {"subject_type": "company", "tickers": ["TSLA"]},
-            "operation": {"name": "fetch"},
-            "tasks": [
-                {
-                    "id": "task_1",
-                    "subject_type": "company",
-                    "tickers": ["TSLA"],
-                    "operation": {"name": "fetch", "params": {"topic": "news", "include_links": True}},
-                }
-            ],
-            "plan_ir": {
-                "steps": [
-                    {"id": "s1", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "TSLA"}},
-                ]
-            },
-            "artifacts": {
-                "alert_markdown": "Created alert for TSLA at 180.",
-                "step_results": {
-                    "s1": {
-                        "output": [
-                            {
-                                "title": "Tesla delivery update",
-                                "url": "https://example.com/tesla-delivery",
-                                "source": "Example News",
-                                "published_at": "2026-05-10",
-                            }
-                        ]
-                    }
-                },
-            },
-        }
-    )
-
-    _assert_chat_contract(markdown)
-    assert markdown.startswith("Created alert for TSLA at 180.")
-    assert "[Tesla delivery update](https://example.com/tesla-delivery)" in markdown
-
-
 def test_news_chat_discloses_missing_article_url_when_source_has_no_url() -> None:
     markdown = _render_chat(
         {
@@ -1328,38 +1286,6 @@ def test_representative_etf_qa_renders_lightweight_without_compare_metrics() -> 
     assert "TSM" in markdown
     assert "半导体 ETF" in markdown
     assert "YTD" not in markdown
-
-
-def test_portfolio_chat_uses_visible_positions_without_asking_for_holdings_again() -> None:
-    markdown = _render_chat(
-        {
-            "query": "这些新闻对我的持仓影响大吗？",
-            "subject": {"subject_type": "portfolio", "tickers": ["AAPL", "MSFT", "NVDA"]},
-            "operation": {"name": "portfolio_impact"},
-            "tasks": [
-                {
-                    "id": "task_1",
-                    "subject_type": "portfolio",
-                    "tickers": ["AAPL", "MSFT", "NVDA"],
-                    "operation": {"name": "portfolio_impact"},
-                    "params": {
-                        "positions": [
-                            {"ticker": "AAPL", "weight": 0.35},
-                            {"ticker": "MSFT", "weight": 0.25},
-                            {"ticker": "NVDA", "weight": 0.15},
-                        ]
-                    },
-                }
-            ],
-        }
-    )
-
-    _assert_chat_contract(markdown)
-    assert "AAPL" in markdown
-    assert "MSFT" in markdown
-    assert "NVDA" in markdown
-    assert "需要你的持仓列表" not in markdown
-    assert "不会按固定框架" in markdown
 
 
 def test_technical_chat_missing_data_is_natural() -> None:
@@ -1799,7 +1725,6 @@ def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_op
                 "relation": "rank",
                 "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
                 "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
-                "required_results": [],
                 "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
                 "intent_contract": {
                     "facets": ["valuation"],

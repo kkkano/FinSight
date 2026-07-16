@@ -12,8 +12,6 @@ from urllib.parse import quote_plus
 from backend.graph.state import GraphState
 from backend.graph.renderers.macro import (
     _external_entity_impact_fallback_lines,
-    _focus_line,
-    _focus_task_present,
     _has_macro_context,
     _macro_mechanism_lines,
 )
@@ -276,9 +274,6 @@ def render_news_impact(state: GraphState, ctx: dict[str, Any]) -> str | None:
         if next_watch and "关注" not in "\n".join(lines):
             lines.append("")
             lines.append(next_watch)
-        elif _focus_task_present(state) and "关注" not in "\n".join(lines):
-            lines.append("")
-            lines.append(_focus_line(state))
         _append_missing_article_url_note(lines, listed_news_items)
         if requested_link_count and not any(_is_citable_url(str(item.get("url") or "")) for item in listed_news_items):
             _append_news_source_page_links(lines, state, count=requested_link_count)
@@ -318,8 +313,5 @@ def render_news_impact(state: GraphState, ctx: dict[str, Any]) -> str | None:
         lines.append(_format_price_line(ticker_label, price))
     if not news_map:
         _append_url_fetch_notes(lines, state)
-    if _focus_task_present(state) and "关注" not in "\n".join(lines):
-        lines.append("")
-        lines.append(_focus_line(state))
     _append_sources_for_state(lines, news or evidence_items, state)
     return _finalize_chat_markdown(lines, state)

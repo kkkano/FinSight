@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -10,26 +8,18 @@ from fastapi import APIRouter, HTTPException
 
 from backend.api.schemas import KlineResponse, StockDataResponse
 
-logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class MarketRouterDeps:
     get_market_data_gateway: Callable[[], Any]
-    get_financial_statements_summary: Callable[[str], Any]
-    detect_chart_type: Callable[[str, str | None], dict[str, Any]] | None
     logger: Any
 
 
 _TICKER_PATTERN = re.compile(r"^[A-Z0-9^][A-Z0-9.^=-]{0,19}$")
 
 
-def _normalize_ticker(raw_ticker: str) -> str:
-    return str(raw_ticker or "").strip().upper()
-
-
 def _validate_ticker_or_400(raw_ticker: str) -> str:
-    ticker = _normalize_ticker(raw_ticker)
+    ticker = str(raw_ticker or "").strip().upper()
     if not ticker:
         raise HTTPException(status_code=400, detail="ticker 不能为空")
     if not _TICKER_PATTERN.fullmatch(ticker):
@@ -37,314 +27,70 @@ def _validate_ticker_or_400(raw_ticker: str) -> str:
     return ticker
 
 
-def _extract_ticker_candidates(query: str, provided_ticker: str | None = None) -> list[str]:
-    candidates: list[str] = []
-    seen: set[str] = set()
-
-    def _add(raw: str) -> None:
-        ticker = _normalize_ticker(raw)
-        if not ticker or ticker in seen:
-            return
-        if not _TICKER_PATTERN.fullmatch(ticker):
-            return
-        seen.add(ticker)
-        candidates.append(ticker)
-
-    if provided_ticker:
-        _add(provided_ticker)
-
-    try:
-        from backend.config.ticker_mapping import extract_tickers as extract_tickers_from_query
-
-        metadata = extract_tickers_from_query(query or "")
-        for ticker in metadata.get("tickers") or []:
-            _add(str(ticker))
-    except Exception:
-        logger.debug("ticker extraction from query failed", exc_info=True)
-
-    return candidates
-
 def create_market_router(deps: MarketRouterDeps) -> APIRouter:
+    """可信 quote、news、financials 与 Kline 数据网关。"""
     router = APIRouter(tags=["Market"])
-
-    @router.post("/api/chart/detect")
-    async def detect_chart(payload: dict[str, Any]):
-        query = str(payload.get("query") or "").strip()
-        ticker = payload.get("ticker")
-        ticker_value = str(ticker).strip() if ticker is not None else None
-        ticker_candidates = _extract_ticker_candidates(query, ticker_value)
-        resolved_ticker = ticker_candidates[0] if ticker_candidates else None
-
-        if not query:
-            return {
-                "success": False,
-                "should_generate": False,
-                "chart_type": None,
-                "data_dimension": None,
-                "data_kind": "none",
-                "detector": "keyword_fallback",
-                "title": "",
-                "confidence": 0.0,
-                "reason": "empty_query",
-                "ticker_candidates": ticker_candidates,
-                "resolved_ticker": resolved_ticker,
-            }
-
-        # 决策主路径：LLM 理解 query 语义（内部自带关键词回退 + 8s 超时）。
-        try:
-            from backend.api.chart_intelligence import decide_chart
-
-            decision = await decide_chart(query, ticker_value or None)
-            chart_type = decision.get("chart_type")
-            confidence = max(0.0, min(1.0, float(decision.get("confidence") or 0.0)))
-            return {
-                "success": True,
-                "should_generate": bool(decision.get("should_generate")),
-                "chart_type": chart_type,
-                # data_dimension 为旧字段，保留向后兼容（前端不再依赖，但仍透传 data_kind 供其映射）
-                "data_dimension": decision.get("data_kind"),
-                "data_kind": decision.get("data_kind") or "none",
-                "detector": decision.get("detector") or "llm",
-                "title": str(decision.get("title") or ""),
-                "confidence": confidence,
-                "reason": str(decision.get("reason") or ""),
-                "ticker_candidates": ticker_candidates,
-                "resolved_ticker": resolved_ticker,
-            }
-        except Exception as exc:
-            # decide_chart 已内置回退；走到这里说明导入或调用层异常，
-            # 再退一步直接用注入的关键词检测器，绝不阻断前端流程。
-            deps.logger.warning("[ChartDetect] decide_chart 异常，降级关键词检测: %s", exc)
-
-        if deps.detect_chart_type is None:
-            return {
-                "success": False,
-                "should_generate": False,
-                "chart_type": None,
-                "data_dimension": None,
-                "data_kind": "none",
-                "detector": "keyword_fallback",
-                "title": "",
-                "confidence": 0.0,
-                "reason": "chart_detector_unavailable",
-                "ticker_candidates": ticker_candidates,
-                "resolved_ticker": resolved_ticker,
-            }
-
-        try:
-            detected = deps.detect_chart_type(query, ticker_value or None)
-            chart_type = detected.get("chart_type") if isinstance(detected, dict) else None
-            data_dimension = detected.get("data_dimension") if isinstance(detected, dict) else None
-            confidence_raw = detected.get("confidence") if isinstance(detected, dict) else 0.0
-            try:
-                confidence = float(confidence_raw)
-            except Exception:
-                confidence = 0.0
-            confidence = max(0.0, min(1.0, confidence))
-            reason = (
-                str(detected.get("reason") or "")
-                if isinstance(detected, dict)
-                else "invalid_detector_response"
-            )
-            should_generate = bool(chart_type) and confidence >= 0.35
-            return {
-                "success": True,
-                "should_generate": should_generate,
-                "chart_type": chart_type,
-                "data_dimension": data_dimension,
-                "data_kind": data_dimension or "none",
-                "detector": "keyword_fallback",
-                "title": "",
-                "confidence": confidence,
-                "reason": reason,
-                "ticker_candidates": ticker_candidates,
-                "resolved_ticker": resolved_ticker,
-            }
-        except Exception as exc:
-            # 异常细节进日志，对外用稳定 reason code，不回传 str(exc)。
-            deps.logger.warning("[ChartDetect] failed: %s", exc)
-            return {
-                "success": False,
-                "should_generate": False,
-                "chart_type": None,
-                "data_dimension": None,
-                "data_kind": "none",
-                "detector": "keyword_fallback",
-                "title": "",
-                "confidence": 0.0,
-                "reason": "chart_detect_error",
-                "ticker_candidates": ticker_candidates,
-                "resolved_ticker": resolved_ticker,
-            }
-
-    @router.post("/api/chart/data")
-    async def get_chart_data(payload: dict[str, Any]):
-        """按 data_kind 返回图表数据（pie/bar 等非 kline 图表的数据源）。
-
-        诚实原则：数据拿不到就返回 success=False + fallback_reason，绝不编造。
-        - composition（pie）：FMP 营收分部 → {labels, values, unit:"$"}
-        - comparison（bar）：同行估值对比 → {labels, values, unit:"x"}
-        其余 data_kind → success=False。
-        """
-        # ticker 校验复用现有逻辑（非法直接 400，与其它端点行为一致）。
-        raw_ticker = payload.get("ticker")
-        ticker = _validate_ticker_or_400(str(raw_ticker) if raw_ticker is not None else "")
-        data_kind = str(payload.get("data_kind") or "").strip().lower()
-        fields = str(payload.get("fields") or "").strip()
-
-        # 前端图表显示上限：分部/对比对象最多 8 个，超出截断。
-        max_items = 8
-
-        if data_kind == "composition":
-            try:
-                from backend.tools.fmp import (
-                    get_revenue_product_segmentation,
-                    is_fmp_configured,
-                )
-
-                # FMP key 未配置时优雅返回，绝不 500。
-                if not is_fmp_configured():
-                    return {
-                        "success": False,
-                        "fallback_reason": "fmp_not_configured",
-                    }
-
-                # FMP 调用是同步阻塞（requests），放到线程池避免卡住事件循环。
-                segments = await asyncio.to_thread(get_revenue_product_segmentation, ticker)
-            except Exception as exc:
-                # 异常细节进日志，对外只给稳定的 reason code，不回传 str(exc)。
-                deps.logger.warning("[ChartData] composition 获取失败 %s: %s", ticker, exc)
-                return {"success": False, "fallback_reason": "composition_error"}
-
-            if not segments:
-                # 小盘股 / FMP 无该公司分部数据：诚实跳过。
-                return {"success": False, "fallback_reason": "no_segmentation_data"}
-
-            top = segments[:max_items]
-            labels = [str(seg.get("segment") or "") for seg in top]
-            values = [float(seg.get("revenue") or 0) for seg in top]
-            return {
-                "success": True,
-                "data": {"labels": labels, "values": values, "unit": "$"},
-                "source": "fmp",
-            }
-
-        if data_kind == "comparison":
-            try:
-                from backend.dashboard.peer_service import fetch_peer_comparison
-
-                # peer 对比内部用 ThreadPoolExecutor，同样放到线程池调度。
-                comparison = await asyncio.to_thread(fetch_peer_comparison, ticker, None)
-            except Exception as exc:
-                # 异常细节进日志，对外只给稳定的 reason code，不回传 str(exc)。
-                deps.logger.warning("[ChartData] comparison 获取失败 %s: %s", ticker, exc)
-                return {"success": False, "fallback_reason": "comparison_error"}
-
-            if not comparison or not isinstance(comparison, dict):
-                return {"success": False, "fallback_reason": "no_peer_data"}
-
-            peers = comparison.get("peers") or []
-            # 默认对比指标 trailing_pe（市盈率），可由 fields 指定其它数值指标。
-            metric = fields or "trailing_pe"
-            labels: list[str] = []
-            values: list[float] = []
-            for row in peers:
-                if not isinstance(row, dict):
-                    continue
-                value = row.get(metric)
-                if value is None:
-                    continue
-                try:
-                    numeric = float(value)
-                except (TypeError, ValueError):
-                    continue
-                labels.append(str(row.get("symbol") or row.get("name") or ""))
-                values.append(numeric)
-                if len(labels) >= max_items:
-                    break
-
-            if not values:
-                # 该指标全员缺失：诚实跳过，不拿别的指标冒充。
-                return {"success": False, "fallback_reason": f"no_metric_data: {metric}"}
-
-            # PE/估值倍数类用 "x" 单位，市值类用 "$"。
-            unit = "$" if metric in ("market_cap",) else "x"
-            return {
-                "success": True,
-                "data": {"labels": labels, "values": values, "unit": unit},
-                "source": "peer_comparison",
-            }
-
-        # 其它 data_kind 暂不支持（kline/technical 走 InlineChart 自有数据源）。
-        return {"success": False, "reason": "unsupported_data_kind"}
 
     @router.get("/api/stock/price/{ticker}", response_model=StockDataResponse)
     def get_price(ticker: str):
-        normalized_ticker = _validate_ticker_or_400(ticker)
+        normalized = _validate_ticker_or_400(ticker)
         try:
-            result = deps.get_market_data_gateway().get_quote(normalized_ticker)
-            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
+            result = deps.get_market_data_gateway().get_quote(normalized)
+            return {"ticker": normalized, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
-            deps.logger.warning("[API] get_price failed for %s: %s", normalized_ticker, exc)
+            deps.logger.warning("[Market] quote unavailable ticker=%s error_type=%s", normalized, type(exc).__name__)
             return {
-                "ticker": normalized_ticker,
+                "ticker": normalized,
                 "data": {"data": {}, "error": "market_data_unavailable", "error_code": "market_data_unavailable"},
                 "cached": False,
             }
 
     @router.get("/api/stock/news/{ticker}", response_model=StockDataResponse)
     def get_news(ticker: str, limit: int = 5):
-        normalized_ticker = _validate_ticker_or_400(ticker)
+        normalized = _validate_ticker_or_400(ticker)
         try:
-            result = deps.get_market_data_gateway().get_news(normalized_ticker, limit=limit)
-            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
+            result = deps.get_market_data_gateway().get_news(normalized, limit=max(1, min(50, limit)))
+            return {"ticker": normalized, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
-            deps.logger.warning("[API] get_news failed for %s: %s", normalized_ticker, exc)
+            deps.logger.warning("[Market] news unavailable ticker=%s error_type=%s", normalized, type(exc).__name__)
             return {
-                "ticker": normalized_ticker,
+                "ticker": normalized,
                 "data": {"data": [], "error": "market_data_unavailable", "error_code": "market_data_unavailable"},
                 "cached": False,
             }
 
     @router.get("/api/financials/{ticker}", response_model=StockDataResponse)
     def get_financials(ticker: str):
-        normalized_ticker = _validate_ticker_or_400(ticker)
+        normalized = _validate_ticker_or_400(ticker)
         try:
-            result = deps.get_market_data_gateway().get_financials(normalized_ticker)
-            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
+            result = deps.get_market_data_gateway().get_financials(normalized)
+            return {"ticker": normalized, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
-            deps.logger.warning("[API] get_financials failed for %s: %s", normalized_ticker, exc)
+            deps.logger.warning(
+                "[Market] financials unavailable ticker=%s error_type=%s",
+                normalized,
+                type(exc).__name__,
+            )
             return {
-                "ticker": normalized_ticker,
+                "ticker": normalized,
                 "data": {"data": {}, "error": "market_data_unavailable", "error_code": "market_data_unavailable"},
                 "cached": False,
             }
 
-    @router.get("/api/financials/{ticker}/summary")
-    def get_financials_summary(ticker: str):
-        normalized_ticker = _validate_ticker_or_400(ticker)
-        try:
-            summary = deps.get_financial_statements_summary(normalized_ticker)
-            return {"ticker": normalized_ticker, "summary": summary}
-        except Exception as exc:
-            deps.logger.warning("[API] get_financials_summary failed for %s: %s", normalized_ticker, exc)
-            raise HTTPException(status_code=502, detail=f"无法获取 {normalized_ticker} 财务摘要") from exc
-
     @router.get("/api/stock/kline/{ticker}", response_model=KlineResponse)
     def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
-        normalized_ticker = _validate_ticker_or_400(ticker)
+        normalized = _validate_ticker_or_400(ticker)
         try:
             result = deps.get_market_data_gateway().get_kline(
-                normalized_ticker,
+                normalized,
                 period=period,
                 interval=interval,
             )
-            return {"ticker": normalized_ticker, "data": result, "cached": bool(result.get("cached"))}
+            return {"ticker": normalized, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
-            # 内部异常只进日志，对外用通用错误描述，不回传原始 str(exc)。
-            deps.logger.error("[Market] get_kline_data 失败 %s: %s", normalized_ticker, exc, exc_info=True)
+            deps.logger.warning("[Market] kline unavailable ticker=%s error_type=%s", normalized, type(exc).__name__)
             return {
-                "ticker": normalized_ticker,
+                "ticker": normalized,
                 "data": {
                     "data": [],
                     "kline_data": [],
@@ -354,50 +100,7 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "cached": False,
             }
 
-    @router.post("/api/export/pdf")
-    async def export_pdf(request: dict):
-        try:
-            from datetime import datetime
-
-            from fastapi.responses import Response
-
-            from backend.services.pdf_export import get_pdf_service
-
-            pdf_service = get_pdf_service()
-            if not pdf_service:
-                raise HTTPException(status_code=503, detail="PDF export service unavailable")
-
-            messages = request.get("messages", [])
-            charts = request.get("charts", [])
-            title = request.get("title", "FinSight 对话记录")
-
-            if not messages:
-                raise HTTPException(status_code=400, detail="messages 不能为空")
-
-            if charts:
-                pdf_bytes = pdf_service.export_with_charts(messages, charts, title=title)
-            else:
-                pdf_bytes = pdf_service.export_conversation(messages, title=title)
-
-            if not pdf_bytes:
-                raise HTTPException(status_code=500, detail="PDF generation failed")
-
-            return Response(
-                content=pdf_bytes,
-                media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f"attachment; filename=finsight_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                },
-            )
-        except HTTPException:
-            raise
-        except ImportError as exc:
-            # 依赖缺失：记日志，对外只说服务暂不可用，不回传模块名等内部细节。
-            deps.logger.error("[Market] export_pdf 依赖缺失: %s", exc, exc_info=True)
-            raise HTTPException(status_code=503, detail="PDF 导出服务暂不可用") from exc
-        except Exception as exc:
-            # 内部异常只进日志，对外返回通用消息（不再 print 堆栈 / 回传 str(exc)）。
-            deps.logger.error("[Market] export_pdf 失败: %s", exc, exc_info=True)
-            raise HTTPException(status_code=500, detail="PDF 导出失败，请稍后重试") from exc
-
     return router
+
+
+__all__ = ["MarketRouterDeps", "create_market_router"]

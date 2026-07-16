@@ -18,8 +18,6 @@ class GoldenQueryCase:
     expected_tickers: list[str] | None = None
     expected_evidence: list[str] | None = None
     expected_frame_evidence: list[list[str]] | None = None
-    expected_required_results: list[str] = field(default_factory=list)
-    expected_action: str | None = None
     expected_render_shape: str | None = None
     must_include_steps: set[str] = field(default_factory=set)
     must_exclude_steps: set[str] = field(default_factory=set)
@@ -157,7 +155,6 @@ def _run_golden_query(query: str) -> tuple[dict, dict]:
 
 @pytest.mark.parametrize("case", GOLDEN_QUERY_CASES, ids=lambda case: case.query)
 def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch):
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("SEC_HOLDINGS_ENABLED", "true")
 
     understanding, plan_out = _run_golden_query(case.query)
@@ -175,10 +172,6 @@ def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch
         assert primary_frame.get("evidence_obligations") == case.expected_evidence
     if case.expected_frame_evidence is not None:
         assert [frame.get("evidence_obligations") for frame in frames] == case.expected_frame_evidence
-    if case.expected_required_results:
-        assert primary_frame.get("required_results") == case.expected_required_results
-    if case.expected_action is not None:
-        assert (primary_frame.get("workflow_action") or {}).get("name") == case.expected_action
     if case.expected_render_shape is not None:
         assert (primary_frame.get("render_contract") or {}).get("shape") == case.expected_render_shape
 
@@ -190,4 +183,3 @@ def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch
     coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
     assert coverage.get("status") == "ok"
     assert coverage.get("missing_evidence") == []
-    assert coverage.get("missing_results") == []

@@ -20,7 +20,6 @@ def _reset_cache() -> None:
 def test_get_sec_filings_requires_user_agent(monkeypatch):
     _reset_cache()
     monkeypatch.delenv("SEC_USER_AGENT", raising=False)
-    monkeypatch.delenv("EMAIL_FROM", raising=False)
     payload = sec.get_sec_filings("AAPL")
     assert payload.get("error") == "missing_sec_user_agent"
 

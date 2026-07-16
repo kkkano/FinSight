@@ -17,7 +17,6 @@ def _multi_frame_state() -> dict:
             "lane": "research",
             "subject": {"type": "company", "tickers": ["AAPL"]},
             "evidence_obligations": ["price_snapshot"],
-            "required_results": [],
             "legacy_operation": {"name": "price", "confidence": 0.8, "params": {}},
         },
         {
@@ -25,7 +24,6 @@ def _multi_frame_state() -> dict:
             "lane": "research",
             "subject": {"type": "company", "tickers": ["MSFT"]},
             "evidence_obligations": ["news_context"],
-            "required_results": [],
             "legacy_operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
         },
         {
@@ -33,7 +31,6 @@ def _multi_frame_state() -> dict:
             "lane": "research",
             "subject": {"type": "macro", "tickers": []},
             "evidence_obligations": ["macro_context"],
-            "required_results": [],
             "legacy_operation": {"name": "macro_brief", "confidence": 0.8, "params": {}},
         },
     ]

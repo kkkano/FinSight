@@ -86,7 +86,10 @@ export function usePredictionGeneration(
   const [state, setState] = useState<PredictionGenerationState>(INITIAL_STATE);
   const controllerRef = useRef<AbortController | null>(null);
   const onSucceededRef = useRef(onSucceeded);
-  onSucceededRef.current = onSucceeded;
+
+  useEffect(() => {
+    onSucceededRef.current = onSucceeded;
+  }, [onSucceeded]);
 
   const reset = useCallback(() => {
     controllerRef.current?.abort();

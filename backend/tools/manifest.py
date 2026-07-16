@@ -274,16 +274,6 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
         cache_ttl_s=1800,
     ),
     ToolManifestEntry(
-        name="run_portfolio_stress_test",
-        group="risk",
-        markets=("US",),
-        operations=("qa", "generate_report"),
-        depths=("report", "deep_research"),
-        risk_level="medium",
-        timeout_ms=15000,
-        cache_ttl_s=1800,
-    ),
-    ToolManifestEntry(
         name="get_performance_comparison",
         group="market",
         markets=("US", "CN"),
@@ -292,77 +282,6 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
         risk_level="low",
         timeout_ms=12000,
         cache_ttl_s=300,
-    ),
-    ToolManifestEntry(
-        name="screen_stocks",
-        group="screener",
-        markets=("US", "CN", "HK"),
-        operations=("screen",),
-        depths=("quick", "report", "deep_research"),
-        risk_level="low",
-        timeout_ms=15000,
-        cache_ttl_s=300,
-        requires_env=("FMP_API_KEY",),
-    ),
-    ToolManifestEntry(
-        name="get_cn_market_fund_flow",
-        group="cn_market",
-        markets=("CN", "HK"),
-        operations=("cn_market",),
-        depths=("quick", "report", "deep_research"),
-        risk_level="low",
-        timeout_ms=12000,
-        cache_ttl_s=120,
-    ),
-    ToolManifestEntry(
-        name="get_cn_market_northbound",
-        group="cn_market",
-        markets=("CN", "HK"),
-        operations=("cn_market",),
-        depths=("quick", "report", "deep_research"),
-        risk_level="low",
-        timeout_ms=12000,
-        cache_ttl_s=120,
-    ),
-    ToolManifestEntry(
-        name="get_cn_limit_board",
-        group="cn_market",
-        markets=("CN", "HK"),
-        operations=("cn_market",),
-        depths=("quick", "report", "deep_research"),
-        risk_level="low",
-        timeout_ms=12000,
-        cache_ttl_s=120,
-    ),
-    ToolManifestEntry(
-        name="get_cn_lhb",
-        group="cn_market",
-        markets=("CN", "HK"),
-        operations=("cn_market",),
-        depths=("quick", "report", "deep_research"),
-        risk_level="low",
-        timeout_ms=12000,
-        cache_ttl_s=300,
-    ),
-    ToolManifestEntry(
-        name="get_cn_concept_map",
-        group="cn_market",
-        markets=("CN", "HK"),
-        operations=("cn_market",),
-        depths=("quick", "report", "deep_research"),
-        risk_level="low",
-        timeout_ms=12000,
-        cache_ttl_s=300,
-    ),
-    ToolManifestEntry(
-        name="run_strategy_backtest",
-        group="backtest",
-        markets=("US", "CN", "HK"),
-        operations=("backtest",),
-        depths=("report", "deep_research"),
-        risk_level="medium",
-        timeout_ms=20000,
-        cache_ttl_s=60,
     ),
     ToolManifestEntry(
         name="fetch_url_content",
@@ -386,9 +305,6 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
             "compare",
             "price",
             "technical",
-            "screen",
-            "cn_market",
-            "backtest",
         ),
         depths=("quick", "report", "deep_research"),
         risk_level="low",
@@ -407,9 +323,6 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
             "compare",
             "price",
             "technical",
-            "screen",
-            "cn_market",
-            "backtest",
         ),
         depths=("quick", "report", "deep_research"),
         risk_level="low",
@@ -439,21 +352,7 @@ def select_tools(
     if depth not in {"quick", "report", "deep_research"}:
         depth = "report"
 
-    if operation == "screen":
-        candidate_names = ["screen_stocks", "search", "get_current_datetime"]
-    elif operation == "cn_market":
-        candidate_names = [
-            "get_cn_market_fund_flow",
-            "get_cn_market_northbound",
-            "get_cn_limit_board",
-            "get_cn_lhb",
-            "get_cn_concept_map",
-            "search",
-            "get_current_datetime",
-        ]
-    elif operation == "backtest":
-        candidate_names = ["run_strategy_backtest", "search", "get_current_datetime"]
-    elif subject in {"news_item", "news_set"}:
+    if subject in {"news_item", "news_set"}:
         candidate_names = [
             "fetch_url_content",
             "get_company_news",
@@ -526,7 +425,6 @@ def select_tools(
                 "get_eps_revisions",
                 "analyze_historical_drawdowns",
                 "get_factor_exposure",
-                "run_portfolio_stress_test",
                 "get_current_datetime",
                 "search",
             ]
@@ -552,7 +450,7 @@ def select_tools(
 
     # For non-report modes, keep manifests deterministic and avoid deep-only inflation.
     if output_mode != "investment_report" and "deep_research" == depth:
-        selected = [name for name in selected if name not in {"get_factor_exposure", "run_portfolio_stress_test"}] or selected
+        selected = [name for name in selected if name != "get_factor_exposure"] or selected
 
     return selected
 

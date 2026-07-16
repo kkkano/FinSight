@@ -10,7 +10,6 @@ import { create } from 'zustand';
 
 import { apiClient } from '../api/client';
 import type { ExecuteRequest, SSECallbacks } from '../api/client';
-import { getAgentPreferences } from '../components/settings/AgentControlPanel';
 import { zh } from '../locales/zh';
 import type {
   AgentRunInfo,
@@ -66,20 +65,6 @@ interface ExecutionState {
     error?: string | null;
     meta?: Record<string, unknown>;
   }) => void;
-  interruptExternalExecution: (runId: string, data: {
-    thread_id: string;
-    prompt?: string;
-    options?: string[];
-    plan_summary?: string;
-    required_agents?: string[];
-    gate_reason_code?: string;
-    gate_reason?: string;
-    option_effects?: Record<string, string>;
-    option_intents?: Record<string, string>;
-    output_mode?: string;
-    confirmation_mode?: string;
-  }) => void;
-  resumeExecution: (runId: string, resumeValue: string) => Promise<void>;
   cancelExecution: (runId: string) => void;
   getActiveRunForTicker: (ticker: string) => ExecutionRun | undefined;
   markBridged: (runId: string) => void;
@@ -451,7 +436,6 @@ function createExecutionRunState(params: {
     completedAt: null,
     abortController: params.abortController ?? null,
     bridgedToChat: false,
-    interruptData: null,
   };
 }
 
@@ -780,34 +764,22 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       completedAt: null,
       abortController,
       bridgedToChat: false,
-      interruptData: null,
     };
 
     set((state) => ({
       activeRuns: [...state.activeRuns, initialRun],
     }));
 
-    const prefs = getAgentPreferences();
-    const override = params.agentPreferencesOverride;
-    const requestPrefs = {
-      agents: override?.agents ?? prefs.agents,
-      maxRounds: override?.maxRounds ?? prefs.maxRounds,
-      concurrentMode: override?.concurrentMode ?? prefs.concurrentMode,
-      timeoutSeconds: override?.timeoutSeconds ?? prefs.timeoutSeconds,
-    };
     const request: ExecuteRequest & Record<string, unknown> = {
       query: params.query,
       tickers: params.tickers,
       output_mode: params.outputMode,
-      confirmation_mode: params.confirmationMode,
       analysis_depth: params.analysisDepth,
-      agents: params.agents,
-      budget: params.budget ?? requestPrefs.maxRounds,
+      budget: params.budget,
       source: params.source,
       ...(params.requestBody ?? {}),
       session_id: sessionId,
       run_id: runId,
-      agent_preferences: requestPrefs,
     };
 
     const updateRun = (patch: Partial<ExecutionRun>) => {
@@ -952,28 +924,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         });
       },
 
-      onInterrupt: (data) => {
-        const run = getRun();
-        const timeline = run
-          ? pushTimeline(run, {
-              id: `${runId}:${Date.now()}:interrupt`,
-              timestamp: new Date().toISOString(),
-              eventType: 'interrupt',
-              stage: 'interrupt',
-              message: data.prompt ?? zh.execution.awaitingConfirmation,
-              runId,
-              raw: data as unknown as Record<string, unknown>,
-            })
-          : [];
-
-        updateRun({
-          status: 'interrupted',
-          currentStep: data.prompt ?? zh.execution.awaitingConfirmation,
-          interruptData: data,
-          timeline,
-          etaSeconds: null,
-        });
-      },
     };
 
     callbacks.onRawEvent = (event) => {
@@ -1027,7 +977,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             allowContinueWhenBlocked: false,
             blockedReportAvailable: false,
             abortController: null,
-            interruptData: null,
           };
           return { activeRuns };
         }
@@ -1054,7 +1003,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           allowContinueWhenBlocked: false,
           blockedReportAvailable: false,
           abortController: null,
-          interruptData: null,
         };
         const nextRecent = state.recentRuns.filter((_, idx) => idx !== recentIndex);
         return {
@@ -1084,26 +1032,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       if (index < 0) return state;
 
       const activeRuns = [...state.activeRuns];
-      const current = activeRuns[index];
-      const run: ExecutionRun = current.status === 'interrupted'
-        ? {
-            ...current,
-            status: 'running' as const,
-            interruptData: null,
-            error: null,
-            report: null,
-            qualityBlocked: false,
-            publishable: true,
-            qualityState: 'pass',
-            qualityReasons: [],
-            blockedReasonCodes: [],
-            qualityMetrics: {},
-            qualityThresholds: {},
-            qualityDetails: {},
-            allowContinueWhenBlocked: false,
-            blockedReportAvailable: false,
-          }
-        : current;
+      const run = activeRuns[index];
 
       const runIdFromEvent = typeof step?.runId === 'string'
         ? step.runId
@@ -1123,26 +1052,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       if (index < 0) return state;
 
       const activeRuns = [...state.activeRuns];
-      const current = activeRuns[index];
-      const run: ExecutionRun = current.status === 'interrupted'
-        ? {
-            ...current,
-            status: 'running' as const,
-            interruptData: null,
-            error: null,
-            report: null,
-            qualityBlocked: false,
-            publishable: true,
-            qualityState: 'pass',
-            qualityReasons: [],
-            blockedReasonCodes: [],
-            qualityMetrics: {},
-            qualityThresholds: {},
-            qualityDetails: {},
-            allowContinueWhenBlocked: false,
-            blockedReportAvailable: false,
-          }
-        : current;
+      const run = activeRuns[index];
 
       const pipelineStages = { ...(run.pipelineStages ?? createInitialPipelineStages()) };
       const timestamp = new Date().toISOString();
@@ -1272,7 +1182,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         etaSeconds: null,
         completedAt: doneAt,
         abortController: null,
-        interruptData: null,
       };
       activeRuns.splice(index, 1);
       return {
@@ -1280,132 +1189,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         recentRuns: [completed, ...state.recentRuns].slice(0, MAX_RECENT_RUNS),
       };
     });
-  },
-
-  interruptExternalExecution: (runId, data) => {
-    set((state) => {
-      const index = state.activeRuns.findIndex((run) => run.runId === runId);
-      if (index < 0) return state;
-
-      const activeRuns = [...state.activeRuns];
-      const run = activeRuns[index];
-      const timeline = pushTimeline(run, {
-        id: `${runId}:${Date.now()}:interrupt`,
-        timestamp: new Date().toISOString(),
-        eventType: 'interrupt',
-        stage: 'interrupt',
-        message: data.prompt ?? 'Waiting for confirmation...',
-        runId,
-        raw: data as unknown as Record<string, unknown>,
-      });
-      activeRuns[index] = {
-        ...run,
-        status: 'interrupted',
-        currentStep: data.prompt ?? 'Waiting for confirmation...',
-        interruptData: data,
-        timeline,
-        etaSeconds: null,
-      };
-      return { activeRuns };
-    });
-  },
-
-  resumeExecution: async (runId, resumeValue) => {
-    const run = get().activeRuns.find((item) => item.runId === runId);
-    const threadId = run?.interruptData?.thread_id;
-    if (!run || run.status !== 'interrupted' || !threadId) return;
-
-    const abortController = new AbortController();
-    const resumedAt = new Date().toISOString();
-    set((state) => ({
-      activeRuns: state.activeRuns.map((item) => {
-        if (item.runId !== runId) return item;
-        return {
-          ...item,
-          status: 'running' as const,
-          currentStep: zh.execution.resuming,
-          error: null,
-          interruptData: null,
-          abortController,
-          completedAt: null,
-          timeline: pushTimeline(item, {
-            id: `${runId}:${Date.now()}:resume`,
-            timestamp: resumedAt,
-            eventType: 'resume',
-            stage: 'resume',
-            message: 'resume execution',
-            runId,
-          }),
-        };
-      }),
-    }));
-
-    const callbacks: SSECallbacks = {
-      onThinking: (step) => {
-        get().ingestExternalThinking(runId, step);
-      },
-      onToken: (token = '') => {
-        get().ingestExternalToken(runId, token);
-      },
-      onDone: (report, _thinking, meta) => {
-        const streamRunId = typeof meta?.run_id === 'string' ? meta.run_id : undefined;
-        if (streamRunId && streamRunId !== runId) return;
-        get().completeExternalExecution({
-          runId,
-          status: 'done',
-          report: (report as ReportIR) ?? null,
-          meta: (meta && typeof meta === 'object') ? meta : undefined,
-        });
-      },
-      onError: (error) => {
-        get().completeExternalExecution({
-          runId,
-          status: 'error',
-          error: error ?? zh.execution.resumeFailed,
-        });
-      },
-      onInterrupt: (data) => {
-        get().interruptExternalExecution(runId, data);
-      },
-      onRawEvent: (event) => {
-        useStore.getState().addRawEvent(event);
-      },
-    };
-
-    const traceRawEnabled = useStore.getState().traceRawEnabled;
-    try {
-      await apiClient.resumeExecution(
-        {
-          thread_id: threadId,
-          resume_value: resumeValue,
-          session_id: useStore.getState().sessionId,
-          source: run.source || 'execute_resume',
-          run_id: runId,
-        },
-        callbacks,
-        {
-          signal: abortController.signal,
-          traceRawEnabled,
-        },
-      );
-
-      const latest = get().activeRuns.find((item) => item.runId === runId);
-      if (latest && latest.status === 'running') {
-        get().completeExternalExecution({
-          runId,
-          status: 'error',
-          error: zh.execution.resumeStreamEndedUnexpectedly,
-        });
-      }
-    } catch (err: unknown) {
-      if (abortController.signal.aborted) return;
-      const message = err instanceof Error ? err.message : zh.execution.resumeFailed;
-      get().completeExternalExecution({
-        runId,
-        status: 'error',
-        error: message,
-      });
-    }
   },
 
   cancelExecution: (runId) => {

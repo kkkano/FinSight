@@ -272,7 +272,6 @@ def _read_reports(
                 "tags": tags,
                 "generated_at": generated_at,
                 "confidence_score": raw.get("confidence_score"),
-                "is_favorite": bool(raw.get("is_favorite")),
                 "trace_digest": trace_digest,
                 "report": report,
                 "quality_state": str(raw.get("quality_state") or "pass"),
@@ -486,10 +485,10 @@ def import_snapshot(
             result = conn.execute(
                 text(
                     "INSERT INTO reports(report_id,user_id,session_id,ticker,title,summary,tags,generated_at,"
-                    "confidence_score,is_favorite,trace_digest,report,quality_state,publishable,quality_reasons,"
+                    "confidence_score,trace_digest,report,quality_state,publishable,quality_reasons,"
                     "source_type,filing_type,publisher,share_token,shared_at,migration_batch_id,created_at,updated_at) "
                     "VALUES (:report_id,:user_id,:session_id,:ticker,:title,:summary,CAST(:tags AS jsonb),"
-                    "CAST(:generated_at AS timestamptz),:confidence_score,:is_favorite,CAST(:trace_digest AS jsonb),"
+                    "CAST(:generated_at AS timestamptz),:confidence_score,CAST(:trace_digest AS jsonb),"
                     "CAST(:report AS jsonb),:quality_state,:publishable,CAST(:quality_reasons AS jsonb),:source_type,"
                     ":filing_type,:publisher,:share_token,CAST(:shared_at AS timestamptz),CAST(:batch_id AS uuid),"
                     "CAST(:created_at AS timestamptz),CAST(:updated_at AS timestamptz)) "

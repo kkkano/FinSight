@@ -90,13 +90,10 @@ def test_collectors_are_constructed_without_llm_or_reflection(monkeypatch):
         def __init__(self, llm, _cache, _tools):
             seen["llm"] = llm
 
-        def configure_research(self, **kwargs):
-            seen.update(kwargs)
-
     monkeypatch.setattr("backend.agents.price_agent.PriceAgent", FakeCollector)
     invokers = adapter.build_collector_invokers(
         allowed_collectors=["price_agent"],
         state={"query": "AAPL", "subject": {"tickers": ["AAPL"]}},
     )
     assert set(invokers) == {"price_agent"}
-    assert seen == {"llm": None, "enable_llm_analysis": False, "max_reflections": 0}
+    assert seen == {"llm": None}

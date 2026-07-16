@@ -35,8 +35,7 @@ interface DashboardStore {
   dashboardData: DashboardData | null;
   isLoading: boolean;
   error: string | null;
-  activeSelection: SelectionItem | null;  // 单选兼容：用于旧 UI（MiniChat pill）
-  activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻多选引用
+  activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻引用
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -54,7 +53,6 @@ interface DashboardStore {
   setDashboardData: (data: DashboardData) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setActiveSelection: (selection: SelectionItem | null) => void;
   toggleSelection: (selection: SelectionItem) => void;
   setSelections: (selections: SelectionItem[]) => void;
   clearSelection: () => void;
@@ -127,7 +125,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   dashboardData: null,
   isLoading: false,
   error: null,
-  activeSelection: null,  // 当前选中的新闻/报告
   activeSelections: [],
   _isWatchlistLoading: false,
   _isWatchlistLoaded: false,
@@ -144,7 +141,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
     set({
       activeAsset: asset,
       error: null,
-      activeSelection: null,
       activeSelections: [],
       ...(symbolChanged ? { dashboardData: null } : {}),
     });
@@ -241,13 +237,6 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // 设置错误
   setError: (error) => set({ error }),
 
-  // 设置当前选中的新闻/报告（用于 MiniChat 上下文引用）
-  setActiveSelection: (selection) =>
-    set({
-      activeSelection: selection,
-      activeSelections: selection ? [selection] : [],
-    }),
-
   // 多选：切换某个 selection 是否被选中
   toggleSelection: (selection) =>
     set((state) => {
@@ -260,21 +249,14 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         ? nextBase.filter((s) => s.id !== selection.id)
         : [...nextBase, selection];
 
-      return {
-        activeSelections: next,
-        activeSelection: next.length === 1 ? next[0] : null,
-      };
+      return { activeSelections: next };
     }),
 
-  // 直接设置多选列表（会同步单选兼容字段）
-  setSelections: (selections) =>
-    set({
-      activeSelections: selections,
-      activeSelection: selections.length === 1 ? selections[0] : null,
-    }),
+  // 直接设置多选列表
+  setSelections: (selections) => set({ activeSelections: selections }),
 
   // 清除当前选择
-  clearSelection: () => set({ activeSelection: null, activeSelections: [] }),
+  clearSelection: () => set({ activeSelections: [] }),
 
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 

@@ -1,9 +1,0 @@
-{
-  "blocked_reasons": [
-    "missing_portfolio_holdings"
-  ],
-  "output_mode": "chat",
-  "plan_steps": [],
-  "route": "clarify",
-  "tasks": []
-}

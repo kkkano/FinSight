@@ -18,12 +18,7 @@ from backend.graph.nodes.compare_gate import (
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
 from backend.graph.json_utils import json_dumps_safe
-from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.graph.state import GraphState
-from backend.graph.synthesis.morning_brief import (
-    _extract_brief_headline,
-    _synthesize_morning_brief_data,
-)
 from backend.graph.synthesis.narrative import (
     _skill_perspective_block,
     generate_narrative_draft,
@@ -223,26 +218,6 @@ async def synthesize(state: GraphState) -> dict:
             payload["error"] = str(error)[:300]
         await emit_event(payload)
 
-    # ── Morning brief: deterministic structured synthesis (ADR-P1-001, zero LLM) ──
-    _op_raw = state.get("operation") or {}
-    _op_name = _op_raw.get("name") if isinstance(_op_raw, dict) else None
-    if _op_name == "morning_brief":
-        brief_result = _synthesize_morning_brief_data(state)
-        trace.update({
-            "synthesize_runtime": {
-                **build_runtime(mode="morning_brief_deterministic", fallback=False),
-                "keys": ["brief_data", "draft_markdown"],
-            }
-        })
-        merged_artifacts = {
-            **(state.get("artifacts") or {}),
-            "brief_data": brief_result["brief_data"],
-            "draft_markdown": brief_result["draft_markdown"],
-            "render_vars": {},
-        }
-        await _emit_synth_stage_done(status="done", message="Morning brief synthesized (deterministic)")
-        return {"artifacts": merged_artifacts, "trace": trace}
-
     chat_task_contract = None
     if output_mode in {"chat", "brief"}:
         state, chat_task_contract = prepare_chat_task_contract(state, trace)
@@ -394,10 +369,6 @@ async def synthesize(state: GraphState) -> dict:
             "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", 1),
             "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", 60),
         }
-    preferred_timeout = timeout_seconds_from_state(state)
-    if preferred_timeout is not None:
-        llm_limits["request_timeout"] = int(preferred_timeout)
-        llm_limits["acquire_timeout"] = int(min(float(llm_limits["acquire_timeout"]), preferred_timeout))
     llm_create_extra: dict[str, Any] = {}
     if output_mode == "investment_report":
         llm_limits["request_timeout"] = _clamp_int(
@@ -848,7 +819,6 @@ __all__ = [
     "_env_bool",
     "_env_int",
     "_env_str",
-    "_extract_brief_headline",
     "_extract_json_object",
     "_format_conversation_history_for_synth",
     "_format_memory_context_for_synth",
@@ -865,7 +835,6 @@ __all__ = [
     "_section_limits",
     "_skill_perspective_block",
     "_stub_render_vars",
-    "_synthesize_morning_brief_data",
     "synthesize",
 ]
 

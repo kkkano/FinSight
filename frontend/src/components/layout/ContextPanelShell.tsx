@@ -9,10 +9,7 @@ export type ContextPanelShellProps = {
   onExpand: () => void;
   onCollapse: () => void;
   onResizeStart: (event: MouseEvent) => void;
-  onSubscribeClick: () => void;
   autoSwitchExecution?: boolean;
-  /** Callback to navigate to chat view (for execution bridge "继续追问"). */
-  onNavigateToChat?: () => void;
 };
 
 export function ContextPanelShell({
@@ -22,9 +19,7 @@ export function ContextPanelShell({
   onExpand,
   onCollapse,
   onResizeStart,
-  onSubscribeClick,
   autoSwitchExecution = true,
-  onNavigateToChat,
 }: ContextPanelShellProps) {
   if (!isExpanded) {
     return (
@@ -64,8 +59,6 @@ export function ContextPanelShell({
       >
         <RightPanel
           onCollapse={onCollapse}
-          onSubscribeClick={onSubscribeClick}
-          onNavigateToChat={onNavigateToChat}
           autoSwitchExecution={autoSwitchExecution}
           className="h-full"
         />

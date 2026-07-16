@@ -9,7 +9,7 @@ describe('performChatHandoff', () => {
   beforeEach(() => {
     useStore.getState().setSessionId('public:test-user:handoff');
     useStore.setState({ draft: '', pendingChatHandoffContextBySession: {} });
-    useDashboardStore.setState({ activeAsset: null, activeSelection: null, activeSelections: [] });
+    useDashboardStore.setState({ activeAsset: null, activeSelections: [] });
   });
 
   it('overwrites the current draft and carries selections outside the URL', () => {
@@ -48,7 +48,7 @@ describe('performChatHandoff', () => {
   it('rejects an empty draft without changing state or navigating', () => {
     const navigateMock = vi.fn();
     const navigate = navigateMock as unknown as NavigateFunction;
-    expect(performChatHandoff({ draft: '  ', sourceView: 'workbench' }, navigate)).toBe(false);
+    expect(performChatHandoff({ draft: '  ', sourceView: 'dashboard' }, navigate)).toBe(false);
     expect(navigateMock).not.toHaveBeenCalled();
     expect(useStore.getState().pendingChatHandoffContextBySession).toEqual({});
   });

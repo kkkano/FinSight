@@ -44,7 +44,7 @@ def test_empty_summary_returns_structured_fallback():
     )
     assert out.get("agent_name") == "price_agent"
     assert out.get("fallback_used") is True
-    assert out.get("requests") == []
+    assert "requests" not in out
     assert float(out.get("confidence", 1)) <= 0.2
 
 

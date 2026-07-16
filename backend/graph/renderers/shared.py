@@ -268,9 +268,6 @@ def _finalize_chat_markdown(lines: list[str], state: GraphState) -> str:
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
     if artifacts.get("render_group_body"):
         return _sanitize_chat_markdown("\n".join(lines))
-    alert_markdown = str(artifacts.get("alert_markdown") or "").strip()
-    if alert_markdown and alert_markdown not in "\n".join(lines):
-        lines[:0] = [alert_markdown, ""]
     _append_blocked_notes(lines, state)
     return _sanitize_chat_markdown("\n".join(lines))
 

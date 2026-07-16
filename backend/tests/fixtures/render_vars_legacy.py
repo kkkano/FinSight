@@ -25,7 +25,6 @@ from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.memory_scope import prompt_memory_context
-from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.graph.state import GraphState
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
 from backend.graph.nodes.synthesize import (  # noqa: F401 —— 副本依赖的宿主模块符号

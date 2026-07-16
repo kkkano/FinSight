@@ -89,7 +89,7 @@ export async function parseSSEStream(
     onEnvelope?: (data: Record<string, unknown>) => void;
   } = {},
 ): Promise<void> {
-  const { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent, onInterrupt } = callbacks;
+  const { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent } = callbacks;
   const traceRawEnabled = opts.traceRawEnabled ?? true;
   const readTimeoutMs = opts.readTimeoutMs ?? sseReadTimeoutMs();
 
@@ -259,20 +259,6 @@ export async function parseSSEStream(
             onDone?.(data.report, data.thinking, data);
           } else if (data.type === 'error') {
             onError?.(data.message);
-          } else if (data.type === 'interrupt') {
-            onInterrupt?.({
-              thread_id: data.thread_id || data.data?.thread_id || '',
-              prompt: data.data?.prompt || data.prompt,
-              options: data.data?.options || data.options,
-              plan_summary: data.data?.plan_summary || data.plan_summary,
-              required_agents: data.data?.required_agents || data.required_agents,
-              gate_reason_code: data.data?.gate_reason_code || data.gate_reason_code,
-              gate_reason: data.data?.gate_reason || data.gate_reason,
-              option_effects: data.data?.option_effects || data.option_effects,
-              option_intents: data.data?.option_intents || data.option_intents,
-              output_mode: data.data?.output_mode || data.output_mode,
-              confirmation_mode: data.data?.confirmation_mode || data.confirmation_mode,
-            });
           } else if (
             ['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)
           ) {

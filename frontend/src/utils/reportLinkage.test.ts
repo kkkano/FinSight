@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   buildReportFollowUpHref,
   buildReportFollowUpPrompt,
-  buildWorkbenchReportHref,
+  buildHistoryReportHref,
 } from './reportLinkage';
 
 describe('report linkage', () => {
-  it('builds a shareable workbench deep link from report_id', () => {
-    expect(buildWorkbenchReportHref('lg/a 1')).toBe('/workbench?report=lg%2Fa%201');
+  it('builds a shareable history deep link from report_id', () => {
+    expect(buildHistoryReportHref('lg/a 1')).toBe('/history?report=lg%2Fa%201');
   });
 
   it('builds a URL-backed follow-up draft from the report title', () => {

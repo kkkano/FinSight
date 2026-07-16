@@ -15,7 +15,6 @@ class ConversationRouterDeps:
     list_conversation_records: Callable[[str], list[dict[str, Any]]] | None = None
     get_conversation_record: Callable[[str, str], dict[str, Any] | None] | None = None
     upsert_conversation_record: Callable[[str, dict[str, Any], str], dict[str, Any]] | None = None
-    patch_conversation_record: Callable[[str, dict[str, Any], str], dict[str, Any]] | None = None
     delete_conversation_record: Callable[[str, str], bool] | None = None
 
 
@@ -137,29 +136,6 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
             "conversation": _merge_conversation(
                 session_id=normalized,
                 context=_context_summary(normalized, manager) if manager is not None else None,
-                record=record,
-            ),
-        }
-
-    @router.patch("/api/conversations/{session_id}")
-    async def patch_conversation(
-        session_id: str,
-        http_request: Request,
-        request: dict | None = None,
-    ):
-        normalized = _resolve_or_422(session_id)
-        payload = request if isinstance(request, dict) else {}
-        user_id = getattr(http_request.state, "user_id", "public")
-        if not deps.patch_conversation_record:
-            raise HTTPException(status_code=501, detail="conversation store unavailable")
-        record = deps.patch_conversation_record(normalized, payload, user_id)
-        manager = deps.get_session_context(normalized)
-        return {
-            "success": True,
-            "session_id": normalized,
-            "conversation": _merge_conversation(
-                session_id=normalized,
-                context=_context_summary(normalized, manager),
                 record=record,
             ),
         }

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict
-import os
+from typing import Any, Callable
 
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, Response
 
 
@@ -14,83 +13,86 @@ class SystemRouterDeps:
     metrics_enabled: bool
     metrics_payload: Callable[[], tuple[str, str]]
     graph_runner_ready: Callable[[], bool]
-    get_graph_checkpointer_info: Callable[[], Dict[str, Any]]
-    get_orchestrator_safe: Callable[[], Any]
-    get_rag_observability_store: Callable[[], Any]
-    require_rag_read_access: Callable[[Request], Dict[str, Any]]
-    require_rag_mutation_access: Callable[[Request], Dict[str, Any]]
-    memory_service: Any
-    logger: Any
-    # P2-7: 成本审计 store（可选注入——未注入时 cost-audit 端点 503，不破坏现有构造方）
-    get_cost_audit_store: Callable[[], Any] | None = None
+    get_graph_checkpointer_info: Callable[[], dict[str, Any]]
+    get_startup_result: Callable[[], Any]
+    get_authentication_health: Callable[[], dict[str, str]]
+    get_database_health: Callable[[], dict[str, str]]
+    get_market_data_health: Callable[[], dict[str, str]]
+
+
+def _read_component(check: Callable[[], dict[str, str]], *, failure_code: str) -> dict[str, str]:
+    try:
+        raw = check()
+    except Exception:
+        return {"status": "error", "error_code": failure_code}
+    if not isinstance(raw, dict):
+        return {"status": "error", "error_code": failure_code}
+    component_status = str(raw.get("status") or "error")
+    if component_status not in {"ok", "disabled", "initializing", "degraded", "error"}:
+        return {"status": "error", "error_code": failure_code}
+    result = {"status": component_status}
+    error_code = str(raw.get("error_code") or "").strip()
+    if error_code and component_status not in {"ok", "disabled"}:
+        result["error_code"] = error_code
+    return result
 
 
 def create_system_router(deps: SystemRouterDeps) -> APIRouter:
+    """运行健康与 Prometheus 指标；交互式运维诊断不属于公共 API。"""
     router = APIRouter(tags=["System"])
-
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    def _rag_store() -> Any:
-        return deps.get_rag_observability_store()
-
-    def _require_rag_read_access(request: Request) -> Dict[str, Any]:
-        return deps.require_rag_read_access(request)
-
-    def _require_rag_mutation_access(request: Request) -> Dict[str, Any]:
-        return deps.require_rag_mutation_access(request)
-
-    @router.get("/")
-    def read_root():
-        return {"status": "healthy", "message": "FinSight API is running", "timestamp": _now()}
 
     @router.get("/health")
     def health_check():
         status = "healthy"
-        components: Dict[str, Dict[str, str]] = {}
+        components: dict[str, dict[str, Any]] = {}
+
+        readiness_checks = (
+            ("authentication", deps.get_authentication_health, "authentication_health_failed"),
+            ("database", deps.get_database_health, "database_health_failed"),
+            ("market_data", deps.get_market_data_health, "market_data_health_failed"),
+        )
+        for name, check, failure_code in readiness_checks:
+            component = _read_component(check, failure_code=failure_code)
+            components[name] = component
+            if component["status"] not in {"ok", "disabled"}:
+                status = "degraded"
 
         try:
-            components["langgraph_runner"] = {"status": "ok" if deps.graph_runner_ready() else "initializing"}
-        except Exception:
-            components["langgraph_runner"] = {"status": "error"}
-            status = "degraded"
-
-        try:
-            checkpointer_info = deps.get_graph_checkpointer_info()
-            components["checkpointer"] = {"status": "ok" if checkpointer_info.get("backend") != "unknown" else "initializing"}
-        except Exception:
-            components["checkpointer"] = {"status": "error"}
-            status = "degraded"
-
-        try:
-            components["orchestrator"] = {"status": "ok" if deps.get_orchestrator_safe() else "error"}
-            if components["orchestrator"]["status"] == "error":
+            runner_ready = bool(deps.graph_runner_ready())
+            components["langgraph_runner"] = {"status": "ok" if runner_ready else "initializing"}
+            if not runner_ready:
                 status = "degraded"
         except Exception:
-            components["orchestrator"] = {"status": "error"}
+            components["langgraph_runner"] = {"status": "error", "error_code": "graph_unavailable"}
             status = "degraded"
-
-        components["memory"] = {"status": "ok" if deps.memory_service else "unavailable"}
-        live_tools = os.getenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false").lower() in ("true", "1", "yes", "on")
-        components["live_tools"] = {"status": "active" if live_tools else "dry_run"}
 
         try:
-            from backend.rag.hybrid_service import get_rag_service
-
-            rag_service = get_rag_service()
-            rag_status = "degraded" if getattr(rag_service, "fallback_reason", None) else "ok"
-            if str(os.getenv("RAG_V2_BACKEND", "auto")).strip().lower() == "postgres" and rag_service.backend_name != "postgres":
-                rag_status = "degraded"
+            checkpointer = deps.get_graph_checkpointer_info()
+            backend = str(checkpointer.get("backend") or "unknown")
+            components["checkpointer"] = {
+                "status": "ok" if backend != "unknown" else "initializing",
+            }
+            if backend == "unknown":
                 status = "degraded"
-            components["rag"] = {"status": rag_status}
         except Exception:
-            components["rag"] = {"status": "error"}
+            components["checkpointer"] = {"status": "error", "error_code": "store_unavailable"}
             status = "degraded"
 
-        payload = {"status": status, "components": components, "timestamp": _now()}
-        # 整体降级/错误时返回 503，让 Docker healthcheck / Cloudflare 真实反映后端状态。
-        # （仅 orchestrator 不可用 / 期望 postgres 实际降级 / RAG 整体异常会把整体 status
-        #  置为 degraded；RAG 组件级降级如 hash embedding 不改整体 status，仍返回 200。）
+        startup = deps.get_startup_result()
+        if startup is None:
+            components["llm"] = {"status": "initializing"}
+            status = "degraded"
+        elif bool(getattr(startup, "llm_available", False)):
+            components["llm"] = {"status": "ok"}
+        else:
+            components["llm"] = {"status": "error", "error_code": "llm_unavailable"}
+            status = "degraded"
+
+        payload = {
+            "status": status,
+            "components": components,
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
         if status != "healthy":
             return JSONResponse(status_code=503, content=payload)
         return payload
@@ -101,145 +103,5 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
             raise HTTPException(status_code=404, detail="metrics disabled")
         payload, content_type = deps.metrics_payload()
         return Response(content=payload, media_type=content_type)
-
-    @router.get("/diagnostics/orchestrator")
-    def diagnostics_orchestrator():
-        orchestrator = deps.get_orchestrator_safe()
-        if not orchestrator:
-            raise HTTPException(status_code=500, detail="Orchestrator not initialized")
-        try:
-            return {"status": "ok", "data": orchestrator.get_stats(), "timestamp": _now()}
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"orchestrator diagnostics failed: {exc}") from exc
-
-    @router.get("/diagnostics/rag/status")
-    def diagnostics_rag_status(request: Request):
-        _require_rag_read_access(request)
-        from backend.rag.hybrid_service import get_rag_service
-
-        rag_service = get_rag_service()
-        observability = _rag_store().health_summary(recent_limit=5, fallback_limit=5)
-        payload = {
-            "backend_requested": str(os.getenv("RAG_V2_BACKEND", "auto") or "auto").strip().lower() or "auto",
-            "backend_actual": str(getattr(rag_service, "backend_name", "unknown") or "unknown"),
-            "doc_count": int(rag_service.count_documents()),
-            "vector_dim": int(getattr(rag_service, "vector_dim", 0) or 0),
-            "embedding_model": str(getattr(rag_service, "embedding_model", "unknown") or "unknown"),
-            "fallback_reason": str(getattr(rag_service, "fallback_reason", "") or "") or None,
-            "enabled": bool(observability.get("enabled")),
-            "backend": str(observability.get("backend") or observability.get("status") or "unknown"),
-            "recent_run_count_24h": int(observability.get("recent_run_count_24h") or 0),
-            "recent_fallback_count_24h": int(observability.get("recent_fallback_count_24h") or 0),
-            "recent_empty_hits_rate_24h": observability.get("recent_empty_hits_rate_24h"),
-            "last_run_at": observability.get("last_run_at"),
-            "last_fallback_at": observability.get("last_fallback_at"),
-            "observability": observability,
-        }
-        return {"status": "ok", "data": payload, "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/runs")
-    def diagnostics_rag_runs(request: Request, limit: int = Query(default=20, ge=1, le=200), cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_runs(limit=limit, cursor=cursor, q=q, fallback_only=fallback_only, include_deleted=include_deleted), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/runs/{run_id}")
-    def diagnostics_rag_run_detail(run_id: str, request: Request):
-        _require_rag_read_access(request)
-        item = _rag_store().get_run_detail(run_id)
-        if not item:
-            raise HTTPException(status_code=404, detail="run not found")
-        return {"status": "ok", "data": item, "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/runs/{run_id}/events")
-    def diagnostics_rag_run_events(run_id: str, request: Request, limit: int = Query(default=500, ge=1, le=2000), include_deleted: bool = False):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_events(run_id=run_id, limit=limit, include_deleted=include_deleted), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/documents")
-    def diagnostics_rag_documents(request: Request, run_id: str | None = None, collection: str | None = None, include_deleted: bool = False, limit: int = Query(default=200, ge=1, le=1000)):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_documents(run_id=run_id, collection=collection, include_deleted=include_deleted, limit=limit), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/chunks")
-    def diagnostics_rag_chunks(request: Request, run_id: str | None = None, collection: str | None = None, source_doc_id: str | None = None, include_deleted: bool = False, limit: int = Query(default=500, ge=1, le=2000)):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_chunks(run_id=run_id, collection=collection, source_doc_id=source_doc_id, include_deleted=include_deleted, limit=limit), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/hits")
-    def diagnostics_rag_hits(request: Request, run_id: str | None = None, collection: str | None = None, include_deleted: bool = False, limit: int = Query(default=500, ge=1, le=2000)):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_hits(run_id=run_id, collection=collection, include_deleted=include_deleted, limit=limit), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/collections")
-    def diagnostics_rag_collections(request: Request, limit: int = Query(default=200, ge=1, le=1000)):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_collections(limit=limit), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/collections/{collection}/documents")
-    def diagnostics_rag_collection_documents(collection: str, request: Request, include_deleted: bool = False, limit: int = Query(default=200, ge=1, le=1000)):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_documents(collection=collection, include_deleted=include_deleted, limit=limit), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/collections/{collection}/chunks")
-    def diagnostics_rag_collection_chunks(collection: str, request: Request, include_deleted: bool = False, limit: int = Query(default=500, ge=1, le=2000)):
-        _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_chunks(collection=collection, include_deleted=include_deleted, limit=limit), "timestamp": _now()}
-
-    @router.get("/diagnostics/rag/db-browser/{table_name}")
-    def diagnostics_rag_db_browser(table_name: str, request: Request, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0, le=100000), q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None, layer: str | None = None):
-        _require_rag_read_access(request)
-        try:
-            payload = _rag_store().browse_db_table(table_name=table_name, limit=limit, offset=offset, q=q, collection=collection, run_id=run_id, source_doc_id=source_doc_id, layer=layer)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"status": "ok", "data": payload, "timestamp": _now()}
-
-    @router.post("/diagnostics/rag/search-preview")
-    def diagnostics_rag_search_preview(request: Request, payload: Dict[str, Any] = Body(default_factory=dict)):
-        _require_rag_read_access(request)
-        try:
-            return {"status": "ok", "data": _rag_store().search_preview(query=str(payload.get('query') or ''), collection=str(payload.get('collection') or ''), top_k=int(payload.get('top_k') or 10)), "timestamp": _now()}
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @router.post("/diagnostics/rag/runs/{run_id}/soft-delete")
-    def diagnostics_rag_soft_delete_run(run_id: str, request: Request, payload: Dict[str, Any] = Body(default_factory=dict)):
-        _require_rag_mutation_access(request)
-        item = _rag_store().soft_delete_run(run_id, deleted_by=str(payload.get('deleted_by') or 'system'), reason=str(payload.get('reason') or '') or None)
-        if not item:
-            raise HTTPException(status_code=404, detail='run not found')
-        return {'status': 'ok', 'data': item, 'timestamp': _now()}
-
-    @router.post("/diagnostics/rag/documents/{source_doc_id}/soft-delete")
-    def diagnostics_rag_soft_delete_source_doc(source_doc_id: str, request: Request, payload: Dict[str, Any] = Body(default_factory=dict)):
-        _require_rag_mutation_access(request)
-        item = _rag_store().soft_delete_source_doc(source_doc_id, deleted_by=str(payload.get('deleted_by') or 'system'), reason=str(payload.get('reason') or '') or None)
-        if not item:
-            raise HTTPException(status_code=404, detail='source document not found')
-        return {'status': 'ok', 'data': item, 'timestamp': _now()}
-
-    # ── P2-7: LLM 成本审计 ─────────────────────────────────────
-    @router.get("/cost-audit")
-    def cost_audit(request: Request, days: int = Query(default=7, ge=1, le=90)):
-        # 复用 RAG 只读访问保护：内部 API key 或已登录用户（Supabase / dev 认证）。
-        _require_rag_read_access(request)
-        if deps.get_cost_audit_store is None:
-            raise HTTPException(status_code=503, detail="cost audit store not configured")
-        store = deps.get_cost_audit_store()
-        daily = store.daily_summary(days=days)
-        top_requests = store.top_requests(days=days, limit=20)
-        totals = store.totals(days=days)
-        return {
-            "status": "ok",
-            "data": {
-                "days": days,
-                "daily": daily,
-                "top_requests": top_requests,
-                "total_cost_usd": totals.get("total_cost_usd", 0.0),
-                "total_tokens": totals.get("total_tokens", 0),
-                "request_count": totals.get("request_count", 0),
-            },
-            "timestamp": _now(),
-        }
 
     return router

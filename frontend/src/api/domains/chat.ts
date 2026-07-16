@@ -1,6 +1,6 @@
 import { api } from '../http';
 import { buildApiUrl } from '../../config/runtime';
-import { buildAuthHeaders, emitRateLimitEvent, ensureStreamResponseOk, parseRetryAfter } from '../http';
+import { buildAuthHeaders, ensureStreamResponseOk } from '../http';
 import { parseSSEStream, withStreamGuards } from '../sse';
 import type { StreamOpts } from '../sse';
 import type * as Contracts from '../contracts';
@@ -186,33 +186,5 @@ async deleteConversation(sessionId: string): Promise<{
     const guarded = withStreamGuards(callbacks, opts);
     await parseSSEStream(response, guarded, opts);
     guarded.finish();
-  },
-
-// --- Resume execution ---
-  async resumeExecution(
-    params: { thread_id: string; resume_value: unknown; session_id?: string; source?: string; run_id?: string },
-    callbacks?: Contracts.SSECallbacks,
-    opts?: { traceRawEnabled?: boolean; signal?: AbortSignal },
-  ): Promise<Response> {
-    const url = buildApiUrl('/api/execute/resume');
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
-      body: JSON.stringify(params),
-      signal: opts?.signal,
-    });
-
-    // P1-8: resume 流被限流时同样提示用户（不抛错，保持原有返回 Response 的契约）
-    if (response.status === 429) {
-      emitRateLimitEvent(parseRetryAfter(response.headers.get('retry-after')));
-    }
-
-    if (callbacks && response.ok) {
-      const guarded = withStreamGuards(callbacks, opts);
-      await parseSSEStream(response, guarded, opts);
-      guarded.finish();
-    }
-
-    return response;
   }
 };

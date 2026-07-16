@@ -42,72 +42,6 @@ def _is_truthy(value: object) -> bool:
     return False
 
 
-def _agent_research_config(agent_preferences: dict) -> dict[str, int | bool]:
-    """Build the per-agent research config.
-
-    ``FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG`` is an ops override for production
-    experiments: it wins over stale browser-local preferences that still submit
-    ``enableLLMAnalysis=false``.
-    """
-
-    forced = _env_bool("FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG", False)
-    env_reflections = _bounded_env_int(
-        "FINSIGHT_AGENT_REFLECTION_ROUNDS",
-        _bounded_env_int("BASE_AGENT_MAX_REFLECTIONS", 3 if forced else 0, min_value=0, max_value=3),
-        min_value=0,
-        max_value=3,
-    )
-    env_analysis_timeout = _bounded_env_int(
-        "FINSIGHT_AGENT_ANALYSIS_TIMEOUT_SECONDS",
-        _bounded_env_int("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", 120 if forced else 0, min_value=0, max_value=120),
-        min_value=0,
-        max_value=120,
-    )
-    env_token_timeout = _bounded_env_int(
-        "FINSIGHT_AGENT_TOKEN_ACQUIRE_TIMEOUT_SECONDS",
-        _bounded_env_int("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", 60 if forced else 0, min_value=0, max_value=60),
-        min_value=0,
-        max_value=60,
-    )
-
-    if forced:
-        return {
-            "enable_llm_analysis": True,
-            "max_reflections": env_reflections,
-            "analysis_timeout_seconds": env_analysis_timeout,
-            "token_acquire_timeout_seconds": env_token_timeout,
-        }
-
-    enable_default = _env_bool("AGENT_LLM_ANALYZE_ENABLED", False)
-    pref_enable = agent_preferences.get("enableLLMAnalysis")
-    enable_llm = pref_enable if isinstance(pref_enable, bool) else enable_default
-
-    def _pref_int(key: str, default: int, *, min_value: int, max_value: int) -> int:
-        raw = agent_preferences.get(key)
-        try:
-            value = int(raw)
-        except Exception:
-            value = default
-        return max(min_value, min(max_value, value))
-
-    return {
-        "enable_llm_analysis": bool(enable_llm),
-        "max_reflections": _pref_int("reflectionRounds", env_reflections, min_value=0, max_value=3),
-        "analysis_timeout_seconds": _pref_int(
-            "analysisTimeoutSeconds",
-            env_analysis_timeout,
-            min_value=0,
-            max_value=120,
-        ),
-        "token_acquire_timeout_seconds": _pref_int(
-            "tokenAcquireTimeoutSeconds",
-            env_token_timeout,
-            min_value=0,
-            max_value=60,
-        ),
-    }
-
-
 def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(str(needle or "").lower() in lowered for needle in needles)
@@ -264,29 +198,6 @@ def _request_frame_evidence_from_state(state: GraphState) -> list[str]:
         if isinstance(raw, list):
             required.extend(str(item) for item in raw if str(item).strip())
     return canonical_evidence_kinds(required)
-
-
-def _request_frame_results_from_state(state: GraphState) -> list[str]:
-    results: list[str] = []
-    seen: set[str] = set()
-    for frame in _request_frames_from_state(state):
-        raw_results = frame.get("required_results")
-        if isinstance(raw_results, list):
-            for item in raw_results:
-                value = str(item or "").strip()
-                if not value or value in seen:
-                    continue
-                seen.add(value)
-                results.append(value)
-        workflow_action = frame.get("workflow_action")
-        if isinstance(workflow_action, dict) and isinstance(workflow_action.get("required_results"), list):
-            for item in workflow_action.get("required_results") or []:
-                value = str(item or "").strip()
-                if not value or value in seen:
-                    continue
-                seen.add(value)
-                results.append(value)
-    return results
 
 
 def _infer_market_from_task(task: dict, fallback: str) -> str:

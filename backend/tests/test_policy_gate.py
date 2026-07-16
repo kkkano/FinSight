@@ -132,7 +132,6 @@ def test_policy_gate_company_default_allowlist_includes_new_agent_tools():
         "get_eps_revisions",
         "get_option_chain_metrics",
         "get_factor_exposure",
-        "run_portfolio_stress_test",
         "get_event_calendar",
         "score_news_source_reliability",
     }
@@ -316,123 +315,6 @@ def test_policy_gate_budget_override_clamped():
     )
     budget = (result.get("policy") or {}).get("budget") or {}
     assert budget.get("max_rounds") == 10
-
-
-def test_policy_gate_agent_preferences_off_removes_agent():
-    """agent_preferences with depth='off' should remove the agent."""
-    result = policy_gate(
-        {
-            "subject": {
-                "subject_type": "company",
-                "tickers": ["AAPL"],
-                "selection_ids": [],
-                "selection_types": [],
-                "selection_payload": [],
-            },
-            "output_mode": "investment_report",
-            "ui_context": {
-                "agent_preferences": {
-                    "agents": {
-                        "macro_agent": "off",
-                    },
-                },
-            },
-        }
-    )
-    policy = result.get("policy") or {}
-    allowed_agents = policy.get("allowed_agents") or []
-    assert "macro_agent" not in allowed_agents
-
-
-def test_policy_gate_agent_preferences_invalid_depth_ignored():
-    """Invalid depth values in preferences should be treated as 'standard'."""
-    result = policy_gate(
-        {
-            "subject": {
-                "subject_type": "company",
-                "tickers": ["AAPL"],
-                "selection_ids": [],
-                "selection_types": [],
-                "selection_payload": [],
-            },
-            "output_mode": "investment_report",
-            "ui_context": {
-                "agent_preferences": {
-                    "agents": {
-                        "price_agent": "invalid_depth",
-                    },
-                },
-            },
-        }
-    )
-    policy = result.get("policy") or {}
-    allowed_agents = policy.get("allowed_agents") or []
-    # price_agent should still be selected (invalid depth treated as standard)
-    assert "price_agent" in allowed_agents
-
-
-def test_policy_gate_agent_preferences_unknown_agent_ignored():
-    """Unknown agent names in preferences should be silently ignored."""
-    result = policy_gate(
-        {
-            "subject": {
-                "subject_type": "company",
-                "tickers": ["AAPL"],
-                "selection_ids": [],
-                "selection_types": [],
-                "selection_payload": [],
-            },
-            "output_mode": "investment_report",
-            "ui_context": {
-                "agent_preferences": {
-                    "agents": {
-                        "nonexistent_agent": "off",
-                        "price_agent": "standard",
-                    },
-                },
-            },
-        }
-    )
-    policy = result.get("policy") or {}
-    allowed_agents = policy.get("allowed_agents") or []
-    assert "price_agent" in allowed_agents
-    assert "nonexistent_agent" not in allowed_agents
-
-
-def test_policy_gate_force_agent_research_config_overrides_stale_preferences(monkeypatch):
-    monkeypatch.setenv("FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG", "true")
-    monkeypatch.setenv("FINSIGHT_AGENT_REFLECTION_ROUNDS", "3")
-    monkeypatch.setenv("FINSIGHT_AGENT_ANALYSIS_TIMEOUT_SECONDS", "120")
-    monkeypatch.setenv("FINSIGHT_AGENT_TOKEN_ACQUIRE_TIMEOUT_SECONDS", "60")
-
-    result = policy_gate(
-        {
-            "subject": {
-                "subject_type": "company",
-                "tickers": ["AAPL"],
-                "selection_ids": [],
-                "selection_types": [],
-                "selection_payload": [],
-            },
-            "output_mode": "investment_report",
-            "ui_context": {
-                "agent_preferences": {
-                    "enableLLMAnalysis": False,
-                    "reflectionRounds": 0,
-                    "analysisTimeoutSeconds": 0,
-                    "tokenAcquireTimeoutSeconds": 0,
-                },
-            },
-        }
-    )
-
-    config = ((result.get("policy") or {}).get("agent_research_config") or {})
-    assert config == {
-        "enable_llm_analysis": True,
-        "max_reflections": 3,
-        "analysis_timeout_seconds": 120,
-        "token_acquire_timeout_seconds": 60,
-    }
 
 
 def test_policy_gate_analysis_depth_report_removes_deep_search_agent():

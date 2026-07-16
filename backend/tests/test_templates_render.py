@@ -609,7 +609,7 @@ def test_render_chat_mixed_url_fallback_uses_tasks_without_render_vars():
     assert "MSFT" in md
     assert "404" in md
     assert "折现率" in md
-    assert "关注" in md
+    assert "价格反应能否互相验证" in md
 
 
 def test_render_chat_empty_primary_renderer_falls_back_to_multitask(monkeypatch):

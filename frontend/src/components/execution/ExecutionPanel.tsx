@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, PauseCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
 
 import { useExecutionStore } from '../../store/executionStore';
 import type { ExecutionRun } from '../../types/execution';
@@ -66,13 +66,6 @@ function resolveStatus(run: ExecutionRun): { icon: ReactNode; text: string; clas
       icon: <AlertTriangle size={14} />,
       text: '执行失败',
       className: 'text-red-300',
-    };
-  }
-  if (run.status === 'interrupted') {
-    return {
-      icon: <PauseCircle size={14} />,
-      text: '等待确认',
-      className: 'text-amber-300',
     };
   }
   return {
@@ -214,12 +207,6 @@ export function ExecutionPanel({
           <div className="mt-1 text-2xs text-fin-warning">预计剩余 ~{run.etaSeconds}s</div>
         )}
       </div>
-
-      {run.status === 'interrupted' && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          当前执行在等待用户确认，恢复后会继续后续步骤。
-        </div>
-      )}
 
       {renderPlanSummary(run)}
 

@@ -10,12 +10,15 @@ import pytest
 
 from backend import tools
 from backend.services.market_data_gateway import reset_market_data_gateway
+from backend.tools import news as news_mod
 
 
 @pytest.fixture(autouse=True)
-def _reset_gateway():
+def _reset_gateway(monkeypatch):
+    monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
     reset_market_data_gateway()
     yield
+    news_mod._YFINANCE_NEWS_DISABLED_UNTIL = 0.0
     reset_market_data_gateway()
 
 

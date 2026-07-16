@@ -52,16 +52,6 @@ def _frame_required_evidence(ctx, frame: dict) -> list[str]:
     return canonical_evidence_kinds(raw_evidence if isinstance(raw_evidence, list) else [])
 
 
-def _frame_required_results(ctx, frame: dict) -> list[str]:
-    raw_results = frame.get("required_results")
-    return [str(item).strip() for item in (raw_results if isinstance(raw_results, list) else []) if str(item).strip()]
-
-
-def _frame_workflow_action(ctx, frame: dict) -> dict:
-    action = frame.get("workflow_action")
-    return action if isinstance(action, dict) else {}
-
-
 def _frame_evidence_profile(ctx, frame: dict) -> str:
     raw_intent_contract = frame.get("intent_contract")
     intent_contract = raw_intent_contract if isinstance(raw_intent_contract, dict) else {}
@@ -141,39 +131,6 @@ def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, t
     return True
 
 
-def _append_backtest_frame_steps(ctx, frame: dict, *, group: str, task_id: str) -> bool:
-    required_results = set(_frame_required_results(ctx, frame))
-    action = _frame_workflow_action(ctx, frame)
-    action_name = str(action.get("name") or "").strip().lower()
-    if action_name != "backtest" and "backtest_result" not in required_results:
-        return False
-    raw_slots = action.get("slots")
-    slots = raw_slots if isinstance(raw_slots, dict) else {}
-    frame_tickers = _frame_tickers(ctx, frame)
-    ticker_for_backtest = (
-        str(slots.get("ticker") or "").strip().upper()
-        or (frame_tickers[0] if frame_tickers else "")
-        or ctx.primary_ticker
-        or ((ctx.tickers or [None])[0] if isinstance(ctx.tickers, list) else None)
-        or ""
-    )
-    strategy = str(slots.get("strategy") or "ma_cross").strip() or "ma_cross"
-    params = slots.get("strategy_params") or slots.get("params") or {}
-    _append_tool_step(ctx, 
-        "run_strategy_backtest",
-        {
-            "ticker": ticker_for_backtest,
-            "strategy": strategy,
-            "params": dict(params if isinstance(params, dict) else {}),
-            "initial_cash": float(slots.get("initial_cash") or 100000.0),
-            "t_plus_one": bool(slots.get("t_plus_one", True)),
-        },
-        why="Request frame action result: run strategy backtest.",
-        optional=False,
-        parallel_group=group,
-        task_ids=[task_id],
-    )
-    return True
 
 
 def _append_request_frame_steps(ctx) -> bool:
@@ -184,12 +141,8 @@ def _append_request_frame_steps(ctx) -> bool:
         frame_id = _frame_id(ctx, frame, index)
         group = frame_id
         required_evidence = _frame_required_evidence(ctx, frame)
-        required_results = _frame_required_results(ctx, frame)
-        if not required_evidence and not required_results and not _frame_workflow_action(ctx, frame):
+        if not required_evidence:
             continue
-
-        if _append_backtest_frame_steps(ctx, frame, group=group, task_id=frame_id):
-            appended = True
 
         if "macro_context" in required_evidence or _frame_subject_type(ctx, frame) == "macro":
             _append_macro_frame_steps(ctx, frame, group=group, task_id=frame_id)
@@ -229,9 +182,7 @@ def _request_frames_authoritatively_need_no_plan_steps(ctx) -> bool:
         render = frame.get("render_contract") if isinstance(frame.get("render_contract"), dict) else {}
         if (
             _frame_required_evidence(ctx, frame)
-            or _frame_required_results(ctx, frame)
-            or _frame_workflow_action(ctx, frame)
-            or str(frame.get("lane") or "").strip().lower() in {"research", "action", "report"}
+            or str(frame.get("lane") or "").strip().lower() in {"research", "report"}
             or render.get("shape") == "compare"
         ):
             return False

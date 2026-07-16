@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bot, Check, Loader2, Minus, X } from 'lucide-react';
 
-import { useAgentProfiles } from '../../hooks/useAgentProfiles';
 import type { AgentProfileMap, AgentProfileView } from '../../types/agents';
 import type { AgentRunInfo, ExecutionRun, TimelineEvent } from '../../types/execution';
 import { normalizeAgentName } from '../../utils/userMessageMapper';
@@ -22,6 +21,7 @@ type WorkLogRow = {
 };
 
 const TERMINAL_AGENT_STATUSES = new Set<AgentRunInfo['status']>(['done', 'error', 'skipped']);
+const EMPTY_PROFILES: AgentProfileMap = {};
 
 function shortAgentName(name: string): string {
   return name.replace(/_agent$/, '').replaceAll('_', ' ');
@@ -80,8 +80,7 @@ function StatusIcon({ status }: { status: AgentRunInfo['status'] }) {
 
 export function AgentWorkLog({ run, className = '', profiles: providedProfiles }: AgentWorkLogProps) {
   const [now, setNow] = useState(() => Date.now());
-  const { profilesByName } = useAgentProfiles();
-  const profiles = providedProfiles ?? profilesByName;
+  const profiles = providedProfiles ?? EMPTY_PROFILES;
 
   useEffect(() => {
     if (run.status !== 'running') return;
@@ -118,7 +117,7 @@ export function AgentWorkLog({ run, className = '', profiles: providedProfiles }
 
   if (rows.length === 0) return null;
 
-  if (run.status !== 'running' && run.status !== 'interrupted') {
+  if (run.status !== 'running') {
     const toolCalls = run.timeline.filter((event) => event.eventType === 'tool_start').length;
     return (
       <div className={`flex h-7 items-center gap-2 px-1 text-xs text-t-text2 ${className}`}>

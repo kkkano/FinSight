@@ -2,8 +2,7 @@
  * AiDisclaimer -- 全局常驻 AI 免责声明（P0-3）
  * 所有展示 AI 分析内容的页面必须挂载。
  *
- * 职责边界：本组件渲染前端固定的通用免责文案；
- * workbench/rebalance/DisclaimerBanner 渲染后端 payload 传入的动态调仓免责文案，两者不可互换。
+ * 职责边界：本组件只渲染前端固定的通用免责文案。
  *
  * 色板说明：使用标准 amber 色板而非 fin-warning token，
  * 因 fin-* hex 变量带 Tailwind alpha 修饰符（如 /10）在暗色模式下会失效。

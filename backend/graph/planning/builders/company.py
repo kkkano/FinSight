@@ -37,24 +37,6 @@ def _append_company_task_steps(ctx, task: dict, *, group: str) -> None:
     params = _task_operation_params(ctx, task)
     tickers_for_task = _task_tickers(ctx, task)
     task_ids = [_task_id(ctx, task)]
-    if op_name == "backtest":
-        ticker = tickers_for_task[0] if tickers_for_task else ctx.primary_ticker
-        strategy = str(params.get("strategy") or "ma_cross").strip() or "ma_cross"
-        _append_tool_step(ctx, 
-            "run_strategy_backtest",
-            {
-                "ticker": ticker or "",
-                "strategy": strategy,
-                "params": dict(params.get("strategy_params") or params.get("params") or {}),
-                "initial_cash": float(params.get("initial_cash") or 100000.0),
-                "t_plus_one": bool(params.get("t_plus_one", True)),
-            },
-            why="Backtest workflow action: execute the requested strategy and return performance metrics.",
-            optional=False,
-            parallel_group=group,
-            task_ids=task_ids,
-        )
-        return
     if op_name == "compare" and len(tickers_for_task) >= 2:
         if _should_use_performance_compare(ctx, task):
             mapping = {ticker: ticker for ticker in tickers_for_task[:6]}

@@ -104,17 +104,6 @@ async def run_execution_rag_pipeline(
         session_id = _resolve_session_id(state)
         user_id = _resolve_rag_user_id(state, session_id=session_id)
         memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else {}
-        if not memory_context:
-            try:
-                from backend.graph.store import load_memory_context
-
-                memory_context = await asyncio.to_thread(
-                    load_memory_context,
-                    thread_id=thread_id,
-                )
-            except Exception as exc:
-                logger.debug("load_memory_context for RAG failed: %s", exc)
-                memory_context = {}
         output_mode = str(state.get("output_mode") or "").strip()
         operation_name = str((state.get("operation") or {}).get("name", "")).strip() if isinstance(state.get("operation"), dict) else ""
         backend_requested = str(os.getenv("RAG_V2_BACKEND", "auto") or "auto").strip().lower() or "auto"

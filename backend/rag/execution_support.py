@@ -75,18 +75,13 @@ def _resolve_session_id(state: GraphState) -> str:
 
 def _resolve_rag_user_id(state: GraphState, *, session_id: str) -> str:
     candidate = session_id or str(state.get("thread_id") or "").strip()
-    try:
-        from backend.graph.store import resolve_user_id
-
-        value = str(resolve_user_id(candidate) or "").strip()
-        if value:
-            return value
-    except Exception:
-        pass
-
     parts = candidate.split(":")
     if len(parts) >= 2 and str(parts[1]).strip():
-        return str(parts[1]).strip()
+        user_id = str(parts[1]).strip()
+        if user_id == "anonymous":
+            digest = hashlib.sha256(candidate.encode("utf-8")).hexdigest()[:24]
+            return f"anonymous_{digest}"
+        return user_id
     return "anonymous"
 
 

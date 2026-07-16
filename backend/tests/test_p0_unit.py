@@ -292,26 +292,13 @@ class TestResetTurnState:
         for key in expected_none_keys:
             assert key in result, f"Missing key: {key}"
             assert result[key] is None, f"Key {key} should be None, got {result[key]}"
-
-    def test_all_confirmation_fields_nullified(self):
-        """All confirmation-gate ephemeral fields must be set to None."""
-        result = reset_turn_state({})
-        confirmation_keys = [
-            "require_confirmation", "confirmation_options",
-            "user_confirmation", "confirmation_intent",
-            "confirmation_instruction",
-        ]
-        for key in confirmation_keys:
-            assert key in result, f"Missing confirmation key: {key}"
-            assert result[key] is None, f"Key {key} should be None, got {result[key]}"
-
     def test_preserved_fields_not_in_output(self):
         """Fields that should be preserved must NOT appear in reset output."""
         result = reset_turn_state({})
         preserved = [
             "thread_id", "messages", "query", "ui_context",
             "memory_context", "schema_version", "output_mode",
-            "strict_selection", "confirmation_mode",
+            "strict_selection",
         ]
         for key in preserved:
             assert key not in result, (
@@ -324,13 +311,10 @@ class TestResetTurnState:
         result = reset_turn_state({})
         assert isinstance(result, dict)
 
-    def test_exactly_26_keys_returned(self):
-        """Exactly 26 keys should be reset (20 decision + 5 confirmation + 1 trace).
-
-        20 decision keys include understanding_v2 and request-frame contract state.
-        """
+    def test_exactly_18_keys_returned(self):
+        """Exactly 18 keys should be reset (17 decision fields + 1 trace)."""
         result = reset_turn_state({})
-        assert len(result) == 26, f"Expected 26 keys, got {len(result)}: {list(result.keys())}"
+        assert len(result) == 18, f"Expected 18 keys, got {len(result)}: {list(result.keys())}"
 
     def test_trace_runtime_subkeys_cleared(self):
         """Per-turn trace runtime sub-keys must be removed."""

@@ -14,7 +14,6 @@ import {
 } from './SmartChart';
 import { ThinkingProcess } from './execution/ThinkingProcess';
 import { ReportView } from './report';
-import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
 import { useToast } from './ui/Toast';
@@ -506,7 +505,6 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
     chartType: ChartType;
     valueMode: 'close' | 'return';
     period: string;
-    summary: string;
   }>>([]);
 
   // FE-03b：流式中间态跳过全文图表正则解析（每 token 一次太贵），落定后一次解析
@@ -534,7 +532,6 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
       chartType: ChartType;
       valueMode: 'close' | 'return';
       period: string;
-      summary: string;
     }> = [];
     matches.forEach((match) => {
       const ticker = match.ticker;
@@ -548,24 +545,10 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
         chartType,
         valueMode: match.valueMode,
         period: match.period,
-        summary: '',
       });
     });
     setChartData(nextData);
   }, [content, isStreaming]);
-
-  const handleChartDataReady = (ticker: string, summary: string) => {
-    setChartData((prev) => prev.map((item) => (item.ticker === ticker ? { ...item, summary } : item)));
-    sendChartDataToBackend(ticker, summary);
-  };
-
-  const sendChartDataToBackend = async (ticker: string, summary: string) => {
-    try {
-      await apiClient.addChartData(ticker, summary);
-    } catch (err) {
-      console.error('Chart data upload failed:', err);
-    }
-  };
 
   const textContent = getRenderableMessageContent(content, Boolean(isStreaming));
 
@@ -597,7 +580,6 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
           chartType={chart.chartType}
           valueMode={chart.valueMode}
           period={chart.period}
-          onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
         />
       ))}
       {smartChartBlocks.map((block, idx) => {
@@ -610,7 +592,6 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
               ticker={realPriceRequest.ticker}
               chartType={realPriceRequest.chartType}
               valueMode={realPriceRequest.valueMode}
-              onDataReady={(_data, summary) => handleChartDataReady(realPriceRequest.ticker, summary)}
             />
           );
         }

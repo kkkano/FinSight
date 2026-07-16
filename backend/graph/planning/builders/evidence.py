@@ -133,14 +133,6 @@ def _append_evidence_steps_for_ticker(ctx,
                 parallel_group=group,
                 task_ids=task_ids,
             )
-            _append_tool_step(ctx, 
-                "run_portfolio_stress_test",
-                {"positions": positions, "lookback_days": 252},
-                why=f"{ticker} evidence contract: stress test.",
-                optional=True,
-                parallel_group=group,
-                task_ids=task_ids,
-            )
             if not lightweight_external_impact:
                 _append_agent_step(ctx, 
                     "risk_agent",

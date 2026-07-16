@@ -6,7 +6,7 @@
  * - Impact level badge (high/medium/low)
  * - Source reliability indicator
  * - “问这条”统一跳转主 Chat，不在 Dashboard 启动第二条 Agent 执行链
- * - Selection checkbox for MiniChat context
+ * - Selection checkbox for Chat context
  * - Relative time display
  */
 import { ExternalLink, MessageCircleQuestion } from 'lucide-react';

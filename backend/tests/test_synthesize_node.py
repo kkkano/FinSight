@@ -386,7 +386,6 @@ def test_synthesize_request_frame_compare_contract_does_not_require_performance_
             "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
             "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
             "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
-            "required_results": [],
         },
         "plan_ir": {"steps": []},
         "artifacts": {"step_results": {}, "evidence_pool": []},
@@ -632,7 +631,6 @@ def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
     state = {
         "query": "请给我一份 INTC 英特尔深度投资报告",
         "output_mode": "investment_report",
-        "ui_context": {"agent_preferences": {"timeoutSeconds": 900}},
         "operation": {"name": "investment_report", "confidence": 0.9, "params": {}},
         "subject": {"subject_type": "company", "tickers": ["INTC"]},
         "artifacts": {"step_results": {}, "evidence_pool": []},

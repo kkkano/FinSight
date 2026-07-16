@@ -57,7 +57,6 @@ from backend.graph.renderers.earnings import render_earnings_impact, render_earn
 from backend.graph.renderers.holdings import render_holdings
 from backend.graph.renderers.news import render_news_impact
 from backend.graph.renderers.opinion import render_investment_opinion
-from backend.graph.renderers.portfolio import render_portfolio
 from backend.graph.renderers.price import render_price_only
 from backend.graph.renderers.valuation import render_valuation_sanity
 
@@ -135,7 +134,6 @@ def enrich_render_ctx(ctx: dict[str, Any], state: GraphState) -> dict[str, Any]:
 
 # 顺序 = 原 render_chat_markdown 分支出现顺序（见 notes-chat-renderer-map.md 顺序表）。
 RENDERERS: list[tuple[str, Renderer]] = [
-    ("portfolio", render_portfolio),
     ("url_context", render_url_context),
     ("research_compare", render_research_compare),
     ("earnings_impact", render_earnings_impact),

@@ -26,11 +26,6 @@
       "group": "primary_company",
       "kind": "tool",
       "name": "get_factor_exposure"
-    },
-    {
-      "group": "primary_company",
-      "kind": "tool",
-      "name": "run_portfolio_stress_test"
     }
   ],
   "route": "research",

@@ -96,19 +96,6 @@ def _kb_collection_from_subject(subject: dict[str, Any] | None) -> str | None:
 def _memory_collection_from_thread(*, thread_id: str, user_id: str | None = None) -> str:
     return build_thread_memory_collection(thread_id=thread_id, user_id=user_id)
 
-def _normalize_watchlist_items(value: Any, *, limit: int = 12) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    result: list[str] = []
-    for item in value:
-        symbol = str(item or '').strip().upper()
-        if not symbol or symbol in result:
-            continue
-        result.append(symbol)
-        if len(result) >= limit:
-            break
-    return result
-
 def _normalize_memory_focus_list(value: Any, *, limit: int = 3) -> list[dict[str, str]]:
     if not isinstance(value, list):
         return []
@@ -132,125 +119,47 @@ def _normalize_memory_focus_list(value: Any, *, limit: int = 3) -> list[dict[str
 
 def _build_memory_context_specs(*, memory_context: dict[str, Any], user_id: str) -> list[dict[str, Any]]:
     # 延迟导入：backend.graph.__init__ 饿加载 runner，模块级 import 会与 execute_plan_node 成环
-    from backend.graph.memory_scope import current_thread_focus, user_profile_memory
+    from backend.graph.memory_scope import current_thread_focus
 
     if not isinstance(memory_context, dict) or not memory_context:
         return []
 
-    profile = user_profile_memory(memory_context)
-    risk_tolerance = str(profile.get("risk_tolerance") or "").strip().lower()
-    investment_style = str(profile.get("investment_style") or "").strip().lower()
-    watchlist = _normalize_watchlist_items(profile.get("watchlist"))
-    last_focus_raw = current_thread_focus(memory_context)
-    last_focus_list = _normalize_memory_focus_list([last_focus_raw] if last_focus_raw else [], limit=1)
-    last_focus = last_focus_list[0] if last_focus_list else None
-    recent_focuses: list[dict[str, Any]] = []
+    current_focus_raw = current_thread_focus(memory_context)
+    current_focuses = _normalize_memory_focus_list(
+        [current_focus_raw] if current_focus_raw else [],
+        limit=1,
+    )
+    current_focus = current_focuses[0] if current_focuses else None
 
     specs: list[dict[str, Any]] = []
-    if watchlist or risk_tolerance not in {"", "medium"} or investment_style not in {"", "balanced"}:
-        profile_lines = [
-            "memory_kind: profile",
-            f"user_id: {user_id}",
-            f"risk_tolerance: {risk_tolerance or 'medium'}",
-            f"investment_style: {investment_style or 'balanced'}",
-        ]
-        if watchlist:
-            profile_lines.append(f"watchlist: {', '.join(watchlist)}")
-        specs.append({
-            "source_id": "memdoc:profile",
-            "title": "Memory Profile",
-            "content": "\n".join(profile_lines),
-            "metadata": {
-                "memory_kind": "profile",
-                "watchlist": watchlist,
-            },
-        })
-
-    if watchlist:
-        specs.append({
-            "source_id": "memdoc:watchlist",
-            "title": "Memory Watchlist",
-            "content": "\n".join([
-                "memory_kind: watchlist",
-                f"user_id: {user_id}",
-                f"watchlist: {', '.join(watchlist)}",
-            ]),
-            "metadata": {
-                "memory_kind": "watchlist",
-                "watchlist": watchlist,
-            },
-        })
-
-    if last_focus:
-        ticker = str(last_focus.get("ticker") or "").strip().upper()
+    if current_focus:
+        ticker = str(current_focus.get("ticker") or "").strip().upper()
         focus_lines = [
-            "memory_kind: last_focus",
+            "memory_kind: current_thread_focus",
             f"user_id: {user_id}",
         ]
         if ticker:
             focus_lines.append(f"ticker: {ticker}")
-        if last_focus.get("query"):
-            focus_lines.append(f"query: {last_focus['query']}")
-        if last_focus.get("summary"):
-            focus_lines.append(f"summary: {last_focus['summary']}")
-        if last_focus.get("sentiment"):
-            focus_lines.append(f"sentiment: {last_focus['sentiment']}")
-        if last_focus.get("updated_at"):
-            focus_lines.append(f"updated_at: {last_focus['updated_at']}")
+        if current_focus.get("query"):
+            focus_lines.append(f"query: {current_focus['query']}")
+        if current_focus.get("summary"):
+            focus_lines.append(f"summary: {current_focus['summary']}")
+        if current_focus.get("sentiment"):
+            focus_lines.append(f"sentiment: {current_focus['sentiment']}")
+        if current_focus.get("updated_at"):
+            focus_lines.append(f"updated_at: {current_focus['updated_at']}")
         specs.append({
-            "source_id": "memdoc:last_focus",
-            "title": f"Memory Last Focus {ticker or user_id}",
+            "source_id": "memdoc:current_thread_focus",
+            "title": f"Memory Current Thread Focus {ticker or user_id}",
             "content": "\n".join(focus_lines),
             "metadata": {
-                "memory_kind": "last_focus",
+                "memory_kind": "current_thread_focus",
                 "ticker": ticker or None,
-                "query": last_focus.get("query") or None,
-                "sentiment": last_focus.get("sentiment") or None,
-                "updated_at": last_focus.get("updated_at") or None,
+                "query": current_focus.get("query") or None,
+                "sentiment": current_focus.get("sentiment") or None,
+                "updated_at": current_focus.get("updated_at") or None,
             },
         })
-
-    seen_recent_keys: set[tuple[str, str]] = set()
-    if last_focus:
-        seen_recent_keys.add((str(last_focus.get("ticker") or "").strip().upper(), str(last_focus.get("query") or "").strip()))
-
-    for index, focus in enumerate(recent_focuses, start=1):
-        ticker = str(focus.get("ticker") or "").strip().upper()
-        query = str(focus.get("query") or "").strip()
-        focus_key = (ticker, query)
-        if focus_key in seen_recent_keys:
-            continue
-        seen_recent_keys.add(focus_key)
-        recent_lines = [
-            "memory_kind: recent_focus",
-            f"user_id: {user_id}",
-            f"recent_focus_rank: {index}",
-        ]
-        if ticker:
-            recent_lines.append(f"ticker: {ticker}")
-        if query:
-            recent_lines.append(f"query: {query}")
-        if focus.get("summary"):
-            recent_lines.append(f"summary: {focus['summary']}")
-        if focus.get("sentiment"):
-            recent_lines.append(f"sentiment: {focus['sentiment']}")
-        if focus.get("updated_at"):
-            recent_lines.append(f"updated_at: {focus['updated_at']}")
-        specs.append({
-            "source_id": f"memdoc:recent_focus:{index}",
-            "title": f"Memory Recent Focus {index} {ticker or user_id}",
-            "content": "\n".join(recent_lines),
-            "metadata": {
-                "memory_kind": "recent_focus",
-                "memory_rank": index,
-                "ticker": ticker or None,
-                "query": query or None,
-                "sentiment": focus.get("sentiment") or None,
-                "updated_at": focus.get("updated_at") or None,
-            },
-        })
-
-    return [spec for spec in specs if str(spec.get("content") or "").strip()]
     return [spec for spec in specs if str(spec.get("content") or "").strip()]
 
 def _resolve_hit_layer(hit: dict[str, Any]) -> str:

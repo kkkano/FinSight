@@ -1,7 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 import asyncio
-import os
 import pandas as pd
 
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, ConflictClaim, EvidenceItem
@@ -20,53 +19,6 @@ class TechnicalAgent(BaseFinancialAgent):
     AGENT_NAME = "technical"
     CACHE_TTL = 1800  # 30 minutes
     MIN_POINTS = 30
-    MAX_REFLECTIONS = 1  # Signal Confluence: one reflection to re-check pattern interpretation
-
-    def _get_tool_registry(self) -> dict:
-        """TechnicalAgent tool registry: K-line indicators with side-signal calibration.
-
-        价格行为、RS、量价和期权波动率主分析归 PriceAgent；这里的 quote/options 仅用于校准 MA/RSI/MACD 等技术形态所处的位置。
-        """
-        registry = {}
-        tools = self.tools
-        if not tools:
-            return registry
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "搜索技术分析观点、形态解读",
-                "call_with": "query",
-            }
-        kline_fn = getattr(tools, "get_stock_historical_data", None)
-        if kline_fn:
-            registry["get_stock_historical_data"] = {
-                "func": lambda ticker: kline_fn(ticker, period="6mo", interval="1d"),
-                "description": "获取K线历史数据(ticker)，用于计算技术指标",
-                "call_with": "ticker",
-            }
-        quote_fn = getattr(tools, "get_stock_price", None)
-        if quote_fn:
-            registry["get_stock_price"] = {
-                "func": quote_fn,
-                "description": "获取当前报价与日内涨跌幅，用于校准技术快照的实时位置",
-                "call_with": "ticker",
-            }
-        option_metrics_fn = getattr(tools, "get_option_chain_metrics", None)
-        if option_metrics_fn:
-            registry["get_option_chain_metrics"] = {
-                "func": option_metrics_fn,
-                "description": "获取期权隐含波动率、Put/Call Ratio 与 Skew，辅助判断短线拥挤度",
-                "call_with": "ticker",
-            }
-        sentiment_fn = getattr(tools, "get_market_sentiment", None)
-        if sentiment_fn:
-            registry["get_market_sentiment"] = {
-                "func": sentiment_fn,
-                "description": "获取市场整体情绪，用于判断技术信号是否处在风险偏好顺风或逆风中",
-                "call_with": "none",
-            }
-        return registry
 
     def _call_optional_tool(self, tool_name: str, *args, **kwargs) -> Any:
         tool_fn = getattr(self.tools, tool_name, None)
@@ -77,10 +29,6 @@ class TechnicalAgent(BaseFinancialAgent):
         except Exception:
             return None
         return payload if isinstance(payload, (dict, list, str)) else None
-
-    def _llm_summary_enabled(self) -> bool:
-        value = os.getenv("TECHNICAL_AGENT_LLM_SUMMARY_ENABLED", "0")
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     def _enrich_with_side_signals(self, data: Dict[str, Any], ticker: str) -> Dict[str, Any]:
         enriched = dict(data)
@@ -115,26 +63,7 @@ class TechnicalAgent(BaseFinancialAgent):
         return data
 
     async def _first_summary(self, data: Any) -> str:
-        deterministic = self._deterministic_summary(data)
-        if not isinstance(data, dict) or not data.get("kline_data"):
-            return deterministic
-        if not self._llm_summary_enabled():
-            return deterministic
-
-        analysis = await self._llm_analyze(
-            deterministic,
-            role="资深技术分析师（信号共振分析模式）",
-            focus=(
-                "从多维度技术信号进行共振分析：\n"
-                "1. 趋势判断：均线排列（MA20/50/200）暗示的中短期方向，价格与均线的偏离程度\n"
-                "2. 动量评估：RSI 位置与 MACD 方向是否一致？是否存在动量背离信号？\n"
-                "3. 关键价位：基于均线和近期走势，识别关键支撑位和压力位\n"
-                "4. 信号共振：多个指标是否指向同一方向？共振强度如何？\n"
-                "5. 交易含义：当前技术格局对短期（1-2周）和中期（1-3月）的操作含义\n"
-                "输出一段连贯的技术分析文本，强调信号间的逻辑关系。"
-            ),
-        )
-        return analysis if analysis else deterministic
+        return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: Any) -> str:
         """Deterministic indicator-based summary (fallback)."""

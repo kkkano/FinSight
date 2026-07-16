@@ -2,18 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Paperclip, SendHorizontal, Square, X } from 'lucide-react';
 
-import { useAgentMention } from '../hooks/useAgentMention';
 import { useChatStream } from '../hooks/useChatStream';
-import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
 import { zh } from '../locales/zh';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import { TICKER_PATTERN } from '../utils/ticker';
-import { AgentMention } from './AgentMention';
 import { AiDisclaimer } from './common/AiDisclaimer';
 import { buildChatSuggestions } from './chatSuggestions';
-import { SkillAutocomplete } from './SkillAutocomplete';
-import { SkillLibraryDrawer } from './SkillLibraryDrawer';
 
 const EMPTY_RESEARCH_PROMPTS = new Set([
   'hi', 'hello', 'hey', '你好', '您好', '嗨', '哈喽', '在吗', '在么',
@@ -44,7 +39,6 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDashboardRequest }) => {
   const [input, setInput] = useState('');
   const [outputMode, setOutputMode] = useState<'chat' | 'investment_report'>('chat');
-  const [skillLibraryOpen, setSkillLibraryOpen] = useState(false);
   const isChatLoading = useStore((state) => state.isChatLoading);
   const draft = useStore((state) => state.draft);
   const setDraft = useStore((state) => state.setDraft);
@@ -60,9 +54,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setInput(text);
     setDraft(text);
   };
-
-  const skillAutocomplete = useSkillAutocomplete(input, setComposerText);
-  const agentMention = useAgentMention(input, setComposerText);
 
   const handleSend = () => {
     const text = input.trim();
@@ -92,7 +83,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   }, [sessionId]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (skillAutocomplete.handleKeyDown(event) || agentMention.handleKeyDown(event)) return;
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSend();
@@ -150,22 +140,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         </button>
       </div>
       <div className="relative flex items-end max-w-5xl mx-auto">
-        {skillAutocomplete.isOpen && (
-          <SkillAutocomplete
-            skills={skillAutocomplete.filteredSkills}
-            totalCount={skillAutocomplete.skillCount}
-            selectedIndex={skillAutocomplete.selectedIndex}
-            onSelect={skillAutocomplete.selectSkill}
-            onOpenLibrary={() => setSkillLibraryOpen(true)}
-          />
-        )}
-        {agentMention.isOpen && (
-          <AgentMention
-            agents={agentMention.filteredAgents}
-            selectedIndex={agentMention.selectedIndex}
-            onSelect={agentMention.selectAgent}
-          />
-        )}
         <textarea
           ref={inputRef}
           id="chat-input"
@@ -211,14 +185,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           )}
         </div>
       </div>
-      <SkillLibraryDrawer
-        open={skillLibraryOpen}
-        onClose={() => setSkillLibraryOpen(false)}
-        onSelectSkill={(text) => {
-          setComposerText(text);
-          inputRef.current?.focus();
-        }}
-      />
       <div className="text-center mt-2">
         <AiDisclaimer variant="compact" />
         <div className="mt-2 flex flex-wrap justify-center gap-2 text-[11px]">

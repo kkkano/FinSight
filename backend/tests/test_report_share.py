@@ -6,8 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from backend.api.report_router import ReportRouterDeps, create_report_router
-from backend.services.report_index import LegacyReportIndexStore
-from backend.tests.test_report_index_api import _TenantLegacyAdapter
+from backend.tests.test_report_index_api import FakeReportStore
 
 
 def _client(store, *, user_id: str) -> TestClient:
@@ -37,10 +36,10 @@ def _contains_key(value, prohibited: set[str]) -> bool:
     return False
 
 
-def test_report_share_create_anonymous_read_revoke_and_redact(tmp_path, monkeypatch):
-    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(tmp_path / "report_index.sqlite"))
-    store = _TenantLegacyAdapter(LegacyReportIndexStore())
-    store.upsert_report(
+def test_report_share_create_anonymous_read_revoke_and_redact():
+    store = FakeReportStore()
+    store.add(
+        user_id="alice",
         session_id="public:alice:thread",
         report={
             "report_id": "rpt-share-1",
@@ -57,7 +56,6 @@ def test_report_share_create_anonymous_read_revoke_and_redact(tmp_path, monkeypa
             "cost": {"usd": 1.23},
             "artifacts": {"tool_diagnostics": [{"raw": "internal"}]},
         },
-        trace_digest={"span_count": 9},
     )
     client = _client(store, user_id="alice")
 

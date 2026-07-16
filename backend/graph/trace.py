@@ -35,7 +35,6 @@ NODE_USER_MESSAGES: dict[str, str] = {
     "parse_operation": "正在分析你想做什么...",
     "policy_gate": "正在制定分析策略...",
     "planner": "正在规划分析步骤...",
-    "confirmation_gate": "正在确认执行方案...",
     "execute_plan": "正在执行分析计划...",
     "synthesize": "正在整合分析结果...",
     "render": "正在生成最终报告...",

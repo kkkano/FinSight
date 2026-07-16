@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type {
-  DebateArtifact,
   EvidenceLedger,
-  HoldingsInsight,
   QueryCoverage,
   ReportIR,
 } from '../../types/index';
 import { AlertTriangle, Link2Off, Maximize2, Share2, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { useDashboardStore } from '../../store/dashboardStore';
-import { useStore } from '../../store/useStore';
 import {
   normalizeAnchor,
   buildSourceSummary,
@@ -17,17 +14,13 @@ import {
   extractMetrics,
   extractReportHints,
   normalizeReportErrors,
-  buildReportMessages,
 } from './ReportUtils';
 import { ReportHeader } from './ReportHeader';
 import { ReportEvidencePoolSection } from './ReportAgentCard';
 import { SynthesisReportBlock } from './ReportCharts';
 import { EvidenceLedgerPanel } from './EvidenceLedgerPanel';
 import { ReportCockpit } from './ReportCockpit';
-import { DebateScorecard } from './DebateScorecard';
 import { FactCheckCard } from './FactCheckCard';
-import { HoldingsWatchPanel } from './HoldingsWatchPanel';
-import { PriceDriftBanner } from './PriceDriftBanner';
 import { QualityBadge } from './QualityBadge';
 import { useToast } from '../ui';
 
@@ -77,7 +70,6 @@ const formatCoverageTarget = (target: string | Record<string, unknown>): string 
 };
 
 export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false }) => {
-  const { subscriptionEmail } = useStore();
   const watchlist = useDashboardStore((state) => state.watchlist);
   const initWatchlist = useDashboardStore((state) => state.initWatchlist);
   const addWatchItemApi = useDashboardStore((state) => state.addWatchItemApi);
@@ -93,11 +85,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     synthesis: true,
   });
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
-  const [subscribed, setSubscribed] = useState(false);
   const [actionState, setActionState] = useState({
-    exporting: false,
     watchlist: false,
-    subscribe: false,
     share: false,
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -121,31 +110,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     if (Number.isNaN(date.getTime())) return report.generated_at;
     return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
   }, [report.generated_at]);
-  // P0-4: 文件名安全格式 "2026-05-29_1432"（不含空格/冒号等非法字符）
-  const formattedDateFile = useMemo(() => {
-    const date = new Date(report.generated_at);
-    if (Number.isNaN(date.getTime())) return 'report';
-    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}_${pad2(date.getHours())}${pad2(date.getMinutes())}`;
-  }, [report.generated_at]);
-
   const sections = useMemo(() => report.sections ?? [], [report.sections]);
   const metricItems = useMemo(() => extractMetrics(sections), [sections]);
-  // P2-11: best-effort 提取报告生成时刻的价格。报告无顶层结构化价格字段，
-  // 这里从顶层/meta 防御性读取，拿不到就传 undefined，banner 退化为「时效提示」。
-  const reportPrice = useMemo(() => {
-    const candidates: unknown[] = [
-      (report as any).price,
-      (report as any).report_price,
-      (report as any).current_price,
-      readObject(report.meta)?.price,
-      readObject(report.meta)?.report_price,
-    ];
-    for (const c of candidates) {
-      const num = typeof c === 'string' ? Number(c) : c;
-      if (typeof num === 'number' && Number.isFinite(num) && num > 0) return num;
-    }
-    return undefined;
-  }, [report]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);
   const evidenceBadges = useMemo(() => buildEvidenceBadges(report.citations || []), [report.citations]);
   const reportHints = useMemo(() => extractReportHints(report), [report]);
@@ -162,20 +128,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
         meta?.evidence_ledger,
         dataContext?.evidence_ledger,
       ),
-      debateArtifact: firstObject<DebateArtifact>(
-        report.debate,
-        artifacts.debate,
-        meta?.debate,
-        dataContext?.debate,
-      ),
-      holdingsInsight: firstObject<HoldingsInsight>(
-        report.holdings_insight,
-        artifacts.holdings_insight,
-        artifacts.holdings,
-        meta?.holdings_insight,
-        dataContext?.holdings_insight,
-        dataContext?.holdings,
-      ),
       queryCoverage: firstObject<QueryCoverage>(
         report.query_coverage,
         artifacts.query_coverage,
@@ -190,11 +142,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     () => researchArtifacts.queryCoverage?.unanswered_targets || [],
     [researchArtifacts.queryCoverage],
   );
-  const hasResearchArtifacts = Boolean(
-    researchArtifacts.evidenceLedger ||
-    researchArtifacts.debateArtifact ||
-    researchArtifacts.holdingsInsight,
-  );
+  const hasResearchArtifacts = Boolean(researchArtifacts.evidenceLedger);
   const watchlisted = useMemo(
     () => watchlist.some((item) => item.symbol.toUpperCase() === report.ticker?.toUpperCase()),
     [report.ticker, watchlist],
@@ -258,32 +206,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
   useEffect(() => {
     if (readOnly) return undefined;
 
-    let mounted = true;
-
-    setSubscribed(false);
     setActiveCitation(null);
-
     void initWatchlist();
-
-    if (subscriptionEmail) {
-      apiClient
-        .listSubscriptions(subscriptionEmail)
-        .then((response) => {
-          if (!mounted || !response?.success) return;
-          const list = response.subscriptions || [];
-          const ticker = report.ticker?.toUpperCase();
-          if (ticker && Array.isArray(list)) {
-            const matched = list.some((sub: { ticker?: string }) => sub.ticker?.toUpperCase() === ticker);
-            setSubscribed(matched);
-          }
-        })
-        .catch(() => undefined);
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [initWatchlist, readOnly, report.ticker, report.report_id, subscriptionEmail]);
+  }, [initWatchlist, readOnly, report.report_id]);
 
   useEffect(() => {
     if (isFullscreen) {
@@ -300,26 +225,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     const target = document.getElementById(`${anchorPrefix}-citation-${ref}`);
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleExportPdf = async () => {
-    if (actionState.exporting) return;
-    setActionState((prev) => ({ ...prev, exporting: true }));
-    try {
-      const messages = buildReportMessages(report);
-      const blob = await apiClient.exportPDF(messages, [], `${report.ticker} Report`);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `report_${report.ticker}_${formattedDateFile}.pdf`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-      toast({ type: 'success', title: 'PDF 已导出' });
-    } catch {
-      toast({ type: 'error', title: 'PDF 导出失败' });
-    } finally {
-      setActionState((prev) => ({ ...prev, exporting: false }));
     }
   };
 
@@ -373,33 +278,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     }
   };
 
-  const handleSubscribe = async () => {
-    if (actionState.subscribe) return;
-    const email = subscriptionEmail.trim();
-    if (!email) {
-      toast({ type: 'info', title: '请先在设置中填写订阅邮箱' });
-      return;
-    }
-    if (subscribed) {
-      toast({ type: 'info', title: '已订阅提醒' });
-      return;
-    }
-    setActionState((prev) => ({ ...prev, subscribe: true }));
-    try {
-      await apiClient.subscribe({
-        email,
-        ticker: report.ticker,
-        alert_types: ['price_change', 'news'],
-      });
-      setSubscribed(true);
-      toast({ type: 'success', title: '提醒订阅成功' });
-    } catch {
-      toast({ type: 'error', title: '订阅失败' });
-    } finally {
-      setActionState((prev) => ({ ...prev, subscribe: false }));
-    }
-  };
-
   const toggleSynthesis = () => {
     setExpandedSections((prev) => ({ ...prev, synthesis: !prev.synthesis }));
   };
@@ -438,15 +316,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
               fullscreen
             />
 
-            {/* P2-12 质量徽章 + P2-11 价差提示（全屏模式） */}
+            {/* 全屏模式沿用同一质量徽章。 */}
             {report.report_quality && <QualityBadge quality={report.report_quality} />}
-            {!readOnly && (
-              <PriceDriftBanner
-                ticker={report.ticker}
-                reportPrice={reportPrice}
-                reportGeneratedAt={report.generated_at}
-              />
-            )}
 
             {queryCoverageWarningNode}
 
@@ -464,8 +335,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
               {hasResearchArtifacts && (
                 <div className="space-y-3">
                   <EvidenceLedgerPanel ledger={researchArtifacts.evidenceLedger} />
-                  <DebateScorecard debate={researchArtifacts.debateArtifact} />
-                  <HoldingsWatchPanel holdings={researchArtifacts.holdingsInsight} />
                 </div>
               )}
 
@@ -517,16 +386,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
           </div>
         )}
 
-        {/* P2-11 价差提示：报告渲染后异步检查实时价，显著时显示琥珀 banner */}
-        {!readOnly && (
-          <div className="mt-3">
-            <PriceDriftBanner
-              ticker={report.ticker}
-              reportPrice={reportPrice}
-              reportGeneratedAt={report.generated_at}
-            />
-          </div>
-        )}
 
         {queryCoverageWarningNode && <div className="mt-4">{queryCoverageWarningNode}</div>}
         {warningNode && <div className="mt-4">{warningNode}</div>}
@@ -538,8 +397,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
           {hasResearchArtifacts && (
             <div className="space-y-3">
               <EvidenceLedgerPanel ledger={researchArtifacts.evidenceLedger} />
-              <DebateScorecard debate={researchArtifacts.debateArtifact} />
-              <HoldingsWatchPanel holdings={researchArtifacts.holdingsInsight} />
             </div>
           )}
 
@@ -561,27 +418,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handleExportPdf}
-              disabled={actionState.exporting}
-              className="px-3 py-1 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary text-[11px] hover:border-fin-primary hover:text-fin-primary transition disabled:opacity-60"
-            >
-              {actionState.exporting ? 'Exporting...' : 'Export PDF'}
-            </button>
-            <button
-              type="button"
               onClick={handleWatchlist}
               disabled={actionState.watchlist}
               className="px-3 py-1 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary text-[11px] hover:border-fin-primary hover:text-fin-primary transition disabled:opacity-60"
             >
               {watchlisted ? 'Remove Watchlist' : 'Save to Watchlist'}
-            </button>
-            <button
-              type="button"
-              onClick={handleSubscribe}
-              disabled={actionState.subscribe}
-              className="px-3 py-1 rounded-full border border-fin-primary/30 bg-fin-primary/10 text-fin-primary text-[11px] hover:opacity-90 transition disabled:opacity-60"
-            >
-              {subscribed ? 'Subscribed' : 'Subscribe Alerts'}
             </button>
             <button
               type="button"

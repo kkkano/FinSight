@@ -1,156 +1,23 @@
 # -*- coding: utf-8 -*-
-"""会话上下文/trace/UI 组装 helper（WP3 Task6 机械搬运自 backend/api/main.py，零行为变更）。"""
+"""会话上下文、报告索引和 UI trace 组装 helper。"""
 import logging
-import json
-import asyncio
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import os
 import re
-import sys
 import time
-from collections import deque
 from threading import Lock
 from typing import Any, Dict, List, Optional
-from urllib import error as urllib_error
-from urllib import request as urllib_request
 from uuid import uuid4
-from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
-from contextlib import asynccontextmanager
-from backend.api.config_router import ConfigRouterDeps, create_config_router
-from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
-from backend.api.dashboard_router import dashboard_router
-from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
+
 from backend.api.schemas import ChatRequest
-from backend.api.market_router import MarketRouterDeps, create_market_router
-from backend.api.monitor_router import monitor_router
-from backend.api.portfolio_router import portfolio_router
-from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
-from backend.api.report_router import ReportRouterDeps, create_report_router
-from backend.api.research_router import ResearchRouterDeps, create_research_router
-from backend.api.subscription_router import create_subscription_router
-from backend.api.alerts_router import create_alerts_router
-from backend.api.screener_router import screener_router
-from backend.api.cn_market_router import cn_market_router
-from backend.api.backtest_router import backtest_router
-from backend.api.system_router import SystemRouterDeps, create_system_router
-from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morning_brief_router
-from backend.api.task_router import TaskRouterDeps, create_task_router
-from backend.api.tools_router import create_tools_router
-from backend.api.skills_router import create_skills_router
-from backend.api.user_router import UserRouterDeps, create_user_router
-from backend.contracts import SSE_EVENT_SCHEMA_VERSION, contract_manifest
-from backend.metrics import METRICS_ENABLED, metrics_payload
+from backend.contracts import contract_manifest
 from backend.conversation.context import ContextManager
-from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready, reset_graph_runner
 from backend.orchestration.tools_bridge import get_global_orchestrator
-from backend.rag import get_rag_observability_store, install_rag_observability_hooks
-from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
-from backend.services.portfolio_store import get_positions as get_portfolio_positions
+from backend.rag import get_rag_observability_store
 from backend.services.report_index import get_report_index_store
-from backend.services.conversation_store import get_conversation_store
-from backend.services.cost_audit import get_cost_audit_store
+from backend.utils.env import env_bool as _env_bool
+from backend.utils.env import env_int as _env_int
+
 
 logger = logging.getLogger(__name__)
-
-from backend.api.lifespan import _init_default_user_config, _schedulers, lifespan  # WP3-T6 拆分回接
-from backend.api.security_gate import (  # WP3-T6 拆分回接
-    SimpleRateLimiter,
-    _AUTH_IDENTITY_CACHE_SENTINEL,
-    _auth_identity_cache,
-    _auth_identity_cache_ttl_seconds,
-    _auth_identity_lock,
-    _concurrency_limiter,
-    _env_bool,
-    _env_int,
-    _extract_api_key,
-    _extract_bearer_token,
-    _fetch_supabase_user_identity,
-    _is_allowlisted_path,
-    _is_internal_api_key_authorized,
-    _is_rag_observability_dev_auth_enabled,
-    _is_supabase_auth_configured,
-    _parse_api_keys,
-    _parse_csv_env,
-    _rate_limiter,
-    _require_rag_mutation_access,
-    _require_rag_read_access,
-    _resolve_client_ip,
-    _resolve_rag_observability_dev_auth_config,
-    _resolve_rag_observability_dev_user_identity,
-    _resolve_request_user_identity,
-    _resolve_supabase_auth_config,
-    _trust_proxy_headers,
-    security_gate,
-)
-
-# Ensure project root is on sys.path for backend imports.
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Windows + psycopg async 需要 Selector Event LoopPolicy，否则本地 PostgreSQL checkpointer 启动会报错。
-if sys.platform.startswith('win') and hasattr(asyncio, 'WindowsSelectorEventLoopPolicy'):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-# Load env once for scheduler/SMTP configs, etc.
-load_dotenv()
-
-# Logging (avoid duplicate handlers in reload)
-if not logging.getLogger().handlers:
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-
-# 鐏忔繆鐦€电厧鍙嗛弽绋跨妇瀹搞儱鍙?
-try:
-    from backend.tools import (
-        get_stock_price,
-        get_company_news,
-        get_stock_historical_data,
-        get_financial_statements,
-        get_financial_statements_summary,
-        get_company_info,
-    )
-    logger.info("[Init] Core tools imported successfully.")
-except ImportError as e:
-    # 婵″倹鐏?backend.tools 鐎电厧鍙嗘径杈Е閿涘苯鍨亸婵婄槸娴犲孩鐗撮惄顔肩秿 tools 鐎电厧鍙嗛敍鍫濆悑鐎硅妫紒鎾寸€敍?
-    try:
-        from tools import (
-            get_stock_price,
-            get_company_news,
-            get_stock_historical_data,
-            get_financial_statements,
-            get_financial_statements_summary,
-            get_company_info,
-        )
-        logger.info("[Init] Core tools imported from root successfully.")
-    except ImportError as e2:
-        logger.info(f"[Init] Error importing tools: {e2}")
-
-# Import chart detector.
-try:
-    from backend.api.chart_detector import ChartTypeDetector
-    logger.info("[Init] Chart detector imported successfully.")
-except ImportError as e:
-    logger.info(f"[Init] Error importing chart detector: {e}")
-    ChartTypeDetector = None
-
-# 鐎电厧鍙?MemoryService
-try:
-    from backend.services.memory import MemoryService, UserProfile
-    memory_service = MemoryService()
-    logger.info("[Init] MemoryService initialized successfully.")
-except Exception as e:
-    logger.info(f"[Init] Error initializing MemoryService: {e}")
-    memory_service = None
-
-
-
 
 _reference_contexts: Dict[str, ContextManager] = {}
 
@@ -490,7 +357,6 @@ def _update_session_context(
 ) -> None:
     if not thread_id:
         return
-    # 閹稿洣鎶ら崹瀣惙娴ｆ粣绱欐俊?alert_set閿涘绗夋惔鏃€钖勯弻鎾愁嚠鐠囨繀绗傛稉瀣瀮
     if skip_context:
         return
     try:
@@ -537,14 +403,6 @@ def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
         selections.extend([s.model_dump() for s in (request.context.selections or []) if s])
     if selections:
         ui_context["selections"] = selections
-    if request.context.user_email:
-        ui_context["user_email"] = request.context.user_email
-
-    raw_context = request.context.model_dump(exclude_none=True)
-    for key in ("portfolio", "positions", "holdings"):
-        value = raw_context.get(key)
-        if value:
-            ui_context[key] = value
     return ui_context
 
 def _contract_info() -> Dict[str, str]:

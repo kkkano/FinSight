@@ -470,6 +470,32 @@ class MarketDataGateway:
         with self._lock:
             return copy.deepcopy(self._health)
 
+    def trusted_provider_readiness(self, capabilities: tuple[str, ...]) -> dict[str, bool]:
+        """返回各能力是否配置了可用凭据的可信主/备 provider。"""
+        credential_env = {
+            "twelve_data": ("TWELVE_DATA_API_KEY",),
+            "massive": ("MASSIVE_API_KEY",),
+            "tiingo": ("TIINGO_API_KEY",),
+            "finnhub": ("FINNHUB_API_KEY",),
+        }
+        readiness: dict[str, bool] = {}
+        for capability in capabilities:
+            config = self._configs.get(str(capability))
+            if config is None:
+                readiness[str(capability)] = False
+                continue
+            ready = False
+            for provider_name in self._provider_order(config):
+                if provider_name not in config.providers or provider_name not in config.trusted_providers:
+                    continue
+                required_env = credential_env.get(provider_name, ())
+                if required_env and not any(str(os.getenv(name) or "").strip() for name in required_env):
+                    continue
+                ready = True
+                break
+            readiness[str(capability)] = ready
+        return readiness
+
     def _cached(self, key: tuple[str, ...], ttl_seconds: int) -> dict[str, Any] | None:
         if ttl_seconds <= 0:
             return None

@@ -13,7 +13,6 @@ from langgraph.graph import MessagesState
 from langgraph.graph.message import add_messages
 
 from backend.contracts import GRAPH_STATE_SCHEMA_VERSION
-from backend.graph.confirmation_policy import ConfirmationMode
 from backend.graph.intent_contract import IntentContract
 from backend.graph.request_task_contract import ReplyContract
 
@@ -32,7 +31,7 @@ SubjectType = Literal[
 ]
 
 OutputMode = Literal["chat", "brief", "investment_report"]
-UnderstandingRoute = Literal["direct", "research", "alert", "clarify"]
+UnderstandingRoute = Literal["direct", "research", "clarify"]
 UnderstandingTaskStatus = Literal["ready", "blocked"]
 TimeScopeKind = Literal[
     "today",
@@ -224,9 +223,6 @@ class GraphState(MessagesState):
     user_email: NotRequired[str]
     subject: NotRequired[Subject]
     operation: NotRequired[Operation]
-    alert_params: NotRequired[dict[str, Any]]
-    alert_valid: NotRequired[bool]
-    pending_research_after_alert: NotRequired[bool]
     skip_session_context: NotRequired[bool]
     output_mode: NotRequired[OutputMode]
     strict_selection: NotRequired[bool]
@@ -249,19 +245,9 @@ class GraphState(MessagesState):
     artifacts: NotRequired[Artifacts]
     trace: NotRequired[Trace]
 
-    # --- Gate-1: human-in-the-loop confirmation ---
-    require_confirmation: NotRequired[bool | None]
-    confirmation_mode: NotRequired[ConfirmationMode]
-    confirmation_options: NotRequired[list[str]]
-    user_confirmation: NotRequired[Any]
-    confirmation_intent: NotRequired[str]
-    confirmation_instruction: NotRequired[str | None]
-
-
 __all__ = [
     "GRAPH_STATE_SCHEMA_VERSION",
     "GraphState",
-    "ConfirmationMode",
     "Subject",
     "Operation",
     "TimeScope",

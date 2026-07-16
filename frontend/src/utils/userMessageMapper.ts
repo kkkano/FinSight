@@ -21,7 +21,6 @@ const NODE_USER_MESSAGES: Record<string, string> = {
   langgraph_parse_operation_start: '正在分析你想做什么...',
   langgraph_policy_gate_start: '正在制定分析策略...',
   langgraph_planner_start: '正在规划分析步骤...',
-  langgraph_confirmation_gate_start: '正在确认执行方案...',
   langgraph_execute_plan_start: '正在执行分析计划...',
   langgraph_synthesize_start: '正在整合分析结果...',
   langgraph_render_start: '正在生成最终报告...',

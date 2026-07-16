@@ -1,10 +1,9 @@
-"""Load and rotate LLM endpoint configs (hot-reload from user_config.json)."""
+"""从服务端环境变量加载并轮换 LLM endpoint。"""
 
 from __future__ import annotations
 
 from backend.utils.env import env_int as _env_int
 
-import json
 import logging
 import os
 import threading
@@ -21,12 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 load_dotenv()
-
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# In Docker, FINSIGHT_CONFIG_DIR=/app/data (mounted as named volume → persists across restarts).
-# Locally, falls back to PROJECT_ROOT for backward compatibility.
-_USER_CONFIG_DIR = os.getenv("FINSIGHT_CONFIG_DIR") or PROJECT_ROOT
-USER_CONFIG_PATH = os.path.join(_USER_CONFIG_DIR, "user_config.json")
 
 PROVIDER_ALIASES = {
     "gemini_proxy": "openai_compatible",
@@ -82,18 +75,6 @@ def _normalize_api_base(api_base: str | None, *, raw: bool = False) -> str | Non
     if normalized and not normalized.endswith("/v1"):
         normalized = normalized + "/v1"
     return normalized
-
-
-def _load_user_config() -> dict:
-    if os.path.exists(USER_CONFIG_PATH):
-        try:
-            with open(USER_CONFIG_PATH, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-                if isinstance(payload, dict):
-                    return payload
-        except Exception as exc:
-            logger.info("[Config] Failed to load user_config.json: %s", exc)
-    return {}
 
 
 def _mask(value: str | None) -> str:
@@ -302,79 +283,6 @@ def _endpoint_config_error() -> RuntimeError:
     )
 
 
-def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -> list[EndpointConfig]:
-    endpoints: list[EndpointConfig] = []
-    default_cooldown = _env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90)
-
-    raw_list = user_config.get("llm_endpoints")
-    if isinstance(raw_list, list):
-        for idx, raw in enumerate(raw_list):
-            if not isinstance(raw, dict):
-                continue
-            enabled = bool(raw.get("enabled", True))
-            if not enabled:
-                continue
-
-            endpoint_provider = _canonical_provider(raw.get("provider") or provider)
-            api_key = str(raw.get("api_key") or "").strip()
-            if not api_key:
-                continue
-            raw_api_base = str(raw.get("api_base") or "").strip()
-            is_raw_url = bool(raw.get("raw_url", False)) or _looks_full_chat_completions_url(raw_api_base)
-            api_base = _normalize_api_base(raw_api_base, raw=is_raw_url)
-            raw_model = str(raw.get("model") or "").strip()
-            if raw_model:
-                endpoint_model = raw_model
-            elif model:
-                endpoint_model = str(model).strip()
-            else:
-                raise _endpoint_config_error()
-            if endpoint_provider == "openai_compatible" and not raw_api_base:
-                raise _endpoint_config_error()
-            endpoints.append(
-                EndpointConfig(
-                    name=_safe_endpoint_name(raw.get("name"), f"ep-{idx+1}"),
-                    provider=endpoint_provider,
-                    api_base=api_base,
-                    api_key=api_key,
-                    model=endpoint_model,
-                    weight=max(1, int(raw.get("weight", 1) or 1)),
-                    enabled=True,
-                    cooldown_sec=max(1, int(raw.get("cooldown_sec", default_cooldown) or default_cooldown)),
-                    raw_url=is_raw_url,
-                    failure_domain=_failure_domain(raw.get("failure_domain"), api_base, _safe_endpoint_name(raw.get("name"), f"ep-{idx+1}")),
-                )
-            )
-
-    if endpoints:
-        return endpoints
-
-    # Legacy single-endpoint compatibility (llm_api_key/base/model)
-    legacy_key = str(user_config.get("llm_api_key") or "").strip()
-    if legacy_key:
-        legacy_api_base = str(user_config.get("llm_api_base") or "").strip()
-        legacy_provider = _canonical_provider(user_config.get("llm_provider") or provider)
-        legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
-        legacy_model = str(user_config.get("llm_model") or "").strip() or (str(model).strip() if model else "")
-        if not legacy_model or (legacy_provider == "openai_compatible" and not legacy_api_base):
-            raise _endpoint_config_error()
-        endpoints.append(
-            EndpointConfig(
-                name="legacy-single",
-                provider=legacy_provider,
-                api_base=_normalize_api_base(legacy_api_base, raw=legacy_raw_url),
-                api_key=legacy_key,
-                model=legacy_model,
-                weight=1,
-                enabled=True,
-                cooldown_sec=default_cooldown,
-                raw_url=legacy_raw_url,
-                failure_domain=_failure_domain(None, _normalize_api_base(legacy_api_base, raw=legacy_raw_url), "legacy-single"),
-            )
-        )
-    return endpoints
-
-
 def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfig]:
     endpoint_model = str(model or "").strip()
     endpoints: list[EndpointConfig] = []
@@ -442,11 +350,6 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
 
 
 def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]:
-    user_config = _load_user_config()
-    endpoints = _parse_user_endpoints(user_config, provider, model)
-    if endpoints:
-        return endpoints
-
     env_endpoints = _parse_env_endpoints(provider, model)
     if env_endpoints:
         return env_endpoints
@@ -455,11 +358,7 @@ def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]
 
 
 def load_user_endpoints(provider: str | None = None, model: str | None = None) -> list[EndpointConfig]:
-    """Compatibility helper for diagnostics scripts.
-
-    Returns resolved endpoint list from `user_config.json` or env fallback,
-    without selecting/rotating any endpoint.
-    """
+    """返回服务端配置的 endpoint，供启动检查和诊断脚本使用。"""
     canonical = _canonical_provider(provider or _default_provider())
     return _resolve_endpoints(canonical, model)
 

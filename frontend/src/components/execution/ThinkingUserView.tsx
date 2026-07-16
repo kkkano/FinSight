@@ -39,7 +39,7 @@ const PHASES = [
     id: 'plan',
     label: '规划策略',
     Icon: Sparkles,
-    nodes: ['policy_gate', 'planner', 'confirmation_gate'],
+    nodes: ['policy_gate', 'planner'],
     altStages: ['agent_gate', 'agent_selected'],
     doneMarker: 'planner',
     altDoneStages: ['agent_selected'],

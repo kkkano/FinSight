@@ -15,7 +15,7 @@ class ActiveAsset(BaseModel):
     用于标识用户当前查看的资产，包含代码、类型和显示名称。
     """
     symbol: str = Field(..., description="标准化代码")
-    type: Literal["equity", "index", "etf", "crypto", "portfolio"] = Field(
+    type: Literal["equity", "index", "etf", "crypto"] = Field(
         ..., description="资产类型"
     )
     display_name: str = Field(..., description="显示名称")

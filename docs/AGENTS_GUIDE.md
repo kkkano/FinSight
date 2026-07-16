@@ -1,61 +1,49 @@
-# FinSight Agent 指南
+# FinSight AI 角色与 Collector 指南
 
-更新时间：2026-07-12
+更新时间：2026-07-16
 
-## 1. 统一模型
+## 1. 用户可感知角色
 
-`backend/agents/profiles.py` 定义 7 个共享 `AgentProfile`，它是 Agent 身份、能力、工具许可和质量要求的公共合同。规划、执行、设置 UI、观测和评估应复用该合同，禁止各 Agent 自建互不兼容的 profile schema。
+系统只有两个业务 LLM 角色：
 
-```mermaid
-flowchart LR
-    PLAN[Planner roles] --> PROFILE[AgentProfile registry]
-    PROFILE --> ADAPTER[Agent adapter]
-    ADAPTER --> AGENT[Research implementation]
-    AGENT --> TOOLS[Allowed tools]
-    AGENT --> RESULT[Structured result]
-    RESULT --> QUALITY[Shared quality contract]
-    QUALITY --> EVIDENCE[Evidence pool]
-```
+| 角色 | 输入 | 输出 | 调用预算 |
+|---|---|---|---|
+| `PredictionAnalyst` | trusted Kline、服务端指标、新闻摘要、已有 Prediction | 严格 Prediction JSON | 一个逻辑任务，最多一次纠错 |
+| `ResearchAnalyst` | 已验证的结构化 evidence | Chat 答案或报告草稿 | 普通研究最多一次；长报告可追加一次 verifier |
 
-## 2. 当前 Agent
+PredictionAnalyst 的 anchor 由服务端覆盖，方向、概率、止损、目标和 RR 由服务端校验。ResearchAnalyst 不直接取数，也不能引用 evidence pool 外的确定性数字。
 
-| Profile | 主要职责 | 常见证据 |
-|---|---|---|
-| `price_agent` | 行情、价格变化、市场状态 | price snapshot、历史价格 |
-| `news_agent` | 公司新闻、事件和情绪 | 带来源与时间的新闻条目 |
-| `fundamental_agent` | 财报、估值和经营趋势 | statements、ratios、filings |
-| `technical_agent` | 指标、趋势和技术形态 | OHLCV、indicator series |
-| `macro_agent` | 宏观数据与传导机制 | 官方宏观序列、事件 |
-| `risk_agent` | 波动、回撤、暴露和压力场景 | risk metrics、scenario outputs |
-| `deep_search_agent` | 网页、公告和跨来源补充研究 | URL、摘要、抓取状态 |
+## 2. 内部 Collector
 
-Agent 数量只按 `profiles.py` 统计。仪表盘洞察评分器是轻量评分服务，不算第 8 个研究 Agent。
+`backend/agents/profiles.py` 描述 Price、News、Fundamental、Technical、Macro、Risk 与 Deep Search 的工具归属和展示元数据。这些 profile 是内部 evidence collector，不是用户选择的独立人格，也不代表七次 LLM 调用。
 
-## 3. 调度生命周期
+`backend/graph/adapters/collector_adapter.py` 使用 `llm=None` 构造 collector；`BaseFinancialAgent` 仅为兼容既有构造签名接收该参数并立即丢弃。collector 的职责只有：
 
-1. `understand_request` 生成任务与 required evidence。
-2. `policy_gate` 确定允许的能力和证据下限。
-3. `planner` 将任务映射到工具或 Agent role，并生成依赖关系。
-4. `execute_plan` 通过 `backend/graph/adapters/agent_adapter.py` 调用 Agent。
-5. 结果经公共质量合同和 evidence gate 进入证据池；失败进入 diagnostics。
-6. `research_debate` 聚合冲突和置信度，之后才进入 synthesis/render。
+- 调用许可范围内的工具；
+- 规范化来源、时间、质量和失败语义；
+- 生成 `AgentOutput`、evidence 与候选 Claim；
+- 把工具错误作为 diagnostics 返回。
 
-## 4. Agent 输出要求
+collector 不执行 LLM analysis、reflection、debate 或隐式 Prediction。
 
-- 明确标的、市场、时间范围和数据时间戳。
-- 事实与推断分开；推断必须能指向输入证据。
-- 不得返回凭据、完整请求头或供应商私有响应。
-- 工具不可用时返回结构化失败/限制，不生成占位数字。
-- 引用型回答必须保留 URL/来源；内部模型分析应标明性质。
-- 遵守 run、thread、user 和取消作用域。
+## 3. 公共合同
 
-## 5. 新增或修改 Agent
+- 工具失败进入 diagnostics，不生成假 evidence。
+- 每条 Claim 必须引用 evidence id。
+- provider、`as_of`、freshness、quality 必须跨层保留。
+- `quality != trusted` 的 Kline 不能进入 Prediction 或 Outcome。
+- collector 只按 capability registry、policy 和 PlanIR 执行。
+- 新 collector 必须复用公共 TaskOutcome、Claim、引用和错误合同，不得自建协议。
+- 用户可见角色、collector 名称和 LLM usage attribution 必须区分，避免把工具采集误报成模型判断。
 
-- [ ] 在 `profiles.py` 注册或调整 profile。
-- [ ] 更新能力注册、planner role 和 policy allowlist。
-- [ ] 通过 adapter 调用，不在图节点硬编码 Agent 类。
-- [ ] 复用公共结果/质量合同并接入 evidence gate。
-- [ ] 添加定向单测和至少一个跨层执行测试。
-- [ ] 同步本指南、前端类型/设置（如可见）和观测字段。
+## 4. 修改检查
 
-不应恢复 `planner_stub.py` 或 `execute_plan_stub.py`。规则回退属于 `backend/graph/planning/`，执行入口属于 `backend/graph/execution/`。
+调整 collector 时至少同步：
+
+1. `backend/agents/profiles.py` 的职责与工具集合；
+2. capability registry、policy allowlist 和规则 planner；
+3. collector adapter 的结构化输出与 evidence gate；
+4. 定向单测和至少一个跨层执行测试；
+5. 本指南及受影响的观测字段。
+
+只有当输出合同、失败语义和调用预算与两个现有角色都根本不同，才讨论新增业务 LLM 角色。这属于架构变更，必须同步 usage 归因、评测、预算和生产门禁。

@@ -722,7 +722,7 @@ def fetch_top_constituents(symbol: str, asset_type: str, limit: int = 10) -> lis
 
 
 def fetch_holdings(symbol: str, asset_type: str, limit: int = 50) -> list[dict[str, Any]]:
-    if asset_type not in {"etf", "portfolio"}:
+    if asset_type != "etf":
         return []
     try:
         from backend.tools.fmp import get_etf_holdings

@@ -1,160 +1,78 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FC } from 'react';
-import { RightPanelHeader } from './right-panel/RightPanelHeader';
-import { RightPanelAlertsTab } from './right-panel/RightPanelAlertsTab';
-import { RightPanelPortfolioTab } from './right-panel/RightPanelPortfolioTab';
-import { RightPanelChartTab } from './right-panel/RightPanelChartTab';
+
 import { ExecutionPanel } from './execution/ExecutionPanel';
-import { useRightPanelData } from './right-panel/useRightPanelData';
-import { useExecutionStore } from '../store/executionStore';
+import { RightPanelChartTab } from './right-panel/RightPanelChartTab';
+import { RightPanelHeader } from './right-panel/RightPanelHeader';
 import type { RightPanelTab } from './right-panel/types';
+import { useExecutionStore } from '../store/executionStore';
 
 type RightPanelProps = {
   onCollapse: () => void;
-  onSubscribeClick?: () => void;
-  onNavigateToChat?: () => void;
   autoSwitchExecution?: boolean;
   className?: string;
 };
 
 export const RightPanel: FC<RightPanelProps> = ({
   onCollapse,
-  onSubscribeClick,
   autoSwitchExecution = true,
   className,
 }) => {
+  const activeRuns = useExecutionStore((state) => state.activeRuns);
+  const recentRuns = useExecutionStore((state) => state.recentRuns);
   const [activeTab, setActiveTab] = useState<RightPanelTab>(() =>
-    useExecutionStore.getState().activeRuns.length > 0 ? 'execution' : 'alerts',
+    activeRuns.length > 0 ? 'execution' : 'chart',
   );
   const [userPinnedTab, setUserPinnedTab] = useState<RightPanelTab | null>(null);
   const [hasUnseenExecution, setHasUnseenExecution] = useState(false);
+  const previousActiveCount = useRef(activeRuns.length);
 
-  const {
-    alerts,
-    alertEvents,
-    eventState,
-    subscriptionState,
-    alertsLoading,
-    alertsError,
-    unreadAlertCount,
-    markAlertsRead,
-    loading,
-    lastUpdated,
-    refreshAll,
-    positionRows,
-    portfolioSummary,
-    isPortfolioEditing,
-    positionDrafts,
-    setPositionDrafts,
-    startPortfolioEdit,
-    cancelPortfolioEdit,
-    savePortfolioEdit,
-  } = useRightPanelData();
-
-  // Execution state for tab badge and auto-switch
-  const activeRuns = useExecutionStore((s) => s.activeRuns);
-  const recentRuns = useExecutionStore((s) => s.recentRuns);
-
-  const handleTabChange = (tab: RightPanelTab) => {
-    setActiveTab(tab);
-    setUserPinnedTab(tab);
-    if (tab === 'execution') {
-      setHasUnseenExecution(false);
-    }
-  };
-
-  // 右侧「过程」页签固定承载专家视图。
-  const latestRunId = activeRuns.length > 0
-    ? activeRuns[activeRuns.length - 1].runId
-    : recentRuns.length > 0
-      ? recentRuns[0].runId
-      : null;
-
-  // Auto-switch to execution tab ONLY on 0->N transition.
-  // If user explicitly pinned a non-execution tab, keep current tab and show pulse instead.
-  const prevActiveCountRef = useRef(activeRuns.length);
   useEffect(() => {
     if (!autoSwitchExecution) {
-      prevActiveCountRef.current = activeRuns.length;
+      previousActiveCount.current = activeRuns.length;
       return;
     }
-    const hasNewRun = prevActiveCountRef.current === 0 && activeRuns.length > 0;
-    const pinnedNonExecution = userPinnedTab !== null && userPinnedTab !== 'execution';
-    if (hasNewRun && !pinnedNonExecution) {
+    const hasNewRun = previousActiveCount.current === 0 && activeRuns.length > 0;
+    if (hasNewRun && userPinnedTab !== 'chart') {
       setActiveTab('execution');
       setHasUnseenExecution(false);
-    } else if (hasNewRun && pinnedNonExecution) {
+    } else if (hasNewRun) {
       setHasUnseenExecution(true);
     }
-    if (prevActiveCountRef.current > 0 && activeRuns.length === 0) {
+    if (previousActiveCount.current > 0 && activeRuns.length === 0) {
       setUserPinnedTab(null);
       setHasUnseenExecution(false);
     }
-    prevActiveCountRef.current = activeRuns.length;
+    previousActiveCount.current = activeRuns.length;
   }, [activeRuns.length, autoSwitchExecution, userPinnedTab]);
 
-  useEffect(() => {
-    if (activeTab === 'alerts') {
-      markAlertsRead();
-    }
-  }, [activeTab, markAlertsRead]);
+  const latestRunId = activeRuns.at(-1)?.runId ?? recentRuns[0]?.runId ?? null;
 
   return (
     <section
       data-testid="context-panel"
-      className={`flex flex-col h-full bg-fin-card border border-fin-border rounded-xl shadow-sm overflow-hidden ${className || ''}`}
+      className={`flex h-full flex-col overflow-hidden rounded-lg border border-fin-border bg-fin-card shadow-sm ${className || ''}`}
     >
       <RightPanelHeader
         activeTab={activeTab}
-        alertsCount={unreadAlertCount}
         executionCount={activeRuns.length}
         hasUnseenExecution={hasUnseenExecution}
-        loading={loading}
-        onTabChange={handleTabChange}
-        onRefresh={refreshAll}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setUserPinnedTab(tab);
+          if (tab === 'execution') setHasUnseenExecution(false);
+        }}
         onCollapse={onCollapse}
       />
-
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'alerts' && (
-          <RightPanelAlertsTab
-            subscriptions={alerts}
-            events={alertEvents}
-            eventState={eventState}
-            subscriptionState={subscriptionState}
-            unreadCount={unreadAlertCount}
-            loading={alertsLoading}
-            error={alertsError}
-            onRetry={refreshAll}
-            onMarkRead={markAlertsRead}
-            onSubscribeClick={onSubscribeClick}
-          />
-        )}
-        {activeTab === 'portfolio' && (
-          <RightPanelPortfolioTab
-            positionRows={positionRows}
-            portfolioSummary={portfolioSummary}
-            isPortfolioEditing={isPortfolioEditing}
-            positionDrafts={positionDrafts}
-            setPositionDrafts={setPositionDrafts}
-            onStartPortfolioEdit={startPortfolioEdit}
-            onCancelPortfolioEdit={cancelPortfolioEdit}
-            onSavePortfolioEdit={savePortfolioEdit}
-          />
-        )}
-        {activeTab === 'chart' && <RightPanelChartTab />}
-        {activeTab === 'execution' && (
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {activeTab === 'chart' ? (
+          <RightPanelChartTab />
+        ) : (
           <div className="h-full overflow-y-auto p-3">
             <ExecutionPanel runId={latestRunId} compact className="border-0 bg-transparent p-0" />
           </div>
         )}
       </div>
-
-      {lastUpdated && (
-        <div className="text-2xs text-fin-muted text-center py-1 border-t border-fin-border/50 shrink-0">
-          Last updated: {lastUpdated.toLocaleTimeString()}
-        </div>
-      )}
     </section>
   );
 };

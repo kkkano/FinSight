@@ -502,8 +502,6 @@ def _goal_type(operation: dict[str, Any]) -> str:
     if name == "compare":
         relation = str((operation.get("params") or {}).get("relation") or "").strip().lower()
         return "rank" if relation == "rank" else "compare"
-    if name == "alert_set":
-        return "set_alert"
     if name in {"analyze_impact", "earnings_impact"}:
         return "explain_impact"
     if name == "generate_report":

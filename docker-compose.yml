@@ -38,6 +38,7 @@ services:
 
   # ── Backend (FastAPI) ───────────────────────────────────────────────────────
   backend:
+    image: finsight-backend:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -52,11 +53,7 @@ services:
     env_file:
       - .env.server          # real secrets on the server (NOT committed)
     environment:
-      # User config is stored in the data volume so it persists across container restarts.
-      # Settings UI changes (LLM keys, etc.) are saved to /app/data/user_config.json.
-      FINSIGHT_CONFIG_DIR:          /app/data
       # Explicit LLM endpoint (OpenAI-compatible); base/model must be present in .env.server.
-      # On first boot, a complete key/base/model set is written to user_config.json.
       # 注：OPENAI_COMPATIBLE_API_KEY 由 env_file (.env.server) 提供，不在此用 ${VAR:-} 兜底，
       #     避免漏带 --env-file 时空值 shadow 掉 env_file 的真实值。
       OPENAI_COMPATIBLE_API_BASE:   ${OPENAI_COMPATIBLE_API_BASE:?OPENAI_COMPATIBLE_API_BASE is required}
@@ -71,16 +68,12 @@ services:
       HF_ENDPOINT:                  https://hf-mirror.com
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
-      RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
+      RAG_V2_ALLOW_MEMORY_FALLBACK: "false"
       # 核心业务表的唯一 DSN；旧的 RAG/LangGraph DSN 仅供各自子系统使用。
       FINSIGHT_POSTGRES_DSN:         postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       RAG_V2_POSTGRES_DSN:          postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
+      LANGGRAPH_CHECKPOINTER_BACKEND: postgres
       LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
-      # Supabase runtime auth for /diagnostics/rag/*
-      # SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY 由 env_file (.env.server) 提供，
-      # 不在此用 ${VAR:-} 空兜底，避免 shadow env_file 的真实值。
-      # 须与前端 VITE_SUPABASE_* 指向同一 Supabase 项目，后端才能校验 Bearer access token。
-      RAG_OBSERVABILITY_AUTH_CACHE_SECONDS: ${RAG_OBSERVABILITY_AUTH_CACHE_SECONDS:-60}
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
@@ -105,6 +98,7 @@ services:
 
   # ── Frontend (Nginx + React SPA) ────────────────────────────────────────────
   frontend:
+    image: finsight-frontend:${IMAGE_TAG:-local}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -116,8 +110,6 @@ services:
         # Must point to the same Supabase project as backend SUPABASE_* runtime env.
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
-        # RAG Inspector 本地开发密码 token（敏感，默认空——生产走 Supabase 登录）
-        VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN: ${VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN:-}
         # SSE 读取与对话历史调参（合理默认，按需在 .env 覆盖）
         VITE_SSE_READ_TIMEOUT_MS: ${VITE_SSE_READ_TIMEOUT_MS:-30000}
         VITE_CHAT_HISTORY_MAX_MESSAGES: ${VITE_CHAT_HISTORY_MAX_MESSAGES:-12}

@@ -14,15 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class MacroAgent(BaseFinancialAgent):
-    """
-    Macro agent (Plan-Execute-Reflect pattern):
-    - Plan: identify relevant macro indicators for the query
-    - Execute: collect from multiple sources (FRED, sentiment, calendar, search)
-    - Reflect: verify cross-source consistency, resolve conflicts, assess risks
-    """
+    """从官方和市场数据源采集、交叉校验宏观证据。"""
 
     AGENT_NAME = "macro"
-    MAX_REFLECTIONS = 1  # Plan-Execute-Reflect: one reflection for cross-validation
     _MISSING_QUALITY_CONFIDENCE = 0.35  # P0-2: 质量分缺失时的诚实上限
 
     _INDICATORS: Dict[str, Dict[str, str]] = {
@@ -50,49 +44,6 @@ class MacroAgent(BaseFinancialAgent):
         "treasury_10y": 0.35,
         "yield_spread": 0.35,
     }
-
-    def _get_tool_registry(self) -> dict:
-        """MacroAgent tool registry: official + market sources for Plan-Execute-Reflect pattern."""
-        registry = {}
-        tools = self.tools
-        if not tools:
-            return registry
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "Generic search for macro cross-check",
-                "call_with": "query",
-            }
-        fred_fn = getattr(tools, "get_fred_data", None)
-        if fred_fn:
-            registry["get_fred_data"] = {
-                "func": fred_fn,
-                "description": "Fetch macro indicators from FRED",
-                "call_with": "none",
-            }
-        official_fn = getattr(tools, "get_official_macro_releases", None)
-        if official_fn:
-            registry["get_official_macro_releases"] = {
-                "func": official_fn,
-                "description": "Get official BLS/BEA/FED release documents",
-                "call_with": "query",
-            }
-        sentiment_fn = getattr(tools, "get_market_sentiment", None)
-        if sentiment_fn:
-            registry["get_market_sentiment"] = {
-                "func": sentiment_fn,
-                "description": "Fetch market sentiment index",
-                "call_with": "none",
-            }
-        events_fn = getattr(tools, "get_economic_events", None)
-        if events_fn:
-            registry["get_economic_events"] = {
-                "func": events_fn,
-                "description": "Fetch near-term macro calendar events",
-                "call_with": "none",
-            }
-        return registry
 
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         source_health: Dict[str, str] = {}
@@ -268,51 +219,7 @@ class MacroAgent(BaseFinancialAgent):
         return payload
 
     async def _first_summary(self, data: Dict[str, Any]) -> str:
-        deterministic = self._deterministic_summary(data)
-        status = str(data.get("status") or "").lower()
-        if status == "error":
-            return deterministic
-
-        context_parts = [deterministic]
-        conflicts = data.get("conflicts") or []
-        if isinstance(conflicts, list) and conflicts:
-            conflict_lines = []
-            for conflict in conflicts[:4]:
-                if not isinstance(conflict, dict):
-                    continue
-                indicator = conflict.get("indicator", "unknown")
-                chosen = conflict.get("chosen_value")
-                other = conflict.get("other_value")
-                chosen_src = conflict.get("chosen_source")
-                other_src = conflict.get("other_source")
-                conflict_lines.append(f"- {indicator}: {chosen_src}={chosen} vs {other_src}={other}")
-            if conflict_lines:
-                context_parts.append("Data conflicts:\n" + "\n".join(conflict_lines))
-
-        sentiment = str(data.get("market_sentiment") or "").strip()
-        if sentiment:
-            context_parts.append(f"Market sentiment: {sentiment[:300]}")
-
-        events = str(data.get("economic_events") or "").strip()
-        if events:
-            context_parts.append(f"Economic calendar: {events[:300]}")
-
-        official_releases = data.get("official_releases") if isinstance(data.get("official_releases"), list) else []
-        if official_releases:
-            top_titles = [str(item.get("title") or "").strip() for item in official_releases[:3] if isinstance(item, dict)]
-            top_titles = [title for title in top_titles if title]
-            if top_titles:
-                context_parts.append("Official releases: " + " | ".join(top_titles))
-
-        analysis = await self._llm_analyze(
-            "\n".join(context_parts),
-            role="资深宏观分析师",
-            focus=(
-                "总结宏观周期、政策方向、跨资产影响、未来 1-3 个月的主要风险，"
-                "以及数据可信度。使用简体中文输出。"
-            ),
-        )
-        return analysis if analysis else deterministic
+        return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: Dict[str, Any]) -> str:
         """确定性宏观快照（兜底文案，用户可见，B 类中文化）。"""

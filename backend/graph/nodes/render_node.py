@@ -294,8 +294,7 @@ def _user_facing_step_label(step: dict, fallback_step_id: str) -> str:
         "get_performance_comparison": "表现对比",
         "get_official_macro_releases": "官方宏观发布",
         "get_authoritative_media_news": "权威新闻",
-        "get_factor_exposure": "组合暴露",
-        "run_portfolio_stress_test": "组合压力测试",
+        "get_factor_exposure": "因子暴露",
         "search": "搜索",
         "price_agent": "价格分析",
         "news_agent": "新闻分析",
@@ -390,8 +389,6 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
             is_related = bool(ticker and ticker in tickers)
             if subject_type == "macro" and name in {"get_official_macro_releases", "get_authoritative_media_news", "search"}:
                 is_related = True
-            if subject_type == "portfolio" and name in {"get_factor_exposure", "run_portfolio_stress_test", "search"}:
-                is_related = True
             if not is_related:
                 continue
             for line in _summarize_step_output(result.get("output")):
@@ -458,14 +455,7 @@ def render_node(state: GraphState) -> dict:
     and skip template rendering.  Template rendering is only a **fallback**
     for stub / empty drafts.
     """
-    # ── Early-return: morning_brief pass-through (no template needed) ──
-    _brief_op = (state.get("operation") or {}).get("name") if isinstance(state.get("operation"), dict) else None
     artifacts = state.get("artifacts") or {}
-    if _brief_op == "morning_brief":
-        brief_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
-        if isinstance(brief_draft, str) and brief_draft.strip():
-            return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
-
     if state.get("output_mode") == "investment_report" and isinstance(artifacts, dict):
         raw_draft = artifacts.get("research_synthesis_draft")
         if isinstance(raw_draft, dict):

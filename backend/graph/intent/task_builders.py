@@ -29,14 +29,7 @@ from backend.graph.investment_intent import (
     query_requests_comparative_investment_opinion,
     query_requests_investment_opinion,
 )
-from backend.graph.intent.router import (
-    ContextBinding,
-    ConversationDecision,
-    _effective_current_turn_tickers,
-    _task_hints_require_execution,
-    generate_contextual_reply,
-    route_conversation,
-)
+from backend.graph.intent.decision import ConversationDecision
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
@@ -72,13 +65,10 @@ from backend.graph.intent.predicates import (
     _contains_any,
     _context_tickers_from_binding,
     _explicit_multi_ticker_compare_requested,
+    _explicit_portfolio_holdings_requested,
     _extract_urls,
     _has_holdings_intent,
     _holdings_intent_params,
-    _holdings_portfolio_context_available,
-    _portfolio_context_available,
-    _portfolio_tickers_from_context,
-    _positions_from_ui_context,
     _query_requests_company_side_data,
     _selection_subject_type,
     _selection_urls,
@@ -202,7 +192,7 @@ def _apply_reply_contract_to_tasks(tasks: list[dict[str, Any]], reply_contract: 
         if not isinstance(operation, dict):
             continue
         op_name = str(operation.get("name") or "").strip()
-        if op_name not in {"fetch", "news_impact", "daily_brief", "morning_brief"}:
+        if op_name not in {"fetch", "news_impact", "daily_brief"}:
             continue
         params = dict(operation.get("params") or {})
         topic = str(params.get("topic") or "").strip().lower()
@@ -372,8 +362,6 @@ def _add_router_task_hints(
         if not isinstance(hint, dict):
             continue
         operation_name = str(hint.get("operation") or "qa").strip().lower()
-        if operation_name == "alert_set":
-            continue
         subject_type = str(hint.get("subject_type") or "unknown").strip().lower()
         subject_label = str(hint.get("subject_label") or "").strip()
         hint_tickers = [
@@ -788,8 +776,6 @@ def _add_router_task_hints_contract(
         if not isinstance(hint, dict):
             continue
         operation_name = str(hint.get("operation") or "qa").strip().lower()
-        if operation_name == "alert_set":
-            continue
         subject_type = str(hint.get("subject_type") or "unknown").strip().lower()
         subject_label = str(hint.get("subject_label") or "").strip()
         hint_tickers = [
@@ -1101,18 +1087,17 @@ def _add_holdings_intent_tasks(
 
     params = _holdings_intent_params(query)
     operation = _operation("holdings", 0.84, params)
-    if _holdings_portfolio_context_available(query, ui_context, tickers):
-        portfolio_tickers = tickers or _portfolio_tickers_from_context(ui_context)
+    if _explicit_portfolio_holdings_requested(query, tickers):
         _add_task(
             tasks,
             subject_type="portfolio",
-            subject_label="当前组合",
+            subject_label="用户明确提到的持仓",
             operation=operation,
             query=query,
-            tickers=portfolio_tickers,
+            tickers=tickers,
             priority=18,
             reason="holdings_intent_portfolio",
-            params={**params, "positions": _positions_from_ui_context(ui_context)},
+            params=params,
         )
         return True
 
@@ -1163,7 +1148,7 @@ def _add_context_bound_research_task(
     """Map a contextual router decision into executable work.
 
     The switch is by context source, not by bespoke follow-up kind. A follow-up
-    can bind to a report, active symbol, selected document, portfolio, or recent
+    can bind to a report, active symbol, selected document, or recent
     focus while still sharing one route schema.
     """
     binding = decision.context_binding
@@ -1201,25 +1186,6 @@ def _add_context_bound_research_task(
         )
         context_refs.append(_binding_context_ref(binding, value=selection_ids))
         return True
-
-    if source == "portfolio":
-        portfolio_tickers = _portfolio_tickers_from_context(ui_context)
-        positions = _positions_from_ui_context(ui_context)
-        if portfolio_tickers or _portfolio_context_available(query, ui_context):
-            _add_task(
-                tasks,
-                subject_type="portfolio",
-                subject_label="当前持仓",
-                operation=_domain_intent_operation(decision.domain_intent, decision.confidence),
-                query=query,
-                tickers=portfolio_tickers,
-                priority=20,
-                reason="context_router_binding",
-                params={"context_binding": binding.model_dump(), "positions": positions},
-            )
-            context_refs.append(_binding_context_ref(binding, value=portfolio_tickers or "portfolio"))
-            return True
-        return False
 
     tickers = _context_tickers_from_binding(
         binding=binding,

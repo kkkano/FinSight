@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const SESSION_ID = 'user:e2e-user:e2e-request-understanding';
+
 const fulfillJson = async (route: any, payload: unknown) => {
   await route.fulfill({
     status: 200,
@@ -23,29 +25,23 @@ const installCommonRoutes = async (page: any) => {
   await page.route('**/api/stock/price/**', async (route: any) => {
     await fulfillJson(route, { success: true, data: { price: 180.5, change_percent: 1.2 } });
   });
-  await page.route('**/api/chart/detect', async (route: any) => {
-    await fulfillJson(route, { success: false, should_generate: false, ticker_candidates: [] });
-  });
   await page.route('**/api/reports/index**', async (route: any) => {
-    await fulfillJson(route, { success: true, count: 0, items: [] });
+    await fulfillJson(route, { count: 0, items: [] });
   });
   await page.route('**/api/reports/replay/**', async (route: any) => {
-    await fulfillJson(route, { success: true, report: null, citations: [], trace_digest: {} });
+    await fulfillJson(route, { report: null, citations: [], trace_digest: {} });
   });
   await page.route('**/api/conversations/**', async (route: any) => {
     const body = parseRequestBody(route);
     await fulfillJson(route, {
       success: true,
-      session_id: body.session_id || 'public:anonymous:e2e-request-understanding',
+      session_id: body.session_id || SESSION_ID,
       cleared: { context: true },
       conversation: { turns: 0 },
     });
   });
   await page.route('**/api/user/profile**', async (route: any) => {
     await fulfillJson(route, { profile: { name: 'E2E User', watchlist: ['AAPL', 'MSFT'] } });
-  });
-  await page.route('**/api/subscriptions**', async (route: any) => {
-    await fulfillJson(route, { subscriptions: [] });
   });
 };
 
@@ -63,7 +59,7 @@ const fulfillTraceStream = async (route: any) => {
       ],
     },
     { type: 'token', content: `回答：${query}` },
-    { type: 'done', response: `回答：${query}`, session_id: payload.session_id || 'public:anonymous:e2e-request-understanding' },
+    { type: 'done', response: `回答：${query}`, session_id: payload.session_id || SESSION_ID },
   ];
   await route.fulfill({
     status: 200,
@@ -76,8 +72,8 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'anonymous');
-    localStorage.setItem('finsight-session-id', 'public:anonymous:e2e-request-understanding');
+    localStorage.setItem('finsight-entry-mode', 'authenticated');
+    localStorage.setItem('finsight-session-id', 'user:e2e-user:e2e-request-understanding');
     localStorage.setItem('finsight-trace-view-mode', 'user');
   });
   await installCommonRoutes(page);

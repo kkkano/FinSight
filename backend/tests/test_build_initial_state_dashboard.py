@@ -6,74 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 build_initial_state_module = importlib.import_module(
     "backend.graph.nodes.build_initial_state",
 )
-
-
-def test_dashboard_investment_report_no_longer_forces_skip(monkeypatch):
-    monkeypatch.setattr(build_initial_state_module, "load_memory_context", lambda thread_id: None)
-
-    updates = build_initial_state_module.build_initial_state(
-        {
-            "thread_id": "public:anonymous:test",
-            "query": "生成 AAPL 投资报告",
-            "output_mode": "investment_report",
-            "ui_context": {"source": "dashboard_research_tab"},
-        }
-    )
-
-    assert "require_confirmation" not in updates
-    messages = updates.get("messages") or []
-    assert messages and isinstance(messages[0], HumanMessage)
-
-
-def test_chat_investment_report_keeps_confirmation_default(monkeypatch):
-    monkeypatch.setattr(build_initial_state_module, "load_memory_context", lambda thread_id: None)
-
-    updates = build_initial_state_module.build_initial_state(
-        {
-            "thread_id": "public:anonymous:test",
-            "query": "生成 AAPL 投资报告",
-            "output_mode": "investment_report",
-            "ui_context": {"source": "chat"},
-        }
-    )
-
-    assert "require_confirmation" not in updates
-
-
-def test_initial_state_keeps_explicit_confirmation_mode(monkeypatch):
-    monkeypatch.setattr(build_initial_state_module, "load_memory_context", lambda thread_id: None)
-
-    updates = build_initial_state_module.build_initial_state(
-        {
-            "thread_id": "public:anonymous:test",
-            "query": "生成 AAPL 投资报告",
-            "output_mode": "investment_report",
-            "confirmation_mode": "skip",
-            "ui_context": {"source": "dashboard_research_tab"},
-        }
-    )
-
-    assert updates.get("confirmation_mode") == "skip"
-
-
-def test_initial_state_drops_invalid_confirmation_mode(monkeypatch):
-    monkeypatch.setattr(build_initial_state_module, "load_memory_context", lambda thread_id: None)
-
-    updates = build_initial_state_module.build_initial_state(
-        {
-            "thread_id": "public:anonymous:test",
-            "query": "生成 AAPL 投资报告",
-            "output_mode": "investment_report",
-            "confirmation_mode": "INVALID_MODE",
-        }
-    )
-
-    assert "confirmation_mode" not in updates
-
-
-def test_initial_state_recovers_client_history_when_checkpoint_is_empty(monkeypatch):
-    monkeypatch.setattr(build_initial_state_module, "load_memory_context", lambda thread_id: None)
-
+def test_initial_state_recovers_client_history_when_checkpoint_is_empty():
     updates = build_initial_state_module.build_initial_state(
         {
             "thread_id": "public:anonymous:test",
@@ -100,9 +33,7 @@ def test_initial_state_recovers_client_history_when_checkpoint_is_empty(monkeypa
     assert messages[0].id.startswith("client-history-")
 
 
-def test_initial_state_does_not_duplicate_client_history_with_checkpoint(monkeypatch):
-    monkeypatch.setattr(build_initial_state_module, "load_memory_context", lambda thread_id: None)
-
+def test_initial_state_does_not_duplicate_client_history_with_checkpoint():
     updates = build_initial_state_module.build_initial_state(
         {
             "thread_id": "public:anonymous:test",

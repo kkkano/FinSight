@@ -21,7 +21,7 @@ from wp4_browser_validation import (
 
 EVIDENCE_DIR = Path(__file__).resolve().parents[2] / ".omx" / "evidence" / "wp5"
 API_ORIGIN = "http://127.0.0.1:8000"
-SESSION_ID = "public:local-rag-inspector:default"
+SESSION_ID = "user:wp5-browser-user:default"
 
 
 def monitor_comment(symbol: str) -> dict[str, object]:
@@ -62,7 +62,7 @@ def start_sse_server(state: SseState) -> ThreadingHTTPServer:
             self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.send_header(
                 "Access-Control-Allow-Headers",
-                requested or "authorization, content-type, x-rag-dev-access-token, x-rag-dev-user",
+                requested or "authorization, content-type",
             )
             self.send_header("Access-Control-Max-Age", "600")
 
@@ -198,7 +198,6 @@ def prepare_authenticated_page(
     page.on("pageerror", lambda error: console_errors.append(str(error)))
     page.add_init_script(
         """
-        localStorage.setItem('finsight-rag-dev-auth-enabled', '1');
         localStorage.setItem('finsight-entry-mode', 'authenticated');
         sessionStorage.setItem('finsight-welcome-gate-passed', '1');
         """
@@ -215,7 +214,6 @@ def prepare_anonymous_page(
     page.on("pageerror", lambda error: console_errors.append(str(error)))
     page.add_init_script(
         """
-        localStorage.removeItem('finsight-rag-dev-auth-enabled');
         localStorage.setItem('finsight-entry-mode', 'anonymous');
         sessionStorage.setItem('finsight-welcome-gate-passed', '1');
         """

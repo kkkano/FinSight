@@ -40,6 +40,6 @@ describe('ReportView 只读分享态', () => {
     const html = renderReport(false);
 
     expect(html).toContain('分享链接');
-    expect(html).toContain('Export PDF');
+    expect(html).not.toContain('Export PDF');
   });
 });

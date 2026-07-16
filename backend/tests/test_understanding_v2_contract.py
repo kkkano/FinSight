@@ -28,7 +28,6 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
     from backend.graph.nodes.policy_gate import policy_gate
     from backend.graph.nodes.route_request import route_request
 
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
@@ -85,7 +84,6 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
 def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypatch):
     from backend.graph.nodes.route_request import route_request
 
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
 
     result = _run(
@@ -113,7 +111,6 @@ def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch
     from backend.graph.nodes.policy_gate import policy_gate
     from backend.graph.nodes.route_request import route_request
 
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
@@ -145,7 +142,6 @@ def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch
 def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
     from backend.graph.nodes.route_request import route_request
 
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     _enable_v2_shadow(monkeypatch)
     monkeypatch.setenv("FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT", "2")
 
@@ -181,7 +177,6 @@ def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
 def test_understanding_v2_can_be_disabled(monkeypatch):
     from backend.graph.nodes.route_request import route_request
 
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("FINSIGHT_UNDERSTANDING_V2_MODE", "off")
 
     result = _run(

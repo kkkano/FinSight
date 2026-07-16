@@ -3,13 +3,14 @@
 P0 稳定性回归测试：健康检查与基本请求校验。
 
 目标：
-- / 与 /health 端点始终可用，用于监控与存活检查；
+- /health 作为核心依赖 readiness，已删除的根路径不再伪装健康检查；
 - /api/execute 在收到空 query 时由 Pydantic 校验层直接返回 422，
   避免空请求进入主链路。
 """
 
 import os
 import sys
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,90 +29,82 @@ def client():
         yield test_client
 
 
-def test_root_health_endpoint(client):
-    """根路径应返回 healthy 状态和时间戳。"""
+def test_root_route_is_not_a_second_health_contract(client):
     resp = client.get("/")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data.get("status") == "healthy"
-    assert "timestamp" in data
-    assert "message" in data
+    assert resp.status_code == 404
 
 
-def test_health_endpoint(client):
-    """/health 端点应返回 healthy 状态。"""
+def test_health_endpoint_exposes_only_core_readiness(client):
     resp = client.get("/health")
-    assert resp.status_code == 200
+    assert resp.status_code in {200, 503}
     data = resp.json()
     assert data.get("status") in ("healthy", "degraded")
     components = data.get("components") or {}
     assert set(components) == {
-        "langgraph_runner", "checkpointer", "orchestrator", "rag", "memory", "live_tools",
+        "authentication",
+        "database",
+        "market_data",
+        "langgraph_runner",
+        "checkpointer",
+        "llm",
     }
-    assert all(set(component) == {"status"} for component in components.values())
+    assert all(set(component).issubset({"status", "error_code"}) for component in components.values())
     assert components["checkpointer"]["status"] in ("ok", "initializing", "error")
-    assert components["rag"]["status"] in ("ok", "degraded", "error")
     serialized = repr(data).lower()
-    for forbidden in ("backend", "embedding_model", "vector_dim", "doc_count", "fallback_reason", "recent_runs"):
+    for forbidden in ("embedding_model", "vector_dim", "doc_count", "fallback_reason", "recent_runs"):
         assert forbidden not in serialized
     assert "timestamp" in data
 
 
-def test_health_rag_fallback_reason_marks_component_degraded(client, monkeypatch):
-    """
-    P1-10 残留缺口：RAG 存在 fallback_reason（如 embedding hash 降级）时，
-    /health 的 components.rag.status 必须诚实显示 degraded，
-    但整体 status 仍为 healthy（RAG 降级后服务仍可用）。
-    """
-    import backend.rag.hybrid_service as hybrid_service
+def _build_system_health_client(*, authentication, database, market_data, llm_available=True):
+    from fastapi import FastAPI
 
-    class _FakeRagService:
-        backend_name = "memory"
-        embedding_model = "hash"
-        vector_dim = 256
-        fallback_reason = "embedding degraded to hash (requested 'bge-m3', FlagEmbedding unavailable)"
+    from backend.api.system_router import SystemRouterDeps, create_system_router
 
-        def count_documents(self):
-            return 0
+    app = FastAPI()
+    app.include_router(
+        create_system_router(
+            SystemRouterDeps(
+                metrics_enabled=False,
+                metrics_payload=lambda: ("", "text/plain"),
+                graph_runner_ready=lambda: True,
+                get_graph_checkpointer_info=lambda: {"backend": "postgres"},
+                get_startup_result=lambda: SimpleNamespace(llm_available=llm_available),
+                get_authentication_health=lambda: authentication,
+                get_database_health=lambda: database,
+                get_market_data_health=lambda: market_data,
+            )
+        )
+    )
+    return TestClient(app)
 
-    monkeypatch.setattr(hybrid_service, "get_rag_service", lambda: _FakeRagService())
-    # 期望 backend 不是 postgres，避免触发「期望 postgres 但实际不是」的整体降级逻辑
-    monkeypatch.setenv("RAG_V2_BACKEND", "auto")
 
-    resp = client.get("/health")
+def test_health_is_healthy_only_when_all_core_dependencies_are_ready():
+    with _build_system_health_client(
+        authentication={"status": "ok"},
+        database={"status": "ok"},
+        market_data={"status": "ok"},
+    ) as isolated_client:
+        resp = isolated_client.get("/health")
     assert resp.status_code == 200
-    data = resp.json()
-    # 整体仍健康——RAG 组件降级不影响服务可用性
-    assert data.get("status") == "healthy"
-    rag = (data.get("components") or {}).get("rag") or {}
-    assert rag.get("status") == "degraded"
-    assert set(rag) == {"status"}
+    assert resp.json()["status"] == "healthy"
 
 
-def test_health_rag_no_fallback_reason_stays_ok(client, monkeypatch):
-    """
-    无 fallback_reason 时 rag.status 保持 ok（已有行为不回归）。
-    """
-    import backend.rag.hybrid_service as hybrid_service
-
-    class _FakeRagService:
-        backend_name = "memory"
-        embedding_model = "bge-m3"
-        vector_dim = 1024
-        fallback_reason = None
-
-        def count_documents(self):
-            return 3
-
-    monkeypatch.setattr(hybrid_service, "get_rag_service", lambda: _FakeRagService())
-    monkeypatch.setenv("RAG_V2_BACKEND", "auto")
-
-    resp = client.get("/health")
-    assert resp.status_code == 200
-    data = resp.json()
-    rag = (data.get("components") or {}).get("rag") or {}
-    assert rag.get("status") == "ok"
-    assert "fallback_reason" not in rag
+def test_health_combines_stable_auth_database_market_and_llm_failures():
+    with _build_system_health_client(
+        authentication={"status": "error", "error_code": "strong_auth_required"},
+        database={"status": "error", "error_code": "database_schema_outdated"},
+        market_data={"status": "error", "error_code": "trusted_market_provider_unconfigured"},
+        llm_available=False,
+    ) as isolated_client:
+        resp = isolated_client.get("/health")
+    assert resp.status_code == 503
+    payload = resp.json()
+    assert payload["status"] == "degraded"
+    assert payload["components"]["authentication"]["error_code"] == "strong_auth_required"
+    assert payload["components"]["database"]["error_code"] == "database_schema_outdated"
+    assert payload["components"]["market_data"]["error_code"] == "trusted_market_provider_unconfigured"
+    assert payload["components"]["llm"]["error_code"] == "llm_unavailable"
 
 
 def test_chat_empty_query_validation(client):

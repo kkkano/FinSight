@@ -69,8 +69,6 @@ export function summarizeTimelineEvent(event: TimelineEvent): string {
       return '[计划] 执行计划已生成';
     case 'system':
       return `[系统] ${subject}`;
-    case 'interrupt':
-      return '[人工确认] 等待用户输入';
     case 'error':
       return '[系统] 执行出错';
     default:

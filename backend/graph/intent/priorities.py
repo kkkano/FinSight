@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-PRIORITY_WORKFLOW_ACTION = 8        # request_frame workflow action（如 backtest）
+PRIORITY_WORKFLOW_ACTION = 8        # request_frame 中的显式流程动作
 PRIORITY_UI_SELECTION = 10          # UI 选中项驱动的任务
 PRIORITY_PRIMARY_COMPARE = 20       # 多标的对比主任务
 PRIORITY_PER_TICKER_EVIDENCE = 24   # contract 逐标的取证任务

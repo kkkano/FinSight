@@ -220,13 +220,13 @@ describe('useStore conversation lifecycle', () => {
     });
     state.setPendingChatHandoffContext(secondSession, {
       sessionId: secondSession,
-      sourceView: 'workbench',
+      sourceView: 'command_palette',
     });
 
     expect(state.takePendingChatHandoffContext(firstSession)).toMatchObject({ sourceTab: 'technical' });
     expect(state.takePendingChatHandoffContext(firstSession)).toBeUndefined();
     expect(useStore.getState().pendingChatHandoffContextBySession[secondSession]).toMatchObject({
-      sourceView: 'workbench',
+      sourceView: 'command_palette',
     });
   });
 

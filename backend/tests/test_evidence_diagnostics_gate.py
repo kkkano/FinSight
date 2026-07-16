@@ -25,7 +25,6 @@ def test_execute_plan_stub_preserves_context_artifacts_across_execution(monkeypa
         "policy": {"allowed_tools": [], "budget": {"max_rounds": 1, "max_tools": 0}},
         "subject": {"subject_type": "company", "tickers": ["TSLA"], "selection_payload": []},
         "artifacts": {
-            "alert_markdown": "Created alert for TSLA at 180.",
             "conversation_decision": {"lane": "source_grounded_answer"},
             "draft_markdown": "stale pre-execution draft",
             "step_results": {"stale": {"output": "old"}},
@@ -36,7 +35,6 @@ def test_execute_plan_stub_preserves_context_artifacts_across_execution(monkeypa
     out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
 
-    assert artifacts.get("alert_markdown") == "Created alert for TSLA at 180."
     assert artifacts.get("conversation_decision") == {"lane": "source_grounded_answer"}
     assert "draft_markdown" not in artifacts
     assert artifacts.get("step_results") == {}

@@ -29,14 +29,7 @@ from backend.graph.investment_intent import (
     query_requests_comparative_investment_opinion,
     query_requests_investment_opinion,
 )
-from backend.graph.intent.router import (
-    ContextBinding,
-    ConversationDecision,
-    _effective_current_turn_tickers,
-    _task_hints_require_execution,
-    generate_contextual_reply,
-    route_conversation,
-)
+from backend.graph.intent.decision import ConversationDecision
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
@@ -69,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 
 from backend.graph.intent.keywords import (  # noqa: F401 —— 关键词单一来源（WP2-T2）
-    _ALERT_HINTS,
     _ASSET_DEICTIC_HINTS,
     _COMPARE_HINTS,
     _FALLBACK_HINTS,
@@ -164,8 +156,6 @@ def _company_operations(
         operations.append(_operation("analyze_impact", 0.78))
     if not explicit_technical and _contains_any(query, _TECHNICAL_HINTS):
         operations.append(_operation("technical", 0.82))
-    if _contains_any(query, _ALERT_HINTS):
-        operations.append(_operation("alert_set", 0.88))
     if operations:
         return operations
 
@@ -188,7 +178,6 @@ def _domain_intent_operation(domain_intent: str, confidence: float) -> dict[str,
         "analysis": "qa",
         "report_discussion": "qa",
         "doc_qa": "qa",
-        "portfolio": "portfolio_impact",
     }
     return _operation(mapping.get(str(domain_intent or ""), "qa"), confidence)
 
@@ -225,17 +214,6 @@ def _router_directed_company_operations(
     """
     if decision is None:
         return None
-    if decision.execution_route == "alert" or decision.domain_intent == "alert":
-        source_ops = [
-            operation
-            for operation in (fallback_operations or [])
-            if isinstance(operation, dict)
-            and str(operation.get("name") or "").strip()
-            in {"fetch", "price", "news_impact", "analyze_impact", "technical"}
-        ]
-        if source_ops:
-            return [*source_ops, _operation("alert_set", max(decision.confidence, 0.78))]
-        return [_operation("alert_set", max(decision.confidence, 0.78))]
     if decision.context_binding.source not in {"none", ""}:
         return None
     specific_fallbacks = _specific_company_operations(fallback_operations)

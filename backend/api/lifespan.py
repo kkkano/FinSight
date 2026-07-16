@@ -1,87 +1,34 @@
-# -*- coding: utf-8 -*-
-"""FastAPI lifespan（WP3 Task6 机械搬运自 backend/api/main.py，零行为变更）。
-
-调度器生命周期（_schedulers）、默认用户配置初始化、RAG 观测台/GraphRunner 预热。
-"""
+"""核心服务、Prediction worker 与必要调度器的生命周期。"""
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.api.security_gate import _env_bool, logger, validate_runtime_auth_configuration
+from backend.api.security_gate import _env_bool, validate_runtime_auth_configuration
 from backend.graph import aget_graph_runner, reset_graph_runner
-from backend.rag import get_rag_observability_store, install_rag_observability_hooks
-from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.database import assert_core_schema_current
+from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
+
 
 logger = logging.getLogger(__name__)
+_schedulers: list[object] = []
 
-_schedulers = []
-
-def _init_default_user_config() -> None:
-    """Write default LLM config on first boot if user_config.json does not exist.
-
-    This gives new deployments a working out-of-the-box experience:
-    users see a pre-filled (but overridable) endpoint in the Settings UI.
-    The file is stored in FINSIGHT_CONFIG_DIR (/app/data in Docker) so it
-    persists across container restarts via the named volume.
-    """
-    import json as _json
-    from backend.llm_config import USER_CONFIG_PATH
-
-    if os.path.exists(USER_CONFIG_PATH):
-        return
-
-    _DEFAULT_API_BASE = os.getenv("OPENAI_COMPATIBLE_API_BASE", "").strip()
-    _DEFAULT_API_KEY  = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
-    _DEFAULT_MODEL    = os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip()
-
-    if not (_DEFAULT_API_BASE and _DEFAULT_API_KEY and _DEFAULT_MODEL):
-        logger.warning(
-            "跳过首启 LLM 配置：请在 .env.server 显式设置 OPENAI_COMPATIBLE_API_BASE、"
-            "OPENAI_COMPATIBLE_MODEL 和 OPENAI_COMPATIBLE_API_KEY"
-        )
-        return
-
-    default_cfg = {
-        "llm_provider": "openai_compatible",
-        "llm_model":    _DEFAULT_MODEL,
-        "llm_api_base": _DEFAULT_API_BASE,
-        "llm_api_key":  _DEFAULT_API_KEY,
-        "llm_endpoints": [
-            {
-                "name":        "primary",
-                "provider":    "openai_compatible",
-                "api_base":    _DEFAULT_API_BASE,
-                "api_key":     _DEFAULT_API_KEY,
-                "model":       _DEFAULT_MODEL,
-                "weight":      1,
-                "enabled":     True,
-                "cooldown_sec": 30,
-            }
-        ],
-    }
-    try:
-        os.makedirs(os.path.dirname(USER_CONFIG_PATH), exist_ok=True)
-        with open(USER_CONFIG_PATH, "w", encoding="utf-8") as _f:
-            _json.dump(default_cfg, _f, indent=2, ensure_ascii=False)
-        logger.info("[Config] wrote default user config to %s", USER_CONFIG_PATH)
-    except Exception as _exc:
-        logger.warning("[Config] failed to write default user config: %s", _exc)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """FastAPI lifespan handler to start/stop price_change scheduler."""
+async def lifespan(_app: FastAPI):
     validate_runtime_auth_configuration()
     schema_status = assert_core_schema_current()
     if schema_status.configured:
         logger.info("[Database] Alembic revision current=%s", ",".join(schema_status.current))
     else:
         logger.info("[Database] development 模式未配置核心 PostgreSQL，跳过 revision 检查")
+
+    from backend.services.startup_check import run_startup_checks
+
+    run_startup_checks()
 
     prediction_service = None
     if schema_status.configured and _env_bool("PREDICTION_GENERATION_ENABLED", True):
@@ -91,141 +38,34 @@ async def lifespan(app: FastAPI):
         await prediction_service.start()
         logger.info("[Prediction] generation worker and recovery scan started")
 
-    # Ensure a working default LLM config exists on first boot.
-    _init_default_user_config()
+    if schema_status.configured:
+        from backend.services.scheduler_runner import start_interval_scheduler
 
-    # P1-1/P1-3: 启动配置自检（数据源 key 缺失告警 + LLM endpoint 可用性）
-    try:
-        from backend.services.startup_check import run_startup_checks
+        if _env_bool("MONITOR_REALTIME_ENABLED", True):
+            from backend.services.monitor_engine import run_realtime_monitor_cycle
 
-        run_startup_checks()
-    except Exception as exc:
-        logger.exception("[StartupCheck] failed: %s", exc)
+            scheduler = start_interval_scheduler(
+                run_realtime_monitor_cycle,
+                interval_minutes=1.0,
+                enabled=True,
+                job_id="monitor_realtime_tick",
+                job_label="page-lease realtime monitor tick",
+            )
+            if scheduler:
+                _schedulers.append(scheduler)
 
-    from backend.services.alert_scheduler import run_price_change_cycle
-    from backend.services.scheduler_runner import start_interval_scheduler, start_price_change_scheduler
+        if _env_bool("PREDICTION_OUTCOME_SCHEDULER_ENABLED", True):
+            from backend.services.prediction_outcomes import run_prediction_outcome_cycle
 
-    enabled = _env_bool("PRICE_ALERT_SCHEDULER_ENABLED", False)
-    if enabled:
-        interval = float(os.getenv("PRICE_ALERT_INTERVAL_MINUTES", "15"))
-        sched = start_price_change_scheduler(
-            run_price_change_cycle,
-            interval_minutes=interval,
-            enabled=True,
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] PRICE_ALERT_SCHEDULER_ENABLED is false; skip start.")
-
-    # News scheduler
-    from backend.services.alert_scheduler import run_news_alert_cycle
-    news_enabled = _env_bool("NEWS_ALERT_SCHEDULER_ENABLED", False)
-    if news_enabled:
-        news_interval = float(os.getenv("NEWS_ALERT_INTERVAL_MINUTES", "30"))
-        sched = start_price_change_scheduler(
-            run_news_alert_cycle,
-            interval_minutes=news_interval,
-            enabled=True,
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] NEWS_ALERT_SCHEDULER_ENABLED is false; skip start.")
-
-    # Risk scheduler
-    from backend.services.alert_scheduler import run_risk_alert_cycle
-    risk_enabled = _env_bool("RISK_ALERT_SCHEDULER_ENABLED", False)
-    if risk_enabled:
-        risk_interval = float(os.getenv("RISK_ALERT_INTERVAL_MINUTES", "60"))
-        sched = start_price_change_scheduler(
-            run_risk_alert_cycle,
-            interval_minutes=risk_interval,
-            enabled=True,
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] RISK_ALERT_SCHEDULER_ENABLED is false; skip start.")
-
-    # Health probe scheduler (optional)
-    from backend.services.health_probe import run_health_probe_cycle
-    health_enabled = _env_bool("HEALTH_PROBE_ENABLED", False)
-    if health_enabled:
-        health_interval = float(os.getenv("HEALTH_PROBE_INTERVAL_MINUTES", "30"))
-        sched = start_price_change_scheduler(
-            run_health_probe_cycle,
-            interval_minutes=health_interval,
-            enabled=True,
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
-
-    # 页面可见时的高频监控：固定 60 秒 tick；函数内部再由 PostgreSQL lease + advisory lock 门控。
-    realtime_monitor_enabled = _env_bool("MONITOR_REALTIME_ENABLED", True)
-    if realtime_monitor_enabled:
-        from backend.services.monitor_engine import run_realtime_monitor_cycle
-
-        sched = start_interval_scheduler(
-            run_realtime_monitor_cycle,
-            interval_minutes=1.0,
-            enabled=True,
-            job_id="monitor_realtime_tick",
-            job_label="page-lease realtime monitor tick",
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] MONITOR_REALTIME_ENABLED is false; skip start.")
-
-    outcome_enabled = _env_bool("PREDICTION_OUTCOME_SCHEDULER_ENABLED", True)
-    if outcome_enabled:
-        from backend.services.prediction_outcomes import run_prediction_outcome_cycle
-
-        outcome_interval = float(os.getenv("PREDICTION_OUTCOME_INTERVAL_MINUTES", "1440"))
-        sched = start_interval_scheduler(
-            run_prediction_outcome_cycle,
-            interval_minutes=outcome_interval,
-            enabled=True,
-            job_id="prediction_outcome_daily",
-            job_label="deterministic prediction outcome evaluation",
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[Scheduler] PREDICTION_OUTCOME_SCHEDULER_ENABLED is false; skip start.")
-
-    try:
-        install_rag_observability_hooks()
-        rag_observability_status = get_rag_observability_store().ensure_schema() if hasattr(get_rag_observability_store(), 'ensure_schema') else False
-        logger.info("[RAGObservability] initialized=%s", rag_observability_status)
-    except Exception as exc:
-        logger.exception("[RAGObservability] initialization failed in lifespan: %s", exc)
-
-    rag_retention_enabled = _env_bool("RAG_OBSERVABILITY_RETENTION_ENABLED", True)
-    if rag_retention_enabled:
-        rag_retention_interval = float(os.getenv("RAG_OBSERVABILITY_RETENTION_INTERVAL_MINUTES", "360"))
-
-        def _run_rag_observability_retention_cycle() -> None:
-            try:
-                deleted = get_rag_observability_store().cleanup_retention()
-                logger.info("[RAGObservability] retention cleanup deleted=%s", deleted)
-            except Exception as exc:
-                logger.exception("[RAGObservability] retention cleanup failed: %s", exc)
-
-        sched = start_interval_scheduler(
-            _run_rag_observability_retention_cycle,
-            interval_minutes=rag_retention_interval,
-            enabled=True,
-            job_id="rag_observability_retention",
-            job_label="rag observability retention",
-        )
-        if sched:
-            _schedulers.append(sched)
-    else:
-        logger.info("[RAGObservability] RAG_OBSERVABILITY_RETENTION_ENABLED is false; skip retention scheduler.")
+            scheduler = start_interval_scheduler(
+                run_prediction_outcome_cycle,
+                interval_minutes=float(os.getenv("PREDICTION_OUTCOME_INTERVAL_MINUTES", "1440")),
+                enabled=True,
+                job_id="prediction_outcome_daily",
+                job_label="deterministic prediction outcome evaluation",
+            )
+            if scheduler:
+                _schedulers.append(scheduler)
 
     try:
         await aget_graph_runner()
@@ -239,27 +79,29 @@ async def lifespan(app: FastAPI):
         if prediction_service is not None:
             try:
                 await prediction_service.stop()
-                logger.info("[Prediction] generation worker stopped")
             except Exception as exc:
-                logger.info("[Prediction] shutdown error: %s", exc)
+                logger.warning("[Prediction] shutdown error: %s", exc)
+
+        for scheduler in _schedulers:
+            try:
+                scheduler.shutdown(wait=True)  # type: ignore[attr-defined]
+            except Exception as exc:
+                logger.warning("[Scheduler] shutdown error: %s", exc)
+        _schedulers.clear()
+
         try:
             flush_langfuse()
             shutdown_langfuse()
         except Exception:
-            logger.debug("[LangFuse] flush/shutdown error on shutdown (ignored)")
-        try:
-            for sched in _schedulers:
-                sched.shutdown(wait=True)
-            if _schedulers:
-                logger.info("[Scheduler] all schedulers stopped.")
-            _schedulers.clear()
-        except Exception as e:
-            logger.info(f"[Scheduler] shutdown error: {e}")
+            logger.debug("[LangFuse] flush/shutdown error", exc_info=True)
+
         try:
             from backend.graph.checkpointer import areset_checkpointer_caches
 
             await areset_checkpointer_caches()
             reset_graph_runner()
-            logger.info("[GraphRunner] checkpointer/runner caches cleared on shutdown")
-        except Exception as e:
-            logger.info(f"[GraphRunner] shutdown cleanup error: {e}")
+        except Exception as exc:
+            logger.warning("[GraphRunner] shutdown cleanup error: %s", exc)
+
+
+__all__ = ["lifespan"]

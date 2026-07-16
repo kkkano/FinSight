@@ -1,10 +1,4 @@
-"""
-APScheduler runner for price_change sweep.
-
-Design:
-- Keep it framework-agnostic; main.py can call start_price_change_scheduler on startup.
-- Accept injected run_fn for testability.
-"""
+"""Prediction Outcome 与页面 lease Monitor 共用的轻量定时器。"""
 from __future__ import annotations
 
 import logging
@@ -15,10 +9,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 logger = logging.getLogger(__name__)
-
-
-
-
 
 def start_interval_scheduler(
     run_fn: Callable[[], None],
@@ -52,18 +42,3 @@ def start_interval_scheduler(
     scheduler.start()
     logger.info(f"[Scheduler] {job_label} started: every {interval_minutes} min.")
     return scheduler
-
-
-def start_price_change_scheduler(
-    run_fn: Callable[[], None],
-    *,
-    interval_minutes: float = 15.0,
-    enabled: bool = True,
-) -> Optional[BackgroundScheduler]:
-    return start_interval_scheduler(
-        run_fn,
-        interval_minutes=interval_minutes,
-        enabled=enabled,
-        job_id="price_change_cycle",
-        job_label="price_change scheduler",
-    )
