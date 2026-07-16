@@ -63,12 +63,12 @@ const getInitialColorConvention = (): ColorConvention => {
   return window.localStorage.getItem('finsight-color-convention') === 'cn' ? 'cn' : 'intl';
 };
 
+export const normalizePersistedEntryMode = (raw: string | null): EntryMode =>
+  raw === 'anonymous' ? 'anonymous' : 'pending';
+
 const getInitialEntryMode = (): EntryMode => {
   if (typeof window === 'undefined') return 'pending';
-  const raw = window.localStorage.getItem('finsight-entry-mode');
-  return raw === 'pending' || raw === 'anonymous' || raw === 'authenticated'
-    ? (raw as EntryMode)
-    : 'pending';
+  return normalizePersistedEntryMode(window.localStorage.getItem('finsight-entry-mode'));
 };
 
 export const buildAnonymousSessionId = (): string => {
@@ -281,8 +281,14 @@ const deriveBackendTitle = (messages?: Message[]): string | undefined => {
   return source.replace(/\s+/g, ' ').trim().slice(0, 42) || undefined;
 };
 
+const isAnonymousSession = (sessionId: string): boolean =>
+  String(sessionId || '').trim().startsWith('public:anonymous:');
+
+const canSyncBackendConversation = (sessionId: string): boolean =>
+  !isAnonymousSession(sessionId) && Boolean(useStore.getState().authIdentity?.userId);
+
 const createBackendConversation = (sessionId: string, messages?: Message[]) => {
-  if (!sessionId) return;
+  if (!sessionId || !canSyncBackendConversation(sessionId)) return;
   const payload = messages
     ? {
         title: deriveBackendTitle(messages),
@@ -293,7 +299,7 @@ const createBackendConversation = (sessionId: string, messages?: Message[]) => {
 };
 
 const deleteBackendConversation = (sessionId: string) => {
-  if (!sessionId) return;
+  if (!sessionId || !canSyncBackendConversation(sessionId)) return;
   void apiClient.deleteConversation(sessionId).catch(() => undefined);
 };
 
@@ -490,7 +496,7 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
  */
 const hydrateMessagesFromBackend = (sessionId: string): void => {
   const sid = String(sessionId || '').trim();
-  if (!sid) return;
+  if (!sid || !canSyncBackendConversation(sid)) return;
   void apiClient
     .getConversation(sid)
     .then((resp) => {

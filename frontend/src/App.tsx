@@ -11,6 +11,7 @@ import { getSupabaseClient } from './api/supabaseClient';
 import { SharedReportPage } from './pages/SharedReportPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 import { useDashboardStore } from './store/dashboardStore';
+import { resolveProtectedRouteAccess } from './auth/access';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
 
@@ -112,8 +113,6 @@ function HistoryRoute() {
 }
 
 function EntryGuard({ children }: { children: ReactElement }) {
-  const authIdentity = useStore((state) => state.authIdentity);
-  const entryMode = useStore((state) => state.entryMode);
   const location = useLocation();
   const hash = String(location.hash || '').toLowerCase();
   const searchParams = new URLSearchParams(location.search);
@@ -126,9 +125,7 @@ function EntryGuard({ children }: { children: ReactElement }) {
 
   if (isAuthCallback) return children;
 
-  const hasEntryAccess =
-    hasWelcomeGatePassed() && (Boolean(authIdentity?.userId) || entryMode === 'anonymous' || entryMode === 'authenticated');
-  if (hasEntryAccess) return children;
+  if (hasWelcomeGatePassed()) return children;
 
   const from = `${location.pathname}${location.search}`;
   return <Navigate to={`/welcome?from=${encodeURIComponent(from)}`} replace />;
@@ -139,9 +136,9 @@ function AuthenticatedGuard({ children }: { children: ReactElement }) {
   const entryMode = useStore((state) => state.entryMode);
   const location = useLocation();
 
-  if (Boolean(authIdentity?.userId) || entryMode === 'authenticated') {
-    return children;
-  }
+  const access = resolveProtectedRouteAccess(authIdentity?.userId, entryMode);
+  if (access === 'allow') return children;
+  if (access === 'pending') return null;
 
   const from = `${location.pathname}${location.search}`;
   return <Navigate to={`/welcome?from=${encodeURIComponent(from)}`} replace />;
@@ -170,6 +167,11 @@ function App() {
     const client = getSupabaseClient();
     if (!client) {
       setAuthIdentity(null);
+      setEntryMode('anonymous');
+      const currentSessionId = useStore.getState().sessionId;
+      if (!String(currentSessionId || '').startsWith('public:anonymous:')) {
+        setSessionId(buildAnonymousSessionId());
+      }
       return;
     }
 
@@ -190,6 +192,7 @@ function App() {
       }
 
       setAuthIdentity(null);
+      setEntryMode('anonymous');
       const currentSessionId = useStore.getState().sessionId;
       if (!String(currentSessionId || '').startsWith('public:anonymous:')) {
         setSessionId(buildAnonymousSessionId());

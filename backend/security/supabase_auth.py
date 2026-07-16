@@ -89,6 +89,31 @@ def _select_jwk(jwks: dict[str, Any], kid: str) -> Any:
     raise InvalidTokenError("JWT 签名密钥不存在")
 
 
+def ensure_auth_verifier_ready() -> None:
+    """确认当前服务端配置足以校验 Supabase JWT。"""
+
+    if os.getenv("SUPABASE_JWT_SECRET", "").strip():
+        return
+
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    if not supabase_url:
+        raise AuthConfigurationError("缺少 SUPABASE_JWT_SECRET 或 SUPABASE_URL")
+
+    try:
+        jwks = _get_jwks(_jwks_url(supabase_url))
+    except AuthConfigurationError:
+        raise
+    except Exception as exc:
+        raise AuthConfigurationError("无法获取 Supabase JWKS") from exc
+
+    keys = jwks.get("keys", [])
+    if not any(
+        isinstance(key_data, dict) and str(key_data.get("kid") or "").strip()
+        for key_data in keys
+    ):
+        raise AuthConfigurationError("Supabase JWKS 不包含可用签名密钥")
+
+
 def _decode_token(token: str) -> dict[str, Any]:
     secret = os.getenv("SUPABASE_JWT_SECRET", "").strip()
     if secret:
@@ -164,6 +189,7 @@ __all__ = [
     "AuthenticatedUser",
     "AuthConfigurationError",
     "InvalidTokenError",
+    "ensure_auth_verifier_ready",
     "resolve_request_user",
     "verify_supabase_jwt",
 ]

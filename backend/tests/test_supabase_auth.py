@@ -12,6 +12,7 @@ from backend.security import supabase_auth
 from backend.security.supabase_auth import (
     AuthConfigurationError,
     InvalidTokenError,
+    ensure_auth_verifier_ready,
     resolve_request_user,
     verify_supabase_jwt,
 )
@@ -98,6 +99,44 @@ def test_invalid_hs256_token_rejected(
 def test_missing_auth_configuration_rejected() -> None:
     with pytest.raises(AuthConfigurationError):
         verify_supabase_jwt(_make_token())
+
+
+def test_auth_verifier_readiness_accepts_hs256_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
+    monkeypatch.setattr(
+        supabase_auth,
+        "_fetch_jwks",
+        lambda _url: pytest.fail("HS256 配置不应访问 JWKS"),
+    )
+
+    ensure_auth_verifier_ready()
+
+
+def test_auth_verifier_readiness_fetches_usable_jwks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co/")
+    monkeypatch.setattr(
+        supabase_auth,
+        "_fetch_jwks",
+        lambda url: {"keys": [{"kid": "active-key"}]}
+        if url == "https://example.supabase.co/auth/v1/.well-known/jwks.json"
+        else pytest.fail(f"意外的 JWKS URL: {url}"),
+    )
+
+    ensure_auth_verifier_ready()
+
+
+def test_auth_verifier_readiness_rejects_jwks_without_signing_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(supabase_auth, "_fetch_jwks", lambda _url: {"keys": []})
+
+    with pytest.raises(AuthConfigurationError, match="不包含可用签名密钥"):
+        ensure_auth_verifier_ready()
 
 
 def test_resolve_request_user_accepts_valid_bearer(monkeypatch: pytest.MonkeyPatch) -> None:

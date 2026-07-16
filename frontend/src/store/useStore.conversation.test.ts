@@ -1,16 +1,35 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { apiClient } from '../api/client';
 import { zh } from '../locales/zh';
 import { useStore } from './useStore';
 
 describe('useStore conversation lifecycle', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
+    vi.spyOn(apiClient, 'createConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:default',
+    });
+    vi.spyOn(apiClient, 'getConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:default',
+    });
+    vi.spyOn(apiClient, 'deleteConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:default',
+    });
     if (typeof window !== 'undefined') {
       window.localStorage.clear();
     }
     const state = useStore.getState();
+    state.setAuthIdentity({ userId: 'test-user', email: null });
     state.setSessionId('public:test-user:default');
     state.clearConversationContext();
+    vi.clearAllMocks();
   });
 
   it('clears the current conversation context without rotating session id', () => {
@@ -38,6 +57,41 @@ describe('useStore conversation lifecycle', () => {
     expect(next.statusMessage).toBeNull();
     expect(next.executionProgress).toBeNull();
     expect(next.abortController).toBeNull();
+  });
+
+  it('keeps anonymous sessions local without calling protected conversation APIs', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setAuthIdentity(null);
+    useStore.getState().setSessionId('public:anonymous:test');
+    await Promise.resolve();
+
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(getConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not trust a user-shaped session id without an authenticated identity', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setAuthIdentity(null);
+    useStore.getState().setSessionId('public:stale-user:default');
+    await Promise.resolve();
+
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(getConversation).not.toHaveBeenCalled();
+  });
+
+  it('syncs an authenticated conversation and hydrates empty local history', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setSessionId('public:test-user:second');
+    await Promise.resolve();
+
+    expect(createConversation).toHaveBeenCalledOnce();
+    expect(getConversation).toHaveBeenCalledOnce();
   });
 
   it('starts a new chat by rotating session id and resetting transient state', () => {

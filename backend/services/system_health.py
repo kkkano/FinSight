@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 from backend.config.settings import security_settings
+from backend.security.supabase_auth import AuthConfigurationError, ensure_auth_verifier_ready
 from backend.services.database import is_production_mode, schema_revision_status
 from backend.services.market_data_gateway import get_market_data_gateway
 from backend.utils.env import env_bool
@@ -24,9 +25,13 @@ def authentication_health() -> dict[str, str]:
         return {"status": "disabled"}
 
     jwt_secret = str(os.getenv("SUPABASE_JWT_SECRET") or "").strip()
-    supabase_url = str(settings.supabase_url or settings.vite_supabase_url).strip()
+    supabase_url = str(settings.supabase_url or "").strip()
     if not jwt_secret and not supabase_url:
         return {"status": "error", "error_code": "auth_verifier_unconfigured"}
+    try:
+        ensure_auth_verifier_ready()
+    except AuthConfigurationError:
+        return {"status": "error", "error_code": "auth_verifier_unavailable"}
     return {"status": "ok"}
 
 

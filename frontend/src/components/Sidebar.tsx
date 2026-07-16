@@ -46,14 +46,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const location = useLocation();
   const { currentTicker } = useStore();
+  const authUserId = useStore((state) => state.authIdentity?.userId);
   const { watchlist, initWatchlist, activeAsset: lastDashboardAsset } = useDashboardStore();
 
   const compactMobile = !isMobileOpen;
   const activeKey = currentView ?? (location.pathname.startsWith('/history') ? 'history' : 'chat');
 
   useEffect(() => {
-    initWatchlist();
-  }, [initWatchlist]);
+    void initWatchlist();
+  }, [authUserId, initWatchlist]);
 
   const closeMobile = () => onMobileClose?.();
 

@@ -261,15 +261,34 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 
   initWatchlist: async () => {
-    const ownerId = useStore.getState().authIdentity?.userId || 'public';
+    const ownerId = String(useStore.getState().authIdentity?.userId || '').trim();
+    if (!ownerId) {
+      set({
+        watchlist: [],
+        _isWatchlistLoaded: true,
+        _isWatchlistLoading: false,
+        _watchlistOwnerId: null,
+      });
+      return;
+    }
+
     const { _isWatchlistLoaded, _isWatchlistLoading, _watchlistOwnerId } = get();
-    if (_isWatchlistLoading) return;
+    if (_isWatchlistLoading && _watchlistOwnerId === ownerId) return;
     if (_isWatchlistLoaded && _watchlistOwnerId === ownerId) return;
 
-    set({ _isWatchlistLoading: true });
+    set({
+      watchlist: [],
+      _isWatchlistLoaded: false,
+      _isWatchlistLoading: true,
+      _watchlistOwnerId: ownerId,
+    });
 
     try {
       const response = await apiClient.getWatchlist();
+      if (
+        useStore.getState().authIdentity?.userId !== ownerId
+        || get()._watchlistOwnerId !== ownerId
+      ) return;
       const items = Array.isArray(response?.items) ? response.items : [];
       const watchItems: WatchItem[] = items.map((item) => ({
         symbol: item.ticker.toUpperCase(),
@@ -284,7 +303,9 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         _watchlistOwnerId: ownerId,
       });
     } catch {
-      set({ _isWatchlistLoading: false });
+      if (get()._watchlistOwnerId === ownerId) {
+        set({ _isWatchlistLoading: false });
+      }
     }
   },
 

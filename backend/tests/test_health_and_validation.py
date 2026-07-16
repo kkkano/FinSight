@@ -107,6 +107,46 @@ def test_health_combines_stable_auth_database_market_and_llm_failures():
     assert payload["components"]["llm"]["error_code"] == "llm_unavailable"
 
 
+def test_authentication_health_probes_configured_jwks(monkeypatch: pytest.MonkeyPatch):
+    from backend.services import system_health
+
+    monkeypatch.setattr(
+        system_health,
+        "security_settings",
+        lambda: SimpleNamespace(supabase_auth_required=True, supabase_url="https://example.supabase.co"),
+    )
+    monkeypatch.setattr(system_health, "is_production_mode", lambda: True)
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    called = []
+    monkeypatch.setattr(system_health, "ensure_auth_verifier_ready", lambda: called.append(True))
+
+    assert system_health.authentication_health() == {"status": "ok"}
+    assert called == [True]
+
+
+def test_authentication_health_reports_unavailable_jwks(monkeypatch: pytest.MonkeyPatch):
+    from backend.security.supabase_auth import AuthConfigurationError
+    from backend.services import system_health
+
+    monkeypatch.setattr(
+        system_health,
+        "security_settings",
+        lambda: SimpleNamespace(supabase_auth_required=True, supabase_url="https://missing.supabase.co"),
+    )
+    monkeypatch.setattr(system_health, "is_production_mode", lambda: True)
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+
+    def unavailable() -> None:
+        raise AuthConfigurationError("无法获取 Supabase JWKS")
+
+    monkeypatch.setattr(system_health, "ensure_auth_verifier_ready", unavailable)
+
+    assert system_health.authentication_health() == {
+        "status": "error",
+        "error_code": "auth_verifier_unavailable",
+    }
+
+
 def test_chat_empty_query_validation(client):
     """
     空 query 应在进入处理函数前被 Pydantic 拦截，返回 422。
