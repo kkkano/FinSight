@@ -2,12 +2,31 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const rawBuildId = process.env.FRONTEND_BUILD_ID?.trim() || 'local'
+const serviceWorkerBuildId = rawBuildId.replace(/[^A-Za-z0-9._-]/g, '-') || 'local'
+const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(serviceWorkerBuildId)}`
+
+const versionedServiceWorkerRegistration = {
+  name: 'versioned-service-worker-registration',
+  transformIndexHtml() {
+    return [
+      {
+        tag: 'script',
+        attrs: { id: 'finsight-service-worker-registration' },
+        children: `if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register(${JSON.stringify(serviceWorkerUrl)}, { scope: '/' }) }) }`,
+        injectTo: 'head' as const,
+      },
+    ]
+  },
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'logo.svg'],
       manifest: {
         name: 'FinSight AI',
@@ -58,6 +77,7 @@ export default defineConfig({
         ],
       },
     }),
+    versionedServiceWorkerRegistration,
   ],
   define: {
     'process.env': {}

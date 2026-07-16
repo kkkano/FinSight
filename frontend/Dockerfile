@@ -24,6 +24,10 @@ ENV VITE_CHAT_HISTORY_MAX_MESSAGES=$VITE_CHAT_HISTORY_MAX_MESSAGES
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Service Worker 注册 URL 使用镜像 SHA；放在依赖层后以保留 npm ci 缓存。
+ARG FRONTEND_BUILD_ID=local
+ENV FRONTEND_BUILD_ID=$FRONTEND_BUILD_ID
+
 COPY . .
 RUN npm run build
 
