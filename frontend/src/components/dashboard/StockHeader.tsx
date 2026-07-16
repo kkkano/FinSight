@@ -94,7 +94,7 @@ export function StockHeader({
   return (
     <div className="flex items-center justify-between gap-4 border-b border-t-border bg-t-surface px-5 py-3 shrink-0 max-lg:px-3 max-lg:flex-wrap max-lg:gap-2">
       {/* Left: Symbol info + Price */}
-      <div className="flex items-center gap-4 min-w-0 max-lg:gap-2">
+      <div className="flex items-center gap-4 min-w-0 max-lg:gap-2 max-md:w-full max-md:flex-col max-md:items-start">
         {/* Symbol + Name */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold text-t-text truncate">{displayName || ticker}</span>
@@ -107,7 +107,7 @@ export function StockHeader({
         {loading ? (
           <div className="h-6 w-24 bg-fin-border rounded animate-pulse" />
         ) : (
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 max-md:w-full max-md:min-w-0 max-md:flex-wrap max-md:shrink">
             {closePrice !== null && (
               <Stat
                 label={ticker}
@@ -125,7 +125,9 @@ export function StockHeader({
             <DashboardSourceBadge metaKey="market_chart" fallbackSource="yfinance" />
             {/* Mini sparkline */}
             {charts?.market_chart && charts.market_chart.length > 0 && (
-              <MiniPriceChart data={charts.market_chart} />
+              <div className="hidden sm:block">
+                <MiniPriceChart data={charts.market_chart} />
+              </div>
             )}
           </div>
         )}
