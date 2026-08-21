@@ -214,6 +214,7 @@ export function NewsTab() {
       <NewsSentimentOverview
         news={overviewNews}
         timeRange={newsTimeRange}
+        snapshot={dashboardData?.news?.sentiment_snapshot}
         ticker={ticker ?? undefined}
       />
 

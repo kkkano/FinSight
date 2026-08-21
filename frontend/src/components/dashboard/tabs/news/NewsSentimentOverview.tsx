@@ -9,7 +9,7 @@ import ReactECharts from 'echarts-for-react';
 import { Activity, Flame, Minus, RadioTower, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
-import type { NewsItem, NewsTimeRange } from '../../../../types/dashboard';
+import type { NewsItem, NewsSentimentSnapshot, NewsTimeRange } from '../../../../types/dashboard';
 import {
   classifySentiment,
   deriveImpactLevel,
@@ -62,6 +62,7 @@ interface NewsSentimentOverviewProps {
   news: NewsItem[];
   timeRange: NewsTimeRange;
   ticker?: string;
+  snapshot?: NewsSentimentSnapshot;
 }
 
 const TIME_RANGE_LABELS: Record<NewsTimeRange, string> = {
@@ -86,6 +87,12 @@ const SENTIMENT_DOT: Record<SentimentType, string> = {
   bullish: 'bg-fin-success',
   neutral: 'bg-fin-muted',
   bearish: 'bg-fin-danger',
+};
+
+const PRICE_STATUS_LABELS: Record<string, string> = {
+  resonance: '共振',
+  divergence: '背离',
+  neutral: '不明确',
 };
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -233,6 +240,52 @@ const buildCatalysts = (news: NewsItem[]): CatalystEvent[] => {
     impactScore: impactValue(item),
   }));
 };
+
+const TREND_DIRECTION_MAP: Record<string, TrendDirection> = {
+  improving: 'up',
+  deteriorating: 'down',
+  stable: 'flat',
+};
+
+const TREND_LABEL_MAP: Record<string, string> = {
+  improving: '转暖',
+  deteriorating: '走弱',
+  stable: '震荡',
+};
+
+export function resolveBackendTrend(
+  snapshot?: NewsSentimentSnapshot,
+): { direction: TrendDirection; label: string; delta: number } | null {
+  const trend = snapshot?.sentiment_trend;
+  if (!trend || trend.direction === 'unknown' || typeof trend.delta !== 'number') {
+    return null;
+  }
+  return {
+    direction: TREND_DIRECTION_MAP[trend.direction] ?? 'flat',
+    label: TREND_LABEL_MAP[trend.direction] ?? '震荡',
+    delta: trend.delta,
+  };
+}
+
+export function mapBackendCatalystEvents(
+  events: NewsSentimentSnapshot['catalyst_events']['events'],
+): CatalystEvent[] {
+  return events.slice(0, 5).map((event, index) => ({
+    id: `backend-${event.title}-${event.date ?? ''}-${index}`,
+    title: event.title ?? '',
+    source: event.source ?? '',
+    ts: event.date ?? '',
+    sentiment: classifySentiment({ title: event.title ?? '', summary: '', url: '', ts: '' } as NewsItem),
+    impactScore: typeof event.impact_score === 'number' ? event.impact_score : 0.5,
+  }));
+}
+
+export function hasUsablePriceTransmission(status: string): boolean {
+  return status !== '' && status !== 'todo' && status !== 'unknown';
+}
+
+const formatPriceChangePct = (value: number): string =>
+  `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 
 const computeOverviewStats = (
   news: NewsItem[],
@@ -448,9 +501,23 @@ function TimelineChart({ stats, theme }: { stats: SentimentOverviewStats; theme:
   );
 }
 
-export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentimentOverviewProps) {
+export function NewsSentimentOverview({ news, timeRange, ticker, snapshot }: NewsSentimentOverviewProps) {
   const theme = useChartTheme();
   const stats = useMemo(() => computeOverviewStats(news, timeRange), [news, timeRange]);
+  const backendTrend = useMemo(() => resolveBackendTrend(snapshot), [snapshot]);
+  const catalysts = useMemo(() => {
+    const events = snapshot?.catalyst_events?.events ?? [];
+    return events.length > 0 ? mapBackendCatalystEvents(events) : stats.catalysts;
+  }, [snapshot, stats.catalysts]);
+  const backendCatalystUsed = (snapshot?.catalyst_events?.events.length ?? 0) > 0;
+  const trend = backendTrend ?? {
+    direction: stats.trendDirection,
+    label: stats.trendLabel,
+    delta: stats.trendDelta,
+  };
+  const trendSourceLabel = backendTrend ? '后端半窗对比' : '客户端时间线估算';
+  const price = snapshot?.price_transmission;
+  const hasBackendPrice = hasUsablePriceTransmission(price?.status ?? '');
   const scoreTone =
     stats.score > 10 ? 'text-fin-success' : stats.score < -10 ? 'text-fin-danger' : 'text-fin-muted';
 
@@ -464,7 +531,8 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
             {ticker && <span className="text-xs font-medium text-fin-muted">{ticker}</span>}
           </div>
           <p className="text-xs text-fin-muted">
-            {TIME_RANGE_LABELS[timeRange]} · 基于 Dashboard 新闻列表客户端聚合
+            {TIME_RANGE_LABELS[timeRange]} ·{' '}
+            {snapshot ? '后端舆情快照优先，客户端兜底' : '基于 Dashboard 新闻列表客户端聚合'}
           </p>
         </div>
         <div className="text-xs text-fin-muted">
@@ -488,13 +556,12 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
             <span className={trendTone(stats.trendDirection)}>{trendIcon(stats.trendDirection)}</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className={`text-xl font-semibold ${trendTone(stats.trendDirection)}`}>{stats.trendLabel}</span>
-            {stats.trendDelta != null && (
-              <span className="text-xs text-fin-muted">{formatSignedScore(stats.trendDelta)}</span>
+            <span className={`text-xl font-semibold ${trendTone(trend.direction)}`}>{trend.label}</span>
+            {trend.delta != null && (
+              <span className="text-xs text-fin-muted">{formatSignedScore(trend.delta)}</span>
             )}
           </div>
-          {/* TODO: 后端 dashboard.news 接入 NewsSentimentSnapshot.sentiment_trend 后，用后端趋势替换客户端时间线估算。 */}
-          <div className="mt-2 text-2xs text-fin-muted">客户端时间线估算</div>
+          <div className="mt-2 text-2xs text-fin-muted">{trendSourceLabel}</div>
         </div>
 
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
@@ -555,16 +622,17 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fin-text">催化事件时间线</h3>
-            <span className="text-2xs text-fin-muted">来自高影响新闻</span>
+            <span className="text-2xs text-fin-muted">
+              {backendCatalystUsed ? '来自后端催化关键词' : '来自高影响新闻'}
+            </span>
           </div>
-          {/* TODO: 后端 dashboard.news 接入 NewsSentimentSnapshot.catalyst_events 后，优先展示后端聚合催化事件。 */}
-          {stats.catalysts.length === 0 ? (
+          {catalysts.length === 0 ? (
             <div className="flex h-24 items-center justify-center text-sm text-fin-muted">
               暂无高影响催化事件
             </div>
           ) : (
             <div className="space-y-3">
-              {stats.catalysts.map((event) => (
+              {catalysts.map((event) => (
                 <div key={event.id} className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <span className={`mt-1 h-2.5 w-2.5 rounded-full ${SENTIMENT_DOT[event.sentiment]}`} />
@@ -587,20 +655,40 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
           )}
         </div>
 
-        <div className="rounded-lg border border-dashed border-fin-border bg-fin-card p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-fin-text">舆情-价格传导</h3>
-            <span className="text-2xs text-fin-muted">待接入</span>
+        {hasBackendPrice && price ? (
+          <div className="rounded-lg border border-fin-border bg-fin-card p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-fin-text">舆情-价格传导</h3>
+              <span className="text-2xs font-medium text-fin-primary">
+                {PRICE_STATUS_LABELS[price.status ?? ''] ?? price.status}
+              </span>
+            </div>
+            <p className="text-sm leading-6 text-fin-text">
+              {price.analysis || '后端快照未提供传导分析文本。'}
+            </p>
+            {typeof price.price_change_pct === 'number' && (
+              <div className="mt-2 text-xs text-fin-muted">
+                近期价格 {formatPriceChangePct(price.price_change_pct)}
+              </div>
+            )}
+            <div className="mt-3 rounded-lg bg-fin-hover/40 p-3 text-xs text-fin-muted">
+              来源：{price.source ?? '后端舆情快照'} · status={price.status}
+            </div>
           </div>
-          <p className="text-sm leading-6 text-fin-muted">
-            Dashboard REST 尚未暴露 NewsSentimentSnapshot.price_transmission，
-            当前不推断价格共振、背离或传导强度。
-          </p>
-          <div className="mt-3 rounded-lg bg-fin-hover/40 p-3 text-xs text-fin-muted">
-            {/* TODO: 后端 dashboard.news 接入 NewsSentimentSnapshot.price_transmission 后，在此展示共振/背离、价格窗口和置信度。 */}
-            需要后端把 NewsAgent 聚合快照同步进 /api/dashboard。
+        ) : (
+          <div className="rounded-lg border border-dashed border-fin-border bg-fin-card p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-fin-text">舆情-价格传导</h3>
+              <span className="text-2xs text-fin-muted">待接入</span>
+            </div>
+            <p className="text-sm leading-6 text-fin-muted">
+              后端快照未提供价格传导证据（status=todo），当前不推断价格共振、背离或传导强度。
+            </p>
+            <div className="mt-3 rounded-lg bg-fin-hover/40 p-3 text-xs text-fin-muted">
+              后端接入价格校准数据后填充；status=todo 时保持数据真实性防线。
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );
