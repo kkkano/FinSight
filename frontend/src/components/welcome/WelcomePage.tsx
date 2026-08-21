@@ -465,14 +465,14 @@ export function WelcomePage() {
           </div>
 
           <h1 className="max-w-[720px] text-[46px] leading-[1.12] font-extrabold tracking-tight text-[var(--bb-text)] max-[960px]:text-[34px] max-[480px]:text-[26px]">
-            面向实盘研究的
-            <span className="block text-[var(--bb-orange)]">AI 投研工作台</span>
+            给投资新手的
+            <span className="block text-[var(--bb-orange)]">AI 股票分析助手</span>
           </h1>
 
           <p className="max-w-[640px] text-[15px] leading-[1.85] text-[var(--bb-text-dim)] max-[480px]:text-sm max-[480px]:leading-7">
-            7 个研究智能体并行执行 · 有状态 LangGraph 编排 · 6 个专业仪表盘标签页
+            用大白话提问，自动帮你分析基本面、技术面、新闻和风险
             <br />
-            混合 RAG 检索 · 跨智能体冲突检测 · 实时邮件预警
+            每个结论都有可追溯的证据来源 · 看不懂也能听懂
           </p>
 
           <div className="grid grid-cols-3 gap-3.5 max-[960px]:grid-cols-3 max-[480px]:gap-2">
