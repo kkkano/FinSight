@@ -131,6 +131,52 @@ export interface NewsRankingMeta {
   notes?: string[];
 }
 
+// === 后端舆情快照（NewsAgent NewsSentimentSnapshot 的 Dashboard 轻量版） ===
+export interface NewsSentimentSnapshot {
+  ticker: string;
+  source: string;
+  sentiment_bias: {
+    label: 'bullish' | 'bearish' | 'neutral';
+    average_score?: number | null;
+    positive_count: number;
+    negative_count: number;
+    neutral_count: number;
+    sample_size: number;
+    basis?: string;
+  };
+  sentiment_trend: {
+    direction: 'improving' | 'deteriorating' | 'stable' | 'unknown';
+    delta: number | null;
+    recent_average: number | null;
+    previous_average: number | null;
+    sample_size: number;
+    basis?: string;
+  };
+  heat: {
+    level: 'elevated' | 'active' | 'normal' | 'thin';
+    news_count: number;
+    basis?: string;
+  };
+  catalyst_events: {
+    count: number;
+    events: Array<{
+      kind?: string;
+      category?: string;
+      title: string;
+      date?: string;
+      source?: string;
+      impact_score?: number | null;
+    }>;
+  };
+  price_transmission: {
+    status: string;
+    reason?: string;
+    analysis?: string;
+    source?: string | null;
+    price_change_pct?: number | null;
+  };
+}
+
 export interface DataSourceMeta {
   provider: string;
   source_type: string;
@@ -179,7 +225,8 @@ export interface DashboardData {
     market_raw?: NewsItem[];
     impact_raw?: NewsItem[];
     ranking_meta?: NewsRankingMeta;
-    [key: string]: NewsItem[] | NewsRankingMeta | undefined;
+    sentiment_snapshot?: NewsSentimentSnapshot;
+    [key: string]: NewsItem[] | NewsRankingMeta | NewsSentimentSnapshot | undefined;
   };
   meta?: Record<string, DataSourceMeta>;
   // v2 fields

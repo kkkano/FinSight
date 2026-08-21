@@ -9,6 +9,12 @@
 
 ### 新增
 
+- **Dashboard 舆情快照接入**（2026-08-21）：
+  - 新增 `backend/dashboard/news_sentiment.py`：从 Dashboard 新闻列表确定性聚合 `sentiment_bias` / `sentiment_trend` / `heat` / `catalyst_events`，零额外 API 调用。
+  - `/api/dashboard` 新闻 payload 新增 `sentiment_snapshot`，不修改缓存对象。
+  - `NewsSentimentOverview` 优先展示后端快照的趋势、催化事件与价格传导状态；`price_transmission=status=todo` 时保持数据真实性防线，不推断共振/背离。
+  - 新增后端单测与前端快照渲染测试。
+
 - **执行追踪 Console 重构 + LLM token 可观测**（2026-05-31）：
   - 主聊天 SSE 流接入 `executionStore`，user/expert/dev 三模式底部指挥台从空白变实时执行追踪（`ChatInput` 接线 `beginExternalExecution`/`ingestExternalThinking`/`completeExternalExecution`）。
   - 新增**并行执行泳道瀑布图**（`ParallelWaterfall`）：按 `parallel_group` 分泳道，bar 宽度 ∝ `duration_ms`，区分 tool(amber)/agent(violet)，一眼看出并行结构与瓶颈。

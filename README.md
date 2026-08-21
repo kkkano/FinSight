@@ -5,7 +5,7 @@
 <h1 align="center">FinSight AI</h1>
 
 <p align="center">
-  <strong>Multi-Agent Financial Research Platform powered by LangGraph</strong>
+  <strong>AI Investment Assistant for Beginners — ask in plain language, get a structured analysis of fundamentals, technicals, news & risk</strong>
 </p>
 
 <p align="center">
@@ -20,7 +20,9 @@
 
 ---
 
-**FinSight AI** is a production-grade, multi-agent financial research system built on **LangGraph**. It unifies conversational AI, a 6-tab professional dashboard, autonomous task execution (Workbench), real-time execution tracking, and proactive email alerts into one coherent platform.
+**FinSight AI** is an AI-powered investment assistant built for **individual investors and beginners** who find professional research hard to digest. Instead of burying users in raw filings, charts and jargon, it lets you ask a question in plain language (e.g. *"Is AAPL worth buying?"*, *"What happened to TSLA this week?"*) and returns a structured analysis covering fundamentals, technicals, news/catalysts and risk — with every conclusion backed by traceable evidence.
+
+Under the hood it is a production-grade, multi-agent system built on **LangGraph**, engineered so that unstable upstream data sources or slow LLM calls never take the whole flow down (multi-source fallback, circuit breaker, timeout + deterministic-summary degradation, template-report fallback).
 
 <p align="center">
   <img src="images/cb70fece-c319-4964-91fc-d7be91211b91.png" alt="FinSight AI Dashboard" width="100%"/>
