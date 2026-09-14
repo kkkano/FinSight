@@ -310,8 +310,15 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   },
 
   addWatchItemApi: async (ticker: string) => {
+    const ownerId = String(useStore.getState().authIdentity?.userId || '').trim();
+    if (!ownerId) return;
     const response = await apiClient.addWatchlistItem({ ticker });
+    if (
+      String(useStore.getState().authIdentity?.userId || '').trim() !== ownerId
+      || (get()._watchlistOwnerId !== null && get()._watchlistOwnerId !== ownerId)
+    ) return;
     const normalized = response.item.ticker;
+    set({ _watchlistOwnerId: ownerId, _isWatchlistLoaded: true });
     get().addWatchItem({
       symbol: normalized,
       type: 'equity',
@@ -320,7 +327,25 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   },
 
   removeWatchItemApi: async (ticker: string) => {
+    const ownerId = String(useStore.getState().authIdentity?.userId || '').trim();
+    if (!ownerId) return;
     await apiClient.removeWatchlistItem(ticker);
+    if (
+      String(useStore.getState().authIdentity?.userId || '').trim() !== ownerId
+      || (get()._watchlistOwnerId !== null && get()._watchlistOwnerId !== ownerId)
+    ) return;
     get().removeWatchItem(ticker);
   },
 }));
+
+useStore.subscribe((state, previousState) => {
+  const ownerId = String(state.authIdentity?.userId || '').trim();
+  const previousOwnerId = String(previousState.authIdentity?.userId || '').trim();
+  if (ownerId === previousOwnerId) return;
+  useDashboardStore.setState({
+    watchlist: [],
+    _isWatchlistLoaded: !ownerId,
+    _isWatchlistLoading: false,
+    _watchlistOwnerId: null,
+  });
+});

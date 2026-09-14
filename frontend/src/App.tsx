@@ -81,6 +81,7 @@ function ChatRoute() {
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
       navigateToHistory={() => navigate('/history')}
+      navigateToToday={() => navigate('/today')}
     />
   );
 }
@@ -95,6 +96,7 @@ function DashboardRoute() {
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
       navigateToHistory={() => navigate('/history')}
+      navigateToToday={() => navigate('/today')}
     />
   );
 }
@@ -108,6 +110,21 @@ function HistoryRoute() {
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
       navigateToHistory={() => navigate('/history')}
+      navigateToToday={() => navigate('/today')}
+    />
+  );
+}
+
+function TodayRoute() {
+  const navigate = useNavigate();
+  return (
+    <WorkspaceShell
+      view="today"
+      dashboardSymbol={null}
+      navigateToChat={() => navigate('/chat')}
+      navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
+      navigateToHistory={() => navigate('/history')}
+      navigateToToday={() => navigate('/today')}
     />
   );
 }
@@ -150,7 +167,7 @@ function RootRedirect() {
   if (symbol) {
     return <Navigate to={`/dashboard/${encodeURIComponent(symbol)}${location.search}`} replace />;
   }
-  return <Navigate to={{ pathname: '/welcome', search: '' }} replace />;
+  return <Navigate to={{ pathname: '/today', search: '' }} replace />;
 }
 
 function WelcomeRoute() {
@@ -255,6 +272,7 @@ function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/welcome" element={<WelcomeRoute />} />
         <Route path="/share/r/:token" element={<SharedReportPage />} />
+        <Route path="/today" element={<EntryGuard><TodayRoute /></EntryGuard>} />
         <Route path="/chat" element={<AuthenticatedGuard><ChatRoute /></AuthenticatedGuard>} />
         <Route path="/history" element={<AuthenticatedGuard><HistoryRoute /></AuthenticatedGuard>} />
         <Route path="/dashboard/:symbol?" element={<EntryGuard><DashboardRoute /></EntryGuard>} />

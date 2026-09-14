@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from threading import Lock
@@ -19,6 +20,8 @@ _LEEWAY_SECONDS = 30
 _JWKS_TTL_SECONDS = 600
 _JWKS_TIMEOUT_SECONDS = 5
 _JWKS_ALGORITHMS = frozenset({"RS256", "ES256"})
+_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_RESERVED_USER_IDS = frozenset({"public", "anonymous"})
 
 
 class AuthConfigurationError(RuntimeError):
@@ -165,9 +168,15 @@ def verify_supabase_jwt(token: str) -> AuthenticatedUser:
     user_id = payload.get("sub")
     if not isinstance(user_id, str) or not user_id.strip():
         raise InvalidTokenError("JWT 缺少 sub")
+    normalized_user_id = user_id.strip()
+    if (
+        normalized_user_id.lower() in _RESERVED_USER_IDS
+        or not _USER_ID_PATTERN.fullmatch(normalized_user_id)
+    ):
+        raise InvalidTokenError("JWT sub 不能作为安全用户标识")
     email = payload.get("email")
     return AuthenticatedUser(
-        user_id=user_id.strip(),
+        user_id=normalized_user_id,
         email=email.strip() if isinstance(email, str) else "",
     )
 

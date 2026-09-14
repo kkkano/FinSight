@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
-"""
-P1-7: 报告级缓存（同 ticker + TTL）
+"""Legacy in-process final-report cache.
 
-热门股票的投资报告重复生成是最大的成本浪费来源（每次 ~20 次 LLM 调用）。
-本模块对成功生成的 investment_report 按 ticker 缓存：
-
-- 缓存键：ticker（大写标准化）+ output_mode
-- TTL：REPORT_CACHE_TTL_HOURS（默认 12 小时，0 = 禁用缓存）
-- 存储：进程内存（重启即失效——缓存只是省钱手段，不是持久层）
-- 命中时执行管线直接回放缓存报告，并在 done 事件标记 cached=true
+The execution path no longer reads or writes this cache. Its historical key
+only contained ticker/output mode, while entries contain full markdown,
+query-specific reports and trace-derived fields. Reusing those entries across
+requests could disclose one user's research to another. The implementation is
+kept temporarily for compatibility with maintenance tooling, but the global
+runtime instance is hard-disabled until a request- and owner-scoped artifact
+cache contract exists.
 """
 
 from __future__ import annotations
@@ -30,7 +29,11 @@ class ReportCache:
 
     @classmethod
     def from_env(cls) -> "ReportCache":
-        return cls(ttl_hours=_env_float("REPORT_CACHE_TTL_HOURS", 12.0))
+        # REPORT_CACHE_TTL_HOURS is deliberately ignored for the global final
+        # report cache. A safe replacement needs authenticated owner, canonical
+        # request, policy/prompt/data versions and a sanitized artifact schema.
+        _env_float("REPORT_CACHE_TTL_HOURS", 0.0)  # parse only for legacy config visibility
+        return cls(ttl_hours=0.0)
 
     @property
     def enabled(self) -> bool:

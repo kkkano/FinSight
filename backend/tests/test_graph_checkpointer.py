@@ -95,3 +95,31 @@ def test_production_rejects_memory_fallback(monkeypatch):
             checkpointer_mod.get_checkpointer_bundle()
     finally:
         _reset_bundle()
+
+
+def test_runtime_profile_production_rejects_memory_backend(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "development")
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "prod")
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
+    _reset_bundle()
+    try:
+        with pytest.raises(ValueError, match="必须为 postgres"):
+            checkpointer_mod.get_checkpointer_bundle()
+    finally:
+        _reset_bundle()
+
+
+def test_adelete_graph_thread_uses_runtime_saver(monkeypatch):
+    deleted: list[str] = []
+
+    class Saver:
+        async def adelete_thread(self, thread_id: str) -> None:
+            deleted.append(thread_id)
+
+    async def get_saver():
+        return Saver()
+
+    monkeypatch.setattr(checkpointer_mod, "aget_graph_checkpointer", get_saver)
+
+    assert asyncio.run(checkpointer_mod.adelete_graph_thread("public:alice:thread")) is True
+    assert deleted == ["public:alice:thread"]

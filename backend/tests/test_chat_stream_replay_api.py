@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 import backend.api.execution_router as execution_router
+import backend.api.session_context as session_context
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 
 
@@ -47,7 +48,7 @@ def _client(monkeypatch) -> TestClient:
         create_execution_router(
             ExecutionRouterDeps(
                 get_graph_runner=unused_runner,
-                resolve_thread_id=lambda value: value or "session-replay-test",
+                resolve_thread_id=session_context._resolve_thread_id,
                 schedule_report_index=lambda **_kwargs: None,
                 update_session_context=lambda **_kwargs: None,
                 redact_sensitive_payload=lambda value: value,
@@ -102,3 +103,97 @@ def test_execute_rejects_unknown_run(monkeypatch):
     client = _client(monkeypatch)
     response = client.get("/api/execute/runs/missing-run/events")
     assert response.status_code == 404
+
+
+def test_stream_pump_redacts_upstream_exception(monkeypatch):
+    client = _client(monkeypatch)
+
+    async def leaking_pipeline(**_kwargs):
+        raise RuntimeError("postgresql://user:password@db.example/finsight?token=secret")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(execution_router, "run_graph_pipeline", leaking_pipeline)
+    response = client.post(
+        "/api/execute",
+        json={"query": "stream failure", "run_id": "stream-error"},
+        headers={"x-test-user": "user-a"},
+    )
+
+    assert response.status_code == 200
+    payload = _events(response)[-1]
+    assert payload["type"] == "error"
+    assert payload["code"] == "execution_failed"
+    assert payload["message"] == "执行失败，请稍后重试。"
+    assert "password" not in str(payload).lower()
+    assert "postgresql://" not in str(payload).lower()
+
+
+def test_execute_binds_new_authenticated_session_to_request_user(monkeypatch):
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/execute",
+        json={"query": "owner binding", "run_id": "owner-new"},
+        headers={"x-test-user": "user-a"},
+    )
+
+    assert response.status_code == 200
+    session_ids = {event["session_id"] for event in _events(response)}
+    assert len(session_ids) == 1
+    assert next(iter(session_ids)).startswith("public:user-a:")
+
+
+def test_execute_rejects_cross_user_session_without_disclosing_owner(monkeypatch):
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/execute",
+        json={"query": "cross owner", "session_id": "public:user-b:thread-1"},
+        headers={"x-test-user": "user-a"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == {
+        "code": "session_not_found",
+        "message": "session not found",
+    }
+
+
+def test_execute_confines_anonymous_session_namespace(monkeypatch):
+    client = _client(monkeypatch)
+    rejected = client.post(
+        "/api/execute",
+        json={"query": "anonymous escape", "session_id": "public:user-a:thread-1"},
+        headers={"x-test-user": "public"},
+    )
+    accepted = client.post(
+        "/api/execute",
+        json={"query": "anonymous local", "session_id": "thread-1", "run_id": "anon-thread"},
+        headers={"x-test-user": "public"},
+    )
+
+    assert rejected.status_code == 404
+    assert accepted.status_code == 200
+    assert {event["session_id"] for event in _events(accepted)} == {"public:anonymous:thread-1"}
+
+
+def test_execute_ignores_forged_user_id_in_request_context(monkeypatch):
+    client = _client(monkeypatch)
+    captured: dict = {}
+
+    async def capture_pipeline(**kwargs):
+        captured.update(kwargs)
+        yield {"type": "done", "response": "ok", "run_id": kwargs["run_id"]}
+
+    monkeypatch.setattr(execution_router, "run_graph_pipeline", capture_pipeline)
+    response = client.post(
+        "/api/execute",
+        json={
+            "query": "identity binding",
+            "run_id": "owner-context",
+            "context": {"active_symbol": "AAPL", "__user_id": "victim"},
+        },
+        headers={"x-test-user": "user-a"},
+    )
+
+    assert response.status_code == 200
+    assert captured["user_id"] == "user-a"
+    assert captured["ui_context"]["__user_id"] == "user-a"

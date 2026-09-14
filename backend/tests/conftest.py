@@ -28,6 +28,11 @@ os.environ["LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK"] = "true"
 
 # 测试默认不启动页面 lease 调度器；实时链路由定向测试显式调用。
 os.environ["MONITOR_REALTIME_ENABLED"] = "false"
+# Health probes must model the deterministic CI profile: external LLM,
+# Postgres and live provider credentials are optional for unit tests.
+os.environ["FINSIGHT_RUNTIME_PROFILE"] = "test"
+os.environ["FINSIGHT_LLM_REQUIRED"] = "false"
+os.environ["ALLOW_ANONYMOUS_GENERATION"] = "true"
 
 
 @pytest.fixture(autouse=True)

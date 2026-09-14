@@ -115,12 +115,69 @@ def test_dispatcher_sanitizes_tool_results(monkeypatch):
             },
         }
 
-    registry = build_tool_registry(handlers={"research_company": _unsafe_handler})
+    registry = build_tool_registry(
+        handlers={"research_company": _unsafe_handler},
+        principal_user_id="alice",
+    )
 
-    result = registry.call_tool("research_company", {"ticker": "NVDA", "session_id": "s1"})
+    result = registry.call_tool(
+        "research_company",
+        {"ticker": "NVDA", "session_id": "public:alice:s1"},
+    )
 
     assert result["isError"] is False
     assert result["structuredContent"]["ticker"] == "NVDA"
     assert result["structuredContent"]["nested"]["value"] == 1
     assert result["structuredContent"]["nested"]["items"] == [{}, {"kept": True}]
     _assert_no_forbidden_keys(result)
+
+
+def test_private_report_tools_fail_closed_without_transport_principal(monkeypatch):
+    monkeypatch.setenv("MCP_SERVER_ENABLED", "true")
+
+    from backend.protocols.mcp_server import build_tool_registry
+
+    registry = build_tool_registry()
+    for tool_name, arguments in (
+        ("research_company", {"ticker": "NVDA", "session_id": "public:alice:s1"}),
+        ("get_evidence_ledger", {"session_id": "public:alice:s1", "report_id": "rpt-1"}),
+    ):
+        result = registry.call_tool(tool_name, arguments)
+        assert result["isError"] is True
+        assert result["error"]["code"] == "auth_required"
+
+
+def test_private_report_tools_use_only_trusted_principal(monkeypatch):
+    monkeypatch.setenv("MCP_SERVER_ENABLED", "true")
+
+    from backend.protocols import mcp_server
+
+    calls = []
+
+    class Store:
+        def list_reports(self, **kwargs):
+            calls.append(kwargs)
+            return [{"report_id": "rpt-1"}]
+
+    monkeypatch.setattr(mcp_server, "get_report_index_store", lambda: Store())
+    registry = mcp_server.build_tool_registry(principal_user_id="alice")
+
+    denied = registry.call_tool(
+        "research_company",
+        {"ticker": "NVDA", "session_id": "public:bob:s1"},
+    )
+    assert denied["isError"] is True
+    assert denied["error"]["code"] == "resource_not_found"
+    assert calls == []
+
+    allowed = registry.call_tool(
+        "research_company",
+        {
+            "ticker": "NVDA",
+            "session_id": "public:alice:s1",
+            "_principal_user_id": "bob",
+        },
+    )
+    assert allowed["isError"] is False
+    assert calls[0]["user_id"] == "alice"
+    assert calls[0]["session_id"] == "public:alice:s1"

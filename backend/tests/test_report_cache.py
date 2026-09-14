@@ -83,11 +83,8 @@ class TestReportCache:
     def test_from_env(self, monkeypatch):
         monkeypatch.setenv("REPORT_CACHE_TTL_HOURS", "6")
         cache = ReportCache.from_env()
-        assert cache.ttl_hours == 6.0
-
-        monkeypatch.setenv("REPORT_CACHE_TTL_HOURS", "0")
-        cache_disabled = ReportCache.from_env()
-        assert cache_disabled.enabled is False
+        assert cache.ttl_hours == 0.0
+        assert cache.enabled is False
 
     def test_global_singleton(self):
         cache1 = get_report_cache()
@@ -131,7 +128,7 @@ class TestCacheTickerResolution:
 
 
 class TestPipelineCacheIntegration:
-    """P1-7: 缓存命中时执行管线直接回放，不跑图"""
+    """Final reports must never cross request/user boundaries via legacy cache."""
 
     @staticmethod
     def _run(coro):
@@ -148,24 +145,29 @@ class TestPipelineCacheIntegration:
             items.append(item)
         return items
 
-    def test_cache_hit_replays_without_running_graph(self):
+    def test_legacy_cache_entry_is_not_replayed_to_another_user(self, monkeypatch):
         import importlib
 
-        from backend.services.report_cache import get_report_cache
+        from backend.services import report_cache as report_cache_module
 
         execution_service = importlib.import_module("backend.services.execution_service")
+        runner_module = importlib.import_module("backend.graph.runner")
+        report_builder_module = importlib.import_module("backend.graph.report_builder")
 
-        # 预先写入缓存
-        cached_report = {
-            "report_id": "rpt-cached-1",
-            "ticker": "AAPL",
-            "title": "Cached AAPL report",
-            "report_quality": {"state": "pass", "reasons": []},
-        }
-        get_report_cache().put(
-            "AAPL", "investment_report",
-            report=cached_report, markdown="# Cached AAPL Report\n内容",
+        # Simulate a legacy process that still has a user-A entry in memory.
+        legacy_cache = ReportCache(ttl_hours=12)
+        legacy_cache.put(
+            "AAPL",
+            "investment_report",
+            report={
+                "report_id": "rpt-user-a",
+                "ticker": "AAPL",
+                "query": "user A private thesis",
+                "graph_trace": {"private": "user-a"},
+            },
+            markdown="# User A private report",
         )
+        monkeypatch.setattr(report_cache_module, "_report_cache", legacy_cache)
 
         graph_runner_called = []
 
@@ -173,12 +175,43 @@ class TestPipelineCacheIntegration:
             graph_runner_called.append(True)
             return object()
 
+        async def _fake_run_graph_traced(
+            _runner,
+            *,
+            thread_id,
+            query,
+            ui_context=None,
+            output_mode=None,
+            strict_selection=None,
+        ):
+            return {
+                "thread_id": thread_id,
+                "query": query,
+                "output_mode": output_mode,
+                "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                "trace": {},
+                "artifacts": {"draft_markdown": "# User B independently generated report"},
+            }
+
+        monkeypatch.setattr(runner_module, "run_graph_traced", _fake_run_graph_traced)
+        monkeypatch.setattr(
+            report_builder_module,
+            "build_report_payload",
+            lambda **_kwargs: {
+                "report_id": "rpt-user-b",
+                "ticker": "AAPL",
+                "title": "User B report",
+                "citations": [],
+                "report_quality": {"state": "pass", "reasons": []},
+            },
+        )
+
         deps = execution_service.ExecutionDeps(
             get_graph_runner=_fake_get_graph_runner,
-            schedule_report_index=lambda **kwargs: None,
-            update_session_context=lambda **kwargs: None,
+            schedule_report_index=lambda **_kwargs: None,
+            update_session_context=lambda **_kwargs: None,
             redact_sensitive_payload=lambda payload: payload,
-            is_raw_trace_event=lambda payload: False,
+            is_raw_trace_event=lambda _payload: False,
             contract_info=lambda: {"chat_response": "chat.response.v1"},
             sse_event_schema_version="chat.sse.v1",
         )
@@ -187,8 +220,9 @@ class TestPipelineCacheIntegration:
             self._collect_events(
                 execution_service.run_graph_pipeline(
                     deps=deps,
-                    query="生成 AAPL 投资报告",
-                    thread_id="tenant:user:thread",
+                    query="user B asks for AAPL",
+                    thread_id="public:user-b:thread",
+                    user_id="user-b",
                     output_mode="investment_report",
                     source="execute_test",
                     ui_context={"tickers_override": ["AAPL"]},
@@ -196,23 +230,10 @@ class TestPipelineCacheIntegration:
             )
         )
 
-        # 图不应该被执行（缓存命中直接回放）
-        assert not graph_runner_called, "graph runner should NOT be called on cache hit"
-
-        done_events = [
-            event for event in events
-            if isinstance(event, dict) and event.get("type") == "done"
-        ]
-        assert done_events, "cached replay should emit done event"
-        done = done_events[0]
-        assert done.get("cached") is True
-        assert done.get("report", {}).get("report_id") == "rpt-cached-1"
-
-        # markdown 应该以 token 流形式回放
-        token_events = [
-            event for event in events
-            if isinstance(event, dict) and event.get("type") == "token"
-        ]
-        assert token_events, "cached markdown should be streamed as tokens"
-        full_text = "".join(event.get("content", "") for event in token_events)
-        assert "Cached AAPL Report" in full_text
+        assert graph_runner_called == [True]
+        done = next(event for event in events if event.get("type") == "done")
+        assert done.get("cached") is not True
+        assert done.get("report", {}).get("report_id") == "rpt-user-b"
+        serialized = str(done)
+        assert "User A private" not in serialized
+        assert "user-a" not in serialized

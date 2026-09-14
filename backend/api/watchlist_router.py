@@ -28,9 +28,18 @@ class AddWatchlistRequest(BaseModel):
 def create_watchlist_router(deps: WatchlistRouterDeps) -> APIRouter:
     router = APIRouter(prefix="/api/watchlist", tags=["Watchlist"])
 
+    def authenticated_user(request: Request) -> str:
+        user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+        if not user_id or user_id == "public":
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "auth_required", "message": "登录后才能访问自选股"},
+            )
+        return user_id
+
     @router.get("")
     async def get_watchlist(request: Request):
-        user_id = getattr(request.state, "user_id", "public")
+        user_id = authenticated_user(request)
         return {"items": deps.get_store().list_items(user_id=user_id)}
 
     @router.post("")
@@ -39,7 +48,7 @@ def create_watchlist_router(deps: WatchlistRouterDeps) -> APIRouter:
         request: Request,
         response: Response,
     ):
-        user_id = getattr(request.state, "user_id", "public")
+        user_id = authenticated_user(request)
         try:
             item, created = deps.get_store().add_item(
                 payload.ticker,
@@ -53,7 +62,7 @@ def create_watchlist_router(deps: WatchlistRouterDeps) -> APIRouter:
 
     @router.delete("/{ticker}", status_code=status.HTTP_204_NO_CONTENT)
     async def remove_watchlist_item(ticker: str, request: Request) -> Response:
-        user_id = getattr(request.state, "user_id", "public")
+        user_id = authenticated_user(request)
         try:
             deps.get_store().remove_item(ticker, user_id=user_id)
         except ValueError as exc:

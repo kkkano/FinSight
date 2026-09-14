@@ -35,6 +35,58 @@ def test_session_id_rejects_invalid_format():
         main._resolve_thread_id("tenant:user:bad/slash")
 
 
+def test_owned_session_resolution_enforces_principal_namespace():
+    from backend.api.session_context import SessionOwnershipError, _resolve_owned_thread_id
+
+    assert _resolve_owned_thread_id("alice:thread-1", "alice") == "public:alice:thread-1"
+    assert _resolve_owned_thread_id("thread-1", "public") == "public:anonymous:thread-1"
+    assert _resolve_owned_thread_id(None, "alice").startswith("public:alice:")
+    with pytest.raises(SessionOwnershipError):
+        _resolve_owned_thread_id("public:bob:thread-1", "alice")
+    with pytest.raises(SessionOwnershipError):
+        _resolve_owned_thread_id("public:alice:thread-1", "public")
+
+
+def test_report_index_worker_receives_explicit_authenticated_owner(monkeypatch):
+    from backend.api import session_context
+
+    captured = {}
+
+    class FakeStore:
+        def upsert_report(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(session_context, "get_report_index_store", lambda: FakeStore())
+    session_context._index_report_async(
+        session_id="public:alice:thread-1",
+        user_id="alice",
+        report={"report_id": "report-1"},
+        state={},
+    )
+
+    assert captured["user_id"] == "alice"
+    assert captured["session_id"] == "public:alice:thread-1"
+
+
+def test_anonymous_report_is_not_scheduled_for_private_index(monkeypatch):
+    import asyncio
+    from backend.api import session_context
+
+    called = []
+    monkeypatch.setattr(session_context, "_index_report_async", lambda **kwargs: called.append(kwargs))
+    result = asyncio.run(
+        session_context._schedule_report_index(
+            session_id="public:anonymous:thread-1",
+            user_id="public",
+            report={"report_id": "report-1"},
+            state={},
+        )
+    )
+
+    assert result is False
+    assert called == []
+
+
 def test_trace_raw_override_priority(monkeypatch):
     main = _load_main_module()
 

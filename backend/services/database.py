@@ -38,7 +38,13 @@ class SchemaRevisionStatus:
 
 def app_mode(environ: Mapping[str, str] | None = None) -> str:
     source = os.environ if environ is None else environ
-    return str(source.get("APP_MODE") or "development").strip().lower()
+    configured = (
+        str(source.get("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
+        str(source.get("APP_MODE") or "").strip().lower(),
+    )
+    if any(value in {"prod", "production"} for value in configured):
+        return "production"
+    return configured[0] or configured[1] or "development"
 
 
 def is_production_mode(environ: Mapping[str, str] | None = None) -> bool:

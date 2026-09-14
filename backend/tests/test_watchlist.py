@@ -51,16 +51,22 @@ def test_watchlist_router_add_list_remove_and_tenant_isolation():
     alice = {"x-test-user": "alice"}
     bob = {"x-test-user": "bob"}
 
+    assert client.get("/api/watchlist").status_code == 401
+    assert client.post("/api/watchlist", json={"ticker": "AAPL"}).status_code == 401
+    assert client.delete("/api/watchlist/AAPL").status_code == 401
+
     assert client.post("/api/watchlist", headers=alice, json={"ticker": "aapl", "note": "core"}).status_code == 201
     duplicate = client.post("/api/watchlist", headers=alice, json={"ticker": "AAPL", "note": "ignored"})
     assert duplicate.status_code == 200
     assert duplicate.json()["item"]["note"] == "core"
     assert client.post("/api/watchlist", headers=bob, json={"ticker": "MSFT"}).status_code == 201
+    assert client.post("/api/watchlist", headers=bob, json={"ticker": "AAPL"}).status_code == 201
 
     assert [item["ticker"] for item in client.get("/api/watchlist", headers=alice).json()["items"]] == ["AAPL"]
-    assert [item["ticker"] for item in client.get("/api/watchlist", headers=bob).json()["items"]] == ["MSFT"]
+    assert [item["ticker"] for item in client.get("/api/watchlist", headers=bob).json()["items"]] == ["MSFT", "AAPL"]
     assert client.delete("/api/watchlist/AAPL", headers=alice).status_code == 204
     assert client.get("/api/watchlist", headers=alice).json() == {"items": []}
+    assert [item["ticker"] for item in client.get("/api/watchlist", headers=bob).json()["items"]] == ["MSFT", "AAPL"]
 
 
 class _Result:

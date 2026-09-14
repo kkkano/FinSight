@@ -7,11 +7,12 @@ Shared graph pipeline execution service.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
+from typing import Any, AsyncGenerator, Awaitable, Callable
 from uuid import uuid4
 
 from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
@@ -108,20 +109,39 @@ def _llm_degradation(
     state: dict[str, Any],
     usage_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
+    def _stable_reason(value: Any, default: str = "llm_unavailable") -> str:
+        raw = str(value or "").strip().lower()
+        allowed = {
+            "llm_unavailable",
+            "provider_timeout",
+            "rate_limited",
+            "all_llm_attempts_failed",
+            "configuration",
+        }
+        if raw in allowed:
+            return raw
+        if "timeout" in raw or "timed out" in raw:
+            return "provider_timeout"
+        if any(token in raw for token in ("rate", "429", "quota", "too many")):
+            return "rate_limited"
+        if raw in {"configuration", "config", "configuration_error"}:
+            return "configuration"
+        return default
+
     trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
     conversation = trace.get("conversation_degraded") if isinstance(trace, dict) else None
     if isinstance(conversation, dict) and conversation.get("used"):
         return {
             "used": True,
             "stage": str(conversation.get("stage") or "conversation"),
-            "reason": str(conversation.get("reason") or "llm_unavailable"),
+            "reason": _stable_reason(conversation.get("reason")),
         }
     synth = trace.get("synthesize_runtime") if isinstance(trace, dict) else None
     if isinstance(synth, dict) and synth.get("fallback"):
         return {
             "used": True,
             "stage": "synthesis",
-            "reason": str(synth.get("reason") or "llm_unavailable"),
+            "reason": _stable_reason(synth.get("reason")),
         }
     usage = usage_summary if isinstance(usage_summary, dict) else {}
     calls = max(0, int(usage.get("llm_token_calls") or 0))
@@ -438,28 +458,6 @@ async def run_graph_pipeline(
             graph_ui_context.setdefault("run_id", run_id_value)
             graph_ui_context["__user_id"] = str(user_id or "public").strip() or "public"
 
-            # P1-7: 报告缓存命中 → 直接回放，不跑图（零 LLM 成本）
-            cache_ticker = _resolve_cache_ticker(graph_ui_context, output_mode)
-            if cache_ticker:
-                from backend.services.report_cache import get_report_cache
-
-                cached_entry = get_report_cache().get(cache_ticker, str(output_mode or ""))
-                if cached_entry:
-                    logger.info(
-                        "[execution_service] report cache hit ticker=%s mode=%s",
-                        cache_ticker,
-                        output_mode,
-                    )
-                    await _replay_cached_report(
-                        _queue_event,
-                        deps=deps,
-                        thread_id=thread_id,
-                        source=source,
-                        cached=cached_entry,
-                        markdown_chunk_size=markdown_chunk_size,
-                    )
-                    return
-
             # 2. Run the graph（通过 Langfuse Trace 入口）
             runner = await deps.get_graph_runner()
 
@@ -499,7 +497,7 @@ async def run_graph_pipeline(
             # 3. Build report payload
             report: dict[str, Any] | None = None
             # P1-4: 记录报告构建崩溃（执行失败），与质量门控拦截区分
-            report_build_error: str | None = None
+            report_build_failed = False
             try:
                 from backend.graph.report_builder import build_report_payload
 
@@ -512,7 +510,7 @@ async def run_graph_pipeline(
                     ticker_override=_resolve_ticker_override(graph_ui_context),
                 )
             except Exception as exc:
-                report_build_error = str(exc)
+                report_build_failed = True
                 logger.warning(
                     "[execution_service] report build failed: %s",
                     exc,
@@ -523,9 +521,11 @@ async def run_graph_pipeline(
                 source="execute_run",
             )
             blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
-            # 软阻断：质量门控 blocked 但报告已生成时，仍然交付内容并附带警告
+            # A blocked report may be shown to the current requester as a
+            # non-publishable preview, but it is never an indexed artifact.
             soft_blocked = quality_blocked and blocked_report_preview is not None
             is_report_mode = str(state.get("output_mode") or "").strip().lower() == "investment_report"
+            execution_failed = bool(report_build_failed and is_report_mode)
             response_markdown = (
                 markdown
                 if (soft_blocked or not is_report_mode)
@@ -534,17 +534,18 @@ async def run_graph_pipeline(
             if not str(response_markdown or "").strip():
                 query_preview = str(query or "这个问题").strip()
                 response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
-            persisted_report = report if soft_blocked else (None if quality_blocked else report)
+            persisted_report = None if (quality_blocked or execution_failed) else report
 
-            if report_build_error and is_report_mode:
+            if report_build_failed and is_report_mode:
                 # P1-4: 报告模式下构建崩溃 = 执行失败，必须显式告知用户，
                 # 不能伪装成"执行完成"（quality gate 对 None 报告不拦截）或"质量拦截"
                 await _queue_event(
                     {
                         "type": "quality_blocked",
-                        "message": f"报告生成过程出错：{report_build_error[:200]}",
+                        "code": "report_build_failed",
+                        "message": "报告生成失败，当前结果无法发布或归档，请稍后重试。",
                         "failure_kind": "execution_error",
-                        "failure_detail": report_build_error,
+                        "failure_detail": None,
                         "quality": report_quality,
                         "blocked_reason_codes": [],
                         "publishable": False,
@@ -562,22 +563,56 @@ async def run_graph_pipeline(
                 await _queue_event(
                     {
                         "type": "quality_blocked",
-                        "message": "Report quality warning" if soft_blocked else "Report blocked by quality gate",
+                        "message": "Report blocked by quality gate; preview is not publishable",
                         "failure_kind": "quality_gate",
                         "failure_detail": None,
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
-                        "publishable": soft_blocked,
+                        "publishable": False,
                         "blocked_report_available": bool(blocked_report_preview),
                         "allow_continue_when_blocked": True,
                         "soft_blocked": soft_blocked,
                     }
                 )
-            if isinstance(report, dict):
-                # 4. Persist report index (async / fire-and-forget)
-                deps.schedule_report_index(
-                    session_id=thread_id, report=report, state=state,
-                )
+            report_archived = False
+            persistence_failed = False
+            if isinstance(persisted_report, dict):
+                # 4. Persist before the final event. History must be readable
+                # when the client observes done; sync callbacks remain valid in
+                # isolated tests, while production uses an async to_thread path.
+                try:
+                    persistence_result = deps.schedule_report_index(
+                        session_id=thread_id,
+                        user_id=user_id,
+                        report=persisted_report,
+                        state=state,
+                    )
+                    if inspect.isawaitable(persistence_result):
+                        persistence_result = await persistence_result
+                    if persistence_result is False:
+                        raise RuntimeError("report persistence unavailable")
+                    report_archived = True
+                except Exception as exc:
+                    logger.error(
+                        "[execution_service] report persistence failed thread_id=%s: %s",
+                        thread_id,
+                        exc,
+                        exc_info=True,
+                    )
+                    persistence_failed = True
+                    blocked_report_preview = persisted_report
+                    persisted_report = None
+                    await _queue_event(
+                        {
+                            "type": "pipeline_stage",
+                            "stage": "persistence",
+                            "status": "error",
+                            "error_code": "report_persistence_failed",
+                            "message": "报告已生成，但保存失败；当前内容仅作为临时预览，请稍后重试。",
+                            "publishable": False,
+                            "archived": False,
+                        }
+                    )
 
             # 5. Update conversational session context
             deps.update_session_context(
@@ -667,8 +702,23 @@ async def run_graph_pipeline(
                     "report": persisted_report,
                     "blocked_report": blocked_report_preview,
                     "quality": report_quality,
-                    "quality_blocked": quality_blocked and not soft_blocked,
-                    "publishable": not quality_blocked or soft_blocked,
+                    "quality_blocked": quality_blocked,
+                    "publishable": not quality_blocked and not execution_failed and not persistence_failed,
+                    "archived": report_archived,
+                    "error_code": (
+                        "report_build_failed"
+                        if execution_failed
+                        else ("report_persistence_failed" if persistence_failed else None)
+                    ),
+                    "failure_kind": (
+                        "execution_error"
+                        if execution_failed
+                        else (
+                            "quality_gate"
+                            if quality_blocked
+                            else ("persistence_error" if persistence_failed else None)
+                        )
+                    ),
                     "blocked_report_available": bool(blocked_report_preview),
                     "allow_continue_when_blocked": True,
                     "soft_blocked": soft_blocked,
@@ -706,23 +756,6 @@ async def run_graph_pipeline(
                     archive_exc,
                 )
 
-            # P1-7: 缓存成功生成的报告（仅 report 模式 + 显式 ticker 请求 + 无失败/拦截）
-            if (
-                is_report_mode
-                and isinstance(persisted_report, dict)
-                and not quality_blocked
-                and not report_build_error
-            ):
-                cache_write_ticker = cache_ticker or str(persisted_report.get("ticker") or "").strip().upper()
-                if cache_write_ticker:
-                    from backend.services.report_cache import get_report_cache
-
-                    get_report_cache().put(
-                        cache_write_ticker,
-                        str(output_mode or ""),
-                        report=persisted_report,
-                        markdown=markdown,
-                    )
         except asyncio.CancelledError:
             cancel_event.set()
             await _queue_event(_cancelled_trace_payload(), record_metric=False)

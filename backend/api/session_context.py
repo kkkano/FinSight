@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """会话上下文、报告索引和 UI trace 组装 helper。"""
+import asyncio
 import logging
 import re
 import time
@@ -10,6 +11,7 @@ from uuid import uuid4
 from backend.api.schemas import ChatRequest
 from backend.contracts import contract_manifest
 from backend.conversation.context import ContextManager
+from backend.graph.checkpointer import adelete_graph_thread
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.rag import get_rag_observability_store
 from backend.services.report_index import get_report_index_store
@@ -26,6 +28,15 @@ _reference_context_last_access: Dict[str, float] = {}
 _reference_lock = Lock()
 
 _SESSION_PART_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+class SessionOwnershipError(ValueError):
+    """A syntactically valid session belongs to another principal."""
+
+
+class ReportPersistenceError(RuntimeError):
+    """Report persistence failed without exposing the storage exception."""
+
 
 _SENSITIVE_KEY_FRAGMENTS = (
     "api_key",
@@ -123,6 +134,41 @@ def _normalize_session_key(session_id: Optional[str]) -> str:
         normalized.append(text)
     return ":".join(normalized)
 
+
+def _resolve_owned_thread_id(
+    session_id: Optional[str],
+    user_id: str,
+    *,
+    normalize=_normalize_session_key,
+) -> str:
+    """Normalize a thread and bind it to the authenticated request owner.
+
+    Anonymous callers are confined to ``public:anonymous:*``. Authenticated
+    callers may create a new server-generated thread or use a supplied thread
+    whose middle segment exactly matches their verified user id.
+    """
+    owner = str(user_id or "public").strip() or "public"
+    anonymous = owner in {"public", "anonymous"}
+    raw = str(session_id or "").strip()
+    normalized = normalize(session_id)
+    parts = normalized.split(":")
+    if len(parts) != 3:
+        raise ValueError("session_id format invalid, expected tenant:user:thread")
+
+    if anonymous:
+        if parts[0] != "public" or parts[1] != "anonymous":
+            raise SessionOwnershipError("session does not belong to request principal")
+        return normalized
+
+    if not _SESSION_PART_PATTERN.fullmatch(owner):
+        raise ValueError("authenticated user id cannot be represented in session_id")
+    if not raw:
+        parts[1] = owner
+        return ":".join(parts)
+    if parts[1] != owner:
+        raise SessionOwnershipError("session does not belong to request principal")
+    return normalized
+
 def _resolve_trace_raw_enabled(request: Any) -> bool:
     default_enabled = _env_bool("TRACE_RAW_ENABLED", True)
     override = None
@@ -152,29 +198,47 @@ def _build_trace_digest(state: dict[str, Any] | None) -> dict[str, Any]:
         "first_nodes": first_nodes,
     }
 
-def _index_report_async(*, session_id: str, report: dict[str, Any], state: dict[str, Any] | None) -> None:
-    try:
-        store = get_report_index_store()
-        store.upsert_report(
-            session_id=session_id,
-            report=report,
-            trace_digest=_build_trace_digest(state),
-        )
-    except Exception:
-        logger.exception("report index async upsert failed")
+def _index_report_async(
+    *,
+    session_id: str,
+    user_id: str,
+    report: dict[str, Any],
+    state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    store = get_report_index_store()
+    return store.upsert_report(
+        session_id=session_id,
+        user_id=user_id,
+        report=report,
+        trace_digest=_build_trace_digest(state),
+    )
 
-def _schedule_report_index(*, session_id: str, report: dict[str, Any], state: dict[str, Any] | None) -> None:
+async def _schedule_report_index(
+    *,
+    session_id: str,
+    user_id: str,
+    report: dict[str, Any],
+    state: dict[str, Any] | None,
+) -> bool:
     if not (isinstance(report, dict) and report.get("report_id")):
-        return
+        return False
+    owner = str(user_id or "").strip()
+    if not owner or owner in {"public", "anonymous"}:
+        # Anonymous sessions are intentionally ephemeral and must never gain a
+        # persisted report owner by parsing attacker-controlled session text.
+        return False
     try:
-        import asyncio as _asyncio
-
-        _asyncio.get_running_loop().run_in_executor(
-            None,
-            lambda: _index_report_async(session_id=session_id, report=report, state=state),
+        await asyncio.to_thread(
+            _index_report_async,
+            session_id=session_id,
+            user_id=owner,
+            report=report,
+            state=state,
         )
-    except Exception:
-        logger.exception("schedule async report indexing failed")
+        return True
+    except Exception as exc:
+        logger.exception("report index upsert failed")
+        raise ReportPersistenceError("report persistence failed") from exc
 
 def _is_raw_trace_event(payload: dict[str, Any]) -> bool:
     event_type = str(payload.get("type") or "").strip().lower()
@@ -306,14 +370,18 @@ def _clear_thread_rag_artifacts(thread_id: str) -> dict[str, int]:
         logger.exception("failed to clear RAG artifacts for session")
     return {"rag_collections": deleted_collections, "rag_runs": soft_deleted_runs}
 
-def _clear_session_context(thread_id: str) -> dict[str, Any]:
-    normalized = str(thread_id or "").strip()
+async def _clear_session_context(thread_id: str, user_id: str) -> dict[str, Any]:
+    try:
+        normalized = _resolve_owned_thread_id(thread_id, user_id)
+    except ValueError:
+        normalized = ""
     result: dict[str, Any] = {
         "context": False,
         "reports": 0,
         "citations": 0,
         "rag_collections": 0,
         "rag_runs": 0,
+        "checkpoint": False,
     }
     if not normalized:
         return result
@@ -331,7 +399,7 @@ def _clear_session_context(thread_id: str) -> dict[str, Any]:
     try:
         delete_session = getattr(get_report_index_store(), "delete_session", None)
         if callable(delete_session):
-            deleted = delete_session(session_id=normalized)
+            deleted = delete_session(session_id=normalized, user_id=user_id)
             if isinstance(deleted, dict):
                 result["reports"] = int(deleted.get("reports") or 0)
                 result["citations"] = int(deleted.get("citations") or 0)
@@ -339,6 +407,10 @@ def _clear_session_context(thread_id: str) -> dict[str, Any]:
         logger.exception("failed to delete report index session")
 
     result.update(_clear_thread_rag_artifacts(normalized))
+    try:
+        result["checkpoint"] = bool(await adelete_graph_thread(normalized))
+    except Exception:
+        logger.exception("failed to delete graph checkpoint for session")
     return result
 
 def _resolve_query_reference(query: str, thread_id: str) -> str:

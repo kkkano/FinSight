@@ -18,7 +18,7 @@ from collections import deque
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
@@ -31,6 +31,21 @@ logger = logging.getLogger(__name__)
 # 因此必须先加载项目环境，避免实例永久固化为代码默认值。
 load_dotenv()
 security_settings.cache_clear()
+
+
+def _runtime_profile() -> str:
+    configured = (
+        str(os.getenv("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
+        str(os.getenv("APP_MODE") or "").strip().lower(),
+    )
+    if any(value in {"prod", "production"} for value in configured):
+        return "production"
+    raw = configured[0] or configured[1] or "development"
+    return "production" if raw in {"prod", "production"} else (raw or "development")
+
+
+def _anonymous_generation_allowed() -> bool:
+    return _runtime_profile() != "production" and _env_bool("ALLOW_ANONYMOUS_GENERATION", False)
 
 def _parse_csv(raw: str) -> list[str]:
     values = [item.strip() for item in str(raw or "").split(",") if item.strip()]
@@ -66,9 +81,11 @@ def _resolve_supabase_auth_config() -> tuple[str, str]:
 def validate_runtime_auth_configuration() -> None:
     """生产必须启用认证，且必须具备可验证 JWT 的服务端配置。"""
     settings = security_settings()
-    mode = str(os.getenv("APP_MODE") or "development").strip().lower()
+    mode = _runtime_profile()
     if mode == "production" and not settings.supabase_auth_required:
         raise RuntimeError("production 必须设置 SUPABASE_AUTH_REQUIRED=true")
+    if mode == "production" and not settings.rate_limit_enabled:
+        raise RuntimeError("production 必须设置 RATE_LIMIT_ENABLED=true")
     if settings.supabase_auth_required:
         jwt_secret = str(os.getenv("SUPABASE_JWT_SECRET") or "").strip()
         supabase_url = str(settings.supabase_url or settings.vite_supabase_url).strip()
@@ -103,8 +120,13 @@ def _path_matches(path: str, configured: list[str]) -> bool:
 
 
 def _is_allowlisted_path(path: str) -> bool:
-    defaults = "/health,/api/reports/shared/*"
+    defaults = "/health,/livez,/readyz,/api/reports/shared/*"
     configured = _parse_csv(security_settings().api_public_paths or defaults)
+    # Liveness/readiness are infrastructure probes, never business resources;
+    # keep them reachable even if an older deployment overrides API_PUBLIC_PATHS.
+    for probe in ("/health", "/livez", "/readyz"):
+        if probe not in configured:
+            configured.append(probe)
     return _path_matches(path, configured)
 
 
@@ -121,6 +143,10 @@ def _is_public_request(request: Request) -> bool:
     if _is_allowlisted_path(request.url.path):
         return True
     return request.method.upper() in {"GET", "HEAD"} and _is_public_read_path(request.url.path)
+
+
+def _is_health_probe_path(path: str) -> bool:
+    return str(path or "").rstrip("/") in {"/health", "/livez", "/readyz"}
 
 class SimpleRateLimiter:
     def __init__(self, limit_per_window: int, window_seconds: int, enabled: bool = True):
@@ -207,11 +233,14 @@ def _resolve_client_ip(request: Request) -> str:
     return request.client.host if request.client else "anonymous"
 
 async def security_gate(request: Request, call_next):
-    if _is_public_request(request):
+    # Infrastructure probes must remain independent from authentication and
+    # traffic buckets so orchestrators can distinguish overload from death.
+    if _is_health_probe_path(request.url.path):
         return await call_next(request)
 
+    public_request = _is_public_request(request)
     api_key = None
-    if security_settings().api_auth_enabled:
+    if not public_request and security_settings().api_auth_enabled:
         keys = _parse_api_keys()
         if not keys:
             return JSONResponse(status_code=503, content={"detail": "API auth enabled but no keys configured"})
@@ -219,14 +248,30 @@ async def security_gate(request: Request, call_next):
         if not api_key or api_key not in keys:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
-    user = resolve_request_user(request)
-    if user is None and security_settings().supabase_auth_required:
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "登录后才能使用，请先登录。"},
+    if public_request:
+        # Public product reads skip authentication but still enter the IP rate
+        # limiter below. Never use an unverified bearer value as a bucket key.
+        request.state.user_id = "public"
+        request.state.user_email = ""
+    else:
+        user = resolve_request_user(request)
+        anonymous_generation_blocked = (
+            user is None
+            and is_generation_path(request.url.path)
+            and not _anonymous_generation_allowed()
         )
-    request.state.user_id = user.user_id if user else "public"
-    request.state.user_email = user.email if user else ""
+        if user is None and (security_settings().supabase_auth_required or anonymous_generation_blocked):
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": {
+                        "code": "auth_required",
+                        "message": "登录后才能使用，请先登录。",
+                    }
+                },
+            )
+        request.state.user_id = user.user_id if user else "public"
+        request.state.user_email = user.email if user else ""
 
     # 解析客户端标识（限流 + 并发限制共用）——必须用真实 IP（Cloudflare/代理感知）
     request_identity = getattr(request.state, "rag_authenticated_user", None)

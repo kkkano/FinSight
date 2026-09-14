@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-const SESSION_ID = 'user:e2e-user:e2e-request-understanding';
+import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
+
+const SESSION_ID = E2E_SESSION_ID;
 
 const fulfillJson = async (route: any, payload: unknown) => {
   await route.fulfill({
@@ -69,13 +71,13 @@ const fulfillTraceStream = async (route: any) => {
 };
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
+  await page.addInitScript((sessionId) => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'authenticated');
-    localStorage.setItem('finsight-session-id', 'user:e2e-user:e2e-request-understanding');
+    localStorage.setItem('finsight-session-id', sessionId);
     localStorage.setItem('finsight-trace-view-mode', 'user');
-  });
+  }, SESSION_ID);
+  await installAuthenticatedSession(page);
   await installCommonRoutes(page);
 });
 

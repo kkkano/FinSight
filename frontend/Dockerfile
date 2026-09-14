@@ -7,7 +7,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# API base URL injected at build time (e.g. http://175.178.159.112:8000)
+# API base URL injected at build time (for example, https://api.example.com)
 ARG VITE_API_BASE_URL=http://localhost:8000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ARG VITE_SUPABASE_URL=

@@ -85,7 +85,12 @@ def test_auth_required_rejects_anonymous_business_request(
         response = client.get("/whoami")
 
     assert response.status_code == 401
-    assert response.json() == {"detail": "登录后才能使用，请先登录。"}
+    assert response.json() == {
+        "detail": {
+            "code": "auth_required",
+            "message": "登录后才能使用，请先登录。",
+        }
+    }
 
 
 def test_auth_optional_assigns_public_user() -> None:

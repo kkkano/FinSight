@@ -2,18 +2,28 @@
 <h1 align="center">FinSight AI</h1>
 <p align="center"><strong>可信行情、可验证 AI 判断与证据化金融研究</strong></p>
 
-FinSight 已收敛为三个主产品入口：Dashboard、Chat、History。用户在 Dashboard 查看真实行情与规则指标，显式生成 `long / short / neutral` Prediction；在 Chat 基于来源继续研究；在 History 查看 Prediction、Outcome 与报告。系统不再提供组合工作台、筛选、回测、调仓、独立告警、晨报、成本审计或浏览器端模型配置。
+FinSight 当前有四个主工作区：Today、Dashboard、Chat、History。用户先在 Today 查看自选标的、最近 Prediction 与待跟进判断，再进入 Dashboard 检查真实行情和规则指标，在 Chat 基于来源继续研究，并在 History 复盘 Prediction、Outcome 与报告。根路径经过欢迎门后进入 Today；组合工作台、筛选、回测、调仓、独立告警、成本审计和浏览器端模型配置不在当前产品面。
 
 ## 核心能力
 
 | 边界 | 当前实现 |
 |---|---|
+| Today | 登录用户的自选报价、最近 Prediction/Outcome 与待跟进摘要；匿名访问只显示登录提示和只读行情入口 |
 | 行情 | 规范化 quote/Kline/news/financials 网关；携带 provider、as_of、freshness、quality；禁止 synthetic OHLC |
 | Prediction | 显式异步生成、幂等 run、服务端校验、PostgreSQL 落库、图表覆盖与 Outcome |
 | Chat / Report | 六节点 LangGraph、确定性 evidence collectors、普通研究最多一次 ResearchAnalyst 调用、引用与质量门禁 |
 | Monitor | 只监控当前 Dashboard 页面 lease；无 lease 时不请求行情或 LLM |
 | 数据 | 核心业务、Prediction、报告、会话、Watchlist、Monitor 与 LLM usage 均以 PostgreSQL 为事实源；RAG 使用 pgvector |
-| API | 9 个 FastAPI Router、35 个 OpenAPI 操作、唯一 `/api/execute` SSE 入口 |
+| API | 9 个 FastAPI Router、37 个 OpenAPI 操作、唯一 `/api/execute` SSE 入口；`/livez` 与 `/readyz` 分离存活和就绪状态 |
+
+## 数据与安全边界
+
+- 服务端只接受已验证 Supabase JWT 中的用户身份。会话 ID、请求 body 或 UI context 不能覆盖 owner；会话、执行回放、报告、自选和 Monitor 都校验 owner。
+- 删除会话同时清理该线程的上下文、报告/引用、RAG 产物和 LangGraph checkpoint，不删除用户级数据。
+- 质量门判定为 blocked 的报告只返回不可发布预览，不进入默认索引、共享链接或最终报告缓存。旧的 ticker 级最终报告缓存已禁用。
+- 共享报告只输出显式 allowlist 字段，响应为 `private, no-store`；MCP 默认关闭，私有报告工具要求可信 transport principal。
+- 公开 quote/news/Kline/Dashboard GET 仍受 IP 限流；只有基础设施健康探针绕过流量桶。
+- 2026-09-15 锁文件审计：生产依赖 0 个已知漏洞；完整开发依赖仍有 17 个待升级项，不随生产镜像发布。
 
 ## 快速启动
 
@@ -41,7 +51,7 @@ OPENAI_COMPATIBLE_MODEL=model-id
 
 ```mermaid
 flowchart LR
-    UI[React SPA\nDashboard · Chat · History] -->|HTTP / SSE| API[FastAPI\n9 Routers]
+    UI[React SPA\nToday · Dashboard · Chat · History] -->|HTTP / SSE| API[FastAPI\n9 Routers]
     API --> GRAPH[六节点 LangGraph]
     GRAPH --> COLLECT[确定性 Evidence Collectors]
     COLLECT --> ANALYST[ResearchAnalyst\n最多一次业务 LLM]
@@ -69,12 +79,23 @@ START
 ## 产品路由
 
 - `/welcome`：登录或只读入口。
+- `/today`：默认工作区；登录后显示个性化摘要，匿名状态显示登录引导。
 - `/dashboard/:symbol?`：行情、规则指标、Prediction 与页面内 AI 动态。
 - `/chat`：证据化追问和报告生成。
 - `/history`：Prediction、Outcome 与报告历史。
 - `/share/r/:token`：公开只读共享报告。
 
-主导航只显示 Dashboard、Chat、History。
+主导航显示 Today、Dashboard、Chat、History。`/chat` 与 `/history` 要求登录；Today 和 Dashboard 通过欢迎门后可进入，但个人数据仍只对有效用户身份开放。
+
+## 运行健康
+
+- `/livez`：只检查后端进程存活，不访问外部依赖。
+- `/readyz`：部署和容器编排的就绪门禁；生产环境会检查认证、PostgreSQL/Alembic、可信行情、六节点 Graph、PostgreSQL checkpointer、LLM 与 PostgreSQL/pgvector RAG。
+- `/health`：兼容的组件状态摘要，不替代 `/readyz` 的发布判定。
+
+生产启动会先执行一次真实 BGE-M3 embedding readiness probe，并在 CPU 模型冷启动期间由容器 180 秒 start period 保护；probe 失败时生产保持未就绪，不使用 hash 或内存回退。
+
+前端镜像默认使用同源 API，并由 Nginx 代理 `/api`、SSE 与健康探针到后端；只有明确采用独立 API 域名时才设置 `VITE_API_BASE_URL`。
 
 ## 验证
 
@@ -86,6 +107,8 @@ docker compose --env-file .env.server config --quiet
 ```
 
 涉及交互或发布时，再运行 Playwright 与生产 canary。OpenAPI 变化必须同步 `frontend/src/api/openapi.snapshot.json` 和 `frontend/src/api/schema.d.ts`。
+
+Playwright 登录场景使用 Supabase client contract fixture 驱动 `getSession` 与 `onAuthStateChange`，不再用 localStorage 假登录；生产 canary 仍必须使用隔离的真实 Supabase 用户。
 
 ## 文档
 

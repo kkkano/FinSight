@@ -17,6 +17,8 @@ from backend.services.report_index import (
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._\-:]{1,160}$")
+_SAFE_PRINCIPAL_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_PRIVATE_REPORT_TOOLS = frozenset({"research_company", "get_evidence_ledger"})
 _SENSITIVE_KEY_PARTS = (
     "trace",
     "secret",
@@ -210,6 +212,25 @@ def _validate_id(value: Any, field_name: str) -> str:
     return cleaned
 
 
+def _normalize_principal_user_id(value: Any) -> str | None:
+    user_id = str(value or "").strip()
+    if (
+        not _SAFE_PRINCIPAL_RE.fullmatch(user_id)
+        or user_id.lower() in {"public", "anonymous"}
+    ):
+        return None
+    return user_id
+
+
+def _session_belongs_to_principal(session_id: Any, user_id: str) -> bool:
+    try:
+        normalized = _validate_id(session_id, "session_id")
+    except ValueError:
+        return False
+    parts = normalized.split(":")
+    return len(parts) == 3 and parts[1] == user_id
+
+
 def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
     try:
         parsed = int(value)
@@ -276,20 +297,32 @@ def _extract_ledger_from_report(report: dict[str, Any], *, citations: list[dict[
     }
 
 
-def _read_report_replay(*, session_id: str, report_id: str) -> dict[str, Any] | None:
+def _read_report_replay(
+    *,
+    session_id: str,
+    report_id: str,
+    _principal_user_id: str,
+) -> dict[str, Any] | None:
     session_id = _validate_id(session_id, "session_id")
     report_id = _validate_id(report_id, "report_id")
     try:
         replay = get_report_index_store().get_report_replay(
             session_id=session_id,
             report_id=report_id,
+            user_id=_principal_user_id,
         )
     except ReportIndexStoreUnavailable:
         return None
     return replay if isinstance(replay, dict) else None
 
 
-def _research_company(*, ticker: str, session_id: str = "", limit: int = 5) -> dict[str, Any]:
+def _research_company(
+    *,
+    ticker: str,
+    session_id: str = "",
+    limit: int = 5,
+    _principal_user_id: str,
+) -> dict[str, Any]:
     ticker = str(ticker or "").strip().upper()
     if not ticker:
         return {"error": "ticker_required", "message": "ticker is required"}
@@ -308,6 +341,7 @@ def _research_company(*, ticker: str, session_id: str = "", limit: int = 5) -> d
             session_id=session_id,
             ticker=ticker,
             limit=limit_value,
+            user_id=_principal_user_id,
         )
     except ReportIndexStoreUnavailable:
         return {
@@ -319,8 +353,17 @@ def _research_company(*, ticker: str, session_id: str = "", limit: int = 5) -> d
     return {"ticker": ticker, "reports": reports, "count": len(reports), "error": None}
 
 
-def _get_evidence_ledger(*, session_id: str, report_id: str) -> dict[str, Any]:
-    replay = _read_report_replay(session_id=session_id, report_id=report_id)
+def _get_evidence_ledger(
+    *,
+    session_id: str,
+    report_id: str,
+    _principal_user_id: str,
+) -> dict[str, Any]:
+    replay = _read_report_replay(
+        session_id=session_id,
+        report_id=report_id,
+        _principal_user_id=_principal_user_id,
+    )
     if replay is None:
         return {
             "report_id": str(report_id or "").strip(),
@@ -393,6 +436,7 @@ class ReadOnlyToolRegistry:
         enabled: bool | None = None,
         handlers: Mapping[str, Handler] | None = None,
         specs: tuple[ToolSpec, ...] | None = None,
+        principal_user_id: str | None = None,
     ) -> None:
         self.enabled = is_mcp_server_enabled() if enabled is None else bool(enabled)
         self._specs = specs or _tool_specs()
@@ -400,6 +444,7 @@ class ReadOnlyToolRegistry:
         defaults = _default_handlers()
         self._handlers = {**defaults, **custom_handlers}
         self._specs_by_name = {spec.name: spec for spec in self._specs}
+        self._principal_user_id = _normalize_principal_user_id(principal_user_id)
 
     def list_tools(self) -> list[dict[str, Any]]:
         if not self.enabled:
@@ -420,8 +465,28 @@ class ReadOnlyToolRegistry:
         handler = self._handlers.get(spec.handler_name)
         if handler is None:
             return _error_result("tool_unavailable", f"工具 handler 不可用：{tool_name}", tool_name=tool_name)
+        call_arguments = dict(arguments or {})
+        if tool_name in _PRIVATE_REPORT_TOOLS:
+            if self._principal_user_id is None:
+                return _error_result(
+                    "auth_required",
+                    "该工具需要由 MCP transport 提供可信认证主体。",
+                    tool_name=tool_name,
+                )
+            session_id = call_arguments.get("session_id")
+            if session_id and not _session_belongs_to_principal(
+                session_id,
+                self._principal_user_id,
+            ):
+                return _error_result(
+                    "resource_not_found",
+                    "未找到可访问的报告资源。",
+                    tool_name=tool_name,
+                )
+            # principal 只从 registry 构造参数注入，不接受工具调用方自报。
+            call_arguments["_principal_user_id"] = self._principal_user_id
         try:
-            result = _call_handler(handler, arguments or {})
+            result = _call_handler(handler, call_arguments)
         except ValueError as exc:
             return _error_result("invalid_arguments", str(exc), tool_name=tool_name)
         except Exception:
@@ -433,8 +498,13 @@ def build_tool_registry(
     *,
     enabled: bool | None = None,
     handlers: Mapping[str, Handler] | None = None,
+    principal_user_id: str | None = None,
 ) -> ReadOnlyToolRegistry:
-    return ReadOnlyToolRegistry(enabled=enabled, handlers=handlers)
+    return ReadOnlyToolRegistry(
+        enabled=enabled,
+        handlers=handlers,
+        principal_user_id=principal_user_id,
+    )
 
 
 def list_mcp_tools() -> list[dict[str, Any]]:

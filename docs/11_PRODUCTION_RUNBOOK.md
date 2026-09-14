@@ -1,6 +1,6 @@
 # FinSight 生产发布 Runbook
 
-更新时间：2026-07-16
+更新时间：2026-09-15
 
 本文是 FinSight 当前唯一生产发布流程。生产目录为 `/home/ubuntu/FinSight`，Compose 服务为
 `postgres`、`backend`、`frontend`。发布必须使用同一个 Git commit SHA 构建前后端镜像；禁止用
@@ -12,8 +12,8 @@
 flowchart TB
     USER[Browser] --> EDGE[HTTPS edge / tunnel]
     EDGE --> FE[finsight-frontend\nNginx :5173]
-    EDGE --> BE[finsight-backend\n127.0.0.1:8000]
-    FE --> BE
+    FE -->|same-origin API / SSE / probes| BE[finsight-backend\n127.0.0.1:8000]
+    EDGE -. optional separate API origin .-> BE
     BE --> PG[(PostgreSQL 16 + pgvector)]
     BE --> LLM[OpenAI-compatible LLM]
     BE --> DATA[Market / filing / news / search providers]
@@ -27,6 +27,11 @@ flowchart TB
 - Prediction 只接受可信 provider 的真实 K 线；provider/LLM 失败必须返回稳定错误码，不生成替代行情或方向性假结论。
 - 常规发布不读取、备份或恢复旧 SQLite/JSON。`scripts/migrate_legacy_storage.py` 只用于经批准的一次性离线导入。
 - `.env.server` 只保存在服务器受限目录，不进入 Git、镜像层、命令参数、日志、截图或发布证据。
+- `/livez` 只检查进程存活；`/readyz` 是容器编排、发布和回滚的唯一就绪门禁；`/health` 只保留兼容状态摘要。
+- 前端默认使用同源 API 并由 Nginx 反向代理。只有生产边缘明确维护独立 API origin 时才设置 `VITE_API_BASE_URL`。
+- 当前 scheduler、Prediction worker、run owner 和 SSE replay buffer 仍在 backend Web 进程内；独立 worker/outbox 与持久 RunService 完成前，生产只运行一个 backend 副本。
+- quality blocked 报告不得进入默认索引、共享链接或最终报告缓存；共享报告只返回 allowlist 字段并使用 `private, no-store`。
+- 公开 quote/news/Kline/Dashboard GET 仍通过 IP 限流。`/health`、`/livez`、`/readyz` 为避免编排器误判而不进入流量桶。
 
 ## 2. 必需配置
 
@@ -48,7 +53,10 @@ PREDICTION_OUTCOME_SCHEDULER_ENABLED=true
 MONITOR_REALTIME_ENABLED=true
 LANGGRAPH_EXECUTE_LIVE_TOOLS=true
 LANGGRAPH_SYNTHESIZE_MODE=llm
+MCP_SERVER_ENABLED=false
 RAG_V2_BACKEND=postgres
+RAG_V2_ALLOW_MEMORY_FALLBACK=false
+RAG_EMBEDDING=bge-m3
 LANGGRAPH_CHECKPOINTER_BACKEND=postgres
 LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK=false
 ```
@@ -57,6 +65,8 @@ LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK=false
 覆盖进程级 `HTTP_PROXY`/`HTTPS_PROXY`。`NO_PROXY` 与 `no_proxy` 必须相同，并至少包含
 `host.docker.internal,localhost,127.0.0.1`。同宿主机 LLM 网关使用
 `http://host.docker.internal/v1`，不经公网地址回源。
+
+生产 `lifespan` 会在接受流量前异步执行一次 RAG readiness warm-up：按当前配置初始化 PostgreSQL/pgvector RAG，使用已选 embedding 对固定短文本执行一次真实 `encode_single`，校验向量维度、有限值和 `bge-m3` 模型标识，并缓存结果供后续 `/readyz` 使用。失败结果默认缓存 45 秒后自动重试，可用 `RAG_PROBE_FAILURE_TTL_SECONDS` 在 1–300 秒内调整；成功结果按配置指纹复用。非生产 profile 不加载模型。后端 Docker HEALTHCHECK 与 Compose healthcheck 均保留 5 秒 probe timeout，但 `start_period` 为 180 秒，以覆盖 CPU BGE-M3/reranker 冷启动；启动 warm-up 失败时生产 readiness fail closed，不得用内存或 hash fallback 继续接流量。
 
 ## 3. 本地发布门禁
 
@@ -69,26 +79,30 @@ test -n "$sha"
 python -m compileall -q backend scripts
 python -m pytest backend/tests -q
 python -m pytest tests/golden -q
-pnpm --dir frontend lint
-pnpm --dir frontend test:unit
-pnpm --dir frontend build
-pnpm --dir frontend test:e2e
+npm run lint --prefix frontend
+npm run test:unit --prefix frontend
+npm run build --prefix frontend
+npm run test:e2e --prefix frontend -- --workers=1
+npm audit --omit=dev --prefix frontend
 python scripts/audit_product_baseline.py --output .omx/evidence/product-baseline.json
 docker compose --env-file .env.server config --quiet
 ```
 
 同时确认：
 
-- FastAPI Router 不超过 9，OpenAPI 操作不超过 35，前端产品路由恰好 5 个。
+- FastAPI Router 恰好 9 个，OpenAPI 操作恰好 37 个，前端当前产品路由恰好 6 个（Welcome、Today、Dashboard、Chat、History、Shared Report）。
 - OpenAPI snapshot 与 `frontend/src/api/schema.d.ts` 已由目标代码重新生成。
 - greeting、news impact、single report 三类 golden 已重录并人工检查引用、降级语义与最终正文。
 - 仓库、构建参数和镜像 history 不含真实 key、token、密码、Cookie 或 DSN。
 - 桌面与移动关键路径已通过 Playwright；不能只以 HTTP 200 或容器 healthy 代替语义验收。
+- `npm audit --omit=dev --prefix frontend` 必须为 0。完整开发依赖的已知漏洞单独登记和升级；2026-09-15 基线仍有 17 个开发链漏洞，不能误写为全依赖清零。
+- 浏览器 E2E 的登录 fixture 必须通过 Supabase client 的 `getSession/onAuthStateChange` 合同建立身份，不能只写 localStorage；生产 canary 仍使用真实隔离用户。
 
 ## 4. 生产预检与备份
 
-登录后先进入生产目录，确认服务器工作区没有本地改动，记录上一稳定 SHA 与镜像 ID。发布所需空间门禁为：
-根分区使用率 `< 90%` 且可用空间 `>= 5 GiB`。
+登录后先进入生产目录，确认服务器工作区没有本地改动，记录上一稳定 SHA 与镜像 ID。空间门禁必须以当次 `df` 实测为准，不因计划发布而假定机器满足条件：根分区使用率 `< 90%` 且可用空间 `>= 5 GiB`。任一条件不满足就停止部署；可先清理明确可回收的构建缓存/日志，再重新测量，仍不满足则扩容。不得删除当前运行镜像、唯一回滚镜像、数据库卷或未验证的用户数据来凑空间。
+
+2026-09-15 首次目标机预检未通过该门禁；随后仅清理可再生的归档日志、APT 缓存和索引，复测已回到门禁以内（约 87% 使用率、约 5.2 GiB 可用）。每次正式构建前仍必须重新执行下方断言；本记录不保存主机地址或凭据。
 
 ```bash
 set -euo pipefail
@@ -96,11 +110,27 @@ cd /home/ubuntu/FinSight
 git status --short
 test -z "$(git status --porcelain)"
 df -h /
+root_use_pct="$(df -P / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
+root_available_kib="$(df -Pk / | awk 'NR==2 {print $4}')"
+test "$root_use_pct" -lt 90
+test "$root_available_kib" -ge 5242880
 docker system df
 docker compose --env-file .env.server ps
 previous_sha="$(git rev-parse HEAD)"
-docker image inspect "finsight-backend:${previous_sha}" --format '{{.Id}}' || true
-docker image inspect "finsight-frontend:${previous_sha}" --format '{{.Id}}' || true
+running_backend_image_id="$(docker inspect finsight-backend --format '{{.Image}}')"
+running_frontend_image_id="$(docker inspect finsight-frontend --format '{{.Image}}')"
+test -n "$running_backend_image_id"
+test -n "$running_frontend_image_id"
+
+# 旧部署若没有精确 SHA tag，先给当前运行中的不可变 image ID 补 tag；不重建镜像。
+docker image inspect "finsight-backend:${previous_sha}" >/dev/null 2>&1 || \
+  docker image tag "$running_backend_image_id" "finsight-backend:${previous_sha}"
+docker image inspect "finsight-frontend:${previous_sha}" >/dev/null 2>&1 || \
+  docker image tag "$running_frontend_image_id" "finsight-frontend:${previous_sha}"
+previous_backend_image_id="$(docker image inspect "finsight-backend:${previous_sha}" --format '{{.Id}}')"
+previous_frontend_image_id="$(docker image inspect "finsight-frontend:${previous_sha}" --format '{{.Id}}')"
+test "$previous_backend_image_id" = "$running_backend_image_id"
+test "$previous_frontend_image_id" = "$running_frontend_image_id"
 ```
 
 PostgreSQL 备份必须实际恢复到临时数据库；`pg_restore --list` 不能替代恢复演练。备份目录不得纳入发布证据同步。
@@ -133,6 +163,16 @@ restored_tables="$(docker compose --env-file .env.server exec -e RESTORE_DB="$re
   'psql -U "$POSTGRES_USER" -d "$RESTORE_DB" -Atc "select count(*) from pg_tables where schemaname='"'"'public'"'"'"')"
 test "$source_tables" -gt 0
 test "$source_tables" -eq "$restored_tables"
+
+# 表数一致不足以证明数据可恢复；逐表对比关键业务记录数。
+critical_tables="conversation_threads watchlist_items reports report_citations prediction_runs agent_predictions agent_prediction_outcomes agent_run_archive monitor_page_leases monitor_comments llm_usage rag_documents_v2 rag_chunks"
+for table_name in $critical_tables; do
+  source_rows="$(docker compose --env-file .env.server exec -e TABLE_NAME="$table_name" -T postgres sh -lc \
+    'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*) from $TABLE_NAME"')"
+  restored_rows="$(docker compose --env-file .env.server exec -e TABLE_NAME="$table_name" -e RESTORE_DB="$restore_db" -T postgres sh -lc \
+    'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$RESTORE_DB" -Atc "select count(*) from $TABLE_NAME"')"
+  test "$source_rows" = "$restored_rows"
+done
 docker compose --env-file .env.server exec -e RESTORE_DB="$restore_db" -T postgres sh -lc \
   'dropdb -U "$POSTGRES_USER" "$RESTORE_DB"'
 ```
@@ -184,17 +224,19 @@ printf 'commit=%s\nbackend=%s\nfrontend=%s\n' \
 docker compose --env-file .env.server run --rm backend alembic upgrade head
 docker compose --env-file .env.server run --rm backend alembic current
 
-# 2. 只替换后端并等待健康
+# 2. 只替换后端并等待依赖就绪
 docker compose --env-file .env.server up -d --no-deps backend
 for i in $(seq 1 30); do
-  curl -fsS http://127.0.0.1:8000/health >/dev/null && break
+  curl -fsS http://127.0.0.1:8000/readyz >/dev/null && break
   test "$i" -lt 30
   sleep 2
 done
 
-# 3. 后端通过后再替换前端
+# 3. 后端 ready 后再替换前端，并验证 Nginx 同源代理
 docker compose --env-file .env.server up -d --no-deps frontend
 curl -fsS http://127.0.0.1:5173/ >/dev/null
+curl -fsS http://127.0.0.1:5173/livez >/dev/null
+curl -fsS http://127.0.0.1:5173/readyz >/dev/null
 docker compose --env-file .env.server ps
 ```
 
@@ -213,10 +255,12 @@ Canary 必须使用隔离的真实 Supabase 用户。访问 token 只读入当�
 read -rsp 'Canary access token: ' CANARY_TOKEN; echo
 read -rp 'Canary user UUID: ' CANARY_USER_ID
 case "$CANARY_USER_ID" in (*[!0-9A-Fa-f-]*) echo 'invalid canary UUID' >&2; exit 2;; esac
-api="https://api.finsight-ai.chat"
+api="${FINSIGHT_CANARY_API_BASE:?set FINSIGHT_CANARY_API_BASE to the deployed API origin}"
 auth="Authorization: Bearer $CANARY_TOKEN"
 
-curl -fsS "$api/health"
+curl -fsS "$api/livez" | jq -e '.live == true'
+curl -fsS "$api/readyz" | jq -e '.ready == true and .status == "ready"'
+curl -fsS "$api/health" | jq .
 curl -fsS -H "$auth" "$api/api/user/profile"
 curl -fsS "$api/api/stock/kline/AAPL?period=1mo&interval=1d"
 ```
@@ -252,7 +296,7 @@ Outcome scheduler 必须能运行且无未解释错误。若新 Prediction 尚�
 ### 7.2 Chat、Report 与 Monitor
 
 ```bash
-session_id="canary-${target_sha:0:12}"
+session_id="public:${CANARY_USER_ID}:canary-${target_sha:0:12}"
 curl -fsS -N -H "$auth" -H 'Content-Type: application/json' \
   -d "{\"query\":\"基于真实证据分析 AAPL 最近一个月的主要驱动与风险，并给出来源\",\"session_id\":\"$session_id\",\"tickers\":[\"AAPL\"],\"output_mode\":\"chat\"}" \
   "$api/api/execute" | tee "/tmp/finsight-canary-chat-${target_sha:0:12}.sse"
@@ -302,13 +346,15 @@ SQL
 
 用真实 canary 登录分别验证桌面 `1440x1000` 与移动 `390x844`：
 
-1. `/dashboard/AAPL` 显示真实 K 线、provider、`as_of`、规则指标和 AI Prediction 覆盖层。
-2. 无 Prediction 时显示“尚未生成”；认证、数据、LLM、配额错误分别显示具体原因。
-3. 生成 Prediction 后能看到 anchor、entry、stop、target、方向和状态，刷新后仍存在。
-4. “问 AI”进入 `/chat`，不在 Dashboard 启动第二条执行流。
-5. `/history` 能读取 Prediction/Outcome/Report，并能回放和创建只读分享。
-6. 页面 lease 只跟随当前标的；切换或离开页面后释放。
-7. `/welcome`、`/dashboard/:symbol`、`/chat`、`/history`、`/share/r/:token` 之外不存在旧产品入口。
+1. `/` 在欢迎门通过后进入 `/today`；带 `?symbol=AAPL` 时进入对应 Dashboard。
+2. 登录用户的 `/today` 显示自选报价、最近 Prediction/Outcome 和待跟进判断，数据带来源与时间；匿名状态不得加载个人数据。
+3. `/dashboard/AAPL` 显示真实 K 线、provider、`as_of`、规则指标和 AI Prediction 覆盖层。
+4. 无 Prediction 时显示“尚未生成”；认证、数据、LLM、配额错误分别显示具体原因。
+5. 生成 Prediction 后能看到 anchor、entry、stop、target、方向和状态，刷新后仍存在。
+6. “问 AI”进入 `/chat`，不在 Dashboard 启动第二条执行流。
+7. `/history` 能读取 Prediction/Outcome/Report，并能回放和创建只读分享。
+8. 页面 lease 只跟随当前标的；切换或离开页面后释放。
+9. 当前产品路由只有 `/welcome`、`/today`、`/dashboard/:symbol?`、`/chat`、`/history`、`/share/r/:token`；旧产品入口不可达。
 
 发布后连续观察 24 小时。至少在 `T+0`、`T+30m`、`T+2h`、`T+6h`、`T+12h`、`T+24h`
 记录一次脱敏快照：
@@ -335,9 +381,10 @@ docker system df
 ```bash
 export IMAGE_TAG="$previous_sha"
 docker compose --env-file .env.server up -d --no-deps backend
-curl -fsS http://127.0.0.1:8000/health >/dev/null
+curl -fsS http://127.0.0.1:8000/readyz >/dev/null
 docker compose --env-file .env.server up -d --no-deps frontend
 curl -fsS http://127.0.0.1:5173/ >/dev/null
+curl -fsS http://127.0.0.1:5173/readyz >/dev/null
 ```
 
 优先回滚应用，保持向后兼容 schema。生产已经产生新写入后，不得直接 `alembic downgrade`；只有确认旧应用无法使用
@@ -355,5 +402,6 @@ Goal 只有在以下证据全部存在时才能完成：
 5. 桌面和移动关键路径截图及浏览器控制台检查。
 6. 24 小时 SLO、provider、错误率、Monitor I/O 与 LLM usage 报告。
 7. 生产日志中不存在未解释的认证、scorer、schema、synthetic data 或跨租户问题。
+8. 后端直连和前端同源代理的 `/livez`、`/readyz` 均通过，且 readiness 未启用内存/非 PostgreSQL 回退。
 
 任何一项缺失，都不得标记 Goal complete 或删除上一稳定 SHA 镜像。

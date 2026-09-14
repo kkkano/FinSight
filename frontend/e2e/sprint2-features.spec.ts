@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
 
+import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
+
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
+  await page.addInitScript((sessionId) => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'authenticated');
-    localStorage.setItem('finsight-session-id', 'user:e2e-user:navigation');
-  });
+    localStorage.setItem('finsight-session-id', sessionId);
+  }, E2E_SESSION_ID);
+  await installAuthenticatedSession(page);
 });
 
 test.describe('移动导航', () => {

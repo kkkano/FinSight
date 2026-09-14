@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-const SESSION_ID = 'user:e2e-user:report-flow';
+import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
+
+const SESSION_ID = E2E_SESSION_ID;
 
 const fulfillJson = async (route: any, payload: unknown, status = 200) => {
   await route.fulfill({
@@ -46,7 +48,7 @@ const dashboardPayload = (symbol = 'AAPL') => ({
         title: 'Apple launches major AI update',
         url: 'https://example.com/apple-ai',
         source: 'E2E News',
-        ts: '2026-07-16T08:00:00Z',
+        ts: new Date().toISOString(),
         summary: 'Apple announced a major AI update.',
       }],
     },
@@ -76,7 +78,6 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript((sessionId) => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'authenticated');
     localStorage.setItem('finsight-session-id', String(sessionId));
     localStorage.setItem(
       'fs_dashboard_active_v1',
@@ -85,6 +86,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('fs_dashboard_layout_v1', JSON.stringify({ hidden_widgets: [], order: [] }));
     localStorage.setItem('fs_dashboard_news_mode_v1', JSON.stringify('market'));
   }, SESSION_ID);
+  await installAuthenticatedSession(page);
 
   await page.route('**/api/execute', (route) => fulfillDoneStream(route));
   await page.route('**/api/dashboard**', async (route) => {

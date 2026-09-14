@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -29,6 +30,20 @@ async def lifespan(_app: FastAPI):
     from backend.services.startup_check import run_startup_checks
 
     run_startup_checks()
+
+    # Warm the production RAG model once before accepting traffic. The result
+    # is cached by app_factory; readiness requests never reload or re-encode.
+    try:
+        from backend.api.app_factory import _is_production_runtime, warm_rag_readiness_probe
+
+        if _is_production_runtime():
+            await asyncio.to_thread(warm_rag_readiness_probe)
+        else:
+            logger.info("[RAG] non-production profile; skip model/database readiness warm-up")
+    except Exception as exc:
+        # The probe itself returns a stable failure result; this guard only
+        # protects startup from an unexpected integration error.
+        logger.exception("[RAG] readiness probe initialization failed: %s", exc)
 
     prediction_service = None
     if schema_status.configured and _env_bool("PREDICTION_GENERATION_ENABLED", True):

@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Menu,
   MessageSquare,
+  Sun,
   Settings,
   X,
 } from 'lucide-react';
@@ -17,7 +18,8 @@ interface SidebarProps {
   onDashboardClick?: (symbol: string) => void;
   onChatClick?: () => void;
   onHistoryClick?: () => void;
-  currentView?: 'chat' | 'dashboard' | 'history';
+  onTodayClick?: () => void;
+  currentView?: 'today' | 'chat' | 'dashboard' | 'history';
   isMobileOpen?: boolean;
   onMobileOpen?: () => void;
   onMobileClose?: () => void;
@@ -39,6 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onDashboardClick,
   onChatClick,
   onHistoryClick,
+  onTodayClick,
   currentView,
   isMobileOpen = false,
   onMobileOpen,
@@ -50,11 +53,19 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { watchlist, initWatchlist, activeAsset: lastDashboardAsset } = useDashboardStore();
 
   const compactMobile = !isMobileOpen;
-  const activeKey = currentView ?? (location.pathname.startsWith('/history') ? 'history' : 'chat');
+  const activeKey = currentView ?? (
+    location.pathname.startsWith('/today')
+      ? 'today'
+      : location.pathname.startsWith('/history')
+        ? 'history'
+        : 'chat'
+  );
 
   useEffect(() => {
+    // Today owns the authenticated watchlist query so its loading/error state is visible.
+    if (currentView === 'today') return;
     void initWatchlist();
-  }, [authUserId, initWatchlist]);
+  }, [authUserId, currentView, initWatchlist]);
 
   const closeMobile = () => onMobileClose?.();
 
@@ -133,6 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <nav className="mt-1 flex min-h-0 flex-1 flex-col">
           <NavGroupLabel compact={compactMobile}>主工作区</NavGroupLabel>
+          <NavItem icon={<Sun size={16} />} label="今日" active={activeKey === 'today'} compact={compactMobile} testId="sidebar-nav-today" onClick={() => { onTodayClick?.(); closeMobile(); }} />
           <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
           <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
           <NavItem icon={<History size={16} />} label="历史" active={activeKey === 'history'} compact={compactMobile} testId="sidebar-nav-history" onClick={() => { onHistoryClick?.(); closeMobile(); }} />

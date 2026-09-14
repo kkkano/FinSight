@@ -89,20 +89,19 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
                 deps=deps,
                 query="生成 AAPL 投资报告",
                 thread_id="tenant:user:thread",
+                user_id="user",
                 output_mode="investment_report",
                 source="execute_test",
             )
         )
     )
 
-    # soft-block: report exists so it IS indexed with quality metadata
-    assert indexed, "soft-blocked reports should be indexed (report content preserved)"
+    assert not indexed, "quality-blocked previews must never enter the report index"
     assert updated_context, "chat context should still be updated for conversation continuity"
 
     blocked_events = [event for event in events if isinstance(event, dict) and event.get("type") == "quality_blocked"]
     assert blocked_events, "SSE stream should emit quality_blocked"
-    # soft-blocked: publishable=True because content is preserved
-    assert blocked_events[0].get("publishable") is True
+    assert blocked_events[0].get("publishable") is False
     assert "EVIDENCE_COVERAGE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
     assert blocked_events[0].get("blocked_report_available") is True
     assert blocked_events[0].get("allow_continue_when_blocked") is True
@@ -117,11 +116,11 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "pipeline should still emit done"
     done = done_events[0]
-    # soft-block: quality_blocked=False at done level, content preserved
-    assert done.get("quality_blocked") is False, "soft-blocked should not flag quality_blocked in done"
-    assert done.get("publishable") is True
+    assert done.get("quality_blocked") is True
+    assert done.get("publishable") is False
+    assert done.get("failure_kind") == "quality_gate"
     assert done.get("soft_blocked") is True
     assert done.get("response") != "", "soft-blocked should preserve markdown response"
-    assert isinstance(done.get("report"), dict), "soft-blocked should preserve report"
+    assert done.get("report") is None
     assert isinstance(done.get("blocked_report"), dict)
     assert done.get("allow_continue_when_blocked") is True

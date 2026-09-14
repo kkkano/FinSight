@@ -3,15 +3,31 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
+历史版本条目保留当时的接口和产品名称；当前路由、执行入口和部署事实以 README、`docs/01_ARCHITECTURE.md` 与 `docs/11_PRODUCTION_RUNBOOK.md` 为准。
+
 ---
 
-## [Unreleased] - 文档事实源收敛与死代码清理
+## [Unreleased] - 2026-09-15
+
+### 新增
+
+- 新增 Today 默认工作区，汇总登录用户的自选报价、最近 Prediction/Outcome 与待跟进判断；匿名状态明确引导登录并保留只读行情入口。
+- 新增 `/livez` 进程存活探针和 `/readyz` 依赖就绪探针；生产 readiness 覆盖认证、PostgreSQL/Alembic、可信行情、六节点 Graph、持久化 checkpointer、LLM 与 PostgreSQL/pgvector RAG。
+- 会话、执行、报告、自选和 Monitor 统一绑定已验证用户 owner；删除会话同时清理线程报告/RAG 与 LangGraph checkpoint。
 
 ### 变更
 
-- 重写中英文 README、系统架构、LangGraph 流程/深潜、Agent、RAG、设计规范和生产 Runbook，并同步当前 Mermaid。
-- 校准 FastAPI 25 个 Router、React/ECharts/Tailwind/Rolldown Vite 版本、PostgreSQL checkpointer、pgvector RAG 和三服务部署拓扑。
+- 根路径默认进入 Today，主导航更新为 Today、Dashboard、Chat、History；Ask/Research/Portfolio/Library 保留为 `DESIGN.md` 中的目标信息架构。
+- 前端构建默认使用同源 API，Nginx 代理 API、SSE、`/livez`、`/readyz` 和 `/health`；后端容器改用 `/readyz` 健康门禁。
+- quality blocked 报告改为不可发布预览，不写默认索引或共享；最终报告旧缓存硬禁用；共享报告改为字段 allowlist 投影和 `private, no-store`。
+- MCP 默认关闭；私有报告 MCP 工具只有 transport 提供可信 principal 且 session owner 一致时才可读取。
+- 升级前端生产依赖，`npm audit --omit=dev` 为 0；完整开发依赖仍有 17 个已知漏洞，继续作为 Phase 8 后续。
+- Playwright 登录测试统一使用 Supabase client contract fixture，不再通过 localStorage 伪造登录身份。
+- 生产 Runbook 增加严格磁盘容量阻断、上一稳定 SHA 镜像 ID/tag 断言，以及备份恢复后的关键业务表逐表行数对比；容量不足时必须清理安全缓存或扩容后重新预检。
+- 生产启动新增一次性真实 BGE-M3 embedding readiness probe；Dockerfile/Compose healthcheck 的 start period 调整为 180 秒，覆盖 CPU 模型冷启动并在 probe 失败时保持 fail closed。
+- 同步 README、系统架构、设计合同、前端说明和生产 Runbook；校准为 9 个 FastAPI Router、37 个 OpenAPI 操作和 6 个当前产品路由。
 - 将已完成 overhaul spec、历史 QA/发布证据、ADR、源笔记和被替代文档归档到 `docs/archive/2026-07-overhaul-closeout/`。
+- 将未被引用的旧 Schema Router、Forum/Supervisor 与 Agent 优化草案归档到 `docs/archive/2026-09-15-doc-reconcile/`。
 - 删除从 `frontend/src/main.tsx` 生产入口不可达的旧 execution 面板、Phase Labs 页面、无效 barrel、独立 retry scope 及其测试。
 - 当前文档索引收敛到 `docs/DOCS_INDEX.md`；历史材料不再作为架构事实源。
 

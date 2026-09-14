@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
+
 const fulfillJson = async (route: any, payload: unknown) => {
   await route.fulfill({
     status: 200,
@@ -50,18 +52,18 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
 });
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
+  await page.addInitScript((sessionId) => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    localStorage.setItem('finsight-entry-mode', 'authenticated');
-    localStorage.setItem('finsight-session-id', 'user:e2e-user:e2e-trace');
+    localStorage.setItem('finsight-session-id', sessionId);
     localStorage.setItem(
       'fs_dashboard_active_v1',
       JSON.stringify({ symbol: 'AAPL', type: 'equity', display_name: 'Apple' }),
     );
     localStorage.setItem('fs_dashboard_layout_v1', JSON.stringify({ hidden_widgets: [], order: [] }));
     localStorage.setItem('fs_dashboard_news_mode_v1', JSON.stringify('market'));
-  });
+  }, E2E_SESSION_ID);
+  await installAuthenticatedSession(page);
 
   await page.route('**/api/dashboard**', async (route) => {
     const url = new URL(route.request().url());
@@ -75,11 +77,11 @@ test.beforeEach(async ({ page }) => {
     await fulfillJson(route, { success: true, data: { price: 180.5, change_percent: 1.2 } });
   });
   await page.route('**/api/reports/index**', async (route) => {
-    await fulfillJson(route, { session_id: 'user:e2e-user:e2e-trace', count: 0, items: [] });
+    await fulfillJson(route, { session_id: E2E_SESSION_ID, count: 0, items: [] });
   });
   await page.route('**/api/reports/replay/**', async (route) => {
     await fulfillJson(route, {
-      session_id: 'user:e2e-user:e2e-trace',
+      session_id: E2E_SESSION_ID,
       report: null,
       citations: [],
       trace_digest: {},

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import os
 import re
@@ -18,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.api.schemas import ChatContext, ChatMessage, ChatOptions
+from backend.api.session_context import SessionOwnershipError, _resolve_owned_thread_id
 from backend.api.stream_replay import replay_buffer
 from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
 
@@ -27,6 +29,7 @@ _STREAM_TASKS: set[asyncio.Task[Any]] = set()
 _STREAM_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
 _RUN_OWNERS: OrderedDict[str, str] = OrderedDict()
 _MAX_RUN_OWNERS = 256
+logger = logging.getLogger(__name__)
 
 
 class ExecuteRequest(BaseModel):
@@ -103,6 +106,10 @@ def _generation_enabled() -> bool:
     return str(os.getenv("REPORTS_GENERATION_ENABLED", "true")).strip().lower() not in {"false", "0", "off"}
 
 
+def _request_user_id(http_request: Request) -> str:
+    return str(getattr(http_request.state, "user_id", "public") or "public").strip() or "public"
+
+
 def _enforce_user_quota(http_request: Request) -> str:
     from backend.services.llm_usage_store import (
         LLMUsageStoreUnavailable,
@@ -110,7 +117,7 @@ def _enforce_user_quota(http_request: Request) -> str:
         check_user_quota,
     )
 
-    user_id = str(getattr(http_request.state, "user_id", "public") or "public")
+    user_id = _request_user_id(http_request)
     try:
         check_user_quota(user_id)
     except UserDailyCostLimitExceeded as exc:
@@ -203,11 +210,12 @@ def _buffered_sse_response(
         except asyncio.CancelledError:
             replay_buffer.append(run_id, {"type": "cancelled", "run_id": run_id, "session_id": thread_id})
             raise
-        except Exception as exc:
+        except Exception:
+            logger.exception("execution stream pump failed run_id=%s", run_id)
             replay_buffer.append(run_id, {
                 "type": "error",
                 "code": "execution_failed",
-                "message": str(exc),
+                "message": "执行失败，请稍后重试。",
                 "run_id": run_id,
                 "session_id": thread_id,
             })
@@ -250,13 +258,23 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
     async def execute_endpoint(request: ExecuteRequest, http_request: Request):
         if not _generation_enabled():
             raise HTTPException(status_code=503, detail={"code": "generation_disabled", "message": "生成服务维护中"})
+        user_id = _request_user_id(http_request)
         try:
-            thread_id = deps.resolve_thread_id(request.session_id)
+            thread_id = _resolve_owned_thread_id(
+                request.session_id,
+                user_id,
+                normalize=deps.resolve_thread_id,
+            )
+        except SessionOwnershipError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "session_not_found", "message": "session not found"},
+            ) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail={"code": "invalid_session_id", "message": str(exc)}) from exc
 
+        _enforce_user_quota(http_request)
         run_id = _normalize_run_id(request.run_id)
-        user_id = _enforce_user_quota(http_request)
         _register_run_owner(run_id, user_id)
         options = request.options
         output_mode = request.output_mode or (options.output_mode if options else None)

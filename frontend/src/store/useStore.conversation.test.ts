@@ -79,8 +79,68 @@ describe('useStore conversation lifecycle', () => {
     useStore.getState().setSessionId('public:stale-user:default');
     await Promise.resolve();
 
+    expect(useStore.getState().sessionId).toMatch(/^public:anonymous:/);
     expect(createConversation).not.toHaveBeenCalled();
     expect(getConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not treat an anonymous session from another tenant as local', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setAuthIdentity(null);
+    useStore.getState().setSessionId('tenant:anonymous:default');
+    await Promise.resolve();
+
+    expect(useStore.getState().sessionId).toMatch(/^public:anonymous:/);
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(getConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not let an authenticated user select or sync another user session', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+    const ownSessionId = useStore.getState().sessionId;
+
+    useStore.getState().setSessionId('public:other-user:private');
+    useStore.getState().selectConversation('public:other-user:private');
+    await Promise.resolve();
+
+    expect(useStore.getState().sessionId).toBe(ownSessionId);
+    expect(createConversation).not.toHaveBeenCalledWith(
+      'public:other-user:private',
+      expect.anything(),
+    );
+    expect(getConversation).not.toHaveBeenCalledWith('public:other-user:private');
+  });
+
+  it('isolates local conversations and late stream updates when the account changes', () => {
+    const aliceSessionId = useStore.getState().sessionId;
+    const controller = new AbortController();
+    useStore.getState().addMessage({
+      id: 'alice-private',
+      role: 'user',
+      content: 'Alice private research',
+      timestamp: 1,
+    });
+    useStore.getState().setSessionAbortController(aliceSessionId, controller);
+
+    useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
+
+    const switched = useStore.getState();
+    expect(controller.signal.aborted).toBe(true);
+    expect(switched.sessionId).toBe('public:bob:default');
+    expect(switched.messages).toHaveLength(1);
+    expect(switched.messages[0].id).toBe('welcome');
+    expect(switched.conversationSummaries.every((item) => item.sessionId.startsWith('public:bob:'))).toBe(true);
+
+    switched.addMessageToSession(aliceSessionId, {
+      id: 'late-alice-response',
+      role: 'assistant',
+      content: 'Late response',
+      timestamp: 2,
+    });
+    expect(useStore.getState().conversationSummaries.some((item) => item.sessionId === aliceSessionId)).toBe(false);
   });
 
   it('syncs an authenticated conversation and hydrates empty local history', async () => {

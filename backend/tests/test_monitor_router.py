@@ -64,18 +64,23 @@ def test_monitor_lease_api_enforces_auth_tenant_and_token(monkeypatch):
     client = _client(monkeypatch, lease_store=store)
     assert client.post(
         "/api/monitor/leases",
-        json={"session_id": "s1", "symbol": "AAPL"},
+        json={"session_id": "public:alice:s1", "symbol": "AAPL"},
     ).status_code == 401
     assert client.post(
         "/api/monitor/leases",
         headers={"x-test-user": "alice"},
-        json={"session_id": "s1", "symbol": "AAPL;DROP TABLE leases"},
+        json={"session_id": "public:alice:s1", "symbol": "AAPL;DROP TABLE leases"},
     ).status_code == 422
+    assert client.post(
+        "/api/monitor/leases",
+        headers={"x-test-user": "alice"},
+        json={"session_id": "public:bob:s1", "symbol": "AAPL"},
+    ).status_code == 404
 
     response = client.post(
         "/api/monitor/leases",
         headers={"x-test-user": "alice"},
-        json={"session_id": "s1", "symbol": "aapl"},
+        json={"session_id": "public:alice:s1", "symbol": "aapl"},
     )
     assert response.status_code == 201
     lease = response.json()["lease"]
@@ -106,7 +111,7 @@ def test_monitor_lease_api_fails_closed_when_store_unavailable(monkeypatch):
     response = _client(monkeypatch, lease_store=Down()).post(
         "/api/monitor/leases",
         headers={"x-test-user": "alice"},
-        json={"session_id": "s1", "symbol": "AAPL"},
+        json={"session_id": "public:alice:s1", "symbol": "AAPL"},
     )
     assert response.status_code == 503
     assert response.json()["detail"] == "monitor lease store unavailable"
@@ -117,7 +122,7 @@ def test_comments_are_scoped_by_user_session_and_current_symbol(monkeypatch):
     prediction_id = "11111111-1111-1111-1111-111111111111"
     comment = SimpleNamespace(model_dump=lambda mode=None: {
         "id": str(uuid.uuid4()),
-        "session_id": "s1",
+        "session_id": "public:alice:s1",
         "symbol": "AAPL",
         "ts": "2026-07-11T00:00:00Z",
         "level": "alert",
@@ -138,16 +143,25 @@ def test_comments_are_scoped_by_user_session_and_current_symbol(monkeypatch):
             return [comment], "next"
 
     client = _client(monkeypatch, comment_store=Store())
-    path = "/api/monitor/comments?session_id=s1&symbol=aapl&day=2026-07-11&limit=20"
+    path = "/api/monitor/comments?session_id=public:alice:s1&symbol=aapl&day=2026-07-11&limit=20"
     assert client.get(path).status_code == 401
     assert client.get(
-        "/api/monitor/comments?session_id=s1",
+        "/api/monitor/comments?session_id=public:alice:s1",
         headers={"x-test-user": "alice"},
     ).status_code == 422
+    assert client.get(
+        "/api/monitor/comments?session_id=public:bob:s1&symbol=AAPL",
+        headers={"x-test-user": "alice"},
+    ).status_code == 404
+    assert client.get(
+        "/api/monitor/comments/stream?session_id=public:bob:s1&symbol=AAPL",
+        headers={"x-test-user": "alice"},
+    ).status_code == 404
+    assert calls == []
     response = client.get(path, headers={"x-test-user": "alice"})
     assert response.status_code == 200
     assert calls[0]["user_id"] == "alice"
-    assert calls[0]["session_id"] == "s1"
+    assert calls[0]["session_id"] == "public:alice:s1"
     assert calls[0]["symbol"] == "aapl"
     assert response.json()["comments"][0]["chart_url"] == (
         f"/dashboard/AAPL?analysis={prediction_id}"
@@ -161,7 +175,7 @@ def test_comment_rest_and_stream_fail_before_200_when_store_unavailable(monkeypa
 
     client = _client(monkeypatch, comment_store=Down())
     headers = {"x-test-user": "alice"}
-    query = "?session_id=s1&symbol=AAPL"
+    query = "?session_id=public:alice:s1&symbol=AAPL"
     rest = client.get(f"/api/monitor/comments{query}", headers=headers)
     stream = client.get(f"/api/monitor/comments/stream{query}", headers=headers)
     assert rest.status_code == stream.status_code == 503

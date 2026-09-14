@@ -1,12 +1,14 @@
 # FinSight 当前架构
 
-更新时间：2026-07-16
+更新时间：2026-09-15
 
 ## 1. 产品边界
 
-FinSight 的唯一产品目标是：围绕一个标的展示可信行情和确定性指标，生成可验证的 AI Prediction，并支持证据化追问与历史复盘。
+FinSight 的产品目标是：先把与用户关注标的有关的变化摆到面前，再用可信行情、可验证 Prediction、证据化追问和历史复盘帮助用户理解公开金融信息。
 
-当前主入口只有 Dashboard、Chat、History；另有 Welcome/Login 与只读 Shared Report。组合工作台、Screener、Backtest、A 股榜单、Attribution、Rebalance、Morning Brief、Daily Tasks、邮件订阅、Alert Feed、RAG Inspector、Cost Audit、Skills/Agents/Tools 目录均不属于当前产品。
+当前主工作区为 Today、Dashboard、Chat、History；另有 Welcome/Login 与只读 Shared Report。Today 是默认入口，登录用户可查看自选报价、最近 Prediction/Outcome 和待跟进判断；匿名用户只看到登录引导并可转到只读 Dashboard。`DESIGN.md` 中的 Ask、Research、Portfolio、Library 是后续目标信息架构，不是当前已注册路由。
+
+组合工作台、Screener、Backtest、A 股榜单、Attribution、Rebalance、独立 Morning Brief/Daily Tasks、邮件订阅、Alert Feed、RAG Inspector、Cost Audit、Skills/Agents/Tools 目录均不属于当前产品。
 
 ## 2. 运行时总览
 
@@ -29,7 +31,7 @@ FastAPI 只注册以下九个 Router：
 
 | Router | 责任 |
 |---|---|
-| `system_router` | `/health`、`/metrics` 与受保护诊断 |
+| `system_router` | `/livez`、`/readyz`、`/health` 与 `/metrics` |
 | `user_router` | 当前用户只读资料 |
 | `watchlist_router` | Watchlist 增删查 |
 | `conversation_router` | 对话列表与历史 |
@@ -39,7 +41,7 @@ FastAPI 只注册以下九个 Router：
 | `monitor_router` | 页面 lease 与当前标的 comments feed |
 | `report_router` | 报告索引、回放、分享与公开只读读取 |
 
-当前 OpenAPI 为 35 个操作。新增公开端点必须先证明不能并入上述边界，并保持总量门禁。
+当前 OpenAPI 为 37 个操作。新增公开端点必须先证明不能并入上述边界，并保持总量门禁。
 
 ## 3. Graph 与请求合同
 
@@ -57,7 +59,7 @@ flowchart TD
 ```
 
 - `prepare_context`：恢复同 thread 上下文并建立本轮状态。
-- `route_request`：优先确定性规则；仅歧义请求允许一次结构化 LLM router。
+- `route_request`：只使用确定性规则生成 route、request frame、tasks 与 render identity，不调用 LLM。
 - `collect_evidence`：规划、策略检查和并行工具采集；collector 被强制关闭自身 LLM 与 reflection。
 - `analyze`：事实查询直接构建渲染变量；研究请求最多调用一次 ResearchAnalyst。
 - `validate`：统一检查 Claim、引用、TaskOutcome、报告/回答质量与失败披露。
@@ -97,20 +99,27 @@ Price、Technical、Fundamental、News、Macro、Risk、Deep Search 只作为内
 
 核心 schema 由 Alembic 管理；应用启动只校验 revision，不执行运行时 DDL。`scripts/migrate_legacy_storage.py` 仅用于一次性 dry-run/import/verify/rollback，不是运行路径。
 
-生产启用 `APP_MODE=production` 和 `SUPABASE_AUTH_REQUIRED=true`。Prediction、Chat、History、Watchlist、Monitor 与私有报告必须带有效 JWT。公开面仅包括健康检查、明确允许的只读行情和 share token 报告。
+生产启用 `APP_MODE=production` 和 `SUPABASE_AUTH_REQUIRED=true`。Prediction、Chat、History、Watchlist、Monitor 与私有报告必须带有效 Supabase JWT。公开面仅包括 `/livez`、`/readyz`、`/health`、明确允许的只读 quote/news/Kline/Dashboard GET，以及 share token 报告。前端的欢迎门只控制页面进入体验，不替代后端身份校验；Today 在没有有效用户身份时不得请求或展示个人自选与历史判断。
+
+认证后的 `user_id` 是资源 owner 的唯一来源；客户端 session/body/UI context 不得覆盖。线程 ID 的 owner 段必须与认证用户一致。删除线程会清理进程内上下文、该 owner 的报告与引用、thread-scoped RAG 数据和 LangGraph checkpoint；用户级数据不随线程删除。
+
+共享报告不是对私有报告对象做递归黑名单清洗，而是只投影显式允许的正文、章节、引用和质量字段；非 HTTP(S) 引用 URL 被清空，响应禁止缓存。quality blocked 报告不写默认索引、不创建 share，并且旧 ticker/output-mode 最终报告缓存已从执行路径移除。MCP 默认关闭；启用后，私有报告工具仍要求 transport 注入可信 principal 并校验 session owner。
 
 ## 7. 前端边界
 
 `frontend/src/App.tsx` 是路由事实源：
 
 - `/welcome`
+- `/today`
 - `/dashboard/:symbol?`
 - `/chat`
 - `/history`
 - `/share/r/:token`
 
-Dashboard 的“问 AI”通过 handoff 进入主 Chat，不创建第二条 SSE。History 统一承载 Prediction/Outcome 与报告。后端合同变化必须同步 API client、OpenAPI snapshot、生成类型、store 和测试。
+`/` 默认重定向到 `/today`；若 query 带 `symbol`，则进入对应 Dashboard。`/chat` 与 `/history` 使用强登录 Guard，Today 与 Dashboard 使用欢迎门，其中个人数据仍由用户身份和后端 JWT 控制。Dashboard 的“问 AI”通过 handoff 进入主 Chat，不创建第二条 SSE。History 统一承载 Prediction/Outcome 与报告。后端合同变化必须同步 API client、OpenAPI snapshot、生成类型、store 和测试。
 
 ## 8. 部署边界
 
-Docker Compose 运行 PostgreSQL/pgvector、FastAPI/Uvicorn 后端和 Nginx/React 前端。后端宿主端口仅绑定 `127.0.0.1:8000`；前端映射 `5173:80`。镜像用 commit SHA 标记，数据库先迁移，随后依次部署后端和前端。完整操作与 canary 标准见 [11_PRODUCTION_RUNBOOK.md](11_PRODUCTION_RUNBOOK.md)。
+Docker Compose 运行 PostgreSQL/pgvector、FastAPI/Uvicorn 后端和 Nginx/React 前端。后端宿主端口仅绑定 `127.0.0.1:8000`；前端映射 `5173:80`，默认由 Nginx 同源代理 API、SSE 与健康探针。后端容器以 `/readyz` 为健康检查；`/livez` 只判断进程存活，`/health` 保留为组件状态摘要。生产 lifespan 接流量前会执行一次真实 BGE-M3 embedding probe，结果缓存给 readiness；Dockerfile 与 Compose 为 CPU 模型冷启动配置 180 秒 start period。镜像用 commit SHA 标记，数据库先迁移，随后依次部署后端和前端。
+
+当前 Prediction worker、Monitor scheduler、Outcome scheduler，以及 run owner/replay buffer 仍在 Web 进程内，因此生产拓扑只支持一个 backend 副本。独立 worker/outbox 和持久 RunService 完成前不得水平扩展 backend。完整操作与 canary 标准见 [11_PRODUCTION_RUNBOOK.md](11_PRODUCTION_RUNBOOK.md)。

@@ -102,6 +102,30 @@ export const deriveUserIdFromSessionId = (sessionId: string | null | undefined):
   return DEFAULT_USER_ID;
 };
 
+export const sessionBelongsToIdentity = (
+  sessionId: string | null | undefined,
+  identity: AuthIdentity | null,
+): boolean => {
+  const parts = String(sessionId || '').trim().split(':');
+  if (parts.length !== 3) return false;
+  const [tenantId, ownerId] = parts;
+  if (!ownerId) return false;
+  if (!identity?.userId) return tenantId === 'public' && ownerId === 'anonymous';
+  return ownerId === normalizeSessionPart(identity.userId, 'user');
+};
+
+const sessionsHaveSameOwner = (left: string, right: string): boolean => {
+  const leftParts = String(left || '').trim().split(':');
+  const rightParts = String(right || '').trim().split(':');
+  if (leftParts.length !== 3 || rightParts.length !== 3) return false;
+  if (leftParts[1] === 'anonymous' || rightParts[1] === 'anonymous') {
+    return leftParts[0] === 'public'
+      && rightParts[0] === 'public'
+      && leftParts[1] === rightParts[1];
+  }
+  return Boolean(leftParts[1] && leftParts[1] === rightParts[1]);
+};
+
 const getInitialSessionId = (): string | null => {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem('finsight-session-id');
@@ -281,11 +305,10 @@ const deriveBackendTitle = (messages?: Message[]): string | undefined => {
   return source.replace(/\s+/g, ' ').trim().slice(0, 42) || undefined;
 };
 
-const isAnonymousSession = (sessionId: string): boolean =>
-  String(sessionId || '').trim().startsWith('public:anonymous:');
-
-const canSyncBackendConversation = (sessionId: string): boolean =>
-  !isAnonymousSession(sessionId) && Boolean(useStore.getState().authIdentity?.userId);
+const canSyncBackendConversation = (sessionId: string): boolean => {
+  const identity = useStore.getState().authIdentity;
+  return Boolean(identity?.userId && sessionBelongsToIdentity(sessionId, identity));
+};
 
 const createBackendConversation = (sessionId: string, messages?: Message[]) => {
   if (!sessionId || !canSyncBackendConversation(sessionId)) return;
@@ -385,11 +408,13 @@ const loadConversationSummaries = (activeSessionId: string, activeMessages: Mess
   if (typeof window === 'undefined') {
     const bySession = new Map<string, ConversationSummary>();
     for (const item of memoryConversationSummaries) {
+      if (!sessionsHaveSameOwner(item.sessionId, activeSessionId)) continue;
       bySession.set(item.sessionId, item);
     }
     for (const [key, raw] of memoryMessageStore.entries()) {
       if (!key.startsWith(MESSAGES_STORAGE_PREFIX)) continue;
       const sid = key.slice(MESSAGES_STORAGE_PREFIX.length).trim();
+      if (!sessionsHaveSameOwner(sid, activeSessionId)) continue;
       const messages = normalizePersistedMessages(raw);
       if (sid && messages.length) {
         bySession.set(sid, buildConversationSummary(sid, messages, bySession.get(sid)));
@@ -403,6 +428,7 @@ const loadConversationSummaries = (activeSessionId: string, activeMessages: Mess
 
   const bySession = new Map<string, ConversationSummary>();
   for (const item of normalizeConversationSummaries(window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY))) {
+    if (!sessionsHaveSameOwner(item.sessionId, activeSessionId)) continue;
     bySession.set(item.sessionId, item);
   }
 
@@ -410,7 +436,7 @@ const loadConversationSummaries = (activeSessionId: string, activeMessages: Mess
     const key = window.localStorage.key(i);
     if (!key || !key.startsWith(MESSAGES_STORAGE_PREFIX)) continue;
     const sid = key.slice(MESSAGES_STORAGE_PREFIX.length).trim();
-    if (!sid) continue;
+    if (!sid || !sessionsHaveSameOwner(sid, activeSessionId)) continue;
     const messages = normalizePersistedMessages(window.localStorage.getItem(key));
     if (!messages.length) continue;
     bySession.set(sid, buildConversationSummary(sid, messages, bySession.get(sid)));
@@ -429,10 +455,11 @@ const upsertConversationSummary = (
 ): ConversationSummary[] => {
   const sid = String(sessionId || '').trim();
   if (!sid) return summaries;
-  const previous = summaries.find((item) => item.sessionId === sid);
+  const ownedSummaries = summaries.filter((item) => sessionsHaveSameOwner(item.sessionId, sid));
+  const previous = ownedSummaries.find((item) => item.sessionId === sid);
   const next = [
     buildConversationSummary(sid, messages, previous),
-    ...summaries.filter((item) => item.sessionId !== sid),
+    ...ownedSummaries.filter((item) => item.sessionId !== sid),
   ].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS);
   persistConversationSummaries(next);
   return next;
@@ -600,6 +627,15 @@ const buildNewConversationSessionId = (identity: AuthIdentity | null): string =>
   return buildAnonymousSessionId();
 };
 
+const ownedSessionOrFallback = (
+  sessionId: string | null | undefined,
+  identity: AuthIdentity | null,
+): string => {
+  const candidate = String(sessionId || '').trim();
+  if (candidate && sessionBelongsToIdentity(candidate, identity)) return candidate;
+  return identity?.userId ? buildUserSessionId(identity.userId) : buildAnonymousSessionId();
+};
+
 const EMPTY_CHAT_SESSION_STATUS: ChatSessionStatus = {
   statusMessage: null,
   statusSince: null,
@@ -666,7 +702,7 @@ export const useStore = create<AppState>((set) => ({
   addMessageToSession: (sessionId, message) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized) return {};
+      if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       const baseMessages = normalized === state.sessionId
         ? state.messages
         : loadMessagesForSession(normalized);
@@ -709,7 +745,7 @@ export const useStore = create<AppState>((set) => ({
   updateMessageInSession: (sessionId, id, patch) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized) return {};
+      if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       const isActiveSession = normalized === state.sessionId;
       const baseMessages = isActiveSession
         ? state.messages
@@ -768,7 +804,7 @@ export const useStore = create<AppState>((set) => ({
   setSessionLoading: (sessionId, loading) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized) return {};
+      if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       const nextStatuses = loading
         ? state.chatStatusBySession
         : {
@@ -849,7 +885,7 @@ export const useStore = create<AppState>((set) => ({
   setSessionAbortController: (sessionId, controller) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized) return {};
+      if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       return {
         abortControllersBySession: {
           ...state.abortControllersBySession,
@@ -1020,7 +1056,7 @@ export const useStore = create<AppState>((set) => ({
     let needHydrate = false;
     let hydrateSid = '';
     set((state) => {
-      const normalized = String(sessionId || '').trim() || buildAnonymousSessionId();
+      const normalized = ownedSessionOrFallback(sessionId, state.authIdentity);
       const messages = loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
@@ -1055,7 +1091,7 @@ export const useStore = create<AppState>((set) => ({
     let hydrateSid = '';
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized) return {};
+      if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       const messages = loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
@@ -1094,7 +1130,7 @@ export const useStore = create<AppState>((set) => ({
   deleteConversation: (sessionId) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized) return {};
+      if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       if (normalized === state.sessionId) {
         const activeController = state.abortControllersBySession[normalized] || state.abortController;
         activeController?.abort();
@@ -1160,7 +1196,63 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setAuthIdentity: (identity) =>
-    set(() => ({ authIdentity: identity })),
+    set((state) => {
+      const normalizedIdentity = identity?.userId
+        ? { userId: String(identity.userId).trim(), email: identity.email }
+        : null;
+      const currentUserId = String(state.authIdentity?.userId || '').trim();
+      const nextUserId = String(normalizedIdentity?.userId || '').trim();
+      if (currentUserId === nextUserId) return { authIdentity: normalizedIdentity };
+
+      for (const controller of Object.values(state.abortControllersBySession)) {
+        controller?.abort();
+      }
+      state.abortController?.abort();
+      const priorSessionIds = new Set([
+        state.sessionId,
+        ...state.conversationSummaries.map((item) => item.sessionId),
+        ...Object.keys(state.chatLoadingBySession),
+      ]);
+      for (const priorSessionId of priorSessionIds) cancelPersist(priorSessionId);
+
+      const nextSessionId = normalizedIdentity?.userId
+        ? buildUserSessionId(normalizedIdentity.userId)
+        : buildAnonymousSessionId();
+      const nextMessages = loadMessagesForSession(nextSessionId);
+      const nextSummaries = loadConversationSummaries(nextSessionId, nextMessages);
+      persistConversationSummaries(nextSummaries);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', nextSessionId);
+      }
+
+      return {
+        authIdentity: normalizedIdentity,
+        sessionId: nextSessionId,
+        messages: nextMessages,
+        conversationSummaries: nextSummaries,
+        isChatLoading: false,
+        chatLoadingBySession: {},
+        chatStatusBySession: {},
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: null,
+        abortControllersBySession: {},
+        currentTicker: null,
+        draft: '',
+        draftBySession: {},
+        pendingChatHandoffContextBySession: {},
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
 
   setDraft: (text) =>
     set((state) => ({
@@ -1174,7 +1266,11 @@ export const useStore = create<AppState>((set) => ({
   setPendingChatHandoffContext: (sessionId, value) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
-      if (!normalized || value.sessionId !== normalized) return {};
+      if (
+        !normalized
+        || value.sessionId !== normalized
+        || !sessionBelongsToIdentity(normalized, state.authIdentity)
+      ) return {};
       return {
         pendingChatHandoffContextBySession: {
           ...state.pendingChatHandoffContextBySession,
@@ -1188,6 +1284,7 @@ export const useStore = create<AppState>((set) => ({
     if (!normalized) return undefined;
     let taken: PendingChatHandoffContext | undefined;
     set((state) => {
+      if (!sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       const candidate = state.pendingChatHandoffContextBySession[normalized];
       if (!candidate || candidate.sessionId !== normalized) return {};
       taken = candidate;

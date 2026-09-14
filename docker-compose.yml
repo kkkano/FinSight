@@ -88,11 +88,11 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/readyz"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 60s      # allow model loading time
+      start_period: 180s     # BGE-M3/reranker CPU cold start can exceed one minute
     networks:
       - finsight-net
 
@@ -104,8 +104,9 @@ services:
       dockerfile: Dockerfile
       args:
         # Production default uses the HTTPS API domain to avoid mixed-content blocks.
-        # Empty string would trigger fallback to http://127.0.0.1:8000 in runtime.ts
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.finsight-ai.chat}
+        # Empty means same-origin through nginx; set an absolute URL only for
+        # an explicitly separate API host.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
         # Version the Service Worker URL with the immutable deployment image tag.
         FRONTEND_BUILD_ID: ${IMAGE_TAG:-local}
         # Optional Supabase auth (Magic Link)

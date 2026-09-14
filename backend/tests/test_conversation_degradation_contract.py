@@ -40,6 +40,24 @@ def test_llm_degradation_reads_synthesis_fallback():
     }
 
 
+def test_llm_degradation_redacts_provider_exception_details():
+    result = _llm_degradation(
+        {
+            "trace": {
+                "conversation_degraded": {
+                    "used": True,
+                    "stage": "direct_reply",
+                    "reason": "llm_unavailable: postgresql://user:password@db.example/v1",
+                }
+            }
+        }
+    )
+
+    assert result["reason"] == "llm_unavailable"
+    assert "postgresql://" not in str(result)
+    assert "password" not in str(result).lower()
+
+
 def test_llm_degradation_marks_all_runtime_attempts_failed():
     result = _llm_degradation(
         {"trace": {}},

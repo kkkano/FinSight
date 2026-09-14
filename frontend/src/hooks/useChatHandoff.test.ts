@@ -1,12 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NavigateFunction } from 'react-router-dom';
 
+import { apiClient } from '../api/client';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import { performChatHandoff } from './useChatHandoff';
 
 describe('performChatHandoff', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(apiClient, 'createConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:handoff',
+    });
+    vi.spyOn(apiClient, 'getConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:handoff',
+    });
+    useStore.getState().setAuthIdentity({ userId: 'test-user', email: null });
     useStore.getState().setSessionId('public:test-user:handoff');
     useStore.setState({ draft: '', pendingChatHandoffContextBySession: {} });
     useDashboardStore.setState({ activeAsset: null, activeSelections: [] });

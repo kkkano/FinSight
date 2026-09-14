@@ -47,4 +47,64 @@ describe('dashboardStore watchlist authentication', () => {
       _watchlistOwnerId: 'user-1',
     });
   });
+
+  it('clears the visible watchlist immediately when the authenticated user changes', () => {
+    useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
+    useDashboardStore.setState({
+      watchlist: [{ symbol: 'AAPL', type: 'equity', name: 'Apple' }],
+      _isWatchlistLoaded: true,
+      _isWatchlistLoading: false,
+      _watchlistOwnerId: 'alice',
+    });
+
+    useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
+
+    expect(useDashboardStore.getState()).toMatchObject({
+      watchlist: [],
+      _isWatchlistLoaded: false,
+      _isWatchlistLoading: false,
+      _watchlistOwnerId: null,
+    });
+  });
+
+  it('ignores a late watchlist response from the previous user', async () => {
+    let resolveRequest!: (value: { items: Array<{ ticker: string; note: string; added_at: string }> }) => void;
+    vi.spyOn(apiClient, 'getWatchlist').mockImplementation(() => new Promise((resolve) => {
+      resolveRequest = resolve;
+    }));
+    useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
+
+    const pending = useDashboardStore.getState().initWatchlist();
+    useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
+    resolveRequest({
+      items: [{ ticker: 'AAPL', note: 'Alice only', added_at: '2026-07-16T00:00:00Z' }],
+    });
+    await pending;
+
+    expect(useDashboardStore.getState()).toMatchObject({
+      watchlist: [],
+      _watchlistOwnerId: null,
+    });
+  });
+
+  it('ignores a late watchlist mutation response after an account switch', async () => {
+    let resolveRequest!: (value: { item: { ticker: string; note: string; added_at: string } }) => void;
+    vi.spyOn(apiClient, 'addWatchlistItem').mockImplementation(() => new Promise((resolve) => {
+      resolveRequest = resolve;
+    }));
+    useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
+    useDashboardStore.setState({ _watchlistOwnerId: 'alice' });
+
+    const pending = useDashboardStore.getState().addWatchItemApi('AAPL');
+    useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
+    resolveRequest({
+      item: { ticker: 'AAPL', note: 'Alice only', added_at: '2026-07-16T00:00:00Z' },
+    });
+    await pending;
+
+    expect(useDashboardStore.getState()).toMatchObject({
+      watchlist: [],
+      _watchlistOwnerId: null,
+    });
+  });
 });

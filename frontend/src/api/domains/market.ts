@@ -2,10 +2,10 @@ import { api } from '../http';
 import type * as Contracts from '../contracts';
 
 export const marketApi = {
-  async getWatchlist(): Promise<{
+  async getWatchlist(signal?: AbortSignal): Promise<{
     items: Array<{ ticker: string; note: string; added_at: string }>;
   }> {
-    const response = await api.get('/api/watchlist');
+    const response = await api.get('/api/watchlist', { signal });
     return response.data;
   },
 
@@ -34,9 +34,13 @@ export const marketApi = {
     return response.data;
   },
 
-async fetchStockPrice(ticker: string): Promise<Contracts.MarketDataResponse<Contracts.QuoteData>> {
+  async fetchStockPrice(
+    ticker: string,
+    signal?: AbortSignal,
+  ): Promise<Contracts.MarketDataResponse<Contracts.QuoteData>> {
     const response = await api.get<Contracts.MarketDataResponse<Contracts.QuoteData>>(
       `/api/stock/price/${encodeURIComponent(ticker)}`,
+      { signal },
     );
     return response.data;
   },

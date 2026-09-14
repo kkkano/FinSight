@@ -34,19 +34,28 @@ class LeaseTokenRequest(BaseModel):
 
 def _authenticated_user_id(request: Request) -> str:
     user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
-    if user_id == "public":
+    if not user_id or user_id == "public":
         raise HTTPException(status_code=401, detail="登录后才能启用页面实时监控")
     return user_id
+
+
+def _owned_session_id(session_id: str, user_id: str) -> str:
+    normalized = str(session_id or "").strip()
+    parts = normalized.split(":")
+    if len(parts) != 3 or parts[1] != user_id:
+        raise HTTPException(status_code=404, detail="monitor session not found")
+    return normalized
 
 
 @monitor_router.post("/api/monitor/leases", status_code=201)
 async def acquire_monitor_lease(payload: AcquireLeaseRequest, request: Request):
     user_id = _authenticated_user_id(request)
+    session_id = _owned_session_id(payload.session_id, user_id)
     try:
         lease = await asyncio.to_thread(
             get_monitor_lease_store().acquire,
             user_id=user_id,
-            session_id=payload.session_id,
+            session_id=session_id,
             symbol=payload.symbol,
         )
     except Exception as exc:
@@ -107,11 +116,12 @@ async def list_monitor_comments(
     limit: int = Query(default=50, ge=1, le=100),
 ):
     user_id = _authenticated_user_id(request)
+    owned_session_id = _owned_session_id(session_id, user_id)
     try:
         items, next_cursor = await asyncio.to_thread(
             get_monitor_comment_store().list,
             user_id=user_id,
-            session_id=session_id,
+            session_id=owned_session_id,
             symbol=symbol,
             day=day,
             cursor=cursor,
@@ -132,6 +142,7 @@ async def stream_monitor_comments(
     last_event_id: str | None = None,
 ):
     user_id = _authenticated_user_id(request)
+    owned_session_id = _owned_session_id(session_id, user_id)
     resume_id = last_event_id or request.headers.get("last-event-id")
     if resume_id:
         try:
@@ -145,7 +156,7 @@ async def stream_monitor_comments(
             initial_items = await asyncio.to_thread(
                 store.list_after,
                 user_id=user_id,
-                session_id=session_id,
+                session_id=owned_session_id,
                 symbol=symbol,
                 last_event_id=resume_id,
             )
@@ -154,7 +165,7 @@ async def stream_monitor_comments(
             initial_items, _ = await asyncio.to_thread(
                 store.list,
                 user_id=user_id,
-                session_id=session_id,
+                session_id=owned_session_id,
                 symbol=symbol,
                 day=datetime.now(timezone.utc).date(),
                 limit=100,
@@ -188,7 +199,7 @@ async def stream_monitor_comments(
                     fresh = await asyncio.to_thread(
                         store.list_after,
                         user_id=user_id,
-                        session_id=session_id,
+                        session_id=owned_session_id,
                         symbol=symbol,
                         last_event_id=current_id,
                     )
@@ -196,7 +207,7 @@ async def stream_monitor_comments(
                     recent, _ = await asyncio.to_thread(
                         store.list,
                         user_id=user_id,
-                        session_id=session_id,
+                        session_id=owned_session_id,
                         symbol=symbol,
                         limit=100,
                     )

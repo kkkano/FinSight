@@ -1,6 +1,6 @@
 # FinSight LangGraph 当前流程
 
-更新时间：2026-07-16
+更新时间：2026-09-15
 
 `backend/graph/runner.py` 是图结构唯一事实源。生产图固定为六个节点，不注册旧兼容节点、confirmation loop、alert action 或 research debate。
 
@@ -18,7 +18,7 @@ flowchart TD
 | 节点 | 输入重点 | 输出与硬约束 |
 |---|---|---|
 | `prepare_context` | query、thread id、UI context、checkpoint | 本轮 GraphState；不得跨租户复用上下文 |
-| `route_request` | query、当前 thread 历史、active symbol/selection | direct/clarify/research 路由与请求帧；确定性优先，歧义时最多一次 router LLM |
+| `route_request` | query、当前 thread 历史、active symbol/selection | direct/clarify/research 路由与请求帧；全程使用确定性规则，不调用 LLM |
 | `collect_evidence` | 请求帧、planning、policy | 工具结果、evidence、diagnostics、TaskOutcome；collector 自身 LLM/reflection 固定关闭 |
 | `analyze` | 结构化 evidence | 事实查询 0 次 LLM；研究最多一次 ResearchAnalyst；报告可进入 verifier 条件 |
 | `validate` | Claim、引用、outcome、候选正文 | 质量状态、阻断/降级理由；失败不能伪装为成功证据 |

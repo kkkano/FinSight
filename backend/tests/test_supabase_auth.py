@@ -83,8 +83,20 @@ def test_valid_hs256_token(monkeypatch: pytest.MonkeyPatch) -> None:
         _make_token(exp_delta=-100),
         _make_token(secret="other-secret-at-least-32-bytes-long"),
         _make_token(sub=None),
+        _make_token(sub="public"),
+        _make_token(sub="anonymous"),
+        _make_token(sub="user:forged"),
+        _make_token(sub="x" * 65),
     ],
-    ids=["expired", "wrong-secret", "missing-sub"],
+    ids=[
+        "expired",
+        "wrong-secret",
+        "missing-sub",
+        "reserved-public",
+        "reserved-anonymous",
+        "illegal-session-separator",
+        "too-long",
+    ],
 )
 def test_invalid_hs256_token_rejected(
     monkeypatch: pytest.MonkeyPatch,

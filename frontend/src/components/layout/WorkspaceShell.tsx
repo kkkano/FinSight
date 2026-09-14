@@ -11,11 +11,12 @@ import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import { HistoryWorkspace } from './HistoryWorkspace';
+import { TodayPage } from '../../pages/TodayPage';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
 import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
 
-export type WorkspaceView = 'chat' | 'dashboard' | 'history';
+export type WorkspaceView = 'today' | 'chat' | 'dashboard' | 'history';
 
 type WorkspaceShellProps = {
   view: WorkspaceView;
@@ -25,6 +26,7 @@ type WorkspaceShellProps = {
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
   navigateToHistory: () => void;
+  navigateToToday: () => void;
 };
 
 const DEFAULT_PANEL_WIDTH = 380;
@@ -55,6 +57,7 @@ export function WorkspaceShell({
   navigateToChat,
   navigateToDashboard,
   navigateToHistory,
+  navigateToToday,
 }: WorkspaceShellProps) {
   const navigate = useNavigate();
 
@@ -182,6 +185,7 @@ export function WorkspaceShell({
         onDashboardClick={(s) => { openDashboard(s); setIsSidebarOpen(false); }}
         onChatClick={() => { navigateToChat(); setIsSidebarOpen(false); }}
         onHistoryClick={() => { navigateToHistory(); setIsSidebarOpen(false); }}
+        onTodayClick={() => { navigateToToday(); setIsSidebarOpen(false); }}
         currentView={view}
         isMobileOpen={isSidebarOpen}
         onMobileOpen={() => setIsSidebarOpen(true)}
@@ -216,7 +220,15 @@ export function WorkspaceShell({
         ) : null}
 
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
-          {view === 'dashboard' ? (
+          {view === 'today' ? (
+            <div className="h-full min-h-0 flex-1 overflow-hidden">
+              <div className="h-full min-h-0 overflow-y-auto p-5 max-sm:p-3">
+                <div className="mx-auto max-w-6xl">
+                  <TodayPage />
+                </div>
+              </div>
+            </div>
+          ) : view === 'dashboard' ? (
             <DashboardWorkspace
               isMobile={isMobile}
               symbol={dashboardSymbol}

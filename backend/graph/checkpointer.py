@@ -5,6 +5,7 @@ from backend.utils.env import env_bool as _env_bool
 
 import asyncio
 import atexit
+import inspect
 import logging
 import os
 from contextlib import ExitStack
@@ -25,7 +26,11 @@ _async_bundle_loop_id: Optional[int] = None
 
 def _resolve_backend() -> str:
     backend = (os.getenv("LANGGRAPH_CHECKPOINTER_BACKEND", "memory") or "memory").strip().lower()
-    if str(os.getenv("APP_MODE") or "development").strip().lower() == "production":
+    runtime_profiles = (
+        str(os.getenv("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
+        str(os.getenv("APP_MODE") or "").strip().lower(),
+    )
+    if any(value in {"prod", "production"} for value in runtime_profiles):
         if backend != "postgres":
             raise ValueError("production 的 LANGGRAPH_CHECKPOINTER_BACKEND 必须为 postgres")
         if _env_bool("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", False):
@@ -221,6 +226,25 @@ async def aget_graph_checkpointer() -> Any:
     return (await aget_checkpointer_bundle()).saver
 
 
+async def adelete_graph_thread(thread_id: str) -> bool:
+    """Delete one thread from the active runtime checkpointer when supported."""
+    normalized = str(thread_id or "").strip()
+    if not normalized:
+        return False
+    saver = await aget_graph_checkpointer()
+    async_delete = getattr(saver, "adelete_thread", None)
+    if callable(async_delete):
+        result = async_delete(normalized)
+        if inspect.isawaitable(result):
+            await result
+        return True
+    sync_delete = getattr(saver, "delete_thread", None)
+    if callable(sync_delete):
+        await asyncio.to_thread(sync_delete, normalized)
+        return True
+    return False
+
+
 def _sanitize_location(info: CheckpointerInfo) -> Optional[str]:
     location = info.location
     if info.backend == "postgres" and isinstance(location, str) and "@" in location:
@@ -316,6 +340,7 @@ __all__ = [
     "aget_checkpointer_bundle",
     "get_graph_checkpointer",
     "aget_graph_checkpointer",
+    "adelete_graph_thread",
     "get_graph_checkpointer_info",
     "reset_checkpointer_caches",
     "areset_checkpointer_caches",

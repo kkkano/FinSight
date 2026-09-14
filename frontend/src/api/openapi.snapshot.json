@@ -4588,6 +4588,26 @@
         ]
       }
     },
+    "/livez": {
+      "get": {
+        "description": "Process liveness probe; never touches external dependencies.",
+        "operationId": "liveness_check_livez_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness Check",
+        "tags": [
+          "System"
+        ]
+      }
+    },
     "/metrics": {
       "get": {
         "operationId": "metrics_endpoint_metrics_get",
@@ -4602,6 +4622,26 @@
           }
         },
         "summary": "Metrics Endpoint",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "Dependency readiness probe used by orchestrators and Docker.",
+        "operationId": "readiness_check_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness Check",
         "tags": [
           "System"
         ]

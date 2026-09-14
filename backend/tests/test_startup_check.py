@@ -62,6 +62,45 @@ class TestLLMEndpointCheck:
         assert result.llm_available is False
         assert "config file corrupted" in result.llm_error
 
+    def test_missing_llm_is_optional_in_test_profile(self, monkeypatch):
+        monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "test")
+        monkeypatch.setenv("FINSIGHT_LLM_REQUIRED", "false")
+        with patch(
+            "backend.llm_config.load_user_endpoints",
+            side_effect=ValueError("No LLM endpoint configured"),
+        ):
+            result = run_startup_checks()
+
+        assert result.llm_available is False
+        assert result.llm_required is False
+        assert result.profile == "test"
+
+    def test_missing_llm_is_required_in_production(self, monkeypatch):
+        monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "production")
+        monkeypatch.setenv("FINSIGHT_LLM_REQUIRED", "true")
+        with patch(
+            "backend.llm_config.load_user_endpoints",
+            side_effect=ValueError("No LLM endpoint configured"),
+        ):
+            result = run_startup_checks()
+
+        assert result.llm_available is False
+        assert result.llm_required is True
+        assert result.profile == "production"
+
+    def test_production_profile_ignores_optional_llm_override(self, monkeypatch):
+        monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "production")
+        monkeypatch.setenv("FINSIGHT_LLM_REQUIRED", "false")
+        with patch(
+            "backend.llm_config.load_user_endpoints",
+            side_effect=ValueError("No LLM endpoint configured"),
+        ):
+            result = run_startup_checks()
+
+        assert result.llm_available is False
+        assert result.llm_required is True
+        assert result.profile == "production"
+
 
 class TestDataSourceKeyCheck:
     """P1-1: 数据源 key 缺失告警"""

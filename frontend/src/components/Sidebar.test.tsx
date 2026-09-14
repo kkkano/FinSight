@@ -5,13 +5,14 @@ import { describe, expect, it } from 'vitest';
 import Sidebar from './Sidebar';
 
 describe('主导航收敛', () => {
-  it('只展示看板、对话和历史三个产品入口', () => {
+  it('只展示今日、看板、对话和历史四个产品入口', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter initialEntries={['/history']}>
         <Sidebar currentView="history" />
       </MemoryRouter>,
     );
 
+    expect(html).toContain('data-testid="sidebar-nav-today"');
     expect(html).toContain('data-testid="sidebar-nav-dashboard"');
     expect(html).toContain('data-testid="sidebar-nav-chat"');
     expect(html).toContain('data-testid="sidebar-nav-history"');

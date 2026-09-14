@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -11,7 +12,7 @@ class ConversationRouterDeps:
     resolve_thread_id: Callable[[Optional[str]], str]
     get_session_context: Callable[[str], Any]
     list_session_contexts: Callable[[], list[dict[str, Any]]]
-    clear_session_context: Callable[[str], dict[str, Any]]
+    clear_session_context: Callable[[str, str], Any]
     list_conversation_records: Callable[[str], list[dict[str, Any]]] | None = None
     get_conversation_record: Callable[[str, str], dict[str, Any] | None] | None = None
     upsert_conversation_record: Callable[[str, dict[str, Any], str], dict[str, Any]] | None = None
@@ -60,30 +61,62 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Conversations"])
 
     def _resolve_or_422(session_id: Optional[str]) -> str:
+        if session_id is not None and not isinstance(session_id, str):
+            raise HTTPException(status_code=422, detail="session_id must be a string")
         try:
             return deps.resolve_thread_id(session_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    def _authenticated_user(request: Request) -> str:
+        user_id = str(getattr(request.state, "user_id", "public") or "public").strip()
+        if not user_id or user_id == "public":
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "auth_required", "message": "登录后才能访问会话"},
+            )
+        return user_id
+
+    def _belongs_to_user(session_id: str, user_id: str) -> bool:
+        parts = str(session_id or "").split(":")
+        return len(parts) == 3 and parts[1] == user_id
+
+    def _owned_session(
+        session_id: Optional[str],
+        request: Request,
+        *,
+        generate_when_missing: bool = False,
+    ) -> tuple[str, str]:
+        user_id = _authenticated_user(request)
+        normalized = _resolve_or_422(session_id)
+        if generate_when_missing and not str(session_id or "").strip():
+            parts = normalized.split(":")
+            if len(parts) != 3:
+                raise HTTPException(status_code=422, detail="session_id format invalid")
+            parts[1] = user_id
+            normalized = _resolve_or_422(":".join(parts))
+        if not _belongs_to_user(normalized, user_id):
+            # 对不存在与无权访问统一返回 404，避免泄露其他用户的线程标识。
+            raise HTTPException(status_code=404, detail="conversation not found")
+        return normalized, user_id
+
     @router.get("/api/conversations")
     async def list_conversations(request: Request):
-        user_id = getattr(request.state, "user_id", "public")
+        user_id = _authenticated_user(request)
         context_items = deps.list_session_contexts()
         context_by_session = {
             str(item.get("session_id") or ""): item
             for item in context_items
-            if str(item.get("session_id") or "").strip()
+            if _belongs_to_user(str(item.get("session_id") or "").strip(), user_id)
         }
         records = deps.list_conversation_records(user_id) if deps.list_conversation_records else []
         items: list[dict[str, Any]] = []
-        seen: set[str] = set()
         for record in records:
             if not isinstance(record, dict):
                 continue
             session_id = str(record.get("session_id") or "").strip()
-            if not session_id:
+            if not session_id or not _belongs_to_user(session_id, user_id):
                 continue
-            seen.add(session_id)
             items.append(
                 _merge_conversation(
                     session_id=session_id,
@@ -91,12 +124,6 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
                     record=record,
                 )
             )
-        for session_id, context in context_by_session.items():
-            if user_id != "public":
-                continue
-            if session_id in seen:
-                continue
-            items.append(_merge_conversation(session_id=session_id, context=context))
         return {
             "success": True,
             "items": items,
@@ -106,8 +133,11 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
     @router.post("/api/conversations")
     async def create_conversation(http_request: Request, request: dict | None = None):
         payload = request if isinstance(request, dict) else {}
-        user_id = getattr(http_request.state, "user_id", "public")
-        session_id = _resolve_or_422(payload.get("session_id"))
+        session_id, user_id = _owned_session(
+            payload.get("session_id"),
+            http_request,
+            generate_when_missing=True,
+        )
         manager = deps.get_session_context(session_id)
         record = (
             deps.upsert_conversation_record(session_id, payload, user_id)
@@ -126,10 +156,9 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
 
     @router.get("/api/conversations/{session_id}")
     async def get_conversation(session_id: str, request: Request):
-        normalized = _resolve_or_422(session_id)
-        user_id = getattr(request.state, "user_id", "public")
+        normalized, user_id = _owned_session(session_id, request)
         record = deps.get_conversation_record(normalized, user_id) if deps.get_conversation_record else None
-        manager = deps.get_session_context(normalized) if record is not None or user_id == "public" else None
+        manager = deps.get_session_context(normalized) if record is not None else None
         return {
             "success": True,
             "session_id": normalized,
@@ -142,18 +171,21 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
 
     @router.delete("/api/conversations/{session_id}")
     async def delete_conversation(session_id: str, request: Request):
-        normalized = _resolve_or_422(session_id)
-        user_id = getattr(request.state, "user_id", "public")
+        normalized, user_id = _owned_session(session_id, request)
         owned_record = (
             deps.get_conversation_record(normalized, user_id)
             if deps.get_conversation_record
             else None
         )
-        cleared = (
-            deps.clear_session_context(normalized)
-            if owned_record is not None or user_id == "public"
-            else {}
-        )
+        if deps.get_conversation_record and owned_record is None:
+            raise HTTPException(status_code=404, detail="conversation not found")
+        cleared: dict[str, Any] = {}
+        if owned_record is not None:
+            clear_result = deps.clear_session_context(normalized, user_id)
+            if inspect.isawaitable(clear_result):
+                clear_result = await clear_result
+            if isinstance(clear_result, dict):
+                cleared = clear_result
         if deps.delete_conversation_record:
             cleared = dict(cleared)
             cleared["conversation_store"] = (

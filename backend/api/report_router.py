@@ -3,25 +3,27 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 
 _REPORT_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _SHARE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
-_SHARED_SENSITIVE_KEYS = {
-    "user_id",
-    "user_email",
-    "session_id",
-    "thread_id",
-    "api_key",
-    "authorization",
-    "cookie",
-    "cost",
-    "tool_diagnostics",
-    "trace",
-    "token",
-}
+_PUBLIC_REPORT_SCALARS = (
+    "report_id",
+    "ticker",
+    "company_name",
+    "title",
+    "summary",
+    "sentiment",
+    "confidence_score",
+    "grounding_rate",
+    "generated_at",
+    "recommendation",
+    "conflict_disclosure",
+    "synthesis_report",
+)
 
 
 def _validate_report_id(report_id: str) -> str:
@@ -31,16 +33,129 @@ def _validate_report_id(report_id: str) -> str:
     return normalized
 
 
-def _strip_shared_sensitive(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: _strip_shared_sensitive(item)
-            for key, item in value.items()
-            if str(key).lower() not in _SHARED_SENSITIVE_KEYS
-        }
-    if isinstance(value, list):
-        return [_strip_shared_sensitive(item) for item in value]
-    return value
+def _project_fields(value: Any, fields: tuple[str, ...]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {field: value[field] for field in fields if field in value}
+
+
+def _public_report_section(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    section = _project_fields(
+        value,
+        (
+            "title",
+            "order",
+            "confidence",
+            "agent_name",
+            "data_sources",
+            "is_collapsible",
+            "default_collapsed",
+        ),
+    )
+    section["contents"] = []
+    for item in (value.get("contents") or []):
+        if not isinstance(item, dict):
+            continue
+        content = _project_fields(item, ("type", "content", "citation_refs"))
+        section["contents"].append(content)
+    section["subsections"] = [
+        projected
+        for item in (value.get("subsections") or [])
+        if (projected := _public_report_section(item)) is not None
+    ]
+    return section
+
+
+def _public_citation(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    citation = _project_fields(
+        value,
+        (
+            "source_id",
+            "title",
+            "url",
+            "snippet",
+            "published_date",
+            "confidence",
+            "freshness_hours",
+        ),
+    )
+    url = str(citation.get("url") or "").strip()
+    if url and urlparse(url).scheme.lower() not in {"http", "https"}:
+        citation["url"] = ""
+    return citation
+
+
+def _public_report_quality(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    quality = _project_fields(value, ("schema_version", "state", "evaluated_at"))
+    quality["reasons"] = [
+        _project_fields(item, ("code", "severity", "metric", "message"))
+        for item in (value.get("reasons") or [])
+        if isinstance(item, dict)
+    ]
+    return quality
+
+
+def _public_shared_report(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    report = _project_fields(value, _PUBLIC_REPORT_SCALARS)
+    report["sections"] = [
+        projected
+        for item in (value.get("sections") or [])
+        if (projected := _public_report_section(item)) is not None
+    ]
+    report["citations"] = [
+        projected
+        for item in (value.get("citations") or [])
+        if (projected := _public_citation(item)) is not None
+    ]
+    for field in ("risks", "tags"):
+        if isinstance(value.get(field), list):
+            report[field] = list(value[field])
+    if isinstance(value.get("core_viewpoints"), list):
+        report["core_viewpoints"] = [
+            _project_fields(
+                item,
+                (
+                    "agent_name",
+                    "title",
+                    "headline",
+                    "detail",
+                    "confidence",
+                    "data_sources",
+                    "evidence_count",
+                    "status",
+                ),
+            )
+            for item in value["core_viewpoints"]
+            if isinstance(item, dict)
+        ]
+    if isinstance(value.get("report_hints"), dict):
+        report["report_hints"] = _project_fields(
+            value["report_hints"],
+            ("is_compare", "has_conflict", "compare_basis", "conflict_agents"),
+        )
+    quality = _public_report_quality(value.get("report_quality"))
+    if quality is not None:
+        report["report_quality"] = quality
+    if isinstance(value.get("fact_check"), dict):
+        fact_check = _project_fields(
+            value["fact_check"],
+            ("redaction_count", "verified_at", "enabled", "checked"),
+        )
+        fact_check["verifier_claims"] = [
+            _project_fields(item, ("claim", "reason"))
+            for item in (value["fact_check"].get("verifier_claims") or [])
+            if isinstance(item, dict)
+        ]
+        report["fact_check"] = fact_check
+    return report
 
 
 @dataclass(frozen=True)
@@ -133,14 +248,15 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         return Response(status_code=204)
 
     @router.get("/api/reports/shared/{token}")
-    async def get_shared_report(token: str):
+    async def get_shared_report(token: str, response: Response):
         normalized = str(token or "").strip()
         if not _SHARE_TOKEN_PATTERN.fullmatch(normalized):
             raise HTTPException(status_code=404, detail="shared report not found")
         report = deps.get_report_index_store().get_shared_report(token=normalized)
         if not report:
             raise HTTPException(status_code=404, detail="shared report not found")
-        return {"report": _strip_shared_sensitive(report)}
+        response.headers["Cache-Control"] = "private, no-store"
+        return {"report": _public_shared_report(report)}
 
     return router
 

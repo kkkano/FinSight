@@ -6,7 +6,7 @@
 
 ## 建议阅读顺序
 
-1. [`../README_CN.md`](../README_CN.md)：产品能力、快速启动、系统与部署拓扑。
+1. [`../README.md`](../README.md)：产品能力、快速启动、当前路由、系统与部署拓扑。
 2. [`01_ARCHITECTURE.md`](01_ARCHITECTURE.md)：代码边界、数据边界和主运行时。
 3. [`LANGGRAPH_FLOW.md`](LANGGRAPH_FLOW.md)：当前 LangGraph 节点与分支。
 4. [`LANGGRAPH_PIPELINE_DEEP_DIVE.md`](LANGGRAPH_PIPELINE_DEEP_DIVE.md)：状态、规划、执行、证据与合成的实现细节。
@@ -14,13 +14,10 @@
 6. [`05_RAG_ARCHITECTURE.md`](05_RAG_ARCHITECTURE.md)：PostgreSQL/pgvector RAG。
 7. [`11_PRODUCTION_RUNBOOK.md`](11_PRODUCTION_RUNBOOK.md)：部署、验证、冒烟和回滚。
 
-## 产品设计与当前执行计划
+## 产品设计与执行依据
 
-- [`../DESIGN.md`](../DESIGN.md)：当前产品定位、Today-first 信息架构、视觉语言、可访问性、交互状态和前端实现约束。
-- [`plans/2026-09-14_finsight全面重构执行方案.md`](plans/2026-09-14_finsight全面重构执行方案.md)：基于代码审计、邮件观点与参考项目整理的全面重构执行方案；覆盖产品定位、身份/租户、Canonical RequestFrame、RunService、Postgres/RAG、调度、前端 Today-first IA、设计系统、测试门禁、迁移顺序和回滚策略。
-- [`plans/2026-05-03_request_understanding_task_graph_spec.md`](plans/2026-05-03_request_understanding_task_graph_spec.md)：请求理解层重构 spec。
-- [`plans/2026-05-02_agent_observability_report_quality_spec.md`](plans/2026-05-02_agent_observability_report_quality_spec.md)：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
-- [`plans/2026-03-08_rag_three_layer_architecture_todolist.md`](plans/2026-03-08_rag_three_layer_architecture_todolist.md)：三层 RAG 架构计划。
+- [`../DESIGN.md`](../DESIGN.md)：Today-first 的目标产品设计合同；其中 Today 已有首版实现，Ask/Research/Portfolio/Library 与 `/ops/*` 仍是目标信息架构，不代表当前路由。
+- [`plans/2026-09-14_finsight全面重构执行方案.md`](plans/2026-09-14_finsight全面重构执行方案.md)：保留的全面审计与重构执行依据；开头维护 Phase 0–9 的当前完成度和剩余缺口，实际运行事实仍以本索引列出的架构、契约和 Runbook 为准。
 
 ## 契约与专项规范
 
@@ -34,6 +31,8 @@
 | [`reports/2026-05-03_request_understanding_query_results.md`](reports/2026-05-03_request_understanding_query_results.md) | 保留的请求理解评估报告 |
 
 已完成的 2026-07 生产质量修复 Spec 与一次性发布证据已归档到 [`archive/2026-07-production-quality-remediation/`](archive/2026-07-production-quality-remediation/)，不再作为当前规范入口。
+
+2026-01 的 Schema Router、Forum/Supervisor 与 Agent 优化草案已归档到 [`archive/2026-09-15-doc-reconcile/`](archive/2026-09-15-doc-reconcile/)。这些文件只保留历史决策背景，不代表六节点主图或当前产品路线。
 
 ## 维护规则
 

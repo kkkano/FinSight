@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from types import SimpleNamespace
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
@@ -47,6 +49,167 @@ def test_security_gate_allowlisted_path_bypasses_auth(monkeypatch):
     assert response.status_code in {200, 503}
     assert response.status_code != 401
     assert response.json().get("status") in {"healthy", "degraded"}
+
+
+def test_liveness_and_readiness_are_public_health_paths(monkeypatch):
+    from backend.api import main
+
+    monkeypatch.setenv("API_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_AUTH_KEYS", "release-key-1")
+    from backend.config.settings import security_settings
+    security_settings.cache_clear()
+    import backend.api.security_gate as _sg
+    monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+
+    with TestClient(main.app) as client:
+        live = client.get("/livez")
+        ready = client.get("/readyz")
+
+    assert live.status_code == 200
+    assert live.json().get("status") == "alive"
+    assert ready.status_code in {200, 503}
+    assert ready.status_code != 401
+
+
+def test_production_auth_validation_rejects_disabled_rate_limit(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import security_settings
+
+    monkeypatch.setenv("APP_MODE", "production")
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "production")
+    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret-at-least-32-bytes-long")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    security_settings.cache_clear()
+
+    with pytest.raises(RuntimeError, match="RATE_LIMIT_ENABLED"):
+        security_gate.validate_runtime_auth_configuration()
+
+
+def test_runtime_profile_production_cannot_bypass_auth_validation(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import security_settings
+
+    monkeypatch.setenv("APP_MODE", "development")
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "production")
+    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+    security_settings.cache_clear()
+
+    with pytest.raises(RuntimeError, match="SUPABASE_AUTH_REQUIRED"):
+        security_gate.validate_runtime_auth_configuration()
+
+
+def test_app_mode_prod_alias_enforces_production_auth(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import security_settings
+
+    monkeypatch.delenv("FINSIGHT_RUNTIME_PROFILE", raising=False)
+    monkeypatch.setenv("APP_MODE", "prod")
+    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+    security_settings.cache_clear()
+
+    with pytest.raises(RuntimeError, match="SUPABASE_AUTH_REQUIRED"):
+        security_gate.validate_runtime_auth_configuration()
+
+
+def test_public_market_read_is_rate_limited_but_health_is_not(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import security_settings
+
+    monkeypatch.setenv("API_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_AUTH_KEYS", "internal-key")
+    monkeypatch.delenv("API_PUBLIC_PATHS", raising=False)
+    monkeypatch.delenv("API_PUBLIC_READ_PATHS", raising=False)
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "false")
+    security_settings.cache_clear()
+    monkeypatch.setattr(
+        security_gate,
+        "_rate_limiter",
+        security_gate.SimpleRateLimiter(limit_per_window=1, window_seconds=60, enabled=True),
+    )
+
+    app = FastAPI()
+    app.middleware("http")(security_gate.security_gate)
+
+    @app.get("/api/stock/price/{ticker}")
+    async def public_price(ticker: str):
+        return {"ticker": ticker}
+
+    @app.get("/livez")
+    async def livez():
+        return {"status": "alive"}
+
+    with TestClient(app) as client:
+        first = client.get("/api/stock/price/AAPL")
+        second = client.get("/api/stock/price/AAPL")
+        health_one = client.get("/livez")
+        health_two = client.get("/livez")
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert health_one.status_code == health_two.status_code == 200
+
+
+def test_production_anonymous_execute_is_rejected(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import security_settings
+
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "production")
+    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret-at-least-32-bytes-long")
+    monkeypatch.setenv("API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("ALLOW_ANONYMOUS_GENERATION", "true")
+    security_settings.cache_clear()
+    monkeypatch.setattr(
+        security_gate,
+        "_rate_limiter",
+        security_gate.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False),
+    )
+
+    app = FastAPI()
+    app.middleware("http")(security_gate.security_gate)
+
+    @app.post("/api/execute")
+    async def execute():
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        response = client.post("/api/execute")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "auth_required"
+
+
+def test_development_anonymous_execute_requires_explicit_escape_hatch(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import security_settings
+
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "development")
+    monkeypatch.setenv("APP_MODE", "development")
+    monkeypatch.setenv("SUPABASE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("ALLOW_ANONYMOUS_GENERATION", "false")
+    security_settings.cache_clear()
+    monkeypatch.setattr(
+        security_gate,
+        "_rate_limiter",
+        security_gate.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False),
+    )
+
+    app = FastAPI()
+    app.middleware("http")(security_gate.security_gate)
+
+    @app.post("/api/execute")
+    async def execute():
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        response = client.post("/api/execute")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "auth_required"
 
 
 def test_security_gate_dashboard_is_anonymous_read_only_by_default(monkeypatch):

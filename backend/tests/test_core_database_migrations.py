@@ -125,3 +125,17 @@ def test_production_without_database_and_non_postgres_dsn_fail_closed(monkeypatc
         assert_core_schema_current()
     with pytest.raises(DatabaseConfigurationError, match="只允许 PostgreSQL"):
         normalize_sync_postgres_dsn("sqlite:///data.db")
+
+
+def test_runtime_profile_production_requires_core_database(monkeypatch):
+    monkeypatch.setenv("APP_MODE", "development")
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "production")
+    for name in (
+        "FINSIGHT_POSTGRES_DSN",
+        "AGENT_PREDICTION_POSTGRES_DSN",
+        "RAG_V2_POSTGRES_DSN",
+        "LANGGRAPH_CHECKPOINT_POSTGRES_DSN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(DatabaseConfigurationError, match="production 必须配置"):
+        assert_core_schema_current()

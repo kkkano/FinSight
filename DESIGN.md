@@ -2,9 +2,10 @@
 
 ## Source of truth
 
-- Status: Draft, intended to become Active after the first Today/Ask usability review.
+- Status: Draft target design. The first Today route is implemented; the remaining surface names require later usability and architecture review before becoming active product routes.
 - Last refreshed: 2026-09-15
-- Primary product surfaces: Today, Ask, Research, Portfolio, Library; `/ops/*` is an authenticated operations surface.
+- Current shipped surfaces: Today (`/today`), Dashboard (`/dashboard/:symbol?`), Chat (`/chat`), History (`/history`), Welcome and shared reports. Today is the default root destination.
+- Target product surfaces: Today, Ask, Research, Portfolio, Library; `/ops/*` is a proposed authenticated operations surface.
 - Evidence reviewed: `frontend/src/App.tsx`, `frontend/src/components/Sidebar.tsx`, `frontend/src/components/layout/WorkspaceShell.tsx`, `frontend/src/pages/Workbench.tsx`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/components/welcome/WelcomePage.tsx`, `frontend/src/index.css`, `docs/01_ARCHITECTURE.md`, `docs/06a_LANGGRAPH_DESIGN_SPEC.md`, `docs/ux/IA_PROPOSAL_WORKBENCH.html`, `docs/design/` proposals, and the 2026-09-14 repository audit.
 - Product premise: FinSight is a personalized financial research assistant for beginners and individual researchers. It helps a person find, organize, and understand public information; it does not trade or make decisions on the user's behalf.
 
@@ -128,7 +129,7 @@
 - Framework/styling system: React 19 + TypeScript + Vite, with the existing Tailwind setup consolidated to one version.
 - Design-token constraints: one semantic token source; no page-local palette; no unlabelled static market values.
 - Performance constraints: initial Today/Ask business JavaScript gzip ≤300KB; LCP <2.5s and INP <200ms on a representative mid-range mobile device.
-- Compatibility constraints: preserve `/chat/supervisor`, `/chat/supervisor/stream`, report replay, and legacy URL redirects during migration; version new contracts.
+- Compatibility constraints: preserve the single `/api/execute` SSE contract, run replay/cancellation, report replay/share, and current public URL behavior during migration; version new contracts.
 - Test/screenshot expectations: unit tests for state reducers and formatting, Playwright flows at all four breakpoints, axe critical/serious violations at zero, and visual snapshots for Today, Ask, Research, Portfolio, and Library.
 
 ## Open questions

@@ -32,6 +32,11 @@ class StartupCheckResult:
     llm_error: str | None = None
     missing_keys: list[str] = field(default_factory=list)
     configured_keys: list[str] = field(default_factory=list)
+    # Stub/test profiles may intentionally run without a real provider. This
+    # flag lets readiness distinguish an optional capability from a production
+    # outage while preserving the detailed llm_available result.
+    llm_required: bool = True
+    profile: str = "development"
 
 
 _startup_result: StartupCheckResult | None = None
@@ -52,6 +57,47 @@ def is_llm_available() -> bool:
     if _startup_result is None:
         return True
     return _startup_result.llm_available
+
+
+def _runtime_profile() -> str:
+    configured = (
+        str(os.getenv("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
+        str(os.getenv("APP_MODE") or "").strip().lower(),
+    )
+    if any(value in {"prod", "production"} for value in configured):
+        return "production"
+    raw = configured[0] or configured[1] or "development"
+    if raw in {"prod", "production"}:
+        return "production"
+    if raw in {"test", "testing", "ci"} or _env_truthy("FINSIGHT_TEST_PROFILE"):
+        return "test"
+    synth_mode = str(os.getenv("LANGGRAPH_SYNTHESIZE_MODE") or "").strip().lower()
+    if synth_mode in {"stub", "dry_run", "off"} and not _env_truthy("LANGGRAPH_EXECUTE_LIVE_TOOLS"):
+        return "stub"
+    return raw or "development"
+
+
+def _env_truthy(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def llm_required() -> bool:
+    """Whether a real LLM endpoint is a hard runtime dependency."""
+    if _runtime_profile() == "production":
+        # Production is fail-closed. An environment override must never turn a
+        # missing model into a healthy readiness result.
+        return True
+    explicit = os.getenv("FINSIGHT_LLM_REQUIRED")
+    if explicit is not None:
+        return _env_truthy("FINSIGHT_LLM_REQUIRED")
+    # Production is the only implicit fail-closed profile. Local development,
+    # CI and deterministic stub runs may intentionally exercise the graph
+    # without provider credentials; callers still receive llm_available=False
+    # for observability and can opt in to strict behavior explicitly.
+    return _runtime_profile() == "production"
 
 
 def _check_llm_endpoint() -> tuple[bool, str | None]:
@@ -88,9 +134,16 @@ def run_startup_checks() -> StartupCheckResult:
 
     llm_available, llm_error = _check_llm_endpoint()
     configured, missing = _check_data_source_keys()
+    required = llm_required()
+    profile = _runtime_profile()
 
     if llm_available:
         logger.info("[StartupCheck] LLM endpoint: OK")
+    elif not required:
+        logger.warning(
+            "[StartupCheck] LLM endpoint 未配置，但 profile=%s 允许无模型运行（仅确定性/stub 路径）",
+            profile,
+        )
     else:
         logger.error(
             "[StartupCheck] LLM endpoint 不可用: %s — Chat/报告请求将快速失败(503)而非等待超时",
@@ -116,5 +169,7 @@ def run_startup_checks() -> StartupCheckResult:
         llm_error=llm_error,
         missing_keys=missing,
         configured_keys=configured,
+        llm_required=required,
+        profile=profile,
     )
     return _startup_result

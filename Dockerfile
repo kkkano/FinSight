@@ -61,8 +61,8 @@ RUN mkdir -p /app/.cache/huggingface /app/.cache/torch
 EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
-    CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=180s --retries=5 \
+    CMD curl -f http://127.0.0.1:8000/readyz || exit 1
 
 CMD ["python", "-m", "uvicorn", "backend.api.main:app", \
      "--host", "0.0.0.0", "--port", "8000", \

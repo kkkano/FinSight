@@ -7,7 +7,10 @@ execution、predictions、monitor 与 report。
 from __future__ import annotations
 
 import logging
+import math
 import os
+import threading
+import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -58,6 +61,195 @@ from backend.services.watchlist_store import get_watchlist_store
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+_rag_probe_lock = threading.Lock()
+_rag_probe_fingerprint: tuple[str, ...] | None = None
+_rag_probe_result: dict[str, object] | None = None
+_rag_probe_failed_at: float | None = None
+
+
+def _is_production_runtime() -> bool:
+    values = (
+        str(os.getenv("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
+        str(os.getenv("APP_MODE") or "").strip().lower(),
+    )
+    return any(value in {"prod", "production"} for value in values)
+
+
+def _rag_probe_key() -> tuple[str, ...]:
+    return (
+        str(os.getenv("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
+        str(os.getenv("APP_MODE") or "").strip().lower(),
+        str(os.getenv("RAG_V2_BACKEND") or "auto").strip().lower(),
+        str(os.getenv("RAG_EMBEDDING") or "bge-m3").strip().lower(),
+        str(os.getenv("RAG_V2_VECTOR_DIM") or "").strip(),
+        str(os.getenv("RAG_RERANKER") or "bge-reranker").strip().lower(),
+    )
+
+
+def _run_embedding_smoke(service: object) -> tuple[bool, str | None]:
+    """Encode one short string using the exact embedder selected by RAG."""
+    embedder = getattr(service, "_embedder", None)
+    encode_single = getattr(embedder, "encode_single", None)
+    if not callable(encode_single):
+        return False, "rag_embedding_probe_unavailable"
+    try:
+        dense, _sparse = encode_single("FinSight readiness probe")
+        vector = list(dense or [])
+        expected_dim = int(getattr(service, "vector_dim", 0) or 0)
+        if not vector or (expected_dim and len(vector) != expected_dim):
+            return False, "rag_embedding_probe_invalid_dimension"
+        if not all(math.isfinite(float(item)) for item in vector):
+            return False, "rag_embedding_probe_non_finite"
+        actual_model = str(getattr(embedder, "model_name", "unknown") or "unknown").lower()
+        if _is_production_runtime() and actual_model != "bge-m3":
+            return False, "rag_embedding_degraded"
+        return True, None
+    except Exception:
+        logger.exception("RAG embedding readiness probe failed")
+        return False, "rag_embedding_probe_failed"
+
+
+def _rag_health_uncached() -> dict[str, object]:
+    """Return a cheap, secret-free RAG readiness snapshot.
+
+    Construction is intentionally lazy and failures are converted into a
+    stable error code so a probe never exposes DSNs or model stack traces.
+    Production readiness is fail-closed; test/stub profiles can report a
+    degraded in-memory service without making the API unusable.
+    """
+    # Local/test readiness must not instantiate a Postgres RAG service or load
+    # multi-gigabyte embedding weights just to answer a probe. Production is
+    # warmed explicitly during lifespan and is the only profile that requires
+    # a real encode check.
+    if not _is_production_runtime():
+        return {
+            "status": "disabled",
+            "reason": "rag_probe_skipped_non_production",
+            "backend_requested": str(os.getenv("RAG_V2_BACKEND", "auto") or "auto").strip().lower(),
+        }
+    try:
+        from backend.rag.hybrid_service import get_rag_service
+        from backend.rag.reranker import get_reranker_service
+
+        service = get_rag_service()
+        backend_actual = str(getattr(service, "backend_name", "unknown") or "unknown").lower()
+        embedding = str(getattr(service, "embedding_model", "unknown") or "unknown").lower()
+        fallback_reason = str(getattr(service, "fallback_reason", "") or "").strip()
+        requested = str(os.getenv("RAG_V2_BACKEND", "auto") or "auto").strip().lower()
+        reranker = get_reranker_service()
+        reranker_enabled = bool(reranker.is_enabled)
+        production = _is_production_runtime()
+
+        if production:
+            probe_ok, probe_error = _run_embedding_smoke(service)
+            if not probe_ok:
+                return {
+                    "status": "error",
+                    "error_code": probe_error or "rag_embedding_probe_failed",
+                    "backend_requested": requested,
+                    "backend": backend_actual,
+                    "embedding": embedding,
+                    "reranker": "ok" if reranker_enabled else "degraded",
+                }
+            if requested == "postgres" and backend_actual != "postgres":
+                return {
+                    "status": "error",
+                    "error_code": "rag_backend_unavailable",
+                    "backend_requested": requested,
+                    "backend": backend_actual,
+                    "embedding": embedding,
+                    "reranker": "ok" if reranker_enabled else "degraded",
+                }
+            if backend_actual != "postgres":
+                return {
+                    "status": "error",
+                    "error_code": "rag_backend_not_persistent",
+                    "backend_requested": requested,
+                    "backend": backend_actual,
+                    "embedding": embedding,
+                    "reranker": "ok" if reranker_enabled else "degraded",
+                }
+            if fallback_reason:
+                return {
+                    "status": "error",
+                    "error_code": "rag_fallback_active",
+                    "backend_requested": requested,
+                    "backend": backend_actual,
+                    "embedding": embedding,
+                    "reranker": "ok" if reranker_enabled else "degraded",
+                }
+            if embedding != "bge-m3":
+                return {
+                    "status": "error",
+                    "error_code": "rag_embedding_degraded",
+                    "backend_requested": requested,
+                    "backend": backend_actual,
+                    "embedding": embedding,
+                    "reranker": "ok" if reranker_enabled else "degraded",
+                }
+
+        return {
+            "status": "ok" if not fallback_reason else "degraded",
+            "backend_requested": requested,
+            "backend": backend_actual,
+            "embedding": embedding,
+            "reranker": "ok" if reranker_enabled else "degraded",
+            "reason": fallback_reason or None,
+        }
+    except Exception:
+        return {"status": "error", "error_code": "rag_health_failed"}
+
+
+def warm_rag_readiness_probe(*, force: bool = False) -> dict[str, object]:
+    """Run/read the RAG readiness probe for the current config.
+
+    Healthy results are reusable for the process lifetime (until the config
+    fingerprint changes). A failure is cached briefly to avoid repeatedly
+    constructing a broken model on every readiness request, then retried so a
+    transient database/model outage can recover without restarting the app.
+    The lock deliberately covers the probe call: concurrent requests share one
+    in-flight attempt rather than loading the embedding model multiple times.
+    """
+    global _rag_probe_fingerprint, _rag_probe_result, _rag_probe_failed_at
+    fingerprint = _rag_probe_key()
+    with _rag_probe_lock:
+        now = time.monotonic()
+        if not force and _rag_probe_result is not None and _rag_probe_fingerprint == fingerprint:
+            status = str(_rag_probe_result.get("status") or "").strip().lower()
+            if status in {"ok", "disabled"}:
+                return dict(_rag_probe_result)
+            failure_ttl = _rag_probe_failure_ttl_seconds()
+            if _rag_probe_failed_at is not None and now - _rag_probe_failed_at < failure_ttl:
+                return dict(_rag_probe_result)
+        result = _rag_health_uncached()
+        _rag_probe_fingerprint = fingerprint
+        _rag_probe_result = dict(result)
+        if str(result.get("status") or "").strip().lower() in {"ok", "disabled"}:
+            _rag_probe_failed_at = None
+        else:
+            _rag_probe_failed_at = now
+        return dict(result)
+
+
+def _rag_probe_failure_ttl_seconds() -> float:
+    raw = str(os.getenv("RAG_PROBE_FAILURE_TTL_SECONDS") or "45").strip()
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = 45.0
+    return max(1.0, min(300.0, value))
+
+
+def reset_rag_readiness_probe_for_testing() -> None:
+    global _rag_probe_fingerprint, _rag_probe_result, _rag_probe_failed_at
+    with _rag_probe_lock:
+        _rag_probe_fingerprint = None
+        _rag_probe_result = None
+        _rag_probe_failed_at = None
+
+
+def _rag_health() -> dict[str, object]:
+    return warm_rag_readiness_probe()
 
 
 def _cors_allow_origins() -> list[str]:
@@ -109,6 +301,7 @@ def create_app() -> FastAPI:
             get_authentication_health=authentication_health,
             get_database_health=database_health,
             get_market_data_health=market_data_health,
+            get_rag_health=_rag_health,
         )
     )
     user_router = create_user_router()
