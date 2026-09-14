@@ -1,10 +1,11 @@
 # FinSight 文档索引
 
-更新时间：2026-05-25
+更新时间：2026-09-15
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
 
+- `DESIGN.md`：当前产品定位、Today-first 信息架构、视觉语言、可访问性、交互状态和前端实现约束。
 - `README.md` / `readme_cn.md`：项目入口与当前 evidence-first 请求链路概览。
 - `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane、`IntentContract` evidence-first 意图模型、作用域化记忆和 evidence/tool diagnostics 边界。
 - `docs/LANGGRAPH_FLOW.md`：当前 LangGraph 请求链路和 request-frame / intent-contract / coverage-validator 的运行边界。
@@ -17,6 +18,7 @@
 
 ## 当前实现 Spec
 
+- `docs/plans/2026-09-14_finsight全面重构执行方案.md`：基于 2026-09-14 代码审计、邮件观点与参考项目整理的全面重构执行方案；覆盖产品定位、身份/租户、Canonical RequestFrame、RunService、Postgres/RAG、调度、前端 Today-first IA、设计系统、测试门禁、迁移顺序和回滚策略。
 - `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`ReplyContract` 三 lane、作用域化 `memory_context`、用户 `timeoutSeconds` 偏好、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results` 与 `tool_diagnostics`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
