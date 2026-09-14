@@ -1,17 +1,17 @@
 ﻿import { useState, useCallback, useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useRef } from 'react';
 import { WorkspaceShell } from './components/layout/WorkspaceShell';
 import { WelcomePage } from './components/welcome/WelcomePage';
-import { Phase24PanelsPage } from './components/labs/Phase24PanelsPage';
 import { ToastProvider } from './components/ui';
 import { RateLimitToastListener } from './components/common/RateLimitToastListener';
 import { CommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
-import { getRagInspectorDevIdentity, isRagInspectorDevAuthActive } from './auth/devAuth';
-import { RagInspectorPage } from './pages/RagInspectorPage';
-import { CostAuditPage } from './pages/CostAuditPage';
+import { SharedReportPage } from './pages/SharedReportPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
+import { useDashboardStore } from './store/dashboardStore';
+import { resolveProtectedRouteAccess } from './auth/access';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
 
@@ -39,16 +39,48 @@ function ChatRoute() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const reportId = searchParams.get('report_id') || null;
+  const [initialHandoff] = useState(() => ({
+    draft: searchParams.get('prompt') || null,
+    symbol: searchParams.get('context_symbol') || null,
+  }));
+  const consumedRef = useRef(false);
+
+  useEffect(() => {
+    if (consumedRef.current) return;
+    const { draft, symbol } = initialHandoff;
+    if (!draft && !symbol) return;
+    consumedRef.current = true;
+
+    const normalizedSymbol = String(symbol ?? '').trim().toUpperCase();
+    if (normalizedSymbol) {
+      const dashboard = useDashboardStore.getState();
+      if (dashboard.activeAsset?.symbol !== normalizedSymbol) {
+        dashboard.setActiveAsset({
+          symbol: normalizedSymbol,
+          display_name: normalizedSymbol,
+          type: dashboard.activeAsset?.type ?? 'equity',
+        });
+      }
+    }
+
+    const next = new URLSearchParams(location.search);
+    next.delete('prompt');
+    next.delete('context_symbol');
+    navigate(
+      { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : '', hash: location.hash },
+      { replace: true },
+    );
+  }, [initialHandoff, location.hash, location.pathname, location.search, navigate]);
 
   return (
     <WorkspaceShell
       view="chat"
       dashboardSymbol={null}
       initialReportId={reportId}
+      initialChatDraft={initialHandoff.draft}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
+      navigateToHistory={() => navigate('/history')}
     />
   );
 }
@@ -62,43 +94,25 @@ function DashboardRoute() {
       dashboardSymbol={decodeSymbolParam(symbol)}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
+      navigateToHistory={() => navigate('/history')}
     />
   );
 }
 
-function WorkbenchRoute() {
+function HistoryRoute() {
   const navigate = useNavigate();
   return (
     <WorkspaceShell
-      view="workbench"
+      view="history"
       dashboardSymbol={null}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
-    />
-  );
-}
-
-function CnMarketRoute() {
-  const navigate = useNavigate();
-  return (
-    <WorkspaceShell
-      view="cn-market"
-      dashboardSymbol={null}
-      navigateToChat={() => navigate('/chat')}
-      navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
-      navigateToWorkbench={() => navigate('/workbench')}
-      navigateToCnMarket={() => navigate('/cn-market')}
+      navigateToHistory={() => navigate('/history')}
     />
   );
 }
 
 function EntryGuard({ children }: { children: ReactElement }) {
-  const authIdentity = useStore((state) => state.authIdentity);
-  const entryMode = useStore((state) => state.entryMode);
   const location = useLocation();
   const hash = String(location.hash || '').toLowerCase();
   const searchParams = new URLSearchParams(location.search);
@@ -111,9 +125,7 @@ function EntryGuard({ children }: { children: ReactElement }) {
 
   if (isAuthCallback) return children;
 
-  const hasEntryAccess =
-    hasWelcomeGatePassed() && (Boolean(authIdentity?.userId) || entryMode === 'anonymous' || entryMode === 'authenticated');
-  if (hasEntryAccess) return children;
+  if (hasWelcomeGatePassed()) return children;
 
   const from = `${location.pathname}${location.search}`;
   return <Navigate to={`/welcome?from=${encodeURIComponent(from)}`} replace />;
@@ -124,9 +136,9 @@ function AuthenticatedGuard({ children }: { children: ReactElement }) {
   const entryMode = useStore((state) => state.entryMode);
   const location = useLocation();
 
-  if (Boolean(authIdentity?.userId) || entryMode === 'authenticated') {
-    return children;
-  }
+  const access = resolveProtectedRouteAccess(authIdentity?.userId, entryMode);
+  if (access === 'allow') return children;
+  if (access === 'pending') return null;
 
   const from = `${location.pathname}${location.search}`;
   return <Navigate to={`/welcome?from=${encodeURIComponent(from)}`} replace />;
@@ -145,29 +157,20 @@ function WelcomeRoute() {
   return <WelcomePage />;
 }
 
-function PhaseLabsRoute() {
-  return <Phase24PanelsPage />;
-}
-
 function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const setAuthIdentity = useStore((state) => state.setAuthIdentity);
   const setEntryMode = useStore((state) => state.setEntryMode);
   const setSessionId = useStore((state) => state.setSessionId);
-  const setSubscriptionEmail = useStore((state) => state.setSubscriptionEmail);
 
   useEffect(() => {
     const client = getSupabaseClient();
     if (!client) {
-      const devIdentity = isRagInspectorDevAuthActive() ? getRagInspectorDevIdentity() : null;
-      if (devIdentity) {
-        markWelcomeGatePassed();
-        setAuthIdentity(devIdentity);
-        setEntryMode('authenticated');
-        setSessionId(buildUserSessionId(devIdentity.userId));
-        if (devIdentity.email) setSubscriptionEmail(devIdentity.email);
-      } else {
-        setAuthIdentity(null);
+      setAuthIdentity(null);
+      setEntryMode('anonymous');
+      const currentSessionId = useStore.getState().sessionId;
+      if (!String(currentSessionId || '').startsWith('public:anonymous:')) {
+        setSessionId(buildAnonymousSessionId());
       }
       return;
     }
@@ -185,11 +188,11 @@ function App() {
         setAuthIdentity({ userId, email });
         setEntryMode('authenticated');
         setSessionId(buildUserSessionId(userId));
-        if (email) setSubscriptionEmail(email);
         return;
       }
 
       setAuthIdentity(null);
+      setEntryMode('anonymous');
       const currentSessionId = useStore.getState().sessionId;
       if (!String(currentSessionId || '').startsWith('public:anonymous:')) {
         setSessionId(buildAnonymousSessionId());
@@ -213,7 +216,7 @@ function App() {
       isMounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [setAuthIdentity, setEntryMode, setSessionId, setSubscriptionEmail]);
+  }, [setAuthIdentity, setEntryMode, setSessionId]);
 
   const handleToggleCommandPalette = useCallback(() => {
     setIsCommandPaletteOpen((prev) => !prev);
@@ -251,14 +254,10 @@ function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/welcome" element={<WelcomeRoute />} />
-        <Route path="/chat" element={<EntryGuard><ChatRoute /></EntryGuard>} />
-        <Route path="/workbench" element={<EntryGuard><WorkbenchRoute /></EntryGuard>} />
-        <Route path="/cn-market" element={<EntryGuard><CnMarketRoute /></EntryGuard>} />
-        <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
-        <Route path="/cost-audit" element={<AuthenticatedGuard><CostAuditPage /></AuthenticatedGuard>} />
-        <Route path="/phase-labs" element={<EntryGuard><PhaseLabsRoute /></EntryGuard>} />
-        <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
-        <Route path="/dashboard/:symbol" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
+        <Route path="/share/r/:token" element={<SharedReportPage />} />
+        <Route path="/chat" element={<AuthenticatedGuard><ChatRoute /></AuthenticatedGuard>} />
+        <Route path="/history" element={<AuthenticatedGuard><HistoryRoute /></AuthenticatedGuard>} />
+        <Route path="/dashboard/:symbol?" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
 

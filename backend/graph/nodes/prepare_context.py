@@ -6,7 +6,9 @@ from typing import Any
 
 from langchain_core.messages import RemoveMessage
 
+from backend.graph.nodes.build_initial_state import build_initial_state
 from backend.graph.nodes.normalize_ui_context import normalize_ui_context
+from backend.graph.nodes.reset_turn_state import reset_turn_state
 from backend.graph.nodes.summarize_history import summarize_history
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.state import GraphState
@@ -29,29 +31,40 @@ def _apply_message_delta(messages: list[Any], delta: list[Any]) -> list[Any]:
 
 
 def prepare_context(state: GraphState) -> dict[str, Any]:
-    """
-    合并原来的 trim/summarize/normalize 前置节点。
+    """初始化当前轮次并规范化历史与 UI 上下文。"""
+    initial = build_initial_state(state)
+    initial_messages = list(initial.get("messages") or [])
 
-    目标是让主图只有一个确定性的上下文准备入口，避免请求理解前散落多个
-    业务可见节点；旧节点仍保留给兼容测试和单独复用。
-    """
-    result: dict[str, Any] = {}
-    messages = list(state.get("messages") or [])
+    working: dict[str, Any] = dict(state)
+    working.update({key: value for key, value in initial.items() if key != "messages"})
+    working["messages"] = _apply_message_delta(
+        list(state.get("messages") or []),
+        initial_messages,
+    )
 
-    trim_delta = trim_conversation_history(state)
+    reset = reset_turn_state(working)  # type: ignore[arg-type]
+    working.update(reset)
+
+    result: dict[str, Any] = {
+        **{key: value for key, value in initial.items() if key != "messages"},
+        **reset,
+    }
+    if initial_messages:
+        result["messages"] = list(initial_messages)
+
+    trim_delta = trim_conversation_history(working)  # type: ignore[arg-type]
     trim_messages = list(trim_delta.get("messages") or [])
     if trim_messages:
         result.setdefault("messages", []).extend(trim_messages)
-        messages = _apply_message_delta(messages, trim_messages)
+        working["messages"] = _apply_message_delta(working["messages"], trim_messages)
 
-    summarize_state = dict(state)
-    summarize_state["messages"] = messages
-    summarize_delta = summarize_history(summarize_state)  # type: ignore[arg-type]
+    summarize_delta = summarize_history(working)  # type: ignore[arg-type]
     summarize_messages = list(summarize_delta.get("messages") or [])
     if summarize_messages:
         result.setdefault("messages", []).extend(summarize_messages)
+        working["messages"] = _apply_message_delta(working["messages"], summarize_messages)
 
-    normalize_delta = normalize_ui_context(state)
+    normalize_delta = normalize_ui_context(working)  # type: ignore[arg-type]
     if normalize_delta:
         result.update(normalize_delta)
 

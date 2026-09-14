@@ -57,13 +57,7 @@ def _error_payload(
 
 
 def _resolve_user_agent() -> str:
-    value = os.getenv("SEC_USER_AGENT", "").strip()
-    if value:
-        return value
-    fallback_email = os.getenv("EMAIL_FROM", "").strip()
-    if fallback_email:
-        return f"FinSight {fallback_email}"
-    return ""
+    return os.getenv("SEC_USER_AGENT", "").strip()
 
 
 def _is_valid_user_agent(user_agent: str) -> bool:

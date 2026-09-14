@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { apiClient, parseSSEStream, RATE_LIMIT_EVENT, rateLimitEvents } from './client';
+import { apiClient, parseSSEStream, RATE_LIMIT_EVENT, rateLimitEvents, withStreamGuards } from './client';
 
 function sseResponse(events: Array<Record<string, unknown>>): Response {
   const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
@@ -11,6 +11,14 @@ function sseResponse(events: Array<Record<string, unknown>>): Response {
     },
   });
   return new Response(stream);
+}
+
+function sseResponseWithHeaders(
+  events: Array<Record<string, unknown>>,
+  headers: Record<string, string>,
+): Response {
+  const response = sseResponse(events);
+  return new Response(response.body, { headers });
 }
 
 describe('parseSSEStream', () => {
@@ -86,6 +94,33 @@ describe('parseSSEStream', () => {
     });
   });
 
+  it('surfaces explicit LLM degradation as a user-visible thinking event', async () => {
+    const thinking: any[] = [];
+
+    await parseSSEStream(
+      sseResponse([
+        {
+          type: 'degraded',
+          message: 'LLM 暂时不可用，本轮已使用降级回答。',
+          degradation: { used: true, stage: 'direct_reply', reason: 'llm_unavailable' },
+        },
+      ]),
+      {
+        onThinking: (step) => thinking.push(step),
+      },
+    );
+
+    expect(thinking).toHaveLength(1);
+    expect(thinking[0]).toMatchObject({
+      stage: 'degraded',
+      message: 'LLM 暂时不可用，本轮已使用降级回答。',
+      eventType: 'degraded',
+      result: {
+        degradation: { used: true, stage: 'direct_reply', reason: 'llm_unavailable' },
+      },
+    });
+  });
+
   it('does not report missing done when execute stream was aborted', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -101,20 +136,6 @@ describe('parseSSEStream', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('does not report missing done when resume stream was aborted', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const onError = vi.fn();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([{ type: 'token', content: 'partial' }])));
-
-    await apiClient.resumeExecution(
-      { thread_id: 'public:user:thread', resume_value: 'continue' },
-      { onError },
-      { signal: controller.signal },
-    );
-
-    expect(onError).not.toHaveBeenCalled();
-  });
 });
 
 describe('SSE read timeout (P1-2)', () => {
@@ -189,6 +210,105 @@ describe('SSE read timeout (P1-2)', () => {
   });
 });
 
+describe('withStreamGuards', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('deduplicates terminal callbacks', () => {
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const guarded = withStreamGuards({ onDone, onError });
+
+    guarded.onDone?.();
+    guarded.onDone?.();
+    guarded.finish();
+
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('never turns an incomplete stream into synthetic done', () => {
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const guarded = withStreamGuards({ onDone, onError });
+
+    guarded.onToken?.('partial');
+    guarded.finish();
+
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('内容可能不完整'));
+  });
+});
+
+describe('chat SSE auto resume', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('replays only events after the last sequence and completes once', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponseWithHeaders(
+        [{ type: 'token', content: 'A', run_id: 'run-1', seq: 1 }],
+        { 'X-Run-Id': 'run-1' },
+      ))
+      .mockResolvedValueOnce(sseResponse([
+        { type: 'token', content: 'B', run_id: 'run-1', seq: 2 },
+        { type: 'done', response: 'AB', run_id: 'run-1', seq: 3 },
+      ]));
+    vi.stubGlobal('fetch', fetchMock);
+    const tokens: string[] = [];
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const connectionStates: string[] = [];
+
+    await apiClient.sendMessageStream(
+      { query: 'AAPL 分析' },
+      { onToken: (token) => tokens.push(String(token)), onDone, onError },
+      {
+        reconnectDelaysMs: [0, 0],
+        onConnectionState: (state) => connectionStates.push(state),
+      },
+    );
+
+    expect(tokens).toEqual(['A', 'B']);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[1][0]).toContain('/api/execute/runs/run-1/events?after_seq=1');
+    expect(connectionStates).toEqual(['reconnecting', 'connected']);
+  });
+
+  it('tries resume at most twice before reporting honest connection loss', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponseWithHeaders(
+        [{ type: 'token', content: 'partial', run_id: 'run-2', seq: 1 }],
+        { 'X-Run-Id': 'run-2' },
+      ))
+      .mockRejectedValueOnce(new Error('offline-1'))
+      .mockRejectedValueOnce(new Error('offline-2'));
+    vi.stubGlobal('fetch', fetchMock);
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const connectionStates: string[] = [];
+
+    await apiClient.sendMessageStream(
+      { query: 'AAPL 分析' },
+      { onDone, onError },
+      {
+        reconnectDelaysMs: [0, 0],
+        onConnectionState: (state) => connectionStates.push(state),
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain('内容可能不完整');
+    expect(connectionStates).toEqual(['reconnecting', 'reconnecting', 'lost']);
+  });
+});
+
 describe('429 rate limit event (P1-8)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -209,7 +329,7 @@ describe('429 rate limit event (P1-8)', () => {
     );
 
     await expect(
-      apiClient.sendMessageStream('AAPL 分析', vi.fn()),
+      apiClient.sendMessageStream({ query: 'AAPL 分析' }, { onToken: vi.fn() }),
     ).rejects.toThrow();
 
     expect(listener).toHaveBeenCalledTimes(1);

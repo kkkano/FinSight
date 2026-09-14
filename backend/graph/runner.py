@@ -2,39 +2,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Optional
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command
 
 from backend.graph.checkpointer import aget_graph_checkpointer, get_graph_checkpointer_info
-from backend.graph.nodes import (
-    alert_action,
-    alert_extractor,
-    build_initial_state,
-    chat_respond,
-    confirmation_gate,
-    decide_output_mode,
-    clarify,
-    execute_plan_stub,
-    normalize_ui_context,
-    parse_operation,
-    policy_gate,
-    prepare_context,
-    planner,
-    render_stub,
-    research_debate,
-    reset_turn_state,
-    resolve_subject,
-    synthesize,
-    understand_request,
-)
-from backend.graph.nodes.trim_conversation_history import trim_conversation_history
-from backend.graph.nodes.summarize_history import summarize_history
-from backend.graph.confirmation_policy import parse_confirmation_mode
+from backend.graph.nodes import analyze, collect_evidence, prepare_context, render, route_request, validate
 from backend.graph.state import GraphState
 from backend.graph.trace import with_node_trace
 from backend.services.langfuse_tracer import langfuse_observe
@@ -45,145 +20,22 @@ _graph_runner_loop_id: Optional[int] = None
 
 
 def _build_graph(*, checkpointer: Any) -> Any:
-    """
-    Build the Phase 1 graph skeleton.
-    Later phases will replace stub nodes with real planner/executor/templates.
-    """
+    """构建唯一的六节点主图。"""
     graph = StateGraph(GraphState)
-    graph.add_node("build_initial_state", with_node_trace("build_initial_state", build_initial_state))
-    graph.add_node("reset_turn_state", with_node_trace("reset_turn_state", reset_turn_state))
     graph.add_node("prepare_context", with_node_trace("prepare_context", prepare_context))
-    graph.add_node("trim_history", with_node_trace("trim_history", trim_conversation_history))
-    graph.add_node("summarize_history", with_node_trace("summarize_history", summarize_history))
-    graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
-    graph.add_node("decide_output_mode", with_node_trace("decide_output_mode", decide_output_mode))
-    graph.add_node("chat_respond", with_node_trace("chat_respond", chat_respond))
-    graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
-    graph.add_node("clarify", with_node_trace("clarify", clarify))
-    graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
-    graph.add_node("understand_request", with_node_trace("understand_request", understand_request))
-    graph.add_node("alert_extractor", with_node_trace("alert_extractor", alert_extractor))
-    graph.add_node("alert_action", with_node_trace("alert_action", alert_action))
-    graph.add_node("policy_gate", with_node_trace("policy_gate", policy_gate))
-    graph.add_node("planner", with_node_trace("planner", planner))
-    graph.add_node("confirmation_gate", with_node_trace("confirmation_gate", confirmation_gate))
-    graph.add_node("execute_plan", with_node_trace("execute_plan", execute_plan_stub))
-    graph.add_node("research_debate", with_node_trace("research_debate", research_debate))
-    graph.add_node("synthesize", with_node_trace("synthesize", synthesize))
-    graph.add_node("render", with_node_trace("render", render_stub))
+    graph.add_node("route_request", with_node_trace("route_request", route_request))
+    graph.add_node("collect_evidence", with_node_trace("collect_evidence", collect_evidence))
+    graph.add_node("analyze", with_node_trace("analyze", analyze))
+    graph.add_node("validate", with_node_trace("validate", validate))
+    graph.add_node("render", with_node_trace("render", render))
 
-    graph.add_edge(START, "build_initial_state")
-    graph.add_edge("build_initial_state", "reset_turn_state")
-    graph.add_edge("reset_turn_state", "prepare_context")
-    # chat_respond is intentionally narrow: only pure greetings/thanks/bye
-    # terminate here. Open-ended chat and out-of-scope requests continue to
-    # understand_request, where the LLM conversation router can answer before
-    # the planner is considered.
-    graph.add_edge("prepare_context", "chat_respond")
-
-    def _route_after_chat_respond(state: GraphState) -> str:
-        if bool(state.get("chat_responded")):
-            return END
-        return "understand_request"
-
-    graph.add_conditional_edges(
-        "chat_respond",
-        _route_after_chat_respond,
-        {"understand_request": "understand_request", END: END},
-    )
-
-    def _route_after_understand_request(state: GraphState) -> str:
-        understanding = state.get("understanding") or {}
-        route = str(understanding.get("route") or "").strip().lower()
-        op = (state.get("operation") or {}).get("name", "qa")
-        if route == "alert" or op == "alert_set":
-            return "alert_extractor"
-        # 用户显式 @agent（ui_context.agents_override）= 明确要 agent 分析，
-        # 强制进入 policy_gate，不被 LLM router 的 direct/clarify 短路。
-        ui_context = state.get("ui_context") or {}
-        forced_agents = ui_context.get("agents_override")
-        has_forced = isinstance(forced_agents, list) and any(
-            isinstance(a, str) and a.strip() for a in forced_agents
-        )
-        if route in {"direct", "clarify"} and not has_forced:
-            return END
-        return "policy_gate"
-
-    graph.add_conditional_edges(
-        "understand_request",
-        _route_after_understand_request,
-        {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate", END: END},
-    )
-
-    # Legacy front-half nodes are still registered for compatibility and
-    # focused unit tests, but the main runtime path now uses understand_request.
-    graph.add_edge("resolve_subject", "clarify")
-
-    def _route_after_clarify(state: GraphState) -> str:
-        clarify_state = state.get("clarify") or {}
-        if isinstance(clarify_state, dict) and clarify_state.get("needed") is True:
-            return END
-        return "parse_operation"
-
-    graph.add_conditional_edges(
-        "clarify",
-        _route_after_clarify,
-        {"parse_operation": "parse_operation", END: END},
-    )
-
-    graph.add_edge("policy_gate", "planner")
-    graph.add_edge("planner", "confirmation_gate")
-
-    def _route_after_confirmation(state: GraphState) -> str:
-        intent = str(state.get("confirmation_intent") or "confirm_execute").strip().lower()
-        if intent == "cancel_execution":
-            return END
-        if intent == "adjust_parameters":
-            return "planner"
-        return "execute_plan"
-
-    graph.add_conditional_edges(
-        "confirmation_gate",
-        _route_after_confirmation,
-        {"planner": "planner", "execute_plan": "execute_plan", END: END},
-    )
-    graph.add_edge("execute_plan", "research_debate")
-    graph.add_edge("research_debate", "synthesize")
-    graph.add_edge("synthesize", "render")
+    graph.add_edge(START, "prepare_context")
+    graph.add_edge("prepare_context", "route_request")
+    graph.add_edge("route_request", "collect_evidence")
+    graph.add_edge("collect_evidence", "analyze")
+    graph.add_edge("analyze", "validate")
+    graph.add_edge("validate", "render")
     graph.add_edge("render", END)
-
-    def _route_after_parse_operation(state: GraphState) -> str:
-        op = (state.get("operation") or {}).get("name", "qa")
-        if op == "alert_set":
-            return "alert_extractor"
-        return "policy_gate"
-
-    graph.add_conditional_edges(
-        "parse_operation",
-        _route_after_parse_operation,
-        {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate"},
-    )
-
-    def _route_after_alert_extractor(state: GraphState) -> str:
-        if bool(state.get("alert_valid")):
-            return "alert_action"
-        return END
-
-    graph.add_conditional_edges(
-        "alert_extractor",
-        _route_after_alert_extractor,
-        {"alert_action": "alert_action", END: END},
-    )
-    def _route_after_alert_action(state: GraphState) -> str:
-        if bool(state.get("pending_research_after_alert")):
-            return "policy_gate"
-        return END
-
-    graph.add_conditional_edges(
-        "alert_action",
-        _route_after_alert_action,
-        {"policy_gate": "policy_gate", END: END},
-    )
 
     return graph.compile(checkpointer=checkpointer)
 
@@ -209,7 +61,6 @@ class GraphRunner:
         ui_context: Optional[dict] = None,
         output_mode: Optional[str] = None,
         strict_selection: Optional[bool] = None,
-        confirmation_mode: Optional[str] = None,
     ) -> dict:
         state: dict = {
             "thread_id": thread_id,
@@ -222,42 +73,8 @@ class GraphRunner:
             state["output_mode"] = output_mode
         if strict_selection is not None:
             state["strict_selection"] = bool(strict_selection)
-        # Always reset confirmation controls for a new run so checkpointed
-        # thread state cannot leak stale values across requests.
-        normalized_mode = parse_confirmation_mode(confirmation_mode) or "auto"
-        state["confirmation_mode"] = normalized_mode
-        if normalized_mode == "required":
-            state["require_confirmation"] = True
-        elif normalized_mode == "skip":
-            state["require_confirmation"] = False
-        else:
-            state["require_confirmation"] = None
-
         config = {"configurable": {"thread_id": thread_id}}
         return await self._graph.ainvoke(state, config=config)
-
-    async def resume(
-        self,
-        *,
-        thread_id: str,
-        resume_value: Any,
-        config: dict[str, Any] | None = None,
-    ) -> AsyncIterator[dict]:
-        """Resume an interrupted graph via ``Command(resume=...)``.
-
-        Returns an async iterator of stream events (``astream_events v2``),
-        consistent with the SSE pipeline used by ``run_graph_pipeline``.
-        """
-        merged_config: dict[str, Any] = {
-            "configurable": {"thread_id": thread_id},
-            **(config or {}),
-        }
-        async for event in self._graph.astream_events(
-            Command(resume=resume_value),
-            config=merged_config,
-            version="v2",
-        ):
-            yield event
 
     @staticmethod
     def checkpointer_info() -> dict[str, Any]:
@@ -329,7 +146,6 @@ async def run_graph_traced(
     ui_context: dict | None = None,
     output_mode: str | None = None,
     strict_selection: bool | None = None,
-    confirmation_mode: str | None = None,
 ) -> dict:
     """
     带 Langfuse Trace 的图执行入口。
@@ -345,7 +161,6 @@ async def run_graph_traced(
         ui_context=ui_context,
         output_mode=output_mode,
         strict_selection=strict_selection,
-        confirmation_mode=confirmation_mode,
     )
 
 

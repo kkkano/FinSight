@@ -34,6 +34,7 @@ class PlanStep(BaseModel):
     task_id: Optional[str] = None
     task_ids: list[str] = Field(default_factory=list)
     parallel_group: Optional[str] = None
+    depends_on: list[str] = Field(default_factory=list)   # 前置 step id；空=无依赖
     why: Optional[str] = None
     optional: bool = False
 
@@ -54,10 +55,16 @@ class PlanSubject(BaseModel):
 
 class PlanTask(BaseModel):
     id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
     subject_type: str = Field(min_length=1)
     tickers: list[str] = Field(default_factory=list)
     operation: str = Field(min_length=1)
     status: str = "ready"
+    priority: int = Field(default=50, ge=0)
+    order_index: int = Field(ge=0)
+    request_frame_id: str = Field(min_length=1)
+    render_kind: Literal["single", "compare"] = "single"
+    render_group_id: str = Field(min_length=1)
 
     model_config = {"extra": "forbid"}
 

@@ -11,6 +11,13 @@ export default {
         '2xs': ['11px', { lineHeight: '16px' }],
       },
       colors: {
+        t: {
+          bg: 'var(--t-bg)', surface: 'var(--t-surface)', card: 'var(--t-card)',
+          elevated: 'var(--t-elevated)', border: 'var(--t-border)', divider: 'var(--t-divider)',
+          hover: 'var(--t-hover)', text: 'var(--t-text)', text2: 'var(--t-text-2)', text3: 'var(--t-text-3)',
+          accent: 'rgb(var(--t-accent) / <alpha-value>)', 'accent-hi': 'var(--t-accent-hi)',
+          up: 'var(--t-up)', down: 'var(--t-down)', warning: 'var(--t-warning)', info: 'var(--t-info)',
+        },
         fin: {
           bg: 'var(--fin-bg)',
           'bg-secondary': 'var(--fin-bg-secondary)',
@@ -34,7 +41,7 @@ export default {
       },
       fontFamily: {
         sans: ['-apple-system', '"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        mono: ['"JetBrains Mono Variable"', 'JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',

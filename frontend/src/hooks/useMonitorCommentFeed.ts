@@ -1,0 +1,131 @@
+import { useEffect, useState } from 'react';
+import { buildAuthHeaders } from '../api/http';
+import { buildApiUrl } from '../config/runtime';
+import { useStore } from '../store/useStore';
+import { isAuthenticatedMonitorSession } from './useMonitorLease';
+
+export type MonitorComment = {
+  id: string;
+  session_id: string;
+  symbol: string;
+  ts: string;
+  level: 'info' | 'warn' | 'alert' | 'error';
+  text: string;
+  trigger: { kind: string; detail: string; observed_at: string };
+  source: 'agent' | 'system';
+  escalated: boolean;
+  prediction_id: string | null;
+  chart_url: string | null;
+};
+
+function mergeComments(previous: MonitorComment[], incoming: MonitorComment[]): MonitorComment[] {
+  const byId = new Map(previous.map((item) => [item.id, item]));
+  incoming.forEach((item) => byId.set(item.id, item));
+  return [...byId.values()].sort((a, b) => b.ts.localeCompare(a.ts));
+}
+
+export type MonitorStreamResponseKind = 'stream' | 'retryable_error' | 'terminal_unavailable';
+
+export function classifyMonitorStreamResponse(
+  response: Pick<Response, 'status' | 'ok' | 'body'>,
+): MonitorStreamResponseKind {
+  if (response.status === 503) return 'terminal_unavailable';
+  if (!response.ok || !response.body) return 'retryable_error';
+  return 'stream';
+}
+
+export function buildMonitorCommentStreamPath(
+  sessionId: string,
+  symbol: string,
+  lastEventId = '',
+): string {
+  const params = new URLSearchParams({
+    session_id: sessionId,
+    symbol: symbol.trim().toUpperCase(),
+  });
+  if (lastEventId) params.set('last_event_id', lastEventId);
+  return `/api/monitor/comments/stream?${params.toString()}`;
+}
+
+export function useMonitorCommentFeed(
+  sessionId: string | null | undefined,
+  symbol: string | null | undefined,
+) {
+  const [comments, setComments] = useState<MonitorComment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  const userId = useStore((state) => state.authIdentity?.userId);
+  const isAvailable = isAuthenticatedMonitorSession(userId);
+  const normalizedSymbol = (symbol || '').trim().toUpperCase();
+
+  useEffect(() => {
+    if (!sessionId || !normalizedSymbol || !isAvailable) {
+      setComments([]);
+      setError(null);
+      setUnavailable(false);
+      return undefined;
+    }
+    setComments([]);
+    setError(null);
+    setUnavailable(false);
+    const controller = new AbortController();
+    let retries = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastEventId = '';
+
+    const connect = async () => {
+      try {
+        const response = await fetch(
+          buildApiUrl(buildMonitorCommentStreamPath(sessionId, normalizedSymbol, lastEventId)),
+          { headers: await buildAuthHeaders(), signal: controller.signal },
+        );
+        const responseKind = classifyMonitorStreamResponse(response);
+        if (responseKind === 'terminal_unavailable') {
+          if (retryTimer) clearTimeout(retryTimer);
+          setUnavailable(true);
+          setError('实时点评服务不可用');
+          return;
+        }
+        if (responseKind === 'retryable_error' || !response.body) throw new Error(`HTTP ${response.status}`);
+        retries = 0;
+        setError(null);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!controller.signal.aborted) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split(/\r?\n\r?\n/);
+          buffer = frames.pop() ?? '';
+          for (const frame of frames) {
+            const event = frame.match(/^event:\s*(.+)$/m)?.[1] ?? 'message';
+            const id = frame.match(/^id:\s*(.+)$/m)?.[1];
+            const data = frame.match(/^data:\s*(.*)$/m)?.[1];
+            if (!data || event === 'heartbeat') continue;
+            if (id) lastEventId = id;
+            const parsed = JSON.parse(data) as MonitorComment | MonitorComment[];
+            if (event === 'snapshot' && Array.isArray(parsed)) setComments(mergeComments([], parsed));
+            if (event === 'comment' && !Array.isArray(parsed)) setComments((prev) => mergeComments(prev, [parsed]));
+          }
+        }
+        if (!controller.signal.aborted) throw new Error('stream closed');
+      } catch (reason) {
+        if (controller.signal.aborted) return;
+        setError(reason instanceof Error ? reason.message : '点评流不可用');
+        if (retries < 3) {
+          retries += 1;
+          retryTimer = setTimeout(() => void connect(), retries * 1_000);
+        }
+      }
+    };
+
+    void connect();
+    return () => {
+      controller.abort();
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [isAvailable, normalizedSymbol, sessionId]);
+
+  return { comments, error, isAvailable, unavailable };
+}

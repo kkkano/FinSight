@@ -143,8 +143,6 @@ def main() -> None:
         "llm-chat-recommended": {
             "LANGGRAPH_PLANNER_MODE": "llm",
             "LANGGRAPH_SYNTHESIZE_MODE": "llm",
-            "FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC": "90",
-            "FINSIGHT_CONTEXT_ROUTER_MAX_TOKENS": "2200",
             "FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC": "120",
             "FINSIGHT_CONTEXT_REPLY_MAX_TOKENS": "3000",
             "LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC": "150",
@@ -157,8 +155,6 @@ def main() -> None:
         "llm-chat-generous": {
             "LANGGRAPH_PLANNER_MODE": "llm",
             "LANGGRAPH_SYNTHESIZE_MODE": "llm",
-            "FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC": "120",
-            "FINSIGHT_CONTEXT_ROUTER_MAX_TOKENS": "3000",
             "FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC": "180",
             "FINSIGHT_CONTEXT_REPLY_MAX_TOKENS": "4000",
             "LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC": "210",

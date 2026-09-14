@@ -71,7 +71,7 @@ def test_execute_plan_stub_records_rag_observability(monkeypatch):
         lambda: fake_store,
     )
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     thread_id = "tenant1:userA:thread-rag-observe"
     selection_payload = [
@@ -118,7 +118,7 @@ def test_execute_plan_stub_records_rag_observability(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     rag_trace = (out.get("trace") or {}).get("rag") or {}
 
@@ -170,7 +170,7 @@ def test_execute_plan_stub_searches_memory_working_set_and_kb(monkeypatch):
         lambda: fake_store,
     )
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     selection_payload = [
         {
@@ -194,21 +194,12 @@ def test_execute_plan_stub_searches_memory_working_set_and_kb(monkeypatch):
         "thread_id": "tenant1:userA:thread-rag-3layer",
         "query": "GOOGL watchlist capex margin services outlook",
         "memory_context": {
-            "watchlist": ["GOOGL"],
-            "last_focus": {
+            "current_thread_focus": {
                 "ticker": "GOOGL",
                 "query": "Alphabet capex margin",
                 "summary": "Watch capex discipline and margin expansion for GOOGL.",
                 "updated_at": "2026-03-07T10:00:00Z",
             },
-            "recent_focuses": [
-                {
-                    "ticker": "GOOGL",
-                    "query": "Alphabet services outlook",
-                    "summary": "Services and advertising demand are improving.",
-                    "updated_at": "2026-03-07T11:00:00Z",
-                }
-            ],
         },
         "plan_ir": {
             "goal": "x",
@@ -233,7 +224,7 @@ def test_execute_plan_stub_searches_memory_working_set_and_kb(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     rag_trace = (out.get("trace") or {}).get("rag") or {}
 
     scope_event = next(event for event in fake_store.events if event.event_type == "retrieval_scope_planned")
@@ -278,7 +269,7 @@ def test_execute_plan_stub_surfaces_memory_ws_kb_layers(monkeypatch):
         lambda: fake_store,
     )
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     thread_id = "tenant1:userA:thread-rag-3layer"
     selection_payload = [
@@ -303,25 +294,13 @@ def test_execute_plan_stub_surfaces_memory_ws_kb_layers(monkeypatch):
         "thread_id": thread_id,
         "query": "?? AI ????????????????",
         "memory_context": {
-            "risk_tolerance": "high",
-            "investment_style": "growth",
-            "watchlist": ["AAPL", "MSFT"],
-            "last_focus": {
+            "current_thread_focus": {
                 "ticker": "AAPL",
                 "query": "Apple AI capital expenditure",
                 "summary": "??????????????????",
                 "sentiment": "bullish",
                 "updated_at": "2026-03-01T00:00:00Z",
             },
-            "recent_focuses": [
-                {
-                    "ticker": "AAPL",
-                    "query": "Apple services demand",
-                    "summary": "????????????",
-                    "sentiment": "positive",
-                    "updated_at": "2026-03-02T00:00:00Z",
-                }
-            ],
         },
         "plan_ir": {
             "goal": "x",
@@ -346,7 +325,7 @@ def test_execute_plan_stub_surfaces_memory_ws_kb_layers(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     rag_trace = (out.get("trace") or {}).get("rag") or {}
     rag_stats = (out.get("artifacts") or {}).get("rag_stats") or {}
 

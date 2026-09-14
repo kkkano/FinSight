@@ -92,17 +92,22 @@ async def _llm_classify_financial(query: str) -> tuple[bool, int]:
     On any failure → ``(False, 0)`` → safe fallback → clarify.
     """
     try:
-        from backend.llm_config import create_llm
+        from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
-        llm = create_llm(temperature=0.0, max_tokens=256, request_timeout=10)
         prompt = _CLASSIFY_PROMPT.format(query=query)
 
         response = await asyncio.wait_for(
-            llm.ainvoke([HumanMessage(content=prompt)]),
+            ainvoke_configured_llm(
+                [HumanMessage(content=prompt)],
+                context=LLMCallContext.create(
+                    stage="subject_resolver", agent="subject_resolver", layer="routing", max_provider_attempts=2,
+                ),
+                temperature=0.0,
+                max_tokens=256,
+                request_timeout=10,
+            ),
             timeout=_LLM_CLASSIFY_TIMEOUT,
         )
-        from backend.services.llm_usage import record_llm_usage
-        record_llm_usage(response, getattr(llm, "model_name", None))
         text = (response.content or "").strip()
         match = re.search(r"\d+", text)
         if match:

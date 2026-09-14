@@ -1,15 +1,35 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { apiClient } from '../api/client';
+import { zh } from '../locales/zh';
 import { useStore } from './useStore';
 
 describe('useStore conversation lifecycle', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
+    vi.spyOn(apiClient, 'createConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:default',
+    });
+    vi.spyOn(apiClient, 'getConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:default',
+    });
+    vi.spyOn(apiClient, 'deleteConversation').mockResolvedValue({
+      success: true,
+      session_id: 'public:test-user:default',
+    });
     if (typeof window !== 'undefined') {
       window.localStorage.clear();
     }
     const state = useStore.getState();
+    state.setAuthIdentity({ userId: 'test-user', email: null });
     state.setSessionId('public:test-user:default');
     state.clearConversationContext();
+    vi.clearAllMocks();
   });
 
   it('clears the current conversation context without rotating session id', () => {
@@ -37,6 +57,41 @@ describe('useStore conversation lifecycle', () => {
     expect(next.statusMessage).toBeNull();
     expect(next.executionProgress).toBeNull();
     expect(next.abortController).toBeNull();
+  });
+
+  it('keeps anonymous sessions local without calling protected conversation APIs', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setAuthIdentity(null);
+    useStore.getState().setSessionId('public:anonymous:test');
+    await Promise.resolve();
+
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(getConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not trust a user-shaped session id without an authenticated identity', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setAuthIdentity(null);
+    useStore.getState().setSessionId('public:stale-user:default');
+    await Promise.resolve();
+
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(getConversation).not.toHaveBeenCalled();
+  });
+
+  it('syncs an authenticated conversation and hydrates empty local history', async () => {
+    const createConversation = vi.mocked(apiClient.createConversation);
+    const getConversation = vi.mocked(apiClient.getConversation);
+
+    useStore.getState().setSessionId('public:test-user:second');
+    await Promise.resolve();
+
+    expect(createConversation).toHaveBeenCalledOnce();
+    expect(getConversation).toHaveBeenCalledOnce();
   });
 
   it('starts a new chat by rotating session id and resetting transient state', () => {
@@ -188,6 +243,11 @@ describe('useStore conversation lifecycle', () => {
     const state = useStore.getState();
     state.addMessage({ id: 'user-1', role: 'user', content: 'AAPL outlook', timestamp: 10 });
     const originalSession = state.sessionId;
+    state.setPendingChatHandoffContext(originalSession, {
+      sessionId: originalSession,
+      sourceView: 'dashboard',
+      sourceTab: 'overview',
+    });
     state.startNewChat();
 
     useStore.getState().deleteConversation(originalSession);
@@ -195,6 +255,58 @@ describe('useStore conversation lifecycle', () => {
     const next = useStore.getState();
     expect(next.sessionId).not.toBe(originalSession);
     expect(next.conversationSummaries.some((item) => item.sessionId === originalSession)).toBe(false);
+    expect(next.pendingChatHandoffContextBySession[originalSession]).toBeUndefined();
+  });
+
+  it('takes one-shot handoff context atomically and only from the matching session', () => {
+    const state = useStore.getState();
+    const firstSession = state.sessionId;
+    const secondSession = 'public:test-user:second';
+    state.setPendingChatHandoffContext(firstSession, {
+      sessionId: firstSession,
+      sourceView: 'dashboard',
+      sourceTab: 'overview',
+    });
+    state.setPendingChatHandoffContext(firstSession, {
+      sessionId: firstSession,
+      sourceView: 'dashboard',
+      sourceTab: 'technical',
+    });
+    state.setPendingChatHandoffContext(secondSession, {
+      sessionId: secondSession,
+      sourceView: 'command_palette',
+    });
+
+    expect(state.takePendingChatHandoffContext(firstSession)).toMatchObject({ sourceTab: 'technical' });
+    expect(state.takePendingChatHandoffContext(firstSession)).toBeUndefined();
+    expect(useStore.getState().pendingChatHandoffContextBySession[secondSession]).toMatchObject({
+      sourceView: 'command_palette',
+    });
+  });
+
+  it('ignores a late async message patch after its conversation was deleted', () => {
+    const state = useStore.getState();
+    const deletedSession = state.sessionId;
+    state.addMessage({ id: 'user-late', role: 'user', content: 'AAPL 图表', timestamp: 10 });
+    state.addMessageToSession(deletedSession, {
+      id: 'ai-late',
+      role: 'assistant',
+      content: 'Final answer',
+      timestamp: 11,
+      isLoading: false,
+    });
+    state.startNewChat();
+
+    useStore.getState().deleteConversation(deletedSession);
+    useStore.getState().updateMessageInSession(deletedSession, 'ai-late', {
+      content: 'Final answer\n\n[CHART:AAPL:line]',
+    });
+
+    const next = useStore.getState();
+    expect(next.conversationSummaries.some((item) => item.sessionId === deletedSession)).toBe(false);
+    if (typeof window !== 'undefined') {
+      expect(window.localStorage.getItem(`finsight-messages:${deletedSession}`)).toBeNull();
+    }
   });
 
   it('marks chat stream as stopped when cancelling active generation', () => {
@@ -210,8 +322,8 @@ describe('useStore conversation lifecycle', () => {
     const next = useStore.getState();
     expect(controller.signal.aborted).toBe(true);
     expect(next.isChatLoading).toBe(false);
-    expect(next.statusMessage).toBe('已停止生成，保留已完成的结果。');
-    expect(next.currentStep).toBe('已停止生成');
+    expect(next.statusMessage).toBe(zh.chat.stopped);
+    expect(next.currentStep).toBe(zh.chat.stoppedLabel);
     expect(next.executionProgress).toBe(40);
     expect(next.abortController).toBeNull();
   });

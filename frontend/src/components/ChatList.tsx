@@ -1,156 +1,49 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
+import { Bot, User, Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2, ChartNoAxesCombined } from 'lucide-react';
 import { normalizeMarkdown } from '../utils/markdown';
-import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
-import { SmartChartRenderer, parseSmartChartBlocks, stripSmartChartTags } from './SmartChart';
-import { ThinkingProcess } from './thinking';
+import {
+  SmartChartRenderer,
+  getRenderableMessageContent,
+  isPriceLikeInlineBlock,
+  parseSmartChartBlocks,
+  resolveRealPriceChartRequest,
+} from './SmartChart';
+import { ThinkingProcess } from './execution/ThinkingProcess';
 import { ReportView } from './report';
-import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
-
-const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
-const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
-
-// InlineChart 唯一数据源是 K 线（fetchKline），只能真实渲染以下类型。
-// 其余类型（pie/bar/radar/gauge/scatter...）若强行注入会被画成股价折线，
-// 造成"标题说营收构成、图画股价"的错配，因此诚实跳过。
-const INLINE_RENDERABLE_TYPES = new Set(['line', 'candlestick', 'area']);
-// 仅 K 线 / 技术取数方式能被 InlineChart 真出图。
-const INLINE_RENDERABLE_DATA_KINDS = new Set(['kline', 'technical']);
-
-// 决定 chart_type + data_kind 是否能被 InlineChart 诚实地真出图。
-const isInlineChartRenderable = (
-  chartType: string | null,
-  dataKind: string | null,
-): boolean => {
-  if (!chartType) return false;
-  if (!INLINE_RENDERABLE_TYPES.has(chartType)) return false;
-  // data_kind 缺省（如旧后端 / 关键词回退未给）时，按类型保守放行 line/candlestick/area。
-  if (!dataKind) return true;
-  return INLINE_RENDERABLE_DATA_KINDS.has(dataKind);
-};
-
-const shouldGenerateChart = async (
-  query: string,
-  currentTicker?: string | null,
-): Promise<{ tickers: string[]; chartType: string | null }> => {
-  try {
-    const response = await apiClient.detectChartType(query, currentTicker || undefined);
-    const apiCandidates = Array.isArray(response?.ticker_candidates)
-      ? response.ticker_candidates.map((value: unknown) => String(value))
-      : [];
-    const resolvedTicker = typeof response?.resolved_ticker === 'string' && response.resolved_ticker.trim()
-      ? [response.resolved_ticker]
-      : [];
-    const localCandidates = extractTickers(query);
-    const contextual = currentTicker ? [currentTicker] : [];
-    const merged = mergeTickerCandidates(apiCandidates, resolvedTicker, localCandidates, contextual);
-
-    if (response.success && response.should_generate) {
-      const chartType = response.chart_type || 'line';
-      const dataKind = typeof response.data_kind === 'string' ? response.data_kind : null;
-      // 诚实原则：只在 InlineChart 能真出图时注入图表标记，否则跳过（chartType=null）。
-      if (isInlineChartRenderable(chartType, dataKind)) {
-        return { tickers: merged, chartType };
-      }
-      return { tickers: merged, chartType: null };
-    }
-  } catch {
-    console.error('Chart detection failed');
-  }
-
-  const lowerQuery = query.toLowerCase();
-  const hasChartKeyword = chartKeywords.some((keyword) => lowerQuery.includes(keyword));
-  if (!hasChartKeyword) return { tickers: [], chartType: null };
-
-  const localCandidates = extractTickers(query);
-  const contextual = currentTicker ? [currentTicker] : [];
-  return { tickers: mergeTickerCandidates(localCandidates, contextual), chartType: 'line' };
-};
-
-const TICKER_STOPWORDS = new Set([
-  'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
-  'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
-  'WITH', 'VIEW', 'FROM', 'FOR', 'OVER', 'NEWS', 'WHAT', 'WHEN', 'WHERE',
-  'WHY', 'THIS', 'THAT', 'THE', 'AND', 'ARE', 'WAS', 'WERE',
-]);
-
-const MAX_AUTO_CHART_TICKERS = 3;
-const TICKER_PATTERN = /^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/;
-
-const mergeTickerCandidates = (...sources: Array<string[] | undefined>): string[] => {
-  const merged: string[] = [];
-  const seen = new Set<string>();
-  for (const source of sources) {
-    for (const raw of source ?? []) {
-      const ticker = String(raw || '').trim().toUpperCase();
-      if (!ticker || seen.has(ticker)) continue;
-      if (TICKER_STOPWORDS.has(ticker)) continue;
-      if (!TICKER_PATTERN.test(ticker)) continue;
-      seen.add(ticker);
-      merged.push(ticker);
-      if (merged.length >= MAX_AUTO_CHART_TICKERS) return merged;
-    }
-  }
-  return merged;
-};
-
-const extractTickers = (text: string): string[] => {
-  if (!text || !text.trim()) return [];
-
-  const seen = new Set<string>();
-  const tickers: string[] = [];
-  const addTicker = (raw: string) => {
-    const symbol = String(raw || '').trim().toUpperCase();
-    if (!symbol || seen.has(symbol)) return;
-    if (symbol.length > 20 || /\s/.test(symbol)) return;
-    seen.add(symbol);
-    tickers.push(symbol);
-  };
-
-  for (const match of text.matchAll(/\^([A-Za-z]{1,8})\b/g)) {
-    addTicker(`^${match[1]}`);
-  }
-  for (const match of text.matchAll(/\b(\d{5,6}\.(?:SS|SZ|BJ|HK))\b/gi)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\b([A-Za-z]{1,8}-[A-Za-z]{2,5})\b/g)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\b([A-Za-z]{1,4}=F)\b/g)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\$([A-Za-z]{1,6})\b/g)) {
-    addTicker(match[1]);
-  }
-  for (const match of text.matchAll(/\b([A-Za-z]{1,6}[.-][A-Za-z]{1,4})\b/g)) {
-    addTicker(match[1]);
-  }
-
-  const alphaTokens = text.match(/\b[A-Za-z]{1,6}\b/g) ?? [];
-  for (const token of alphaTokens) {
-    if (token !== token.toUpperCase()) continue;
-    const upper = token.toUpperCase();
-    if (TICKER_STOPWORDS.has(upper)) continue;
-    addTicker(upper);
-  }
-
-  return tickers.slice(0, MAX_AUTO_CHART_TICKERS);
-};
+import { useToast } from './ui/Toast';
+import {
+  MESSAGE_ACTION_LABELS,
+  copyTextWithFeedback,
+  messageActionContainerClass,
+} from './chatMessageActions';
+import { useChatStream } from '../hooks/useChatStream';
+import { zh } from '../locales/zh';
+import { useExecutionStore } from '../store/executionStore';
+import type { ExecutionRun, PipelineStage } from '../types/execution';
+import { getAgentDisplayName } from '../utils/userMessageMapper';
+import { StageStepper, type StageStepperProps, type StageStatus } from './execution/StageStepper';
+import { AgentWorkLog } from './execution/AgentWorkLog';
+import { EmptyState } from './ui/EmptyState';
+import { extractTickers } from '../utils/ticker';
+import { parseChartMarkers } from '../utils/chartIntent';
+import { createTickerLinkPlugin, tickerFromDashboardHref } from '../utils/tickerMarkdown';
+import { TickerLink } from './common/TickerLink';
+import { ReportArchiveLink } from './common/ReportArchiveLink';
 
 // ── Shared sub-components ──
 
 const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence_pool }) => (
   <div className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2">
-    <div className="text-[11px] text-fin-muted mb-2">Evidence ({evidence_pool.length})</div>
+    <div className="text-[11px] text-fin-muted mb-2">{zh.chat.source} ({evidence_pool.length})</div>
     <div className="flex flex-wrap gap-2">
       {evidence_pool.map((ev, idx) => {
-        const label = ev.title || ev.source || ev.url || `Source ${idx + 1}`;
+        const label = ev.title || ev.source || ev.url || `${zh.chat.source} ${idx + 1}`;
         if (ev.url) {
           return <SourceLink key={`${ev.url}-${idx}`} href={ev.url} label={label} />;
         }
@@ -167,15 +60,16 @@ const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence
 const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; as_of?: string | null; tried_sources?: string[] }> = ({
   data_origin, fallback_used, as_of, tried_sources,
 }) => {
-  if (!data_origin) return null;
+  if (!data_origin && !fallback_used) return null;
+  const sourceLabel = data_origin || 'LLM';
   return (
     <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
-      <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
-        来源: {data_origin} {fallback_used ? '(兜底)' : ''}
+      <span className={`px-2 py-0.5 rounded-full border ${fallback_used ? 'border-amber-400/70 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200' : 'border-fin-border/60 bg-fin-bg/60'}`}>
+        {zh.chat.source}: {sourceLabel} {fallback_used ? `(${zh.chat.fallback})` : ''}
       </span>
-      {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {as_of}</span>}
+      {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">{zh.chat.asOf}: {as_of}</span>}
       {tried_sources && tried_sources.length > 0 && (
-        <span className="text-2xs text-fin-muted/70">尝试: {tried_sources.join(' → ')}</span>
+        <span className="text-2xs text-fin-muted/70">{zh.chat.triedSources}: {tried_sources.join(' → ')}</span>
       )}
     </div>
   );
@@ -195,6 +89,102 @@ type MessagePayload = {
   thinking?: ThinkingStep[];
 };
 
+const CHAT_PIPELINE_STAGES: Array<{
+  key: string;
+  label: string;
+  pipelineStage?: PipelineStage;
+}> = [
+  { key: 'understand', label: '理解' },
+  { key: 'plan', label: '计划', pipelineStage: 'planning' },
+  { key: 'execute', label: '执行', pipelineStage: 'executing' },
+  { key: 'synthesize', label: '综合', pipelineStage: 'synthesizing' },
+  { key: 'render', label: '撰写', pipelineStage: 'rendering' },
+];
+
+function countCompletedPlanSteps(run: ExecutionRun): { completed: number; total: number } {
+  const planSteps = run.planSteps ?? [];
+  const total = planSteps.length;
+  if (total === 0) return { completed: 0, total: 0 };
+
+  const terminalEventTypes = new Set(['step_done', 'step_error', 'step_skipped']);
+  const terminalEvents = run.timeline.filter((event) => terminalEventTypes.has(event.eventType));
+  const terminalStepIds = new Set(
+    terminalEvents.map((event) => event.stepId).filter((stepId): stepId is string => Boolean(stepId)),
+  );
+  const matched = new Set<string>();
+
+  for (const step of planSteps) {
+    const agent = run.agentStatuses[step.name];
+    const agentFinished = agent && ['done', 'error', 'skipped'].includes(agent.status);
+    const stepAgentFinished = Object.values(run.agentStatuses).some(
+      (candidate) => candidate.stepId === step.id && ['done', 'error', 'skipped'].includes(candidate.status),
+    );
+    if (terminalStepIds.has(step.id) || agentFinished || stepAgentFinished) matched.add(step.id);
+  }
+
+  const unmatchedTerminalEvents = terminalEvents.filter(
+    (event) => !event.stepId || !planSteps.some((step) => step.id === event.stepId),
+  ).length;
+  return {
+    completed: Math.min(total, matched.size + unmatchedTerminalEvents),
+    total,
+  };
+}
+
+function toStageStatus(run: ExecutionRun, pipelineStage: PipelineStage): StageStatus {
+  const status = run.pipelineStages?.[pipelineStage]?.status;
+  if (status === 'done') return 'done';
+  if (status === 'running') return 'active';
+  if (status === 'error') return 'error';
+  return 'pending';
+}
+
+function buildChatStages(run: ExecutionRun | undefined, isChatLoading: boolean): StageStepperProps['stages'] {
+  if (!run) {
+    return CHAT_PIPELINE_STAGES.map((stage, index) => ({
+      key: stage.key,
+      label: stage.label,
+      status: index === 0 && isChatLoading ? 'active' : 'pending',
+    }));
+  }
+
+  const executionCount = countCompletedPlanSteps(run);
+  const pipelineDone = run.pipelineCurrentStage === 'done' || run.status === 'done';
+  const stages = CHAT_PIPELINE_STAGES.map((stage, index) => {
+    let status: StageStatus = index === 0 ? 'done' : toStageStatus(run, stage.pipelineStage!);
+    if (pipelineDone) status = 'done';
+    return {
+      key: stage.key,
+      label: stage.label,
+      status,
+      detail: stage.pipelineStage === 'executing' && executionCount.total > 0
+        ? `${executionCount.completed}/${executionCount.total}`
+        : undefined,
+    };
+  });
+
+  const activeIndex = stages.findIndex((stage) => stage.status === 'active' || stage.status === 'error');
+  if (activeIndex > 0) {
+    for (let index = 0; index < activeIndex; index += 1) {
+      if (stages[index].status === 'pending') stages[index].status = 'done';
+    }
+  } else if (activeIndex < 0 && run.status === 'running') {
+    stages[1].status = 'active';
+  }
+  return stages;
+}
+
+function getCurrentAction(run: ExecutionRun | undefined, fallback?: string | null): string | undefined {
+  if (!run) return fallback || undefined;
+  const latestAction = [...run.timeline].reverse().find((event) =>
+    ['step_start', 'agent_start', 'agent_step', 'tool_start'].includes(event.eventType),
+  );
+  const action = latestAction?.userMessage || latestAction?.message;
+  const agent = latestAction?.agent || latestAction?.name;
+  if (action && agent) return `${getAgentDisplayName(agent)} · ${action}`;
+  return action || run.currentStep || fallback || undefined;
+}
+
 const AssistantContent: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
@@ -204,16 +194,19 @@ const AssistantContent: React.FC<{
   <>
     {msg.isLoading ? (
       msg.content ? (
-        <MessageWithChart content={msg.content} />
+        <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
       ) : (
         <div className="py-4 flex items-center justify-start">
           <LoadingDots />
         </div>
       )
     ) : msg.report ? (
-      <ReportView report={msg.report} />
+      <>
+        <ReportView report={msg.report} />
+        <ReportArchiveLink reportId={msg.report.report_id} />
+      </>
     ) : (
-      <MessageWithChart content={msg.content} />
+      <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
     )}
     {msg.evidence_pool && msg.evidence_pool.length > 0 && (
       <EvidenceSection evidence_pool={msg.evidence_pool} />
@@ -258,7 +251,14 @@ const Avatar: React.FC<{ role: string; size?: number }> = ({ role, size = 32 }) 
 
 // ── Bubble Message (original layout) ──
 
-const BubbleMessage: React.FC<{
+const areMessagePropsEqual = (
+  prev: { msg: MessagePayload },
+  next: { msg: MessagePayload },
+): boolean => prev.msg === next.msg;
+// FE-03a：msg 在 store 中按不可变模式更新——内容变则引用变，历史消息引用稳定 → memo 命中。
+// onRetry/onDelete 是内联箭头（引用不稳定）但行为只依赖 msg.id，故比较器有意忽略。
+
+const BubbleMessageImpl: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
   onDelete: () => void;
@@ -272,10 +272,10 @@ const BubbleMessage: React.FC<{
     )}>
       <div className="mx-2"><Avatar role={msg.role} /></div>
       <div className={clsx(
-        "p-4 rounded-xl text-sm leading-relaxed shadow-sm",
+        "p-3.5 rounded-lg text-sm leading-relaxed",
         msg.role === 'user'
-          ? "bg-fin-hover text-fin-text rounded-tr-sm"
-          : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-sm relative overflow-visible"
+          ? "bg-t-elevated border border-t-border/60 text-t-text"
+          : "bg-t-card border border-t-border text-t-text relative overflow-visible"
       )}>
         {msg.role === 'user' ? (
           msg.content
@@ -289,42 +289,37 @@ const BubbleMessage: React.FC<{
 
 // ── Flat Message (ChatGPT-style layout) ──
 
-const FlatMessage: React.FC<{
+const BubbleMessage = React.memo(BubbleMessageImpl, areMessagePropsEqual);
+
+const FlatMessageImpl: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
   onDelete: () => void;
 }> = ({ msg, onRetry, onDelete }) => {
   const isUser = msg.role === 'user';
-  return (
-    <div className="group/msg animate-slide-up">
-      <div className={clsx("py-6 px-4 md:px-6", isUser ? "bg-transparent" : "bg-transparent")}>
-        <div className="max-w-[48rem] mx-auto flex gap-4">
-          {/* Avatar */}
-          <div className="flex-shrink-0 pt-0.5">
-            <div className={clsx(
-              "w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold",
-              isUser
-                ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm"
-                : "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm"
-            )}>
-              {isUser ? <User size={16} /> : <Bot size={16} />}
-            </div>
+  if (isUser) {
+    // TERMINAL：用户消息 = 右对齐轻色块，无头像
+    return (
+      <div className="group/msg animate-slide-up py-3 px-4 md:px-6">
+        <div className="max-w-[48rem] mx-auto flex justify-end">
+          <div className="max-w-[72%] rounded-lg bg-t-elevated border border-t-border/60 px-3.5 py-2.5 text-sm leading-relaxed text-t-text">
+            <p className="whitespace-pre-wrap m-0">{msg.content}</p>
           </div>
-
-          {/* Content */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 text-[13px] font-semibold text-fin-text">
-              {isUser ? '你' : 'FinSight'}
-            </div>
-            <div className="text-[14.5px] leading-7 text-fin-text">
-              {isUser ? (
-                <p className="whitespace-pre-wrap m-0">{msg.content}</p>
-              ) : (
-                <div className="relative overflow-visible">
-                  <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
-                </div>
-              )}
-            </div>
+        </div>
+      </div>
+    );
+  }
+  // TERMINAL：AI 回答 = 无框文档流，左侧橙色竖线贯穿 + 等宽元信息行
+  return (
+    <div className="group/msg animate-slide-up py-3 px-4 md:px-6">
+      <div className="max-w-[48rem] mx-auto">
+        <div className="relative pl-4 border-l-2 border-t-accent/70">
+          <div className="mb-1.5 flex items-center gap-2 text-2xs font-mono text-t-text3">
+            <span className="font-semibold text-t-accent">FS▎</span>
+            <span>FinSight</span>
+          </div>
+          <div className="text-[14.5px] leading-7 text-t-text relative overflow-visible">
+            <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
           </div>
         </div>
       </div>
@@ -340,132 +335,97 @@ export const ChatList: React.FC = () => {
     isChatLoading,
     statusMessage,
     statusSince,
-    executionProgress,
     currentStep,
     removeMessage,
-    setStatus,
-    setLoading,
-    setTicker,
-    addMessage,
-    updateMessage,
+    sessionId,
     chatStyle,
   } = useStore();
+  const activeRuns = useExecutionStore((state) => state.activeRuns);
+  const recentRuns = useExecutionStore((state) => state.recentRuns);
+  const chatStream = useChatStream(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [elapsed, setElapsed] = useState<string>('0.0');
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [showRecentExecutionSummary, setShowRecentExecutionSummary] = useState(false);
   const isFlat = chatStyle === 'flat';
+  const activeChatRun = useMemo(
+    () => [...activeRuns].reverse().find((run) => run.source === 'chat'),
+    [activeRuns],
+  );
+  const recentChatRun = useMemo(
+    () => recentRuns.find((run) => run.source === 'chat'),
+    [recentRuns],
+  );
+  const previousRecentRunIdRef = useRef(recentChatRun?.runId);
+  const displayChatRun = activeChatRun ?? (showRecentExecutionSummary ? recentChatRun : undefined);
+  const executionStages = useMemo(
+    () => buildChatStages(displayChatRun, isChatLoading),
+    [displayChatRun, isChatLoading],
+  );
+  const currentAction = useMemo(
+    () => getCurrentAction(activeChatRun, currentStep || statusMessage),
+    [activeChatRun, currentStep, statusMessage],
+  );
   const showExecutionBanner = isChatLoading
-    || statusMessage === STOPPED_GENERATION_MESSAGE
-    || currentStep === '已停止生成';
+    || statusMessage === zh.chat.stopped
+    || currentStep === zh.chat.stoppedLabel
+    || showRecentExecutionSummary;
+
+  // FE-02：滚动停靠检测——只有用户停靠在底部时才自动跟随，向上回看不再被拽回
+  const PIN_THRESHOLD_PX = 80;
+  const isPinnedRef = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const pinned = distance < PIN_THRESHOLD_PX;
+    isPinnedRef.current = pinned;
+    setShowJumpToLatest((prev) => (prev === !pinned ? prev : !pinned));
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    const el = containerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    isPinnedRef.current = true;
+    setShowJumpToLatest(false);
+  }, []);
 
   useEffect(() => {
+    if (!isPinnedRef.current) return;
     const container = containerRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    container.scrollTo({ top: container.scrollHeight });
   }, [messages, isChatLoading, showExecutionBanner]);
 
   useEffect(() => {
-    if (!statusSince) {
-      setElapsed('0.0');
+    const recentRunId = recentChatRun?.runId;
+    if (activeChatRun) {
+      setShowRecentExecutionSummary(false);
+      previousRecentRunIdRef.current = recentRunId;
+      return;
+    }
+    if (!recentRunId || previousRecentRunIdRef.current === recentRunId) return;
+    previousRecentRunIdRef.current = recentRunId;
+    setShowRecentExecutionSummary(true);
+    const timer = window.setTimeout(() => setShowRecentExecutionSummary(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [activeChatRun, recentChatRun?.runId]);
+
+  useEffect(() => {
+    const runStartedAt = displayChatRun ? Date.parse(displayChatRun.startedAt) : Number.NaN;
+    const startedAt = Number.isFinite(runStartedAt) ? runStartedAt : statusSince;
+    if (!startedAt) {
+      setElapsedMs(0);
       return;
     }
     const timer = setInterval(() => {
-      const delta = (Date.now() - statusSince) / 1000;
-      setElapsed(delta.toFixed(1));
-    }, 200);
+      setElapsedMs(Math.max(0, Date.now() - startedAt));
+    }, 1000);
+    setElapsedMs(Math.max(0, Date.now() - startedAt));
     return () => clearInterval(timer);
-  }, [statusSince]);
-
-  const findNearestUserQuery = (index: number): string | null => {
-    const before = [...messages.slice(0, index)].reverse().find((m) => m.role === 'user');
-    if (before?.content?.trim()) return before.content.trim();
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    return lastUser?.content?.trim() || null;
-  };
-
-  const handleRetry = async (messageId: string) => {
-    if (isChatLoading) return;
-
-    const idx = messages.findIndex((m) => m.id === messageId);
-    if (idx === -1) return;
-    const originalMsg = messages[idx];
-    const query = findNearestUserQuery(idx);
-    if (!query) {
-      setStatus('No user query found to retry');
-      setTimeout(() => setStatus(null), 1500);
-      return;
-    }
-
-    setLoading(true);
-    setStatus('Retrying request...');
-    updateMessage(messageId, { isLoading: true, content: '' });
-
-    try {
-      const response = await apiClient.sendMessage(query, undefined, {
-        output_mode: 'chat',
-        confirmation_mode: 'skip',
-      });
-
-      const chartInfo = await shouldGenerateChart(query, response.current_focus ?? null);
-      const tickerToChart = chartInfo.tickers[0] || null;
-      const evidencePool = (response as any).evidence_pool ?? response.data?.evidence_pool;
-
-      let responseContent = typeof response.response === 'string'
-        ? response.response
-        : JSON.stringify(response.response, null, 2);
-      const markerRegex = /\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g;
-      const existingTickers = new Set(
-        Array.from(responseContent.matchAll(markerRegex)).map((match) => match[1])
-      );
-      const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(query);
-      const forceMulti = tickers.length > 1;
-      if (chartInfo.chartType || forceMulti) {
-        const targetTickers = tickers.slice(0, MAX_AUTO_CHART_TICKERS);
-        const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
-        if (missingTickers.length > 0) {
-          const chartType = forceMulti ? 'line' : (chartInfo.chartType || 'line');
-          missingTickers.forEach((ticker) => {
-            responseContent += `\n\n[CHART:${ticker}:${chartType}]`;
-          });
-        }
-      }
-
-      updateMessage(messageId, {
-        content: responseContent,
-        timestamp: Date.now(),
-        intent: response.intent,
-        relatedTicker: response.current_focus || tickerToChart || undefined,
-        thinking: response.thinking,
-        data_origin: response.data?.data_origin,
-        as_of: response.data?.as_of ?? null,
-        fallback_used: response.data?.fallback_used,
-        tried_sources: response.data?.tried_sources,
-        evidence_pool: evidencePool,
-        report: response.report,
-        isLoading: false,
-      });
-
-      const elapsedSeconds =
-        (response.thinking_elapsed_seconds ?? (response.response_time_ms != null ? response.response_time_ms / 1000 : 0)).toFixed(1);
-      setStatus(`Completed in ${elapsedSeconds}s`);
-
-      if (response.current_focus || tickerToChart) {
-        setTicker(response.current_focus || tickerToChart);
-      }
-    } catch {
-      updateMessage(messageId, { content: originalMsg.content, isLoading: false });
-      addMessage({
-        id: uuidv4(),
-        role: 'system',
-        content: 'Retry failed. Please confirm the backend service is running.',
-        timestamp: Date.now(),
-      });
-      setStatus('Retry failed');
-    } finally {
-      setLoading(false);
-      setTimeout(() => setStatus(null), 2000);
-    }
-  };
+  }, [displayChatRun, statusSince]);
 
   const renderMessages = () => {
     const items = messages.map((msg) =>
@@ -473,14 +433,14 @@ export const ChatList: React.FC = () => {
         <FlatMessage
           key={msg.id}
           msg={msg}
-          onRetry={() => handleRetry(msg.id)}
+          onRetry={() => void chatStream.retry(msg.id)}
           onDelete={() => removeMessage(msg.id)}
         />
       ) : (
         <BubbleMessage
           key={msg.id}
           msg={msg}
-          onRetry={() => handleRetry(msg.id)}
+          onRetry={() => void chatStream.retry(msg.id)}
           onDelete={() => removeMessage(msg.id)}
         />
       )
@@ -496,40 +456,36 @@ export const ChatList: React.FC = () => {
     <div
       id="chat-scroll-container"
       ref={containerRef}
+      onScroll={handleScroll}
       className={clsx("flex-1 overflow-y-auto", isFlat ? "p-0" : "p-4 md:p-6 lg:p-8 space-y-6")}
     >
       {renderMessages()}
 
+      {showJumpToLatest && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          aria-label={zh.chat.backToLatest}
+          className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full border border-fin-border bg-fin-card px-3 py-1.5 text-xs text-fin-text shadow-lg hover:border-fin-primary/60 transition-colors"
+        >
+          ↓ {zh.chat.backToLatest}
+        </button>
+      )}
+
       {showExecutionBanner && (
-        <div className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
+        <div role="status" aria-live="polite" className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
           <div className={clsx(
-            "rounded-xl border border-fin-border bg-fin-card px-4 py-3 shadow-sm min-w-[300px] max-w-[440px]",
-            isFlat ? "max-w-3xl mx-auto w-full" : "ml-12"
+            "min-w-[300px] max-w-[48rem]",
+            isFlat ? "mx-auto w-full" : "ml-12 w-full max-w-[440px]"
           )}>
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-fin-primary opacity-60 animate-ping" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-fin-primary" />
-              </span>
-              <span className="flex-1 truncate text-[13px] font-medium text-fin-text">
-                {statusMessage === STOPPED_GENERATION_MESSAGE
-                  ? '已停止生成（结果已保留）'
-                  : statusMessage || '正在分析…'}
-              </span>
-              <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{elapsed}s</span>
-            </div>
-            <div className="mt-2.5">
-              <div className="h-1 overflow-hidden rounded-full bg-fin-border">
-                <div
-                  className="h-full rounded-full bg-fin-primary transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(3, Math.min(100, executionProgress ?? 0))}%` }}
-                />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-2">
-                <span className="truncate text-2xs text-fin-text-secondary">{currentStep || '准备执行…'}</span>
-                <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{Math.round(executionProgress ?? 0)}%</span>
-              </div>
-            </div>
+            <StageStepper
+              stages={executionStages}
+              elapsedMs={elapsedMs}
+              currentAction={displayChatRun?.status === 'running'
+                ? (statusMessage === zh.chat.stopped ? zh.chat.stoppedResult : currentAction)
+                : undefined}
+            />
+            {displayChatRun && <AgentWorkLog run={displayChatRun} />}
           </div>
         </div>
       )}
@@ -541,57 +497,72 @@ export const ChatList: React.FC = () => {
 
 // ── MessageWithChart ──
 
-const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
-  const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
+const EMPTY_SMART_CHART_BLOCKS: ReturnType<typeof parseSmartChartBlocks> = [];
 
-  const smartChartBlocks = useMemo(() => parseSmartChartBlocks(content), [content]);
+const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRetry: () => void }> = ({ content, isStreaming, onRetry }) => {
+  const [chartData, setChartData] = useState<Array<{
+    ticker: string;
+    chartType: ChartType;
+    valueMode: 'close' | 'return';
+    period: string;
+  }>>([]);
+
+  // FE-03b：流式中间态跳过全文图表正则解析（每 token 一次太贵），落定后一次解析
+  const smartChartBlocks = useMemo(
+    () => (isStreaming ? EMPTY_SMART_CHART_BLOCKS : parseSmartChartBlocks(content)),
+    [content, isStreaming],
+  );
+  const tickerCandidates = useMemo(() => extractTickers(content), [content]);
+  const tickerLinkPlugin = useMemo(
+    () => createTickerLinkPlugin(tickerCandidates),
+    [tickerCandidates],
+  );
 
   useEffect(() => {
-    const matches = Array.from(content.matchAll(/\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g));
+    if (isStreaming) return; // CHART 标记由收尾阶段注入，流式期间无需扫描
+    const matches = parseChartMarkers(content);
     if (matches.length === 0) {
       setChartData([]);
       return;
     }
     const validChartTypes: ChartType[] = ['line', 'candlestick', 'pie', 'bar', 'tree', 'area', 'scatter', 'heatmap'];
     const seen = new Set<string>();
-    const nextData: Array<{ ticker: string; chartType: ChartType; summary: string }> = [];
+    const nextData: Array<{
+      ticker: string;
+      chartType: ChartType;
+      valueMode: 'close' | 'return';
+      period: string;
+    }> = [];
     matches.forEach((match) => {
-      const ticker = match[1];
-      const chartTypeStr = match[2];
+      const ticker = match.ticker;
+      const chartTypeStr = match.chartType;
       const chartType = (validChartTypes.includes(chartTypeStr as ChartType) ? chartTypeStr : 'line') as ChartType;
-      const key = `${ticker}-${chartType}`;
+      const key = `${ticker}-${chartType}-${match.valueMode}-${match.period}`;
       if (seen.has(key)) return;
       seen.add(key);
-      nextData.push({ ticker, chartType, summary: '' });
+      nextData.push({
+        ticker,
+        chartType,
+        valueMode: match.valueMode,
+        period: match.period,
+      });
     });
     setChartData(nextData);
-  }, [content]);
+  }, [content, isStreaming]);
 
-  const handleChartDataReady = (ticker: string, summary: string) => {
-    setChartData((prev) => prev.map((item) => (item.ticker === ticker ? { ...item, summary } : item)));
-    sendChartDataToBackend(ticker, summary);
-  };
-
-  const sendChartDataToBackend = async (ticker: string, summary: string) => {
-    try {
-      await apiClient.addChartData(ticker, summary);
-    } catch (err) {
-      console.error('Chart data upload failed:', err);
-    }
-  };
-
-  const textContent = stripSmartChartTags(
-    content.replace(/\[CHART:[^\]]+\]/g, '')
-  );
+  const textContent = getRenderableMessageContent(content, Boolean(isStreaming));
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-invert prose-sm max-w-none prose-terminal">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, tickerLinkPlugin]}
         components={{
-          a: ({ href, children }) => (
-            <SourceLink href={href || ''} label={children} />
-          ),
+          a: ({ href, children }) => {
+            const ticker = tickerFromDashboardHref(href);
+            return ticker
+              ? <TickerLink ticker={ticker}>{children}</TickerLink>
+              : <SourceLink href={href || ''} label={children} />;
+          },
           /* 移动端：长报告 markdown 表格加横向滚动容器，避免窄屏溢出撑破布局 */
           table: ({ children }) => (
             <div className="overflow-x-auto scrollbar-hide">
@@ -604,15 +575,39 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
       </ReactMarkdown>
       {chartData.map((chart) => (
         <InlineChart
-          key={`${chart.ticker}-${chart.chartType}`}
+          key={`${chart.ticker}-${chart.chartType}-${chart.valueMode}-${chart.period}`}
           ticker={chart.ticker}
           chartType={chart.chartType}
-          onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
+          valueMode={chart.valueMode}
+          period={chart.period}
         />
       ))}
-      {smartChartBlocks.map((block, idx) => (
-        <SmartChartRenderer key={`smart-${idx}-${block.type}-${block.title}`} block={block} />
-      ))}
+      {smartChartBlocks.map((block, idx) => {
+        const key = `smart-${idx}-${block.type}-${block.title}`;
+        const realPriceRequest = resolveRealPriceChartRequest(block, tickerCandidates);
+        if (realPriceRequest) {
+          return (
+            <InlineChart
+              key={key}
+              ticker={realPriceRequest.ticker}
+              chartType={realPriceRequest.chartType}
+              valueMode={realPriceRequest.valueMode}
+            />
+          );
+        }
+        if (isPriceLikeInlineBlock(block)) {
+          return (
+            <div key={key} className="my-4 rounded-lg border border-fin-border bg-fin-panel px-4">
+              <EmptyState
+                icon={ChartNoAxesCombined}
+                message="行情图暂不可用：未识别到可查询的标的。"
+                action={{ label: '重新生成', onClick: onRetry }}
+              />
+            </div>
+          );
+        }
+        return <SmartChartRenderer key={key} block={block} />;
+      })}
     </div>
   );
 };
@@ -638,7 +633,7 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
   const displayText =
     stringLabel && stringLabel !== href
       ? stringLabel
-      : urlMeta.domain || '来源链接';
+      : urlMeta.domain || zh.chat.sourceLink;
 
   return (
     <a
@@ -668,6 +663,7 @@ const MessageActions: React.FC<{
   onDelete: () => void;
   inline?: boolean;
 }> = ({ content, thinking, report, onRetry, onDelete, inline }) => {
+  const { toast } = useToast();
   const buildTraceMarkdown = () => {
     const lines: string[] = [];
 
@@ -715,12 +711,21 @@ const MessageActions: React.FC<{
     return lines.filter((line) => line !== undefined).join('\n');
   };
 
+  const [copied, setCopied] = useState(false);
+
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-    } catch (e) {
-      console.error('Copy failed', e);
-    }
+    await copyTextWithFeedback(
+      content,
+      (text) => navigator.clipboard.writeText(text),
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      (error) => {
+        console.error('Copy failed', error);
+        toast({ type: 'error', title: zh.chat.copyFailedTitle, message: zh.chat.copyFailedMessage });
+      },
+    );
   };
 
   const handleExport = () => {
@@ -737,32 +742,37 @@ const MessageActions: React.FC<{
   const btnClass = "p-1.5 rounded-md hover:bg-fin-hover hover:text-fin-text transition-colors";
 
   return (
-    <div className={clsx(
-      "flex items-center gap-1 text-fin-muted pointer-events-auto",
-      inline
-        ? "mt-4 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200"
-        : "absolute bottom-0 right-2 translate-y-full"
-    )}>
-      <button className={btnClass} title="复制" onClick={handleCopy}>
-        <Copy size={14} />
+    <div className={messageActionContainerClass(Boolean(inline))}>
+      <button
+        className={clsx(btnClass, copied && 'text-fin-success')}
+        title={copied ? zh.chat.copied : zh.chat.copy}
+        aria-label={copied ? zh.chat.copied : zh.chat.copyAnswer}
+        onClick={handleCopy}
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
-      <button className={btnClass} title="重试" onClick={onRetry}>
+      <button className={btnClass} title={zh.chat.retry} aria-label={MESSAGE_ACTION_LABELS.retry} onClick={onRetry}>
         <RefreshCcw size={14} />
       </button>
-      <button className={btnClass} title="导出" onClick={handleExport}>
+      <button className={btnClass} title={zh.chat.export} aria-label={MESSAGE_ACTION_LABELS.export} onClick={handleExport}>
         <Download size={14} />
       </button>
-      <button className={btnClass} title="删除" onClick={onDelete}>
+      <button className={btnClass} title={zh.chat.delete} aria-label={MESSAGE_ACTION_LABELS.delete} onClick={onDelete}>
         <Trash2 size={14} />
       </button>
     </div>
   );
 };
 
-const LoadingDots: React.FC = () => (
-  <div className="flex space-x-2">
-    <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '0ms' }} />
-    <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '150ms' }} />
-    <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '300ms' }} />
-  </div>
-);
+const LoadingDots: React.FC = () => {
+  // TERMINAL：终端光标 + 真实阶段文案（取自 executionStore 的 statusMessage），拒绝三点弹跳
+  const statusMessage = useStore((s) => s.statusMessage);
+  return (
+    <div className="flex items-center text-2xs font-mono text-t-text3">
+      <span>{statusMessage || zh.chat.analyzingShort}</span>
+      <span className="t-caret" />
+    </div>
+  );
+};
+
+const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual);

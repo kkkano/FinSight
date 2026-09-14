@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.render_node import render_node
 
 
 def test_url_fetch_failure_stays_on_url_failure_without_generic_focus_line() -> None:
-    result = render_stub(
+    result = render_node(
         {
             "query": "Read https://example.com/empty and disclose if no usable content is available.",
             "output_mode": "chat",

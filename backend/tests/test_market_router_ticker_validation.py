@@ -12,22 +12,34 @@ def _build_client(
     get_stock_price=None,
     get_company_news=None,
     get_financial_statements=None,
-    get_financial_statements_summary=None,
     get_stock_historical_data=None,
-    detect_chart_type=None,
 ) -> TestClient:
+    stock_price = get_stock_price or (lambda _ticker: {"price": 100.0})
+    company_news = get_company_news or (lambda _ticker: [])
+    financials = get_financial_statements or (lambda _ticker: {})
+    historical = get_stock_historical_data or (
+        lambda _ticker, period="1y", interval="1d": {"kline_data": [], "period": period, "interval": interval}
+    )
+
+    class Gateway:
+        def get_quote(self, ticker: str):
+            return {"data": stock_price(ticker), "provider": "test", "error_code": None, "cached": False}
+
+        def get_news(self, ticker: str, *, limit: int = 5):
+            del limit
+            return {"data": company_news(ticker), "provider": "test", "error_code": None, "cached": False}
+
+        def get_financials(self, ticker: str):
+            return {"data": financials(ticker), "provider": "test", "error_code": None, "cached": False}
+
+        def get_kline(self, ticker: str, *, period: str = "1y", interval: str = "1d"):
+            return historical(ticker, period=period, interval=interval)
+
     app = FastAPI()
     app.include_router(
         create_market_router(
             MarketRouterDeps(
-                get_orchestrator_safe=lambda: None,
-                get_stock_price=get_stock_price or (lambda _ticker: {"price": 100.0}),
-                get_company_news=get_company_news or (lambda _ticker: []),
-                get_financial_statements=get_financial_statements or (lambda _ticker: {}),
-                get_financial_statements_summary=get_financial_statements_summary or (lambda _ticker: {}),
-                get_stock_historical_data=get_stock_historical_data
-                or (lambda _ticker, period="1y", interval="1d": {"kline_data": [], "period": period, "interval": interval}),
-                detect_chart_type=detect_chart_type,
+                get_market_data_gateway=lambda: Gateway(),
                 logger=logging.getLogger("test_market_router"),
             )
         )
@@ -58,7 +70,6 @@ def test_price_endpoint_normalizes_ticker_before_fetch():
         "/api/stock/kline/GOOGL%20VS%20GOOGLE",
         "/api/stock/news/GOOGL%20VS%20GOOGLE",
         "/api/financials/GOOGL%20VS%20GOOGLE",
-        "/api/financials/GOOGL%20VS%20GOOGLE/summary",
     ],
 )
 def test_market_endpoints_reject_phrase_like_ticker(path: str):
@@ -84,18 +95,3 @@ def test_kline_endpoint_normalizes_special_symbol():
     payload = response.json()
     assert payload["ticker"] == "GC=F"
     assert called == ["GC=F"]
-
-
-def test_chart_detect_returns_dynamic_ticker_candidates():
-    client = _build_client()
-    response = client.post(
-        "/api/chart/detect",
-        json={"query": "compare google and TSLA trend", "ticker": "aapl"},
-    )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert isinstance(payload.get("ticker_candidates"), list)
-    assert "AAPL" in payload["ticker_candidates"]
-    assert "TSLA" in payload["ticker_candidates"]
-    assert payload.get("resolved_ticker") == payload["ticker_candidates"][0]

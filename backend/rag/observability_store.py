@@ -426,23 +426,13 @@ class NoOpRAGObservabilityStore(_RuntimeNoOp):
 class SQLRAGObservabilityStore(_RuntimeSQL):
     def __init__(self, *, dsn: str) -> None:
         super().__init__(dsn=dsn)
-        self._extended_schema_ready = False
         self._pending_lock = threading.Lock()
         self._pending_batches: dict[str, deque[PendingIngestBatch]] = defaultdict(deque)
         self._pending_ttl_seconds = max(30, min(86400, int(os.getenv("RAG_OBSERVABILITY_PENDING_TTL_SECONDS", "900") or "900")))
         self._pending_max_batches = max(1, min(500, int(os.getenv("RAG_OBSERVABILITY_PENDING_BATCHES", "20") or "20")))
 
     def ensure_schema(self) -> bool:
-        super().ensure_schema()
-        if self._extended_schema_ready:
-            return True
-        with self._schema_lock:
-            if self._extended_schema_ready:
-                return True
-            with self._engine.begin() as conn:
-                conn.execute(text("ALTER TABLE rag_query_runs ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb"))
-            self._extended_schema_ready = True
-        return True
+        return super().ensure_schema()
 
     def start_query_run(self, record: QueryRunRecord) -> str:
         self.ensure_schema()
@@ -1007,6 +997,5 @@ __all__ = [
     "redact_query_text",
     "suppress_rag_observability_hooks",
 ]
-
 
 

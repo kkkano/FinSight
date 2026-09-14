@@ -74,7 +74,7 @@ def _build_state(case: dict[str, Any]) -> dict[str, Any]:
 
 
 def collect_case_contract(case: dict[str, Any]) -> dict[str, Any]:
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     state = _build_state(case)

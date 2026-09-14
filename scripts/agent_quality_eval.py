@@ -84,12 +84,6 @@ class _FixtureTools:
         payload = self.fixture.get("factor_exposure")
         return payload if isinstance(payload, dict) else {"error": "missing_fixture_factor_exposure"}
 
-    def run_portfolio_stress_test(self, positions: list[dict[str, Any]], lookback_days: int = 252) -> dict[str, Any]:
-        del positions, lookback_days
-        payload = self.fixture.get("stress_test")
-        return payload if isinstance(payload, dict) else {"error": "missing_fixture_stress_test"}
-
-
 def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 

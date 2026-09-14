@@ -11,7 +11,7 @@ from urllib.parse import quote_plus, urlparse
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import yfinance as yf
+from .yfinance_client import create_ticker
 
 from .env import ALPHA_VANTAGE_API_KEY, finnhub_client
 from .authoritative_feeds import search_authoritative_feeds
@@ -93,7 +93,7 @@ NEWS_TAG_RULES = [
 
 MARKET_INDICES = {
     "^GSPC": "S&P 500 index",
-    "^IXIC": "Nasdaq Composite index", 
+    "^IXIC": "Nasdaq Composite index",
     "^DJI": "Dow Jones Industrial Average",
     "^RUT": "Russell 2000 index",
     "^VIX": "VIX volatility index",
@@ -769,7 +769,7 @@ def _fetch_finnhub_market_news(limit: int = 5, max_age_hours: int = 48) -> tuple
 
 MARKET_INDICES = {
     "^GSPC": "S&P 500 index",
-    "^IXIC": "Nasdaq Composite index", 
+    "^IXIC": "Nasdaq Composite index",
     "^DJI": "Dow Jones Industrial Average",
     "^RUT": "Russell 2000 index",
     "^VIX": "VIX volatility index",
@@ -785,7 +785,7 @@ def _is_market_index(ticker: str) -> bool:
     # 方法1: 检查是否在已知指数列表中
     if ticker in MARKET_INDICES:
         return True
-    
+
     # 方法2: 检查常见指数命名模式
     index_patterns = [
         r'^\^',      # 以 ^ 开头（Yahoo Finance指数标记）
@@ -793,11 +793,11 @@ def _is_market_index(ticker: str) -> bool:
         r'NDX$',     # Nasdaq 100
         r'DJI$',     # Dow Jones
     ]
-    
+
     for pattern in index_patterns:
         if re.match(pattern, ticker):
             return True
-    
+
     return False
 
 
@@ -807,10 +807,10 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     策略：通过搜索获取宏观市场新闻和指数分析。
     """
     friendly_name = MARKET_INDICES.get(ticker, ticker.replace('^', ''))
-    
+
     logger.info(f"  → Detected market index: {friendly_name}")
-    logger.info(f"  → Using specialized search strategy for index news...")
-    
+    logger.info("  → Using specialized search strategy for index news...")
+
     # 策略1: 搜索指数最近表现和分析
     current_date = datetime.now().strftime('%B %Y')
     search_queries = [
@@ -818,7 +818,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
         f"{friendly_name} market news today",
         f"What's driving {friendly_name} this week"
     ]
-    
+
     all_results = []
     for query in search_queries[:2]:  # 只用前2个查询，避免过多请求
         try:
@@ -829,17 +829,17 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
         except Exception as e:
             logger.info(f"  → Search failed for '{query}': {e}")
             continue
-    
+
     if not all_results:
         return []
-    
+
     # 解析并格式化搜索结果
     combined_results = "\n\n".join(all_results)
-    
+
     # 尝试从搜索结果中提取新闻标题和日期
     news_items: List[Dict[str, Any]] = []
     lines = combined_results.split('\n')
-    
+
     for i, line in enumerate(lines):
         # 寻找标题模式（通常以数字开头）
         if re.match(r'^\d+\.', line.strip()):
@@ -847,7 +847,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
             title = re.sub(r'^\d+\.\s*', '', raw_title).strip()
             window = ' '.join(lines[i:i+3])
             # 尝试找到日期信息
-            date_match = re.search(r'(\d{1,2}\s+\w+\s+ago|\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2},?\s+\d{4})', 
+            date_match = re.search(r'(\d{1,2}\s+\w+\s+ago|\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2},?\s+\d{4})',
                                   window, re.IGNORECASE)
             if not _is_reasonable_headline(title, window):
                 continue
@@ -865,10 +865,10 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
             )
             if item:
                 news_items.append(item)
-            
+
             if len(news_items) >= limit:
                 break
-    
+
     return news_items
 
 
@@ -940,6 +940,42 @@ def _get_finnhub_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
         return []
 
 
+def _get_yfinance_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
+    """只调用一次 yfinance news provider，并输出可追溯的真实新闻条目。"""
+    if not _yfinance_news_available():
+        return []
+    try:
+        rows = create_ticker(ticker).news
+        items: List[Dict[str, Any]] = []
+        for article in rows or []:
+            if not isinstance(article, dict):
+                continue
+            title = _extract_article_title(article)
+            snippet = _extract_article_snippet(article)
+            if not _headline_is_useful(title, snippet):
+                continue
+            if not _is_market_index(ticker) and not _company_news_is_relevant(ticker, title, snippet):
+                continue
+            item = _build_news_item(
+                title=title,
+                source=_extract_article_source(article),
+                url=_extract_article_url(article),
+                published_at=_extract_article_published_at(article),
+                snippet=snippet,
+                ticker=ticker,
+                confidence=0.7,
+            )
+            if item:
+                items.append(item)
+            if len(items) >= limit:
+                break
+        return items
+    except Exception as exc:
+        logger.info("yfinance news provider failed for %s: %s", ticker, exc)
+        _mark_yfinance_news_unavailable(exc)
+        return []
+
+
 def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
     try:
         rows = search_authoritative_feeds(
@@ -985,232 +1021,29 @@ def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, A
 
 
 def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Dict[str, Any]]:
-    """
-    智能获取新闻：自动识别是公司股票还是市场指数（结构化输出）。
-    - 公司股票：使用 API (yfinance, Finnhub, Alpha Vantage)
-    - 市场指数：使用搜索策略获取宏观市场新闻
-    """
-    try:
-        limit = int(limit) if limit is not None else 5
-    except Exception:
-        limit = 5
-    limit = max(1, min(limit, 20))
-    if fast:
-        return _fast_company_news_links(ticker, limit=limit)
-    # 🔍 关键判断：这是指数还是公司股票？
-    if _is_market_index(ticker):
-        # 优先用 alert_scheduler 的新闻抓取（含48h过滤）
-        try:
-            from backend.services.alert_scheduler import fetch_news_articles
-            articles = fetch_news_articles(ticker)
-            if articles:
-                items: List[Dict[str, Any]] = []
-                for a in articles:
-                    title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
-                    snippet = a.get("summary") or a.get("description") or ""
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    source = a.get("source") or a.get("publisher") or "Unknown"
-                    published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
-                    url = a.get("url") or a.get("link") or ""
-                    item = _build_news_item(
-                        title=title,
-                        source=source,
-                        url=url,
-                        published_at=published_at,
-                        snippet=snippet,
-                        ticker=ticker,
-                        confidence=0.7,
-                    )
-                    if item:
-                        items.append(item)
-                    if len(items) >= limit:
-                        break
-                if items:
-                    return items
-        except Exception as e:
-            logger.info(f"index news via alert_scheduler failed: {e}")
+    """通过统一网关获取公司新闻；`fast` 仅为旧调用签名兼容，不生成搜索占位条目。"""
+    del fast
+    from backend.services.market_data_gateway import get_market_data_gateway
 
-        # 先试 yfinance 的新闻（部分指数也有）
-        if _yfinance_news_available():
-            try:
-                stock = yf.Ticker(ticker)
-                news = stock.news
-                if news:
-                    items = []
-                    for article in news:
-                        title = _extract_article_title(article)
-                        snippet = _extract_article_snippet(article)
-                        if not _headline_is_useful(title, snippet):
-                            continue
-                        publisher = _extract_article_source(article)
-                        pub_time = _extract_article_published_at(article)
-                        url = _extract_article_url(article)
-                        item = _build_news_item(
-                            title=title,
-                            source=publisher,
-                            url=url,
-                            published_at=pub_time,
-                            snippet=snippet,
-                            ticker=ticker,
-                            confidence=0.7,
-                        )
-                        if item:
-                            items.append(item)
-                        if len(items) >= limit:
-                            break
-                    if items:
-                        return items
-            except Exception as e:
-                logger.info(f"yfinance index news error for {ticker}: {e}")
-                _mark_yfinance_news_unavailable(e)
-
-        # 再退回搜索策略
-        return _get_index_news(ticker, limit=limit)
-
-    deferred_company_news_items: List[Dict[str, Any]] = []
-
-    if finnhub_client:
-        items = _get_finnhub_company_news(ticker, limit)
-        if items:
-            linked_items = [item for item in items if str(item.get("url") or "").strip()]
-            if linked_items:
-                return linked_items[:limit]
-            deferred_company_news_items = items
-
-    authoritative_items = _get_authoritative_company_news(ticker, limit)
-    if authoritative_items:
-        return authoritative_items
-
-    # --- 以下是原有的公司新闻获取逻辑 ---
-
-    # 方法1: yfinance
-    if _yfinance_news_available():
-        try:
-            stock = yf.Ticker(ticker)
-            news = stock.news
-            if news:
-                items = []
-                for article in news:
-                    title = _extract_article_title(article)
-                    snippet = _extract_article_snippet(article)
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    if not _company_news_is_relevant(ticker, title, snippet):
-                        continue
-                    publisher = _extract_article_source(article)
-                    pub_time = _extract_article_published_at(article)
-                    url = _extract_article_url(article)
-                    item = _build_news_item(
-                        title=title,
-                        source=publisher,
-                        url=url,
-                        published_at=pub_time,
-                        snippet=snippet,
-                        ticker=ticker,
-                        confidence=0.7,
-                    )
-                    if item:
-                        items.append(item)
-                    if len(items) >= limit:
-                        break
-                if items:
-                    return items
-        except Exception as e:
-            logger.info(f"yfinance news error for {ticker}: {e}")
-            _mark_yfinance_news_unavailable(e)
-
-    # 方法2: Finnhub
-    if finnhub_client:
-        try:
-            logger.info(f"Trying Finnhub news for {ticker}")
-            to_date = date.today().strftime("%Y-%m-%d")
-            from_date = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
-            news = finnhub_client.company_news(ticker, _from=from_date, to=to_date)
-            if news:
-                items = []
-                for article in news:
-                    title = article.get('headline', 'No title')
-                    snippet = article.get('summary') or ""
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    if not _company_news_is_relevant(ticker, title, snippet):
-                        continue
-                    source = article.get('source', 'Unknown')
-                    pub_time = article.get('datetime', 0)
-                    url = article.get('url') or ''
-                    item = _build_news_item(
-                        title=title,
-                        source=source,
-                        url=url,
-                        published_at=pub_time,
-                        snippet=snippet,
-                        ticker=ticker,
-                        confidence=0.8,
-                    )
-                    if item:
-                        items.append(item)
-                    if len(items) >= limit:
-                        break
-                if items:
-                    return items
-        except Exception as e:
-            logger.info(f"Finnhub news fetch failed: {e}")
-
-    # 方法3: Alpha Vantage
-    try:
-        logger.info(f"Trying Alpha Vantage news for {ticker}")
-        url = "https://www.alphavantage.co/query"
-        params = {'function': 'NEWS_SENTIMENT', 'tickers': ticker, 'limit': 5, 'apikey': ALPHA_VANTAGE_API_KEY}
-        response = _http_get(url, params=params, timeout=10)
-        data = response.json()
-        if 'feed' in data and data['feed']:
-            items = []
-            for article in data['feed']:
-                title = article.get('title', 'No title')
-                source = article.get('source', 'Unknown')
-                date_str = article.get('time_published', '')[:8]
-                if date_str:
-                    date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-                snippet = article.get('summary') or ""
-                if not _headline_is_useful(title, snippet):
-                    continue
-                if not _company_news_is_relevant(ticker, title, snippet):
-                    continue
-                url = article.get('url') or article.get('link') or ''
-                item = _build_news_item(
-                    title=title,
-                    source=source,
-                    url=url,
-                    published_at=date_str,
-                    snippet=snippet,
-                    ticker=ticker,
-                    confidence=0.8,
-                )
-                if item:
-                    items.append(item)
-                if len(items) >= limit:
-                    break
-            if items:
-                return items
-    except Exception as e:
-        logger.info(f"Alpha Vantage news fetch failed: {e}")
-    
-    # 方法4: 回退到公司特定搜索
-    logger.info(f"Falling back to search for {ticker} news")
-    fallback_text = search(f"{ticker} company latest news stock")
-    items = _build_search_news_items(fallback_text, limit=limit, max_age_days=7)
-    if items:
-        relevant_items = []
-        for item in items:
-            if isinstance(item, dict):
-                if not _company_news_is_relevant(ticker, str(item.get("title") or item.get("headline") or ""), str(item.get("snippet") or "")):
-                    continue
-                item.setdefault("ticker", ticker)
-                relevant_items.append(item)
-        if relevant_items:
-            return relevant_items
-    return []
+    result = get_market_data_gateway().get_news(ticker, limit=limit)
+    rows = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(rows, list) or result.get("error_code"):
+        return []
+    output: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        item.update(
+            {
+                "provider": result.get("provider"),
+                "as_of": result.get("as_of"),
+                "quality": result.get("quality"),
+                "degraded": result.get("degraded"),
+            }
+        )
+        output.append(item)
+    return output
 
 
 
@@ -1352,7 +1185,7 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
         return result
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         calendar_payload = getattr(stock, "calendar", None)
         if isinstance(calendar_payload, dict):
             for key, raw_value in calendar_payload.items():
@@ -1705,39 +1538,7 @@ def get_market_news_headlines(limit: int = 5) -> str:
     if finnhub_ok:
         return "最近48小时市场要闻(Finnhub):\n" + "\n".join(finnhub_lines[:limit])
 
-    # 2) 尝试用 alert_scheduler 的新闻抓取（已含48h过滤），优先指数与代表性ETF
-    try:
-        from backend.services.alert_scheduler import fetch_news_articles
-        for idx_ticker in ["^GSPC", "^IXIC", "SPY", "QQQ", "DIA", "IWM"]:
-            try:
-                articles = fetch_news_articles(idx_ticker)
-            except Exception as inner:
-                logger.info(f"[MarketNews] fetch_news_articles failed for {idx_ticker}: {inner}")
-                continue
-            if articles:
-                lines = []
-                for a in articles:
-                    title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
-                    snippet = a.get("summary") or a.get("description") or ""
-                    if not _headline_is_useful(title, snippet):
-                        continue
-                    source = a.get("source") or a.get("publisher") or "Unknown"
-                    published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
-                    if isinstance(published_at, str):
-                        date_str = published_at.split("T")[0]
-                    else:
-                        date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
-                    url = a.get("url") or a.get("link") or ""
-                    line = _format_headline_line(date_str, title, source, url, snippet)
-                    lines.append(f"{len(lines) + 1}. {line}")
-                    if len(lines) >= limit:
-                        break
-                if lines:
-                    return "最近48小时市场要闻:\n" + "\n".join(lines)
-    except Exception as e:
-        logger.info(f"[MarketNews] fetch via alert_scheduler failed: {e}")
-
-    # 3) 搜索聚合兜底
+    # 2) 搜索聚合兜底
     queries = [
         "global stock market breaking news today",
         "US stock market headlines today",
@@ -1753,7 +1554,7 @@ def get_market_news_headlines(limit: int = 5) -> str:
             continue
     if not combined:
         return "未能获取可靠的市场热点信息，请直接查看 Bloomberg/Reuters/WSJ 等权威来源。"
-    
+
     text = "\n\n".join(combined)
     lines, has_recent = _format_search_news_items(text, limit=limit, max_age_days=3)
     if not has_recent:

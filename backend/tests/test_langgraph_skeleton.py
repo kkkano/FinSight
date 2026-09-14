@@ -20,17 +20,11 @@ def test_langgraph_runner_import_and_invoke():
     trace = result.get("trace") or {}
     spans = trace.get("spans") or []
     assert [s.get("node") for s in spans] == [
-        "build_initial_state",
-        "reset_turn_state",
         "prepare_context",
-        "chat_respond",
-        "understand_request",
-        "policy_gate",
-        "planner",
-        "confirmation_gate",
-        "execute_plan",
-        "research_debate",
-        "synthesize",
+        "route_request",
+        "collect_evidence",
+        "analyze",
+        "validate",
         "render",
     ]
 

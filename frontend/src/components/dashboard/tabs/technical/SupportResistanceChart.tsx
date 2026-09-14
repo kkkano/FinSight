@@ -10,12 +10,17 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
 import type { ChartPoint, TechnicalData } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { applyPredictionOverlay, STATUS_SUFFIX } from '../../../charts/PredictionOverlay';
+import type { PredictionOverlay } from '../../../../types/chartPrediction';
 
 // --- Props ---
 
 interface SupportResistanceChartProps {
   technicals?: TechnicalData | null;
   marketChart?: ChartPoint[];
+  marketAsOf?: string;
+  predictionOverlay?: PredictionOverlay | null;
 }
 
 // --- Helpers ---
@@ -55,14 +60,27 @@ const formatDate = (point: ChartPoint): string => {
 
 // --- Component ---
 
-export function SupportResistanceChart({ technicals, marketChart }: SupportResistanceChartProps) {
+function formatAsOf(metaAsOf: string | undefined, marketChart: ChartPoint[] | undefined): string {
+  const raw = String(metaAsOf ?? '').trim();
+  if (raw) return `截至 ${raw}`;
+  const last = marketChart?.[marketChart.length - 1];
+  if (last?.time) return `截至 ${formatDate(last)}`;
+  if (last?.period) return `截至 ${last.period}`;
+  return '截至时间未知';
+}
+
+export function SupportResistanceChart({
+  technicals,
+  marketChart,
+  marketAsOf,
+  predictionOverlay,
+}: SupportResistanceChartProps) {
   const theme = useChartTheme();
 
   const option = useMemo(() => {
     if (!marketChart || marketChart.length === 0) return null;
 
-    // Take last 120 data points for readability
-    const slice = marketChart.slice(-120);
+    const slice = marketChart;
 
     const dates = slice.map(formatDate);
     const ohlc = slice.map((p) => [p.open ?? 0, p.close ?? 0, p.low ?? 0, p.high ?? 0]);
@@ -71,7 +89,7 @@ export function SupportResistanceChart({ technicals, marketChart }: SupportResis
     const supportLevels = technicals?.support_levels ?? [];
     const resistanceLevels = technicals?.resistance_levels ?? [];
 
-    return {
+    const marketOption = {
       animation: true,
       tooltip: {
         trigger: 'axis',
@@ -171,24 +189,50 @@ export function SupportResistanceChart({ technicals, marketChart }: SupportResis
         },
       ],
     };
-  }, [marketChart, technicals, theme]);
+    return applyPredictionOverlay(marketOption, predictionOverlay ?? null, dates);
+  }, [marketChart, predictionOverlay, technicals, theme]);
+
+  const asOfText = formatAsOf(marketAsOf, marketChart);
 
   if (!option) {
     return (
-      <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-        <div className="text-xs font-medium text-fin-muted mb-3">支撑/阻力位</div>
+      <div
+        className="p-4 bg-fin-card rounded-lg border border-fin-border"
+        data-testid="dashboard-primary-candlestick"
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-fin-muted">日线快照 · 支撑/阻力位</div>
+            <div className="mt-0.5 text-2xs text-fin-muted">{asOfText}</div>
+          </div>
+          <DashboardSourceBadge metaKey="market_chart" />
+        </div>
         <div className="text-sm text-fin-muted">暂无K线数据</div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-2">K线图 · 支撑/阻力位</div>
+    <div
+      className="p-4 bg-fin-card rounded-lg border border-fin-border"
+      data-testid="dashboard-primary-candlestick"
+    >
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-fin-muted">
+            <span>日线快照 · K线图 · 支撑/阻力位</span>
+            {predictionOverlay && (
+              <span className="text-t-warning">AI 标注 · {STATUS_SUFFIX[predictionOverlay.status]}</span>
+            )}
+          </div>
+          <div className="mt-0.5 text-2xs text-fin-muted">{asOfText}</div>
+        </div>
+        <DashboardSourceBadge metaKey="market_chart" />
+      </div>
       <ReactECharts
         option={option}
         style={{ width: '100%', height: 360 }}
-        opts={{ renderer: 'svg' }}
+        opts={{ renderer: (marketChart?.length ?? 0) > 200 ? 'canvas' : 'svg' }}
         notMerge
         lazyUpdate
       />

@@ -30,38 +30,15 @@ class _Tools:
     def get_factor_exposure(self, positions, lookback_days=252):
         return {"positions": positions, "lookback_days": lookback_days}
 
-    def run_portfolio_stress_test(self, positions, scenarios=None, lookback_days=252):
-        return {"positions": positions, "scenarios": scenarios or []}
+def test_price_collector_has_no_dynamic_tool_registry_or_llm():
+    collector = PriceAgent(None, _Cache(), _Tools())
+
+    assert not hasattr(collector, "_get_tool_registry")
+    assert not hasattr(collector, "llm")
 
 
-def test_price_agent_registry_exposes_quote_and_options_tools():
-    registry = PriceAgent(None, _Cache(), _Tools())._get_tool_registry()
+def test_risk_collector_has_no_dynamic_tool_registry_or_llm():
+    collector = RiskAgent(None, _Cache(), _Tools())
 
-    assert {
-        "search",
-        "get_stock_price",
-        "get_stock_historical_data",
-        "get_market_benchmark_history",
-        "get_relative_strength",
-        "analyze_historical_drawdowns",
-        "get_option_chain_metrics",
-    }.issubset(registry)
-    assert registry["get_stock_price"]["call_with"] == "ticker"
-    assert registry["get_stock_historical_data"]["call_with"] == "ticker"
-    assert registry["get_relative_strength"]["call_with"] == "ticker"
-    assert registry["get_option_chain_metrics"]["call_with"] == "ticker"
-
-
-def test_risk_agent_registry_exposes_risk_specific_tools():
-    registry = RiskAgent(None, _Cache(), _Tools())._get_tool_registry()
-
-    assert {
-        "search",
-        "get_stock_price",
-        "analyze_historical_drawdowns",
-        "get_factor_exposure",
-        "run_portfolio_stress_test",
-    }.issubset(registry)
-    assert registry["analyze_historical_drawdowns"]["call_with"] == "ticker"
-    assert registry["get_factor_exposure"]["call_with"] == "positions"
-    assert registry["run_portfolio_stress_test"]["call_with"] == "positions"
+    assert not hasattr(collector, "_get_tool_registry")
+    assert not hasattr(collector, "llm")

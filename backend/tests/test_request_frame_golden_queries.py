@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 from backend.graph.nodes.policy_gate import policy_gate
-from backend.graph.nodes.understand_request import understand_request
+from backend.graph.nodes.route_request import route_request
 
 
 @dataclass(frozen=True)
@@ -18,8 +18,6 @@ class GoldenQueryCase:
     expected_tickers: list[str] | None = None
     expected_evidence: list[str] | None = None
     expected_frame_evidence: list[list[str]] | None = None
-    expected_required_results: list[str] = field(default_factory=list)
-    expected_action: str | None = None
     expected_render_shape: str | None = None
     must_include_steps: set[str] = field(default_factory=set)
     must_exclude_steps: set[str] = field(default_factory=set)
@@ -42,17 +40,6 @@ GOLDEN_QUERY_CASES = [
         expected_evidence=["price_snapshot", "news_context", "risk_profile"],
         expected_render_shape="answer",
         must_include_steps={"get_stock_price", "get_company_news", "analyze_historical_drawdowns"},
-    ),
-    GoldenQueryCase(
-        query="backtest MACD strategy on AAPL",
-        expected_lane="action",
-        expected_relation="single",
-        expected_tickers=["AAPL"],
-        expected_required_results=["backtest_result"],
-        expected_action="backtest",
-        expected_render_shape="action_result",
-        must_include_steps={"run_strategy_backtest"},
-        must_exclude_steps={"technical_agent"},
     ),
     GoldenQueryCase(
         query="what is backtesting?",
@@ -160,7 +147,7 @@ def _run_golden_query(query: str) -> tuple[dict, dict]:
         "ui_context": {"market": "US"},
         "output_mode": "chat",
     }
-    understanding = asyncio.run(understand_request(state))
+    understanding = asyncio.run(route_request(state))
     policy_out = policy_gate({**state, **understanding})
     plan_out = planner_stub({**state, **understanding, **policy_out})
     return understanding, plan_out
@@ -168,7 +155,6 @@ def _run_golden_query(query: str) -> tuple[dict, dict]:
 
 @pytest.mark.parametrize("case", GOLDEN_QUERY_CASES, ids=lambda case: case.query)
 def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch):
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("SEC_HOLDINGS_ENABLED", "true")
 
     understanding, plan_out = _run_golden_query(case.query)
@@ -186,10 +172,6 @@ def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch
         assert primary_frame.get("evidence_obligations") == case.expected_evidence
     if case.expected_frame_evidence is not None:
         assert [frame.get("evidence_obligations") for frame in frames] == case.expected_frame_evidence
-    if case.expected_required_results:
-        assert primary_frame.get("required_results") == case.expected_required_results
-    if case.expected_action is not None:
-        assert (primary_frame.get("workflow_action") or {}).get("name") == case.expected_action
     if case.expected_render_shape is not None:
         assert (primary_frame.get("render_contract") or {}).get("shape") == case.expected_render_shape
 
@@ -201,4 +183,3 @@ def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch
     coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
     assert coverage.get("status") == "ok"
     assert coverage.get("missing_evidence") == []
-    assert coverage.get("missing_results") == []

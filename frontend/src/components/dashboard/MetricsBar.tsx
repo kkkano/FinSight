@@ -8,6 +8,7 @@
  */
 import type { ValuationData, SnapshotData } from '../../types/dashboard';
 import { currencySymbolForTicker, formatMarketCapForMarket } from '../../utils/format';
+import { Stat } from '../ui';
 
 // --- Props ---
 
@@ -107,10 +108,7 @@ export function MetricsBar({ valuation, snapshot, ticker, loading }: MetricsBarP
           key={m.label}
           className="flex-1 min-w-[100px] px-4 py-2.5 border-r border-fin-border last:border-r-0"
         >
-          <div className="text-2xs text-fin-muted whitespace-nowrap">{m.label}</div>
-          <div className="text-sm font-semibold text-fin-text tabular-nums whitespace-nowrap mt-0.5">
-            {m.value}
-          </div>
+          <Stat label={m.label} value={m.value} className="whitespace-nowrap [&_.num]:text-sm" />
         </div>
       ))}
     </div>

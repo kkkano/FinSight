@@ -2,7 +2,8 @@
 import asyncio
 import time
 
-from backend.graph.executor import execute_plan, group_steps_by_parallel_group
+from backend.graph.dag_executor import execute_plan_dag
+from backend.graph.executor import group_steps_by_parallel_group
 
 
 def _run(coro):
@@ -34,7 +35,7 @@ def test_execute_plan_parallel_group_runs_concurrently():
     }
 
     start = time.perf_counter()
-    artifacts, _events = _run(execute_plan(plan, tool_invokers={"slow": slow_tool}, dry_run=False))
+    artifacts, _events = _run(execute_plan_dag(plan, tool_invokers={"slow": slow_tool}, dry_run=False))
     duration = time.perf_counter() - start
 
     assert duration < 0.35, f"expected parallel execution; took {duration:.3f}s"
@@ -55,7 +56,7 @@ def test_execute_plan_step_cache_dedupes_calls():
         ]
     }
 
-    artifacts, _events = _run(execute_plan(plan, tool_invokers={"add_one": add_one}, dry_run=False))
+    artifacts, _events = _run(execute_plan_dag(plan, tool_invokers={"add_one": add_one}, dry_run=False))
     assert calls["n"] == 1
     assert artifacts["step_results"]["s1"]["cached"] is False
     assert artifacts["step_results"]["s2"]["cached"] is True
@@ -75,7 +76,7 @@ def test_execute_plan_optional_failure_does_not_stop():
         ]
     }
 
-    artifacts, _events = _run(execute_plan(plan, tool_invokers={"ok": ok_tool}, dry_run=False))
+    artifacts, _events = _run(execute_plan_dag(plan, tool_invokers={"ok": ok_tool}, dry_run=False))
     assert calls["ok"] == 1
     assert len(artifacts.get("errors") or []) == 1
     assert "s1" == artifacts["errors"][0]["step_id"]
@@ -95,7 +96,7 @@ def test_execute_plan_required_failure_stops_following_steps():
         ]
     }
 
-    artifacts, _events = _run(execute_plan(plan, tool_invokers={"ok": ok_tool}, dry_run=False))
+    artifacts, _events = _run(execute_plan_dag(plan, tool_invokers={"ok": ok_tool}, dry_run=False))
     assert calls["ok"] == 0
     assert len(artifacts.get("errors") or []) == 1
     assert "s1" == artifacts["errors"][0]["step_id"]
@@ -113,7 +114,7 @@ def test_execute_plan_supports_llm_summarize_selection_in_live_mode():
             }
         ]
     }
-    artifacts, _events = _run(execute_plan(plan, tool_invokers={}, dry_run=False))
+    artifacts, _events = _run(execute_plan_dag(plan, tool_invokers={}, dry_run=False))
     output = artifacts["step_results"]["s1"]["output"]
     assert "T" in str(output)
 
@@ -130,7 +131,7 @@ def test_execute_plan_runs_llm_summarize_selection_even_in_dry_run():
             }
         ]
     }
-    artifacts, _events = _run(execute_plan(plan, tool_invokers={}, dry_run=True))
+    artifacts, _events = _run(execute_plan_dag(plan, tool_invokers={}, dry_run=True))
     output = artifacts["step_results"]["s1"]["output"]
     assert "T" in str(output)
 
@@ -144,7 +145,7 @@ def test_execute_plan_supports_agent_steps_in_live_mode():
             {"id": "s1", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "AAPL"}, "optional": False},
         ]
     }
-    artifacts, _events = _run(execute_plan(plan, agent_invokers={"fundamental_agent": fake_agent}, dry_run=False))
+    artifacts, _events = _run(execute_plan_dag(plan, agent_invokers={"fundamental_agent": fake_agent}, dry_run=False))
     output = artifacts["step_results"]["s1"]["output"]
     assert output.get("agent") == "ok"
 
@@ -178,7 +179,7 @@ def test_execute_plan_groups_results_by_task_ids():
         ],
     }
 
-    artifacts, events = _run(execute_plan(plan, tool_invokers={"news": fake_news}, dry_run=False))
+    artifacts, events = _run(execute_plan_dag(plan, tool_invokers={"news": fake_news}, dry_run=False))
 
     assert artifacts["step_results"]["s1"]["task_ids"] == ["task_1"]
     assert artifacts["step_results"]["s2"]["task_id"] == "task_2"
@@ -216,7 +217,7 @@ def test_execute_plan_progressive_escalation_skips_high_cost_step_when_confidenc
     }
 
     artifacts, _events = _run(
-        execute_plan(
+        execute_plan_dag(
             plan,
             agent_invokers={"price_agent": low_cost_agent, "deep_search_agent": deep_agent},
             dry_run=False,
@@ -259,7 +260,7 @@ def test_execute_plan_progressive_escalation_force_run_executes_high_cost_step()
     }
 
     artifacts, _events = _run(
-        execute_plan(
+        execute_plan_dag(
             plan,
             agent_invokers={"price_agent": low_cost_agent, "deep_search_agent": deep_agent},
             dry_run=False,
@@ -303,7 +304,7 @@ def test_execute_plan_injects_dataset_refs_for_python_compute():
     }
 
     artifacts, _events = _run(
-        execute_plan(
+        execute_plan_dag(
             plan,
             tool_invokers={
                 "get_stock_price": fake_price,

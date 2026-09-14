@@ -3,7 +3,7 @@
 Per-run LLM token usage accumulator.
 
 设计：与 ``graph/event_bus.py`` 同构，用 ContextVar 在单次请求（run）内累加每次
-LLM 调用的 token。统一在 LLM 调用入口 ``llm_retry.ainvoke_with_rate_limit_retry``
+LLM 调用的 token。统一在 LLM 调用入口 ``llm_retry.ainvoke_llm``
 提取 token 并累加 —— 一处覆盖所有 agent/节点的 LLM 调用，零额外 SSE 流量，且不受
 trace-raw 事件过滤影响。done 事件构造时读取总量写入 ``metrics``。
 
@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextvars
 import json
 import os
+from dataclasses import dataclass
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -26,15 +27,28 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class LLMAttribution:
+    agent: str
+    layer: str
+    prediction_id: str | None = None
+
+
 class TokenUsageAccumulator:
     """单次 run 的 token 累加器（线程内顺序累加，无需锁）。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, user_id: str = "public") -> None:
+        self.user_id = str(user_id or "public").strip() or "public"
         self.prompt_tokens: int = 0
         self.completion_tokens: int = 0
         self.call_count: int = 0
+        self.failed_call_count: int = 0
+        self.reported_usage_calls: int = 0
+        self.unreported_usage_calls: int = 0
+        self.selection_failed_call_count: int = 0
         # model -> {"prompt": int, "completion": int, "calls": int}
         self.by_model: dict[str, dict[str, int]] = {}
+        self.by_attribution: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
 
     def add(self, model: str | None, prompt: int, completion: int) -> None:
         self.prompt_tokens += prompt
@@ -46,24 +60,95 @@ class TokenUsageAccumulator:
         entry["completion"] += completion
         entry["calls"] += 1
 
+    def add_attributed_attempt(
+        self,
+        *,
+        model: str | None,
+        status: str,
+        duration_ms: int,
+        prompt: int = 0,
+        completion: int = 0,
+        attribution: LLMAttribution | None = None,
+        usage_reported: bool | None = None,
+    ) -> None:
+        key_model = model or "unknown"
+        identity = attribution or LLMAttribution(agent="unattributed", layer="unknown")
+        key = (identity.agent, identity.layer, identity.prediction_id, key_model)
+        entry = self.by_attribution.setdefault(key, {
+            "agent": identity.agent,
+            "layer": identity.layer,
+            "prediction_id": identity.prediction_id,
+            "model": key_model,
+            "prompt": 0,
+            "completion": 0,
+            "calls": 0,
+            "failed_calls": 0,
+            "duration_ms": 0,
+        })
+        entry["prompt"] += max(0, int(prompt))
+        entry["completion"] += max(0, int(completion))
+        entry["calls"] += 1
+        entry["failed_calls"] += int(status != "success")
+        entry["duration_ms"] += max(0, int(duration_ms))
+        self.failed_call_count += int(status != "success")
+        if status == "success":
+            if usage_reported:
+                self.reported_usage_calls += 1
+            else:
+                self.unreported_usage_calls += 1
+
+    def bind_prediction(self, *, agent: str, prediction_id: str) -> None:
+        """提交成功后，把本 Agent 本 run 尚未关联的调用层绑定到该 prediction。"""
+        normalized_id = str(prediction_id or "").strip()
+        if not normalized_id:
+            return
+        for key in list(self.by_attribution):
+            key_agent, layer, current_prediction_id, model = key
+            if key_agent != agent or current_prediction_id is not None:
+                continue
+            source = self.by_attribution.pop(key)
+            target_key = (key_agent, layer, normalized_id, model)
+            target = self.by_attribution.get(target_key)
+            source["prediction_id"] = normalized_id
+            if target is None:
+                self.by_attribution[target_key] = source
+                continue
+            for field in ("prompt", "completion", "calls", "failed_calls", "duration_ms"):
+                target[field] += source[field]
+
     @property
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
 
     def summary(self) -> dict[str, Any]:
         cost = estimate_cost(self.by_model)
+        if self.reported_usage_calls == 0:
+            usage_state = "not_reported"
+        elif self.unreported_usage_calls == 0 and self.failed_call_count == 0:
+            usage_state = "reported"
+        else:
+            usage_state = "partial"
         return {
             "total_prompt_tokens": self.prompt_tokens,
             "total_completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "llm_token_calls": self.call_count,
+            "failed_llm_calls": self.failed_call_count,
+            "selection_failed_llm_calls": self.selection_failed_call_count,
+            "reported_usage_calls": self.reported_usage_calls,
+            "unreported_usage_calls": self.unreported_usage_calls,
+            "usage_state": usage_state,
             "total_cost_usd": round(cost, 6) if cost else 0.0,
             "tokens_by_model": self.by_model,
+            "usage_by_attribution": list(self.by_attribution.values()),
         }
 
 
 _ACC: contextvars.ContextVar[TokenUsageAccumulator | None] = contextvars.ContextVar(
     "_LLM_TOKEN_ACC", default=None
+)
+_ATTRIBUTION: contextvars.ContextVar[LLMAttribution | None] = contextvars.ContextVar(
+    "_LLM_ATTRIBUTION", default=None
 )
 
 
@@ -80,6 +165,27 @@ def reset_token_accumulator(token: contextvars.Token) -> None:
 
 def get_token_accumulator() -> TokenUsageAccumulator | None:
     return _ACC.get()
+
+
+def set_llm_attribution(attribution: LLMAttribution) -> contextvars.Token:
+    return _ATTRIBUTION.set(attribution)
+
+
+def reset_llm_attribution(token: contextvars.Token) -> None:
+    try:
+        _ATTRIBUTION.reset(token)
+    except Exception:
+        return
+
+
+def get_llm_attribution() -> LLMAttribution | None:
+    return _ATTRIBUTION.get()
+
+
+def bind_current_llm_usage_prediction(*, agent: str, prediction_id: str) -> None:
+    acc = get_token_accumulator()
+    if acc is not None:
+        acc.bind_prediction(agent=agent, prediction_id=prediction_id)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +220,23 @@ def extract_token_usage(response: Any) -> tuple[int, int]:
     return 0, 0
 
 
-def record_llm_usage(response: Any, model: str | None = None) -> None:
+def has_reported_token_usage(response: Any) -> bool:
+    """Return true when the provider explicitly supplied usage, including 0/0."""
+    usage_metadata = getattr(response, "usage_metadata", None)
+    if isinstance(usage_metadata, dict) and any(
+        key in usage_metadata for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")
+    ):
+        return True
+    response_metadata = getattr(response, "response_metadata", None)
+    if not isinstance(response_metadata, dict):
+        return False
+    usage = response_metadata.get("token_usage") or response_metadata.get("usage")
+    return isinstance(usage, dict) and any(
+        key in usage for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")
+    )
+
+
+def record_llm_usage(response: Any, model: str | None = None, *, count_call: bool = True) -> None:
     """统一入口调用：提取 token 并累加到当前 run 的 accumulator（无 accumulator 时静默）。"""
     acc = get_token_accumulator()
     if acc is None:
@@ -123,8 +245,43 @@ def record_llm_usage(response: Any, model: str | None = None) -> None:
         prompt, completion = extract_token_usage(response)
         if prompt or completion:
             acc.add(model, prompt, completion)
+            if not count_call:
+                acc.call_count -= 1
+                acc.by_model[model or "unknown"]["calls"] -= 1
     except Exception:
         return
+
+
+def record_llm_attempt(
+    *,
+    model: str | None,
+    status: str,
+    duration_ms: int,
+    response: Any | None = None,
+) -> None:
+    """记录一次真正发往模型的调用；限流令牌等待不属于模型调用。"""
+    acc = get_token_accumulator()
+    if acc is None:
+        return
+    prompt, completion = extract_token_usage(response) if response is not None else (0, 0)
+    acc.call_count += 1
+    model_entry = acc.by_model.setdefault(model or "unknown", {"prompt": 0, "completion": 0, "calls": 0})
+    model_entry["calls"] += 1
+    acc.add_attributed_attempt(
+        model=model,
+        status=status,
+        duration_ms=duration_ms,
+        prompt=prompt,
+        completion=completion,
+        attribution=get_llm_attribution(),
+        usage_reported=has_reported_token_usage(response) if status == "success" and response is not None else False,
+    )
+
+
+def record_llm_selection_failure() -> None:
+    acc = get_token_accumulator()
+    if acc is not None:
+        acc.selection_failed_call_count += 1
 
 
 # ---------------------------------------------------------------------------

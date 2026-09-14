@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.graph.nodes.decide_output_mode import decide_output_mode
-from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.render_node import render_node
 
 
 FORBIDDEN_CHAT_MARKERS = (
@@ -20,7 +20,7 @@ FORBIDDEN_CHAT_MARKERS = (
 
 
 def _render_chat(state: dict) -> str:
-    result = render_stub(
+    result = render_node(
         {
             "query": state.get("query", ""),
             "output_mode": "chat",
@@ -49,7 +49,7 @@ def _assert_chat_contract(markdown: str) -> None:
 
 def test_preserved_report_draft_strips_internal_price_ladder_and_template_marker(monkeypatch) -> None:
     monkeypatch.setenv("RENDER_NARRATIVE_MIN_CHARS", "10")
-    result = render_stub(
+    result = render_node(
         {
             "query": "给我生成一份 AAPL 投资报告。",
             "output_mode": "investment_report",
@@ -73,7 +73,7 @@ def test_preserved_report_draft_strips_internal_price_ladder_and_template_marker
 
 def test_report_template_output_strips_template_marker(monkeypatch) -> None:
     monkeypatch.setenv("RENDER_NARRATIVE_MIN_CHARS", "100000")
-    result = render_stub(
+    result = render_node(
         {
             "query": "给我生成一份 AAPL 投资报告。",
             "output_mode": "investment_report",
@@ -355,7 +355,7 @@ def test_technical_chat_renders_clean_actionable_short_answer() -> None:
     assert "阻力 132.75" in markdown
 
 
-def test_investment_opinion_chat_renders_quality_contract_sections() -> None:
+def test_investment_opinion_chat_without_synthesis_artifact_fails_closed() -> None:
     markdown = _render_chat(
         {
             "query": "INTC 最近走势如何 看好么",
@@ -425,15 +425,13 @@ def test_investment_opinion_chat_renders_quality_contract_sections() -> None:
     )
 
     _assert_chat_contract(markdown)
-    for heading in ("结论", "价格/趋势", "技术面", "消息/催化", "基本面/估值", "风险"):
-        assert heading in markdown
-    assert "支撑 79.62" in markdown
-    assert "Example News" in markdown
-    assert "盈利修复" in markdown
-    assert "跌破支撑" in markdown
+    assert "证据状态：暂不能形成方向判断" in markdown
+    assert "结构化证据尚未就绪" in markdown
+    for term in ("偏多", "偏空", "中性", "买入", "卖出", "持有"):
+        assert term not in markdown
 
 
-def test_investment_opinion_answer_matrix_preserves_quality_sections() -> None:
+def test_investment_opinion_answer_matrix_requires_structured_synthesis() -> None:
     cases = [
         ("INTC 最近走势如何 看好么", "INTC"),
         ("NVDA 走势怎么看", "NVDA"),
@@ -479,13 +477,12 @@ def test_investment_opinion_answer_matrix_preserves_quality_sections() -> None:
         )
 
         _assert_chat_contract(markdown)
-        for heading in ("结论", "价格/趋势", "技术面", "消息/催化", "基本面/估值", "风险"):
-            assert heading in markdown, query
-        assert "数据缺失" not in markdown, query
-        assert "支撑 100.00" in markdown, query
+        assert "证据状态：暂不能形成方向判断" in markdown, query
+        for term in ("偏多", "偏空", "中性", "买入", "卖出", "持有"):
+            assert term not in markdown, query
 
 
-def test_investment_opinion_bias_does_not_treat_controlled_risk_as_bearish() -> None:
+def test_investment_opinion_without_structured_artifact_does_not_infer_direction() -> None:
     markdown = _render_chat(
         {
             "query": "NVDA 走势怎么看",
@@ -518,7 +515,9 @@ def test_investment_opinion_bias_does_not_treat_controlled_risk_as_bearish() -> 
         }
     )
 
-    assert "「中性偏多」" in markdown
+    assert "证据状态：暂不能形成方向判断" in markdown
+    for term in ("偏多", "偏空", "中性", "买入", "卖出", "持有"):
+        assert term not in markdown
 
 
 def test_earnings_performance_chat_renders_financial_sections_not_news_only() -> None:
@@ -1051,48 +1050,6 @@ def test_news_chat_answer_uses_clean_citations() -> None:
     assert "[Tesla shares move after delivery update](https://example.com/tesla-delivery)" in markdown
 
 
-def test_chat_renderer_preserves_alert_markdown_with_followup_news() -> None:
-    markdown = _render_chat(
-        {
-            "query": "give recent news links",
-            "subject": {"subject_type": "company", "tickers": ["TSLA"]},
-            "operation": {"name": "fetch"},
-            "tasks": [
-                {
-                    "id": "task_1",
-                    "subject_type": "company",
-                    "tickers": ["TSLA"],
-                    "operation": {"name": "fetch", "params": {"topic": "news", "include_links": True}},
-                }
-            ],
-            "plan_ir": {
-                "steps": [
-                    {"id": "s1", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "TSLA"}},
-                ]
-            },
-            "artifacts": {
-                "alert_markdown": "Created alert for TSLA at 180.",
-                "step_results": {
-                    "s1": {
-                        "output": [
-                            {
-                                "title": "Tesla delivery update",
-                                "url": "https://example.com/tesla-delivery",
-                                "source": "Example News",
-                                "published_at": "2026-05-10",
-                            }
-                        ]
-                    }
-                },
-            },
-        }
-    )
-
-    _assert_chat_contract(markdown)
-    assert markdown.startswith("Created alert for TSLA at 180.")
-    assert "[Tesla delivery update](https://example.com/tesla-delivery)" in markdown
-
-
 def test_news_chat_discloses_missing_article_url_when_source_has_no_url() -> None:
     markdown = _render_chat(
         {
@@ -1331,38 +1288,6 @@ def test_representative_etf_qa_renders_lightweight_without_compare_metrics() -> 
     assert "YTD" not in markdown
 
 
-def test_portfolio_chat_uses_visible_positions_without_asking_for_holdings_again() -> None:
-    markdown = _render_chat(
-        {
-            "query": "这些新闻对我的持仓影响大吗？",
-            "subject": {"subject_type": "portfolio", "tickers": ["AAPL", "MSFT", "NVDA"]},
-            "operation": {"name": "portfolio_impact"},
-            "tasks": [
-                {
-                    "id": "task_1",
-                    "subject_type": "portfolio",
-                    "tickers": ["AAPL", "MSFT", "NVDA"],
-                    "operation": {"name": "portfolio_impact"},
-                    "params": {
-                        "positions": [
-                            {"ticker": "AAPL", "weight": 0.35},
-                            {"ticker": "MSFT", "weight": 0.25},
-                            {"ticker": "NVDA", "weight": 0.15},
-                        ]
-                    },
-                }
-            ],
-        }
-    )
-
-    _assert_chat_contract(markdown)
-    assert "AAPL" in markdown
-    assert "MSFT" in markdown
-    assert "NVDA" in markdown
-    assert "需要你的持仓列表" not in markdown
-    assert "不会按固定框架" in markdown
-
-
 def test_technical_chat_missing_data_is_natural() -> None:
     markdown = _render_chat(
         {
@@ -1427,7 +1352,7 @@ def test_report_followup_chat_uses_last_report_context_without_report_mode() -> 
 
 
 def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkeypatch) -> None:
-    from backend.graph.nodes import chat_renderer
+    from backend.graph.renderers import news_fallback as chat_renderer_news
 
     def fake_get_company_news(ticker: str, limit: int = 5, fast: bool = False):
         assert ticker == "NVDA"
@@ -1441,8 +1366,8 @@ def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkey
             }
         ][:limit]
 
-    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
-    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_authoritative_media_news", None, raising=False)
 
     markdown = _render_chat(
         {
@@ -1474,7 +1399,7 @@ def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkey
 
 
 def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> None:
-    from backend.graph.nodes import chat_renderer
+    from backend.graph.renderers import news_fallback as chat_renderer_news
 
     calls: list[str] = []
 
@@ -1489,8 +1414,8 @@ def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> N
             }
         ][:limit]
 
-    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
-    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_authoritative_media_news", None, raising=False)
     monkeypatch.setenv("CHAT_RENDER_NEWS_FALLBACK_MAX_TICKERS", "1")
     monkeypatch.setenv("CHAT_RENDER_NEWS_FALLBACK_BUDGET_SECONDS", "5")
 
@@ -1522,7 +1447,7 @@ def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> N
 
 
 def test_news_article_fallback_does_not_run_for_direct_answer_route(monkeypatch) -> None:
-    from backend.graph.nodes import chat_renderer
+    from backend.graph.renderers import news_fallback as chat_renderer_news
 
     calls: list[str] = []
 
@@ -1537,8 +1462,8 @@ def test_news_article_fallback_does_not_run_for_direct_answer_route(monkeypatch)
             }
         ]
 
-    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
-    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_authoritative_media_news", None, raising=False)
 
     markdown = _render_chat(
         {
@@ -1701,15 +1626,91 @@ def test_chat_renderer_valuation_compare_light_does_not_emit_missing_fundamental
                 "step_results": {
                     "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
                     "s4": {"output": {"price": 50.0, "change_percent": -1.0}},
+                },
+                # 生产 DAG 会按 task_id 写入结果；整体 compare 必须优先于
+                # 通用多任务分节，否则会退化成两份单股投资观点。
+                "task_results": {
+                    "task_2": {
+                        "step_ids": ["s1", "s2", "s3"],
+                        "results": {"s1": {"output": {"price": 100.0}}},
+                    },
+                    "task_3": {
+                        "step_ids": ["s4", "s5", "s6"],
+                        "results": {"s4": {"output": {"price": 50.0}}},
+                    },
+                },
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Comparison of NVDA, AMD" in markdown
+    assert "valuation reasonableness" in markdown
+    assert "Quick valuation pass is based on" not in markdown
+    assert "Valuation evidence uses company context" not in markdown
+    assert "[data missing] fundamental_agent output was not available" not in markdown
+
+
+def test_chat_renderer_valuation_compare_uses_actual_multiples_and_answers_the_ranking() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA and AMD which valuation is more reasonable?",
+            "subject": {"subject_type": "company", "tickers": ["NVDA", "AMD"]},
+            "operation": {"name": "compare"},
+            "intent_contract": {
+                "facets": ["valuation"],
+                "budget_profile": "valuation_compare_light",
+                "primary_tickers": ["NVDA", "AMD"],
+                "per_ticker_required": True,
+                "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates"],
+            },
+            "plan_ir": {
+                "steps": [
+                    {"id": "nvda_price", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "nvda_info", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
+                    {"id": "nvda_eps", "name": "get_earnings_estimates", "inputs": {"ticker": "NVDA"}},
+                    {"id": "amd_price", "name": "get_stock_price", "inputs": {"ticker": "AMD"}},
+                    {"id": "amd_info", "name": "get_company_info", "inputs": {"ticker": "AMD"}},
+                    {"id": "amd_eps", "name": "get_earnings_estimates", "inputs": {"ticker": "AMD"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "nvda_price": {"output": {"price": 180.0, "change_percent": 1.0}},
+                    "nvda_info": {
+                        "output": (
+                            "Company Profile (NVDA):\n"
+                            "- Market Cap: $4,000,000,000,000\n"
+                            "- Trailing P/E: 52.00\n"
+                            "- Forward P/E: 35.00\n"
+                            "- Price/Book: 40.00"
+                        )
+                    },
+                    "nvda_eps": {"output": {"ticker": "NVDA", "revision_signal": "positive"}},
+                    "amd_price": {"output": {"price": 160.0, "change_percent": -1.0}},
+                    "amd_info": {
+                        "output": (
+                            "Company Profile (AMD):\n"
+                            "- Market Cap: $300,000,000,000\n"
+                            "- Trailing P/E: 95.00\n"
+                            "- Forward P/E: 28.00\n"
+                            "- Price/Book: 7.00"
+                        )
+                    },
+                    "amd_eps": {"output": {"ticker": "AMD", "revision_signal": "neutral"}},
                 }
             },
         }
     )
 
     _assert_chat_contract(markdown)
-    assert "Research comparison for NVDA, AMD" in markdown
-    assert "Valuation read" in markdown
-    assert "[data missing] fundamental_agent output was not available" not in markdown
+    assert "市值：$4.00T" in markdown
+    assert "Forward P/E 35.00x" in markdown
+    assert "Forward P/E 28.00x" in markdown
+    assert "EPS 修正信号：上修" in markdown
+    assert "AMD 的估值倍数更低" in markdown
+    assert "AMD 28.00x，NVDA 35.00x" in markdown
 
 
 def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_operation() -> None:
@@ -1724,7 +1725,6 @@ def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_op
                 "relation": "rank",
                 "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
                 "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
-                "required_results": [],
                 "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
                 "intent_contract": {
                     "facets": ["valuation"],
@@ -1750,8 +1750,8 @@ def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_op
     )
 
     _assert_chat_contract(markdown)
-    assert "Research comparison for NVDA, AMD" in markdown
-    assert "valuation_reasonableness" in markdown
+    assert "Comparison of NVDA, AMD" in markdown
+    assert "valuation reasonableness" in markdown
 
 
 def test_chat_renderer_compare_contract_takes_priority_over_earnings_operation() -> None:
@@ -1809,8 +1809,8 @@ def test_chat_renderer_compare_contract_takes_priority_over_earnings_operation()
     )
 
     _assert_chat_contract(markdown)
-    assert "Research comparison for AAPL, MSFT" in markdown
-    assert "valuation_reasonableness, earnings" in markdown
+    assert "Comparison of AAPL, MSFT" in markdown
+    assert "valuation reasonableness, earnings" in markdown
     assert "**最新季度/财务表现**" not in markdown
 
 

@@ -27,8 +27,6 @@ from backend.dashboard.schemas import (
     DashboardErrorResponse,
     SnapshotData,
     NewsItem,
-    InsightCard,
-    DashboardInsightsResponse,
 )
 from backend.dashboard.errors import (
     DashboardError,
@@ -65,8 +63,6 @@ __all__ = [
     "DashboardErrorResponse",
     "SnapshotData",
     "NewsItem",
-    "InsightCard",
-    "DashboardInsightsResponse",
     # Errors
     "DashboardError",
     "symbol_not_found",

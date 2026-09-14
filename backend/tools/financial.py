@@ -1,12 +1,10 @@
-import json
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from urllib.parse import quote
 
-import requests
-import yfinance as yf
+from .yfinance_client import create_ticker
 
 from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY, finnhub_client
 from .http import _http_get, _http_post
@@ -130,19 +128,10 @@ def _fetch_financials_from_sec_companyfacts(ticker: str) -> dict | None:
         logger.info(f"[Financials] SEC companyfacts fallback failed for {ticker}: {exc}")
         return None
 
-def get_financial_statements(ticker: str) -> dict:
-    """
-    获取公司的财务报表数据（财报）
-    包括：损益表、资产负债表、现金流量表
-    
-    Args:
-        ticker: 股票代码
-        
-    Returns:
-        dict: 包含 financials, balance_sheet, cashflow 的字典
-    """
+def _fetch_financials_from_yfinance(ticker: str) -> dict:
+    """只从 yfinance 获取财报表，不在 provider 内继续跨源回退。"""
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
 
         result = {
             'ticker': ticker,
@@ -187,7 +176,7 @@ def get_financial_statements(ticker: str) -> dict:
 
         result['financials'] = _fetch_with_fallbacks(
             '损益表',
-            ['financials', 'income_stmt', 'quarterly_financials', 'quarterly_income_stmt'],
+            ['quarterly_income_stmt', 'quarterly_financials', 'income_stmt', 'financials'],
         )
         result['balance_sheet'] = _fetch_with_fallbacks(
             '资产负债表',
@@ -199,9 +188,6 @@ def get_financial_statements(ticker: str) -> dict:
         )
 
         if not result['financials'] and not result['balance_sheet'] and not result['cashflow']:
-            sec_fallback = _fetch_financials_from_sec_companyfacts(ticker)
-            if isinstance(sec_fallback, dict):
-                return sec_fallback
             result['error'] = "无法获取任何财报数据，请检查股票代码是否正确"
         else:
             # 只要拿到任意一张主表，就不把局部失败升级为全局 error
@@ -211,12 +197,6 @@ def get_financial_statements(ticker: str) -> dict:
 
     except Exception as e:
         logger.info(f"[Financials] 获取财报数据失败: {e}")
-        sec_fallback = _fetch_financials_from_sec_companyfacts(ticker)
-        if isinstance(sec_fallback, dict):
-            warnings = sec_fallback.get("warnings")
-            if isinstance(warnings, list):
-                warnings.append(f"yfinance_error:{e.__class__.__name__}")
-            return sec_fallback
         return {
             'ticker': ticker,
             'timestamp': datetime.now().isoformat(),
@@ -228,35 +208,72 @@ def get_financial_statements(ticker: str) -> dict:
         }
 
 
+def get_financial_statements(ticker: str) -> dict:
+    """通过统一网关获取财报，并保留旧工具消费者需要的表结构。"""
+    from backend.services.market_data_gateway import get_market_data_gateway
+
+    result = get_market_data_gateway().get_financials(ticker)
+    data = result.get("data") if isinstance(result, dict) else None
+    if isinstance(data, dict) and not result.get("error_code"):
+        payload = dict(data)
+        payload.update(
+            {
+                "provider": result.get("provider"),
+                "source": result.get("provider"),
+                "as_of": result.get("as_of"),
+                "freshness_seconds": result.get("freshness_seconds"),
+                "quality": result.get("quality"),
+                "degraded": result.get("degraded"),
+                "error_code": None,
+            }
+        )
+        return payload
+    return {
+        "ticker": str(ticker or "").strip().upper(),
+        "timestamp": datetime.now().isoformat(),
+        "financials": None,
+        "balance_sheet": None,
+        "cashflow": None,
+        "provider": None,
+        "source": None,
+        "as_of": None,
+        "quality": "degraded",
+        "degraded": True,
+        "error_code": "market_data_unavailable",
+        "error": "market_data_unavailable",
+        "warnings": list(result.get("provider_failures") or []) if isinstance(result, dict) else [],
+    }
+
+
 def get_financial_statements_summary(ticker: str) -> str:
     """
     获取财报数据并格式化为可读的文本摘要
-    
+
     Args:
         ticker: 股票代码
-        
+
     Returns:
         str: 格式化的财报摘要文本
     """
     data = get_financial_statements(ticker)
-    
+
     if data.get('error'):
         return f"无法获取 {ticker} 的财报数据: {data['error']}"
-    
+
     summary_parts = [f"📊 {ticker} 财务报表摘要\n"]
     summary_parts.append("=" * 50 + "\n")
-    
+
     # 损益表摘要
     if data.get('financials'):
         financials = data['financials']
         summary_parts.append("\n📈 损益表 (Income Statement):\n")
         summary_parts.append("-" * 50 + "\n")
-        
+
         # 获取最新年份的数据
         if financials.get('columns') and len(financials['columns']) > 0:
             latest_year = financials['columns'][0]
             summary_parts.append(f"最新财报日期: {latest_year}\n\n")
-            
+
             # 显示关键指标
             key_metrics = ['Total Revenue', 'Net Income', 'Operating Income', 'EBIT', 'Gross Profit']
             for metric in key_metrics:
@@ -270,17 +287,17 @@ def get_financial_statements_summary(ticker: str) -> str:
                                 if value != 'N/A' and value is not None:
                                     formatted_value = f"${value/1e9:.2f}B" if abs(value) >= 1e9 else f"${value/1e6:.2f}M"
                                     summary_parts.append(f"  {row_name}: {formatted_value}\n")
-    
+
     # 资产负债表摘要
     if data.get('balance_sheet'):
         balance_sheet = data['balance_sheet']
         summary_parts.append("\n💰 资产负债表 (Balance Sheet):\n")
         summary_parts.append("-" * 50 + "\n")
-        
+
         if balance_sheet.get('columns') and len(balance_sheet['columns']) > 0:
             latest_year = balance_sheet['columns'][0]
             summary_parts.append(f"最新财报日期: {latest_year}\n\n")
-            
+
             key_metrics = ['Total Assets', 'Total Liabilities', 'Total Stockholder Equity', 'Cash And Cash Equivalents']
             for metric in key_metrics:
                 if balance_sheet.get('index'):
@@ -291,17 +308,17 @@ def get_financial_statements_summary(ticker: str) -> str:
                                 if value != 'N/A' and value is not None:
                                     formatted_value = f"${value/1e9:.2f}B" if abs(value) >= 1e9 else f"${value/1e6:.2f}M"
                                     summary_parts.append(f"  {row_name}: {formatted_value}\n")
-    
+
     # 现金流量表摘要
     if data.get('cashflow'):
         cashflow = data['cashflow']
         summary_parts.append("\n💵 现金流量表 (Cash Flow):\n")
         summary_parts.append("-" * 50 + "\n")
-        
+
         if cashflow.get('columns') and len(cashflow['columns']) > 0:
             latest_year = cashflow['columns'][0]
             summary_parts.append(f"最新财报日期: {latest_year}\n\n")
-            
+
             key_metrics = ['Operating Cash Flow', 'Free Cash Flow', 'Capital Expenditure']
             for metric in key_metrics:
                 if cashflow.get('index'):
@@ -312,7 +329,7 @@ def get_financial_statements_summary(ticker: str) -> str:
                                 if value != 'N/A' and value is not None:
                                     formatted_value = f"${value/1e9:.2f}B" if abs(value) >= 1e9 else f"${value/1e6:.2f}M"
                                     summary_parts.append(f"  {row_name}: {formatted_value}\n")
-    
+
     return "".join(summary_parts)
 
 
@@ -323,16 +340,18 @@ def get_company_info(ticker: str) -> str:
     """
     # 方法1: yfinance
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
         info = stock.info
         if info and 'longName' in info:
             summary = info.get('longBusinessSummary', '')
             description = (summary[:200] + '...') if summary else 'No description available'
+            valuation_lines = _company_valuation_lines(info)
             return f"""Company Profile ({ticker}):
 - Name: {info.get('longName', 'Unknown')}
 - Sector: {info.get('sector', 'Unknown')}
 - Industry: {info.get('industry', 'Unknown')}
 - Market Cap: ${info.get('marketCap', 0):,.0f}
+{valuation_lines}
 - Website: {info.get('website', 'N/A')}
 - Description: {description}"""
     except Exception as e:
@@ -352,7 +371,7 @@ def get_company_info(ticker: str) -> str:
 - Description: Search online for more details.""" # Finnhub profile doesn't include a long description
         except Exception as e:
             logger.info(f"Finnhub profile fetch failed: {e}")
-    
+
     # 方法3: Alpha Vantage
     try:
         logger.info(f"Trying Alpha Vantage for company info: {ticker}")
@@ -362,18 +381,46 @@ def get_company_info(ticker: str) -> str:
         data = response.json()
         if 'Symbol' in data and data['Symbol']:
             description = data.get('Description', 'No description')[:200] + '...'
+            valuation_lines = _company_valuation_lines({
+                "trailingPE": data.get("PERatio"),
+                "forwardPE": data.get("ForwardPE"),
+                "priceToBook": data.get("PriceToBookRatio"),
+                "priceToSalesTrailing12Months": data.get("PriceToSalesRatioTTM"),
+                "enterpriseToEbitda": data.get("EVToEBITDA"),
+            })
             return f"""Company Profile ({ticker}):
 - Name: {data.get('Name', 'Unknown')}
 - Sector: {data.get('Sector', 'Unknown')}
 - Industry: {data.get('Industry', 'Unknown')}
 - Market Cap: ${int(data.get('MarketCapitalization', 0)):,}
+{valuation_lines}
 - Description: {description}"""
     except Exception as e:
         logger.info(f"Alpha Vantage overview fetch failed: {e}")
-    
+
     # 方法4: 网页搜索
     logger.info(f"Falling back to web search for '{ticker}' company info")
     return search(f"{ticker} company profile stock information")
+
+
+def _company_valuation_lines(info: Dict[str, Any]) -> str:
+    fields = (
+        ("Trailing P/E", info.get("trailingPE")),
+        ("Forward P/E", info.get("forwardPE")),
+        ("Price/Book", info.get("priceToBook")),
+        ("Price/Sales", info.get("priceToSalesTrailing12Months")),
+        ("EV/EBITDA", info.get("enterpriseToEbitda")),
+    )
+    lines: List[str] = []
+    for label, raw_value in fields:
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        if value <= 0:
+            continue
+        lines.append(f"- {label}: {value:.2f}")
+    return "\n".join(lines)
 
 
 def _serialize_table_records(table: Any, *, max_rows: int = 8) -> List[Dict[str, Any]]:
@@ -495,7 +542,7 @@ def get_earnings_estimates(ticker: str) -> Dict[str, Any]:
         return result
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = create_ticker(ticker)
 
         result["earnings_estimate"] = _serialize_table_records(getattr(stock, "earnings_estimate", None), max_rows=8)
         result["eps_trend"] = _serialize_table_records(getattr(stock, "eps_trend", None), max_rows=8)

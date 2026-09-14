@@ -210,6 +210,11 @@ def _source_from_mapping(item: Any, *, default_source: str, index: int) -> Sourc
     freshness_hours = _optional_float(mapping.get("freshness_hours", meta.get("freshness_hours")))
     layer = _first_text(mapping.get("layer"), meta.get("layer")) or None
     collection = _first_text(mapping.get("collection"), meta.get("collection")) or None
+    task_ids = _dedupe_strings(
+        _list_of_strings(mapping.get("task_ids"))
+        + _list_of_strings(meta.get("task_ids"))
+        + [_clean_text(mapping.get("task_id")), _clean_text(meta.get("task_id"))]
+    )
 
     source_id = _source_id_for_raw(
         mapping,
@@ -233,6 +238,7 @@ def _source_from_mapping(item: Any, *, default_source: str, index: int) -> Sourc
         freshness_hours=freshness_hours,
         layer=layer,
         collection=collection,
+        task_ids=task_ids,
     )
 
 
@@ -266,6 +272,11 @@ def _rag_source_from_hit(hit: Any, *, index: int) -> SourceRef | None:
     ) or None
     layer = _first_text(mapping.get("layer"), metadata.get("layer")) or None
     collection = _first_text(mapping.get("collection"), metadata.get("collection")) or None
+    task_ids = _dedupe_strings(
+        _list_of_strings(mapping.get("task_ids"))
+        + _list_of_strings(metadata.get("task_ids"))
+        + [_clean_text(mapping.get("task_id")), _clean_text(metadata.get("task_id"))]
+    )
     snippet = _first_text(
         mapping.get("snippet"),
         mapping.get("content"),
@@ -297,6 +308,7 @@ def _rag_source_from_hit(hit: Any, *, index: int) -> SourceRef | None:
         freshness_hours=_optional_float(mapping.get("freshness_hours", metadata.get("freshness_hours"))),
         layer=layer,
         collection=collection,
+        task_ids=task_ids,
     )
 
 
@@ -363,7 +375,11 @@ def _ledger_from_embedded_payload(output: Any, query: str, subject: dict[str, An
         return None
 
 
-def _canonicalise_agent_ledger_sources(ledger: EvidenceLedger, output: Any) -> EvidenceLedger:
+def _canonicalise_agent_ledger_sources(
+    ledger: EvidenceLedger,
+    output: Any,
+    task_ids: list[str],
+) -> EvidenceLedger:
     evidence_items = _get_value(output, "evidence", [])
     if not isinstance(evidence_items, list):
         evidence_items = []
@@ -372,6 +388,14 @@ def _canonicalise_agent_ledger_sources(ledger: EvidenceLedger, output: Any) -> E
     sources: list[SourceRef] = []
     for index, source in enumerate(ledger.sources):
         raw_item = evidence_items[index] if index < len(evidence_items) else {}
+        raw_mapping = _as_dict(raw_item)
+        raw_meta = _as_dict(raw_mapping.get("meta") or raw_mapping.get("metadata"))
+        source_task_ids = _dedupe_strings(
+            list(source.task_ids)
+            + _list_of_strings(raw_mapping.get("task_ids"))
+            + _list_of_strings(raw_meta.get("task_ids"))
+            + [_clean_text(raw_mapping.get("task_id")), _clean_text(raw_meta.get("task_id"))]
+        ) or list(task_ids)
         source_id = _source_id_for_raw(
             raw_item,
             title=source.title,
@@ -380,12 +404,21 @@ def _canonicalise_agent_ledger_sources(ledger: EvidenceLedger, output: Any) -> E
             published_date=source.published_date,
         )
         id_map[source.source_id] = source_id
-        sources.append(source.model_copy(update={"source_id": source_id}))
+        sources.append(
+            source.model_copy(update={"source_id": source_id, "task_ids": source_task_ids})
+        )
 
     claims = []
     for claim in ledger.claims:
         evidence_ids = _dedupe_strings([id_map.get(source_id, source_id) for source_id in claim.evidence_ids])
-        claims.append(claim.model_copy(update={"evidence_ids": evidence_ids}))
+        claims.append(
+            claim.model_copy(
+                update={
+                    "evidence_ids": evidence_ids,
+                    "task_ids": list(claim.task_ids) or list(task_ids),
+                }
+            )
+        )
     return ledger.model_copy(update={"sources": sources, "claims": claims})
 
 
@@ -408,6 +441,9 @@ def _dedupe_ledger_sources(ledger: EvidenceLedger) -> EvidenceLedger:
             updates["reliability"] = candidate.reliability
         if existing.freshness_hours is None and candidate.freshness_hours is not None:
             updates["freshness_hours"] = candidate.freshness_hours
+        task_ids = _dedupe_strings([*existing.task_ids, *candidate.task_ids])
+        if task_ids != existing.task_ids:
+            updates["task_ids"] = task_ids
         if updates:
             sources_by_id[canonical_id] = existing.model_copy(update=updates)
 
@@ -446,7 +482,7 @@ def extract_agent_ledgers(step_results: Any, query: str, subject: dict[str, Any]
                 ledger = from_agent_output(output, query=query, subject=subject, task_ids=task_ids)
             except Exception:
                 continue
-        ledger = _canonicalise_agent_ledger_sources(ledger, output)
+        ledger = _canonicalise_agent_ledger_sources(ledger, output, task_ids)
         if ledger.claims or ledger.sources:
             ledgers.append(ledger)
     return ledgers
@@ -484,12 +520,23 @@ def attach_pool_sources_to_claims(ledger: EvidenceLedger, pool_sources: list[Sou
     for claim in ledger.claims:
         evidence_ids = list(claim.evidence_ids)
         evidence_keys = {source_key_by_id.get(source_id, source_id) for source_id in evidence_ids}
+        claim_task_ids = set(claim.task_ids)
+
+        def _matches_task_scope(source: SourceRef) -> bool:
+            return (
+                not claim_task_ids
+                or not source.task_ids
+                or bool(claim_task_ids.intersection(source.task_ids))
+            )
+
         if evidence_ids:
             for source in pool_sources:
-                if pool_key_by_id[source.source_id] in evidence_keys:
+                if pool_key_by_id[source.source_id] in evidence_keys and _matches_task_scope(source):
                     evidence_ids.append(source.source_id)
         else:
-            evidence_ids.extend(source.source_id for source in pool_sources)
+            evidence_ids.extend(
+                source.source_id for source in pool_sources if _matches_task_scope(source)
+            )
         claims.append(claim.model_copy(update={"evidence_ids": _dedupe_strings(evidence_ids)}))
 
     return ledger.model_copy(update={"sources": [*pool_sources, *ledger.sources], "claims": claims})

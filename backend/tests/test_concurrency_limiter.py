@@ -97,10 +97,8 @@ class TestGenerationPathMatcher:
     def test_generation_paths_matched(self):
         from backend.api.concurrency import is_generation_path
 
-        assert is_generation_path("/chat/supervisor") is True
-        assert is_generation_path("/chat/supervisor/stream") is True
         assert is_generation_path("/api/execute") is True
-        assert is_generation_path("/api/execute/resume") is True
+        assert is_generation_path("/api/execute/runs/run-1/cancel") is True
 
     def test_cheap_paths_not_matched(self):
         from backend.api.concurrency import is_generation_path

@@ -5,13 +5,13 @@
  * live price with change data, and action buttons for watchlist toggle,
  * quick analysis, and report generation.
  */
-import { FileText, Loader2, Star, Zap } from 'lucide-react';
+import { Star } from 'lucide-react';
 
-import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
 import { formatMarketCapForMarket, formatPriceForMarket } from '../../utils/format';
-import { useToast } from '../ui';
+import { Stat, useToast } from '../ui';
+import { DashboardSourceBadge } from './DashboardSourceBadge';
 import { MiniPriceChart } from './tabs/overview/MiniPriceChart';
 
 // --- Props ---
@@ -36,6 +36,16 @@ const getLastClose = (charts: Record<string, ChartPoint[]>): number | null => {
   return last?.close ?? last?.value ?? null;
 };
 
+const getPriceChange = (charts: Record<string, ChartPoint[]>): { value: number; text: string } | null => {
+  const points = charts?.market_chart;
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const current = points[points.length - 1]?.close ?? points[points.length - 1]?.value;
+  const previous = points[points.length - 2]?.close ?? points[points.length - 2]?.value;
+  if (typeof current !== 'number' || typeof previous !== 'number' || previous === 0) return null;
+  const percent = ((current - previous) / previous) * 100;
+  return { value: percent, text: `${Math.abs(percent).toFixed(2)}%` };
+};
+
 // --- Component ---
 
 export function StockHeader({
@@ -51,10 +61,7 @@ export function StockHeader({
     watchlist,
     addWatchItemApi,
     removeWatchItemApi,
-    deepAnalysisIncludeDeepSearch,
-    setDeepAnalysisIncludeDeepSearch,
   } = useDashboardStore();
-  const { execute, isRunning, runId } = useExecuteAgent();
   const { toast } = useToast();
 
   // Watchlist toggle state
@@ -79,44 +86,19 @@ export function StockHeader({
     }
   };
 
-  const handleQuickAnalysis = () => {
-    if (!ticker || isRunning) return;
-    execute({
-      query: `快速分析 ${ticker}`,
-      tickers: [ticker],
-      outputMode: 'brief',
-      analysisDepth: 'quick',
-      budget: 3,
-      source: 'dashboard_header',
-    });
-  };
-
-  const handleDeepAnalysis = () => {
-    if (!ticker || isRunning) return;
-    const includeDeepSearch = deepAnalysisIncludeDeepSearch;
-    execute({
-      query: includeDeepSearch
-        ? `对 ${ticker} 做深度搜索，输出可追溯证据与关键结论`
-        : `生成 ${ticker} 投资报告`,
-      tickers: [ticker],
-      outputMode: 'investment_report',
-      analysisDepth: includeDeepSearch ? 'deep_research' : 'report',
-      source: includeDeepSearch ? 'dashboard_deep_search' : 'dashboard_header',
-    });
-  };
-
   // Derive price from snapshot or chart fallback
   const closePrice = snapshot?.index_level ?? snapshot?.nav ?? getLastClose(charts);
   const marketCap = valuation?.market_cap ?? null;
+  const priceChange = getPriceChange(charts);
 
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-3 bg-fin-card border-b border-fin-border shrink-0 max-lg:px-3 max-lg:flex-wrap max-lg:gap-2">
+    <div className="flex items-center justify-between gap-4 border-b border-t-border bg-t-surface px-5 py-3 shrink-0 max-lg:px-3 max-lg:flex-wrap max-lg:gap-2">
       {/* Left: Symbol info + Price */}
-      <div className="flex items-center gap-4 min-w-0 max-lg:gap-2">
+      <div className="flex items-center gap-4 min-w-0 max-lg:gap-2 max-md:w-full max-md:flex-col max-md:items-start">
         {/* Symbol + Name */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-lg font-bold text-fin-text truncate">{displayName || ticker}</span>
-          <span className="text-2xs text-fin-muted bg-fin-bg-secondary px-2 py-0.5 rounded shrink-0 uppercase">
+          <span className="text-sm font-semibold text-t-text truncate">{displayName || ticker}</span>
+          <span className="text-2xs text-t-text3 bg-t-elevated px-2 py-0.5 rounded shrink-0 uppercase">
             {assetType}
           </span>
         </div>
@@ -125,20 +107,27 @@ export function StockHeader({
         {loading ? (
           <div className="h-6 w-24 bg-fin-border rounded animate-pulse" />
         ) : (
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 max-md:w-full max-md:min-w-0 max-md:flex-wrap max-md:shrink">
             {closePrice !== null && (
-              <span className="text-lg font-semibold text-fin-text tabular-nums">
-                {formatPriceForMarket(closePrice, ticker)}
-              </span>
+              <Stat
+                label={ticker}
+                value={formatPriceForMarket(closePrice, ticker)}
+                change={priceChange?.value}
+                changeText={priceChange?.text}
+                className="min-w-[92px]"
+              />
             )}
             {marketCap !== null && (
-              <span className="text-xs text-fin-muted">
+              <span className="num text-xs text-t-text3">
                 {formatMarketCapForMarket(marketCap, ticker)}
               </span>
             )}
+            <DashboardSourceBadge metaKey="market_chart" fallbackSource="yfinance" />
             {/* Mini sparkline */}
             {charts?.market_chart && charts.market_chart.length > 0 && (
-              <MiniPriceChart data={charts.market_chart} />
+              <div className="hidden sm:block">
+                <MiniPriceChart data={charts.market_chart} />
+              </div>
             )}
           </div>
         )}
@@ -160,44 +149,6 @@ export function StockHeader({
           <Star size={16} fill={isInWatchlist ? 'currentColor' : 'none'} />
         </button>
 
-        {/* Quick Analysis */}
-        <button
-          type="button"
-          onClick={handleQuickAnalysis}
-          disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRunning && runId ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Zap size={12} />
-          )}
-          快速分析
-        </button>
-
-        {/* Deep analysis toggle + action */}
-        <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
-          <input
-            type="checkbox"
-            className="accent-fin-primary"
-            checked={deepAnalysisIncludeDeepSearch}
-            onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
-          />
-          含 deepsearch
-        </label>
-        <button
-          type="button"
-          onClick={handleDeepAnalysis}
-          disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRunning && runId ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <FileText size={12} />
-          )}
-          深度分析
-        </button>
       </div>
     </div>
   );

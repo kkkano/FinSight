@@ -1,7 +1,7 @@
 """
 Shared graph pipeline execution service.
 
-Both ``/chat/supervisor/stream`` and ``/api/execute`` delegate to
+``/api/execute`` delegates to
 :func:`run_graph_pipeline` so that streaming logic is never duplicated.
 """
 from __future__ import annotations
@@ -40,8 +40,6 @@ def _normalize_report_source_type(source: str | None) -> str:
         return "dashboard"
     if raw.startswith("chat"):
         return "chat"
-    if raw.startswith("workbench"):
-        return "workbench"
     return raw[:64]
 
 
@@ -89,7 +87,7 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
     if markdown.strip():
         return markdown, state
     try:
-        from backend.graph.nodes.render_stub import render_stub
+        from backend.graph.nodes.render_node import render_node as render_stub
 
         rendered = render_stub(state)
         rendered_artifacts = rendered.get("artifacts") if isinstance(rendered, dict) else None
@@ -104,6 +102,37 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
     markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query}\n"
     state = {**state, "artifacts": {**artifacts, "draft_markdown": markdown}}
     return markdown, state
+
+
+def _llm_degradation(
+    state: dict[str, Any],
+    usage_summary: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
+    conversation = trace.get("conversation_degraded") if isinstance(trace, dict) else None
+    if isinstance(conversation, dict) and conversation.get("used"):
+        return {
+            "used": True,
+            "stage": str(conversation.get("stage") or "conversation"),
+            "reason": str(conversation.get("reason") or "llm_unavailable"),
+        }
+    synth = trace.get("synthesize_runtime") if isinstance(trace, dict) else None
+    if isinstance(synth, dict) and synth.get("fallback"):
+        return {
+            "used": True,
+            "stage": "synthesis",
+            "reason": str(synth.get("reason") or "llm_unavailable"),
+        }
+    usage = usage_summary if isinstance(usage_summary, dict) else {}
+    calls = max(0, int(usage.get("llm_token_calls") or 0))
+    failed_calls = max(0, int(usage.get("failed_llm_calls") or 0))
+    if calls > 0 and failed_calls >= calls:
+        return {
+            "used": True,
+            "stage": "runtime",
+            "reason": "all_llm_attempts_failed",
+        }
+    return None
 
 
 def _apply_quality_gate(
@@ -198,7 +227,7 @@ async def _replay_cached_report(
     )
 
 
-def _execution_timeout_seconds(output_mode: str | None = None, ui_context: dict[str, Any] | None = None) -> float:
+def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
 
@@ -218,14 +247,6 @@ def _execution_timeout_seconds(output_mode: str | None = None, ui_context: dict[
         default_timeout = max(60.0, float(raw))
     except Exception:
         default_timeout = 900.0 if mode == "investment_report" else 500.0
-    try:
-        from backend.graph.preference_timeouts import timeout_seconds_from_ui_context
-
-        preferred_timeout = timeout_seconds_from_ui_context(ui_context)
-        if preferred_timeout is not None:
-            return preferred_timeout
-    except Exception:
-        pass
     return default_timeout
 
 
@@ -281,9 +302,9 @@ async def run_graph_pipeline(
     ui_context: dict[str, Any] | None = None,
     output_mode: str | None = None,
     strict_selection: str | None = None,
-    confirmation_mode: str | None = None,
     original_query: str | None = None,
     source: str | None = None,
+    user_id: str = "public",
     trace_raw_enabled: bool = False,
     markdown_chunk_size: int = 60,
 ) -> AsyncGenerator[dict[str, Any], None]:
@@ -310,8 +331,7 @@ async def run_graph_pipeline(
         The raw user query *before* reference resolution (for session
         context bookkeeping).  Falls back to *query* when ``None``.
     source:
-        Trigger origin for observability (``"chat"`` / ``"execute"`` /
-        ``"workbench"`` / …).
+        Trigger origin for observability (``"chat"`` / ``"execute"`` / …).
     trace_raw_enabled:
         If ``False``, intermediate graph trace events are filtered out
         and only essential types (``token``, ``done``, ``error``) are
@@ -329,7 +349,7 @@ async def run_graph_pipeline(
     cancel_event = asyncio.Event()
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
-    token_acc = TokenUsageAccumulator()
+    token_acc = TokenUsageAccumulator(user_id=user_id)
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
         "llm_call": 0,
@@ -416,6 +436,7 @@ async def run_graph_pipeline(
 
             graph_ui_context = dict(ui_context or {})
             graph_ui_context.setdefault("run_id", run_id_value)
+            graph_ui_context["__user_id"] = str(user_id or "public").strip() or "public"
 
             # P1-7: 报告缓存命中 → 直接回放，不跑图（零 LLM 成本）
             cache_ticker = _resolve_cache_ticker(graph_ui_context, output_mode)
@@ -443,7 +464,7 @@ async def run_graph_pipeline(
             runner = await deps.get_graph_runner()
 
             from backend.graph.runner import run_graph_traced
-            timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=graph_ui_context)
+            timeout_seconds = _execution_timeout_seconds(output_mode)
             try:
                 state = await asyncio.wait_for(
                     run_graph_traced(
@@ -453,7 +474,6 @@ async def run_graph_pipeline(
                         ui_context=graph_ui_context,
                         output_mode=output_mode,
                         strict_selection=strict_selection,
-                        confirmation_mode=confirmation_mode,
                     ),
                     timeout=timeout_seconds,
                 )
@@ -472,30 +492,6 @@ async def run_graph_pipeline(
                         "message": f"Execution timed out after {int(timeout_seconds)}s; please retry with brief mode or fewer agents.",
                     }
                 )
-                return
-
-            # 2b. Check if the graph was interrupted (human-in-the-loop)
-            # LangGraph stores pending interrupts in __interrupt__ state key
-            pending_interrupts = state.get("__interrupt__")
-            if pending_interrupts:
-                # Extract interrupt info and forward to client
-                interrupt_data: dict[str, Any] = {
-                    "thread_id": thread_id,
-                }
-                if isinstance(pending_interrupts, (list, tuple)) and len(pending_interrupts) > 0:
-                    first = pending_interrupts[0]
-                    if hasattr(first, "value"):
-                        interrupt_data["data"] = first.value
-                    elif isinstance(first, dict):
-                        interrupt_data["data"] = first
-                await _queue_event(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "interrupt",
-                        **interrupt_data,
-                    }
-                )
-                await queue.put(_END)
                 return
 
             markdown, state = _ensure_deliverable_markdown(state)
@@ -592,19 +588,6 @@ async def run_graph_pipeline(
                 skip_context=bool(state.get("skip_session_context")),
             )
 
-            # 5b. Persist lightweight long-term memory snapshot (best-effort)
-            if not quality_blocked or soft_blocked:
-                try:
-                    from backend.graph.store import persist_memory_snapshot
-
-                    persist_memory_snapshot(
-                        thread_id=thread_id,
-                        state=state,
-                        report=report,
-                    )
-                except Exception as exc:
-                    logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
-
             if not quality_blocked or soft_blocked:
                 # 6. Stream markdown in chunks
                 await _queue_event(
@@ -660,6 +643,18 @@ async def run_graph_pipeline(
             if tool_total_calls <= 0:
                 tool_total_calls = stream_metrics.get("tool_call", 0)
 
+            usage_summary = token_acc.summary()
+            degradation = _llm_degradation(state, usage_summary)
+            if degradation:
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "degraded",
+                        "message": "LLM 暂时不可用，本轮已使用降级回答；结果可能不完整，请稍后重试。",
+                        "degradation": degradation,
+                    }
+                )
+
             await _queue_event(
                 {
                     "schema_version": deps.sse_event_schema_version,
@@ -677,6 +672,8 @@ async def run_graph_pipeline(
                     "blocked_report_available": bool(blocked_report_preview),
                     "allow_continue_when_blocked": True,
                     "soft_blocked": soft_blocked,
+                    "degraded": bool(degradation),
+                    "degradation": degradation,
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),
@@ -686,27 +683,27 @@ async def run_graph_pipeline(
                         **stream_metrics,
                         "llm_total_calls": llm_total_calls,
                         "tool_total_calls": tool_total_calls,
-                        **token_acc.summary(),
+                        **usage_summary,
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),
                     },
                 }
             )
 
-            # P2-7: 持久化本次请求的 LLM 成本审计（失败绝不影响主流程）。
             try:
-                from backend.services.cost_audit import get_cost_audit_store
+                from backend.services.agent_run_archive import get_agent_run_archive
 
-                get_cost_audit_store().record(
-                    session_id=thread_id,
-                    source=source,
+                get_agent_run_archive().archive_usage_summary(
+                    run_id=str(run_id_value or thread_id),
+                    user_id=token_acc.user_id,
                     summary=token_acc.summary(),
+                    status="completed",
                 )
-            except Exception as audit_exc:  # noqa: BLE001 — 审计为旁路，吞掉所有异常
+            except Exception as archive_exc:  # noqa: BLE001 — PostgreSQL 归档为旁路
                 logger.warning(
-                    "[execution_service] cost audit record failed thread_id=%s: %s",
+                    "[execution_service] agent run archive failed thread_id=%s: %s",
                     thread_id,
-                    audit_exc,
+                    archive_exc,
                 )
 
             # P1-7: 缓存成功生成的报告（仅 report 模式 + 显式 ticker 请求 + 无失败/拦截）
@@ -760,324 +757,6 @@ async def run_graph_pipeline(
                 yield {"type": "keep-alive", "ts": _utc_iso_now()}
                 continue
 
-            if item is _END:
-                break
-            if isinstance(item, dict):
-                yield item
-    finally:
-        if not producer_task.done():
-            cancel_event.set()
-            producer_task.cancel()
-            try:
-                await producer_task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                pass
-
-
-# ---------------------------------------------------------------------------
-# Resume pipeline (for human-in-the-loop interrupt/resume flow)
-# ---------------------------------------------------------------------------
-
-async def resume_graph_pipeline(
-    *,
-    deps: ExecutionDeps,
-    thread_id: str,
-    run_id: str | None = None,
-    resume_value: Any,
-    source: str | None = None,
-    trace_raw_enabled: bool = False,
-    markdown_chunk_size: int = 60,
-) -> AsyncGenerator[dict[str, Any], None]:
-    """Resume an interrupted graph run and yield SSE-compatible events.
-
-    Mirrors the structure of :func:`run_graph_pipeline` but instead of
-    starting a new run it sends ``Command(resume=resume_value)`` to the
-    checkpointed graph via ``runner.resume()``.
-    """
-    from backend.graph.event_bus import reset_event_emitter, set_event_emitter
-    from backend.graph.cancellation import reset_cancel_event, set_cancel_event
-    from backend.orchestration.trace_emitter import TraceEvent, get_trace_emitter
-
-    queue: asyncio.Queue[object] = asyncio.Queue()
-    _END = object()
-    cancel_event = asyncio.Event()
-    run_id_value = _normalize_run_id(run_id)
-    request_started_at = _utc_iso_now()
-
-    def _stamp_ids(payload: dict[str, Any]) -> dict[str, Any]:
-        outgoing = deps.redact_sensitive_payload(dict(payload))
-        original_schema = outgoing.get("schema_version")
-        if (
-            isinstance(original_schema, str)
-            and original_schema
-            and original_schema != deps.sse_event_schema_version
-        ):
-            outgoing["trace_schema_version"] = original_schema
-        outgoing["schema_version"] = deps.sse_event_schema_version
-        outgoing.setdefault("session_id", thread_id)
-        outgoing.setdefault("run_id", run_id_value)
-        return outgoing
-
-    async def _queue_event(payload: dict[str, Any]) -> None:
-        await queue.put(_stamp_ids(payload))
-
-    # -- internal emitter ---------------------------------------------------
-
-    async def _emit(payload: dict) -> None:
-        if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
-            return
-        await _queue_event(payload)
-
-    def _enqueue_trace_event(event: TraceEvent) -> None:
-        if event is None:
-            return
-        try:
-            payload = event.to_sse_dict()
-        except Exception:
-            return
-        if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
-            return
-        outgoing = _stamp_ids(payload)
-        try:
-            loop = asyncio.get_running_loop()
-            loop.call_soon_threadsafe(queue.put_nowait, outgoing)
-        except Exception:
-            pass
-
-    # -- producer coroutine ------------------------------------------------
-
-    async def _producer() -> None:
-        token = set_event_emitter(_emit)
-        cancel_token = set_cancel_event(cancel_event)
-        trace_emitter = get_trace_emitter()
-        trace_emitter.add_listener(_enqueue_trace_event)
-        try:
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "thinking",
-                    "stage": "resume_start",
-                    "message": "Resuming execution",
-                    "timestamp": _utc_iso_now(),
-                }
-            )
-
-            runner = await deps.get_graph_runner()
-
-            # Collect final state from the stream events
-            final_state: dict[str, Any] = {}
-            async for event in runner.resume(
-                thread_id=thread_id,
-                resume_value=resume_value,
-            ):
-                event_name = event.get("event", "")
-                # Forward interrupt events to the client
-                if "interrupt" in event_name:
-                    await _queue_event(
-                        {
-                            "schema_version": deps.sse_event_schema_version,
-                            "type": "interrupt",
-                            "thread_id": thread_id,
-                            "data": event.get("data", {}),
-                        }
-                    )
-                # Capture final state from on_chain_end
-                if event_name == "on_chain_end" and event.get("data", {}).get("output"):
-                    final_state = event["data"]["output"]
-
-            # Build report from final state
-            markdown, final_state = _ensure_deliverable_markdown(final_state)
-            final_ui_context = dict(final_state.get("ui_context") or {}) if isinstance(final_state.get("ui_context"), dict) else {}
-            final_ui_context.setdefault("run_id", run_id_value)
-            final_state = {**final_state, "ui_context": final_ui_context}
-            report: dict[str, Any] | None = None
-            # P1-4: 记录报告构建崩溃（执行失败），与质量门控拦截区分
-            report_build_error: str | None = None
-            try:
-                from backend.graph.report_builder import build_report_payload
-                report = build_report_payload(
-                    state=final_state, query=final_state.get("query", ""), thread_id=thread_id,
-                )
-                report = _annotate_report_source(report, source)
-            except Exception as exc:
-                report_build_error = str(exc)
-                logger.warning("[resume_pipeline] report build failed: %s", exc)
-            report_quality, quality_blocked = _apply_quality_gate(
-                report=report,
-                source="execute_resume",
-            )
-            blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
-            # 软阻断：质量门控 blocked 但报告已生成时，仍然交付内容并附带警告
-            soft_blocked = quality_blocked and blocked_report_preview is not None
-            is_report_mode = str(final_state.get("output_mode") or "").strip().lower() == "investment_report"
-            response_markdown = (
-                markdown
-                if (soft_blocked or not is_report_mode)
-                else ("" if quality_blocked else markdown)
-            )
-            if not str(response_markdown or "").strip():
-                query_preview = str(final_state.get("query") or "这个问题").strip()
-                response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
-            persisted_report = report if soft_blocked else (None if quality_blocked else report)
-
-            if report_build_error and is_report_mode:
-                # P1-4: 报告模式下构建崩溃 = 执行失败，必须显式告知用户，
-                # 不能伪装成"执行完成"（quality gate 对 None 报告不拦截）或"质量拦截"
-                await _queue_event(
-                    {
-                        "type": "quality_blocked",
-                        "message": f"报告生成过程出错：{report_build_error[:200]}",
-                        "failure_kind": "execution_error",
-                        "failure_detail": report_build_error,
-                        "quality": report_quality,
-                        "blocked_reason_codes": [],
-                        "publishable": False,
-                        "blocked_report_available": False,
-                        "allow_continue_when_blocked": True,
-                        "soft_blocked": False,
-                    }
-                )
-            elif quality_blocked:
-                blocked_reason_codes = [
-                    str(item.get("code") or "").strip()
-                    for item in (report_quality.get("reasons") or [])
-                    if isinstance(item, dict)
-                ]
-                await _queue_event(
-                    {
-                        "type": "quality_blocked",
-                        "message": "Report quality warning" if soft_blocked else "Report blocked by quality gate",
-                        "failure_kind": "quality_gate",
-                        "failure_detail": None,
-                        "quality": report_quality,
-                        "blocked_reason_codes": [code for code in blocked_reason_codes if code],
-                        "publishable": soft_blocked,
-                        "blocked_report_available": bool(blocked_report_preview),
-                        "allow_continue_when_blocked": True,
-                        "soft_blocked": soft_blocked,
-                    }
-                )
-            if isinstance(report, dict):
-                # Persist report index
-                deps.schedule_report_index(
-                    session_id=thread_id, report=report, state=final_state,
-                )
-
-            # Persist lightweight long-term memory snapshot (best-effort)
-            if not quality_blocked or soft_blocked:
-                try:
-                    from backend.graph.store import persist_memory_snapshot
-
-                    persist_memory_snapshot(
-                        thread_id=thread_id,
-                        state=final_state,
-                        report=report,
-                    )
-                except Exception as exc:
-                    logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
-
-            if not quality_blocked or soft_blocked:
-                # Stream markdown
-                await _queue_event(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "pipeline_stage",
-                        "stage": "rendering",
-                        "status": "start",
-                        "message": "Rendering markdown stream",
-                        "timestamp": _utc_iso_now(),
-                    }
-                )
-                for idx in range(0, len(markdown), markdown_chunk_size):
-                    chunk = markdown[idx: idx + markdown_chunk_size]
-                    if chunk:
-                        await _queue_event(
-                            {
-                                "schema_version": deps.sse_event_schema_version,
-                                "type": "token",
-                                "content": chunk,
-                            }
-                        )
-                    await asyncio.sleep(0)
-
-                await _queue_event(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "pipeline_stage",
-                        "stage": "rendering",
-                        "status": "done",
-                        "message": "Rendering stream completed",
-                        "timestamp": _utc_iso_now(),
-                    }
-                )
-
-                await _queue_event(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "pipeline_stage",
-                        "stage": "done",
-                        "status": "done",
-                        "message": "Execution completed",
-                        "timestamp": _utc_iso_now(),
-                    }
-                )
-
-            # Done
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "done",
-                    "contracts": deps.contract_info(),
-                    "intent": "resume",
-                    "session_id": thread_id,
-                    "source": source,
-                    "response": response_markdown,
-                    "report": persisted_report,
-                    "blocked_report": blocked_report_preview,
-                    "quality": report_quality,
-                    "quality_blocked": quality_blocked and not soft_blocked,
-                    "publishable": not quality_blocked or soft_blocked,
-                    "blocked_report_available": bool(blocked_report_preview),
-                    "allow_continue_when_blocked": True,
-                    "soft_blocked": soft_blocked,
-                    "metrics": {
-                        "request_started_at": request_started_at,
-                        "request_finished_at": _utc_iso_now(),
-                    },
-                }
-            )
-        except asyncio.CancelledError:
-            cancel_event.set()
-            await _queue_event(_cancelled_trace_payload())
-            await _queue_event(_cancelled_pipeline_payload())
-            logger.info("[resume_pipeline] graph resume cancelled thread_id=%s", thread_id)
-        except Exception as exc:
-            logger.error("[resume_pipeline] unhandled: %s", exc, exc_info=True)
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "error",
-                    "message": "Resume execution failed",
-                }
-            )
-        finally:
-            trace_emitter.remove_listener(_enqueue_trace_event)
-            reset_cancel_event(cancel_token)
-            reset_event_emitter(token)
-            await queue.put(_END)
-
-    # -- launch & yield ----------------------------------------------------
-
-    producer_task = asyncio.create_task(_producer())
-    try:
-        while True:
-            try:
-                item = await asyncio.wait_for(queue.get(), timeout=3)
-            except asyncio.TimeoutError:
-                yield {"type": "keep-alive", "ts": _utc_iso_now()}
-                continue
             if item is _END:
                 break
             if isinstance(item, dict):

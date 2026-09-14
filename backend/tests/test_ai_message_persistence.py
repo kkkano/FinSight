@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-PM0-1b: Verify that render_stub now appends an AIMessage to state messages,
+PM0-1b: Verify that render_node now appends an AIMessage to state messages,
 so checkpointer stores complete conversation (Human + AI) turns.
 
 This confirms:
@@ -34,8 +34,8 @@ def test_ai_message_present_after_invocation():
 
     assert len(human_msgs) >= 1, "Should have at least 1 HumanMessage"
     assert len(ai_msgs) >= 1, (
-        f"Should have at least 1 AIMessage after render_stub, got {len(ai_msgs)}. "
-        f"render_stub may not be appending AIMessage."
+        f"Should have at least 1 AIMessage after render_node, got {len(ai_msgs)}. "
+        f"render_node may not be appending AIMessage."
     )
 
 

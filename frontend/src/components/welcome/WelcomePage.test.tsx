@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,36 +11,42 @@ vi.mock('../../api/supabaseClient', () => ({
   isSupabaseAuthConfigured: () => false,
 }));
 
-vi.mock('../../auth/devAuth', () => ({
-  getRagInspectorDevIdentity: () => null,
-  isRagInspectorDevAuthAvailable: () => false,
-  setRagInspectorDevAuthActive: () => undefined,
-  verifyRagInspectorDevAccessPassword: () => false,
-}));
-
-const renderWelcomeText = (path: string) =>
-  renderToStaticMarkup(
-    <MemoryRouter initialEntries={[path]}>
-      <ToastProvider>
-        <WelcomePage />
-      </ToastProvider>
-    </MemoryRouter>,
+const renderWelcomeText = (path: string) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <ToastProvider>
+          <WelcomePage />
+        </ToastProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   ).replace(/\s+/g, ' ');
+};
 
 describe('WelcomePage', () => {
-  it('keeps anonymous entry ahead of email login for normal workspace entry', () => {
-    const text = renderWelcomeText('/welcome?from=/chat');
+  it('uses the shared application skin', () => {
+    const markup = renderWelcomeText('/welcome?from=/chat');
 
-    expect(text.indexOf('匿名体验')).toBeGreaterThanOrEqual(0);
-    expect(text.indexOf('邮箱')).toBeGreaterThanOrEqual(0);
-    expect(text.indexOf('匿名体验')).toBeLessThan(text.indexOf('邮箱'));
+    expect(markup).not.toContain('--bb-');
+    expect(markup).not.toContain('linear-gradient(135deg');
+    expect(markup).toContain('bg-t-bg');
+    expect(markup).toContain('text-t-accent');
   });
 
-  it('explains missing RAG Inspector login configuration on guarded entry', () => {
-    const text = renderWelcomeText('/welcome?from=/rag-inspector');
+  it('offers authenticated login and read-only market access', () => {
+    const text = renderWelcomeText('/welcome?from=/chat');
 
-    expect(text).toContain('RAG Inspector 需要登录配置');
-    expect(text).toContain('缺少 VITE_SUPABASE_URL 或 VITE_SUPABASE_PUBLISHABLE_KEY');
-    expect(text).toContain('缺少 VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN');
+    expect(text.indexOf('浏览只读行情')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('邮箱')).toBeGreaterThanOrEqual(0);
+    expect(text).toContain('发送验证码');
+  });
+
+  it('does not advertise removed product surfaces', () => {
+    const text = renderWelcomeText('/welcome?from=/chat');
+
+    expect(text).not.toContain('RAG Inspector');
+    expect(text).not.toContain('邮件预警');
+    expect(text).not.toContain('7 个研究智能体');
   });
 });

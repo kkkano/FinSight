@@ -1,0 +1,20 @@
+{
+  "blocked_reasons": [],
+  "output_mode": "chat",
+  "plan_steps": [
+    {
+      "group": "task_1",
+      "kind": "tool",
+      "name": "fetch_url_content"
+    }
+  ],
+  "route": "research",
+  "tasks": [
+    {
+      "operation": "qa",
+      "reason": "explicit_url_reference",
+      "subject_type": "research_doc",
+      "tickers": []
+    }
+  ]
+}

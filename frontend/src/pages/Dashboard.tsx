@@ -8,8 +8,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useDashboardData } from '../hooks/useDashboardData';
-import { useDashboardInsights } from '../hooks/useDashboardInsights';
 import { useDashboardStore } from '../store/dashboardStore';
 import { Watchlist } from '../components/dashboard/Watchlist';
 import { StockHeader } from '../components/dashboard/StockHeader';
@@ -20,12 +20,20 @@ import { DataSourceTrace } from '../components/dashboard/DataSourceTrace';
 import { useStore } from '../store/useStore';
 import { useToast } from '../components/ui';
 import { useMarketQuotes } from '../hooks/useMarketQuotes';
+import { getPredictionIdFromSearch } from '../components/chatChartIntent';
+import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
+import { useMonitorLease } from '../hooks/useMonitorLease';
+import { usePredictionOverlay } from '../hooks/usePredictionOverlay';
+import { useChatHandoff } from '../hooks/useChatHandoff';
+import { usePredictionGeneration } from '../hooks/usePredictionGeneration';
+import { usePredictionEligibility } from '../hooks/usePredictionEligibility';
+import { PredictionTrack } from '../components/dashboard/PredictionTrack';
+import { MonitorActivityFeed } from '../components/dashboard/MonitorActivityFeed';
 
 interface DashboardProps {
   initialSymbol?: string;
   onBackToChat?: () => void;
   onSymbolChange?: (symbol: string) => void;
-  onGoWorkbench?: (symbol: string) => void;
 }
 
 const formatClock = (): string =>
@@ -34,17 +42,33 @@ const formatClock = (): string =>
     timeZone: 'Asia/Shanghai',
   });
 
-export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
+export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: DashboardProps) {
   const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
-  const { theme, setTheme, entryMode, authIdentity } = useStore();
+  const { theme, setTheme, entryMode, authIdentity, sessionId } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const lastErrorRef = useRef<string | null>(null);
+  const predictionId = getPredictionIdFromSearch(searchParams.toString());
+  const handoffToChat = useChatHandoff();
 
   const [clock, setClock] = useState<string>(formatClock());
   const [currentSymbol, setCurrentSymbol] = useState<string>(
     () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
+  const [predictionRefreshKey, setPredictionRefreshKey] = useState(0);
+  useMonitorLease(currentSymbol);
+  const authenticated = Boolean(authIdentity?.userId);
+  const prediction = usePredictionOverlay(
+    currentSymbol,
+    predictionId,
+    authenticated,
+    predictionRefreshKey,
+  );
+  const predictionEligibility = usePredictionEligibility(currentSymbol);
+  const predictionGeneration = usePredictionGeneration(currentSymbol, () => {
+    setPredictionRefreshKey((value) => value + 1);
+  });
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(formatClock()), 1000);
@@ -61,14 +85,6 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   }, [activeAsset, currentSymbol, initialSymbol, setActiveAsset]);
 
   const { refetch } = useDashboardData(currentSymbol);
-  const { refetch: refetchInsights } = useDashboardInsights(currentSymbol);
-
-  // Expose insights refetch to store so child tabs can trigger refresh
-  const setInsightsRefetch = useDashboardStore((s) => s.setInsightsRefetch);
-  useEffect(() => {
-    setInsightsRefetch(() => refetchInsights(currentSymbol, { force: true }));
-    return () => setInsightsRefetch(null);
-  }, [currentSymbol, refetchInsights, setInsightsRefetch]);
 
   useEffect(() => {
     if (!error) {
@@ -98,13 +114,30 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
 
   const handleRefresh = () => {
     refetch(currentSymbol);
-    refetchInsights(currentSymbol, { force: true });
+    setPredictionRefreshKey((value) => value + 1);
+  };
+
+  const handleAskAi = () => {
+    const symbol = (activeAsset?.symbol || currentSymbol).trim().toUpperCase();
+    if (!symbol) return;
+    if (!activeAsset || activeAsset.symbol !== symbol) {
+      setActiveAsset({
+        symbol,
+        display_name: activeAsset?.display_name || symbol,
+        type: activeAsset?.type || 'equity',
+      });
+    }
+    handoffToChat({
+      draft: buildDashboardAskAiDraft(symbol, searchParams.get('tab')),
+      activeSymbol: symbol,
+      sourceView: 'dashboard',
+      sourceTab: searchParams.get('tab') || 'overview',
+    });
   };
 
   const snapshot = dashboardData?.snapshot ?? {};
   const charts = dashboardData?.charts ?? {};
   const valuation = dashboardData?.valuation ?? null;
-
   const isTerminalStyle = theme === 'dark';
   const sessionText = authIdentity?.email || (entryMode === 'anonymous' ? 'ANON' : 'GUEST');
 
@@ -135,7 +168,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   if (!currentSymbol) {
     return (
       <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
-        <aside className="w-[220px] shrink-0 border-r border-fin-border bg-fin-card flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b">
+        <aside className="w-[220px] shrink-0 border-r border-fin-border bg-fin-card flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]">
           <Watchlist activeSymbol="" onSymbolSelect={handleSymbolChange} />
         </aside>
         <main className="flex-1 min-w-0 min-h-0 flex flex-col items-center justify-center bg-fin-bg">
@@ -162,8 +195,8 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
             <span className="text-[#ff8c00] font-semibold tracking-wide">FINSIGHT TERMINAL</span>
             <span>SESSION: <span className="text-slate-200">{sessionText}</span></span>
             <span>
-              MARKET:
-              <span className="ml-1 text-emerald-400">OPEN</span>
+              DATA:
+              <span className="ml-1 text-emerald-400">日线快照</span>
             </span>
           </div>
           <div className="text-slate-400">
@@ -176,7 +209,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
       <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
         <aside
           className={[
-            'w-[220px] shrink-0 border-r flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b',
+            'w-[220px] shrink-0 border-r flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]',
             isTerminalStyle ? 'border-[#1e2a3a] bg-[#111827]' : 'border-fin-border bg-fin-card',
           ].join(' ')}
         >
@@ -184,7 +217,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
         </aside>
 
         <main className={[
-          'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden',
+          'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden max-lg:overflow-y-auto',
           isTerminalStyle ? 'bg-[#0a0e17]' : 'bg-fin-bg',
         ].join(' ')}>
           <header
@@ -195,36 +228,19 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
           >
             <div className="flex items-center gap-3 min-w-0">
               {onBackToChat && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    data-testid="dashboard-back-chat"
-                    onClick={onBackToChat}
-                    className={[
-                      'px-3 py-1.5 rounded-lg border transition-colors text-xs',
-                      isTerminalStyle
-                        ? 'border-[#2b3a52] bg-[#0a0e17] text-slate-300 hover:border-[#ff8c00] hover:text-[#ff8c00]'
-                        : 'border-fin-border bg-fin-bg text-fin-text-secondary hover:bg-fin-hover',
-                    ].join(' ')}
-                  >
-                    返回对话
-                  </button>
-                  {onGoWorkbench && (
-                    <button
-                      type="button"
-                      data-testid="dashboard-go-workbench"
-                      onClick={() => onGoWorkbench(activeAsset?.symbol || currentSymbol)}
-                      className={[
-                        'px-3 py-1.5 rounded-lg border transition-colors text-xs',
-                        isTerminalStyle
-                          ? 'border-[#ff8c00]/40 bg-[#ff8c00]/15 text-[#ff8c00] hover:bg-[#ff8c00]/25'
-                          : 'border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20',
-                      ].join(' ')}
-                    >
-                      去工作台
-                    </button>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  data-testid="dashboard-back-chat"
+                  onClick={onBackToChat}
+                  className={[
+                    'px-3 py-1.5 rounded-md border transition-colors text-xs shrink-0',
+                    isTerminalStyle
+                      ? 'border-[#2b3a52] bg-[#0a0e17] text-slate-300 hover:border-[#ff8c00] hover:text-[#ff8c00]'
+                      : 'border-fin-border bg-fin-bg text-fin-text-secondary hover:bg-fin-hover',
+                  ].join(' ')}
+                >
+                  对话
+                </button>
               )}
 
               {isLoading && <span className="text-xs text-fin-muted animate-pulse shrink-0">加载中...</span>}
@@ -297,7 +313,24 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
             loading={isLoading && !dashboardData}
           />
 
-          <DashboardTabs />
+          <PredictionTrack
+            authenticated={authenticated}
+            eligibility={predictionEligibility}
+            loadState={prediction}
+            generationPhase={predictionGeneration.phase}
+            generationRun={predictionGeneration.run}
+            generationFailure={predictionGeneration.failure}
+            isGenerating={predictionGeneration.isGenerating}
+            onGenerate={() => { void predictionGeneration.generate(); }}
+            onAsk={handleAskAi}
+          />
+
+          <MonitorActivityFeed
+            sessionId={sessionId}
+            symbol={activeAsset?.symbol || currentSymbol}
+          />
+
+          <DashboardTabs predictionOverlay={prediction.overlay} />
 
           {isTerminalStyle && (
             <div className="h-8 shrink-0 border-t border-[#1e2a3a] bg-[#111827] overflow-hidden flex items-center">
@@ -305,7 +338,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
                 {[...tickerTapeItems, ...tickerTapeItems].map((item, idx) => (
                   <span key={`${item.key}-${idx}`} className="whitespace-nowrap">
                     <span className="text-slate-400 mr-1">{item.label}</span>
-                    <span className={item.up ? 'text-emerald-400' : 'text-red-400'}>{item.text.replace(`${item.label} `, '')}</span>
+                    <span className={item.up ? 'text-t-up' : 'text-t-down'}>{item.text.replace(`${item.label} `, '')}</span>
                   </span>
                 ))}
               </div>

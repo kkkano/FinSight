@@ -11,7 +11,9 @@ This module centralizes:
 
 from __future__ import annotations
 
-import os
+from backend.utils.env import env_float as _env_float
+from backend.utils.env import env_int as _env_int
+
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -37,26 +39,6 @@ class RuntimeQualityThresholds:
     grounding_warn: float = 0.75
     verifier_block_count: int = 3
     verifier_warn_count: int = 1
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return float(str(raw).strip())
-    except Exception:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return int(str(raw).strip())
-    except Exception:
-        return default
 
 
 def load_runtime_quality_thresholds() -> RuntimeQualityThresholds:

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# ruff: noqa: E402
 """
 ToolOrchestrator utilities for data source orchestration,
 fallback handling, caching, validation, and trace metadata.
@@ -7,7 +8,7 @@ fallback handling, caching, validation, and trace metadata.
 import sys
 import os
 import logging
-from typing import Dict, List, Optional, Any, Callable, Union
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import time
@@ -135,42 +136,11 @@ class ToolOrchestrator:
         self.health_min_calls = int(os.getenv("PRICE_HEALTH_MIN_CALLS", "3"))
         self.health_skip_seconds = int(os.getenv("PRICE_HEALTH_SKIP_SECONDS", "300"))
         
-        def _cfg_int(name: str, default: int) -> int:
-            try:
-                return int(os.getenv(name, default))
-            except Exception:
-                return default
-
-        def _is_configured(source_name: str) -> bool:
-            key_map = {
-                'tiingo': 'TIINGO_API_KEY',
-                'iex_cloud': 'IEX_CLOUD_API_KEY',
-                'twelve_data': 'TWELVE_DATA_API_KEY',
-                'alpha_vantage': 'ALPHA_VANTAGE_API_KEY',
-                'finnhub': 'FINNHUB_API_KEY',
-            }
-            key_attr = key_map.get(source_name)
-            if not key_attr:
-                return True
-            val = getattr(self.tools_module, key_attr, "") if self.tools_module else ""
-            return bool(val)
-        
-        
+        # MarketDataGateway 是唯一的报价供应商选择边界。
         self.sources['price'] = []
-        price_funcs = [
-            ('index_price', getattr(self.tools_module, '_fetch_index_price', None), _cfg_int('PRICE_PRIORITY_INDEX', 1), _cfg_int('PRICE_RATE_INDEX', 10), _cfg_int('PRICE_COOLDOWN_INDEX', 0)),
-            ('alpha_vantage', getattr(self.tools_module, '_fetch_with_alpha_vantage', None), _cfg_int('PRICE_PRIORITY_ALPHA', 1), _cfg_int('PRICE_RATE_ALPHA', 5), _cfg_int('PRICE_COOLDOWN_ALPHA', 0)),
-            ('finnhub', getattr(self.tools_module, '_fetch_with_finnhub', None), _cfg_int('PRICE_PRIORITY_FINNHUB', 2), _cfg_int('PRICE_RATE_FINNHUB', 60), _cfg_int('PRICE_COOLDOWN_FINNHUB', 0)),
-            ('yfinance', getattr(self.tools_module, '_fetch_with_yfinance', None), _cfg_int('PRICE_PRIORITY_YFIN', 3), _cfg_int('PRICE_RATE_YFIN', 30), _cfg_int('PRICE_COOLDOWN_YFIN', 0)),
-            ('twelve_data', getattr(self.tools_module, '_fetch_with_twelve_data_price', None), _cfg_int('PRICE_PRIORITY_TWELVEDATA', 4), _cfg_int('PRICE_RATE_TWELVEDATA', 30), _cfg_int('PRICE_COOLDOWN_TWELVEDATA', 0)),
-            ('yahoo_scrape', getattr(self.tools_module, '_scrape_yahoo_finance', None), _cfg_int('PRICE_PRIORITY_YAHOO', 5), _cfg_int('PRICE_RATE_YAHOO', 10), _cfg_int('PRICE_COOLDOWN_YAHOO', 0)),
-            ('search', getattr(self.tools_module, '_search_for_price', None), _cfg_int('PRICE_PRIORITY_SEARCH', 6), _cfg_int('PRICE_RATE_SEARCH', 30), _cfg_int('PRICE_COOLDOWN_SEARCH', 0)),
-        ]
-        for name, func, priority, rate_limit, cooldown in price_funcs:
-            if func:
-                if not _is_configured(name):
-                    continue
-                self.sources['price'].append(DataSource(name, func, priority, rate_limit, cooldown_seconds=cooldown))
+        quote_func = getattr(self.tools_module, 'get_stock_price', None) if self.tools_module else None
+        if quote_func:
+            self.sources['price'].append(DataSource('market_gateway', quote_func, 1, 120))
     
     def set_tools_module(self, tools_module):
         """Set tools module and reinitialize sources."""
@@ -683,5 +653,3 @@ class ToolOrchestrator:
                 source.total_calls = 0
                 source.total_successes = 0
                 source.consecutive_failures = 0
-
-

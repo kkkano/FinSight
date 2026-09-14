@@ -52,6 +52,28 @@ def test_python_compute_valuation_sanity_uses_existing_datasets_only():
     assert result["tables"][0]["name"] == "valuation_sanity"
 
 
+def test_python_compute_valuation_sanity_parses_company_profile_market_cap():
+    result = run_python_compute(
+        dataset_refs=["step:get_stock_price", "step:get_company_info", "step:get_sec_company_facts_quarterly"],
+        operation="valuation_sanity",
+        params={"ticker": "NVDA"},
+        datasets={
+            "step:get_stock_price": {"price": 100.0},
+            "step:get_company_info": "Company Profile (NVDA):\n- Market Cap: $5.0B",
+            "step:get_sec_company_facts_quarterly": {
+                "rows": [
+                    {"period": "2025Q4", "revenue": 450.0, "net_income": 90.0},
+                    {"period": "2026Q1", "revenue": 500.0, "net_income": 100.0},
+                ]
+            },
+        },
+    )
+
+    assert result["metrics"]["market_cap"] == 5_000_000_000.0
+    assert result["metrics"]["price_to_sales"] == 2_500_000.0
+    assert result["metrics"]["price_to_earnings"] == 12_500_000.0
+
+
 def test_python_compute_rejects_arbitrary_code_payloads():
     with pytest.raises(PythonComputeRejected):
         validate_compute_request(

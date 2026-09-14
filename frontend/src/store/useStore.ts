@@ -1,8 +1,12 @@
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
 import { apiClient } from '../api/client';
+import { zh } from '../locales/zh';
+import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
+import type { PendingChatHandoffContext } from '../types/chatHandoff';
 
 type Theme = 'dark' | 'light';
+export type ColorConvention = 'intl' | 'cn';
 type LayoutMode = 'centered' | 'full';
 type ChatStyle = 'bubble' | 'flat';
 export type EntryMode = 'pending' | 'anonymous' | 'authenticated';
@@ -54,17 +58,17 @@ const getInitialTheme = (): Theme => {
   return prefersDark ? 'dark' : 'light';
 };
 
-const getInitialSubscriptionEmail = (): string => {
-  if (typeof window === 'undefined') return '';
-  return window.localStorage.getItem('finsight-subscription-email') || '';
+const getInitialColorConvention = (): ColorConvention => {
+  if (typeof window === 'undefined') return 'intl';
+  return window.localStorage.getItem('finsight-color-convention') === 'cn' ? 'cn' : 'intl';
 };
+
+export const normalizePersistedEntryMode = (raw: string | null): EntryMode =>
+  raw === 'anonymous' ? 'anonymous' : 'pending';
 
 const getInitialEntryMode = (): EntryMode => {
   if (typeof window === 'undefined') return 'pending';
-  const raw = window.localStorage.getItem('finsight-entry-mode');
-  return raw === 'pending' || raw === 'anonymous' || raw === 'authenticated'
-    ? (raw as EntryMode)
-    : 'pending';
+  return normalizePersistedEntryMode(window.localStorage.getItem('finsight-entry-mode'));
 };
 
 export const buildAnonymousSessionId = (): string => {
@@ -142,15 +146,21 @@ const applyThemeClass = (theme: Theme) => {
   root.classList.toggle('dark', theme === 'dark');
 };
 
+export const applyColorConventionClass = (colorConvention: ColorConvention) => {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.toggle('cn-colors', colorConvention === 'cn');
+};
+
 const initialTheme = getInitialTheme();
+const initialColorConvention = getInitialColorConvention();
 const initialLayout = getInitialLayout();
-const initialSubscriptionEmail = getInitialSubscriptionEmail();
 const initialEntryMode = getInitialEntryMode();
 const initialSessionId = getInitialSessionId() || buildAnonymousSessionId();
 const initialTraceRawEnabled = getInitialTraceRawEnabled();
 const initialTraceViewMode = getInitialTraceViewMode();
 const initialTraceRawShowRawJson = getInitialTraceRawShowRawJson();
 applyThemeClass(initialTheme);
+applyColorConventionClass(initialColorConvention);
 
 interface AppState {
   messages: Message[];
@@ -186,6 +196,8 @@ interface AppState {
   setTicker: (ticker: string | null) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  colorConvention: ColorConvention;
+  setColorConvention: (colorConvention: ColorConvention) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
   chatStyle: ChatStyle;
@@ -193,8 +205,9 @@ interface AppState {
   setDraft: (text: string) => void;
   draft: string;
   draftBySession: Record<string, string>;
-  subscriptionEmail: string;
-  setSubscriptionEmail: (email: string) => void;
+  pendingChatHandoffContextBySession: Record<string, PendingChatHandoffContext | undefined>;
+  setPendingChatHandoffContext: (sessionId: string, value: PendingChatHandoffContext) => void;
+  takePendingChatHandoffContext: (sessionId: string) => PendingChatHandoffContext | undefined;
   entryMode: EntryMode;
   setEntryMode: (mode: EntryMode) => void;
   sessionId: string;
@@ -237,7 +250,7 @@ const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    '您好，我是 FinSight AI 金融助手。直接输入股票代码或问题（例如：AAPL 股价走势、特斯拉最新新闻），我会用实时数据和图表帮你分析。',
+    zh.chat.welcome,
   timestamp: Date.now(),
 };
 
@@ -245,7 +258,6 @@ const MESSAGES_STORAGE_PREFIX = 'finsight-messages:';
 const CONVERSATIONS_STORAGE_KEY = 'finsight-conversations';
 const MAX_PERSISTED_MESSAGES = 100;
 const MAX_CONVERSATIONS = 50;
-const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 const memoryMessageStore = new Map<string, string>();
 let memoryConversationSummaries: ConversationSummary[] = [];
 
@@ -269,8 +281,14 @@ const deriveBackendTitle = (messages?: Message[]): string | undefined => {
   return source.replace(/\s+/g, ' ').trim().slice(0, 42) || undefined;
 };
 
+const isAnonymousSession = (sessionId: string): boolean =>
+  String(sessionId || '').trim().startsWith('public:anonymous:');
+
+const canSyncBackendConversation = (sessionId: string): boolean =>
+  !isAnonymousSession(sessionId) && Boolean(useStore.getState().authIdentity?.userId);
+
 const createBackendConversation = (sessionId: string, messages?: Message[]) => {
-  if (!sessionId) return;
+  if (!sessionId || !canSyncBackendConversation(sessionId)) return;
   const payload = messages
     ? {
         title: deriveBackendTitle(messages),
@@ -281,7 +299,7 @@ const createBackendConversation = (sessionId: string, messages?: Message[]) => {
 };
 
 const deleteBackendConversation = (sessionId: string) => {
-  if (!sessionId) return;
+  if (!sessionId || !canSyncBackendConversation(sessionId)) return;
   void apiClient.deleteConversation(sessionId).catch(() => undefined);
 };
 
@@ -313,7 +331,7 @@ const normalizeConversationSummaries = (raw: string | null): ConversationSummary
     return parsed
       .map((item) => ({
         sessionId: String(item?.sessionId || '').trim(),
-        title: String(item?.title || '').trim() || '新对话',
+        title: String(item?.title || '').trim() || zh.chat.newConversation,
         lastMessagePreview: String(item?.lastMessagePreview || '').trim(),
         messageCount: Math.max(0, Number(item?.messageCount || 0)),
         createdAt: Number(item?.createdAt || Date.now()),
@@ -336,14 +354,14 @@ const buildConversationSummary = (
   const nonWelcome = visibleMessages.filter((m) => m.id !== WELCOME_MESSAGE.id && m.content.trim());
   const firstUser = nonWelcome.find((m) => m.role === 'user');
   const latest = [...nonWelcome].reverse()[0] || visibleMessages[visibleMessages.length - 1] || WELCOME_MESSAGE;
-  const titleSource = firstUser?.content || latest?.content || previous?.title || '新对话';
+  const titleSource = firstUser?.content || latest?.content || previous?.title || zh.chat.newConversation;
   const previewSource = latest?.content || previous?.lastMessagePreview || '';
   const createdAt = previous?.createdAt || visibleMessages[0]?.timestamp || Date.now();
   const updatedAt = latest?.timestamp || previous?.updatedAt || Date.now();
 
   return {
     sessionId,
-    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || '新对话',
+    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || zh.chat.newConversation,
     lastMessagePreview: previewSource.replace(/\s+/g, ' ').trim().slice(0, 90),
     messageCount: nonWelcome.length,
     createdAt,
@@ -478,7 +496,7 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
  */
 const hydrateMessagesFromBackend = (sessionId: string): void => {
   const sid = String(sessionId || '').trim();
-  if (!sid) return;
+  if (!sid || !canSyncBackendConversation(sid)) return;
   void apiClient
     .getConversation(sid)
     .then((resp) => {
@@ -609,10 +627,11 @@ export const useStore = create<AppState>((set) => ({
   abortControllersBySession: {},
   draft: '',
   draftBySession: {},
+  pendingChatHandoffContextBySession: {},
   theme: initialTheme,
+  colorConvention: initialColorConvention,
   layoutMode: initialLayout,
   chatStyle: getInitialChatStyle(),
-  subscriptionEmail: initialSubscriptionEmail,
   entryMode: initialEntryMode,
   sessionId: initialSessionId,
   authIdentity: null,
@@ -631,7 +650,7 @@ export const useStore = create<AppState>((set) => ({
     toolTotalCalls: 0,
     updatedAt: null,
   },
-  // 右侧面板默认收起（告警进顶部铃铛，按需展开）
+  // 右侧市场与执行面板默认收起，按需展开。
   showRightPanel: false,
 
   addMessage: (message) =>
@@ -662,7 +681,25 @@ export const useStore = create<AppState>((set) => ({
   updateMessage: (id, patch) =>
     set((state) => {
       const next = patchMessageForSession(state.messages, id, patch);
-      persistMessages(next, state.sessionId, { syncBackend: patch.isLoading === false });
+      const finalized = patch.isLoading === false;
+      if (!finalized) {
+        // FE-01：流式中间态的写盘与摘要更新去抖合并，消息 state 照常更新
+        schedulePersist(state.sessionId, () => {
+          const latest = useStore.getState();
+          if (latest.sessionId !== state.sessionId) return; // 已切会话，等收尾路径落盘
+          persistMessages(latest.messages, latest.sessionId, { syncBackend: false });
+          useStore.setState({
+            conversationSummaries: upsertConversationSummary(
+              latest.conversationSummaries,
+              latest.sessionId,
+              latest.messages,
+            ),
+          });
+        });
+        return { messages: next };
+      }
+      cancelPersist(state.sessionId);
+      persistMessages(next, state.sessionId, { syncBackend: true });
       return {
         messages: next,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, state.sessionId, next),
@@ -673,13 +710,30 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const normalized = String(sessionId || '').trim();
       if (!normalized) return {};
-      const baseMessages = normalized === state.sessionId
+      const isActiveSession = normalized === state.sessionId;
+      const baseMessages = isActiveSession
         ? state.messages
         : loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
+      // 异步补挂可能晚于会话删除返回；目标消息已不存在时不得重建会话摘要或本地存储。
+      if (!baseMessages.some((message) => message.id === id)) return {};
       const next = patchMessageForSession(baseMessages, id, patch);
-      persistMessages(next, normalized, { syncBackend: patch.isLoading === false });
+      const finalized = patch.isLoading === false;
+      if (!finalized && isActiveSession) {
+        // FE-01：流式中间态去抖（仅当前会话；跨会话更新低频，保持原直写路径）
+        schedulePersist(normalized, () => {
+          const latest = useStore.getState();
+          if (latest.sessionId !== normalized) return; // 已切走：patch 含全量 content，收尾路径会补齐
+          persistMessages(latest.messages, normalized, { syncBackend: false });
+          useStore.setState({
+            conversationSummaries: upsertConversationSummary(latest.conversationSummaries, normalized, latest.messages),
+          });
+        });
+        return { messages: next };
+      }
+      if (finalized) cancelPersist(normalized);
+      persistMessages(next, normalized, { syncBackend: finalized });
       return {
-        messages: normalized === state.sessionId ? next : state.messages,
+        messages: isActiveSession ? next : state.messages,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, next),
       };
     }),
@@ -820,16 +874,16 @@ export const useStore = create<AppState>((set) => ({
           [state.sessionId]: false,
         },
         isChatLoading: false,
-        statusMessage: STOPPED_GENERATION_MESSAGE,
+        statusMessage: zh.chat.stopped,
         statusSince: Date.now(),
-        currentStep: '已停止生成',
+        currentStep: zh.chat.stoppedLabel,
         executionProgress: progress,
         chatStatusBySession: {
           ...state.chatStatusBySession,
           [state.sessionId]: {
-            statusMessage: STOPPED_GENERATION_MESSAGE,
+            statusMessage: zh.chat.stopped,
             statusSince: Date.now(),
-            currentStep: '已停止生成',
+            currentStep: zh.chat.stoppedLabel,
             executionProgress: progress,
           },
         },
@@ -883,8 +937,10 @@ export const useStore = create<AppState>((set) => ({
         },
       };
     }),
-  startNewChat: () =>
-    set((state) => {
+  startNewChat: () => {
+    // FE-01：切走前把当前会话 pending 的去抖写盘落定（此刻 state 仍指向旧会话，能正确落盘）
+    flushPersist(useStore.getState().sessionId);
+    return set((state) => {
       const nextSessionId = buildNewConversationSessionId(state.authIdentity);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', nextSessionId);
@@ -917,13 +973,22 @@ export const useStore = create<AppState>((set) => ({
           updatedAt: null,
         },
       };
-    }),
+    });
+  },
 
   setTheme: (theme) => {
     set({ theme });
     applyThemeClass(theme);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('finsight-theme', theme);
+    }
+  },
+
+  setColorConvention: (colorConvention) => {
+    set({ colorConvention });
+    applyColorConventionClass(colorConvention);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('finsight-color-convention', colorConvention);
     }
   },
 
@@ -941,14 +1006,6 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-chat-style', style);
       }
       return { chatStyle: style };
-    }),
-
-  setSubscriptionEmail: (email) =>
-    set(() => {
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('finsight-subscription-email', email);
-      }
-      return { subscriptionEmail: email };
     }),
 
   setEntryMode: (mode) =>
@@ -992,6 +1049,8 @@ export const useStore = create<AppState>((set) => ({
   },
 
   selectConversation: (sessionId) => {
+    // FE-01：切走前先把旧会话的 pending 去抖写盘落定，防止读到半新半旧
+    flushPersist(useStore.getState().sessionId);
     let needHydrate = false;
     let hydrateSid = '';
     set((state) => {
@@ -1040,6 +1099,7 @@ export const useStore = create<AppState>((set) => ({
         const activeController = state.abortControllersBySession[normalized] || state.abortController;
         activeController?.abort();
       }
+      cancelPersist(normalized); // FE-01：丢弃 pending 写盘，防止定时器把已删会话写回
       deleteBackendConversation(normalized);
       clearPersistedConversation(normalized);
       const remaining = state.conversationSummaries
@@ -1062,6 +1122,8 @@ export const useStore = create<AppState>((set) => ({
         createBackendConversation(nextSessionId, nextMessages);
       }
       const nextSessionStatus = statusForSession(state.chatStatusBySession, nextSessionId);
+      const pendingChatHandoffContextBySession = { ...state.pendingChatHandoffContextBySession };
+      delete pendingChatHandoffContextBySession[normalized];
       return {
         sessionId: nextSessionId,
         messages: nextMessages,
@@ -1090,6 +1152,7 @@ export const useStore = create<AppState>((set) => ({
           ...state.draftBySession,
           [normalized]: '',
         },
+        pendingChatHandoffContextBySession,
         agentLogs: normalized === state.sessionId ? [] : state.agentLogs,
         agentStatuses: normalized === state.sessionId ? createInitialAgentStatuses() : state.agentStatuses,
         rawEvents: normalized === state.sessionId ? [] : state.rawEvents,
@@ -1107,6 +1170,33 @@ export const useStore = create<AppState>((set) => ({
         [state.sessionId]: text,
       },
     })),
+
+  setPendingChatHandoffContext: (sessionId, value) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized || value.sessionId !== normalized) return {};
+      return {
+        pendingChatHandoffContextBySession: {
+          ...state.pendingChatHandoffContextBySession,
+          [normalized]: value,
+        },
+      };
+    }),
+
+  takePendingChatHandoffContext: (sessionId) => {
+    const normalized = String(sessionId || '').trim();
+    if (!normalized) return undefined;
+    let taken: PendingChatHandoffContext | undefined;
+    set((state) => {
+      const candidate = state.pendingChatHandoffContextBySession[normalized];
+      if (!candidate || candidate.sessionId !== normalized) return {};
+      taken = candidate;
+      const next = { ...state.pendingChatHandoffContextBySession };
+      delete next[normalized];
+      return { pendingChatHandoffContextBySession: next };
+    });
+    return taken;
+  },
 
   // Agent Logs Actions
   addAgentLog: (log) =>
@@ -1186,3 +1276,8 @@ export const useStore = create<AppState>((set) => ({
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),
 }));
+
+// FE-01：页面卸载前把所有 pending 的去抖写盘落定，避免丢最后 ≤500ms 的流式内容
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => flushPersist());
+}

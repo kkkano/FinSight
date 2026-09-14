@@ -182,6 +182,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+      - name: Verify generated OpenAPI TypeScript schema
+        run: |
+          npm run gen:api --prefix frontend
+          git diff --exit-code -- frontend/src/api/schema.d.ts
       - name: Build frontend
         run: npm run build --prefix frontend
       - name: Upload frontend build artifacts

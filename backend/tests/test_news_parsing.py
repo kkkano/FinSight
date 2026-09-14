@@ -6,7 +6,20 @@ Tests for news parsing utilities.
 
 from datetime import datetime
 
+import pytest
+
 from backend import tools
+from backend.services.market_data_gateway import reset_market_data_gateway
+from backend.tools import news as news_mod
+
+
+@pytest.fixture(autouse=True)
+def _reset_gateway(monkeypatch):
+    monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
+    reset_market_data_gateway()
+    yield
+    news_mod._YFINANCE_NEWS_DISABLED_UNTIL = 0.0
+    reset_market_data_gateway()
 
 
 def test_format_search_news_items_detects_recent_items():
@@ -96,7 +109,7 @@ def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -108,7 +121,7 @@ def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
     assert items[0]["url"] == "https://finance.yahoo.com/news/nested-article.html"
 
 
-def test_get_company_news_leaves_url_empty_when_source_has_no_article_url(monkeypatch):
+def test_get_company_news_rejects_item_without_article_url(monkeypatch):
     from backend.tools import news as news_mod
 
     class _Ticker:
@@ -125,15 +138,14 @@ def test_get_company_news_leaves_url_empty_when_source_has_no_article_url(monkey
                 }
             ]
 
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
 
     items = news_mod.get_company_news("NVDA", limit=1)
 
-    assert items
-    assert items[0]["url"] == ""
+    assert items == []
 
 
 def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypatch):
@@ -162,7 +174,7 @@ def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypat
                 },
             ]
 
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -187,7 +199,7 @@ def test_get_company_news_cools_down_yfinance_after_timeout(monkeypatch):
 
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_COOLDOWN_SEC", 900)
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda ticker: _Ticker(ticker))
+    monkeypatch.setattr(news_mod, "create_ticker", lambda ticker: _Ticker(ticker))
     monkeypatch.setattr(news_mod, "finnhub_client", None)
     monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
@@ -223,7 +235,7 @@ def test_get_company_news_prefers_finnhub_when_configured(monkeypatch):
             ]
 
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", _Finnhub())
 
     items = news_mod.get_company_news("NVDA", limit=1)
@@ -232,7 +244,7 @@ def test_get_company_news_prefers_finnhub_when_configured(monkeypatch):
     assert items[0]["source"] == "Finnhub"
 
 
-def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monkeypatch):
+def test_get_company_news_does_not_add_third_search_provider(monkeypatch):
     from backend.tools import news as news_mod
 
     class _Ticker:
@@ -253,7 +265,7 @@ def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monk
             ]
 
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
-    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "create_ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", _Finnhub())
     monkeypatch.setattr(
         news_mod,
@@ -271,6 +283,4 @@ def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monk
 
     items = news_mod.get_company_news("AAPL", limit=1)
 
-    assert items
-    assert items[0]["title"] == "Apple AAPL supplier story with direct link"
-    assert items[0]["url"] == "https://finance.yahoo.com/news/apple-supplier-story.html"
+    assert items == []

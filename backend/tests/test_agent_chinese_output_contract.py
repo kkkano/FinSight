@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 """P2-5 英文 claim 中文化 — 中文输出契约测试。
 
-验证两类约束：
-1. LLM 分析 prompt 含"中文输出"要求（A 类：prompt 强制中文）。
-2. 各 agent 的确定性模板（summary / risks / claim / limitations）不再
+验证各 agent 的确定性模板（summary / risks / claim / limitations）不再
    暴露已知的英文模板字符串（B 类：固定英文模板已中文化）。
 
 注：搜索词、外部新闻标题、金融术语缩写（ATR/PCR/IV/Skew/MA）属 C 类原始
@@ -12,27 +10,11 @@
 
 import inspect
 
-from backend.agents import base_agent
 from backend.agents import fundamental_agent
 from backend.agents import macro_agent
 from backend.agents import news_agent
 from backend.agents import price_agent
 from backend.agents import risk_agent
-
-
-# ── A 类：prompt 含中文输出要求 ──
-
-def test_base_llm_analyze_prompt_requires_chinese():
-    """base_agent._llm_analyze 的公共 prompt 必须显式要求中文输出。"""
-    src = inspect.getsource(base_agent.BaseFinancialAgent._llm_analyze)
-    assert "中文" in src, "公共 _llm_analyze prompt 缺少中文输出要求"
-
-
-def test_macro_llm_analyze_role_focus_is_chinese():
-    """macro agent 的 _llm_analyze role/focus 已中文化。"""
-    src = inspect.getsource(macro_agent.MacroAgent)
-    assert "资深宏观分析师" in src
-    assert "Senior macro analyst" not in src
 
 
 # ── B 类：确定性英文模板已消除 ──

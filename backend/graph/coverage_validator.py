@@ -17,14 +17,7 @@ class CoverageValidation(TypedDict, total=False):
     status: str
     fulfilled_evidence: list[str]
     missing_evidence: list[str]
-    fulfilled_results: list[str]
-    missing_results: list[str]
     frame_results: list[dict[str, Any]]
-
-
-_RESULT_PRODUCERS: dict[str, set[str]] = {
-    "backtest_result": {"run_strategy_backtest"},
-}
 
 
 def _plan_step_names(plan_ir: dict[str, Any] | None) -> set[str]:
@@ -56,13 +49,6 @@ def validate_plan_coverage(
         if isinstance(request_frame, dict) and isinstance(request_frame.get("evidence_obligations"), list)
         else []
     )
-    raw_required_results: list[Any] = []
-    if isinstance(request_frame, dict):
-        frame_required_results = request_frame.get("required_results")
-        if isinstance(frame_required_results, list):
-            raw_required_results = frame_required_results
-    required_results = [str(result) for result in raw_required_results if str(result).strip()]
-
     fulfilled_evidence: list[str] = []
     missing_evidence: list[str] = []
     for kind in required_evidence:
@@ -72,22 +58,11 @@ def validate_plan_coverage(
         else:
             missing_evidence.append(kind)
 
-    fulfilled_results: list[str] = []
-    missing_results: list[str] = []
-    for result in required_results:
-        producers = _RESULT_PRODUCERS.get(result, set())
-        if producers and step_names.intersection(producers):
-            fulfilled_results.append(result)
-        else:
-            missing_results.append(result)
-
-    status = "ok" if not missing_evidence and not missing_results else "missing"
+    status = "ok" if not missing_evidence else "missing"
     return {
         "status": status,
         "fulfilled_evidence": fulfilled_evidence,
         "missing_evidence": missing_evidence,
-        "fulfilled_results": fulfilled_results,
-        "missing_results": missing_results,
     }
 
 
@@ -111,12 +86,8 @@ def validate_plan_coverage_for_frames(
 
     fulfilled_evidence: list[str] = []
     missing_evidence: list[str] = []
-    fulfilled_results: list[str] = []
-    missing_results: list[str] = []
     seen_fulfilled_evidence: set[str] = set()
     seen_missing_evidence: set[str] = set()
-    seen_fulfilled_results: set[str] = set()
-    seen_missing_results: set[str] = set()
     frame_results: list[dict[str, Any]] = []
 
     for index, frame in enumerate(frames, 1):
@@ -126,22 +97,16 @@ def validate_plan_coverage_for_frames(
             "status": result.get("status", ""),
             "fulfilled_evidence": result.get("fulfilled_evidence", []),
             "missing_evidence": result.get("missing_evidence", []),
-            "fulfilled_results": result.get("fulfilled_results", []),
-            "missing_results": result.get("missing_results", []),
         }
         frame_results.append(frame_result)
         _append_unique(fulfilled_evidence, result.get("fulfilled_evidence", []), seen_fulfilled_evidence)
         _append_unique(missing_evidence, result.get("missing_evidence", []), seen_missing_evidence)
-        _append_unique(fulfilled_results, result.get("fulfilled_results", []), seen_fulfilled_results)
-        _append_unique(missing_results, result.get("missing_results", []), seen_missing_results)
 
-    status = "ok" if not missing_evidence and not missing_results else "missing"
+    status = "ok" if not missing_evidence else "missing"
     return {
         "status": status,
         "fulfilled_evidence": fulfilled_evidence,
         "missing_evidence": missing_evidence,
-        "fulfilled_results": fulfilled_results,
-        "missing_results": missing_results,
         "frame_results": frame_results,
     }
 

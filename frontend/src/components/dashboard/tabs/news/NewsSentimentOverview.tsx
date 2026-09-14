@@ -10,6 +10,7 @@ import { Activity, Flame, Minus, RadioTower, TrendingDown, TrendingUp } from 'lu
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
 import type { NewsItem, NewsTimeRange } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 import {
   classifySentiment,
   deriveImpactLevel,
@@ -474,7 +475,10 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
-          <div className="text-xs text-fin-muted">整体情绪</div>
+          <div className="flex items-center justify-between gap-2 text-xs text-fin-muted">
+            <span>整体情绪</span>
+            <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
+          </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className={`text-2xl font-semibold ${scoreTone}`}>{formatSignedScore(stats.score)}</span>
             <span className="text-sm font-medium text-fin-text">{stats.biasLabel}</span>
@@ -485,7 +489,10 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="flex items-center justify-between text-xs text-fin-muted">
             <span>情绪趋势</span>
-            <span className={trendTone(stats.trendDirection)}>{trendIcon(stats.trendDirection)}</span>
+            <div className="flex items-center gap-2">
+              <span className={trendTone(stats.trendDirection)}>{trendIcon(stats.trendDirection)}</span>
+              <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
+            </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className={`text-xl font-semibold ${trendTone(stats.trendDirection)}`}>{stats.trendLabel}</span>
@@ -500,7 +507,10 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="flex items-center justify-between text-xs text-fin-muted">
             <span>舆情热度</span>
-            <Flame size={15} className="text-fin-warning" />
+            <div className="flex items-center gap-2">
+              <Flame size={15} className="text-fin-warning" />
+              <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
+            </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-fin-text">{stats.heatScore}</span>
@@ -517,7 +527,10 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="flex items-center justify-between text-xs text-fin-muted">
             <span>信源质量</span>
-            <Activity size={15} className="text-fin-primary" />
+            <div className="flex items-center gap-2">
+              <Activity size={15} className="text-fin-primary" />
+              <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
+            </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-semibold text-fin-text">
@@ -537,7 +550,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fin-text">情绪分布</h3>
-            <span className="text-2xs text-fin-muted">看多 / 中性 / 看空</span>
+            <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           <DistributionChart stats={stats} theme={theme} />
         </div>
@@ -545,7 +558,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fin-text">情绪时间线</h3>
-            <span className="text-2xs text-fin-muted">客户端聚合情绪分</span>
+            <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           <TimelineChart stats={stats} theme={theme} />
         </div>
@@ -555,7 +568,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fin-text">催化事件时间线</h3>
-            <span className="text-2xs text-fin-muted">来自高影响新闻</span>
+            <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           {/* TODO: 后端 dashboard.news 接入 NewsSentimentSnapshot.catalyst_events 后，优先展示后端聚合催化事件。 */}
           {stats.catalysts.length === 0 ? (

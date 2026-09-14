@@ -130,17 +130,18 @@ class _RiskTools:
             "annualized_volatility": 0.42,
         }
 
+class _PriceTools:
     @staticmethod
-    def run_portfolio_stress_test(_positions, lookback_days: int = 252) -> dict:
-        del _positions, lookback_days
+    def get_stock_price(_ticker: str) -> dict:
         return {
-            "source": "fixture_stress_model",
-            "worst_case_return": -0.16,
-            "scenarios": [{"name": "rate shock", "return": -0.16}],
+            "ticker": "AAPL",
+            "price": 150.0,
+            "currency": "USD",
+            "change": 3.2,
+            "change_percent": 2.3,
+            "source": "fixture_quote",
         }
 
-
-class _PriceTools:
     @staticmethod
     def _fetch_with_yfinance(_ticker: str) -> dict:
         return {
@@ -265,10 +266,10 @@ async def test_price_agent_outputs_price_behavior_native_claims() -> None:
 
 
 @pytest.mark.asyncio
-async def test_risk_agent_outputs_scenario_level_native_claims() -> None:
+async def test_risk_agent_outputs_factor_level_native_claims() -> None:
     output = await RiskAgent(None, _Cache(), _RiskTools()).research("NVDA 现在主要风险是什么？", "NVDA")
 
     claim_types = {claim.get("metadata", {}).get("claim_type") for claim in output.claims}
-    assert {"risk_score", "factor_exposure", "stress_test"}.issubset(claim_types)
+    assert {"risk_score", "factor_exposure"}.issubset(claim_types)
     assert all(claim.get("stance") == "risk" for claim in output.claims)
     _assert_claims_are_supported(output)

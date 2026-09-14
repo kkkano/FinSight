@@ -2,6 +2,8 @@
 """Tests for backend.rag.chunker — document chunking strategies."""
 from __future__ import annotations
 
+import builtins
+
 from backend.rag.chunker import ChunkResult, chunk_document
 
 
@@ -105,3 +107,42 @@ def test_auto_detect_table():
     result = chunk_document(content, "web_page")
     assert len(result.chunks) == 1
     assert result.metadata[0]["doc_type"] == "table"
+
+
+def test_recursive_chunking_matches_existing_output_contract():
+    content = (
+        "Alpha beta gamma delta. Epsilon zeta eta theta.\n\n"
+        "Iota kappa lambda mu nu xi omicron pi."
+    )
+
+    result = chunk_document(
+        content,
+        "research",
+        max_chunk_size=40,
+        overlap=8,
+    )
+
+    assert result.chunks == [
+        "Alpha beta gamma delta",
+        ". Epsilon zeta eta theta.",
+        "Iota kappa lambda mu nu xi omicron pi.",
+    ]
+
+
+def test_long_chunking_does_not_import_langchain_text_splitters(monkeypatch):
+    original_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name.startswith("langchain_text_splitters"):
+            raise AssertionError("request-time chunking loaded langchain_text_splitters")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    result = chunk_document(
+        "Market conditions remained stable. " * 200,
+        "research",
+        max_chunk_size=400,
+        overlap=40,
+    )
+
+    assert len(result.chunks) > 1

@@ -1,18 +1,23 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { FC, KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Bot,
+  ArrowUpDown,
   Gauge,
   GitCompare,
-  LayoutDashboard,
+  History,
   MessageSquarePlus,
+  MessageCircleQuestion,
   Moon,
   Search,
   Sparkles,
   Sun,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useDashboardStore } from '../store/dashboardStore';
+import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
+import { getDashboardRouteSymbol } from '../utils/dashboardRouteContext';
+import { useChatHandoff } from '../hooks/useChatHandoff';
 import { Dialog } from './ui/Dialog';
 
 interface CommandAction {
@@ -31,7 +36,17 @@ interface CommandPaletteProps {
 
 export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { theme, setTheme, setDraft, currentTicker } = useStore();
+  const location = useLocation();
+  const {
+    theme,
+    setTheme,
+    colorConvention,
+    setColorConvention,
+    setDraft,
+    currentTicker,
+  } = useStore();
+  const handoffToChat = useChatHandoff();
+  const activeAsset = useDashboardStore((state) => state.activeAsset);
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -51,22 +66,42 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         },
       },
       {
-        id: 'open-workbench',
-        label: '打开工作台',
-        icon: LayoutDashboard,
-        keywords: ['workbench'],
+        id: 'ask-ai-with-context',
+        label: '问 AI（带当前页面上下文）',
+        icon: MessageCircleQuestion,
+        keywords: ['ask', 'ai', 'context', '提问', '上下文'],
         execute: () => {
-          navigate('/workbench');
+          const symbol = getDashboardRouteSymbol(
+            location.pathname,
+            activeAsset?.symbol || currentTicker,
+          );
+          const tab = new URLSearchParams(location.search).get('tab');
+          handoffToChat({
+            draft: symbol ? buildDashboardAskAiDraft(symbol, tab) : '请分析我当前关注的问题',
+            activeSymbol: symbol ?? undefined,
+            sourceView: 'command_palette',
+            sourceTab: tab ?? undefined,
+          });
           onClose();
         },
       },
       {
         id: 'open-dashboard',
-        label: '打开仪表盘',
+        label: '打开看板',
         icon: Gauge,
         keywords: ['dashboard'],
         execute: () => {
           navigate('/dashboard');
+          onClose();
+        },
+      },
+      {
+        id: 'open-history',
+        label: '打开历史',
+        icon: History,
+        keywords: ['history', 'prediction', 'report', '历史', '预测', '报告'],
+        execute: () => {
+          navigate('/history');
           onClose();
         },
       },
@@ -95,16 +130,6 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         },
       },
       {
-        id: 'cmd-agents',
-        label: '/agents Agent 设置',
-        icon: Bot,
-        keywords: ['agents', 'settings', '偏好'],
-        execute: () => {
-          window.dispatchEvent(new CustomEvent('finsight:open-settings'));
-          onClose();
-        },
-      },
-      {
         id: 'toggle-dark-mode',
         label: '切换明暗主题',
         icon: theme === 'dark' ? Sun : Moon,
@@ -114,8 +139,31 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
           onClose();
         },
       },
+      {
+        id: 'toggle-color-convention',
+        label: `切换涨跌色（当前：${colorConvention === 'cn' ? 'A股' : '国际'}）`,
+        icon: ArrowUpDown,
+        keywords: ['color', 'red', 'green', '涨跌色', '红绿'],
+        execute: () => {
+          setColorConvention(colorConvention === 'cn' ? 'intl' : 'cn');
+          onClose();
+        },
+      },
     ],
-    [navigate, onClose, theme, setTheme, setDraft, currentTicker],
+    [
+      activeAsset?.symbol,
+      colorConvention,
+      currentTicker,
+      location.pathname,
+      location.search,
+      navigate,
+      onClose,
+      setDraft,
+      setColorConvention,
+      handoffToChat,
+      setTheme,
+      theme,
+    ],
   );
 
   const filteredActions = useMemo(() => {

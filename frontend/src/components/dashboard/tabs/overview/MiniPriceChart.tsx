@@ -10,6 +10,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { ChartPoint } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -68,13 +69,16 @@ export function MiniPriceChart({ data }: MiniPriceChartProps) {
   if (!option) return null;
 
   return (
-    <ReactECharts
-      option={option}
-      style={{ width: 160, height: 48 }}
-      opts={{ renderer: 'svg' }}
-      notMerge
-      lazyUpdate
-    />
+    <div className="relative pt-3">
+      <DashboardSourceBadge metaKey="market_chart" className="absolute right-0 top-0" />
+      <ReactECharts
+        option={option}
+        style={{ width: 160, height: 48 }}
+        opts={{ renderer: data.length > 200 ? 'canvas' : 'svg' }}
+        notMerge
+        lazyUpdate
+      />
+    </div>
   );
 }
 

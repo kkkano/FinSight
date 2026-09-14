@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""P0-9 corrected: 舆情简报接入真实 Chat 生产路径（render_stub -> chat_renderer）。
+"""P0-9 corrected: 舆情简报接入真实 Chat 生产路径（render_node -> chat_renderer）。
 
 两层测试：
 - build_light_snapshot 单元测试（轻量快照构建，零额外 API 调用）
-- Chat 链路集成测试（render_stub 真实路径，验证个股/泛市场新闻走简报渲染）
+- Chat 链路集成测试（render_node 真实路径，验证个股/泛市场新闻走简报渲染）
 """
 from __future__ import annotations
 
 from backend.agents.sentiment_brief import build_light_snapshot
-from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.render_node import render_node
 
 
 # ──────────────────────────────────────────────────────────────
@@ -92,12 +92,12 @@ def test_build_light_snapshot_no_extra_api_calls():
 
 
 # ──────────────────────────────────────────────────────────────
-# Chat 链路集成测试（render_stub 真实生产路径）
+# Chat 链路集成测试（render_node 真实生产路径）
 # ──────────────────────────────────────────────────────────────
 
 
 def _render_chat(state: dict) -> str:
-    result = render_stub(
+    result = render_node(
         {
             "query": state.get("query", ""),
             "output_mode": state.get("output_mode", "chat"),
@@ -232,7 +232,7 @@ def test_chat_news_brief_does_not_break_price_only():
 # ──────────────────────────────────────────────────────────────
 # P0-9-2 双快照打架修复：NewsAgent 完整快照 > 轻量快照
 #
-# 现象（FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true 时）：
+# 历史现象：
 # - NewsAgent 完整快照以 evidence(source=news_sentiment_snapshot) 混进新闻流
 # - chat_renderer 把快照文本当新闻渲染，却用轻量快照渲染标题/催化
 # 修复目标：
@@ -355,7 +355,7 @@ def test_full_snapshot_preferred_over_light():
 
 def test_snapshot_text_parsing():
     """meta 丢失时从快照文本正则提取数值（平均分/占比/催化数/趋势）。"""
-    from backend.graph.nodes.chat_renderer import _parse_snapshot_text
+    from backend.graph.renderers.news_snapshot import _parse_snapshot_text
 
     parsed = _parse_snapshot_text(_SNAPSHOT_TEXT)
     assert parsed is not None

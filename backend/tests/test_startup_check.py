@@ -32,13 +32,13 @@ class TestLLMEndpointCheck:
     def test_llm_unavailable_when_no_endpoint_configured(self):
         with patch(
             "backend.llm_config.load_user_endpoints",
-            side_effect=ValueError("No LLM endpoint configured"),
+            side_effect=RuntimeError("LLM endpoint not configured: set OPENAI_COMPATIBLE_API_BASE"),
         ):
             result = run_startup_checks()
 
         assert result.llm_available is False
         assert result.llm_error is not None
-        assert "No LLM endpoint" in result.llm_error
+        assert "OPENAI_COMPATIBLE_API_BASE" in result.llm_error
 
     def test_llm_available_when_endpoint_configured(self):
         fake_endpoint = object()
@@ -101,39 +101,6 @@ class TestDataSourceKeyCheck:
         assert keys[1] in result.missing_keys
 
 
-class TestAgentLLMAnalyzeCheck:
-    """P3: AGENT_LLM_ANALYZE_ENABLED 启动校验（关闭则 agent 退化成只列数据）"""
-
-    def test_disabled_by_default(self, monkeypatch):
-        monkeypatch.delenv("AGENT_LLM_ANALYZE_ENABLED", raising=False)
-        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
-            result = run_startup_checks()
-        assert result.agent_llm_analyze_enabled is False
-
-    def test_enabled_when_true(self, monkeypatch):
-        monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
-        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
-            result = run_startup_checks()
-        assert result.agent_llm_analyze_enabled is True
-
-    def test_enabled_accepts_truthy_variants(self, monkeypatch):
-        for raw in ("1", "yes", "on", "TRUE", "On"):
-            startup_check._reset_for_testing()
-            monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", raw)
-            with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
-                result = run_startup_checks()
-            assert result.agent_llm_analyze_enabled is True, raw
-
-    def test_warning_logged_when_disabled(self, monkeypatch, caplog):
-        import logging
-
-        monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "false")
-        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
-            with caplog.at_level(logging.WARNING, logger="backend.services.startup_check"):
-                run_startup_checks()
-        assert any("AGENT_LLM_ANALYZE_ENABLED" in r.message for r in caplog.records)
-
-
 class TestIsLLMAvailable:
     """P1-3: chat_router 快速失败依赖的状态查询"""
 
@@ -170,38 +137,3 @@ class TestGetStartupResult:
         result = get_startup_result()
         assert isinstance(result, StartupCheckResult)
         assert result.llm_available is True
-
-
-class TestChatRouterFastFail:
-    """P1-3: chat_router 在 LLM 不可用时立即 503，不让用户等超时"""
-
-    def test_ensure_llm_available_raises_503_when_unavailable(self):
-        from fastapi import HTTPException
-
-        from backend.api.chat_router import _ensure_llm_available
-
-        with patch(
-            "backend.llm_config.load_user_endpoints",
-            side_effect=ValueError("no endpoint"),
-        ):
-            run_startup_checks()
-
-        with pytest.raises(HTTPException) as exc_info:
-            _ensure_llm_available()
-        assert exc_info.value.status_code == 503
-        assert "LLM" in exc_info.value.detail
-
-    def test_ensure_llm_available_passes_when_available(self):
-        from backend.api.chat_router import _ensure_llm_available
-
-        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
-            run_startup_checks()
-
-        # 不抛异常即通过
-        _ensure_llm_available()
-
-    def test_ensure_llm_available_passes_when_never_checked(self):
-        """向后兼容：测试环境没跑启动检查时不拦截"""
-        from backend.api.chat_router import _ensure_llm_available
-
-        _ensure_llm_available()

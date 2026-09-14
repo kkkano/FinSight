@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 
@@ -116,83 +115,38 @@ async def test_base_agent_research_attaches_self_check_diagnostics() -> None:
 
 
 @pytest.mark.asyncio
-async def test_agent_llm_analysis_is_opt_in_by_default(monkeypatch) -> None:
-    class _UnexpectedLLM:
-        model_name = "unexpected-fixture"
+async def test_base_agent_keeps_research_context_isolated_per_async_task() -> None:
+    class _ConcurrentAgent(BaseFinancialAgent):
+        AGENT_NAME = "concurrent_context_agent"
 
-        async def ainvoke(self, _messages):
-            raise AssertionError("agent LLM analysis should be disabled by default")
+        def __init__(self) -> None:
+            super().__init__(llm=None, cache=None)
+            self.first_search_started = asyncio.Event()
+            self.second_search_started = asyncio.Event()
 
-    class _OptInAgent(BaseFinancialAgent):
-        AGENT_NAME = "optin_agent"
+        async def _initial_search(self, query: str, ticker: str) -> dict[str, str]:
+            del query
+            if ticker == "AAPL":
+                self.first_search_started.set()
+                await self.second_search_started.wait()
+            else:
+                await self.first_search_started.wait()
+                self.second_search_started.set()
 
-    monkeypatch.delenv("AGENT_LLM_ANALYZE_ENABLED", raising=False)
-    monkeypatch.delenv("OPTIN_AGENT_LLM_ANALYZE_ENABLED", raising=False)
+            return {
+                "query": self._current_query or "",
+                "ticker": self._current_ticker or "",
+            }
 
-    agent = _OptInAgent(llm=_UnexpectedLLM(), cache=None)
+        async def _first_summary(self, data: dict[str, str]) -> str:
+            return "|".join((data["query"], data["ticker"]))
 
-    assert await agent._llm_analyze("price 10", role="fixture", focus="fixture") is None
+    agent = _ConcurrentAgent()
 
-
-@pytest.mark.asyncio
-async def test_agent_llm_analysis_has_hard_call_timeout(monkeypatch) -> None:
-    class _SlowLLM:
-        model_name = "slow-fixture"
-
-        async def ainvoke(self, _messages):
-            await asyncio.sleep(2.0)
-            return type("_Resp", (), {"content": "这段内容不应该在超时后返回。"})()
-
-    class _TimeoutAgent(BaseFinancialAgent):
-        AGENT_NAME = "timeout_agent"
-
-    monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
-    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "0.1")
-    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
-    monkeypatch.setattr(
-        "backend.services.rate_limiter.acquire_llm_token",
-        lambda *args, **kwargs: asyncio.sleep(0, result=True),
+    apple_output, microsoft_output = await asyncio.gather(
+        agent.research("apple query", "AAPL"),
+        agent.research("microsoft query", "MSFT"),
     )
 
-    agent = _TimeoutAgent(llm=_SlowLLM(), cache=None)
-
-    start = time.perf_counter()
-    result = await agent._llm_analyze(
-        "price 10, MA20 9, RSI 55",
-        role="fixture",
-        focus="fixture",
-    )
-    elapsed = time.perf_counter() - start
-
-    assert result is None
-    assert elapsed < 0.8
-
-
-@pytest.mark.asyncio
-async def test_agent_reflection_gap_detection_has_hard_call_timeout(monkeypatch) -> None:
-    class _SlowLLM:
-        model_name = "slow-fixture"
-
-        async def ainvoke(self, _messages):
-            await asyncio.sleep(2.0)
-            return type("_Resp", (), {"content": "{\"complete\": true}"})()
-
-    class _TimeoutAgent(BaseFinancialAgent):
-        AGENT_NAME = "timeout_agent"
-
-    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
-    monkeypatch.setattr(
-        "backend.services.rate_limiter.acquire_llm_token",
-        lambda *args, **kwargs: asyncio.sleep(0, result=True),
-    )
-
-    agent = _TimeoutAgent(llm=_SlowLLM(), cache=None)
-    agent._current_query = "AAPL technical"
-    agent._current_ticker = "AAPL"
-
-    start = time.perf_counter()
-    result = await agent._identify_gaps("AAPL has price and RSI evidence.")
-    elapsed = time.perf_counter() - start
-
-    assert result == []
-    assert elapsed < 0.8
+    assert apple_output.summary == "apple query|AAPL"
+    assert microsoft_output.summary == "microsoft query|MSFT"

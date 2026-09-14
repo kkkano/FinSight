@@ -110,7 +110,6 @@ def build_execute_request(payload: Mapping[str, Any]) -> dict[str, Any]:
         "query": query,
         "output_mode": output_mode,
         "analysis_depth": analysis_depth,
-        "confirmation_mode": _clean_text(metadata.get("confirmation_mode")) or "skip",
         "source": "a2a",
     }
     session_id = _clean_text(metadata.get("session_id") or payload.get("session_id"))
@@ -118,8 +117,6 @@ def build_execute_request(payload: Mapping[str, Any]) -> dict[str, Any]:
         request["session_id"] = session_id
     if tickers:
         request["tickers"] = tickers
-    if skill:
-        request["agent_preferences"] = {"a2a_skill": skill}
     return request
 
 

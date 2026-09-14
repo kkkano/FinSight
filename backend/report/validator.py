@@ -117,7 +117,7 @@ class ReportValidator:
                                     delta = now - pub_dt
                                     freshness_hours = max(0.0, delta.total_seconds() / 3600)
                                 except Exception:
-                                    pass
+                                    logger.debug("citation published_date is invalid", exc_info=True)
                         else:
                             try:
                                 freshness_hours = float(freshness_hours)

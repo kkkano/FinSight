@@ -16,7 +16,6 @@ class AssetType(str, Enum):
     INDEX = "index"         # 指数
     ETF = "etf"             # 交易所交易基金
     CRYPTO = "crypto"       # 加密货币
-    PORTFOLIO = "portfolio" # 投资组合
 
 
 class TimeRange(str, Enum):

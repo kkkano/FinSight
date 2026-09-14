@@ -1,14 +1,13 @@
-import { Eraser, Moon, Plus, Sun, Bell, ChevronUp, Loader2, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Eraser, Moon, Plus, Sun, PanelRightOpen, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
-import { ExecutionPanel } from '../execution/ExecutionPanel';
 import { ChatInput } from '../ChatInput';
 import { ChatList } from '../ChatList';
 import { ContextPanelShell } from './ContextPanelShell';
 import type { MarketQuote } from '../../hooks/useMarketQuotes';
+import { useDeveloperMode } from '../../hooks/useDeveloperMode';
 import { apiClient } from '../../api/client';
-import { useExecutionStore } from '../../store/executionStore';
 import { useStore } from '../../store/useStore';
 import type { ConversationSummary } from '../../store/useStore';
 
@@ -23,12 +22,11 @@ type ChatWorkspaceProps = {
     onExpand: () => void;
     onCollapse: () => void;
     onResizeStart: (event: MouseEvent) => void;
-    onSubscribeClick: () => void;
     autoSwitchExecution?: boolean;
-    onNavigateToChat?: () => void;
   };
   marketQuotes: MarketQuote[];
   initialReportId?: string | null;
+  initialDraft?: string | null;
 };
 
 const formatChangePct = (value?: number) => {
@@ -64,8 +62,9 @@ export function ChatWorkspace({
   contextPanel,
   marketQuotes,
   initialReportId,
+  initialDraft,
 }: ChatWorkspaceProps) {
-  const traceViewMode = useStore((state) => state.traceViewMode);
+  const [developerMode] = useDeveloperMode();
   const chatStyle = useStore((state) => state.chatStyle);
   const setChatStyle = useStore((state) => state.setChatStyle);
   const sessionId = useStore((state) => state.sessionId);
@@ -74,28 +73,20 @@ export function ChatWorkspace({
   const deleteConversation = useStore((state) => state.deleteConversation);
   const startNewChat = useStore((state) => state.startNewChat);
   const clearConversationContext = useStore((state) => state.clearConversationContext);
-  const latestRunId = useExecutionStore((state) => (
-    state.activeRuns[state.activeRuns.length - 1]?.runId
-      ?? state.recentRuns[0]?.runId
-      ?? null
-  ));
-  const latestRunStatus = useExecutionStore((state) => {
-    const run = state.activeRuns[state.activeRuns.length - 1]
-      ?? state.recentRuns[0]
-      ?? null;
-    return run?.status ?? null;
-  });
+  const setDraft = useStore((state) => state.setDraft);
 
-  const [execCollapsed, setExecCollapsed] = useState(true);
+  const loadedDraftRef = useRef<string | null>(null);
 
-  // 执行中自动展开，完成后自动折叠
   useEffect(() => {
-    if (latestRunStatus === 'running' || latestRunStatus === 'interrupted') {
-      setExecCollapsed(false);
-    } else if (latestRunStatus === 'done' || latestRunStatus === 'error') {
-      setExecCollapsed(true);
-    }
-  }, [latestRunStatus]);
+    const nextDraft = initialDraft?.trim();
+    if (!nextDraft) return;
+    // 登录态/匿名态初始化可能在路由挂载后切换 session，并清空当前 draft。
+    // 按 session 记录已加载键，确保深链草稿在最终会话中仍能恢复。
+    const loadedDraftKey = `${sessionId}\u0000${nextDraft}`;
+    if (loadedDraftRef.current === loadedDraftKey) return;
+    loadedDraftRef.current = loadedDraftKey;
+    setDraft(nextDraft);
+  }, [initialDraft, sessionId, setDraft]);
 
   // --- P0-2: report_id replay ---
   const replayLoadedRef = useRef<string | null>(null);
@@ -112,7 +103,7 @@ export function ChatWorkspace({
     apiClient
       .getReportReplay({ sessionId, reportId: initialReportId })
       .then((data) => {
-        if (data.success && data.report) {
+        if (data.report) {
           const { addMessage } = useStore.getState();
           addMessage({
             id: `replay-${initialReportId}-${Date.now()}`,
@@ -130,8 +121,8 @@ export function ChatWorkspace({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
-      <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:px-3">
-        <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-hide">
+      <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:pl-14 max-lg:pr-3">
+        <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-hide max-lg:hidden">
           {marketQuotes.map((quote) => (
             <span key={quote.label} className="flex items-center gap-1 whitespace-nowrap">
               {quote.flag} {quote.label}:{' '}
@@ -150,11 +141,11 @@ export function ChatWorkspace({
           ))}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 max-lg:w-full max-lg:justify-end max-lg:overflow-x-auto scrollbar-hide">
           <button
             type="button"
             onClick={startNewChat}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
             title="新建对话"
             aria-label="新建对话"
           >
@@ -164,7 +155,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={clearConversationContext}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
             title="清空上下文"
             aria-label="清空上下文"
           >
@@ -174,7 +165,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={() => setChatStyle(chatStyle === 'bubble' ? 'flat' : 'bubble')}
-            className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            className="min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
             title={chatStyle === 'bubble' ? '切换平铺布局' : '切换气泡布局'}
             aria-label="切换聊天布局"
           >
@@ -183,24 +174,20 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={onToggleTheme}
-            className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            className="min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
+            title={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
+            aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <button
             type="button"
             onClick={contextPanel.onExpand}
-            className="relative p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
-            title="告警与订阅"
-            aria-label="告警与订阅"
+            className="relative min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
+            title="展开市场与执行面板"
+            aria-label="展开市场与执行面板"
           >
-            <Bell size={16} />
-          </button>
-          <button
-            type="button"
-            className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
-          >
-            导出 PDF
+            <PanelRightOpen size={16} />
           </button>
         </div>
       </header>
@@ -264,7 +251,7 @@ export function ChatWorkspace({
                   </button>
                   <button
                     type="button"
-                    className="shrink-0 self-start mt-1.5 mr-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded-md text-fin-muted hover:text-red-300 hover:bg-red-500/10 transition"
+                    className="shrink-0 self-start mt-1.5 mr-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 max-lg:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 p-1 rounded-md text-fin-muted hover:text-red-300 hover:bg-red-500/10 transition"
                     title="删除会话"
                     aria-label="删除会话"
                     data-testid="conversation-delete"
@@ -287,32 +274,7 @@ export function ChatWorkspace({
             <ChatList />
             <ChatInput onDashboardRequest={onDashboardRequest} />
           </div>
-          <div className="shrink-0">
-            {traceViewMode === 'dev' ? (
-              <AgentLogPanel />
-            ) : latestRunId ? (
-              execCollapsed ? (
-                <button
-                  type="button"
-                  onClick={() => setExecCollapsed(false)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-fin-border bg-fin-card text-xs text-fin-muted hover:bg-fin-hover transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    {latestRunStatus === 'running' && <Loader2 size={12} className="animate-spin text-blue-300" />}
-                    执行追踪（已折叠）
-                  </span>
-                  <ChevronUp size={14} />
-                </button>
-              ) : (
-                <ExecutionPanel
-                  runId={latestRunId}
-                  mode={traceViewMode === 'expert' ? 'expert' : 'user'}
-                  collapsible
-                  onCollapse={() => setExecCollapsed(true)}
-                />
-              )
-            ) : null}
-          </div>
+          {developerMode && <div className="shrink-0"><AgentLogPanel /></div>}
         </div>
 
         <ContextPanelShell
@@ -322,10 +284,7 @@ export function ChatWorkspace({
           onExpand={contextPanel.onExpand}
           onCollapse={contextPanel.onCollapse}
           onResizeStart={contextPanel.onResizeStart}
-          onSubscribeClick={contextPanel.onSubscribeClick}
           autoSwitchExecution={contextPanel.autoSwitchExecution}
-          onNavigateToChat={contextPanel.onNavigateToChat}
-          showMiniChat={false}
         />
       </div>
     </div>

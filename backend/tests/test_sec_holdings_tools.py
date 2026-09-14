@@ -40,7 +40,6 @@ def test_get_institutional_holdings_rejects_non_us_market(monkeypatch):
 def test_get_institutional_holdings_requires_sec_user_agent(monkeypatch):
     _reset_sec_cache()
     monkeypatch.delenv("SEC_USER_AGENT", raising=False)
-    monkeypatch.delenv("EMAIL_FROM", raising=False)
 
     payload = sec_holdings.get_institutional_holdings("0001067983")
 

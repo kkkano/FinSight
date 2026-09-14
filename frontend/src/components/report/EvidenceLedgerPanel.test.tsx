@@ -3,8 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { EvidenceLedgerPanel } from './EvidenceLedgerPanel';
-import { HoldingsWatchPanel } from './HoldingsWatchPanel';
-import type { EvidenceLedger, HoldingsInsight } from '../../types/index';
+import type { EvidenceLedger } from '../../types/index';
 
 const renderText = (node: React.ReactElement) =>
   renderToStaticMarkup(node).replace(/\s+/g, ' ');
@@ -64,54 +63,5 @@ describe('EvidenceLedgerPanel', () => {
     expect(text).toContain('暂无证据账本');
     expect(html).not.toContain('{');
     expect(html).not.toContain('"claims"');
-  });
-});
-
-describe('HoldingsWatchPanel', () => {
-  it('renders 13F delay note and Form 4 transaction rows', () => {
-    const holdings: HoldingsInsight = {
-      source: 'sec_holdings',
-      ticker: 'AAPL',
-      holder_name: 'Berkshire Hathaway',
-      quarter: '2025Q1',
-      regulatory_notes: {
-        form_13f_due: 'SEC Form 13F is due within 45 days after each calendar quarter end.',
-        form_4_due: 'In most cases, Form 4 is filed within two business days following the transaction date.',
-      },
-      holdings: [
-        {
-          issuer_name: 'Apple Inc.',
-          ticker: 'AAPL',
-          cusip: '037833100',
-          value_usd_thousands: 150000,
-          shares: 1000,
-          share_type: 'SH',
-        },
-      ],
-      transactions: [
-        {
-          owner_name: 'Jane Officer',
-          security_title: 'Common Stock',
-          security_type: 'non_derivative',
-          transaction_date: '2025-05-01',
-          transaction_code: 'P',
-          acquired_disposed: 'A',
-          shares: 100,
-          price_per_share: 185.5,
-          direct_or_indirect_ownership: 'D',
-          interpretation_note: 'Raw SEC Form 4 code P; do not infer intent from code alone.',
-        },
-      ],
-    };
-
-    const text = renderText(<HoldingsWatchPanel holdings={holdings} />);
-
-    expect(text).toContain('13F');
-    expect(text).toContain('45 days');
-    expect(text).toContain('Form 4');
-    expect(text).toContain('Jane Officer');
-    expect(text).toContain('P');
-    expect(text).toContain('100');
-    expect(text).toContain('$185.50');
   });
 });

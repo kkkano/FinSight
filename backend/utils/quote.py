@@ -9,7 +9,6 @@ import math
 import re
 from typing import Any, Optional
 
-
 def safe_float(value: Any) -> Optional[float]:
     """Convert *value* to float; return None for invalid numbers."""
     if value is None:
@@ -69,9 +68,9 @@ def parse_quote_payload(payload: Any) -> dict[str, Any] | None:
 def fallback_quote_yfinance(ticker: str) -> dict[str, Any] | None:
     """Last-resort quote fetch via yfinance 5-day daily history."""
     try:
-        import yfinance as yf
+        from backend.tools.yfinance_client import create_ticker
 
-        hist = yf.Ticker(ticker).history(period="5d", interval="1d")
+        hist = create_ticker(ticker).history(period="5d", interval="1d")
         if hist is None or hist.empty:
             return None
 
@@ -118,4 +117,3 @@ def resolve_live_quote(
         return fallback, raw_payload
 
     return None, raw_payload
-

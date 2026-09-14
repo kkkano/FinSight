@@ -13,17 +13,11 @@ P1-7: 报告级缓存（同 ticker + TTL）
 
 from __future__ import annotations
 
-import os
+from backend.utils.env import env_float as _env_float
+
 import threading
 import time
 from typing import Any, Optional
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, str(default)))
-    except (TypeError, ValueError):
-        return default
 
 
 class ReportCache:

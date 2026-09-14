@@ -46,7 +46,6 @@ SOURCE_OPERATION_NAMES = frozenset(
         "fact_check",
         "company_info",
         "fundamental",
-        "morning_brief",
     }
 )
 

@@ -23,27 +23,6 @@
       "expect": {"min_ledger_claims": 2, "min_source_count": 2, "min_query_coverage_rate": 0.8, "min_grounding_rate": 0.8, "max_verifier_unresolved_count": 0}
     },
     {
-      "id": "nvda-debate",
-      "category": "debate",
-      "query": "NVDA bull/bear debate",
-      "artifacts": {
-        "evidence_ledger": {
-          "claims": [
-            {"claim_id": "nvda-bull", "claim": "Data center demand remains strong.", "stance": "bull", "evidence_ids": ["nvda-s1"], "confidence": 0.8},
-            {"claim_id": "nvda-bear", "claim": "Valuation risk remains material.", "stance": "bear", "evidence_ids": ["nvda-s2"], "confidence": 0.72}
-          ],
-          "sources": [
-            {"source_id": "nvda-s1", "title": "Demand source", "source": "filing", "reliability": 0.78},
-            {"source_id": "nvda-s2", "title": "Valuation source", "source": "market_data", "reliability": 0.74}
-          ]
-        },
-        "query_coverage": {"coverage_rate": 0.9, "covered_targets": [{"id": "catalyst"}, {"id": "risk"}], "unanswered_targets": []},
-        "grounding_rate": 0.88,
-        "debate": {"status": "done", "judge_scorecard": {"bull_score": 0.74, "bear_score": 0.69, "evidence_balance": "mixed", "key_disagreements": ["valuation vs demand"]}}
-      },
-      "expect": {"min_ledger_claims": 2, "min_source_count": 2, "require_debate": true, "min_grounding_rate": 0.8}
-    },
-    {
       "id": "msft-risk-report",
       "category": "risk_report",
       "query": "MSFT risk-focused report",

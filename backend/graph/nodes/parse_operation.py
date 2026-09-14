@@ -4,8 +4,8 @@ Rule-first operation parsing with multi-ticker default compare strategy.
 
 Priority order (highest to lowest):
   1. Explicit compare keywords  → compare
-  2. Guardrail-A single-task keywords (analyze_impact > backtest > technical >
-     price > summarize > extract_metrics > fetch)  → corresponding op
+  2. Guardrail-A single-task keywords (analyze_impact > technical > price >
+     summarize > extract_metrics > fetch)  → corresponding op
   3. Multi-ticker default compare (len(tickers) >= 2, no guardrail-A hit)
   4. qa fallback
 
@@ -48,56 +48,6 @@ _TECHNICAL_KEYWORDS: tuple[str, ...] = (
     "技术面", "技術面", "技术分析", "技術分析", "technical analysis",
     "macd", "rsi", "kdj", "均线", "ma", "k线", "k線", "支撑", "阻力",
 )
-_ALERT_KEYWORDS: tuple[str, ...] = (
-    # CN
-    "提醒",
-    "提醒我",
-    "预警",
-    "设置提醒",
-    "价格提醒",
-    "涨到",
-    "跌到",
-    "到达",
-    "触及",
-    "达到",
-    # EN (fixed phrases only, no regex tokens here)
-    "alert",
-    "notify",
-    "remind me",
-    "price alert",
-    "when it reaches",
-    "when reaches",
-    "target price",
-)
-_SCREEN_KEYWORDS: tuple[str, ...] = (
-    "screen",
-    "screener",
-    "stock screener",
-    "stock screen",
-    "筛选",
-    "选股",
-    "条件选股",
-)
-_CN_MARKET_KEYWORDS: tuple[str, ...] = (
-    "资金流向",
-    "北向",
-    "northbound",
-    "fund flow",
-    "limit-up",
-    "limit up",
-    "龙虎榜",
-    "概念股",
-    "concept board",
-)
-_BACKTEST_KEYWORDS: tuple[str, ...] = (
-    "backtest",
-    "strategy backtest",
-    "回测",
-    "策略回测",
-    "ma cross",
-    "macd strategy",
-    "rsi mean reversion",
-)
 _PRICE_KEYWORDS: tuple[str, ...] = (
     "股价", "股價", "现价", "現價", "报价", "報價", "行情",
     "price", "quote", "多少钱", "多少錢", "现在多少钱",
@@ -112,13 +62,6 @@ _FETCH_KEYWORDS: tuple[str, ...] = (
     "获取", "列出", "有哪些", "新闻", "最新", "发生了什么", "發生了什麼",
     "news", "latest news",
 )
-_MORNING_BRIEF_KEYWORDS: tuple[str, ...] = (
-    "晨报", "早报", "晨间", "早间", "每日简报", "今日概览",
-    "morning brief", "daily brief", "morning report", "daily summary",
-    "今日行情", "盘前", "开盘前",
-)
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -198,13 +141,6 @@ def parse_operation(state: GraphState) -> dict:
         keyword_hits = ["earnings_performance_pattern"]
         guardrail_a_hit = "earnings_performance"
 
-    elif (hits := _match_any(_BACKTEST_KEYWORDS, lowered)):
-        op = "backtest"
-        confidence = 0.86
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "backtest"
-
     elif (hits := _match_any(_TECHNICAL_KEYWORDS, lowered)):
         op = "technical"
         confidence = 0.85
@@ -218,27 +154,6 @@ def parse_operation(state: GraphState) -> dict:
         source = "semantic_rule"
         keyword_hits = ["investment_opinion_pattern"]
         guardrail_a_hit = "investment_opinion"
-
-    elif (hits := _match_any(_ALERT_KEYWORDS, lowered)):
-        op = "alert_set"
-        confidence = 0.88
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "alert_set"
-
-    elif (hits := _match_any(_SCREEN_KEYWORDS, lowered)):
-        op = "screen"
-        confidence = 0.86
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "screen"
-
-    elif (hits := _match_any(_CN_MARKET_KEYWORDS, lowered)):
-        op = "cn_market"
-        confidence = 0.84
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "cn_market"
 
     elif (hits := _match_any(_PRICE_KEYWORDS, lowered)):
         op = "price"
@@ -269,16 +184,6 @@ def parse_operation(state: GraphState) -> dict:
         source = "keyword"
         keyword_hits = hits
         guardrail_a_hit = "fetch"
-
-    # ------------------------------------------------------------------
-    # 2.5. Morning brief keywords (between fetch and multi-ticker default)
-    # ------------------------------------------------------------------
-    elif (hits := _match_any(_MORNING_BRIEF_KEYWORDS, lowered)):
-        op = "morning_brief"
-        confidence = 0.85
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "morning_brief"
 
     # ------------------------------------------------------------------
     # 3. Multi-ticker default compare (no guardrail-A hit)

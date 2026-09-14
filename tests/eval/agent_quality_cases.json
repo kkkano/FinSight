@@ -116,16 +116,11 @@
           "source": "fixture_factor_model",
           "factor_beta": {"market": 1.35, "growth": 1.55},
           "annualized_volatility": 0.42
-        },
-        "stress_test": {
-          "source": "fixture_stress_model",
-          "worst_case_return": -0.16,
-          "scenarios": [{"name": "rate shock", "return": -0.16}]
         }
       },
       "expect": {
         "min_risk_count": 1,
-        "min_claim_count": 3,
+        "min_claim_count": 2,
         "min_claim_source_ratio": 1.0,
         "require_agent_quality_status": ["pass", "warn"],
         "require_self_check_status": ["pass", "warn"]

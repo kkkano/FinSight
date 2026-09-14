@@ -3,8 +3,6 @@ from __future__ import annotations
 import sys
 import types
 
-import pandas as pd
-
 from backend.dashboard import data_service
 from backend.dashboard import peer_service
 
@@ -25,43 +23,6 @@ def test_fetch_valuation_uses_finnhub_fallback_when_yfinance_empty(monkeypatch):
     assert isinstance(result, dict)
     assert result["market_cap"] == 123.0
     assert result["trailing_pe"] == 20.0
-
-
-def test_fetch_financials_uses_finnhub_fallback_when_yfinance_missing(monkeypatch):
-    class EmptyTicker:
-        def __init__(self, symbol: str):
-            self.quarterly_income_stmt = pd.DataFrame()
-            self.quarterly_financials = pd.DataFrame()
-            self.quarterly_balance_sheet = pd.DataFrame()
-            self.quarterly_cashflow = pd.DataFrame()
-
-    fallback_payload = {
-        "periods": ["2025FY", "2024FY"],
-        "revenue": [100.0, 90.0],
-        "gross_profit": [50.0, 45.0],
-        "operating_income": [20.0, 18.0],
-        "net_income": [15.0, 14.0],
-        "eps": [1.2, 1.1],
-        "total_assets": [300.0, 280.0],
-        "total_liabilities": [120.0, 110.0],
-        "operating_cash_flow": [25.0, 24.0],
-        "free_cash_flow": [10.0, 9.0],
-    }
-
-    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=EmptyTicker))
-    monkeypatch.setattr(
-        data_service,
-        "_fetch_financial_statements_from_finnhub",
-        lambda symbol, periods=8: fallback_payload,
-    )
-    monkeypatch.setattr(
-        data_service,
-        "_fetch_financial_statements_from_sec_companyfacts",
-        lambda symbol, periods=8: None,
-    )
-
-    result = data_service.fetch_financial_statements("AAPL")
-    assert result == fallback_payload
 
 
 def test_peer_service_uses_finnhub_when_yfinance_info_empty(monkeypatch):
@@ -104,66 +65,6 @@ def test_resolve_peers_falls_back_to_default_list_when_sector_unknown(monkeypatc
     peers = peer_service.resolve_peers("ZZZZ", limit=4)
     assert len(peers) == 4
     assert all(p != "ZZZZ" for p in peers)
-
-
-def test_fetch_financials_prefers_sec_companyfacts_before_finnhub(monkeypatch):
-    class EmptyTicker:
-        def __init__(self, symbol: str):
-            self.quarterly_income_stmt = pd.DataFrame()
-            self.quarterly_financials = pd.DataFrame()
-            self.quarterly_balance_sheet = pd.DataFrame()
-            self.quarterly_cashflow = pd.DataFrame()
-
-    sec_payload = {
-        "periods": ["2025Q3", "2025Q2"],
-        "revenue": [100.0, 90.0],
-        "gross_profit": [40.0, 35.0],
-        "operating_income": [20.0, 18.0],
-        "net_income": [15.0, 14.0],
-        "eps": [1.5, 1.4],
-        "total_assets": [300.0, 280.0],
-        "total_liabilities": [120.0, 110.0],
-        "operating_cash_flow": [30.0, 28.0],
-        "free_cash_flow": [20.0, 18.0],
-    }
-
-    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=EmptyTicker))
-    monkeypatch.setattr(
-        data_service,
-        "_fetch_financial_statements_from_sec_companyfacts",
-        lambda symbol, periods=8: sec_payload,
-    )
-    monkeypatch.setattr(
-        data_service,
-        "_fetch_financial_statements_from_finnhub",
-        lambda symbol, periods=8: None,
-    )
-
-    result = data_service.fetch_financial_statements("AAPL")
-    assert result == sec_payload
-
-
-def test_fetch_financials_uses_cn_hk_route_for_cn_symbol(monkeypatch):
-    payload = {
-        "periods": ["2025Q3", "2025Q2"],
-        "revenue": [130.0, 110.0],
-        "gross_profit": [60.0, 50.0],
-        "operating_income": [40.0, 35.0],
-        "net_income": [25.0, 22.0],
-        "eps": [2.5, 2.2],
-        "total_assets": [500.0, 480.0],
-        "total_liabilities": [100.0, 95.0],
-        "operating_cash_flow": [50.0, 45.0],
-        "free_cash_flow": [30.0, 28.0],
-    }
-    monkeypatch.setattr(
-        data_service,
-        "_fetch_financial_statements_from_cn_hk_market",
-        lambda symbol, periods=8: payload,
-    )
-
-    result = data_service.fetch_financial_statements("600519.SS")
-    assert result == payload
 
 
 def test_resolve_peers_uses_market_specific_defaults():

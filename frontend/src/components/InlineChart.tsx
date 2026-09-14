@@ -1,16 +1,24 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Loader2 } from 'lucide-react';
+import { ChartNoAxesCombined, Loader2 } from 'lucide-react';
 
 import { apiClient } from '../api/client';
 import { useChartTheme } from '../hooks/useChartTheme';
 import type { ChartType, KlineData } from '../types';
+import {
+  buildCandlestickOption,
+  buildKlineSmartChartData,
+  buildLineOption,
+} from './SmartChart';
+import { SourceBadge } from './ui/SourceBadge';
+import { EmptyState } from './ui/EmptyState';
 
 interface InlineChartProps {
   ticker: string;
   period?: string;
   chartType?: ChartType;
-  onDataReady?: (data: KlineData[], summary: string) => void;
+  /** 价格语义图使用 close；旧的收益率快捷图保持 return。 */
+  valueMode?: 'close' | 'return';
 }
 
 const chartLabels: Partial<Record<ChartType, string>> = {
@@ -24,191 +32,49 @@ const chartLabels: Partial<Record<ChartType, string>> = {
   tree: 'Hierarchy',
 };
 
-const buildLineOption = (data: KlineData[], chartTheme: ReturnType<typeof useChartTheme>, fillArea = false) => {
-  const returns = data.map((item, idx) => {
-    const firstClose = data[0].close;
-    const value = ((item.close - firstClose) / firstClose) * 100;
-    return { time: item.time, value, idx };
-  });
-
-  return {
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-      backgroundColor: chartTheme.tooltipBackground,
-      borderColor: chartTheme.tooltipBorder,
-      textStyle: { color: chartTheme.tooltipText },
-      formatter: (params: any) => {
-        const point = params[0];
-        const sign = point.value >= 0 ? '+' : '';
-        return `${point.axisValue}<br/>Return: <span style="color: ${point.value >= 0 ? chartTheme.success : chartTheme.danger}">${sign}${point.value.toFixed(2)}%</span>`;
-      },
-    },
-    grid: { left: '10%', right: '10%', bottom: '15%', top: '10%' },
-    xAxis: {
-      type: 'category',
-      data: returns.map((item) => item.time),
-      axisLine: { lineStyle: { color: chartTheme.border } },
-      axisLabel: {
-        color: chartTheme.muted,
-        fontSize: 10,
-        rotate: 0,
-        hideOverlap: true,
-        interval: 'auto',
-        formatter: (value: string) => {
-          // 优先显示日期部分（MM-DD），而非时间
-          if (!value) return '';
-          // 如果包含空格（如 "2024-01-15 00:00:00"），取日期部分
-          const datePart = value.includes(' ') ? value.split(' ')[0] : value;
-          // 如果是 YYYY-MM-DD 格式，返回 MM-DD
-          if (datePart.includes('-') && datePart.length >= 10) {
-            return datePart.slice(5); // MM-DD
-          }
-          // 如果是短日期格式，直接返回
-          if (datePart.includes('-')) return datePart.slice(5);
-          return datePart;
-        }
-      },
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { show: false },
-      splitLine: { lineStyle: { color: chartTheme.grid } },
-      axisLabel: {
-        color: chartTheme.textSecondary,
-        fontSize: 10,
-        formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`,
-      },
-    },
-    series: [
-      {
-        type: 'line',
-        data: returns.map((item) => item.value),
-        smooth: true,
-        lineStyle: { color: chartTheme.primary, width: 2 },
-        areaStyle: fillArea
-          ? {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: chartTheme.primarySoft },
-                { offset: 1, color: chartTheme.primaryFaint },
-              ],
-            },
-          }
-          : undefined,
-        itemStyle: { color: chartTheme.primary },
-      },
-    ],
-  };
-};
-
-const buildCandleOption = (data: KlineData[], chartTheme: ReturnType<typeof useChartTheme>) => ({
-  backgroundColor: 'transparent',
-  tooltip: {
-    trigger: 'axis',
-    axisPointer: { type: 'cross' },
-    backgroundColor: chartTheme.tooltipBackground,
-    borderColor: chartTheme.tooltipBorder,
-    textStyle: { color: chartTheme.tooltipText },
-  },
-  grid: { left: '10%', right: '10%', bottom: '15%', top: '10%' },
-  xAxis: {
-    type: 'category',
-    data: data.map((item) => item.time),
-    axisLine: { lineStyle: { color: chartTheme.border } },
-    axisLabel: { color: chartTheme.textSecondary, fontSize: 10, rotate: 45 },
-  },
-  yAxis: {
-    scale: true,
-    axisLine: { show: false },
-    splitLine: { lineStyle: { color: chartTheme.grid } },
-    axisLabel: { color: chartTheme.textSecondary, fontSize: 10 },
-  },
-  series: [
-    {
-      type: 'candlestick',
-      data: data.map((item) => [item.open, item.close, item.low, item.high]),
-      itemStyle: {
-        color: chartTheme.success,
-        color0: chartTheme.danger,
-        borderColor: chartTheme.success,
-        borderColor0: chartTheme.danger,
-      },
-    },
-  ],
-});
-
-const generateDataSummary = (ticker: string, data: KlineData[]): string => {
-  if (!data.length) return '';
-
-  const first = data[0];
-  const last = data[data.length - 1];
-  const prices = data.map((d) => d.close);
-  const high = Math.max(...prices);
-  const low = Math.min(...prices);
-  const change = last.close - first.close;
-  const changePercent = (change / first.close) * 100;
-
-  return `
-[${ticker} Historical Snapshot]
-Range: ${first.time} -> ${last.time}
-Start: $${first.close.toFixed(2)}
-Last: $${last.close.toFixed(2)}
-High: $${high.toFixed(2)}
-Low: $${low.toFixed(2)}
-Return: ${change >= 0 ? '+' : ''}$${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)
-Points: ${data.length}
-`;
-};
-
 export const InlineChart: React.FC<InlineChartProps> = ({
   ticker,
   period = '1y',
   chartType = 'line',
-  onDataReady,
+  valueMode = 'return',
 }) => {
   const chartTheme = useChartTheme();
   const [data, setData] = useState<KlineData[]>([]);
-  // 数据来源标记：price_fallback* 表示后端全源失败后生成的合成占位 K 线（非真实行情）
   const [dataSource, setDataSource] = useState<string | null>(null);
+  const [dataAsOf, setDataAsOf] = useState<string | null>(null);
+  const [dataQuality, setDataQuality] = useState<'trusted' | 'degraded' | null>(null);
+  const [dataDegraded, setDataDegraded] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const onDataReadyRef = useRef(onDataReady);
-  const lastSummaryRef = useRef<string>('');
-
-  useEffect(() => {
-    onDataReadyRef.current = onDataReady;
-  }, [onDataReady]);
-
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   useEffect(() => {
     let active = true;
     const loadData = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const interval = period === '1y' || period === '2y' ? '1d' : period === '5y' ? '1wk' : '1d';
         const res = await apiClient.fetchKline(ticker, period, interval);
         const responseData = res as any;
         const kline = responseData?.data?.kline_data ?? responseData?.kline_data ?? [];
-        // 读取后端 source 标记（price_fallback / price_fallback_hourly = 合成占位行情）
-        const source = responseData?.data?.source ?? responseData?.source ?? null;
+        const source = responseData?.data?.provider ?? responseData?.data?.source
+          ?? responseData?.provider ?? responseData?.source ?? null;
+        const asOf = responseData?.data?.as_of ?? responseData?.as_of ?? null;
+        const quality = responseData?.data?.quality ?? responseData?.quality ?? null;
+        const degraded = responseData?.data?.degraded ?? responseData?.degraded ?? false;
+        const responseErrorCode = responseData?.data?.error_code ?? responseData?.error_code ?? null;
 
         if (!active) return;
         setData(kline);
         setDataSource(typeof source === 'string' ? source : null);
-        if (kline.length) {
-          const summary = generateDataSummary(ticker, kline);
-          if (summary && summary !== lastSummaryRef.current) {
-            lastSummaryRef.current = summary;
-            onDataReadyRef.current?.(kline, summary);
-          }
-        }
+        setDataAsOf(typeof asOf === 'string' ? asOf : null);
+        setDataQuality(quality === 'trusted' || quality === 'degraded' ? quality : null);
+        setDataDegraded(Boolean(degraded));
+        setErrorCode(typeof responseErrorCode === 'string' ? responseErrorCode : null);
       } catch (err) {
         console.error('Inline chart load failed:', err);
+        if (active) setLoadError(true);
       } finally {
         if (active) {
           setLoading(false);
@@ -220,7 +86,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     return () => {
       active = false;
     };
-  }, [ticker, period]);
+  }, [ticker, period, retryKey]);
 
   if (loading) {
     return (
@@ -232,28 +98,67 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   }
 
   if (data.length === 0) {
-    return null;
+    const noDataMessage = errorCode === 'market_data_unavailable'
+      ? '真实行情源暂时不可用，未生成任何占位数据。'
+      : '行情源没有返回有效 K 线。';
+    return (
+      <div className="my-4 rounded-lg border border-fin-border bg-fin-panel px-4">
+        <EmptyState
+          icon={ChartNoAxesCombined}
+          message={loadError ? '行情请求失败，请稍后重试。' : noDataMessage}
+          action={{ label: '重试', onClick: () => setRetryKey((value) => value + 1) }}
+        />
+      </div>
+    );
   }
 
-  // 合成占位数据：后端全源失败后用最新价生成的等值序列，非真实行情，必须显著标注
-  const isSynthetic = typeof dataSource === 'string' && dataSource.startsWith('price_fallback');
+  const isDegraded = dataDegraded || dataQuality !== 'trusted';
 
+  const effectiveValueMode = chartType === 'candlestick' ? 'close' : valueMode;
+  const smartData = buildKlineSmartChartData(data, effectiveValueMode);
+  if (effectiveValueMode === 'close') {
+    smartData.unit = inferTickerPriceUnit(ticker);
+  }
+  const chartLabel = chartType === 'line' && effectiveValueMode === 'close'
+    ? 'Price trend'
+    : chartLabels[chartType] || 'Chart';
+  const title = `${ticker} ${chartLabel} (${period})`;
   const option = chartType === 'candlestick'
-    ? buildCandleOption(data, chartTheme)
-    : buildLineOption(data, chartTheme, chartType === 'area');
+    ? buildCandlestickOption(smartData, title, chartTheme)
+    : buildLineOption(smartData, title, chartTheme, chartType === 'area');
 
   return (
     <div className="my-4 p-4 bg-fin-panel rounded-lg border border-fin-border">
-      <div className="text-xs text-fin-muted mb-2">
-        {ticker} {chartLabels[chartType] || 'Chart'} ({period})
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs text-fin-muted">
+          {ticker} {chartLabel} ({period})
+        </div>
+        <SourceBadge
+          source={dataSource ?? undefined}
+          asOf={dataAsOf}
+          degraded={isDegraded}
+        />
       </div>
-      {isSynthetic && (
+      {isDegraded && (
         <div className="mb-2 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-600 text-xs font-medium">
-          ⚠ 合成占位 · 非真实行情：实时数据源全部失败，下图为按最新价生成的等值占位序列，仅供形态参考，不可用于交易决策。
+          降级行情仅供查看，不会用于 AI Prediction 或 Outcome。
         </div>
       )}
-      <ReactECharts option={option} style={{ height: '300px', width: '100%' }} />
+      <ReactECharts
+        option={option}
+        style={{ height: '300px', width: '100%' }}
+        opts={{ renderer: data.length > 200 ? 'canvas' : 'svg' }}
+      />
     </div>
   );
 };
 
+function inferTickerPriceUnit(ticker: string): string {
+  const normalized = ticker.trim().toUpperCase();
+  if (normalized.endsWith('.HK')) return 'HK$';
+  if (/\.(?:SS|SZ|BJ)$/.test(normalized)) return '¥';
+  if (normalized.endsWith('.L')) return '£';
+  if (/\.(?:PA|DE|AS|MI)$/.test(normalized)) return '€';
+  if (normalized.endsWith('.T')) return '¥';
+  return '$';
+}

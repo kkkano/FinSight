@@ -32,7 +32,6 @@ export {
   extractTextItems,
   extractCatalystItems,
   extractMetrics,
-  buildReportMessages,
   buildChartOption,
   extractReportHints,
   extractAgentDetailSections,

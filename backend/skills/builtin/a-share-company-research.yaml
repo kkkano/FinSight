@@ -1,0 +1,29 @@
+name: a-share-company-research
+description: Research A-share companies with trusted market data, exchange filings, company news, and risk context.
+required_facets:
+  market: CN
+  primary_task:
+    - qa
+    - earnings_analysis
+    - impact_analysis
+    - investment_opinion
+preferred_tools:
+  - get_stock_price
+  - get_local_market_filings
+  - get_company_news
+preferred_agents:
+  - news_agent
+  - fundamental_agent
+  - risk_agent
+optional_python_operations:
+  - growth_rates
+  - ratio_table
+budget:
+  max_tools: 5
+  max_rounds: 4
+output_contract:
+  requires_local_market_context: true
+  requires_source_boundary: true
+risk_level: medium
+eval_cases:
+  - cn_a_share_research

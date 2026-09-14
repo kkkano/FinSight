@@ -230,7 +230,6 @@ class TestShouldRenderCompare:
                 "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
                 "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
                 "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
-                "required_results": [],
             },
         }
 

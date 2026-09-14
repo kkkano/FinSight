@@ -9,11 +9,18 @@
  *
  * Graceful degradation: JSON parse failures or missing data → silent skip.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 
+import { apiClient } from '../api/client';
 import { useChartTheme, type ChartTheme } from '../hooks/useChartTheme';
 import { useDashboardStore } from '../store/dashboardStore';
+import { applyPredictionOverlay } from './charts/PredictionOverlay';
+import { SourceBadge } from './ui/SourceBadge';
+import {
+  loadPredictionOverlay,
+  type PredictionOverlay,
+} from '../types/chartPrediction';
 import type {
   ChartPoint,
   DashboardData,
@@ -23,6 +30,7 @@ import type {
   TechnicalData,
   ValuationData,
 } from '../types/dashboard';
+import type { KlineData } from '../types';
 
 // --- Types ---
 
@@ -47,11 +55,16 @@ export interface SmartChartBlock {
   mode: 'inline' | 'ref';
   type: SmartChartType;
   title: string;
+  /** 价格语义 inline 会被强制切换到真实行情通道，禁止消费模型数组。 */
+  priceLike?: boolean;
+  /** inline 图表可显式声明标的；也兼容 ticker 属性。 */
+  symbol?: string;
   /** For inline mode: raw JSON string */
   dataJson?: string;
   /** For ref mode */
   source?: string;
   fields?: string;
+  asOf?: string;
 }
 
 export type SmartChartOhlcPoint = [open: number, close: number, low: number, high: number];
@@ -86,6 +99,27 @@ export interface SmartChartData {
   events?: SmartChartEvent[];
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared real-market adapter for InlineChart/right panel
+export function buildKlineSmartChartData(
+  rows: KlineData[],
+  valueMode: 'close' | 'return' = 'close',
+): SmartChartData {
+  const base = rows[0]?.close ?? 0;
+  const values = rows.map((row) => {
+    if (valueMode === 'return') {
+      return base === 0 ? 0 : ((row.close - base) / base) * 100;
+    }
+    return row.close;
+  });
+  return {
+    labels: rows.map((row) => row.time),
+    values,
+    ...(valueMode === 'return' ? { unit: '%' } : {}),
+    ohlc: rows.map((row) => [row.open, row.close, row.low, row.high]),
+    volume: rows.map((row) => row.volume ?? 0),
+  };
+}
+
 // --- Helpers ---
 
 const VALID_TYPES = [
@@ -105,6 +139,42 @@ const VALID_TYPES = [
   'drawdown',
   'scenario',
 ] as const satisfies readonly SmartChartType[];
+
+const PRICE_LIKE_INLINE_TYPES = new Set<SmartChartType>([
+  'candlestick',
+  'price_volume',
+  'rs_line',
+  'valuation_band',
+  'drawdown',
+]);
+
+const PRICE_TYPE_ALIASES: Record<string, SmartChartType> = {
+  kline: 'candlestick',
+  ohlc: 'candlestick',
+  line_price: 'line',
+};
+
+const PRICE_LIKE_LINE_TITLE = /(?:股价|价格走势|收盘价|行情|stock\s*price|price\s*(?:trend|history|chart)|clos(?:e|ing)\s*price)/i;
+const PRICE_LIKE_SERIES_NAME = /^(?:股价|价格|收盘价|行情|stock\s*price|price|close|closing\s*price)$/i;
+const PRICE_CURRENCY_UNITS = new Set([
+  '$',
+  'usd',
+  'us$',
+  '美元',
+  'hk$',
+  'hkd',
+  '港元',
+  '¥',
+  '￥',
+  'cny',
+  'rmb',
+  '人民币',
+  '元',
+  '€',
+  'eur',
+  '£',
+  'gbp',
+]);
 
 const FINANCIAL_NUMERIC_FIELDS = [
   'revenue',
@@ -194,22 +264,35 @@ export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
   for (const match of content.matchAll(inlineRegex)) {
     const attrs = match[1];
     const json = match[2].trim();
-    const type = extractAttr(attrs, 'type');
+    const rawType = extractAttr(attrs, 'type');
+    const type = normalizeSmartChartType(rawType);
     const title = extractAttr(attrs, 'title') ?? '';
-    if (!isSmartChartType(type)) continue;
-    blocks.push({ mode: 'inline', type, title, dataJson: json });
+    if (!type) continue;
+    const symbol = extractAttr(attrs, 'symbol') ?? extractAttr(attrs, 'ticker') ?? extractInlineSymbol(json);
+    const normalizedRawType = rawType?.trim().toLowerCase();
+    blocks.push({
+      mode: 'inline',
+      type,
+      title,
+      dataJson: json,
+      priceLike: normalizedRawType === 'line_price'
+        || PRICE_LIKE_INLINE_TYPES.has(type)
+        || (type === 'line' && hasInlinePriceSemantics(title, json)),
+      ...(symbol ? { symbol: symbol.trim().toUpperCase() } : {}),
+    });
   }
 
   // Match <chart_ref type="..." source="..." fields="..." title="..."/>
   const refRegex = /<chart_ref\s+([^>]*?)\/>/g;
   for (const match of content.matchAll(refRegex)) {
     const attrs = match[1];
-    const type = extractAttr(attrs, 'type');
+    const type = normalizeSmartChartType(extractAttr(attrs, 'type'));
     const title = extractAttr(attrs, 'title') ?? '';
     const source = extractAttr(attrs, 'source') ?? '';
     const fields = extractAttr(attrs, 'fields') ?? '';
-    if (!isSmartChartType(type)) continue;
-    blocks.push({ mode: 'ref', type, title, source, fields });
+    if (!type) continue;
+    const asOf = extractAttr(attrs, 'as_of') ?? extractAttr(attrs, 'asOf');
+    blocks.push({ mode: 'ref', type, title, source, fields, asOf });
   }
 
   // 每条消息最多渲染 4 张 SmartChart，避免聊天气泡过长。
@@ -227,6 +310,13 @@ export function stripSmartChartTags(content: string): string {
     .trim();
 }
 
+/** 流式阶段直接返回原文；图表正则只在消息落定后执行一次。 */
+// eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
+export function getRenderableMessageContent(content: string, isStreaming: boolean = false): string {
+  if (isStreaming) return content;
+  return stripSmartChartTags(content.replace(/\[CHART:[^\]]+\]/g, ''));
+}
+
 function extractAttr(attrs: string, name: string): string | undefined {
   const regex = new RegExp(`${name}=["']([^"']*)["']`);
   const match = attrs.match(regex);
@@ -235,6 +325,76 @@ function extractAttr(attrs: string, name: string): string | undefined {
 
 function isSmartChartType(value: string | undefined): value is SmartChartType {
   return typeof value === 'string' && (VALID_TYPES as readonly string[]).includes(value);
+}
+
+function normalizeSmartChartType(value: string | undefined): SmartChartType | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (isSmartChartType(normalized)) return normalized;
+  return PRICE_TYPE_ALIASES[normalized] ?? null;
+}
+
+function extractInlineSymbol(json: string): string | undefined {
+  try {
+    const value: unknown = JSON.parse(json);
+    if (!isRecord(value)) return undefined;
+    const symbol = value.symbol ?? value.ticker;
+    return typeof symbol === 'string' && symbol.trim() ? symbol : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasInlinePriceSemantics(title: string, json: string): boolean {
+  if (PRICE_LIKE_LINE_TITLE.test(title.trim())) return true;
+  try {
+    const value: unknown = JSON.parse(json);
+    if (!isRecord(value)) return false;
+    const unit = typeof value.unit === 'string' ? value.unit.trim().toLowerCase() : '';
+    if (PRICE_CURRENCY_UNITS.has(unit)) return true;
+    const names = [value.name, value.series_name, value.metric];
+    if (Array.isArray(value.series)) {
+      names.push(...value.series.map((item) => (isRecord(item) ? item.name : undefined)));
+    }
+    return names.some((name) => typeof name === 'string' && PRICE_LIKE_SERIES_NAME.test(name.trim()));
+  } catch {
+    return false;
+  }
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- shared rendering policy for ChatList and tests
+export function isPriceLikeInlineBlock(block: SmartChartBlock): boolean {
+  return block.mode === 'inline' && (block.priceLike === true || PRICE_LIKE_INLINE_TYPES.has(block.type));
+}
+
+export interface RealPriceChartRequest {
+  ticker: string;
+  chartType: 'candlestick' | 'line';
+  valueMode: 'close';
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- pure policy helper
+export function resolveRealPriceChartRequest(
+  block: SmartChartBlock,
+  tickerCandidates: string[],
+): RealPriceChartRequest | null {
+  if (!isPriceLikeInlineBlock(block)) return null;
+  const ticker = String(block.symbol || tickerCandidates[0] || '').trim().toUpperCase();
+  if (!ticker) return null;
+  return {
+    ticker,
+    chartType: block.type === 'candlestick' || block.type === 'price_volume' ? 'candlestick' : 'line',
+    valueMode: 'close',
+  };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- provenance contract is unit-tested
+export function getSmartChartProvenance(block: SmartChartBlock) {
+  return {
+    synthetic: block.mode === 'inline',
+    source: block.mode === 'ref' ? block.source : undefined,
+    asOf: block.asOf,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -425,13 +585,35 @@ function buildBarOption(data: SmartChartData, title: string, theme: ChartTheme) 
   };
 }
 
-function buildLineOption(data: SmartChartData, title: string, theme: ChartTheme) {
+// eslint-disable-next-line react-refresh/only-export-components -- shared by InlineChart
+export function buildLineOption(
+  data: SmartChartData,
+  title: string,
+  theme: ChartTheme,
+  fillArea = true,
+) {
+  const formatValue = (value: unknown) => formatSmartChartValue(value, data.unit);
+  const isPriceSeries = PRICE_CURRENCY_UNITS.has(String(data.unit ?? '').trim().toLowerCase());
   return {
     tooltip: {
       trigger: 'axis' as const,
       backgroundColor: theme.tooltipBackground,
       borderColor: theme.tooltipBorder,
       textStyle: { color: theme.tooltipText, fontSize: 11 },
+      formatter: (params: unknown) => {
+        const rows = Array.isArray(params) ? params : [params];
+        const first = rows.find(isRecord);
+        const axisLabel = first && (first.axisValueLabel ?? first.axisValue);
+        const lines = axisLabel === undefined ? [] : [String(axisLabel)];
+        for (const row of rows) {
+          if (!isRecord(row)) continue;
+          const rawValue = Array.isArray(row.value) ? row.value.at(-1) : row.value;
+          const marker = typeof row.marker === 'string' ? row.marker : '';
+          const name = typeof row.seriesName === 'string' && row.seriesName.trim() ? `${row.seriesName}: ` : '';
+          lines.push(`${marker}${name}${formatValue(rawValue)}`);
+        }
+        return lines.join('<br/>');
+      },
     },
     grid: { left: 48, right: 16, top: 32, bottom: 24 },
     title: {
@@ -447,7 +629,8 @@ function buildLineOption(data: SmartChartData, title: string, theme: ChartTheme)
     },
     yAxis: {
       type: 'value' as const,
-      axisLabel: { color: theme.muted, fontSize: 9 },
+      scale: isPriceSeries,
+      axisLabel: { color: theme.muted, fontSize: 9, formatter: formatValue },
       splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
     },
     series: [{
@@ -458,9 +641,29 @@ function buildLineOption(data: SmartChartData, title: string, theme: ChartTheme)
       symbolSize: 5,
       lineStyle: { color: theme.primary, width: 2 },
       itemStyle: { color: theme.primary },
-      areaStyle: { opacity: 0.1 },
+      areaStyle: fillArea ? { opacity: 0.1 } : undefined,
     }],
   };
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- unit-aware formatting is part of the chart truthfulness contract
+export function formatSmartChartValue(value: unknown, unit?: string): string {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return String(value ?? '');
+  const formatted = new Intl.NumberFormat('zh-CN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(numeric);
+  const normalizedUnit = String(unit ?? '').trim();
+  const loweredUnit = normalizedUnit.toLowerCase();
+  if (!normalizedUnit) return formatted;
+  if (normalizedUnit === '%' || loweredUnit === 'percent') return `${formatted}%`;
+  if (['$', 'usd', 'us$', '美元'].includes(loweredUnit)) return `$${formatted}`;
+  if (['hk$', 'hkd', '港元'].includes(loweredUnit)) return `HK$${formatted}`;
+  if (['¥', '￥', 'cny', 'rmb', '人民币', '元'].includes(loweredUnit)) return `¥${formatted}`;
+  if (['€', 'eur'].includes(loweredUnit)) return `€${formatted}`;
+  if (['£', 'gbp'].includes(loweredUnit)) return `£${formatted}`;
+  return `${formatted}${normalizedUnit}`;
 }
 
 function buildPieOption(data: SmartChartData, title: string, theme: ChartTheme) {
@@ -469,7 +672,7 @@ function buildPieOption(data: SmartChartData, title: string, theme: ChartTheme) 
     value: data.values[i],
   }));
 
-  const colors = [theme.primary, theme.success, theme.warning, theme.danger, '#8b5cf6', '#06b6d4', '#ec4899'];
+  const colors = theme.colorPalette;
 
   return {
     tooltip: {
@@ -494,7 +697,7 @@ function buildPieOption(data: SmartChartData, title: string, theme: ChartTheme) 
         formatter: '{b}: {d}%',
       },
       itemStyle: {
-        borderColor: theme.isDark ? '#1e2028' : '#ffffff',
+        borderColor: theme.tooltipBackground,
         borderWidth: 2,
       },
       color: colors,
@@ -584,15 +787,7 @@ function buildGaugeOption(data: SmartChartData, title: string, theme: ChartTheme
   };
 }
 
-const FINANCIAL_CHART_COLORS = (theme: ChartTheme) => [
-  theme.primary,
-  theme.success,
-  theme.warning,
-  theme.danger,
-  '#8b5cf6',
-  '#06b6d4',
-  '#ec4899',
-];
+const FINANCIAL_CHART_COLORS = (theme: ChartTheme) => theme.colorPalette;
 
 function buildSmartChartTitle(title: string, theme: ChartTheme) {
   return {
@@ -740,7 +935,8 @@ function buildEventMarkPoints(
     : undefined;
 }
 
-function buildCandlestickOption(data: SmartChartData, title: string, theme: ChartTheme) {
+// eslint-disable-next-line react-refresh/only-export-components -- shared by InlineChart
+export function buildCandlestickOption(data: SmartChartData, title: string, theme: ChartTheme) {
   if (!data.ohlc?.length || data.ohlc.length !== data.labels.length) return null;
 
   const closeValues = data.ohlc.map((row) => row[1]);
@@ -1617,39 +1813,145 @@ function buildOption(
 
 interface SmartChartRendererProps {
   block: SmartChartBlock;
+  /** 真实行情输入；传入时优先于 store 中的 ref 数据。 */
+  marketSeries?: SmartChartData;
+  /** 已由调用方取得并白名单解析的 AI 标注。 */
+  predictionOverlay?: PredictionOverlay | null;
+  /** 深链只携带 id；组件通过受鉴权 API 读取完整标注。 */
+  predictionId?: string | null;
 }
 
-export function SmartChartRenderer({ block }: SmartChartRendererProps) {
+const DENSE_SERIES_TYPES = new Set<SmartChartType>([
+  'line',
+  'candlestick',
+  'price_volume',
+  'rs_line',
+  'valuation_band',
+  'drawdown',
+]);
+
+function getSmartChartPointCount(data: SmartChartData): number {
+  return Math.max(
+    data.labels.length,
+    data.values.length,
+    data.ohlc?.length ?? 0,
+    data.volume?.length ?? 0,
+    ...(data.series?.map((series) => series.values.length) ?? [0]),
+    ...(data.bands?.map((band) => band.values.length) ?? [0]),
+  );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- renderer policy is unit-tested independently
+export function getSmartChartRenderer(type: SmartChartType, data: SmartChartData): 'canvas' | 'svg' {
+  return DENSE_SERIES_TYPES.has(type) && getSmartChartPointCount(data) > 200 ? 'canvas' : 'svg';
+}
+
+export function SmartChartRenderer({
+  block,
+  marketSeries,
+  predictionOverlay,
+  predictionId,
+}: SmartChartRendererProps) {
   const theme = useChartTheme();
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const [remotePrediction, setRemotePrediction] = useState<PredictionOverlay | null>(null);
+  const [predictionUnavailable, setPredictionUnavailable] = useState(false);
+  const [overlayEnabled, setOverlayEnabled] = useState(true);
 
-  const option = useMemo(() => {
+  useEffect(() => {
+    setOverlayEnabled(true);
+    setPredictionUnavailable(false);
+    setRemotePrediction(null);
+    if (!predictionId || predictionOverlay) return;
+
+    let cancelled = false;
+    loadPredictionOverlay(predictionId, block.symbol, apiClient.getPrediction)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'unavailable') {
+          setPredictionUnavailable(true);
+          return;
+        }
+        setRemotePrediction(result.overlay);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [block.symbol, predictionId, predictionOverlay]);
+
+  const effectivePrediction = overlayEnabled
+    ? (predictionOverlay ?? remotePrediction)
+    : null;
+
+  const chart = useMemo(() => {
+    // 防御性边界：即使调用方忘了分流，模型生成的价格数组也绝不进入 ECharts。
+    if (isPriceLikeInlineBlock(block)) return null;
     let data: SmartChartData | null = null;
 
     if (block.mode === 'inline' && block.dataJson) {
       data = parseInlineData(block.dataJson);
     } else if (block.mode === 'ref') {
-      data = resolveRefData(
-        block.source ?? '',
-        block.fields ?? '',
-        dashboardData,
-      );
+      data = marketSeries ?? resolveRefData(
+          block.source ?? '',
+          block.fields ?? '',
+          dashboardData,
+        );
     }
 
     if (!data) return null;
-    return buildOption(block.type, data, block.title, theme);
-  }, [block, dashboardData, theme]);
+    const marketOption = buildOption(block.type, data, block.title, theme);
+    if (!marketOption) return null;
+    const option = block.mode === 'ref'
+      ? applyPredictionOverlay(marketOption, effectivePrediction, data.labels)
+      : marketOption;
+    return { option, renderer: getSmartChartRenderer(block.type, data) };
+  }, [block, dashboardData, effectivePrediction, marketSeries, theme]);
 
-  if (!option) return null;
+  if (!chart) return null;
 
   const height = block.type === 'gauge' ? 200 : block.type === 'pie' ? 220 : 200;
+  const provenance = getSmartChartProvenance(block);
+  const sourceMeta = block.mode === 'ref' && block.source
+    ? dashboardData?.meta?.[block.source]
+    : undefined;
 
   return (
-    <div className="my-3 p-3 bg-fin-card rounded-xl border border-fin-border">
+    <div className="relative my-3 p-3 bg-fin-card rounded-lg border border-fin-border">
+      <div className="absolute right-3 top-2 z-10 flex items-center gap-2">
+        <SourceBadge
+          synthetic={provenance.synthetic}
+          source={sourceMeta?.provider ?? provenance.source}
+          asOf={provenance.asOf ?? sourceMeta?.as_of}
+          degraded={sourceMeta?.fallback_used}
+        />
+        {effectivePrediction && (
+          <button
+            type="button"
+            className="inline-flex items-center rounded border border-t-warning/50 px-1 text-2xs font-mono text-t-warning hover:bg-t-warning/10"
+            onClick={() => setOverlayEnabled(false)}
+            title="关闭 AI 标注；真实行情不会重新请求或改变"
+          >
+            AI标注 · 关闭
+          </button>
+        )}
+        {!effectivePrediction && (remotePrediction || predictionOverlay) && (
+          <button
+            type="button"
+            className="inline-flex items-center rounded border border-t-border px-1 text-2xs font-mono text-t-text3 hover:text-t-text1"
+            onClick={() => setOverlayEnabled(true)}
+          >
+            AI标注 · 开启
+          </button>
+        )}
+        {predictionUnavailable && (
+          <span className="text-2xs font-mono text-t-warning">AI 标注暂不可用</span>
+        )}
+      </div>
       <ReactECharts
-        option={option}
+        option={chart.option}
         style={{ width: '100%', height }}
-        opts={{ renderer: 'svg' }}
+        opts={{ renderer: chart.renderer }}
         notMerge
         lazyUpdate
       />

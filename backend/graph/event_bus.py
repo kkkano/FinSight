@@ -13,7 +13,7 @@ def set_event_emitter(emitter: Optional[EventEmitter]):
     """
     Set an async event emitter for the current async context.
 
-    Used by `/chat/supervisor/stream` to stream real-time trace/thinking events
+    Used by `/api/execute` to stream real-time trace/thinking events
     while the graph is executing.
     """
 
@@ -36,4 +36,3 @@ async def emit_event(payload: dict[str, Any]) -> None:
 
 
 __all__ = ["EventEmitter", "emit_event", "set_event_emitter", "reset_event_emitter"]
-

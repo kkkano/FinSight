@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-import json
 import os
 import tempfile
 from pathlib import Path
 
 import pytest
+
+from backend.config.settings import clear_settings_caches
 
 # Windows sandbox may deny pytest's default AppData temp base. Keep pytest
 # temp files inside the repo-local ignored tmp/ directory for deterministic CI.
@@ -21,15 +22,12 @@ tempfile.tempdir = str(_PYTEST_TMP)
 # These are HARD isolation guarantees: force-override even when the outer shell
 # already exports them. Using setdefault here was a silent footgun — an external
 # env (e.g. a dev shell with LANGGRAPH_CHECKPOINTER_BACKEND=postgres or
-# MONITOR_SCAN_ENABLED=true) would make the whole suite connect to the real
-# Postgres checkpointer / fire real price-API scans during TestClient startup.
+# MONITOR_REALTIME_ENABLED=true) would make the suite connect to real services.
 os.environ["LANGGRAPH_CHECKPOINTER_BACKEND"] = "memory"
 os.environ["LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK"] = "true"
 
-# 工作台 L1 盯盘扫描器默认开启（生产），测试里强制关掉后台自动扫描，
-# 避免 TestClient 启动时触发真实价格抓取（网络）/读真实 portfolio.db。
-# 手动 /api/monitor/scan 端点不受此开关影响。
-os.environ["MONITOR_SCAN_ENABLED"] = "false"
+# 测试默认不启动页面 lease 调度器；实时链路由定向测试显式调用。
+os.environ["MONITOR_REALTIME_ENABLED"] = "false"
 
 
 @pytest.fixture(autouse=True)
@@ -40,44 +38,9 @@ def _force_langgraph_deterministic_defaults(monkeypatch):
     Individual tests can override these env vars when explicitly testing LLM/tool modes.
     """
 
-    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
-    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("ENABLE_LANGSMITH", "false")
-
-
-@pytest.fixture(autouse=True)
-def _reset_api_memory_test_fixtures():
-    """
-    Some API tests persist user profiles/watchlists to `data/memory/*.json`.
-    Reset them before each test to avoid order-dependence and dirty working trees.
-    Teardown removes ALL test_api_user* files to prevent pollution.
-    """
-
-    repo_root = Path(__file__).resolve().parents[2]
-    memory_dir = repo_root / "data" / "memory"
-    memory_dir.mkdir(parents=True, exist_ok=True)
-
-    _default_profile = {
-        "risk_tolerance": "medium",
-        "investment_style": "balanced",
-        "watchlist": [],
-        "preferences": {},
-        "last_active": "2026-02-03T00:00:00Z",
-    }
-
-    for uid in ("test_api_user", "test_api_user_wl", "test_api_user_agent_prefs"):
-        (memory_dir / f"{uid}.json").write_text(
-            json.dumps({**_default_profile, "user_id": uid}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
+    clear_settings_caches()
     yield
-
-    # Teardown: remove ALL test_api_user* files to prevent pollution
-    for f in memory_dir.glob("test_api_user*.json"):
-        try:
-            f.unlink(missing_ok=True)
-        except PermissionError:
-            pass
+    clear_settings_caches()

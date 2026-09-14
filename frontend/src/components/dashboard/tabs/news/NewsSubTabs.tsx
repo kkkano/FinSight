@@ -35,7 +35,7 @@ export function NewsSubTabs({ activeTab, onTabChange, ticker, counts }: NewsSubT
             onClick={() => onTabChange(key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
               isActive
-                ? 'bg-fin-card text-fin-text shadow-sm'
+                ? 'bg-fin-card text-fin-text'
                 : 'text-fin-muted hover:text-fin-text'
             }`}
           >

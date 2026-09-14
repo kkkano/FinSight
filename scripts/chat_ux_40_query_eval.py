@@ -266,22 +266,6 @@ CASES: list[dict[str, Any]] = [
         "expect": "尊重用户纠正，转向 AAPL。",
     },
     {
-        "id": "Q26",
-        "type": "alert",
-        "session": "eval-alert",
-        "query": "AAPL 跌破 180 的时候提醒我。",
-        "context": {"user_email": "eval@example.com"},
-        "expect": "进入提醒链路或给出提醒确认，不当成普通分析。",
-    },
-    {
-        "id": "Q27",
-        "type": "compound_alert_news",
-        "session": "eval-alert-news",
-        "query": "TSLA 跌破 180 提醒我，顺便说说最近新闻。",
-        "context": {"user_email": "eval@example.com"},
-        "expect": "能处理提醒和新闻混合需求。",
-    },
-    {
         "id": "Q28",
         "type": "compare_crypto_stock",
         "session": "eval-crypto-stock",
@@ -586,11 +570,6 @@ def _verdict(case: dict[str, Any], data: dict[str, Any]) -> tuple[str, list[str]
             issues.append("chaotic ETF answer used irrelevant Wikipedia/theme search")
         if "NVDA" not in response or "AMD" not in response or "TSM" not in response:
             issues.append("chaotic ETF answer did not keep representative tickers")
-    if case["id"] == "Q27":
-        if "alert_set" not in task_ops and "提醒" not in response:
-            issues.append("compound alert did not preserve the reminder action")
-        if "最近新闻" in case["query"] and "最近新闻" not in response and "继续查" not in response:
-            issues.append("compound alert swallowed the secondary news request")
     if case["id"] == "Q39":
         aapl_price_task = any(
             isinstance(task, dict)
@@ -842,7 +821,6 @@ def main() -> None:
     os.environ["LANGFUSE_ENABLED"] = "false"
     os.environ["OTEL_SDK_DISABLED"] = "true"
     os.environ["OTEL_TRACES_EXPORTER"] = "none"
-    os.environ.setdefault("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", "90")
     os.environ.setdefault("FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC", "120")
     os.environ.setdefault("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", "150")
     os.environ.setdefault("LANGGRAPH_PLANNER_CHAT_MAX_TOKENS", "3000")

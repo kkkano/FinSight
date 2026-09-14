@@ -3,10 +3,7 @@
 
 from __future__ import annotations
 
-import builtins
 import math
-import sys
-from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -105,14 +102,10 @@ class TestParseQuotePayload:
 
 class TestFallbackQuoteYfinance:
     def test_yfinance_import_error(self, monkeypatch: pytest.MonkeyPatch):
-        original_import = builtins.__import__
+        def unavailable(_ticker: str):
+            raise ImportError("yfinance not installed")
 
-        def fake_import(name, *args, **kwargs):
-            if name == "yfinance":
-                raise ImportError("yfinance not installed")
-            return original_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
+        monkeypatch.setattr("backend.tools.yfinance_client.create_ticker", unavailable)
         assert fallback_quote_yfinance("AAPL") is None
 
     def test_success_with_mock_yfinance(self, monkeypatch: pytest.MonkeyPatch):
@@ -122,8 +115,7 @@ class TestFallbackQuoteYfinance:
                 assert interval == "1d"
                 return pd.DataFrame({"Close": [100.0, 101.0, 103.0]})
 
-        fake_module = SimpleNamespace(Ticker=lambda _ticker: FakeTicker())
-        monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+        monkeypatch.setattr("backend.tools.yfinance_client.create_ticker", lambda _ticker: FakeTicker())
 
         result = fallback_quote_yfinance("AAPL")
 
@@ -138,8 +130,7 @@ class TestFallbackQuoteYfinance:
             def history(self, period: str, interval: str):
                 return pd.DataFrame({"Close": []})
 
-        fake_module = SimpleNamespace(Ticker=lambda _ticker: FakeTicker())
-        monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+        monkeypatch.setattr("backend.tools.yfinance_client.create_ticker", lambda _ticker: FakeTicker())
 
         assert fallback_quote_yfinance("AAPL") is None
 
@@ -148,7 +139,6 @@ class TestFallbackQuoteYfinance:
             def history(self, period: str, interval: str):
                 return pd.DataFrame({"Close": [100.0, math.inf]})
 
-        fake_module = SimpleNamespace(Ticker=lambda _ticker: FakeTicker())
-        monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+        monkeypatch.setattr("backend.tools.yfinance_client.create_ticker", lambda _ticker: FakeTicker())
 
         assert fallback_quote_yfinance("AAPL") is None

@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -13,15 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class MacroAgent(BaseFinancialAgent):
-    """
-    Macro agent (Plan-Execute-Reflect pattern):
-    - Plan: identify relevant macro indicators for the query
-    - Execute: collect from multiple sources (FRED, sentiment, calendar, search)
-    - Reflect: verify cross-source consistency, resolve conflicts, assess risks
-    """
+    """从官方和市场数据源采集、交叉校验宏观证据。"""
 
     AGENT_NAME = "macro"
-    MAX_REFLECTIONS = 1  # Plan-Execute-Reflect: one reflection for cross-validation
     _MISSING_QUALITY_CONFIDENCE = 0.35  # P0-2: 质量分缺失时的诚实上限
 
     _INDICATORS: Dict[str, Dict[str, str]] = {
@@ -50,53 +45,6 @@ class MacroAgent(BaseFinancialAgent):
         "yield_spread": 0.35,
     }
 
-    def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
-
-    def _get_tool_registry(self) -> dict:
-        """MacroAgent tool registry: official + market sources for Plan-Execute-Reflect pattern."""
-        registry = {}
-        tools = self.tools
-        if not tools:
-            return registry
-        search_fn = getattr(tools, "search", None)
-        if search_fn:
-            registry["search"] = {
-                "func": search_fn,
-                "description": "Generic search for macro cross-check",
-                "call_with": "query",
-            }
-        fred_fn = getattr(tools, "get_fred_data", None)
-        if fred_fn:
-            registry["get_fred_data"] = {
-                "func": fred_fn,
-                "description": "Fetch macro indicators from FRED",
-                "call_with": "none",
-            }
-        official_fn = getattr(tools, "get_official_macro_releases", None)
-        if official_fn:
-            registry["get_official_macro_releases"] = {
-                "func": official_fn,
-                "description": "Get official BLS/BEA/FED release documents",
-                "call_with": "query",
-            }
-        sentiment_fn = getattr(tools, "get_market_sentiment", None)
-        if sentiment_fn:
-            registry["get_market_sentiment"] = {
-                "func": sentiment_fn,
-                "description": "Fetch market sentiment index",
-                "call_with": "none",
-            }
-        events_fn = getattr(tools, "get_economic_events", None)
-        if events_fn:
-            registry["get_economic_events"] = {
-                "func": events_fn,
-                "description": "Fetch near-term macro calendar events",
-                "call_with": "none",
-            }
-        return registry
-
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         source_health: Dict[str, str] = {}
         used_sources: List[str] = []
@@ -105,7 +53,7 @@ class MacroAgent(BaseFinancialAgent):
         fred_payload: Dict[str, Any] = {}
         try:
             if hasattr(self.tools, "get_fred_data"):
-                payload = self.tools.get_fred_data()
+                payload = await asyncio.to_thread(self.tools.get_fred_data)
                 if isinstance(payload, dict) and payload.get("status") == "data_unavailable":
                     # FRED 不可用（如无 API key）：明确走 fallback 路径，不把空 payload 当数据用（P0-1）
                     logger.info("[MacroAgent] FRED unavailable: %s", payload.get("unavailable_reason"))
@@ -132,7 +80,11 @@ class MacroAgent(BaseFinancialAgent):
         official_releases: List[Dict[str, Any]] = []
         try:
             if hasattr(self.tools, "get_official_macro_releases"):
-                payload = self.tools.get_official_macro_releases(query=query, max_results=8)
+                payload = await asyncio.to_thread(
+                    self.tools.get_official_macro_releases,
+                    query=query,
+                    max_results=8,
+                )
                 if isinstance(payload, dict):
                     official_payload = payload
                     rows = payload.get("releases")
@@ -154,7 +106,9 @@ class MacroAgent(BaseFinancialAgent):
         market_sentiment = ""
         try:
             if hasattr(self.tools, "get_market_sentiment"):
-                market_sentiment = str(self.tools.get_market_sentiment() or "").strip()
+                market_sentiment = str(
+                    await asyncio.to_thread(self.tools.get_market_sentiment) or ""
+                ).strip()
                 if market_sentiment:
                     source_health["market_sentiment"] = "ok"
                     used_sources.append("market_sentiment")
@@ -169,7 +123,9 @@ class MacroAgent(BaseFinancialAgent):
         economic_events = ""
         try:
             if hasattr(self.tools, "get_economic_events"):
-                economic_events = str(self.tools.get_economic_events() or "").strip()
+                economic_events = str(
+                    await asyncio.to_thread(self.tools.get_economic_events) or ""
+                ).strip()
                 if economic_events:
                     source_health["economic_events"] = "ok"
                     used_sources.append("economic_events")
@@ -186,7 +142,10 @@ class MacroAgent(BaseFinancialAgent):
         try:
             if hasattr(self.tools, "search"):
                 cross_check_text = str(
-                    self.tools.search("latest US CPI federal funds rate unemployment 10Y Treasury yield")
+                    await asyncio.to_thread(
+                        self.tools.search,
+                        "latest US CPI federal funds rate unemployment 10Y Treasury yield",
+                    )
                     or ""
                 )
                 cross_check_metrics = self._extract_numeric_metrics_from_text(cross_check_text)
@@ -260,51 +219,7 @@ class MacroAgent(BaseFinancialAgent):
         return payload
 
     async def _first_summary(self, data: Dict[str, Any]) -> str:
-        deterministic = self._deterministic_summary(data)
-        status = str(data.get("status") or "").lower()
-        if status == "error":
-            return deterministic
-
-        context_parts = [deterministic]
-        conflicts = data.get("conflicts") or []
-        if isinstance(conflicts, list) and conflicts:
-            conflict_lines = []
-            for conflict in conflicts[:4]:
-                if not isinstance(conflict, dict):
-                    continue
-                indicator = conflict.get("indicator", "unknown")
-                chosen = conflict.get("chosen_value")
-                other = conflict.get("other_value")
-                chosen_src = conflict.get("chosen_source")
-                other_src = conflict.get("other_source")
-                conflict_lines.append(f"- {indicator}: {chosen_src}={chosen} vs {other_src}={other}")
-            if conflict_lines:
-                context_parts.append("Data conflicts:\n" + "\n".join(conflict_lines))
-
-        sentiment = str(data.get("market_sentiment") or "").strip()
-        if sentiment:
-            context_parts.append(f"Market sentiment: {sentiment[:300]}")
-
-        events = str(data.get("economic_events") or "").strip()
-        if events:
-            context_parts.append(f"Economic calendar: {events[:300]}")
-
-        official_releases = data.get("official_releases") if isinstance(data.get("official_releases"), list) else []
-        if official_releases:
-            top_titles = [str(item.get("title") or "").strip() for item in official_releases[:3] if isinstance(item, dict)]
-            top_titles = [title for title in top_titles if title]
-            if top_titles:
-                context_parts.append("Official releases: " + " | ".join(top_titles))
-
-        analysis = await self._llm_analyze(
-            "\n".join(context_parts),
-            role="资深宏观分析师",
-            focus=(
-                "总结宏观周期、政策方向、跨资产影响、未来 1-3 个月的主要风险，"
-                "以及数据可信度。使用简体中文输出。"
-            ),
-        )
-        return analysis if analysis else deterministic
+        return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: Dict[str, Any]) -> str:
         """确定性宏观快照（兜底文案，用户可见，B 类中文化）。"""
@@ -688,4 +603,3 @@ class MacroAgent(BaseFinancialAgent):
 
     def _format_percentage_value(self, value: float, *, digits: int = 2) -> str:
         return f"{value:.{digits}f}%"
-

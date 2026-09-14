@@ -10,62 +10,38 @@
  * Row 5: BollingerVolumeCard
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
-import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
 import { TechnicalSummaryCard } from './technical/TechnicalSummaryCard';
 import { MovingAverageTable } from './technical/MovingAverageTable';
 import { OscillatorTable } from './technical/OscillatorTable';
 import { SupportResistanceChart } from './technical/SupportResistanceChart';
 import { BollingerVolumeCard } from './technical/BollingerVolumeCard';
 import { TechnicalSubCharts } from './technical/TechnicalSubCharts';
-import { AiInsightCard } from './shared/AiInsightCard';
-import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
-import type { SelectionItem } from '../../../types/dashboard';
+import type { PredictionOverlay } from '../../../types/chartPrediction';
 
 // --- Component ---
 
-export function TechnicalTab() {
-  const dashboardData = useDashboardStore((s) => s.dashboardData);
-  const insightsData = useDashboardStore((s) => s.insightsData);
-  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
-  const insightsError = useDashboardStore((s) => s.insightsError);
-  const insightsStale = useDashboardStore((s) => s.insightsStale);
-  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+interface TechnicalTabProps {
+  predictionOverlay?: PredictionOverlay | null;
+}
 
-  const handleAskAbout = (selection: SelectionItem) => {
-    setActiveSelection(selection);
-  };
+export function TechnicalTab({ predictionOverlay }: TechnicalTabProps) {
+  const dashboardData = useDashboardStore((s) => s.dashboardData);
 
   const technicals = dashboardData?.technicals;
   const technicalsFallbackReason = dashboardData?.technicals_fallback_reason;
   const marketChart = dashboardData?.charts?.market_chart;
   const indicatorSeries = dashboardData?.indicator_series;
-  const technicalInsight = insightsData?.technical ?? null;
-  const deepDive = useDashboardDeepDive({
-    tab: 'technical',
-    metric: technicalInsight?.score_label ?? null,
-    insight: technicalInsight,
-  });
 
   return (
     <div className="flex flex-col gap-4">
-      {/* AI Technical Analysis Card */}
-      <AiInsightCard
-        tab="technical"
-        insight={technicalInsight}
-        loading={insightsLoading}
-        error={insightsError}
-        stale={insightsStale}
-        onAskAbout={handleAskAbout}
-        onDeepDive={deepDive.startDeepDive}
-        deepDiveRunning={deepDive.isRunning}
-        deepDiveProgress={deepDive.progress}
-        deepDiveCurrentStep={deepDive.currentStep}
-      />
-      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-y border-t-border py-2 text-2xs text-t-text3">
+        <span>规则指标 · RSI、MACD、均线和支撑阻力均由服务端基于真实 K 线计算</span>
+        <span className="rounded border border-t-accent/30 bg-t-accent/10 px-1.5 py-0.5 text-t-accent">RULES</span>
+      </div>
 
       {/* K-line chart with support/resistance — full width */}
       {!technicals && technicalsFallbackReason && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
           <div className="text-xs font-semibold text-amber-200">技术面数据暂不可用</div>
           <div className="mt-1 text-2xs text-amber-100/90">原因：{technicalsFallbackReason}</div>
           <div className="mt-1 text-2xs text-amber-100/80">
@@ -74,7 +50,12 @@ export function TechnicalTab() {
         </div>
       )}
 
-      <SupportResistanceChart technicals={technicals} marketChart={marketChart} />
+      <SupportResistanceChart
+        technicals={technicals}
+        marketChart={marketChart}
+        marketAsOf={dashboardData?.meta?.market_chart?.as_of}
+        predictionOverlay={predictionOverlay}
+      />
 
       {/* Row 2: Summary full width */}
       <TechnicalSummaryCard technicals={technicals} />

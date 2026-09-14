@@ -1,11 +1,76 @@
-import { useState } from 'react';
-import { Maximize2, TrendingUp, X } from 'lucide-react';
-import { StockChart } from '../StockChart';
+import { useEffect, useMemo, useState } from 'react';
+import { ChartNoAxesCombined, Loader2, Maximize2, TrendingUp, X } from 'lucide-react';
+
+import { apiClient } from '../../api/client';
+import { useDashboardStore } from '../../store/dashboardStore';
+import { useStore } from '../../store/useStore';
+import type { KlineData } from '../../types';
+import {
+  buildKlineSmartChartData,
+  SmartChartRenderer,
+  type SmartChartBlock,
+  type SmartChartData,
+} from '../SmartChart';
 import { Dialog } from '../ui/Dialog';
+import { EmptyState } from '../ui/EmptyState';
 
 export function RightPanelChartTab() {
   const [chartHeight, setChartHeight] = useState(250);
   const [isChartMaximized, setIsChartMaximized] = useState(false);
+  const activeSymbol = useDashboardStore((state) => state.activeAsset?.symbol);
+  const currentTicker = useStore((state) => state.currentTicker);
+  const symbol = (activeSymbol || currentTicker || '').trim().toUpperCase();
+  const [marketSeries, setMarketSeries] = useState<SmartChartData | null>(null);
+  const [source, setSource] = useState<string>('market_chart');
+  const [asOf, setAsOf] = useState<string | undefined>();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!symbol) {
+      setMarketSeries(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    apiClient.fetchKline(symbol, '1y', '1d')
+      .then((response) => {
+        if (cancelled) return;
+        const payload = response?.data;
+        const rows = Array.isArray(payload?.kline_data) ? payload.kline_data as KlineData[] : [];
+        setMarketSeries(rows.length > 0 ? buildKlineSmartChartData(rows) : null);
+        setSource(typeof payload?.source === 'string' ? payload.source : 'market_chart');
+        setAsOf(typeof payload?.as_of === 'string' ? payload.as_of : undefined);
+      })
+      .catch(() => {
+        if (!cancelled) setMarketSeries(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol]);
+
+  const block = useMemo<SmartChartBlock>(() => ({
+    mode: 'ref',
+    type: 'candlestick',
+    title: symbol ? `${symbol} 真实行情` : '真实行情',
+    symbol,
+    source,
+    fields: 'open,close,low,high,volume',
+    asOf,
+  }), [asOf, source, symbol]);
+
+  const chart = loading ? (
+    <div className="flex h-full items-center justify-center text-xs text-fin-muted">
+      <Loader2 className="mr-2 animate-spin" size={16} /> 正在加载真实行情…
+    </div>
+  ) : marketSeries ? (
+    <SmartChartRenderer block={block} marketSeries={marketSeries} />
+  ) : (
+    <EmptyState icon={ChartNoAxesCombined} message={symbol ? '真实行情暂不可用' : '选择标的后查看真实行情'} />
+  );
 
   return (
     <>
@@ -23,7 +88,7 @@ export function RightPanelChartTab() {
         </div>
         <div className="flex-1 relative min-h-0">
           <div style={{ height: chartHeight }} className="w-full bg-fin-bg-secondary/50 rounded-lg overflow-hidden">
-            <StockChart />
+            {chart}
           </div>
           <div
             className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize bg-gradient-to-t from-fin-border/30 to-transparent flex items-center justify-center"
@@ -71,7 +136,7 @@ export function RightPanelChartTab() {
           </button>
         </div>
         <div className="flex-1 p-4 overflow-hidden bg-fin-bg-secondary/30">
-          <StockChart />
+          {chart}
         </div>
       </Dialog>
     </>

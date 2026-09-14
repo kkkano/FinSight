@@ -150,7 +150,7 @@ export function DataSourceTrace({ meta }: DataSourceTraceProps) {
         open={open}
         onClose={() => setOpen(false)}
         labelledBy="dashboard-source-title"
-        panelClassName="w-full max-w-4xl max-h-[82vh] overflow-hidden bg-fin-card border border-fin-border rounded-xl shadow-2xl"
+        panelClassName="w-full max-w-4xl max-h-[82vh] overflow-hidden bg-fin-card border border-fin-border rounded-lg shadow-2xl"
       >
         <div className="p-4 border-b border-fin-border flex items-center justify-between">
           <div>

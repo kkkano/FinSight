@@ -9,7 +9,7 @@ export function Skeleton({
   variant = 'text',
   lines = 1,
 }: SkeletonProps) {
-  const baseClass = 'animate-pulse bg-fin-border';
+  const baseClass = 't-skeleton';
 
   if (variant === 'circular') {
     return <div className={`${baseClass} rounded-full ${className}`.trim()} />;

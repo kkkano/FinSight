@@ -5,6 +5,36 @@
 
 ---
 
+## [Unreleased] - 文档事实源收敛与死代码清理
+
+### 变更
+
+- 重写中英文 README、系统架构、LangGraph 流程/深潜、Agent、RAG、设计规范和生产 Runbook，并同步当前 Mermaid。
+- 校准 FastAPI 25 个 Router、React/ECharts/Tailwind/Rolldown Vite 版本、PostgreSQL checkpointer、pgvector RAG 和三服务部署拓扑。
+- 将已完成 overhaul spec、历史 QA/发布证据、ADR、源笔记和被替代文档归档到 `docs/archive/2026-07-overhaul-closeout/`。
+- 删除从 `frontend/src/main.tsx` 生产入口不可达的旧 execution 面板、Phase Labs 页面、无效 barrel、独立 retry scope 及其测试。
+- 当前文档索引收敛到 `docs/DOCS_INDEX.md`；历史材料不再作为架构事实源。
+
+---
+
+## [2.0.0-rc1] - 2026-07-12
+
+### 新增
+
+- 完成 WP0-WP6、前端 TERMINAL 重设计、功能联动审计与 Agent 原生化：统一 planning/policy/execution/synthesis/rendering 边界，引入 PostgreSQL prediction/outcome/run-cost 可追溯链路、7 个统一 AgentProfile、真实行情图表治理、watchlist、晨报/监控联动、报告分享、SSE 续传、PWA、组合归因与报告回测联动。
+- 新增多用户隔离、服务端可信行情锚点、受控 prediction 校验回路、确定性 outcome、页面 lease 与可重放点评流。
+
+### 修复
+
+- 修复匿名会话错误启动需鉴权的 monitor lease/comment stream，以及晨报深链在会话初始化竞态中丢失 Chat 草稿的问题。
+- 收口 PostgreSQL UUID、JSONB 默认表达式与旧 prediction scenarios 绑定兼容问题。
+
+### 验证与部署
+
+- Linux 后端分片全量 `2119 passed / 9 skipped`，golden `12 passed`，前端 `69 files / 304 tests`，production build/PWA 成功。
+- 真实 PostgreSQL 验证 prediction→outcome→run/cost 全链路、租户隔离与复合外键；生产三容器 healthy，公网健康检查、真实 Chat/SSE、AAPL 图表与晨报联动通过。
+- A 股联网脚本已实际执行，但周末且外部数据源不可用；保留真实失败记录，未伪造成功。
+
 ## [Unreleased] - 2026-05-18
 
 ### 新增

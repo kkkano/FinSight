@@ -16,16 +16,10 @@ import type {
   NewsTimeRange,
   DashboardData,
   SelectionItem,
-  InsightCard,
 } from '../types/dashboard';
 import { STORAGE_KEYS } from '../types/dashboard';
 import { apiClient } from '../api/client';
-import { deriveUserIdFromSessionId, useStore } from './useStore';
-import {
-  buildDashboardOverlayKey,
-  type DashboardAgentOverlay,
-  type DashboardDeepDiveTab,
-} from '../utils/dashboardDeepDiveOverlay';
+import { useStore } from './useStore';
 
 // === Store 接口 ===
 interface DashboardStore {
@@ -39,21 +33,9 @@ interface DashboardStore {
   newsTagFilter: NewsTagGroup;      // Phase H: 主题筛选
   newsTimeRange: NewsTimeRange;     // Phase H: 时间范围
   dashboardData: DashboardData | null;
-  agentOverlaysBySymbolTab: Record<string, DashboardAgentOverlay>;
   isLoading: boolean;
   error: string | null;
-  activeSelection: SelectionItem | null;  // 单选兼容：用于旧 UI（MiniChat pill）
-  activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻多选引用
-
-  // AI Insights 状态 (Phase F)
-  insightsData: Record<string, InsightCard> | null;
-  insightsLoading: boolean;
-  insightsError: string | null;
-  insightsStale: boolean;
-  insightsCachedAt: string | null;
-  deepAnalysisIncludeDeepSearch: boolean;
-  /** Callback injected by Dashboard.tsx to force-refresh insights */
-  insightsRefetch: (() => void) | null;
+  activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻引用
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -69,28 +51,11 @@ interface DashboardStore {
   setNewsTagFilter: (tag: NewsTagGroup) => void;
   setNewsTimeRange: (range: NewsTimeRange) => void;
   setDashboardData: (data: DashboardData) => void;
-  setOverlay: (
-    symbol: string,
-    tab: DashboardDeepDiveTab,
-    overlay: DashboardAgentOverlay | null,
-  ) => void;
-  getOverlay: (symbol: string, tab: DashboardDeepDiveTab) => DashboardAgentOverlay | null;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setActiveSelection: (selection: SelectionItem | null) => void;
   toggleSelection: (selection: SelectionItem) => void;
   setSelections: (selections: SelectionItem[]) => void;
   clearSelection: () => void;
-
-  // AI Insights actions (Phase F)
-  setInsightsData: (data: Record<string, InsightCard>) => void;
-  setInsightsLoading: (loading: boolean) => void;
-  setInsightsError: (error: string | null) => void;
-  setInsightsStale: (stale: boolean) => void;
-  setInsightsCachedAt: (cachedAt: string | null) => void;
-  clearInsights: () => void;
-  setDeepAnalysisIncludeDeepSearch: (enabled: boolean) => void;
-  setInsightsRefetch: (fn: (() => void) | null) => void;
 
   // Watchlist API methods (API-first, replace localStorage persistence)
   initWatchlist: () => Promise<void>;
@@ -146,8 +111,6 @@ const normalizeLayoutPrefs = (value: unknown): LayoutPrefs => {
   };
 };
 
-const resolveCurrentUserId = (): string => deriveUserIdFromSessionId(useStore.getState().sessionId);
-
 // === Store 实例 ===
 export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // 初始状态（从 localStorage 恢复, watchlist 改为 API 加载）
@@ -160,28 +123,14 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   newsTagFilter: loadFromStorage<NewsTagGroup>(STORAGE_KEYS.NEWS_TAG_FILTER, '全部'),
   newsTimeRange: loadFromStorage<NewsTimeRange>(STORAGE_KEYS.NEWS_TIME_RANGE, '7d'),
   dashboardData: null,
-  agentOverlaysBySymbolTab: {},
   isLoading: false,
   error: null,
-  activeSelection: null,  // 当前选中的新闻/报告
   activeSelections: [],
   _isWatchlistLoading: false,
   _isWatchlistLoaded: false,
   _watchlistOwnerId: null,
 
-  // AI Insights 初始状态
-  insightsData: null,
-  insightsLoading: false,
-  insightsError: null,
-  insightsStale: false,
-  insightsCachedAt: null,
-  insightsRefetch: null,
-  deepAnalysisIncludeDeepSearch: loadFromStorage(
-    STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH,
-    false,
-  ),
-
-  // 设置当前资产（同时清除 selection、insights、dashboardData，
+  // 设置当前资产（同时清除 selection 和 dashboardData，
   // 因为切换股票后之前的数据不再有效，必须等新请求返回才渲染）
   setActiveAsset: (asset) => {
     const prev = get().activeAsset;
@@ -192,12 +141,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
     set({
       activeAsset: asset,
       error: null,
-      activeSelection: null,
       activeSelections: [],
-      insightsData: null,
-      insightsError: null,
-      insightsStale: false,
-      insightsCachedAt: null,
       ...(symbolChanged ? { dashboardData: null } : {}),
     });
   },
@@ -287,34 +231,11 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // 设置聚合数据
   setDashboardData: (data) => set({ dashboardData: data }),
 
-  // 设置/读取 Dashboard Tab Agent 深挖回填结果
-  setOverlay: (symbol, tab, overlay) =>
-    set((state) => {
-      const key = buildDashboardOverlayKey(symbol, tab);
-      const next = { ...state.agentOverlaysBySymbolTab };
-      if (overlay) {
-        next[key] = overlay;
-      } else {
-        delete next[key];
-      }
-      return { agentOverlaysBySymbolTab: next };
-    }),
-  getOverlay: (symbol, tab) => (
-    get().agentOverlaysBySymbolTab[buildDashboardOverlayKey(symbol, tab)] ?? null
-  ),
-
   // 设置加载状态
   setLoading: (loading) => set({ isLoading: loading }),
 
   // 设置错误
   setError: (error) => set({ error }),
-
-  // 设置当前选中的新闻/报告（用于 MiniChat 上下文引用）
-  setActiveSelection: (selection) =>
-    set({
-      activeSelection: selection,
-      activeSelections: selection ? [selection] : [],
-    }),
 
   // 多选：切换某个 selection 是否被选中
   toggleSelection: (selection) =>
@@ -328,97 +249,78 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         ? nextBase.filter((s) => s.id !== selection.id)
         : [...nextBase, selection];
 
-      return {
-        activeSelections: next,
-        activeSelection: next.length === 1 ? next[0] : null,
-      };
+      return { activeSelections: next };
     }),
 
-  // 直接设置多选列表（会同步单选兼容字段）
-  setSelections: (selections) =>
-    set({
-      activeSelections: selections,
-      activeSelection: selections.length === 1 ? selections[0] : null,
-    }),
+  // 直接设置多选列表
+  setSelections: (selections) => set({ activeSelections: selections }),
 
   // 清除当前选择
-  clearSelection: () => set({ activeSelection: null, activeSelections: [] }),
-
-  // --- AI Insights actions (Phase F) ---
-  setInsightsData: (data) => set({ insightsData: data, insightsError: null }),
-  setInsightsLoading: (loading) => set({ insightsLoading: loading }),
-  setInsightsError: (error) => set({ insightsError: error }),
-  setInsightsStale: (stale) => set({ insightsStale: stale }),
-  setInsightsCachedAt: (cachedAt) => set({ insightsCachedAt: cachedAt }),
-  clearInsights: () => set({
-    insightsData: null,
-    insightsLoading: false,
-    insightsError: null,
-    insightsStale: false,
-    insightsCachedAt: null,
-  }),
-  setDeepAnalysisIncludeDeepSearch: (enabled) => {
-    saveToStorage(STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH, enabled);
-    set({ deepAnalysisIncludeDeepSearch: enabled });
-  },
-  setInsightsRefetch: (fn) => set({ insightsRefetch: fn }),
+  clearSelection: () => set({ activeSelections: [] }),
 
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 
   initWatchlist: async () => {
-    const userId = resolveCurrentUserId();
-    const { _isWatchlistLoaded, _isWatchlistLoading, _watchlistOwnerId } = get();
-    if (_isWatchlistLoading) return;
-    if (_isWatchlistLoaded && _watchlistOwnerId === userId) return;
+    const ownerId = String(useStore.getState().authIdentity?.userId || '').trim();
+    if (!ownerId) {
+      set({
+        watchlist: [],
+        _isWatchlistLoaded: true,
+        _isWatchlistLoading: false,
+        _watchlistOwnerId: null,
+      });
+      return;
+    }
 
-    set({ _isWatchlistLoading: true });
+    const { _isWatchlistLoaded, _isWatchlistLoading, _watchlistOwnerId } = get();
+    if (_isWatchlistLoading && _watchlistOwnerId === ownerId) return;
+    if (_isWatchlistLoaded && _watchlistOwnerId === ownerId) return;
+
+    set({
+      watchlist: [],
+      _isWatchlistLoaded: false,
+      _isWatchlistLoading: true,
+      _watchlistOwnerId: ownerId,
+    });
 
     try {
-      const response = await apiClient.getUserProfile(userId);
-      if (!response?.success) {
-        throw new Error(response?.error || '加载自选列表失败');
-      }
-      const profile = response?.profile;
-      const list: string[] = Array.isArray(profile?.watchlist)
-        ? profile.watchlist
-        : [];
-
-      const watchItems: WatchItem[] = list.map((ticker: string) => ({
-        symbol: ticker.toUpperCase(),
+      const response = await apiClient.getWatchlist();
+      if (
+        useStore.getState().authIdentity?.userId !== ownerId
+        || get()._watchlistOwnerId !== ownerId
+      ) return;
+      const items = Array.isArray(response?.items) ? response.items : [];
+      const watchItems: WatchItem[] = items.map((item) => ({
+        symbol: item.ticker.toUpperCase(),
         type: 'equity',
-        name: ticker.toUpperCase(),
+        name: item.note || item.ticker.toUpperCase(),
       }));
 
       set({
         watchlist: watchItems,
         _isWatchlistLoaded: true,
         _isWatchlistLoading: false,
-        _watchlistOwnerId: userId,
+        _watchlistOwnerId: ownerId,
       });
     } catch {
-      set({ _isWatchlistLoading: false });
+      if (get()._watchlistOwnerId === ownerId) {
+        set({ _isWatchlistLoading: false });
+      }
     }
   },
 
   addWatchItemApi: async (ticker: string) => {
-    const userId = resolveCurrentUserId();
-    const response = await apiClient.addWatchlist({ user_id: userId, ticker });
-    if (!response?.success) {
-      throw new Error(response?.error || '添加自选失败');
-    }
+    const response = await apiClient.addWatchlistItem({ ticker });
+    const normalized = response.item.ticker;
     get().addWatchItem({
-      symbol: ticker.toUpperCase(),
+      symbol: normalized,
       type: 'equity',
-      name: ticker.toUpperCase(),
+      name: response.item.note || normalized,
     });
   },
 
   removeWatchItemApi: async (ticker: string) => {
-    const userId = resolveCurrentUserId();
-    const response = await apiClient.removeWatchlist({ user_id: userId, ticker });
-    if (!response?.success) {
-      throw new Error(response?.error || '移除自选失败');
-    }
+    await apiClient.removeWatchlistItem(ticker);
     get().removeWatchItem(ticker);
   },
 }));

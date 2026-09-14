@@ -1,0 +1,9 @@
+{
+  "blocked_reasons": [
+    "missing_analysis_target"
+  ],
+  "output_mode": "chat",
+  "plan_steps": [],
+  "route": "clarify",
+  "tasks": []
+}

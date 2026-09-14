@@ -10,7 +10,7 @@ import { create } from 'zustand';
 
 import { apiClient } from '../api/client';
 import type { ExecuteRequest, SSECallbacks } from '../api/client';
-import { getAgentPreferences } from '../components/settings/AgentControlPanel';
+import { zh } from '../locales/zh';
 import type {
   AgentRunInfo,
   BudgetPriorityItem,
@@ -65,20 +65,6 @@ interface ExecutionState {
     error?: string | null;
     meta?: Record<string, unknown>;
   }) => void;
-  interruptExternalExecution: (runId: string, data: {
-    thread_id: string;
-    prompt?: string;
-    options?: string[];
-    plan_summary?: string;
-    required_agents?: string[];
-    gate_reason_code?: string;
-    gate_reason?: string;
-    option_effects?: Record<string, string>;
-    option_intents?: Record<string, string>;
-    output_mode?: string;
-    confirmation_mode?: string;
-  }) => void;
-  resumeExecution: (runId: string, resumeValue: string) => Promise<void>;
   cancelExecution: (runId: string) => void;
   getActiveRunForTicker: (ticker: string) => ExecutionRun | undefined;
   markBridged: (runId: string) => void;
@@ -430,7 +416,7 @@ function createExecutionRunState(params: {
     decisionNotes: [],
     etaSeconds: null,
     progress: 0,
-    currentStep: '准备执行...',
+    currentStep: zh.execution.preparing,
     timeline: [],
     report: null,
       qualityBlocked: false,
@@ -450,7 +436,6 @@ function createExecutionRunState(params: {
     completedAt: null,
     abortController: params.abortController ?? null,
     bridgedToChat: false,
-    interruptData: null,
   };
 }
 
@@ -490,7 +475,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     patch.hasParallelPlan = result.has_parallel === true;
     patch.budgetPriority = asBudgetPriority(result.agent_selection);
     patch.reasoningBrief = typeof result.reasoning_brief === 'string' ? result.reasoning_brief : undefined;
-    patch.currentStep = message || '计划已生成';
+    patch.currentStep = message || zh.execution.planReady;
     patch.progress = Math.max(run.progress, 8);
     return mergePatchAndEstimateEta(run, patch);
   }
@@ -531,7 +516,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     const note: DecisionNote = {
       id: `${run.runId}:decision:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
       scope: typeof result.scope === 'string' ? result.scope : undefined,
-      title: typeof result.title === 'string' && result.title.trim() ? result.title : '决策说明',
+      title: typeof result.title === 'string' && result.title.trim() ? result.title : zh.execution.decisionNote,
       reason: typeof result.reason === 'string' ? result.reason : undefined,
       impact: typeof result.impact === 'string' ? result.impact : undefined,
       nextStep: typeof result.next_step === 'string'
@@ -552,8 +537,8 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     const qualityPatch = extractRunQualityPatch(result);
     // P1-4: 执行失败（报告构建崩溃）≠ 质量拦截，fallback 文案区分两种情况
     const fallbackMessage = result.failure_kind === 'execution_error'
-      ? '报告生成过程出错，请重试'
-      : 'Report blocked by quality gate';
+      ? zh.execution.reportFailed
+      : zh.execution.qualityBlocked;
     patch.currentStep = message || fallbackMessage;
     patch.progress = Math.max(run.progress, 98);
     return mergePatchAndEstimateEta(run, {
@@ -582,7 +567,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     }
     patch.agentStatuses = { ...run.agentStatuses, ...newStatuses };
     patch.progress = Math.max(run.progress, 5);
-    patch.currentStep = message || '协调器已启动';
+    patch.currentStep = message || zh.execution.coordinatorStarted;
     return mergePatchAndEstimateEta(run, patch);
   }
 
@@ -612,7 +597,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       };
       patch.agentStatuses = statuses;
       patch.progress = calculateAgentProgress(statuses, run.progress);
-      patch.currentStep = `${agentName} 执行中...`;
+      patch.currentStep = zh.execution.agentRunning(agentName);
       return mergePatchAndEstimateEta(run, patch);
     }
   }
@@ -674,7 +659,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       };
       patch.agentStatuses = statuses;
       patch.progress = calculateAgentProgress(statuses, run.progress);
-      patch.currentStep = `${agentName} 完成`;
+      patch.currentStep = zh.execution.agentCompleted(agentName);
       return mergePatchAndEstimateEta(run, patch);
     }
   }
@@ -685,7 +670,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       const timestamp = typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString();
       const statuses = { ...run.agentStatuses };
       const existing = statuses[agentName] ?? { name: agentName, status: 'pending' as const };
-      const errorText = typeof result.error === 'string' ? result.error : 'Unknown error';
+      const errorText = typeof result.error === 'string' ? result.error : zh.execution.unknownError;
       statuses[agentName] = {
         ...existing,
         status: 'error',
@@ -704,7 +689,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       patch.agentStatuses = statuses;
       patch.fallbackReasons = fallbackReasons;
       patch.progress = calculateAgentProgress(statuses, run.progress);
-      patch.currentStep = `${agentName} 异常`;
+      patch.currentStep = zh.execution.agentFailed(agentName);
       return mergePatchAndEstimateEta(run, patch);
     }
   }
@@ -759,7 +744,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       decisionNotes: [],
       etaSeconds: null,
       progress: 0,
-      currentStep: '准备执行...',
+      currentStep: zh.execution.preparing,
       timeline: [],
       report: null,
     qualityBlocked: false,
@@ -779,34 +764,22 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       completedAt: null,
       abortController,
       bridgedToChat: false,
-      interruptData: null,
     };
 
     set((state) => ({
       activeRuns: [...state.activeRuns, initialRun],
     }));
 
-    const prefs = getAgentPreferences();
-    const override = params.agentPreferencesOverride;
-    const requestPrefs = {
-      agents: override?.agents ?? prefs.agents,
-      maxRounds: override?.maxRounds ?? prefs.maxRounds,
-      concurrentMode: override?.concurrentMode ?? prefs.concurrentMode,
-      timeoutSeconds: override?.timeoutSeconds ?? prefs.timeoutSeconds,
-    };
     const request: ExecuteRequest & Record<string, unknown> = {
       query: params.query,
       tickers: params.tickers,
       output_mode: params.outputMode,
-      confirmation_mode: params.confirmationMode,
       analysis_depth: params.analysisDepth,
-      agents: params.agents,
-      budget: params.budget ?? requestPrefs.maxRounds,
+      budget: params.budget,
       source: params.source,
       ...(params.requestBody ?? {}),
       session_id: sessionId,
       run_id: runId,
-      agent_preferences: requestPrefs,
     };
 
     const updateRun = (patch: Partial<ExecutionRun>) => {
@@ -862,12 +835,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           ...pipelineStages.rendering,
           status: pipelineStages.rendering.status === 'done' ? 'done' : 'running',
           startedAt: pipelineStages.rendering.startedAt ?? timestamp,
-          message: 'Rendering markdown stream',
+          message: zh.execution.renderingStream,
         };
         updateRun({
           streamedContent: run.streamedContent + token,
           progress: Math.max(run.progress, 92),
-          currentStep: '生成报告中...',
+          currentStep: zh.execution.generatingReport,
           pipelineStages,
           pipelineCurrentStage: run.pipelineCurrentStage ?? 'rendering',
           etaSeconds: run.etaSeconds,
@@ -902,7 +875,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           status: 'done',
           startedAt: pipelineStages.done.startedAt ?? doneAt,
           completedAt: doneAt,
-          message: 'Execution completed',
+          message: zh.execution.doneEvent,
         };
         if (pipelineStages.rendering.status === 'running') {
           pipelineStages.rendering = {
@@ -938,41 +911,19 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
               timestamp: new Date().toISOString(),
               eventType: 'error',
               stage: 'error',
-              message: error ?? 'Unknown error',
+              message: error ?? zh.execution.unknownError,
               runId,
             })
           : [];
 
         completeRun({
           status: 'error',
-          error: error ?? 'Unknown error',
+          error: error ?? zh.execution.unknownError,
           currentStep: null,
           timeline,
         });
       },
 
-      onInterrupt: (data) => {
-        const run = getRun();
-        const timeline = run
-          ? pushTimeline(run, {
-              id: `${runId}:${Date.now()}:interrupt`,
-              timestamp: new Date().toISOString(),
-              eventType: 'interrupt',
-              stage: 'interrupt',
-              message: data.prompt ?? '等待确认...',
-              runId,
-              raw: data as unknown as Record<string, unknown>,
-            })
-          : [];
-
-        updateRun({
-          status: 'interrupted',
-          currentStep: data.prompt ?? '等待确认...',
-          interruptData: data,
-          timeline,
-          etaSeconds: null,
-        });
-      },
     };
 
     callbacks.onRawEvent = (event) => {
@@ -990,11 +941,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
         const run = getRun();
         if (run && run.status === 'running') {
-          callbacks.onError?.('Execution stream ended unexpectedly (missing done event)');
+          callbacks.onError?.(zh.execution.streamEndedUnexpectedly);
         }
       } catch (err: unknown) {
         if (abortController.signal.aborted) return;
-        const message = err instanceof Error ? err.message : 'Execution failed';
+        const message = err instanceof Error ? err.message : zh.execution.failed;
         callbacks.onError?.(message);
       }
     })();
@@ -1026,7 +977,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             allowContinueWhenBlocked: false,
             blockedReportAvailable: false,
             abortController: null,
-            interruptData: null,
           };
           return { activeRuns };
         }
@@ -1053,7 +1003,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           allowContinueWhenBlocked: false,
           blockedReportAvailable: false,
           abortController: null,
-          interruptData: null,
         };
         const nextRecent = state.recentRuns.filter((_, idx) => idx !== recentIndex);
         return {
@@ -1083,26 +1032,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       if (index < 0) return state;
 
       const activeRuns = [...state.activeRuns];
-      const current = activeRuns[index];
-      const run: ExecutionRun = current.status === 'interrupted'
-        ? {
-            ...current,
-            status: 'running' as const,
-            interruptData: null,
-            error: null,
-            report: null,
-            qualityBlocked: false,
-            publishable: true,
-            qualityState: 'pass',
-            qualityReasons: [],
-            blockedReasonCodes: [],
-            qualityMetrics: {},
-            qualityThresholds: {},
-            qualityDetails: {},
-            allowContinueWhenBlocked: false,
-            blockedReportAvailable: false,
-          }
-        : current;
+      const run = activeRuns[index];
 
       const runIdFromEvent = typeof step?.runId === 'string'
         ? step.runId
@@ -1122,26 +1052,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       if (index < 0) return state;
 
       const activeRuns = [...state.activeRuns];
-      const current = activeRuns[index];
-      const run: ExecutionRun = current.status === 'interrupted'
-        ? {
-            ...current,
-            status: 'running' as const,
-            interruptData: null,
-            error: null,
-            report: null,
-            qualityBlocked: false,
-            publishable: true,
-            qualityState: 'pass',
-            qualityReasons: [],
-            blockedReasonCodes: [],
-            qualityMetrics: {},
-            qualityThresholds: {},
-            qualityDetails: {},
-            allowContinueWhenBlocked: false,
-            blockedReportAvailable: false,
-          }
-        : current;
+      const run = activeRuns[index];
 
       const pipelineStages = { ...(run.pipelineStages ?? createInitialPipelineStages()) };
       const timestamp = new Date().toISOString();
@@ -1149,12 +1060,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...pipelineStages.rendering,
         status: pipelineStages.rendering.status === 'done' ? 'done' : 'running',
         startedAt: pipelineStages.rendering.startedAt ?? timestamp,
-        message: 'Rendering markdown stream',
+        message: zh.execution.renderingStream,
       };
       const patch = mergePatchAndEstimateEta(run, {
         streamedContent: run.streamedContent + token,
         progress: Math.max(run.progress, 92),
-        currentStep: '生成报告中...',
+        currentStep: zh.execution.generatingReport,
         pipelineStages,
         pipelineCurrentStage: run.pipelineCurrentStage ?? 'rendering',
       });
@@ -1205,7 +1116,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             status: 'done',
             startedAt: pipelineStages.done.startedAt ?? doneAt,
             completedAt: doneAt,
-            message: 'Execution completed',
+            message: zh.execution.doneEvent,
           },
           rendering: pipelineStages.rendering.status === 'running'
             ? {
@@ -1218,7 +1129,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         nextCurrentStage = 'done';
         nextProgress = 100;
       } else if (status === 'error') {
-        const message = nextError || 'Unknown error';
+        const message = nextError || zh.execution.unknownError;
         timeline = pushTimeline(run, {
           id: `${runId}:${Date.now()}:error`,
           timestamp: doneAt,
@@ -1235,11 +1146,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           timestamp: doneAt,
           eventType: 'cancel',
           stage: 'cancel',
-          message: nextError || 'Execution cancelled',
+          message: nextError || zh.execution.cancelled,
           runId,
           raw: (meta && typeof meta === 'object') ? meta : {},
         });
-        nextError = nextError || 'Execution cancelled';
+        nextError = nextError || zh.execution.cancelled;
       }
 
       const metricsObj = (meta && typeof meta === 'object' && meta.metrics && typeof meta.metrics === 'object')
@@ -1271,7 +1182,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         etaSeconds: null,
         completedAt: doneAt,
         abortController: null,
-        interruptData: null,
       };
       activeRuns.splice(index, 1);
       return {
@@ -1279,132 +1189,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         recentRuns: [completed, ...state.recentRuns].slice(0, MAX_RECENT_RUNS),
       };
     });
-  },
-
-  interruptExternalExecution: (runId, data) => {
-    set((state) => {
-      const index = state.activeRuns.findIndex((run) => run.runId === runId);
-      if (index < 0) return state;
-
-      const activeRuns = [...state.activeRuns];
-      const run = activeRuns[index];
-      const timeline = pushTimeline(run, {
-        id: `${runId}:${Date.now()}:interrupt`,
-        timestamp: new Date().toISOString(),
-        eventType: 'interrupt',
-        stage: 'interrupt',
-        message: data.prompt ?? 'Waiting for confirmation...',
-        runId,
-        raw: data as unknown as Record<string, unknown>,
-      });
-      activeRuns[index] = {
-        ...run,
-        status: 'interrupted',
-        currentStep: data.prompt ?? 'Waiting for confirmation...',
-        interruptData: data,
-        timeline,
-        etaSeconds: null,
-      };
-      return { activeRuns };
-    });
-  },
-
-  resumeExecution: async (runId, resumeValue) => {
-    const run = get().activeRuns.find((item) => item.runId === runId);
-    const threadId = run?.interruptData?.thread_id;
-    if (!run || run.status !== 'interrupted' || !threadId) return;
-
-    const abortController = new AbortController();
-    const resumedAt = new Date().toISOString();
-    set((state) => ({
-      activeRuns: state.activeRuns.map((item) => {
-        if (item.runId !== runId) return item;
-        return {
-          ...item,
-          status: 'running' as const,
-          currentStep: 'Resuming execution...',
-          error: null,
-          interruptData: null,
-          abortController,
-          completedAt: null,
-          timeline: pushTimeline(item, {
-            id: `${runId}:${Date.now()}:resume`,
-            timestamp: resumedAt,
-            eventType: 'resume',
-            stage: 'resume',
-            message: 'resume execution',
-            runId,
-          }),
-        };
-      }),
-    }));
-
-    const callbacks: SSECallbacks = {
-      onThinking: (step) => {
-        get().ingestExternalThinking(runId, step);
-      },
-      onToken: (token = '') => {
-        get().ingestExternalToken(runId, token);
-      },
-      onDone: (report, _thinking, meta) => {
-        const streamRunId = typeof meta?.run_id === 'string' ? meta.run_id : undefined;
-        if (streamRunId && streamRunId !== runId) return;
-        get().completeExternalExecution({
-          runId,
-          status: 'done',
-          report: (report as ReportIR) ?? null,
-          meta: (meta && typeof meta === 'object') ? meta : undefined,
-        });
-      },
-      onError: (error) => {
-        get().completeExternalExecution({
-          runId,
-          status: 'error',
-          error: error ?? 'Resume failed',
-        });
-      },
-      onInterrupt: (data) => {
-        get().interruptExternalExecution(runId, data);
-      },
-      onRawEvent: (event) => {
-        useStore.getState().addRawEvent(event);
-      },
-    };
-
-    const traceRawEnabled = useStore.getState().traceRawEnabled;
-    try {
-      await apiClient.resumeExecution(
-        {
-          thread_id: threadId,
-          resume_value: resumeValue,
-          session_id: useStore.getState().sessionId,
-          source: run.source || 'execute_resume',
-          run_id: runId,
-        },
-        callbacks,
-        {
-          signal: abortController.signal,
-          traceRawEnabled,
-        },
-      );
-
-      const latest = get().activeRuns.find((item) => item.runId === runId);
-      if (latest && latest.status === 'running') {
-        get().completeExternalExecution({
-          runId,
-          status: 'error',
-          error: 'Resume stream ended unexpectedly (missing done event)',
-        });
-      }
-    } catch (err: unknown) {
-      if (abortController.signal.aborted) return;
-      const message = err instanceof Error ? err.message : 'Resume failed';
-      get().completeExternalExecution({
-        runId,
-        status: 'error',
-        error: message,
-      });
-    }
   },
 
   cancelExecution: (runId) => {

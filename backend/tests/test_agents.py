@@ -1,7 +1,6 @@
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-from backend.agents.price_agent import PriceAgent, AllSourcesFailedError
+from unittest.mock import MagicMock, AsyncMock
+from backend.agents.price_agent import PriceAgent
 from backend.agents.news_agent import NewsAgent
 from backend.services.circuit_breaker import CircuitBreaker
 
@@ -19,7 +18,9 @@ def mock_llm():
 def mock_tools():
     tools = MagicMock()
     # Mock price tool
-    tools._fetch_with_yfinance = MagicMock(return_value={"price": 150.0, "currency": "USD", "source": "yfinance", "as_of": "2023-01-01"})
+    tools.get_stock_price = MagicMock(
+        return_value={"price": 150.0, "currency": "USD", "source": "market_gateway", "as_of": "2023-01-01"}
+    )
     # Mock news tool
     tools._fetch_with_finnhub_news = MagicMock(return_value=[
         {"headline": "Apple releases new iPhone", "url": "http://apple.com", "source": "finnhub", "datetime": "2023-01-01"}
@@ -42,13 +43,17 @@ async def test_price_agent_success(mock_llm, mock_cache, mock_tools, circuit_bre
     assert result.agent_name == "PriceAgent"
     assert "150.0" in result.summary
     assert result.confidence == 1.0
-    mock_tools._fetch_with_yfinance.assert_called_once_with("AAPL")
+    mock_tools.get_stock_price.assert_called_once_with("AAPL")
 
 @pytest.mark.asyncio
-async def test_price_agent_fallback(mock_llm, mock_cache, mock_tools, circuit_breaker):
-    # Simulate yfinance failure
-    mock_tools._fetch_with_yfinance.side_effect = Exception("API Error")
-    mock_tools._fetch_with_finnhub = MagicMock(return_value={"price": 151.0, "currency": "USD", "source": "finnhub", "as_of": "2023-01-01"})
+async def test_price_agent_accepts_gateway_secondary_result(mock_llm, mock_cache, mock_tools, circuit_breaker):
+    mock_tools.get_stock_price.return_value = {
+        "price": 151.0,
+        "currency": "USD",
+        "source": "finnhub",
+        "as_of": "2023-01-01",
+        "degraded": True,
+    }
 
     agent = PriceAgent(mock_llm, mock_cache, mock_tools, circuit_breaker)
 
@@ -56,9 +61,7 @@ async def test_price_agent_fallback(mock_llm, mock_cache, mock_tools, circuit_br
 
     assert "151.0" in result.summary
     assert result.data_sources == ["finnhub"]
-    # Should have tried yfinance first
-    mock_tools._fetch_with_yfinance.assert_called_once()
-    mock_tools._fetch_with_finnhub.assert_called_once()
+    mock_tools.get_stock_price.assert_called_once_with("AAPL")
 
 
 @pytest.mark.asyncio

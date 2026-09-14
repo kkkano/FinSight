@@ -164,12 +164,130 @@ def test_recovery_after_cooldown(monkeypatch):
 
 def test_get_llm_config_raises_when_all_sources_empty(monkeypatch):
     llm_config = _reload_llm_config()
-    monkeypatch.setattr(llm_config, '_load_user_config', lambda: {})
     monkeypatch.setattr(llm_config, '_parse_env_endpoints', lambda provider, model: [])
 
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(RuntimeError) as exc:
         llm_config.get_llm_config(provider='openai_compatible', model=None)
-    assert 'No LLM endpoint configured' in str(exc.value)
+    assert 'OPENAI_COMPATIBLE_API_BASE' in str(exc.value)
+
+
+def test_all_cooling_down_creates_no_client_or_provider_request(monkeypatch):
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoint = llm_config.EndpointConfig(
+        name="cooling", provider="openai_compatible", api_base="https://a.example.test/v1",
+        api_key="test-key", model="test-model", cooldown_sec=60, failure_domain="a.example.test",
+    )
+    manager = llm_config.EndpointManager(endpoints=[llm_config.EndpointRuntime(cfg=endpoint, cooldown_until=10**12)])
+    context = llm_retry.LLMCallContext.create(stage="planner")
+    client_calls: list[object] = []
+    invoke_calls: list[object] = []
+
+    async def invoke(client, messages):
+        invoke_calls.append(client)
+        return {"ok": True}
+
+    with pytest.raises(llm_config.AllEndpointsCoolingDown) as exc:
+        asyncio.run(llm_retry.ainvoke_llm(
+            messages=["x"], context=context, endpoint_manager=manager,
+            client_factory=lambda config: client_calls.append(config), invoke=invoke,
+        ))
+    assert exc.value.retry_after_seconds >= 1
+    assert client_calls == []
+    assert invoke_calls == []
+    assert context.budget.provider_attempts_used == 0
+
+
+@pytest.mark.parametrize("failure", ["401 unauthorized", "403 forbidden", "400 bad request", "404 not found", "422 invalid"])
+def test_non_retryable_failures_do_not_retry_or_cool_down(failure):
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoint = llm_config.EndpointConfig(
+        name="primary", provider="openai_compatible", api_base="https://a.example.test/v1",
+        api_key="test-key", model="test-model", failure_domain="a.example.test",
+    )
+    manager = llm_config.EndpointManager(endpoints=[llm_config.EndpointRuntime(cfg=endpoint)])
+    calls: list[object] = []
+
+    async def invoke(client, messages):
+        calls.append(client)
+        raise RuntimeError(failure)
+
+    with pytest.raises(RuntimeError, match=failure):
+        asyncio.run(llm_retry.ainvoke_llm(
+            messages=["x"], context=llm_retry.LLMCallContext.create(stage="planner"),
+            endpoint_manager=manager, client_factory=lambda config: object(), invoke=invoke,
+            sleeper=lambda _: asyncio.sleep(0),
+        ))
+    assert len(calls) == 1
+    assert manager.endpoints[0].cooldown_until == 0
+
+
+def test_retry_prefers_another_failure_domain_and_caps_attempts():
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoints = [
+        llm_config.EndpointConfig("a", "openai_compatible", "https://a.example.test/v1", "key", "m", failure_domain="a"),
+        llm_config.EndpointConfig("b", "openai_compatible", "https://b.example.test/v1", "key", "m", failure_domain="b"),
+    ]
+    manager = llm_config.EndpointManager(endpoints=[llm_config.EndpointRuntime(cfg=endpoint) for endpoint in endpoints])
+    used: list[str] = []
+
+    async def invoke(client, messages):
+        used.append(client.name)
+        if len(used) == 1:
+            raise RuntimeError("503 service unavailable")
+        return {"ok": True}
+
+    result = asyncio.run(llm_retry.ainvoke_llm(
+        messages=["x"], context=llm_retry.LLMCallContext.create(stage="planner"), endpoint_manager=manager,
+        client_factory=lambda config: config, invoke=invoke, sleeper=lambda _: asyncio.sleep(0),
+    ))
+    assert result == {"ok": True}
+    assert used == ["a", "b"]
+
+
+def test_configured_invoke_filters_endpoints_without_mutating_shared_manager(monkeypatch):
+    import backend.llm_config as llm_config
+    import backend.services.llm_retry as llm_retry
+
+    endpoints = [
+        llm_config.EndpointConfig("primary", "openai_compatible", "https://a.example.test/v1", "key", "m-a"),
+        llm_config.EndpointConfig("backup", "openai_compatible", "https://b.example.test/v1", "key", "m-b"),
+    ]
+    manager = llm_config.EndpointManager(
+        endpoints=[llm_config.EndpointRuntime(cfg=endpoint) for endpoint in endpoints]
+    )
+    used: list[str] = []
+
+    class Client:
+        def __init__(self, endpoint):
+            self.endpoint = endpoint
+            self.model_name = endpoint.model
+
+        async def ainvoke(self, _messages):
+            used.append(self.endpoint.name)
+            return {"ok": True}
+
+    monkeypatch.setattr(llm_retry, "check_token_budget", lambda: None)
+    monkeypatch.setattr(llm_retry, "get_endpoint_manager", lambda **_kwargs: manager)
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", lambda endpoint, **_kwargs: Client(endpoint))
+    monkeypatch.setattr(llm_retry, "record_llm_usage", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(llm_retry, "record_llm_attempt", lambda *_args, **_kwargs: None)
+
+    result = asyncio.run(llm_retry.ainvoke_configured_llm(
+        ["x"],
+        context=llm_retry.LLMCallContext.create(stage="prediction", max_provider_attempts=2),
+        endpoint_names=("primary",),
+        acquire_token=False,
+    ))
+
+    assert result == {"ok": True}
+    assert used == ["primary"]
+    assert [runtime.cfg.name for runtime in manager.endpoints] == ["primary", "backup"]
 
 
 def test_retry_helper_reports_failure_and_success(monkeypatch):
@@ -517,6 +635,43 @@ def test_retry_fallback_without_factory(monkeypatch):
     assert llm.call_count == 3
 
 
+def test_retry_transient_connection_error_without_factory(monkeypatch):
+    """单端点连接抖动时应复用原 LLM 重试，而不是立即降级。"""
+    import backend.services.llm_retry as llm_retry
+
+    async def _no_sleep(_seconds: float):
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _no_sleep)
+
+    class _FlakyLLM:
+        def __init__(self):
+            self.call_count = 0
+
+        async def ainvoke(self, messages):
+            self.call_count += 1
+            if self.call_count == 1:
+                raise RuntimeError('Connection error.')
+            return {'ok': True}
+
+    llm = _FlakyLLM()
+    result = asyncio.run(
+        llm_retry.ainvoke_with_rate_limit_retry(
+            llm,
+            messages=[{'role': 'user', 'content': 'hello'}],
+            max_attempts=2,
+            sleep_seconds=0,
+            jitter_seconds=0,
+            acquire_token=False,
+        )
+    )
+
+    assert result == {'ok': True}
+    assert llm.call_count == 2
+
+
 def test_raw_url_preserved():
     """raw_url=True should preserve the full URL without stripping /chat/completions."""
     llm_config = _reload_llm_config()
@@ -536,25 +691,3 @@ def test_auto_detect_full_chat_completions_url_without_raw_flag():
     full_url = 'https://x666.me/v1/chat/completions'
     result = llm_config._normalize_api_base(full_url, raw=False)
     assert result == full_url
-
-
-def test_parse_user_endpoints_auto_sets_raw_url_for_full_endpoint():
-    llm_config = _reload_llm_config()
-
-    payload = {
-        'llm_endpoints': [
-            {
-                'name': 'primary',
-                'provider': 'openai_compatible',
-                'api_base': 'https://x666.me/v1/chat/completions',
-                'api_key': 'sk-test-1234567890',
-                'model': 'gemini-3-pro-high',
-                'enabled': True,
-            }
-        ]
-    }
-
-    endpoints = llm_config._parse_user_endpoints(payload, 'openai_compatible', None)
-    assert len(endpoints) == 1
-    assert endpoints[0].raw_url is True
-    assert endpoints[0].api_base == 'https://x666.me/v1/chat/completions'

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import sqlite3
-import threading
+import secrets
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy import text
+
 from backend.report.quality_engine import apply_quality_to_report
+from backend.services.database import create_core_engine, resolve_core_postgres_dsn
 
 
 def _now_iso() -> str:
@@ -104,103 +105,53 @@ def _derive_quality_fields(report: dict[str, Any]) -> tuple[str, int, str]:
     return state, publishable, reasons_json
 
 
+class ReportIndexStoreUnavailable(RuntimeError):
+    pass
+
+
+def _session_owner_id(session_id: str) -> str:
+    parts = str(session_id or "").strip().split(":")
+    if len(parts) != 3 or not parts[1] or parts[1] in {"public", "anonymous"}:
+        raise ReportIndexStoreUnavailable("report store requires authenticated tenant session")
+    return parts[1]
+
+
+def _report_owner(session_id: str, user_id: str | None) -> str:
+    session_owner = _session_owner_id(session_id)
+    explicit = str(user_id or "").strip()
+    if explicit and explicit != session_owner:
+        raise ReportIndexStoreUnavailable("report session does not belong to authenticated user")
+    return explicit or session_owner
+
+
+def _json_value(value: Any, fallback: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return fallback
+    return value if isinstance(value, type(fallback)) else fallback
+
+
+def _iso_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+class UnavailableReportIndexStore:
+    def __getattr__(self, _name: str):
+        def unavailable(*_args, **_kwargs):
+            raise ReportIndexStoreUnavailable("report postgres unavailable")
+
+        return unavailable
+
+
 class ReportIndexStore:
-    def __init__(self) -> None:
-        # 默认落在 data/ 目录（容器内映射到挂载卷 /app/data），与其他 store 一致，
-        # 避免落在卷外导致每次 --build 丢失报告索引。
-        path = os.getenv("REPORT_INDEX_SQLITE_PATH", "data/report_index.sqlite")
-        self._path = os.path.abspath(path)
-        os.makedirs(os.path.dirname(self._path), exist_ok=True)
-        self._lock = threading.Lock()
-        self._init_db()
+    """报告、引用与分享的 PostgreSQL 租户存储。"""
 
-    @property
-    def path(self) -> str:
-        return self._path
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _column_exists(self, conn: sqlite3.Connection, table: str, column: str) -> bool:
-        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-        for row in rows:
-            try:
-                if str(row["name"]).strip().lower() == column.lower():
-                    return True
-            except Exception:
-                if len(row) > 1 and str(row[1]).strip().lower() == column.lower():
-                    return True
-        return False
-
-    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
-        if self._column_exists(conn, table, column):
-            return
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
-    def _ensure_report_indexes(self, conn: sqlite3.Connection) -> None:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type)")
-        if self._column_exists(conn, "report_index", "quality_state"):
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_quality_state ON report_index(quality_state)")
-        if self._column_exists(conn, "report_index", "publishable"):
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_publishable ON report_index(publishable)")
-
-    def _ensure_citation_indexes(self, conn: sqlite3.Connection) -> None:
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_report ON citation_index(report_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_session ON citation_index(session_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_url ON citation_index(url)")
-
-    def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS report_index (
-                    report_id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    ticker TEXT,
-                    title TEXT,
-                    summary TEXT,
-                    tags_json TEXT,
-                    generated_at TEXT,
-                    confidence_score REAL,
-                    is_favorite INTEGER NOT NULL DEFAULT 0,
-                    trace_digest_json TEXT,
-                    report_json TEXT NOT NULL,
-                    quality_state TEXT NOT NULL DEFAULT 'pass',
-                    publishable INTEGER NOT NULL DEFAULT 1,
-                    quality_reasons_json TEXT,
-                    source_type TEXT NOT NULL DEFAULT 'ai_generated',
-                    filing_type TEXT,
-                    publisher TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS citation_index (
-                    row_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    report_id TEXT NOT NULL,
-                    session_id TEXT NOT NULL,
-                    source_id TEXT,
-                    title TEXT,
-                    url TEXT,
-                    snippet TEXT,
-                    published_date TEXT,
-                    confidence REAL,
-                    citation_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(report_id) REFERENCES report_index(report_id) ON DELETE CASCADE
-                );
-                """
-            )
-            self._ensure_column(conn, "report_index", "quality_state", "TEXT NOT NULL DEFAULT 'pass'")
-            self._ensure_column(conn, "report_index", "publishable", "INTEGER NOT NULL DEFAULT 1")
-            self._ensure_column(conn, "report_index", "quality_reasons_json", "TEXT")
-            self._ensure_report_indexes(conn)
-            self._ensure_citation_indexes(conn)
+    def __init__(self, *, dsn: str | None = None, engine: Any | None = None) -> None:
+        self._engine = engine if engine is not None else create_core_engine(dsn=dsn)
 
     def upsert_report(
         self,
@@ -209,25 +160,14 @@ class ReportIndexStore:
         report: dict[str, Any],
         trace_digest: dict[str, Any] | None = None,
         include_blocked: bool = False,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
+        owner = _report_owner(session_id, user_id)
         report_id = str(report.get("report_id") or "").strip()
         if not report_id:
             raise ValueError("report.report_id is required")
-
-        ticker = str(report.get("ticker") or "").strip() or None
-        title = str(report.get("title") or "").strip() or None
-        summary = str(report.get("summary") or "").strip() or None
-        confidence = report.get("confidence_score")
-        try:
-            confidence_value = float(confidence) if confidence is not None else None
-        except Exception:
-            confidence_value = None
-
-        tags = report.get("tags")
-        tags_json = json.dumps(tags, ensure_ascii=False) if isinstance(tags, list) else None
-        quality_state, publishable, quality_reasons_json = _derive_quality_fields(report)
-        report_json = json.dumps(report, ensure_ascii=False)
-        trace_digest_json = json.dumps(trace_digest or {}, ensure_ascii=False)
+        quality_state, publishable_raw, quality_reasons = _derive_quality_fields(report)
+        publishable = bool(publishable_raw)
         if quality_state == "block" and not include_blocked:
             return {
                 "report_id": report_id,
@@ -236,95 +176,84 @@ class ReportIndexStore:
                 "publishable": False,
                 "skipped": "quality_blocked",
             }
-        generated_at = str(report.get("generated_at") or "").strip() or _now_iso()
+        confidence = report.get("confidence_score")
+        try:
+            confidence_value = float(confidence) if confidence is not None else None
+        except (TypeError, ValueError):
+            confidence_value = None
         meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
-        source_type = str(report.get("source_type") or meta.get("source_type") or "ai_generated").strip() or "ai_generated"
-        filing_type = str(report.get("filing_type") or "").strip() or None
-        publisher = str(report.get("publisher") or "").strip() or None
-        now = _now_iso()
-
-        with self._lock:
-            with self._connect() as conn:
+        params = {
+            "report_id": report_id,
+            "user_id": owner,
+            "session_id": session_id,
+            "ticker": str(report.get("ticker") or "").strip() or None,
+            "title": str(report.get("title") or "").strip() or None,
+            "summary": str(report.get("summary") or "").strip() or None,
+            "tags": json.dumps(report.get("tags") if isinstance(report.get("tags"), list) else [], ensure_ascii=False),
+            "generated_at": str(report.get("generated_at") or "").strip() or _now_iso(),
+            "confidence_score": confidence_value,
+            "trace_digest": json.dumps(trace_digest or {}, ensure_ascii=False),
+            "report": json.dumps(report, ensure_ascii=False),
+            "quality_state": quality_state,
+            "publishable": publishable,
+            "quality_reasons": quality_reasons,
+            "source_type": str(report.get("source_type") or meta.get("source_type") or "ai_generated").strip() or "ai_generated",
+            "filing_type": str(report.get("filing_type") or "").strip() or None,
+            "publisher": str(report.get("publisher") or "").strip() or None,
+        }
+        with self._engine.begin() as conn:
+            upserted_owner = conn.execute(
+                text(
+                    "INSERT INTO reports(report_id,user_id,session_id,ticker,title,summary,tags,generated_at,"
+                    "confidence_score,trace_digest,report,quality_state,publishable,quality_reasons,"
+                    "source_type,filing_type,publisher) VALUES (:report_id,:user_id,:session_id,:ticker,"
+                    ":title,:summary,CAST(:tags AS jsonb),CAST(:generated_at AS timestamptz),:confidence_score,"
+                    "CAST(:trace_digest AS jsonb),CAST(:report AS jsonb),:quality_state,:publishable,"
+                    "CAST(:quality_reasons AS jsonb),:source_type,:filing_type,:publisher) "
+                    "ON CONFLICT(report_id) DO UPDATE SET session_id=excluded.session_id,"
+                    "ticker=excluded.ticker,title=excluded.title,summary=excluded.summary,tags=excluded.tags,"
+                    "generated_at=excluded.generated_at,confidence_score=excluded.confidence_score,"
+                    "trace_digest=excluded.trace_digest,report=excluded.report,quality_state=excluded.quality_state,"
+                    "publishable=excluded.publishable,quality_reasons=excluded.quality_reasons,"
+                    "source_type=excluded.source_type,filing_type=excluded.filing_type,publisher=excluded.publisher,"
+                    "updated_at=now() WHERE reports.user_id=excluded.user_id RETURNING user_id"
+                ),
+                params,
+            ).scalar_one_or_none()
+            if upserted_owner is None:
+                raise ReportIndexStoreUnavailable("report_id belongs to another authenticated user")
+            conn.execute(
+                text("DELETE FROM report_citations WHERE report_id=:report_id AND user_id=:user_id"),
+                {"report_id": report_id, "user_id": owner},
+            )
+            seen: set[str] = set()
+            for item in report.get("citations") or []:
+                citation = _normalize_citation_item(item)
+                if not citation:
+                    continue
+                source_id = _clean_text(citation.get("source_id"))
+                if source_id in seen:
+                    continue
+                seen.add(source_id)
                 conn.execute(
-                    """
-                    INSERT INTO report_index(
-                        report_id, session_id, ticker, title, summary, tags_json,
-                        generated_at, confidence_score, trace_digest_json, report_json,
-                        quality_state, publishable, quality_reasons_json,
-                        source_type, filing_type, publisher,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(report_id) DO UPDATE SET
-                        session_id=excluded.session_id,
-                        ticker=excluded.ticker,
-                        title=excluded.title,
-                        summary=excluded.summary,
-                        tags_json=excluded.tags_json,
-                        generated_at=excluded.generated_at,
-                        confidence_score=excluded.confidence_score,
-                        trace_digest_json=excluded.trace_digest_json,
-                        report_json=excluded.report_json,
-                        quality_state=excluded.quality_state,
-                        publishable=excluded.publishable,
-                        quality_reasons_json=excluded.quality_reasons_json,
-                        source_type=excluded.source_type,
-                        filing_type=excluded.filing_type,
-                        publisher=excluded.publisher,
-                        updated_at=excluded.updated_at
-                    """,
-                    (
-                        report_id,
-                        session_id,
-                        ticker,
-                        title,
-                        summary,
-                        tags_json,
-                        generated_at,
-                        confidence_value,
-                        trace_digest_json,
-                        report_json,
-                        quality_state,
-                        publishable,
-                        quality_reasons_json,
-                        source_type,
-                        filing_type,
-                        publisher,
-                        now,
-                        now,
+                    text(
+                        "INSERT INTO report_citations(report_id,user_id,session_id,source_id,title,url,snippet,"
+                        "published_date,confidence,citation) VALUES (:report_id,:user_id,:session_id,:source_id,"
+                        ":title,:url,:snippet,:published_date,:confidence,CAST(:citation AS jsonb))"
                     ),
+                    {
+                        "report_id": report_id,
+                        "user_id": owner,
+                        "session_id": session_id,
+                        "source_id": source_id,
+                        "title": citation.get("title"),
+                        "url": citation.get("url"),
+                        "snippet": citation.get("snippet"),
+                        "published_date": citation.get("published_date"),
+                        "confidence": citation.get("confidence"),
+                        "citation": json.dumps(citation, ensure_ascii=False),
+                    },
                 )
-
-                conn.execute("DELETE FROM citation_index WHERE report_id = ?", (report_id,))
-                seen_source_ids: set[str] = set()
-                for item in report.get("citations") or []:
-                    normalized_citation = _normalize_citation_item(item)
-                    if not normalized_citation:
-                        continue
-                    source_id = _clean_text(normalized_citation.get("source_id"))
-                    if source_id in seen_source_ids:
-                        continue
-                    seen_source_ids.add(source_id)
-                    conn.execute(
-                        """
-                        INSERT INTO citation_index(
-                            report_id, session_id, source_id, title, url, snippet,
-                            published_date, confidence, citation_json, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            report_id,
-                            session_id,
-                            source_id,
-                            normalized_citation.get("title"),
-                            normalized_citation.get("url"),
-                            normalized_citation.get("snippet"),
-                            normalized_citation.get("published_date"),
-                            normalized_citation.get("confidence"),
-                            json.dumps(normalized_citation, ensure_ascii=False),
-                            now,
-                        ),
-                    )
-
         return {"report_id": report_id, "session_id": session_id}
 
     def list_reports(
@@ -333,98 +262,63 @@ class ReportIndexStore:
         session_id: str,
         ticker: str | None = None,
         query: str | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
-        tag: str | None = None,
-        favorite_only: bool = False,
         source_type: str | None = None,
         include_blocked: bool = False,
         limit: int = 50,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        sql = """
-            SELECT report_id, session_id, ticker, title, summary, generated_at,
-                   confidence_score, is_favorite, tags_json, source_type, report_json,
-                   quality_state, publishable, quality_reasons_json,
-                   filing_type, publisher, created_at, updated_at
-            FROM report_index
-            WHERE session_id = ?
-        """
-        args: list[Any] = [session_id]
+        owner = _report_owner(session_id, user_id)
+        where = ["user_id=:user_id", "session_id=:session_id"]
+        params: dict[str, Any] = {"user_id": owner, "session_id": session_id}
         if ticker:
-            sql += " AND ticker = ?"
-            args.append(ticker)
-        if favorite_only:
-            sql += " AND is_favorite = 1"
+            where.append("ticker=:ticker")
+            params["ticker"] = ticker
         if query:
-            like = f"%{query.strip()}%"
-            sql += " AND (title LIKE ? OR summary LIKE ? OR ticker LIKE ?)"
-            args.extend([like, like, like])
-        if date_from:
-            sql += " AND generated_at >= ?"
-            args.append(date_from.strip())
-        if date_to:
-            sql += " AND generated_at <= ?"
-            args.append(date_to.strip())
-        if tag:
-            sql += " AND tags_json LIKE ?"
-            args.append(f'%"{tag.strip()}"%')
+            where.append("(title ILIKE :query OR summary ILIKE :query OR ticker ILIKE :query)")
+            params["query"] = f"%{query.strip()}%"
         if source_type:
-            sql += " AND source_type = ?"
-            args.append(source_type.strip())
+            where.append("source_type=:source_type")
+            params["source_type"] = source_type.strip()
         if not include_blocked:
-            sql += " AND publishable = 1"
-        sql += " ORDER BY generated_at DESC LIMIT ?"
-        args.append(max(1, min(500, int(limit))))
-
-        with self._connect() as conn:
-            rows = conn.execute(sql, args).fetchall()
-            result: list[dict[str, Any]] = []
-            for row in rows:
-                tags = []
-                if row["tags_json"]:
-                    try:
-                        parsed = json.loads(row["tags_json"])
-                        if isinstance(parsed, list):
-                            tags = parsed
-                    except Exception:
-                        tags = []
-                report_meta = _extract_report_meta(row["report_json"])
-                source_trigger = str(report_meta.get("source_trigger") or "").strip() or None
-                analysis_depth = _derive_analysis_depth(
-                    source_trigger=source_trigger,
-                    report_meta=report_meta,
-                )
-                quality_reasons: list[dict[str, Any]] = []
-                try:
-                    parsed_reasons = json.loads(row["quality_reasons_json"] or "[]")
-                    if isinstance(parsed_reasons, list):
-                        quality_reasons = [item for item in parsed_reasons if isinstance(item, dict)]
-                except Exception:
-                    quality_reasons = []
-                result.append(
-                    {
-                        "report_id": row["report_id"],
-                        "session_id": row["session_id"],
-                        "ticker": row["ticker"],
-                        "title": row["title"],
-                        "summary": row["summary"],
-                        "generated_at": row["generated_at"],
-                        "confidence_score": row["confidence_score"],
-                        "is_favorite": bool(row["is_favorite"]),
-                        "tags": tags,
-                        "source_type": row["source_type"],
-                        "quality_state": row["quality_state"] or "pass",
-                        "publishable": bool(row["publishable"]),
-                        "quality_reasons": quality_reasons,
-                        "source_trigger": source_trigger,
-                        "analysis_depth": analysis_depth,
-                        "filing_type": row["filing_type"],
-                        "publisher": row["publisher"],
-                        "created_at": row["created_at"],
-                        "updated_at": row["updated_at"],
-                    }
-                )
-            return result
+            where.append("publishable=true")
+        params["limit"] = max(1, min(500, int(limit)))
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT * FROM reports WHERE " + " AND ".join(where) +
+                    " ORDER BY generated_at DESC NULLS LAST,created_at DESC LIMIT :limit"
+                ),
+                params,
+            ).mappings().all()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            data = dict(row)
+            report_payload = _json_value(data.get("report"), {})
+            report_meta = report_payload.get("meta") if isinstance(report_payload.get("meta"), dict) else {}
+            source_trigger = str(report_meta.get("source_trigger") or "").strip() or None
+            result.append(
+                {
+                    "report_id": data["report_id"],
+                    "session_id": data["session_id"],
+                    "ticker": data.get("ticker"),
+                    "title": data.get("title"),
+                    "summary": data.get("summary"),
+                    "generated_at": _iso_value(data.get("generated_at")),
+                    "confidence_score": data.get("confidence_score"),
+                    "tags": _json_value(data.get("tags"), []),
+                    "source_type": data.get("source_type"),
+                    "quality_state": data.get("quality_state") or "pass",
+                    "publishable": bool(data.get("publishable")),
+                    "quality_reasons": _json_value(data.get("quality_reasons"), []),
+                    "source_trigger": source_trigger,
+                    "analysis_depth": _derive_analysis_depth(source_trigger=source_trigger, report_meta=report_meta),
+                    "filing_type": data.get("filing_type"),
+                    "publisher": data.get("publisher"),
+                    "created_at": _iso_value(data.get("created_at")),
+                    "updated_at": _iso_value(data.get("updated_at")),
+                }
+            )
+        return result
 
     def get_report_replay(
         self,
@@ -432,52 +326,55 @@ class ReportIndexStore:
         session_id: str,
         report_id: str,
         include_blocked: bool = False,
+        user_id: str | None = None,
     ) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            where_clause = "WHERE session_id = ? AND report_id = ?"
-            if not include_blocked:
-                where_clause += " AND publishable = 1"
+        owner = _report_owner(session_id, user_id)
+        publishable = "" if include_blocked else " AND publishable=true"
+        with self._engine.connect() as conn:
             row = conn.execute(
-                """
-                SELECT report_json, trace_digest_json
-                FROM report_index
-                """
-                + where_clause,
-                (
-                    session_id,
-                    report_id,
+                text(
+                    "SELECT report,trace_digest FROM reports WHERE user_id=:user_id "
+                    "AND session_id=:session_id AND report_id=:report_id" + publishable
                 ),
-            ).fetchone()
+                {"user_id": owner, "session_id": session_id, "report_id": report_id},
+            ).mappings().first()
             if not row:
                 return None
             citations = conn.execute(
-                """
-                SELECT citation_json
-                FROM citation_index
-                WHERE session_id = ? AND report_id = ?
-                ORDER BY row_id ASC
-                """,
-                (session_id, report_id),
-            ).fetchall()
-
-        report_payload = json.loads(row["report_json"])
-        citation_items = []
-        for item in citations:
-            try:
-                citation_items.append(json.loads(item["citation_json"]))
-            except Exception:
-                continue
+                text(
+                    "SELECT citation FROM report_citations WHERE user_id=:user_id "
+                    "AND session_id=:session_id AND report_id=:report_id ORDER BY id"
+                ),
+                {"user_id": owner, "session_id": session_id, "report_id": report_id},
+            ).scalars().all()
+        report_payload = _json_value(row["report"], {})
+        citation_items = [_json_value(item, {}) for item in citations]
         report_payload["citations"] = citation_items
-        trace_digest = {}
-        try:
-            trace_digest = json.loads(row["trace_digest_json"] or "{}")
-        except Exception:
-            trace_digest = {}
         return {
             "report": report_payload,
-            "trace_digest": trace_digest,
+            "trace_digest": _json_value(row["trace_digest"], {}),
             "citations": citation_items,
         }
+
+    def get_report_by_id(
+        self,
+        *,
+        report_id: str,
+        include_blocked: bool = False,
+        user_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        owner = str(user_id or "").strip()
+        if not owner or owner == "public":
+            raise ReportIndexStoreUnavailable("report lookup requires authenticated user")
+        where = ["report_id=:report_id", "user_id=:user_id"]
+        params: dict[str, Any] = {"report_id": report_id, "user_id": owner}
+        if not include_blocked:
+            where.append("publishable=true")
+        with self._engine.connect() as conn:
+            value = conn.execute(
+                text("SELECT report FROM reports WHERE " + " AND ".join(where)), params
+            ).scalar()
+        return _json_value(value, {}) if value is not None else None
 
     def list_citations(
         self,
@@ -489,104 +386,126 @@ class ReportIndexStore:
         date_from: str | None = None,
         date_to: str | None = None,
         limit: int = 100,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        sql = """
-            SELECT row_id, report_id, session_id, source_id, title, url, snippet,
-                   published_date, confidence, citation_json, created_at
-            FROM citation_index
-            WHERE session_id = ?
-        """
-        args: list[Any] = [session_id]
-
+        owner = _report_owner(session_id, user_id)
+        where = ["user_id=:user_id", "session_id=:session_id"]
+        params: dict[str, Any] = {"user_id": owner, "session_id": session_id}
         if report_id:
-            sql += " AND report_id = ?"
-            args.append(report_id)
+            where.append("report_id=:report_id")
+            params["report_id"] = report_id
         if source_id:
-            sql += " AND source_id = ?"
-            args.append(source_id.strip())
+            where.append("source_id=:source_id")
+            params["source_id"] = source_id.strip()
         if date_from:
-            sql += " AND published_date >= ?"
-            args.append(date_from.strip())
+            where.append("published_date>=:date_from")
+            params["date_from"] = date_from.strip()
         if date_to:
-            sql += " AND published_date <= ?"
-            args.append(date_to.strip())
+            where.append("published_date<=:date_to")
+            params["date_to"] = date_to.strip()
         if query:
-            like = f"%{query.strip()}%"
-            sql += " AND (title LIKE ? OR snippet LIKE ? OR url LIKE ? OR source_id LIKE ?)"
-            args.extend([like, like, like, like])
+            where.append("(title ILIKE :query OR snippet ILIKE :query OR url ILIKE :query OR source_id ILIKE :query)")
+            params["query"] = f"%{query.strip()}%"
+        params["limit"] = max(1, min(500, int(limit)))
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT * FROM report_citations WHERE " + " AND ".join(where) +
+                    " ORDER BY id DESC LIMIT :limit"
+                ),
+                params,
+            ).mappings().all()
+        return [
+            {
+                "row_id": row["id"], "report_id": row["report_id"], "session_id": row["session_id"],
+                "source_id": row["source_id"], "title": row["title"], "url": row["url"],
+                "snippet": row["snippet"], "published_date": row["published_date"],
+                "confidence": row["confidence"], "created_at": _iso_value(row["created_at"]),
+                "citation": _json_value(row["citation"], {}),
+            }
+            for row in rows
+        ]
 
-        sql += " ORDER BY row_id DESC LIMIT ?"
-        args.append(max(1, min(500, int(limit))))
+    def create_share(self, *, report_id: str, user_id: str | None = None) -> str | None:
+        if not user_id:
+            raise ReportIndexStoreUnavailable("share creation requires authenticated user")
+        with self._engine.begin() as conn:
+            existing = conn.execute(
+                text(
+                    "SELECT share_token FROM reports WHERE report_id=:report_id "
+                    "AND user_id=:user_id AND publishable=true"
+                ),
+                {"report_id": report_id, "user_id": user_id},
+            ).scalar()
+            if existing:
+                return str(existing)
+            token = secrets.token_urlsafe(24)
+            result = conn.execute(
+                text(
+                    "UPDATE reports SET share_token=:token,shared_at=now(),updated_at=now() "
+                    "WHERE report_id=:report_id AND user_id=:user_id AND publishable=true"
+                ),
+                {"token": token, "report_id": report_id, "user_id": user_id},
+            )
+        return token if result.rowcount else None
 
-        with self._connect() as conn:
-            rows = conn.execute(sql, args).fetchall()
-            result: list[dict[str, Any]] = []
-            for row in rows:
-                citation_payload: dict[str, Any] = {}
-                try:
-                    parsed = json.loads(row["citation_json"] or "{}")
-                    if isinstance(parsed, dict):
-                        citation_payload = parsed
-                except Exception:
-                    citation_payload = {}
+    def revoke_share(self, *, report_id: str, user_id: str | None = None) -> bool:
+        if not user_id:
+            raise ReportIndexStoreUnavailable("share revoke requires authenticated user")
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    "UPDATE reports SET share_token=NULL,shared_at=NULL,updated_at=now() "
+                    "WHERE report_id=:report_id AND user_id=:user_id"
+                ),
+                {"report_id": report_id, "user_id": user_id},
+            )
+        return bool(result.rowcount)
 
-                result.append(
-                    {
-                        "row_id": row["row_id"],
-                        "report_id": row["report_id"],
-                        "session_id": row["session_id"],
-                        "source_id": row["source_id"],
-                        "title": row["title"],
-                        "url": row["url"],
-                        "snippet": row["snippet"],
-                        "published_date": row["published_date"],
-                        "confidence": row["confidence"],
-                        "created_at": row["created_at"],
-                        "citation": citation_payload,
-                    }
-                )
-            return result
+    def get_shared_report(self, *, token: str) -> dict[str, Any] | None:
+        with self._engine.connect() as conn:
+            value = conn.execute(
+                text("SELECT report FROM reports WHERE share_token=:token AND publishable=true"),
+                {"token": token},
+            ).scalar()
+        return _json_value(value, {}) if value is not None else None
 
-    def set_favorite(self, *, session_id: str, report_id: str, is_favorite: bool) -> bool:
-        with self._lock:
-            with self._connect() as conn:
-                cur = conn.execute(
-                    """
-                    UPDATE report_index
-                    SET is_favorite = ?, updated_at = ?
-                    WHERE session_id = ? AND report_id = ?
-                    """,
-                    (1 if is_favorite else 0, _now_iso(), session_id, report_id),
-                )
-                return cur.rowcount > 0
-
-    def delete_session(self, *, session_id: str) -> dict[str, int]:
-        normalized = str(session_id or "").strip()
-        if not normalized:
-            return {"reports": 0, "citations": 0}
-
-        with self._lock:
-            with self._connect() as conn:
-                citation_cur = conn.execute(
-                    "DELETE FROM citation_index WHERE session_id = ?",
-                    (normalized,),
-                )
-                report_cur = conn.execute(
-                    "DELETE FROM report_index WHERE session_id = ?",
-                    (normalized,),
-                )
-
-        return {
-            "reports": int(report_cur.rowcount or 0),
-            "citations": int(citation_cur.rowcount or 0),
-        }
+    def delete_session(self, *, session_id: str, user_id: str | None = None) -> dict[str, int]:
+        owner = _report_owner(session_id, user_id)
+        with self._engine.begin() as conn:
+            citations = conn.execute(
+                text("DELETE FROM report_citations WHERE user_id=:user_id AND session_id=:session_id"),
+                {"user_id": owner, "session_id": session_id},
+            )
+            reports = conn.execute(
+                text("DELETE FROM reports WHERE user_id=:user_id AND session_id=:session_id"),
+                {"user_id": owner, "session_id": session_id},
+            )
+        return {"reports": int(reports.rowcount or 0), "citations": int(citations.rowcount or 0)}
 
 
-_REPORT_INDEX_STORE: ReportIndexStore | None = None
+_REPORT_INDEX_STORE: ReportIndexStore | UnavailableReportIndexStore | None = None
 
 
-def get_report_index_store() -> ReportIndexStore:
+def get_report_index_store() -> ReportIndexStore | UnavailableReportIndexStore:
     global _REPORT_INDEX_STORE
     if _REPORT_INDEX_STORE is None:
-        _REPORT_INDEX_STORE = ReportIndexStore()
+        dsn = resolve_core_postgres_dsn(required=False)
+        try:
+            _REPORT_INDEX_STORE = ReportIndexStore(dsn=dsn) if dsn else UnavailableReportIndexStore()
+        except Exception:
+            _REPORT_INDEX_STORE = UnavailableReportIndexStore()
     return _REPORT_INDEX_STORE
+
+
+def reset_report_index_store_cache() -> None:
+    global _REPORT_INDEX_STORE
+    _REPORT_INDEX_STORE = None
+
+
+__all__ = [
+    "ReportIndexStore",
+    "ReportIndexStoreUnavailable",
+    "get_report_index_store",
+    "reset_report_index_store_cache",
+]

@@ -18,15 +18,8 @@ from backend.graph.intent_contract import (
 )
 
 
-RequestLane = Literal["answer", "research", "action", "report", "clarify", "reject"]
+RequestLane = Literal["answer", "research", "report", "clarify", "reject"]
 RelationKind = Literal["single", "compare", "rank", "impact", "continuation", "none"]
-WorkflowActionName = Literal["backtest", "alert", "screen", "holdings", "fetch_url"]
-
-
-class WorkflowAction(TypedDict, total=False):
-    name: WorkflowActionName
-    slots: dict[str, Any]
-    required_results: list[str]
 
 
 class RequestFrame(TypedDict, total=False):
@@ -36,8 +29,6 @@ class RequestFrame(TypedDict, total=False):
     relation: RelationKind
     subject: dict[str, Any]
     evidence_obligations: list[str]
-    required_results: list[str]
-    workflow_action: NotRequired[WorkflowAction]
     render_contract: dict[str, Any]
     intent_contract: NotRequired[dict[str, Any]]
     legacy_operation: dict[str, Any]
@@ -46,11 +37,6 @@ class RequestFrame(TypedDict, total=False):
 
 
 _FRAME_VERSION = "request_frame.v1"
-_BACKTEST_ACTION_RE = re.compile(r"(?<![a-z0-9])(?:back[\s-]?test(?:ing)?|run\s+a?\s*backtest|strategy\s+backtest)(?![a-z0-9])", re.IGNORECASE)
-_BACKTEST_DEFINITION_RE = re.compile(
-    r"^\s*(?:what\s+is|what's|explain|meaning\s+of|define|how\s+does)\s+(?:a\s+)?back[\s-]?test(?:ing)?\??\s*$",
-    re.IGNORECASE,
-)
 _FRAME_SPLIT_RE = re.compile(
     r"[\u3001,\uff0c;\uff1b\u3002.!?\uff1f\uff01]+"
     r"|\b(?:and|then|also)\b"
@@ -68,28 +54,6 @@ _MACRO_HINT_RE = re.compile(
 
 def _normalized_tickers(tickers: list[str] | tuple[str, ...] | None) -> list[str]:
     return dedup_tickers([normalize_ticker(str(ticker)) for ticker in (tickers or []) if str(ticker).strip()])
-
-
-def _strategy_slot(query: str) -> str:
-    lowered = str(query or "").lower()
-    if "macd" in lowered:
-        return "macd"
-    if re.search(r"(?<![a-z0-9])rsi(?![a-z0-9])", lowered):
-        return "rsi_mean_reversion"
-    if any(token in lowered for token in ("sma", "moving average", "ma cross", "ma_cross", "crossover")):
-        return "ma_cross"
-    return "ma_cross"
-
-
-def _requests_backtest_action(query: str, tickers: list[str]) -> bool:
-    text = str(query or "").strip()
-    if not text:
-        return False
-    if _BACKTEST_DEFINITION_RE.search(text):
-        return False
-    if not tickers:
-        return False
-    return bool(_BACKTEST_ACTION_RE.search(text))
 
 
 def _domain_intent_for_fragment(fragment: str, *, subject_type: str) -> str:
@@ -132,44 +96,6 @@ def _subject(subject_type: str, tickers: list[str]) -> dict[str, Any]:
     }
 
 
-def _backtest_frame(
-    *,
-    query: str,
-    tickers: list[str],
-    subject_type: str,
-    frame_id: str,
-) -> RequestFrame:
-    ticker = tickers[0]
-    strategy = _strategy_slot(query)
-    operation = {
-        "name": "backtest",
-        "confidence": 0.9,
-        "params": {
-            "workflow_action": "backtest",
-            "strategy": strategy,
-            "required_results": ["backtest_result"],
-        },
-    }
-    return {
-        "version": _FRAME_VERSION,
-        "frame_id": frame_id,
-        "lane": "action",
-        "relation": "single",
-        "subject": _subject(subject_type, [ticker]),
-        "evidence_obligations": [],
-        "required_results": ["backtest_result"],
-        "workflow_action": {
-            "name": "backtest",
-            "slots": {"ticker": ticker, "strategy": strategy, "params": {}},
-            "required_results": ["backtest_result"],
-        },
-        "render_contract": {"shape": "action_result", "artifact": "backtest_result"},
-        "legacy_operation": operation,
-        "source": "deterministic_request_frame",
-        "reason": "workflow action compiled before research facets or legacy operation",
-    }
-
-
 def compile_request_frame(
     *,
     query: str,
@@ -184,9 +110,6 @@ def compile_request_frame(
     subject = str(subject_type or "company").strip().lower() or "company"
     if subject == "company" and not normalized and _MACRO_HINT_RE.search(str(query or "")):
         subject = "macro"
-    if _requests_backtest_action(query, normalized):
-        return _backtest_frame(query=query, tickers=normalized, subject_type=subject, frame_id=frame_id)
-
     contract = derive_intent_contract(
         query=query,
         tickers=normalized,
@@ -213,7 +136,6 @@ def compile_request_frame(
         "relation": _relation_for_contract(contract),
         "subject": _subject(subject, list(contract.get("primary_tickers") or normalized)),
         "evidence_obligations": required,
-        "required_results": [],
         "render_contract": dict(render),
         "intent_contract": dict(contract),
         "legacy_operation": legacy_operation_for_contract(contract, subject_type=subject),
@@ -262,7 +184,7 @@ def compile_request_frames(
             subject_type=subject_type,
             frame_id=f"query_frame_{idx}",
         )
-        if frame.get("lane") == "answer" and not frame.get("workflow_action"):
+        if frame.get("lane") == "answer":
             continue
         frames.append(frame)
     return frames if len(frames) >= 2 else []
@@ -270,7 +192,6 @@ def compile_request_frames(
 
 __all__ = [
     "RequestFrame",
-    "WorkflowAction",
     "compile_request_frame",
     "compile_request_frames",
 ]

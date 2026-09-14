@@ -16,7 +16,7 @@ _MARKET_OBJECT_RE = re.compile(
 )
 
 _VIEW_QUESTION_RE = re.compile(
-    r"(怎么看|怎麼看|如何看|怎么走|怎麼走|怎么操作|怎麼操作|看法|观点|觀點|判断|判斷|结论|結論|"
+    r"(怎么看|怎麼看|如何看|能不能看|可不可以看|值不值得关注|怎么走|怎麼走|怎么操作|怎麼操作|看法|观点|觀點|判断|判斷|结论|結論|"
     r"看好|看坏|看壞|看多|看空|偏多|偏空|"
     r"\bview\b|\btake\b|\bopinion\b|\bthink\b|\bbullish\b|\bbearish\b)",
     re.IGNORECASE,

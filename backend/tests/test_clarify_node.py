@@ -17,13 +17,15 @@ def test_clarify_node_interrupts_when_subject_unknown():
     nodes = [s.get("node") for s in spans]
 
     assert nodes == [
-        "build_initial_state",
-        "reset_turn_state",
         "prepare_context",
-        "chat_respond",
-        "understand_request",
+        "route_request",
+        "collect_evidence",
+        "analyze",
+        "validate",
+        "render",
     ]
     assert (result.get("clarify") or {}).get("needed") is True
+    assert (trace.get("collect_evidence") or {}).get("status") == "skipped"
 
     markdown = ((result.get("artifacts") or {}).get("draft_markdown")) or ""
     assert isinstance(markdown, str) and markdown.strip()
@@ -42,4 +44,11 @@ def test_clarify_node_allows_continue_when_subject_known():
     trace = result.get("trace") or {}
     spans = trace.get("spans") or []
     nodes = [s.get("node") for s in spans]
-    assert "policy_gate" in nodes
+    assert nodes == [
+        "prepare_context",
+        "route_request",
+        "collect_evidence",
+        "analyze",
+        "validate",
+        "render",
+    ]

@@ -70,22 +70,14 @@ def test_conversation_module():
         pytest.fail(f"conversation 模块测试失败: {e}")
 
 
-def test_prompts_module():
-    """测试 prompts 模块"""
+def test_handlers_module():
+    """测试 handlers 包仍可作为兼容命名空间导入。"""
     try:
-        from backend.prompts import (
-            FORUM_SYNTHESIS_PROMPT,
-        )
-        
-        # 验证提示词不为空
-        assert len(FORUM_SYNTHESIS_PROMPT) > 100
-        
-        # 验证包含关键占位符
-        assert "{risk_tolerance}" in FORUM_SYNTHESIS_PROMPT
-        
-        print("✅ prompts 模块测试通过")
-    except Exception as e:
-        pytest.fail(f"prompts 模块测试失败: {e}")
+        import backend.handlers as handlers
+
+        assert handlers is not None
+    except ImportError as e:
+        pytest.fail(f"handlers 模块导入失败: {e}")
 
 
 def test_directory_structure():
@@ -94,7 +86,6 @@ def test_directory_structure():
         "backend",
         "backend/orchestration",
         "backend/conversation", 
-        "backend/prompts",
         "backend/tests",
         "backend/api",
     ]
@@ -125,7 +116,6 @@ def run_all_tests():
         ("orchestration 模块", test_orchestration_module),
         ("conversation 模块", test_conversation_module),
         ("handlers 模块", test_handlers_module),
-        ("prompts 模块", test_prompts_module),
     ]
 
     for test_name, test_func in tests:

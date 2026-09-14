@@ -1,14 +1,16 @@
-"""Load and rotate LLM endpoint configs (hot-reload from user_config.json)."""
+"""从服务端环境变量加载并轮换 LLM endpoint。"""
 
 from __future__ import annotations
 
-import json
+from backend.utils.env import env_int as _env_int
+
 import logging
 import os
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -18,12 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 load_dotenv()
-
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# In Docker, FINSIGHT_CONFIG_DIR=/app/data (mounted as named volume → persists across restarts).
-# Locally, falls back to PROJECT_ROOT for backward compatibility.
-_USER_CONFIG_DIR = os.getenv("FINSIGHT_CONFIG_DIR") or PROJECT_ROOT
-USER_CONFIG_PATH = os.path.join(_USER_CONFIG_DIR, "user_config.json")
 
 PROVIDER_ALIASES = {
     "gemini_proxy": "openai_compatible",
@@ -81,34 +77,11 @@ def _normalize_api_base(api_base: str | None, *, raw: bool = False) -> str | Non
     return normalized
 
 
-def _load_user_config() -> dict:
-    if os.path.exists(USER_CONFIG_PATH):
-        try:
-            with open(USER_CONFIG_PATH, "r", encoding="utf-8") as f:
-                payload = json.load(f)
-                if isinstance(payload, dict):
-                    return payload
-        except Exception as exc:
-            logger.info("[Config] Failed to load user_config.json: %s", exc)
-    return {}
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except Exception:
-        return default
-
-
 def _mask(value: str | None) -> str:
     raw = str(value or "")
     if len(raw) <= 8:
         return "***"
     return f"{raw[:3]}***{raw[-3:]}"
-
-
-DEFAULT_OPENAI_COMPATIBLE_API_BASE = "https://token-plan-cn.xiaomimimo.com/v1"
-DEFAULT_OPENAI_COMPATIBLE_MODEL = "mimo-v2.5-pro"
 
 
 # Compatibility map for modules that still import LLM_CONFIGS directly.
@@ -118,12 +91,15 @@ LLM_CONFIGS = {
         "api_base": _normalize_api_base(
             os.getenv("OPENAI_COMPATIBLE_API_BASE")
             or os.getenv("GEMINI_PROXY_API_BASE")
-            or DEFAULT_OPENAI_COMPATIBLE_API_BASE
         ),
         "models": [
-            os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip() or DEFAULT_OPENAI_COMPATIBLE_MODEL,
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
+            item
+            for item in (
+                os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip(),
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+            )
+            if item
         ],
     },
     "gemini_proxy": {
@@ -160,6 +136,24 @@ class EndpointConfig:
     enabled: bool = True
     cooldown_sec: int = 60
     raw_url: bool = False
+    failure_domain: str = ""
+
+
+@dataclass(frozen=True)
+class ConfiguredLLMHandle:
+    """Non-network handle used by agents that historically stored a raw client."""
+
+    temperature: float = 0.3
+    model_name: str = "configured-at-invocation"
+
+
+class AllEndpointsCoolingDown(RuntimeError):
+    code = "all_endpoints_cooling_down"
+
+    def __init__(self, *, retry_after_seconds: int, endpoint_names: tuple[str, ...]) -> None:
+        self.retry_after_seconds = max(1, int(retry_after_seconds))
+        self.endpoint_names = endpoint_names
+        super().__init__(self.code)
 
 
 @dataclass
@@ -189,14 +183,29 @@ class EndpointManager:
         self.endpoints = [EndpointRuntime(cfg=s) for s in specs]
         self.fingerprint = fingerprint
 
-    def select(self) -> EndpointConfig:
+    def select(
+        self,
+        *,
+        exclude_names: set[str] | None = None,
+        prefer_different_failure_domain: str | None = None,
+    ) -> EndpointConfig:
         with self.lock:
-            available = [ep for ep in self.endpoints if ep.is_available]
+            enabled = [ep for ep in self.endpoints if ep.cfg.enabled]
+            available = [ep for ep in enabled if ep.is_available and ep.cfg.name not in (exclude_names or set())]
             if not available:
-                if not self.endpoints:
+                if not enabled:
                     raise ValueError("No LLM endpoint available")
-                # All cooling down: pick the one with earliest recovery.
-                available = [min(self.endpoints, key=lambda ep: ep.cooldown_until)]
+                cooldowns = [ep.cooldown_until for ep in enabled]
+                retry_after = max(1, int(__import__("math").ceil(min(cooldowns) - time.time())))
+                raise AllEndpointsCoolingDown(
+                    retry_after_seconds=retry_after,
+                    endpoint_names=tuple(ep.cfg.name for ep in enabled),
+                )
+
+            if prefer_different_failure_domain:
+                different = [ep for ep in available if ep.cfg.failure_domain != prefer_different_failure_domain]
+                if different:
+                    available = different
 
             total_weight = 0
             winner: EndpointRuntime | None = None
@@ -213,17 +222,25 @@ class EndpointManager:
             winner.current_weight -= max(1, total_weight)
             return winner.cfg
 
-    def report_failure(self, endpoint_name: str, *, reason: str | None = None) -> None:
+    def report_failure(
+        self,
+        endpoint_name: str,
+        *,
+        reason: str | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> None:
         with self.lock:
             for ep in self.endpoints:
                 if ep.cfg.name != endpoint_name:
                     continue
-                ep.cooldown_until = time.time() + max(1, int(ep.cfg.cooldown_sec))
+                retry_after = min(300, max(0, int(retry_after_seconds or 0)))
+                cooldown_seconds = max(1, int(ep.cfg.cooldown_sec), retry_after)
+                ep.cooldown_until = time.time() + cooldown_seconds
                 ep.current_weight = 0
                 logger.warning(
                     "[LLM Rotation] endpoint cooling down: name=%s cooldown=%ss reason=%s",
                     endpoint_name,
-                    ep.cfg.cooldown_sec,
+                    cooldown_seconds,
                     (reason or "unknown")[:180],
                 )
                 return
@@ -247,89 +264,23 @@ def _safe_endpoint_name(value: Any, default_name: str) -> str:
     return text or default_name
 
 
-def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -> list[EndpointConfig]:
-    endpoints: list[EndpointConfig] = []
-    default_cooldown = _env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90)
+def _failure_domain(value: Any, api_base: str | None, fallback: str) -> str:
+    configured = str(value or "").strip().lower()
+    if configured:
+        return configured
+    try:
+        hostname = (urlparse(str(api_base or "")).hostname or "").strip().lower()
+    except ValueError:
+        hostname = ""
+    return hostname or fallback
 
-    raw_list = user_config.get("llm_endpoints")
-    if isinstance(raw_list, list):
-        for idx, raw in enumerate(raw_list):
-            if not isinstance(raw, dict):
-                continue
-            enabled = bool(raw.get("enabled", True))
-            if not enabled:
-                continue
 
-            endpoint_provider = _canonical_provider(raw.get("provider") or provider)
-            api_key = str(raw.get("api_key") or "").strip()
-            raw_api_base = str(raw.get("api_base") or "").strip()
-            if not raw_api_base and endpoint_provider == "openai_compatible":
-                raw_api_base = DEFAULT_OPENAI_COMPATIBLE_API_BASE
-            is_raw_url = bool(raw.get("raw_url", False)) or _looks_full_chat_completions_url(raw_api_base)
-            api_base = _normalize_api_base(raw_api_base, raw=is_raw_url)
-            raw_model = str(raw.get("model") or "").strip()
-            if raw_model:
-                endpoint_model = raw_model
-            elif model:
-                endpoint_model = str(model).strip()
-            else:
-                endpoint_model = DEFAULT_OPENAI_COMPATIBLE_MODEL
-                logger.warning(
-                    "[LLM Config] endpoint '%s' has empty model field, falling back to '%s'. "
-                    "Please set the model name in Settings → Endpoint Pool.",
-                    _safe_endpoint_name(raw.get("name"), f"ep-{idx+1}"),
-                    endpoint_model,
-                )
-            if not api_key:
-                continue
-
-            endpoints.append(
-                EndpointConfig(
-                    name=_safe_endpoint_name(raw.get("name"), f"ep-{idx+1}"),
-                    provider=endpoint_provider,
-                    api_base=api_base,
-                    api_key=api_key,
-                    model=endpoint_model,
-                    weight=max(1, int(raw.get("weight", 1) or 1)),
-                    enabled=True,
-                    cooldown_sec=max(1, int(raw.get("cooldown_sec", default_cooldown) or default_cooldown)),
-                    raw_url=is_raw_url,
-                )
-            )
-
-    if endpoints:
-        return endpoints
-
-    # Legacy single-endpoint compatibility (llm_api_key/base/model)
-    legacy_key = str(user_config.get("llm_api_key") or "").strip()
-    if legacy_key:
-        legacy_api_base = str(user_config.get("llm_api_base") or "").strip()
-        legacy_provider = _canonical_provider(user_config.get("llm_provider") or provider)
-        if not legacy_api_base and legacy_provider == "openai_compatible":
-            legacy_api_base = DEFAULT_OPENAI_COMPATIBLE_API_BASE
-        legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
-        legacy_model = str(user_config.get("llm_model") or "").strip() or (str(model).strip() if model else "")
-        if not legacy_model:
-            legacy_model = DEFAULT_OPENAI_COMPATIBLE_MODEL
-            logger.warning(
-                "[LLM Config] legacy endpoint has empty llm_model, falling back to '%s'. "
-                "Please set the model name in Settings.",
-                legacy_model,
-            )
-        endpoints.append(
-            EndpointConfig(
-                name="legacy-single",
-                provider=legacy_provider,
-                api_base=_normalize_api_base(legacy_api_base, raw=legacy_raw_url),
-                api_key=legacy_key,
-                model=legacy_model,
-                weight=1,
-                enabled=True,
-                cooldown_sec=default_cooldown,
-                raw_url=legacy_raw_url,
-            )
-        )
-    return endpoints
+def _endpoint_config_error() -> RuntimeError:
+    return RuntimeError(
+        "LLM endpoint not configured: set OPENAI_COMPATIBLE_API_BASE / "
+        "OPENAI_COMPATIBLE_MODEL (and OPENAI_COMPATIBLE_API_KEY) in .env.server "
+        "- see .env.server.example"
+    )
 
 
 def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfig]:
@@ -350,35 +301,44 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
         raw_api_base = str(os.getenv(base_env, "") or "").strip() if base_env else ""
         if not raw_api_base and fallback_base:
             raw_api_base = fallback_base
+        resolved_provider = _canonical_provider(provider_name)
+        resolved_model = endpoint_model or fallback_model
+        if resolved_provider == "openai_compatible" and (not raw_api_base or not resolved_model):
+            return
         is_raw_url = _looks_full_chat_completions_url(raw_api_base)
         api_base = _normalize_api_base(raw_api_base, raw=is_raw_url) if base_env else None
         endpoints.append(
             EndpointConfig(
                 name=name,
-                provider=_canonical_provider(provider_name),
+                provider=resolved_provider,
                 api_base=api_base,
                 api_key=api_key,
-                model=endpoint_model or fallback_model,
+                model=resolved_model,
                 weight=1,
                 enabled=True,
                 cooldown_sec=_env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90),
                 raw_url=is_raw_url,
+                failure_domain=_failure_domain(None, api_base, name),
             )
         )
 
     canonical = _canonical_provider(provider)
     if canonical == "openai_compatible":
-        # Read OPENAI_COMPATIBLE_MODEL env var; fall back to the production default.
-        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or DEFAULT_OPENAI_COMPATIBLE_MODEL
+        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip()
         _try_add(
             "openai-compatible-primary",
             "openai_compatible",
             "OPENAI_COMPATIBLE_API_KEY",
             "OPENAI_COMPATIBLE_API_BASE",
             _oc_model,
-            DEFAULT_OPENAI_COMPATIBLE_API_BASE,
         )
-        _try_add("gemini-proxy", "openai_compatible", "GEMINI_PROXY_API_KEY", "GEMINI_PROXY_API_BASE", "gemini-2.5-flash")
+        _try_add(
+            "gemini-proxy",
+            "openai_compatible",
+            "GEMINI_PROXY_API_KEY",
+            "GEMINI_PROXY_API_BASE",
+            str(os.getenv("GEMINI_PROXY_MODEL", "gemini-2.5-flash") or "gemini-2.5-flash").strip(),
+        )
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
     elif canonical == "openai":
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
@@ -390,44 +350,37 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
 
 
 def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]:
-    user_config = _load_user_config()
-    endpoints = _parse_user_endpoints(user_config, provider, model)
-    if endpoints:
-        return endpoints
-
     env_endpoints = _parse_env_endpoints(provider, model)
     if env_endpoints:
         return env_endpoints
 
-    raise ValueError(
-        "No LLM endpoint configured. Provide user_config.llm_endpoints[] or llm_api_key/llm_api_base, "
-        "or set OPENAI_COMPATIBLE_API_KEY / GEMINI_PROXY_API_KEY."
-    )
+    raise _endpoint_config_error()
 
 
 def load_user_endpoints(provider: str | None = None, model: str | None = None) -> list[EndpointConfig]:
-    """Compatibility helper for diagnostics scripts.
-
-    Returns resolved endpoint list from `user_config.json` or env fallback,
-    without selecting/rotating any endpoint.
-    """
+    """返回服务端配置的 endpoint，供启动检查和诊断脚本使用。"""
     canonical = _canonical_provider(provider or _default_provider())
     return _resolve_endpoints(canonical, model)
 
 
-def get_llm_config(provider: str | None = None, model: str | None = None) -> dict:
+def get_endpoint_manager(provider: str | None = None, model: str | None = None) -> EndpointManager:
+    """Resolve endpoint configuration without selecting or creating a client."""
     canonical = _canonical_provider(provider or _default_provider())
     endpoints = _resolve_endpoints(canonical, model)
     _ENDPOINT_MANAGER._sync_if_changed(endpoints)
-    selected = _ENDPOINT_MANAGER.select()
+    return _ENDPOINT_MANAGER
+
+
+def get_llm_config(provider: str | None = None, model: str | None = None) -> dict:
+    manager = get_endpoint_manager(provider=provider, model=model)
+    selected = manager.select()
 
     logger.info(
-        "[LLM Rotation] select endpoint name=%s provider=%s model=%s api_base=%s api_key=%s",
+        "[LLM] select endpoint name=%s provider=%s model=%s failure_domain=%s",
         selected.name,
         selected.provider,
         selected.model,
-        selected.api_base,
-        _mask(selected.api_key),
+        selected.failure_domain,
     )
     return {
         "provider": selected.provider,
@@ -458,6 +411,39 @@ def report_llm_failure(llm: Any, error: BaseException | str | None = None) -> No
         _ENDPOINT_MANAGER.report_failure(endpoint_name, reason=str(error or "unknown"))
 
 
+def create_llm_for_endpoint(
+    cfg: EndpointConfig,
+    *,
+    temperature: float = 0.3,
+    max_tokens: int | None = None,
+    request_timeout: int = 600,
+):
+    """Build one client for an already selected endpoint without re-selecting."""
+    from langchain_openai import ChatOpenAI
+
+    api_key = cfg.api_key
+    sdk_api_base = _to_chatopenai_base(cfg.api_base)
+    if not api_key:
+        raise ValueError(f"API key not found for provider '{cfg.provider}'")
+    resolved_max_tokens = max(256, int(max_tokens if max_tokens is not None else _env_int("LLM_MAX_TOKENS", 8192)))
+    callbacks = []
+    langfuse_cb = get_langfuse_callback()
+    if langfuse_cb is not None:
+        callbacks.append(langfuse_cb)
+    llm = ChatOpenAI(
+        model=cfg.model,
+        openai_api_key=api_key,
+        openai_api_base=sdk_api_base,
+        temperature=temperature,
+        max_tokens=resolved_max_tokens,
+        request_timeout=request_timeout,
+        max_retries=0,
+        callbacks=callbacks or None,
+    )
+    bind_llm_instance(llm, cfg.name)
+    return llm
+
+
 def create_llm(
     provider: str | None = None,
     model: str | None = None,
@@ -466,54 +452,12 @@ def create_llm(
     request_timeout: int = 600,
     max_retries: int | None = None,
 ):
-    from langchain_openai import ChatOpenAI
-
     cfg = get_llm_config(provider=provider, model=model)
-    api_key = cfg.get("api_key")
-    api_base = cfg.get("api_base")
-    sdk_api_base = _to_chatopenai_base(api_base)
-    model_name = cfg.get("model")
-    endpoint_name = str(cfg.get("endpoint_name") or "unknown")
-
-    resolved_max_tokens = max_tokens
-    if resolved_max_tokens is None:
-        resolved_max_tokens = _env_int("LLM_MAX_TOKENS", 8192)
-    resolved_max_tokens = max(256, int(resolved_max_tokens))
-
-    if not api_key:
-        resolved_provider = str(cfg.get("provider") or provider or _default_provider())
-        raise ValueError(f"API key not found for provider '{resolved_provider}'")
-
-    resolved_max_retries = 3 if max_retries is None else max(0, int(max_retries))
-
-    logger.info(
-        "[LLM Factory] create endpoint=%s provider=%s model=%s api_base=%s sdk_api_base=%s timeout=%ss max_retries=%s",
-        endpoint_name,
-        cfg.get("provider"),
-        model_name,
-        api_base,
-        sdk_api_base,
-        request_timeout,
-        resolved_max_retries,
+    endpoint = EndpointConfig(
+        name=str(cfg.get("endpoint_name") or "unknown"), provider=str(cfg["provider"]),
+        api_base=cfg.get("api_base"), api_key=str(cfg["api_key"]), model=str(cfg["model"]),
     )
-
-    callbacks = []
-    langfuse_cb = get_langfuse_callback()
-    if langfuse_cb is not None:
-        callbacks.append(langfuse_cb)
-
-    llm = ChatOpenAI(
-        model=model_name,
-        openai_api_key=api_key,
-        openai_api_base=sdk_api_base,
-        temperature=temperature,
-        max_tokens=resolved_max_tokens,
-        request_timeout=request_timeout,
-        max_retries=resolved_max_retries,
-        callbacks=callbacks or None,
-    )
-    bind_llm_instance(llm, endpoint_name)
-    return llm
+    return create_llm_for_endpoint(endpoint, temperature=temperature, max_tokens=max_tokens, request_timeout=request_timeout)
 
 
 LANGSMITH_CONFIG = {
@@ -528,8 +472,14 @@ __all__ = [
     "LLM_CONFIGS",
     "LANGSMITH_CONFIG",
     "load_user_endpoints",
+    "get_endpoint_manager",
     "get_llm_config",
     "create_llm",
+    "create_llm_for_endpoint",
+    "AllEndpointsCoolingDown",
+    "EndpointConfig",
+    "ConfiguredLLMHandle",
+    "EndpointManager",
     "report_llm_failure",
     "report_llm_success",
 ]

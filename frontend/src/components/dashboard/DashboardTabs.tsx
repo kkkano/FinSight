@@ -1,12 +1,4 @@
-/**
- * DashboardTabs - Tab navigation for the v2 dashboard.
- *
- * Provides 6 tabs synced with the URL query param `?tab=`:
- *   overview | financial | technical | news | research | peers
- *
- * Tabs 4-6 (news, research, peers) render real panel components;
- * Tabs 1-3 (overview, financial, technical) also render real panel components.
- */
+/** Dashboard tabs synchronized with the URL `tab` query parameter. */
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs } from '../ui/Tabs';
@@ -15,8 +7,7 @@ import { OverviewTab } from './tabs/OverviewTab.tsx';
 import { FinancialTab } from './tabs/FinancialTab.tsx';
 import { TechnicalTab } from './tabs/TechnicalTab.tsx';
 import { NewsTab } from './tabs/NewsTab.tsx';
-import { ResearchTab } from './tabs/ResearchTab.tsx';
-import { PeersTab } from './tabs/PeersTab.tsx';
+import type { PredictionOverlay } from '../../types/chartPrediction';
 
 // --- Tab Definition ---
 
@@ -24,9 +15,7 @@ export type DashboardTabKey =
   | 'overview'
   | 'financial'
   | 'technical'
-  | 'news'
-  | 'research'
-  | 'peers';
+  | 'news';
 
 interface TabDef {
   key: DashboardTabKey;
@@ -38,8 +27,6 @@ const TABS: readonly TabDef[] = [
   { key: 'financial', label: '财务报表' },
   { key: 'technical', label: '技术面' },
   { key: 'news', label: '新闻动态' },
-  { key: 'research', label: '深度研究' },
-  { key: 'peers', label: '同行对比' },
 ] as const;
 
 const VALID_KEYS = new Set<string>(TABS.map((t) => t.key));
@@ -47,7 +34,11 @@ const DEFAULT_TAB: DashboardTabKey = 'overview';
 
 // --- Component ---
 
-export function DashboardTabs() {
+interface DashboardTabsProps {
+  predictionOverlay?: PredictionOverlay | null;
+}
+
+export function DashboardTabs({ predictionOverlay }: DashboardTabsProps) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab: DashboardTabKey = useMemo(() => {
@@ -75,7 +66,7 @@ export function DashboardTabs() {
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden max-lg:min-h-[520px] max-lg:flex-none">
       {/* Tab bar */}
       <Tabs
         items={TABS.map((tab) => ({
@@ -86,7 +77,7 @@ export function DashboardTabs() {
         value={activeTab}
         onChange={handleTabChange}
         listClassName="flex items-end gap-0 border-b border-fin-border bg-fin-card px-5 overflow-x-auto scrollbar-hide shrink-0 max-lg:px-3"
-        buttonClassName="px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 border-transparent"
+        buttonClassName="min-h-11 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 border-transparent"
         activeClassName="text-fin-primary border-fin-primary"
         inactiveClassName="text-fin-muted hover:text-fin-text"
       />
@@ -96,10 +87,8 @@ export function DashboardTabs() {
         <div className="p-5 max-lg:p-3">
           {activeTab === 'overview' && <OverviewTab />}
           {activeTab === 'financial' && <FinancialTab />}
-          {activeTab === 'technical' && <TechnicalTab />}
+          {activeTab === 'technical' && <TechnicalTab predictionOverlay={predictionOverlay} />}
           {activeTab === 'news' && <NewsTab />}
-          {activeTab === 'research' && <ResearchTab />}
-          {activeTab === 'peers' && <PeersTab />}
         </div>
       </div>
     </div>

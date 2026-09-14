@@ -43,7 +43,6 @@ class DashboardCache:
     TTL_ANALYST = 1800          # Analyst targets/recommendations (30 min)
     TTL_PEERS = 3600           # Peer comparison (1 hour)
     TTL_INSIGHTS = 3600        # AI insights (1 hour)
-    TTL_INSIGHTS_STALE = 14400 # AI insights stale window (4 hours)
 
     def __init__(self) -> None:
         """初始化缓存存储"""

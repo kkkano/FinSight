@@ -35,7 +35,6 @@ NODE_USER_MESSAGES: dict[str, str] = {
     "parse_operation": "正在分析你想做什么...",
     "policy_gate": "正在制定分析策略...",
     "planner": "正在规划分析步骤...",
-    "confirmation_gate": "正在确认执行方案...",
     "execute_plan": "正在执行分析计划...",
     "synthesize": "正在整合分析结果...",
     "render": "正在生成最终报告...",
@@ -387,7 +386,11 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
         # ========== Langfuse 桥接：节点级 Span ==========
         # langfuse_span 内部处理 Langfuse 未启用 / 异常场景，保证不影响主流程
         async with langfuse_span(node_name) as lf_span:
-            maybe_updates = fn(state)
+            if asyncio.iscoroutinefunction(fn):
+                maybe_updates = fn(state)
+            else:
+                # 同步节点的首次导入或本地 I/O 可能很慢，不能占用 ASGI 事件循环。
+                maybe_updates = await asyncio.to_thread(fn, state)
             updates = (
                 await maybe_updates
                 if asyncio.iscoroutine(maybe_updates)

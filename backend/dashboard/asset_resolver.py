@@ -6,7 +6,6 @@
 - index: 指数
 - etf: 交易所交易基金
 - crypto: 加密货币
-- portfolio: 投资组合（需显式指定）
 """
 from backend.dashboard.schemas import ActiveAsset
 
