@@ -25,6 +25,7 @@
 - Playwright 登录测试统一使用 Supabase client contract fixture，不再通过 localStorage 伪造登录身份。
 - 生产 Runbook 增加严格磁盘容量阻断、上一稳定 SHA 镜像 ID/tag 断言，以及备份恢复后的关键业务表逐表行数对比；容量不足时必须清理安全缓存或扩容后重新预检。
 - 生产启动新增一次性真实 BGE-M3 embedding readiness probe；Dockerfile/Compose healthcheck 的 start period 调整为 180 秒，覆盖 CPU 模型冷启动并在 probe 失败时保持 fail closed。
+- 移除代码中未使用且已无法从当前 PyPI 索引安装的 `litellm==1.30.0`；LLM 运行时继续统一使用 `langchain-openai` 与 OpenAI-compatible client。
 - 同步 README、系统架构、设计合同、前端说明和生产 Runbook；校准为 9 个 FastAPI Router、37 个 OpenAPI 操作和 6 个当前产品路由。
 - 将已完成 overhaul spec、历史 QA/发布证据、ADR、源笔记和被替代文档归档到 `docs/archive/2026-07-overhaul-closeout/`。
 - 将未被引用的旧 Schema Router、Forum/Supervisor 与 Agent 优化草案归档到 `docs/archive/2026-09-15-doc-reconcile/`。

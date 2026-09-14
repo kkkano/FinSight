@@ -20,7 +20,8 @@ langgraph-checkpoint==3.0.0
 langgraph-checkpoint-postgres==3.0.4
 
 # LLM 服务 & 数据抓取
-litellm==1.30.0
+# LiteLLM 已无运行时调用，旧 1.30.0 也不再由当前 PyPI 索引提供；
+# 统一通过 langchain-openai / OpenAI-compatible client，避免保留不可复现依赖。
 ddgs==9.6.1
 yfinance==0.2.66
 akshare==1.*
