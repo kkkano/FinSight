@@ -522,7 +522,8 @@ class PredictionRunStore:
         with self._engine.connect() as conn:
             rows = conn.execute(text(
                 "SELECT p.*,CASE WHEN o.prediction_id IS NULL THEN NULL ELSE jsonb_build_object("
-                "'status',o.status,'resolved_at',o.resolved_at,'entry_time',o.entry_time,"
+                "'prediction_id',o.prediction_id::text,'status',o.status,"
+                "'resolved_at',o.resolved_at,'entry_time',o.entry_time,"
                 "'entry_price',o.entry_price,'pct_since_anchor',o.pct_since_anchor,"
                 "'resolution_reason',o.resolution_reason,'evaluated_through',o.evaluated_through,"
                 "'market_provider',o.market_provider,'market_as_of',o.market_as_of,"

@@ -9,6 +9,10 @@
 
 ## [Unreleased] - 2026-09-15
 
+### 修复
+
+- 修复真实 PostgreSQL Prediction outcome 中 UUID 未序列化、历史聚合漏传 `prediction_id` 导致 latest/history 接口返回 500 的问题。
+
 ### 新增
 
 - 新增 Today 默认工作区，汇总登录用户的自选报价、最近 Prediction/Outcome 与待跟进判断；匿名状态明确引导登录并保留只读行情入口。

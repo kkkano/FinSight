@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -101,6 +102,7 @@ class _Service:
     def __init__(self) -> None:
         self.generated = False
         self.raise_reads = False
+        self.postgres_outcome_shape = False
 
     async def generate(self, *, user_id: str, symbol: str, timeframe: str):
         assert user_id == "alice"
@@ -122,14 +124,20 @@ class _Service:
         return _prediction() if user_id == "alice" and symbol.strip().upper() == "AAPL" else None
 
     async def get_outcome(self, prediction_id: str, *, user_id: str):
-        return _outcome() if prediction_id == PREDICTION_ID and user_id == "alice" else None
+        if prediction_id != PREDICTION_ID or user_id != "alice":
+            return None
+        outcome = _outcome()
+        if self.postgres_outcome_shape:
+            outcome["prediction_id"] = UUID(PREDICTION_ID)
+        return outcome
 
     async def history(self, **kwargs: Any):
-        return (
-            [{"prediction": _prediction(), "outcome": _outcome()}]
-            if kwargs["user_id"] == "alice"
-            else []
-        )
+        if kwargs["user_id"] != "alice":
+            return []
+        outcome = _outcome()
+        if self.postgres_outcome_shape:
+            outcome.pop("prediction_id")
+        return [{"prediction": _prediction(), "outcome": outcome}]
 
     async def stats(self, **kwargs: Any):
         assert kwargs["user_id"] == "alice"
@@ -243,6 +251,20 @@ def test_latest_detail_history_and_stats_share_prediction_outcome_provenance():
     assert history.json()["items"][0]["prediction"]["source_type"] == "ai"
     assert history.json()["items"][0]["outcome"]["prediction_id"] == PREDICTION_ID
     assert set(stats.json()["stats"]["by_source"]) == {"ai", "manual"}
+
+
+def test_outcome_response_normalizes_postgres_uuid_and_backfills_history_id():
+    client, service, _calls = _client()
+    service.postgres_outcome_shape = True
+    headers = {"x-test-user": "alice"}
+
+    latest = client.get("/api/predictions/latest?symbol=AAPL", headers=headers)
+    history = client.get("/api/predictions/history?symbol=AAPL", headers=headers)
+
+    assert latest.status_code == 200
+    assert history.status_code == 200
+    assert latest.json()["outcome"]["prediction_id"] == PREDICTION_ID
+    assert history.json()["items"][0]["outcome"]["prediction_id"] == PREDICTION_ID
 
 
 def test_outcome_recompute_requires_internal_key_and_is_tenant_scoped():

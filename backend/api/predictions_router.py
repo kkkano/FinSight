@@ -250,14 +250,23 @@ def _public_prediction(prediction: Any) -> dict[str, Any]:
     return payload
 
 
-def _public_outcome(outcome: Any) -> dict[str, Any] | None:
+def _public_outcome(
+    outcome: Any,
+    *,
+    prediction_id: str | None = None,
+) -> dict[str, Any] | None:
     if outcome is None:
         return None
     if isinstance(outcome, BaseModel):
-        return outcome.model_dump(mode="json", exclude={"user_id"})
-    if isinstance(outcome, dict):
-        return {key: value for key, value in outcome.items() if key != "user_id"}
-    return None
+        payload = outcome.model_dump(mode="json", exclude={"user_id"})
+    elif isinstance(outcome, dict):
+        payload = {key: value for key, value in outcome.items() if key != "user_id"}
+    else:
+        return None
+    resolved_prediction_id = payload.get("prediction_id") or prediction_id
+    if resolved_prediction_id is not None:
+        payload["prediction_id"] = str(resolved_prediction_id)
+    return payload
 
 
 def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
@@ -354,7 +363,10 @@ def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
             raise _error(503, "store_unavailable", "Prediction 暂时无法读取") from exc
         return PredictionResponse(
             prediction=_public_prediction(prediction) if prediction is not None else None,
-            outcome=_public_outcome(outcome),
+            outcome=_public_outcome(
+                outcome,
+                prediction_id=prediction.id if prediction is not None else None,
+            ),
         )
 
     @router.get("/history")
@@ -382,7 +394,10 @@ def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
             items=[
                 {
                     "prediction": _public_prediction(row["prediction"]),
-                    "outcome": _public_outcome(row.get("outcome")),
+                    "outcome": _public_outcome(
+                        row.get("outcome"),
+                        prediction_id=row["prediction"].id,
+                    ),
                 }
                 for row in rows
             ],
@@ -423,7 +438,7 @@ def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
             raise _error(503, "store_unavailable", "Prediction Outcome 暂时无法读取") from exc
         return PredictionResponse(
             prediction=_public_prediction(prediction),
-            outcome=_public_outcome(outcome),
+            outcome=_public_outcome(outcome, prediction_id=prediction.id),
         )
 
     return router
