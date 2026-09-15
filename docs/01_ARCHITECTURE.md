@@ -6,7 +6,7 @@
 
 FinSight 的产品目标是：先把与用户关注标的有关的变化摆到面前，再用可信行情、可验证 Prediction、证据化追问和历史复盘帮助用户理解公开金融信息。
 
-当前主工作区为 Today、Dashboard、Chat、History；另有 Welcome/Login 与只读 Shared Report。Today 是默认入口，登录用户可查看自选报价、最近 Prediction/Outcome 和待跟进判断；匿名用户只看到登录引导并可转到只读 Dashboard。`DESIGN.md` 中的 Ask、Research、Portfolio、Library 是后续目标信息架构，不是当前已注册路由。
+当前主工作区为 Today、Dashboard、Chat、History；另有 Welcome/Login 与只读 Shared Report。Today 是默认入口，登录用户可查看自选报价、最近 Prediction/Outcome 和待跟进判断；匿名用户只看到登录引导并可转到只读 Dashboard。Ask、Research、Portfolio、Library 是后续目标信息架构，不是当前已注册路由。
 
 组合工作台、Screener、Backtest、A 股榜单、Attribution、Rebalance、独立 Morning Brief/Daily Tasks、邮件订阅、Alert Feed、RAG Inspector、Cost Audit、Skills/Agents/Tools 目录均不属于当前产品。
 

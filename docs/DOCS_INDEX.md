@@ -13,12 +13,6 @@
 5. [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)：两个业务 LLM 角色、内部 Collector 与公共质量合同。
 6. [`05_RAG_ARCHITECTURE.md`](05_RAG_ARCHITECTURE.md)：PostgreSQL/pgvector RAG。
 7. [`11_PRODUCTION_RUNBOOK.md`](11_PRODUCTION_RUNBOOK.md)：部署、验证、冒烟和回滚。
-8. [`reports/2026-09-15_release_validation.md`](reports/2026-09-15_release_validation.md)：最近一次生产发布验证、回滚与外部阻断记录。
-
-## 产品设计与执行依据
-
-- [`../DESIGN.md`](../DESIGN.md)：Today-first 的目标产品设计合同；其中 Today 已有首版实现，Ask/Research/Portfolio/Library 与 `/ops/*` 仍是目标信息架构，不代表当前路由。
-- [`plans/2026-09-14_finsight全面重构执行方案.md`](plans/2026-09-14_finsight全面重构执行方案.md)：保留的全面审计与重构执行依据；开头维护 Phase 0–9 的当前完成度和剩余缺口，实际运行事实仍以本索引列出的架构、契约和 Runbook 为准。
 
 ## 契约与专项规范
 
@@ -29,7 +23,6 @@
 | [`REPORT_CHART_SPEC.md`](REPORT_CHART_SPEC.md) | 报告图表与 `chart_ref` 合同 |
 | [`HALLUCINATION_MITIGATION.md`](HALLUCINATION_MITIGATION.md) | 证据、引用和降级治理 |
 | [`rag-evaluation-guide.md`](rag-evaluation-guide.md) | RAG 质量评估方法与门禁 |
-| [`reports/2026-05-03_request_understanding_query_results.md`](reports/2026-05-03_request_understanding_query_results.md) | 保留的请求理解评估报告 |
 
 已完成的 2026-07 生产质量修复 Spec 与一次性发布证据已归档到 [`archive/2026-07-production-quality-remediation/`](archive/2026-07-production-quality-remediation/)，不再作为当前规范入口。
 

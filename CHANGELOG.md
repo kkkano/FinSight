@@ -17,7 +17,7 @@
 
 ### 变更
 
-- 根路径默认进入 Today，主导航更新为 Today、Dashboard、Chat、History；Ask/Research/Portfolio/Library 保留为 `DESIGN.md` 中的目标信息架构。
+- 根路径默认进入 Today，主导航更新为 Today、Dashboard、Chat、History；Ask/Research/Portfolio/Library 保留为后续目标信息架构。
 - 前端构建默认使用同源 API，Nginx 代理 API、SSE、`/livez`、`/readyz` 和 `/health`；后端容器改用 `/readyz` 健康门禁。
 - quality blocked 报告改为不可发布预览，不写默认索引或共享；最终报告旧缓存硬禁用；共享报告改为字段 allowlist 投影和 `private, no-store`。
 - MCP 默认关闭；私有报告 MCP 工具只有 transport 提供可信 principal 且 session owner 一致时才可读取。
@@ -29,7 +29,6 @@
 - 同步 README、系统架构、设计合同、前端说明和生产 Runbook；校准为 9 个 FastAPI Router、37 个 OpenAPI 操作和 6 个当前产品路由。
 - 将已完成 overhaul spec、历史 QA/发布证据、ADR、源笔记和被替代文档归档到 `docs/archive/2026-07-overhaul-closeout/`。
 - 将未被引用的旧 Schema Router、Forum/Supervisor 与 Agent 优化草案归档到 `docs/archive/2026-09-15-doc-reconcile/`。
-- 记录 2026-09-15 生产发布验证：代码候选已推送，备份恢复与迁移演练通过；因 Supabase DNS/JWT 验证和新进程 RAG readiness 未通过而停止切换并恢复旧镜像，详见 `docs/reports/2026-09-15_release_validation.md`。
 - 删除从 `frontend/src/main.tsx` 生产入口不可达的旧 execution 面板、Phase Labs 页面、无效 barrel、独立 retry scope 及其测试。
 - 当前文档索引收敛到 `docs/DOCS_INDEX.md`；历史材料不再作为架构事实源。
 

@@ -91,6 +91,10 @@ rag-inspector-local-check.png
 # --- Auto-generated Reports ---
 docs/reports/
 
+# --- Local design and execution plans ---
+DESIGN.md
+docs/plans/
+
 # --- Lint / CI / Test Artifacts ---
 eslint_report.json
 eslint_remaining.json
