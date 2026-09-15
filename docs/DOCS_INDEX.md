@@ -13,6 +13,7 @@
 5. [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)：两个业务 LLM 角色、内部 Collector 与公共质量合同。
 6. [`05_RAG_ARCHITECTURE.md`](05_RAG_ARCHITECTURE.md)：PostgreSQL/pgvector RAG。
 7. [`11_PRODUCTION_RUNBOOK.md`](11_PRODUCTION_RUNBOOK.md)：部署、验证、冒烟和回滚。
+8. [`reports/2026-09-15_release_validation.md`](reports/2026-09-15_release_validation.md)：最近一次生产发布验证、回滚与外部阻断记录。
 
 ## 产品设计与执行依据
 
