@@ -34,6 +34,7 @@ from backend.dashboard.data_service import (
     fetch_valuation,
 )
 from backend.dashboard.errors import symbol_not_found
+from backend.dashboard.news_sentiment import attach_dashboard_news_sentiment
 from backend.dashboard.peer_service import fetch_peer_comparison
 from backend.dashboard.schemas import (
     AnalystTargets,
@@ -734,10 +735,12 @@ async def get_dashboard(
         calc_window="near_real_time",
     )
 
+    news_payload = attach_dashboard_news_sentiment(news, sym)
+
     raw_data = {
         "snapshot": snapshot or {},
         "charts": charts or {},
-        "news": news or {},
+        "news": news_payload,
         "macro_snapshot": macro_snapshot or {},
     }
     filtered_charts = _filter_charts_by_capabilities(raw_data.get("charts", {}), capabilities)

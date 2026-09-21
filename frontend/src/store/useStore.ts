@@ -237,7 +237,7 @@ const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    '您好，我是 FinSight AI 金融助手。直接输入股票代码或问题（例如：AAPL 股价走势、特斯拉最新新闻），我会用实时数据和图表帮你分析。',
+    '您好，我是 FinSight AI 投资分析助手。直接输入股票代码或问题（例如：AAPL 股价走势、特斯拉最新新闻），我会用大白话帮你分析基本面、技术面和风险，并配上实时数据图表。',
   timestamp: Date.now(),
 };
 
