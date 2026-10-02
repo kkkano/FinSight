@@ -88,6 +88,18 @@ async def lifespan(_app: FastAPI):
     except Exception as exc:
         logger.exception("[GraphRunner] initialization failed in lifespan: %s", exc)
 
+    from backend.services.prediction_runner import enabled, run_prediction_cycle
+    if enabled():
+        from backend.services.scheduler_runner import start_interval_scheduler
+        from backend.services.prediction_store import get_prediction_store
+        get_prediction_store().recover_interrupted()
+        scheduler = start_interval_scheduler(
+            run_prediction_cycle, interval_minutes=5.0, enabled=True,
+            job_id="us20_prediction_ledger", job_label="US20 prospective forecast collection and settlement",
+        )
+        if scheduler:
+            _schedulers.append(scheduler)
+
     try:
         yield
     finally:

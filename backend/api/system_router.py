@@ -280,6 +280,8 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
     def health_check():
         status = "healthy"
         components: dict[str, dict[str, Any]] = {}
+        from backend.services.prediction_runner import prediction_health
+        components["prediction_collection"] = prediction_health()
 
         readiness_checks = (
             ("authentication", deps.get_authentication_health, "authentication_health_failed"),

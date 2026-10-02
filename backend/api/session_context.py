@@ -108,7 +108,8 @@ def _redact_sensitive_payload(value: Any) -> Any:
             lambda m: f"{m.group(1)}{_mask_secret(m.group(2))}",
             masked,
         )
-        return masked
+        from backend.services.model_selection import redact_model_secrets
+        return redact_model_secrets(masked)
     return value
 
 def _normalize_session_key(session_id: Optional[str]) -> str:

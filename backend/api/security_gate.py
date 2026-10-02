@@ -12,13 +12,14 @@ from backend.utils.env import env_int as _env_int  # noqa: F401 - 兼容旧 API 
 from backend.utils.env import env_str
 
 import logging
+import asyncio
 import os
 import time
 from collections import deque
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
-from fastapi import Request
+from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
@@ -131,6 +132,8 @@ def _is_allowlisted_path(path: str) -> bool:
 
 
 def _is_public_read_path(path: str) -> bool:
+    if path in {"/api/models", "/api/models/capabilities", "/api/predictions/track-record"}:
+        return True
     defaults = (
         "/api/stock/price/*,/api/stock/news/*,/api/stock/kline/*,"
         "/api/dashboard/*"
@@ -240,7 +243,15 @@ async def security_gate(request: Request, call_next):
 
     public_request = _is_public_request(request)
     api_key = None
-    if not public_request and security_settings().api_auth_enabled:
+    model_user = None
+    from backend.services.model_selection import is_model_generation_path, require_model_access
+    if request.url.path == "/api/models/test" or (is_model_generation_path(request.url.path) and request.headers.get("x-finsight-model")):
+        try:
+            model_user = await asyncio.to_thread(require_model_access, request)
+            request.state.model_user = model_user
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    if not public_request and model_user is None and security_settings().api_auth_enabled:
         keys = _parse_api_keys()
         if not keys:
             return JSONResponse(status_code=503, content={"detail": "API auth enabled but no keys configured"})
@@ -248,7 +259,10 @@ async def security_gate(request: Request, call_next):
         if not api_key or api_key not in keys:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
-    if public_request:
+    if model_user is not None:
+        request.state.user_id = model_user["user_id"]
+        request.state.user_email = ""
+    elif public_request:
         # Public product reads skip authentication but still enter the IP rate
         # limiter below. Never use an unverified bearer value as a bucket key.
         request.state.user_id = "public"
@@ -289,7 +303,7 @@ async def security_gate(request: Request, call_next):
             return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}, headers=headers)
 
     # P1-6: 昂贵生成端点（Chat/报告执行）施加并发上限，防止少量长连接打满后端
-    if _concurrency_limiter.enabled and is_generation_path(request.url.path):
+    if _concurrency_limiter.enabled and (is_generation_path(request.url.path) or request.url.path == "/api/models/test"):
         if not _concurrency_limiter.try_acquire(client_id):
             return JSONResponse(
                 status_code=429,

@@ -199,14 +199,22 @@ def _buffered_sse_response(
     replay_buffer.start_run(run_id)
 
     async def _pump() -> None:
+        from backend.services.model_selection import current_model, model_client_scope, CUSTOM_REQUEST_TIMEOUT_SECONDS
+        chosen = current_model()
         try:
-            async for event in pipeline:
-                payload = _sanitize_json_payload(jsonable_encoder(event))
-                if not isinstance(payload, dict):
-                    payload = {"type": "system", "data": payload}
-                payload.setdefault("run_id", run_id)
-                payload.setdefault("session_id", thread_id)
-                replay_buffer.append(run_id, payload)
+            async with model_client_scope(), asyncio.timeout(
+                CUSTOM_REQUEST_TIMEOUT_SECONDS if chosen is not None and chosen.source == "custom" else None
+            ):
+                async for event in pipeline:
+                    payload = _sanitize_json_payload(jsonable_encoder(event))
+                    if not isinstance(payload, dict):
+                        payload = {"type": "system", "data": payload}
+                    payload.setdefault("run_id", run_id)
+                    payload.setdefault("session_id", thread_id)
+                    replay_buffer.append(run_id, payload)
+        except TimeoutError:
+            replay_buffer.append(run_id, {"type": "error", "code": "model_timeout",
+                "message": "模型请求超时，请稍后重试。", "run_id": run_id, "session_id": thread_id})
         except asyncio.CancelledError:
             replay_buffer.append(run_id, {"type": "cancelled", "run_id": run_id, "session_id": thread_id})
             raise

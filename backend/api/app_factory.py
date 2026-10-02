@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """FinSight FastAPI 应用装配。
 
-公共产品面只注册九个 Router：system、user、watchlist、conversation、market、
-execution、predictions、monitor 与 report。
+公共产品面注册核心业务、模型设置与固定公开预测账本 Router。
 """
 from __future__ import annotations
 
@@ -21,6 +20,9 @@ from backend.api.execution_router import ExecutionRouterDeps, create_execution_r
 from backend.api.lifespan import lifespan
 from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.monitor_router import monitor_router
+from backend.api.model_router import router as model_router
+from backend.api.prediction_router import router as track_record_router
+from backend.services.model_selection import ModelSelectionMiddleware, require_model_access
 from backend.api.predictions_router import PredictionsRouterDeps, create_predictions_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.security_gate import (
@@ -280,6 +282,8 @@ def create_app() -> FastAPI:
         version="2.0.0",
         lifespan=lifespan,
     )
+    app.state.require_model_access = require_model_access
+    app.add_middleware(ModelSelectionMiddleware, authenticate=require_model_access)
     app.middleware("http")(security_gate)
     app.add_middleware(
         CORSMiddleware,
@@ -365,6 +369,8 @@ def create_app() -> FastAPI:
     )
 
     for router in (
+        model_router,
+        track_record_router,
         system_router,
         user_router,
         watchlist_router,
