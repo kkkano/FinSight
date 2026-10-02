@@ -23,6 +23,7 @@ tests/rag_qualityV2/reports/
 tests/retrieval_eval/reports/
 
 # Data & secrets
+.omx/
 .env
 .env.*
 data/
