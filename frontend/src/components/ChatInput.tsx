@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ModelPickerButton } from './settings/ModelPickerButton';
 import type { KeyboardEvent } from 'react';
 import { Paperclip, SendHorizontal, Square, X } from 'lucide-react';
 
@@ -186,6 +187,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         </div>
       </div>
       <div className="text-center mt-2">
+        <div className="flex justify-center"><ModelPickerButton /></div>
         <AiDisclaimer variant="compact" />
         <div className="mt-2 flex flex-wrap justify-center gap-2 text-[11px]">
           {suggestions.map((suggestion) => (

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import {
   Command,
   History,
+  Target,
   LayoutDashboard,
   Menu,
   MessageSquare,
@@ -9,7 +10,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 
@@ -48,6 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onMobileClose,
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { currentTicker } = useStore();
   const authUserId = useStore((state) => state.authIdentity?.userId);
   const { watchlist, initWatchlist, activeAsset: lastDashboardAsset } = useDashboardStore();
@@ -148,6 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
           <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
           <NavItem icon={<History size={16} />} label="历史" active={activeKey === 'history'} compact={compactMobile} testId="sidebar-nav-history" onClick={() => { onHistoryClick?.(); closeMobile(); }} />
+          <NavItem icon={<Target size={16} />} label="预测战绩" active={false} compact={compactMobile} testId="sidebar-nav-track-record" onClick={() => { navigate('/track-record'); closeMobile(); }} />
 
           <div className="mt-auto border-t border-t-border pt-2">
             <NavItem icon={<Settings size={16} />} label="设置" active={false} compact={compactMobile} testId="sidebar-nav-settings" onClick={() => { onSettingsClick?.(); closeMobile(); }} />

@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/runtime';
 import { getSupabaseClient } from './supabaseClient';
+import { getModelSelectionHeaders, MODEL_SELECTION_HEADER } from '../store/modelSelection';
+import { usesModelSelection } from './modelRequestScope';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -13,7 +15,7 @@ export const api = axios.create({
 /**
  * 与 axios 拦截器同源的鉴权头构造，供绕过 axios 的流式 fetch 复用（FE-05）。
  */
-export async function buildAuthHeaders(): Promise<Record<string, string>> {
+export async function buildAuthHeaders(path?: string): Promise<Record<string, string>> {
   const client = getSupabaseClient();
   let accessToken: string | null = null;
 
@@ -26,10 +28,14 @@ export async function buildAuthHeaders(): Promise<Record<string, string>> {
     }
   }
 
-  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  return {
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...(accessToken && path && usesModelSelection(path) ? getModelSelectionHeaders() : {}),
+  };
 }
 
 api.interceptors.request.use(async (config) => {
+  config.headers.delete(MODEL_SELECTION_HEADER);
   const client = getSupabaseClient();
   let accessToken: string | null = null;
 
@@ -45,6 +51,12 @@ api.interceptors.request.use(async (config) => {
   if (!accessToken) return config;
 
   const headers: any = config.headers ?? {};
+  if (usesModelSelection(config.url || '')) {
+    for (const [name, value] of Object.entries(getModelSelectionHeaders())) {
+      if (typeof headers.set === 'function') headers.set(name, value);
+      else headers[name] = value;
+    }
+  }
   const hasAuthorization = typeof headers.get === 'function'
     ? Boolean(headers.get('Authorization'))
     : Boolean(headers.Authorization);
@@ -101,7 +113,13 @@ api.interceptors.response.use(
     if (error.response?.status === 429) {
       emitRateLimitEvent(parseRetryAfter(error.response.headers?.['retry-after']));
     }
-    console.error('API Error:', error.response || error.message);
+    for (const config of [error.config, error.response?.config]) {
+      if (!config) continue;
+      if (typeof config.headers?.delete === 'function') config.headers.delete(MODEL_SELECTION_HEADER);
+      else if (config.headers) delete config.headers[MODEL_SELECTION_HEADER];
+      if (/\/api\/models\/test(?:\?|$)/.test(config.url || '')) config.data = '[redacted]';
+    }
+    console.error('API Error:', error.response?.status || 'network_error');
     return Promise.reject(error);
   }
 );

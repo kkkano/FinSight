@@ -9,6 +9,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
 import { SharedReportPage } from './pages/SharedReportPage';
+import { TrackRecordPage } from './pages/TrackRecordPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 import { useDashboardStore } from './store/dashboardStore';
 import { resolveProtectedRouteAccess } from './auth/access';
@@ -269,6 +270,7 @@ function App() {
       </a>
 
       <Routes>
+        <Route path="/track-record" element={<TrackRecordPage />} />
         <Route path="/" element={<RootRedirect />} />
         <Route path="/welcome" element={<WelcomeRoute />} />
         <Route path="/share/r/:token" element={<SharedReportPage />} />

@@ -8,6 +8,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Dialog } from './ui/Dialog';
 import { useToast } from './ui/Toast';
+import { ModelSettings } from './settings/ModelSettings';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -60,7 +61,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       open={isOpen}
       onClose={onClose}
       labelledBy="settings-modal-title"
-      panelClassName="w-full max-w-lg overflow-hidden rounded-lg border border-fin-border bg-fin-panel shadow-2xl"
+      panelClassName="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-lg border border-fin-border bg-fin-panel shadow-2xl"
     >
       <div className="flex items-center justify-between border-b border-fin-border p-4">
         <div className="flex items-center gap-2">
@@ -73,6 +74,7 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       </div>
 
       <div className="space-y-4 p-5">
+        <ModelSettings />
         <Card className="space-y-3 bg-fin-bg/40 p-4">
           <h3 className="text-sm font-medium text-fin-text">外观</h3>
           <div className="grid grid-cols-2 gap-2">

@@ -76,7 +76,7 @@ async deleteConversation(sessionId: string): Promise<{
   ): Promise<void> {
     let response = await fetch(buildApiUrl('/api/execute'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
+      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders('/api/execute')) },
       body: JSON.stringify(body),
       signal: opts.signal,
     });
@@ -177,7 +177,7 @@ async deleteConversation(sessionId: string): Promise<{
   ): Promise<void> {
     const response = await fetch(buildApiUrl(opts.endpoint ?? '/api/execute'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
+      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders(opts.endpoint ?? '/api/execute')) },
       body: JSON.stringify(request),
       signal: opts.signal,
     });

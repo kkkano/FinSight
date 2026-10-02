@@ -1,6 +1,7 @@
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
 import { apiClient } from '../api/client';
+import { useModelSelectionStore } from './modelSelection';
 import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
 import type { PendingChatHandoffContext } from '../types/chatHandoff';
@@ -1203,6 +1204,7 @@ export const useStore = create<AppState>((set) => ({
       const currentUserId = String(state.authIdentity?.userId || '').trim();
       const nextUserId = String(normalizedIdentity?.userId || '').trim();
       if (currentUserId === nextUserId) return { authIdentity: normalizedIdentity };
+      useModelSelectionStore.getState().clearSelection();
 
       for (const controller of Object.values(state.abortControllersBySession)) {
         controller?.abort();
