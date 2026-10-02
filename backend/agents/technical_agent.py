@@ -5,6 +5,7 @@ import pandas as pd
 
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, ConflictClaim, EvidenceItem
 from backend.agents.chart_specs_extra import build_technical_chart_specs
+from backend.research.prediction_contract import ForecastContext, ForecastResult
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.tools.technical import calculate_kdj
 
@@ -19,6 +20,39 @@ class TechnicalAgent(BaseFinancialAgent):
     AGENT_NAME = "technical"
     CACHE_TTL = 1800  # 30 minutes
     MIN_POINTS = 30
+
+    def __init__(self, llm, cache, tools_module=None, circuit_breaker=None):
+        super().__init__(llm, cache, tools_module, circuit_breaker)
+        self._forecast_llm = llm
+
+    FORECAST_PROMPT_VERSION = "technical-direction-v1"
+
+    async def forecast(self, context: ForecastContext, snapshot: Dict[str, Any]) -> ForecastResult:
+        """Issue a prospective five-session judgment independently of research summaries."""
+        from backend.research.forecasting import run_forecast
+
+        return await run_forecast(
+            self._forecast_llm, context, snapshot,
+            prediction_type="direction", prompt_version=self.FORECAST_PROMPT_VERSION,
+            prompt=(
+                "You are TechnicalAgent in prospective forecast mode. Use only the frozen input. "
+                "Predict the return over the next 5 regular trading sessions: P0 is the future "
+                "opening price at window_start; P5 is the closing price at window_end (session 5). "
+                "Neither future price is known now. R=P5/P0-1. Choose up if R>0.005, down if "
+                "R<-0.005, or flat if -0.005<=R<=0.005. Historical returns and indicator states "
+                "are evidence, not the target outcome; make a new forward-looking judgment. "
+                "Weigh trend, momentum and volume together, including conflicting signals. "
+                "Do not claim certainty or output a probability. If the available evidence cannot "
+                "support a judgment, explicitly abstain. Do not use external facts or future data. "
+                "All identity, window, cutoff, thresholds and versions are fixed by context. "
+                "Return ONLY one JSON object with exactly these keys: status (predicted or "
+                "abstained), direction (up, down, flat, or null only for abstention), reason "
+                "(brief simplified Chinese, at most 600 characters), evidence_refs (a list of "
+                "exact nonempty features keys, e.g. ma20 or rsi, at least one for a prediction). "
+                "Never return ticker, agent, dates, confidence, thresholds, versions or any extra keys."
+            ),
+        )
+
 
     def _call_optional_tool(self, tool_name: str, *args, **kwargs) -> Any:
         tool_fn = getattr(self.tools, tool_name, None)

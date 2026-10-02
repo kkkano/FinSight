@@ -24,6 +24,7 @@ from backend.research.agent_quality_contract import (
     build_agent_claim,
 )
 from backend.research.agent_research_loop import apply_agent_self_check
+from backend.research.prediction_contract import ForecastContext, ForecastResult
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.utils.quote import resolve_live_quote, safe_float
 
@@ -75,6 +76,10 @@ class RiskAgent(BaseFinancialAgent):
     """
 
     AGENT_NAME = "risk_agent"
+
+    def __init__(self, llm, cache, tools_module=None, circuit_breaker=None):
+        super().__init__(llm, cache, tools_module, circuit_breaker)
+        self._forecast_llm = llm
 
     CATEGORY_WEIGHTS: dict[str, float] = {
         "technical": 25.0,
@@ -162,6 +167,39 @@ class RiskAgent(BaseFinancialAgent):
         RiskLevel.HIGH: 3,
         RiskLevel.CRITICAL: 4,
     }
+
+    FORECAST_PROMPT_VERSION = "risk-drawdown-v1"
+
+    async def forecast(self, context: ForecastContext, snapshot: Dict[str, Any]) -> ForecastResult:
+        """Forecast a future close-based drawdown, not a historical stress-test label."""
+        from backend.research.forecasting import run_forecast
+
+        return await run_forecast(
+            self._forecast_llm, context, snapshot,
+            prediction_type="drawdown", prompt_version=self.FORECAST_PROMPT_VERSION,
+            prompt=(
+                "You are RiskAgent in prospective forecast mode. Use only the frozen input. "
+                "Predict whether maximum close-based drawdown reaches 5% over the next 5 "
+                "regular trading sessions. The scoring sequence is P0 (the future opening price "
+                "at window_start), then each of the 5 session closing prices through window_end. "
+                "For each close, drawdown is 1-close/prior running maximum of that sequence. "
+                "event_occurs=true if the largest drawdown>=0.05, otherwise false. This is not "
+                "intraday low drawdown or end-to-end return. Future prices are unknown. "
+                "Use realized volatility, historical drawdown and trend as evidence for a NEW "
+                "future event judgment; do not relabel a past drawdown or stress test. "
+                "Both true and false are valid predictions. Do not output a probability or "
+                "claim certainty. If evidence cannot support a judgment, explicitly abstain. "
+                "Do not use external facts or future data. All identity, window, cutoff, "
+                "thresholds and versions are fixed by context. Return ONLY one JSON object "
+                "with exactly these keys: status (predicted or abstained), event_occurs "
+                "(JSON true or false, or null only for abstention), reason (brief simplified "
+                "Chinese, at most 600 characters), evidence_refs (a list of exact nonempty "
+                "features keys, e.g. realized_vol20 or max_drawdown60, at least one for a "
+                "prediction). Never return ticker, agent, dates, confidence, thresholds, "
+                "versions or any extra keys."
+            ),
+        )
+
 
     @classmethod
     def risk_level_meets_threshold(cls, actual: RiskLevel, threshold: RiskLevel) -> bool:
