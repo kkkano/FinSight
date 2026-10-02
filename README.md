@@ -2,7 +2,7 @@
 <h1 align="center">FinSight AI</h1>
 <p align="center"><strong>可信行情、可验证 AI 判断与证据化金融研究</strong></p>
 
-FinSight 当前有四个主工作区：Today、Dashboard、Chat、History。用户先在 Today 查看自选标的、最近 Prediction 与待跟进判断，再进入 Dashboard 检查真实行情和规则指标，在 Chat 基于来源继续研究，并在 History 复盘 Prediction、Outcome 与报告。根路径经过欢迎门后进入 Today；组合工作台、筛选、回测、调仓、独立告警、成本审计和浏览器端模型配置不在当前产品面。
+FinSight 当前有四个主工作区：Today、Dashboard、Chat、History。用户先在 Today 查看自选标的、最近 Prediction 与待跟进判断，再进入 Dashboard 检查真实行情和规则指标，在 Chat 基于来源继续研究，并在 History 复盘 Prediction、Outcome 与报告。根路径经过欢迎门后进入 Today；组合工作台、筛选、回测、调仓和成本审计不在当前产品面。登录用户可为聊天和报告切换模型；另有 `/track-record` 公开展示固定样本的预测战绩。
 
 ## 核心能力
 
@@ -14,7 +14,9 @@ FinSight 当前有四个主工作区：Today、Dashboard、Chat、History。用�
 | Chat / Report | 六节点 LangGraph、确定性 evidence collectors、普通研究最多一次 ResearchAnalyst 调用、引用与质量门禁 |
 | Monitor | 只监控当前 Dashboard 页面 lease；无 lease 时不请求行情或 LLM |
 | 数据 | 核心业务、Prediction、报告、会话、Watchlist、Monitor 与 LLM usage 均以 PostgreSQL 为事实源；RAG 使用 pgvector |
-| API | 9 个 FastAPI Router、37 个 OpenAPI 操作、唯一 `/api/execute` SSE 入口；`/livez` 与 `/readyz` 分离存活和就绪状态 |
+| 模型选择 | 系统 Step 5 Preview 与用户自带服务，官方 effort、登录校验和完整研究上下文外发确认 |
+| 公开战绩 | 固定 20 股每日 40 个机会，五交易日方向/回撤结算、简单基准与独立覆盖率告警 |
+| API | 11 个 FastAPI Router、41 个 OpenAPI 操作、唯一 `/api/execute` SSE 入口；`/livez` 与 `/readyz` 分离存活和就绪状态 |
 
 ## 数据与安全边界
 
@@ -51,7 +53,7 @@ OPENAI_COMPATIBLE_MODEL=model-id
 
 ```mermaid
 flowchart LR
-    UI[React SPA\nToday · Dashboard · Chat · History] -->|HTTP / SSE| API[FastAPI\n9 Routers]
+    UI[React SPA\nToday · Dashboard · Chat · History · Track Record] -->|HTTP / SSE| API[FastAPI\n11 Routers]
     API --> GRAPH[六节点 LangGraph]
     GRAPH --> COLLECT[确定性 Evidence Collectors]
     COLLECT --> ANALYST[ResearchAnalyst\n最多一次业务 LLM]
@@ -59,6 +61,10 @@ flowchart LR
     COLLECT --> PROVIDERS[Market · SEC · FRED · Search]
     GRAPH <--> PG[(PostgreSQL + pgvector)]
     PRED <--> PG
+    API --> BENCH[固定 US20 公开评估]
+    BENCH --> YAHOO[单源 Yahoo + 现有代理]
+    BENCH --> LEDGER[(持久卷预测账本)]
+    WATCH[独立覆盖率监控] -->|health| API
 ```
 
 主图只有六个节点：

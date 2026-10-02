@@ -1,6 +1,6 @@
 # FinSight AI 角色与 Collector 指南
 
-更新时间：2026-07-16
+更新时间：2026-10-02
 
 ## 1. 用户可感知角色
 
@@ -25,6 +25,8 @@ PredictionAnalyst 的 anchor 由服务端覆盖，方向、概率、止损、目
 - 把工具错误作为 diagnostics 返回。
 
 collector 不执行 LLM analysis、reflection、debate 或隐式 Prediction。
+
+固定 US20 公开账本另有显式 `forecast()` 模式：Technical 预测五日方向，Risk 预测五日收盘序列最大回撤是否达到 5%。两者只接收冻结快照，使用独立 token/次数预算，允许弃权且不回退为历史标签。该模式由定时采集器显式调用，不进入普通 Collector 执行链，也不与用户 PostgreSQL Prediction/Outcome 混合统计。口径、实际模型审计和基准见 [公开预测账本](PREDICTION_TRACK_RECORD.md)。
 
 ## 3. 公共合同
 

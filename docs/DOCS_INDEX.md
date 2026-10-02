@@ -1,6 +1,6 @@
 # FinSight 当前文档索引
 
-更新时间：2026-09-15
+更新时间：2026-10-02
 
 本页只索引当前有效的事实文档。历史计划、阶段报告、QA 证据、ADR 和被替代说明统一位于 [`archive/`](archive/)；设计提案位于 [`design/`](design/)，两者都不作为运行时事实源。
 
@@ -23,6 +23,8 @@
 | [`REPORT_CHART_SPEC.md`](REPORT_CHART_SPEC.md) | 报告图表与 `chart_ref` 合同 |
 | [`HALLUCINATION_MITIGATION.md`](HALLUCINATION_MITIGATION.md) | 证据、引用和降级治理 |
 | [`rag-evaluation-guide.md`](rag-evaluation-guide.md) | RAG 质量评估方法与门禁 |
+| [`MODEL_SELECTION.md`](MODEL_SELECTION.md) | 登录用户的模型切换、凭据与研究上下文边界 |
+| [`PREDICTION_TRACK_RECORD.md`](PREDICTION_TRACK_RECORD.md) | 固定 US20 公开预测账本、冻结口径、结算与独立告警 |
 
 已完成的 2026-07 生产质量修复 Spec 与一次性发布证据已归档到 [`archive/2026-07-production-quality-remediation/`](archive/2026-07-production-quality-remediation/)，不再作为当前规范入口。
 

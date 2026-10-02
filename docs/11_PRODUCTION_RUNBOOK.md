@@ -1,9 +1,9 @@
 # FinSight 生产发布 Runbook
 
-更新时间：2026-09-15
+更新时间：2026-10-02
 
 本文是 FinSight 当前唯一生产发布流程。生产目录为 `/home/ubuntu/FinSight`，Compose 服务为
-`postgres`、`backend`、`frontend`。发布必须使用同一个 Git commit SHA 构建前后端镜像；禁止用
+`postgres`、`backend`、`frontend`，公开账本另使用 `predictions` profile 下的 `prediction-watchdog`。发布必须使用同一个 Git commit SHA 构建前后端镜像；禁止用
 `latest`、未提交工作区或旧 SQLite/JSON 运行路径部署。
 
 ## 1. 发布不变量
@@ -21,9 +21,10 @@ flowchart TB
 
 - 核心业务只写 PostgreSQL；schema 只由 Alembic 管理，应用启动不建表。
 - 生产必须启用 Supabase 认证；Prediction、Chat、History、Watchlist、Monitor 均不得匿名写入。
-- Price、Technical、Fundamental、News、Macro、Risk 和 Deep Search 只采集证据，不独立调用 LLM，
+- 常规研究链中的 Price、Technical、Fundamental、News、Macro、Risk 和 Deep Search 只采集证据，不独立调用 LLM，
   不运行 reflection、补充搜索循环或动态委托。
 - 业务 LLM 角色只有 `PredictionAnalyst` 与 `ResearchAnalyst`；长报告可以追加一次 verifier。
+- 固定公开 US20 评估另设 Technical/Risk forecast 模式，采集预算与用户业务分开；其 SQLite 账本和 watchdog 状态位于 backend_data 持久卷，不恢复旧业务存储。
 - Prediction 只接受可信 provider 的真实 K 线；provider/LLM 失败必须返回稳定错误码，不生成替代行情或方向性假结论。
 - 常规发布不读取、备份或恢复旧 SQLite/JSON。`scripts/migrate_legacy_storage.py` 只用于经批准的一次性离线导入。
 - `.env.server` 只保存在服务器受限目录，不进入 Git、镜像层、命令参数、日志、截图或发布证据。
@@ -65,6 +66,16 @@ LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK=false
 覆盖进程级 `HTTP_PROXY`/`HTTPS_PROXY`。`NO_PROXY` 与 `no_proxy` 必须相同，并至少包含
 `host.docker.internal,localhost,127.0.0.1`。同宿主机 LLM 网关使用
 `http://host.docker.internal/v1`，不经公网地址回源。
+
+公开账本须通过 `backend.tools.yfinance_client.create_ticker` 复用已验证的 Yahoo 代理，不能以裸 `yf.Ticker` 的直连结果代替生产预检。模型 key 使用服务端 `STEPFUN_API_KEY`，SMTP 配置和 `PREDICTION_ALERT_EMAIL` 仅合并进现有 `.env.server`，不得用部分配置覆盖数据库与认证字段。采集默认 `PREDICTION_ENABLED=false`；完成检查后在美东 08:45 前启用。
+
+部署公开账本时必须同时列出独立监控服务：
+
+```bash
+IMAGE_TAG="$release_sha" docker compose --env-file .env.server --profile predictions up -d --build backend frontend prediction-watchdog
+```
+
+镜像回滚前关闭采集并保留 `prediction_ledger.db` 和 `prediction_watchdog.json`；恢复采集会补记漏日 missed，不补写历史预测。常规业务数据库仍执行本 Runbook 的 PostgreSQL 回滚流程。
 
 生产 `lifespan` 会在接受流量前异步执行一次 RAG readiness warm-up：按当前配置初始化 PostgreSQL/pgvector RAG，使用已选 embedding 对固定短文本执行一次真实 `encode_single`，校验向量维度、有限值和 `bge-m3` 模型标识，并缓存结果供后续 `/readyz` 使用。失败结果默认缓存 45 秒后自动重试，可用 `RAG_PROBE_FAILURE_TTL_SECONDS` 在 1–300 秒内调整；成功结果按配置指纹复用。非生产 profile 不加载模型。后端 Docker HEALTHCHECK 与 Compose healthcheck 均保留 5 秒 probe timeout，但 `start_period` 为 180 秒，以覆盖 CPU BGE-M3/reranker 冷启动；启动 warm-up 失败时生产 readiness fail closed，不得用内存或 hash fallback 继续接流量。
 

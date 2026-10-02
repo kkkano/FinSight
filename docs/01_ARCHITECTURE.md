@@ -1,6 +1,6 @@
 # FinSight 当前架构
 
-更新时间：2026-09-15
+更新时间：2026-10-02
 
 ## 1. 产品边界
 
@@ -25,9 +25,12 @@ flowchart LR
     EXEC <--> RAG[(PostgreSQL + pgvector)]
     GRAPH <--> CP[(PostgreSQL checkpoints)]
     PRED <--> CORE[(PostgreSQL core tables)]
+    API --> BENCH[固定 US20 公开评估]
+    BENCH --> YAHOO[Yahoo / yfinance 专用代理]
+    BENCH --> LEDGER[(独立持久账本)]
 ```
 
-FastAPI 只注册以下九个 Router：
+FastAPI 注册以下十一个 Router：
 
 | Router | 责任 |
 |---|---|
@@ -40,8 +43,14 @@ FastAPI 只注册以下九个 Router：
 | `predictions_router` | generate、run、latest、history、detail、stats、Outcome 运维入口 |
 | `monitor_router` | 页面 lease 与当前标的 comments feed |
 | `report_router` | 报告索引、回放、分享与公开只读读取 |
+| `model_router` | 公开模型目录与能力、登录用户的连接测试 |
+| `prediction_router` | 固定 US20 五日公开预测账本，只读 |
 
-当前 OpenAPI 为 37 个操作。新增公开端点必须先证明不能并入上述边界，并保持总量门禁。
+当前 OpenAPI 为 41 个操作。其中 `/api/models`、`/api/models/capabilities`、`/api/models/test` 提供请求级模型配置；`/api/predictions/track-record` 提供固定公开样本的只读账本。后者先于现有 prediction ID 动态路径注册。新增公开端点必须有明确边界和回归验证。
+
+聊天和研究报告的模型选择通过 `backend/services/model_selection.py` 进入现有 LLM 调用链；使用单独端点池，保持全站共享报告缓存停用。详见 [模型选择](MODEL_SELECTION.md)。
+
+固定 US20 账本独立于用户的 PostgreSQL Prediction/Outcome：Technical 与 Risk 仅在显式定时 forecast 模式产出五日方向及回撤事件，使用独立预算、冻结输入和单源 Yahoo。公开评估记录写入持久卷中的 `prediction_ledger.db`，独立 watchdog 记录投递状态；这不恢复旧业务 SQLite/JSON 路径。详见 [公开预测账本](PREDICTION_TRACK_RECORD.md)。
 
 ## 3. Graph 与请求合同
 
