@@ -12,6 +12,8 @@ def test_security_gate_rejects_missing_api_key_when_enabled(monkeypatch):
 
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_AUTH_KEYS", "release-key-1")
+    from backend.config.settings import clear_settings_caches
+    clear_settings_caches()
     import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
 
     with TestClient(main.app) as client:

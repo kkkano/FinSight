@@ -1,6 +1,6 @@
 # 预测账本 v1：运行与验收
 
-公开页面 `/track-record`、只读 API `/api/predictions/track-record`。这两个入口不要求登录，仅展示固定公开样本，不包含用户聊天或自定义模型凭据。明细支持 `limit` / `offset` 翻页，汇总始终覆盖全部样本。
+公开页面 `/track-record`、只读 API `/api/benchmarks/us20-v1/track-record`。这两个入口不要求登录，仅展示固定公开样本，不包含用户聊天或自定义模型凭据。旧 API `/api/predictions/track-record` 仅保留为隐藏兼容入口，新客户端使用独立的 benchmark 地址。明细支持 `limit` / `offset` 翻页，汇总始终覆盖全部样本。
 
 ## 采集与评分
 
@@ -15,6 +15,7 @@
 交易日历使用锁定版本的 pandas_market_calendars，包含跨年、提前收市和时区处理。行情通过现有 `backend.tools.yfinance_client.create_ticker` 工厂复用 `YFINANCE_PROXY`，固定 yfinance 0.2.66 / Yahoo，显式关闭 auto_adjust、back_adjust 和 repair；不计现金分红回报，不做跨供应商回退。结算时冻结整个价格窗口，两类预测共享该窗口；缺行情显示等待数据，不延长预测期限。
 
 该账本是固定公开样本的独立评估数据集；现有 PostgreSQL 个股 Prediction/Outcome 继续按用户隔离，两套样本不合并统计。
+用户触发的 PredictionTrack 可以覆盖不同标的与判断范围；US20 账本每天固定 20 只股票、两个五交易日判断，并按相同样本与简单基准比较。两者的采样方式、期限、访问边界和存储不同，当前分别展示、分别统计。兼容旧账本地址的静态路由位于现有 `predictions_router` 的 ID 详情路由前；两个 Router 在应用中的注册顺序不影响新旧账本地址。
 
 ## 开关与部署准备
 

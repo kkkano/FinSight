@@ -341,15 +341,41 @@ def test_selected_endpoint_does_not_change_server_rotation_pool():
 
 
 @pytest.mark.asyncio
-async def test_public_ledger_route_is_not_swallowed_by_prediction_id_route(monkeypatch, tmp_path):
+async def test_public_ledger_routes_survive_reversed_registration(monkeypatch, tmp_path):
     from backend.api.main import app
     from backend.api import prediction_router
     from backend.services.prediction_store import PredictionStore
+    from fastapi.routing import APIRoute
+
     monkeypatch.setattr(prediction_router, 'get_prediction_store', lambda: PredictionStore(tmp_path/'ledger.sqlite'))
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
-        response = await client.get('/api/predictions/track-record')
-    assert response.status_code == 200
-    assert response.json()['summary']['opportunities'] == 0
+    routes = {
+        route.path: route for route in app.routes
+        if isinstance(route, APIRoute) and route.path in {
+            '/api/predictions/{prediction_id}', '/api/predictions/track-record',
+            '/api/benchmarks/us20-v1/track-record',
+        }
+    }
+    assert len(routes) == 3
+    detail = routes['/api/predictions/{prediction_id}']
+    alias = routes['/api/predictions/track-record']
+    benchmark = routes['/api/benchmarks/us20-v1/track-record']
+    assert list(app.routes).index(alias) < list(app.routes).index(detail)
+
+    for ordering in ((alias, detail, benchmark), (benchmark, alias, detail)):
+        isolated = FastAPI()
+        isolated.router.routes.extend(ordering)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=isolated), base_url='http://test') as client:
+            current = await client.get('/api/benchmarks/us20-v1/track-record')
+            legacy = await client.get('/api/predictions/track-record')
+            private = await client.get('/api/predictions/00000000-0000-4000-8000-000000000302')
+        assert current.status_code == legacy.status_code == 200
+        assert current.json() == legacy.json()
+        assert current.json()['summary']['opportunities'] == 0
+        assert private.status_code == 401 and private.json()['detail']['code'] == 'auth_required'
+
+    openapi = app.openapi()['paths']
+    assert '/api/benchmarks/us20-v1/track-record' in openapi
+    assert '/api/predictions/track-record' not in openapi
 
 
 @pytest.mark.asyncio

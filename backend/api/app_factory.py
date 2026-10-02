@@ -370,7 +370,6 @@ def create_app() -> FastAPI:
 
     for router in (
         model_router,
-        track_record_router,
         system_router,
         user_router,
         watchlist_router,
@@ -378,6 +377,7 @@ def create_app() -> FastAPI:
         market_router,
         execution_router,
         predictions_router,
+        track_record_router,
         monitor_router,
         report_router,
     ):

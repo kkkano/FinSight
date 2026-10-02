@@ -255,11 +255,11 @@ async def test_public_api_whitelist_and_limit(store, window, monkeypatch):
     app = FastAPI()
     app.include_router(module.router)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/predictions/track-record?limit=2")
+        response = await client.get("/api/benchmarks/us20-v1/track-record?limit=2")
         assert response.status_code == 200 and len(response.json()["records"]) == 2
         for private in ("api_key", "must-not-be-public", "endpoint_alias", "context_json", "audit_json"):
             assert private not in response.text
-        assert (await client.get("/api/predictions/track-record?limit=201")).status_code == 422
+        assert (await client.get("/api/benchmarks/us20-v1/track-record?limit=201")).status_code == 422
 
 
 @pytest.mark.asyncio

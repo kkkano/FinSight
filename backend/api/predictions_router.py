@@ -421,6 +421,12 @@ def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
         except Exception as exc:
             raise _error(503, "store_unavailable", "Prediction stats 暂时无法读取") from exc
 
+    # 兼容仍缓存旧前端的客户端；旧别名跟随本 Router，排在 ID 详情之前。
+    from backend.api.prediction_router import track_record
+    router.add_api_route(
+        "/track-record", track_record, methods=["GET"], include_in_schema=False,
+    )
+
     @router.get("/{prediction_id}")
     async def get_prediction(prediction_id: str, request: Request) -> PredictionResponse:
         user_id = _user_id(request)

@@ -331,7 +331,7 @@ export function TrackRecordPage() {
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="mb-2 flex items-center gap-2 text-xs font-medium text-fin-primary"><Target size={16} />FinSight · 公开只读账本</p>
-            <h1 className="text-2xl font-semibold text-fin-text">预测战绩</h1>
+            <h1 className="text-2xl font-semibold text-fin-text">US20 预测战绩</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-fin-muted">Technical 与 Risk 对固定美股样本的 5 日前瞻预测。方向与回撤事件分别评价，保留每次机会及结果。</p>
           </div>
           <div className="flex items-center gap-2">

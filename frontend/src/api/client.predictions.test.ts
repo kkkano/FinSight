@@ -19,7 +19,7 @@ describe('public prediction ledger client', () => {
     vi.stubGlobal('fetch', fetchMock);
     const controller = new AbortController();
     expect(await apiClient.getPredictionTrackRecord(50, 200, controller.signal)).toEqual(fixture);
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/predictions/track-record?limit=50&offset=200'), {
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/benchmarks/us20-v1/track-record?limit=50&offset=200'), {
       headers: { Accept: 'application/json' }, credentials: 'omit', signal: controller.signal,
     });
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('fixture-never-send');

@@ -6,7 +6,7 @@ import type { PredictionTrackRecord } from '../src/types/predictions';
 // All API responses in these tests are explicitly labelled, invented UI fixtures.
 async function mockLedger(page: Page, getData: () => PredictionTrackRecord, fail?: () => boolean) {
   const headers: Array<Record<string, string>> = [];
-  await page.route('**/api/predictions/track-record?*', async (route) => {
+  await page.route('**/api/benchmarks/us20-v1/track-record?*', async (route) => {
     headers.push(route.request().headers());
     await route.fulfill({
       status: fail?.() ? 503 : 200,
@@ -22,7 +22,7 @@ test('public empty and pending states require no welcome gate and never invent h
   const headers = await mockLedger(page, () => fixture);
   await page.goto('/track-record');
   await expect(page).toHaveURL(/\/track-record$/);
-  await expect(page.getByRole('heading', { name: '预测战绩', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'US20 预测战绩', exact: true })).toBeVisible();
   await expect(page.getByText('固定采集尚未启用', { exact: true })).toBeVisible();
   await expect(page.getByTestId('direction-results').getByText('等待首批结算', { exact: true })).toBeVisible();
   await expect(page.getByTestId('drawdown-results').getByText('等待首批结算', { exact: true })).toBeVisible();
@@ -76,7 +76,7 @@ test('settled fixtures retain losing groups, unknown models and all failure stat
   await page.screenshot({ path: testInfo.outputPath('track-record-desktop-fixture.png') });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('heading', { name: '预测战绩', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'US20 预测战绩', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('track-record-mobile-fixture.png') });
 });
@@ -116,7 +116,7 @@ test('pagination reaches older settled fixtures beyond 200 records and retains t
   };
   const offsets: number[] = [];
   let failNextPage = true;
-  await page.route('**/api/predictions/track-record?*', async (route) => {
+  await page.route('**/api/benchmarks/us20-v1/track-record?*', async (route) => {
     const params = new URL(route.request().url()).searchParams;
     const offset = Number(params.get('offset') || 0);
     const limit = Number(params.get('limit') || 50);
