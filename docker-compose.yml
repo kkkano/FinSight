@@ -39,7 +39,7 @@ services:
   # ── Backend (FastAPI) ───────────────────────────────────────────────────────
   backend:
     image: finsight-backend:${IMAGE_TAG:-local}
-    build:
+    build: &backend-build
       context: .
       dockerfile: Dockerfile
       args:
@@ -130,6 +130,27 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - finsight-net
+
+  prediction-watchdog:
+    profiles: ["predictions"]
+    image: finsight-backend:${IMAGE_TAG:-local}
+    build: *backend-build
+    restart: unless-stopped
+    env_file:
+      - .env.server
+    environment:
+      PREDICTION_HEALTH_URL: http://backend:8000/health
+      PREDICTION_WATCHDOG_STATE: /app/data/prediction_watchdog.json
+    command: ["python", "scripts/prediction_watchdog.py"]
+    healthcheck:
+      disable: true
+    volumes:
+      - backend_data:/app/data
+    depends_on:
+      backend:
+        condition: service_started
     networks:
       - finsight-net
 
