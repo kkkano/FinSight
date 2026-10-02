@@ -81,7 +81,7 @@ async deleteConversation(sessionId: string): Promise<{
       signal: opts.signal,
     });
 
-    ensureStreamResponseOk(response);
+    await ensureStreamResponseOk(response);
     const guarded = withStreamGuards(callbacks, opts);
     const reconnectDelays = opts.reconnectDelaysMs ?? [1000, 4000];
     let runId = response.headers.get('X-Run-Id');
@@ -144,7 +144,7 @@ async deleteConversation(sessionId: string): Promise<{
               signal: opts.signal,
             },
           );
-          ensureStreamResponseOk(response);
+          await ensureStreamResponseOk(response);
           opts.onConnectionState?.('connected', attempt);
         } catch (resumeError) {
           if (opts.signal?.aborted) break;
@@ -182,7 +182,7 @@ async deleteConversation(sessionId: string): Promise<{
       signal: opts.signal,
     });
 
-    ensureStreamResponseOk(response);
+    await ensureStreamResponseOk(response);
     const guarded = withStreamGuards(callbacks, opts);
     await parseSSEStream(response, guarded, opts);
     guarded.finish();

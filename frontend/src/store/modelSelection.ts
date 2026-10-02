@@ -23,27 +23,91 @@ export interface CatalogModel extends ModelCapabilities {
   available: boolean;
 }
 
+export type CustomModelDraft = Omit<Extract<ModelSelection, { source: 'custom' }>, 'api_key' | 'context_acknowledged'>;
+
 interface ModelSelectionState {
+  userId: string | null;
   selection: ModelSelection | null;
+  pendingCustom: CustomModelDraft | null;
   metadata: ModelCapabilities | null;
   catalog: CatalogModel[];
-  setCatalog: (models: CatalogModel[]) => void;
+  defaultModelId: string | null;
+  setUser: (userId: string | null) => void;
+  setCatalog: (models: CatalogModel[], defaultModelId?: string | null) => void;
   applySelection: (selection: ModelSelection, metadata: ModelCapabilities) => void;
   clearSelection: () => void;
 }
 
-// Deliberately memory-only: a reload must discard custom credentials and selection.
-// Keep this store separate from persisted conversation/preferences stores and devtools.
-export const useModelSelectionStore = create<ModelSelectionState>((set) => ({
+export const modelPreferenceKey = (userId: string): string => `finsight-model-preference:${encodeURIComponent(userId)}`;
+
+type ModelPreference = Extract<ModelSelection, { source: 'system' }> | CustomModelDraft;
+
+function readPreference(userId: string): ModelPreference | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(modelPreferenceKey(userId)) || 'null');
+    if (!value || typeof value !== 'object') return null;
+    const effort = typeof value.effort === 'string' ? { effort: value.effort } : {};
+    if (value.source === 'system' && typeof value.model_id === 'string' && value.model_id.trim()) {
+      return { source: 'system', model_id: value.model_id, ...effort };
+    }
+    if (value.source === 'custom' && typeof value.base_url === 'string' && typeof value.model === 'string') {
+      return { source: 'custom', base_url: value.base_url, model: value.model, ...effort };
+    }
+  } catch {
+    // 存储不可用时，当前页面仍可使用已应用的模型。
+  }
+  return null;
+}
+
+function writePreference(userId: string | null, selection: ModelSelection | null): void {
+  if (!userId) return;
+  try {
+    if (!selection) {
+      localStorage.removeItem(modelPreferenceKey(userId));
+      return;
+    }
+    // 自带模型只保存非敏感字段，密钥和授权确认不落盘。
+    const preference: ModelPreference = selection.source === 'system'
+      ? { source: 'system', model_id: selection.model_id, ...(selection.effort ? { effort: selection.effort } : {}) }
+      : { source: 'custom', base_url: selection.base_url, model: selection.model, ...(selection.effort ? { effort: selection.effort } : {}) };
+    localStorage.setItem(modelPreferenceKey(userId), JSON.stringify(preference));
+  } catch {
+    // 不因浏览器禁用存储而阻断当前请求。
+  }
+}
+
+export const useModelSelectionStore = create<ModelSelectionState>((set, get) => ({
+  userId: null,
   selection: null,
+  pendingCustom: null,
   metadata: null,
   catalog: [],
-  setCatalog: (catalog) => set({ catalog }),
+  defaultModelId: null,
+  setUser: (userId) => {
+    if (get().userId === userId) return;
+    const preference = userId ? readPreference(userId) : null;
+    const selection = preference?.source === 'system' ? preference : null;
+    const pendingCustom = preference?.source === 'custom' ? preference : null;
+    const modelId = selection?.model_id || get().defaultModelId;
+    set({ userId, selection, pendingCustom, metadata: pendingCustom ? null : get().catalog.find((model) => model.id === modelId) || null });
+  },
+  setCatalog: (catalog, defaultModelId) => {
+    const state = get();
+    const resolvedDefault = defaultModelId ?? state.defaultModelId;
+    const modelId = state.selection?.source === 'system' ? state.selection.model_id : resolvedDefault;
+    set({ catalog, defaultModelId: resolvedDefault,
+      ...(state.selection?.source !== 'custom' && !state.pendingCustom ? { metadata: catalog.find((model) => model.id === modelId) || null } : {}),
+    });
+  },
   applySelection: (selection, metadata) => {
     if (selection.source === 'custom' && selection.context_acknowledged !== true) return;
-    set({ selection, metadata });
+    writePreference(get().userId, selection);
+    set({ selection, pendingCustom: null, metadata });
   },
-  clearSelection: () => set({ selection: null, metadata: null }),
+  clearSelection: () => {
+    writePreference(get().userId, null);
+    set({ selection: null, pendingCustom: null, metadata: get().catalog.find((model) => model.id === get().defaultModelId) || null });
+  },
 }));
 
 export function validateCustomModelSelection(
@@ -88,8 +152,16 @@ export function validateCustomModelSelection(
 
 export const MODEL_SELECTION_HEADER = 'X-FinSight-Model';
 
+export class ModelSelectionRequiredError extends Error {
+  constructor() {
+    super('自带模型的密钥未保存。请在模型设置中重新填写 API Key、测试并应用，或明确选择内置模型。');
+    this.name = 'ModelSelectionRequiredError';
+  }
+}
+
 export function getModelSelectionHeaders(): Record<string, string> {
-  const { selection } = useModelSelectionStore.getState();
+  const { selection, pendingCustom } = useModelSelectionStore.getState();
+  if (pendingCustom) throw new ModelSelectionRequiredError();
   if (!selection) return {};
   const bytes = new TextEncoder().encode(JSON.stringify(selection));
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');

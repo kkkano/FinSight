@@ -350,6 +350,11 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
 
 
 def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]:
+    if not model and os.getenv("STEPFUN_API_KEY", "").strip():
+        from backend.services.model_selection import STEP_BASE_URL, STEP_MODEL
+        return [EndpointConfig(name="system-stepfun", provider="openai_compatible", api_base=STEP_BASE_URL,
+                               api_key=os.environ["STEPFUN_API_KEY"].strip(), model=STEP_MODEL)]
+
     env_endpoints = _parse_env_endpoints(provider, model)
     if env_endpoints:
         return env_endpoints

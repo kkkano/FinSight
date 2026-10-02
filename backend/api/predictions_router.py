@@ -21,6 +21,7 @@ from backend.services.llm_usage_store import (
     LLMUsageStoreUnavailable,
     UserDailyCostLimitExceeded,
 )
+from backend.services.model_preflight import ensure_model_available
 
 
 class PredictionRunView(BaseModel):
@@ -290,6 +291,7 @@ def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
             raise _error(429, "llm_quota_exceeded", str(exc)) from exc
         except LLMUsageStoreUnavailable as exc:
             raise _error(503, "store_unavailable", "AI 额度暂时无法检查") from exc
+        await ensure_model_available()
         try:
             run, created = await service().generate(
                 user_id=user_id,

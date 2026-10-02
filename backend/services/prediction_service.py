@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -33,6 +34,13 @@ from backend.services.llm_retry import (
 )
 from backend.services.llm_usage import estimate_cost
 from backend.services.market_data_gateway import get_market_data_gateway
+from backend.services.model_selection import (
+    SelectedModel,
+    current_model,
+    model_client_scope,
+    model_selection_scope,
+    redact_model_secrets,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -129,6 +137,18 @@ def normalize_prediction_symbol(value: str) -> str:
     return normalized
 
 
+def _model_prompt_version(prompt_version: str, selected: SelectedModel | None) -> str:
+    if selected is None:
+        return prompt_version
+    identity = json.dumps(
+        [selected.source, selected.model, selected.base_url, selected.effort],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    fingerprint = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    return f"{prompt_version[:105]}:model-{fingerprint}"
+
+
 def _run_from_row(row: Mapping[str, Any]) -> PredictionRun:
     payload = dict(row)
     for key in ("id", "prediction_id"):
@@ -138,7 +158,7 @@ def _run_from_row(row: Mapping[str, Any]) -> PredictionRun:
 
 
 def _safe_failure_detail(value: Any) -> str:
-    message = str(value or "").replace("\r", " ").replace("\n", " ").strip()
+    message = redact_model_secrets(str(value or "")).replace("\r", " ").replace("\n", " ").strip()
     message = re.sub(r"(?i)(api[_ -]?key|authorization|bearer|token)\s*[:=]\s*\S+", r"\1=[redacted]", message)
     return message[:400] or "prediction run failed"
 
@@ -219,8 +239,8 @@ class PredictionRunStore:
     def recoverable_run_ids(self, *, limit: int = 100) -> list[str]:
         with self._engine.connect() as conn:
             rows = conn.execute(text(
-                "SELECT id FROM prediction_runs WHERE status='queued' OR "
-                "(status='running' AND updated_at < now() - interval '90 seconds') "
+                "SELECT id FROM prediction_runs WHERE status IN ('queued','running') "
+                "AND updated_at < now() - interval '90 seconds' "
                 "ORDER BY created_at ASC LIMIT :limit"
             ), {"limit": max(1, min(1000, int(limit)))}).scalars().all()
         return [str(value) for value in rows]
@@ -643,6 +663,7 @@ class PredictionService:
         self.enabled = bool(enabled)
         self._run_slots = asyncio.Semaphore(max(1, min(16, int(max_concurrent_runs))))
         self._tasks: dict[str, asyncio.Task[None]] = {}
+        self._run_models: dict[str, SelectedModel | None] = {}
         self._recovery_task: asyncio.Task[None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -655,14 +676,16 @@ class PredictionService:
         normalized_symbol = normalize_prediction_symbol(symbol)
         if timeframe != "1d":
             raise ValueError("unsupported prediction timeframe")
+        selected = current_model()
         run, created = await asyncio.to_thread(
             self.store.create_or_get_active,
             user_id=normalized_user,
             symbol=normalized_symbol,
             timeframe=timeframe,
-            prompt_version=self.prompt_version,
+            prompt_version=_model_prompt_version(self.prompt_version, selected),
         )
         if created:
+            self._run_models[run.id] = selected
             self._schedule(run.id)
         return run, created
 
@@ -742,6 +765,7 @@ class PredictionService:
             prompt_version=self.prompt_version,
         )
         if created:
+            self._run_models[run.id] = None
             loop.call_soon_threadsafe(self._schedule, run.id)
         return run, created
 
@@ -761,6 +785,7 @@ class PredictionService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
+        self._run_models.clear()
         self._loop = None
 
     def _schedule(self, run_id: str) -> None:
@@ -773,6 +798,7 @@ class PredictionService:
         def _discard(done: asyncio.Task[None], *, key: str = run_id) -> None:
             if self._tasks.get(key) is done:
                 self._tasks.pop(key, None)
+                self._run_models.pop(key, None)
             try:
                 done.exception()
             except (asyncio.CancelledError, Exception):
@@ -786,16 +812,34 @@ class PredictionService:
                 try:
                     run_ids = await asyncio.to_thread(self.store.recoverable_run_ids, limit=100)
                     for run_id in run_ids:
-                        self._schedule(run_id)
+                        if run_id in self._run_models:
+                            self._schedule(run_id)
+                        else:
+                            await self._cancel_without_model_context(run_id)
                 except Exception:
                     logger.exception("prediction run recovery scan failed")
                 await asyncio.sleep(30)
         except asyncio.CancelledError:
             return
 
+    async def _cancel_without_model_context(self, run_id: str) -> None:
+        """重启后凭据不可恢复，终止旧任务而不是静默改用系统模型。"""
+        run = await asyncio.to_thread(self.store.claim, run_id)
+        if run is not None:
+            await self._finish_failure(
+                run,
+                status="cancelled",
+                code="model_context_lost",
+                detail="服务已重启，本次模型配置无法恢复，请重新生成预测。",
+                attempts=[],
+                started=perf_counter(),
+            )
+
     async def _process_run(self, run_id: str) -> None:
         async with self._run_slots:
-            await self._process_claimed_run(run_id)
+            with model_selection_scope(self._run_models.get(run_id)):
+                async with model_client_scope():
+                    await self._process_claimed_run(run_id)
 
     async def _process_claimed_run(self, run_id: str) -> None:
         started = perf_counter()
@@ -981,14 +1025,23 @@ class PredictionService:
     async def _invoke(self, prompt: str, *, context: LLMCallContext) -> Any:
         from langchain_core.messages import HumanMessage
 
+        selected = current_model()
+        if selected is not None:
+            # 推理模型的思考过程也消耗输出预算；沿用旧的 1600/30 会在
+            # JSON 合同完成前截断，随后被误报成预测合同失败。
+            max_tokens = max(4096, min(8192, int(os.getenv("PREDICTION_LLM_MAX_TOKENS", "4096"))))
+            request_timeout = 60
+        else:
+            max_tokens = max(512, min(2400, int(os.getenv("PREDICTION_LLM_MAX_TOKENS", "1600"))))
+            request_timeout = int(self.llm_attempt_timeout_seconds)
         return await self.invoke_llm(
             [HumanMessage(content=prompt)],
             context=context,
             temperature=0.1,
-            max_tokens=max(512, min(2400, int(os.getenv("PREDICTION_LLM_MAX_TOKENS", "1600")))),
-            request_timeout=int(self.llm_attempt_timeout_seconds),
+            max_tokens=max_tokens,
+            request_timeout=request_timeout,
             acquire_token=True,
-            acquire_timeout_seconds=min(10.0, self.llm_attempt_timeout_seconds),
+            acquire_timeout_seconds=min(15.0 if selected else 10.0, float(request_timeout)),
             endpoint_names=self.llm_endpoint_names,
         )
 

@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getModelSelectionHeaders,
   MODEL_SELECTION_HEADER,
+  modelPreferenceKey,
+  ModelSelectionRequiredError,
   useModelSelectionStore,
   validateCustomModelSelection,
 } from './modelSelection';
@@ -22,6 +24,16 @@ function decodeHeader(): unknown {
   const binary = atob(getModelSelectionHeaders()[MODEL_SELECTION_HEADER]);
   return JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0))));
 }
+
+beforeEach(() => {
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) || null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+  });
+  useModelSelectionStore.setState({ catalog: [], defaultModelId: null, metadata: null });
+});
 
 afterEach(() => {
   useModelSelectionStore.getState().clearSelection();
@@ -61,7 +73,7 @@ describe('request-scoped model selection', () => {
     expect(getModelSelectionHeaders()).toEqual({});
   });
 
-  it('clears credentials and explicit selection on logout and account changes', () => {
+  it('clears active credentials on logout and isolates preferences across accounts', () => {
     const auth = useStore.getState();
     auth.setAuthIdentity({ userId: 'fixture-user-a', email: null });
     useModelSelectionStore.getState().applySelection(custom, metadata);
@@ -73,6 +85,48 @@ describe('request-scoped model selection', () => {
     auth.setAuthIdentity(null);
     expect(useModelSelectionStore.getState().selection).toBeNull();
     expect(JSON.stringify(useModelSelectionStore.getState())).not.toContain(custom.api_key);
+  });
+
+  it('restores the chosen system model and effort when the same account initializes after refresh', () => {
+    const auth = useStore.getState();
+    auth.setAuthIdentity({ userId: 'fixture-user-a', email: null });
+    const selected = { source: 'system', model_id: 'stepfun:step-5-preview', effort: 'high' } as const;
+    useModelSelectionStore.getState().applySelection(selected, metadata);
+    expect(JSON.parse(localStorage.getItem(modelPreferenceKey('fixture-user-a'))!)).toEqual(selected);
+    useModelSelectionStore.setState({ userId: null, selection: null, metadata: null });
+    auth.setAuthIdentity({ userId: 'fixture-user-a', email: null });
+    expect(decodeHeader()).toEqual(selected);
+    auth.setAuthIdentity({ userId: 'fixture-user-b', email: null });
+    expect(getModelSelectionHeaders()).toEqual({});
+    auth.setAuthIdentity({ userId: 'fixture-user-a', email: null });
+    expect(decodeHeader()).toEqual(selected);
+  });
+
+  it('restores custom configuration without a key and blocks generation until explicitly reapplied', () => {
+    useStore.getState().setAuthIdentity({ userId: 'fixture-user-a', email: null });
+    useModelSelectionStore.getState().applySelection(custom, metadata);
+    const persisted = localStorage.getItem(modelPreferenceKey('fixture-user-a'))!;
+    expect(persisted).not.toContain(custom.api_key);
+    expect(persisted).not.toContain('context_acknowledged');
+    useModelSelectionStore.setState({ userId: null, selection: null, metadata: null });
+    useModelSelectionStore.getState().setUser('fixture-user-a');
+    expect(useModelSelectionStore.getState().pendingCustom?.model).toBe(custom.model);
+    expect(() => getModelSelectionHeaders()).toThrow(ModelSelectionRequiredError);
+    expect(JSON.stringify(useModelSelectionStore.getState())).not.toContain(custom.api_key);
+    useModelSelectionStore.getState().clearSelection();
+    expect(getModelSelectionHeaders()).toEqual({});
+    expect(localStorage.getItem(modelPreferenceKey('fixture-user-a'))).toBeNull();
+  });
+
+  it('uses the advertised default metadata without replacing an explicit system choice', () => {
+    const model = { ...metadata, id: 'stepfun:step-5-preview', model: 'step-5-preview', available: true };
+    useModelSelectionStore.getState().setCatalog([model], model.id);
+    expect(useModelSelectionStore.getState().metadata?.label).toBe('Step 5 Preview');
+    useModelSelectionStore.getState().applySelection({ source: 'system', model_id: 'unavailable-model' }, { ...metadata, label: 'Unavailable' });
+    useModelSelectionStore.getState().setCatalog([model], model.id);
+    expect(decodeHeader()).toEqual({ source: 'system', model_id: 'unavailable-model' });
+    useModelSelectionStore.getState().clearSelection();
+    expect(useModelSelectionStore.getState().metadata?.label).toBe('Step 5 Preview');
   });
 
   it.each([

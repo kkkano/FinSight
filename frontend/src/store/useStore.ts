@@ -1203,8 +1203,8 @@ export const useStore = create<AppState>((set) => ({
         : null;
       const currentUserId = String(state.authIdentity?.userId || '').trim();
       const nextUserId = String(normalizedIdentity?.userId || '').trim();
+      useModelSelectionStore.getState().setUser(nextUserId || null);
       if (currentUserId === nextUserId) return { authIdentity: normalizedIdentity };
-      useModelSelectionStore.getState().clearSelection();
 
       for (const controller of Object.values(state.abortControllersBySession)) {
         controller?.abort();

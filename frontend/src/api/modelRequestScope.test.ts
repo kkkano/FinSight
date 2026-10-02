@@ -3,7 +3,7 @@ import { usesModelSelection } from './modelRequestScope';
 
 describe('model selection request scope', () => {
   it.each([
-    '/api/execute', '/api/execute/resume', '/api/execute/?ticker=AAPL',
+    '/api/execute', '/api/execute/resume', '/api/execute/?ticker=AAPL', '/api/predictions/generate',
   ])('includes the generation path %s', (path) => {
     expect(usesModelSelection(path)).toBe(true);
   });
@@ -15,7 +15,7 @@ describe('model selection request scope', () => {
     '/api/rebalance/suggestions/123', '/api/portfolio/summary', '/api/predictions/track-record',
     '/api/benchmarks/us20-v1/track-record',
     '/api/execute-metadata', '/api/dashboard/insights-cache', '/api/config?next=/chat/supervisor',
-    '/api/predictions/generate', '/api/execute/runs/fixture/stream', '/api/execute/runs/fixture/cancel',
+    '/api/execute/runs/fixture/stream', '/api/execute/runs/fixture/cancel',
   ])('excludes the data or management path %s', (path) => {
     expect(usesModelSelection(path)).toBe(false);
   });

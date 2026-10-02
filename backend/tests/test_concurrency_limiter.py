@@ -99,6 +99,7 @@ class TestGenerationPathMatcher:
 
         assert is_generation_path("/api/execute") is True
         assert is_generation_path("/api/execute/runs/run-1/cancel") is True
+        assert is_generation_path("/api/predictions/generate") is True
 
     def test_cheap_paths_not_matched(self):
         from backend.api.concurrency import is_generation_path
@@ -107,3 +108,4 @@ class TestGenerationPathMatcher:
         assert is_generation_path("/api/stock/price/AAPL") is False
         assert is_generation_path("/health") is False
         assert is_generation_path("/api/reports/index") is False
+        assert is_generation_path("/api/predictions/history") is False

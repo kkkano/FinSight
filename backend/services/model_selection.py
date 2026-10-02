@@ -17,6 +17,7 @@ from urllib.parse import urlsplit, urlunsplit
 from backend.security.ssrf import is_safe_url
 
 STEP_MODEL_ID = "stepfun:step-5-preview"
+SERVER_DEFAULT_MODEL_ID = "system:server-default"
 STEP_MODEL = "step-5-preview"
 STEP_BASE_URL = "https://api.stepfun.com/step_plan/v1"
 STEP_DOCS = "https://platform.stepfun.com/docs/zh/guides/models/step-5-preview"
@@ -27,7 +28,7 @@ _model_clients: ContextVar[list | None] = ContextVar("finsight_model_clients", d
 
 def is_model_generation_path(path: str) -> bool:
     path = path.split("?", 1)[0].rstrip("/")
-    return path in {"/api/execute", "/api/execute/resume"}
+    return path in {"/api/execute", "/api/execute/resume", "/api/predictions/generate"}
 
 
 def require_model_access(request) -> dict:
@@ -112,6 +113,30 @@ def current_model() -> SelectedModel | None:
 
 
 @contextmanager
+def model_selection_scope(selected: SelectedModel | None):
+    """后台任务只使用创建时选定的模型，退出后恢复调用方上下文。"""
+    token = _selected_model.set(selected)
+    try:
+        yield
+    finally:
+        _selected_model.reset(token)
+
+
+def default_model_id() -> str:
+    return STEP_MODEL_ID if os.getenv("STEPFUN_API_KEY", "").strip() else SERVER_DEFAULT_MODEL_ID
+
+
+def resolve_default_model() -> SelectedModel:
+    if default_model_id() == STEP_MODEL_ID:
+        return SelectedModel("system", STEP_MODEL, STEP_BASE_URL, os.environ["STEPFUN_API_KEY"].strip(),
+                             "system-stepfun", model_capabilities(STEP_MODEL)["default_effort"])
+    from backend.llm_config import load_user_endpoints
+    cfg = load_user_endpoints()[0]
+    return SelectedModel("system", cfg.model, cfg.api_base or "", cfg.api_key, cfg.name,
+                         model_capabilities(cfg.model)["default_effort"])
+
+
+@contextmanager
 def server_model_scope():
     """Scheduled public benchmarks cannot inherit a browsing user's endpoint/key."""
     token = _selected_model.set(None)
@@ -149,10 +174,21 @@ def model_capabilities(model: str, base_url: str = "") -> dict[str, Any]:
 
 
 def system_models() -> list[dict[str, Any]]:
-    return [{
+    models = [{
         "id": STEP_MODEL_ID, "model": STEP_MODEL, **model_capabilities(STEP_MODEL),
         "available": bool(os.getenv("STEPFUN_API_KEY", "").strip()),
     }]
+    if default_model_id() == SERVER_DEFAULT_MODEL_ID:
+        try:
+            configured = resolve_default_model()
+        except RuntimeError:
+            return models
+        models.insert(0, {
+            "id": SERVER_DEFAULT_MODEL_ID, "model": configured.model,
+            **model_capabilities(configured.model), "label": configured.model,
+            "provider": "system", "available": True,
+        })
+    return models
 
 
 def normalize_custom_base(value: Any) -> str:
@@ -181,14 +217,18 @@ async def resolve_selection(payload: Any) -> SelectedModel:
     if source == "system":
         if set(payload) - {"source", "model_id", "effort"}:
             raise ModelSelectionError("系统模型不接受自定义地址或密钥")
-        if payload.get("model_id") != STEP_MODEL_ID:
+        if payload.get("model_id") == SERVER_DEFAULT_MODEL_ID and default_model_id() == SERVER_DEFAULT_MODEL_ID:
+            configured = resolve_default_model()
+            key, base, model, endpoint = configured.api_key, configured.base_url, configured.model, configured.endpoint_name
+        elif payload.get("model_id") == STEP_MODEL_ID:
+            key = os.getenv("STEPFUN_API_KEY", "").strip()
+            if not key:
+                raise ModelSelectionError("此系统模型尚未配置，请选择其它模型或使用自定义接入")
+            base = STEP_BASE_URL
+            model = STEP_MODEL
+            endpoint = "system-stepfun"
+        else:
             raise ModelSelectionError("系统模型不存在")
-        key = os.getenv("STEPFUN_API_KEY", "").strip()
-        if not key:
-            raise ModelSelectionError("此系统模型尚未配置，请选择其它模型或使用自定义接入")
-        base = STEP_BASE_URL
-        model = STEP_MODEL
-        endpoint = "system-stepfun"
     elif source == "custom":
         if set(payload) - {"source", "base_url", "api_key", "model", "effort", "context_acknowledged"}:
             raise ModelSelectionError("自定义模型配置包含不支持的字段")
@@ -228,28 +268,31 @@ class ModelSelectionMiddleware:
         if scope["type"] != "http" or scope.get("method") == "OPTIONS" or not is_model_generation_path(scope.get("path", "")):
             return await self.app(scope, receive, send)
         encoded = next((v for k, v in scope.get("headers", []) if k.lower() == MODEL_HEADER), None)
-        if encoded is None:
-            return await self.app(scope, receive, send)
         from fastapi import HTTPException
         from starlette.requests import Request
         from starlette.responses import JSONResponse
-        try:
-            await require_model_user(Request(scope, receive), self.authenticate)
-        except HTTPException as exc:
-            return await JSONResponse({"detail": exc.detail}, status_code=exc.status_code)(scope, receive, send)
-        try:
-            if len(encoded) > 16384:
-                raise ModelSelectionError("模型配置过长")
-            payload = json.loads(base64.b64decode(encoded, validate=True).decode("utf-8"))
-            if isinstance(payload, dict) and payload.get("source") == "custom" and payload.get("context_acknowledged") is not True:
-                raise ModelSelectionError("请先确认允许将研究上下文发送到自定义服务")
-            selected = await asyncio.wait_for(resolve_selection(payload), timeout=10)
-        except asyncio.TimeoutError:
-            return await JSONResponse({"detail": "模型地址验证超时"}, status_code=400)(scope, receive, send)
-        except (ValueError, TypeError, binascii.Error, UnicodeError) as exc:
-            from starlette.responses import JSONResponse
-            message = str(exc) if isinstance(exc, ModelSelectionError) else "模型配置无法解析"
-            return await JSONResponse({"detail": message}, status_code=400)(scope, receive, send)
+        if encoded is None:
+            try:
+                selected = resolve_default_model()
+            except RuntimeError:
+                return await JSONResponse({"detail": {"code": "model_unavailable", "message": "系统模型尚未配置，请联系管理员。"}}, status_code=503)(scope, receive, send)
+        else:
+            try:
+                await require_model_user(Request(scope, receive), self.authenticate)
+            except HTTPException as exc:
+                return await JSONResponse({"detail": exc.detail}, status_code=exc.status_code)(scope, receive, send)
+            try:
+                if len(encoded) > 16384:
+                    raise ModelSelectionError("模型配置过长")
+                payload = json.loads(base64.b64decode(encoded, validate=True).decode("utf-8"))
+                if isinstance(payload, dict) and payload.get("source") == "custom" and payload.get("context_acknowledged") is not True:
+                    raise ModelSelectionError("请先确认允许将研究上下文发送到自定义服务")
+                selected = await asyncio.wait_for(resolve_selection(payload), timeout=10)
+            except asyncio.TimeoutError:
+                return await JSONResponse({"detail": "模型地址验证超时"}, status_code=400)(scope, receive, send)
+            except (ValueError, TypeError, binascii.Error, UnicodeError) as exc:
+                message = str(exc) if isinstance(exc, ModelSelectionError) else "模型配置无法解析"
+                return await JSONResponse({"detail": message}, status_code=400)(scope, receive, send)
         token = _selected_model.set(selected)
         clients = []
         client_token = _model_clients.set(clients)

@@ -60,11 +60,53 @@ async def test_catalog_and_capabilities_never_expose_system_key(monkeypatch):
         response = await client.get("/api/models")
         assert response.status_code == 200
         item = response.json()["models"][0]
+        assert response.json()["default_model_id"] == selection.STEP_MODEL_ID
         assert item["available"] is True
         assert item["effort_options"] == ["low", "medium", "high"]
         assert "api_key" not in response.text and "system-test-secret" not in response.text
         unknown = await client.get("/api/models/capabilities", params={"model": "unknown-model"})
         assert unknown.json()["effort_options"] == []
+
+
+@pytest.mark.asyncio
+async def test_no_header_default_matches_step_catalog_despite_old_proxy_config(monkeypatch):
+    monkeypatch.setenv("STEPFUN_API_KEY", "system-test-secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "legacy-private-key")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_BASE", "https://legacy.example/v1")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_MODEL", "gpt-5.4-mini")
+    from backend.llm_config import load_user_endpoints
+    assert [cfg.model for cfg in load_user_endpoints()] == [selection.STEP_MODEL]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app_with_models()), base_url="http://test") as client:
+        response = await client.get("/api/execute")
+    assert response.json() == {"model": selection.STEP_MODEL, "endpoint": "system-stepfun", "effort": "medium"}
+    assert selection.current_model() is None
+
+
+@pytest.mark.asyncio
+async def test_personal_prediction_uses_same_selection_as_chat(monkeypatch):
+    monkeypatch.setenv("STEPFUN_API_KEY", "system-test-secret")
+    app = app_with_models()
+
+    @app.post("/api/predictions/generate")
+    async def prediction():
+        from backend.llm_config import get_llm_config
+        cfg = await asyncio.to_thread(get_llm_config, model="ignored-legacy-model")
+        return {"model": cfg["model"], "effort": cfg.get("reasoning_effort")}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        chosen = header({"source": "system", "model_id": selection.STEP_MODEL_ID, "effort": "high"})
+        response = await client.post("/api/predictions/generate", headers=chosen)
+    assert response.json() == {"model": selection.STEP_MODEL, "effort": "high"}
+
+
+def test_public_benchmark_does_not_inherit_custom_selection(monkeypatch):
+    from backend.llm_config import get_llm_config
+    monkeypatch.setenv("STEPFUN_API_KEY", "system-test-secret")
+    selected = selection.SelectedModel("custom", "own-model", "https://example.com/v1", "private-user-key")
+    with selection.model_selection_scope(selected):
+        with selection.server_model_scope():
+            assert get_llm_config()["model"] == selection.STEP_MODEL
+        assert selection.current_model() is selected
 
 
 @pytest.mark.asyncio

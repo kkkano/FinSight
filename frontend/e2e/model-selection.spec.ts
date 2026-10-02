@@ -16,6 +16,7 @@ async function fulfillJson(route: Route, body: unknown) {
 async function setup(page: Page, authenticated = true) {
   const testedModels: Record<string, unknown>[] = [];
   const chatModels: Record<string, unknown>[] = [];
+  const predictionModels: Record<string, unknown>[] = [];
   const catalogHeaders: Array<string | undefined> = [];
   const configWrites: string[] = [];
   await page.addInitScript((hasSession) => {
@@ -28,7 +29,7 @@ async function setup(page: Page, authenticated = true) {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === '/api/models') {
       catalogHeaders.push(route.request().headers()['x-finsight-model']);
-      return fulfillJson(route, { models: [builtIn] });
+      return fulfillJson(route, { models: [builtIn], default_model_id: builtIn.id });
     }
     if (pathname === '/api/models/capabilities') {
       catalogHeaders.push(route.request().headers()['x-finsight-model']);
@@ -41,6 +42,11 @@ async function setup(page: Page, authenticated = true) {
       catalogHeaders.push(route.request().headers()['x-finsight-model']);
       testedModels.push(route.request().postDataJSON());
       return fulfillJson(route, { success: true, model: 'custom-model', latency_ms: 12, message: 'ok' });
+    }
+    if (pathname === '/api/predictions/generate') {
+      const header = route.request().headers()['x-finsight-model'];
+      predictionModels.push(header ? JSON.parse(Buffer.from(header, 'base64').toString('utf8')) : {});
+      return fulfillJson(route, { run: { id: 'fixture-run', status: 'queued' } });
     }
     if (pathname === '/api/config' && route.request().method() === 'POST') configWrites.push(route.request().postData() || '');
     return fulfillJson(route, {
@@ -85,7 +91,7 @@ async function setup(page: Page, authenticated = true) {
     });
   });
   await page.goto(authenticated ? '/chat' : '/today');
-  return { testedModels, chatModels, catalogHeaders, configWrites };
+  return { testedModels, chatModels, predictionModels, catalogHeaders, configWrites };
 }
 
 async function openModels(page: Page) {
@@ -117,7 +123,7 @@ async function sendChat(page: Page, query: string) {
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
 }
 
-test('built-in model uses official effort metadata without any key controls or global config writes', async ({ page }) => {
+test('built-in model uses official metadata and preserves the same model and effort across refresh and AI features', async ({ page }) => {
   const requests = await setup(page);
   await openModels(page);
   await expect(page.getByLabel('API Key', { exact: true })).toHaveCount(0);
@@ -125,16 +131,30 @@ test('built-in model uses official effort metadata without any key controls or g
   await expect(page.getByText('LLM Endpoints（轮换池）')).toHaveCount(0);
   await expect(page.getByLabel('推理强度')).toHaveValue('medium');
   await expect(page.getByLabel('推理强度').locator('option')).toHaveText(['low', 'medium', 'high']);
+  await page.getByLabel('推理强度').selectOption('high');
   await page.getByRole('button', { name: '应用模型', exact: true }).click();
   await expect(page.getByTestId('current-model')).toContainText('Step 5 Preview');
   await sendChat(page, '你好');
   await expect(page.getByTestId('chat-model-switcher').locator('img')).toHaveAttribute('src', builtIn.icon_url);
-  expect(requests.chatModels.at(-1)).toEqual({ source: 'system', model_id: builtIn.id, effort: 'medium' });
+  const selected = { source: 'system', model_id: builtIn.id, effort: 'high' };
+  expect(requests.chatModels.at(-1)).toEqual(selected);
   expect(requests.testedModels).toHaveLength(0);
   expect(requests.configWrites).toHaveLength(0);
+  await page.reload();
+  await expect(page.getByTestId('chat-model-switcher')).toContainText('Step 5 Preview');
+  await openModels(page);
+  await expect(page.getByLabel('推理强度')).toHaveValue('high');
+  await sendChat(page, '刷新后继续');
+  expect(requests.chatModels.at(-1)).toEqual(selected);
+  await page.evaluate(async () => {
+    const modulePath = '/src/api/client.ts';
+    const { apiClient } = await import(modulePath);
+    await apiClient.generatePrediction('AAPL');
+  });
+  expect(requests.predictionModels.at(-1)).toEqual(selected);
 });
 
-test('custom model validates, requires testing, discards secrets on refresh, and clears its header when switching', async ({ page }) => {
+test('custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back', async ({ page }) => {
   const requests = await setup(page);
   await openModels(page);
   await page.getByRole('button', { name: '自带模型', exact: true }).click();
@@ -154,7 +174,7 @@ test('custom model validates, requires testing, discards secrets on refresh, and
 
   const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(storage).not.toContain(customKey);
-  expect(storage).not.toContain('api.example.com');
+  expect(storage).toContain('api.example.com');
   await page.getByTestId('chat-model-switcher').click();
   await page.getByRole('button', { name: '系统内置', exact: true }).click();
   await page.getByRole('button', { name: '应用模型', exact: true }).click();
@@ -165,9 +185,14 @@ test('custom model validates, requires testing, discards secrets on refresh, and
   await applyCustomModel(page);
   await page.getByRole('button', { name: '关闭设置', exact: true }).click();
   await page.reload();
-  await expect(page.getByTestId('chat-model-switcher')).toContainText('默认模型');
-  await openModels(page);
-  await page.getByRole('button', { name: '自带模型', exact: true }).click();
+  await expect(page.getByTestId('chat-model-switcher')).toContainText('custom-model · 待补密钥');
+  const countBeforeBlockedChat = requests.chatModels.length;
+  await page.locator('#chat-input').fill('刷新后继续');
+  await page.getByTestId('chat-send-btn').click();
+  await expect(page.getByText('自带模型的密钥未保存。请在模型设置中重新填写 API Key、测试并应用，或明确选择内置模型。').first()).toBeVisible();
+  expect(requests.chatModels).toHaveLength(countBeforeBlockedChat);
+  await page.getByTestId('chat-model-switcher').click();
+  await expect(page.getByLabel('API 地址', { exact: true })).toHaveValue('https://api.example.com/v1');
   await expect(page.getByLabel('API Key', { exact: true })).toHaveValue('');
   await expect(page.getByRole('button', { name: '应用模型', exact: true })).toBeDisabled();
   expect(requests.catalogHeaders.every((header) => header === undefined)).toBe(true);
@@ -211,7 +236,7 @@ test('custom context consent resets when destination credentials change and defa
   await consent.check();
   await page.getByRole('button', { name: '应用模型', exact: true }).click();
   await page.getByRole('button', { name: '恢复默认模型', exact: true }).click();
-  await expect(page.getByTestId('current-model')).toContainText('系统默认');
+  await expect(page.getByTestId('current-model')).toContainText('Step 5 Preview');
   await sendChat(page, '你好');
   expect(requests.chatModels.at(-1)).toEqual({});
 });
@@ -241,4 +266,23 @@ test('connection-test rate limits remain a recoverable form message', async ({ p
   await expect(page.getByText('测试请求过于频繁，请稍后重试。', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('button', { name: '测试连接', exact: true })).toBeEnabled();
+});
+
+test('model preflight failure and empty completions show explicit retryable messages', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/execute', (route) => route.fulfill({
+    status: 503, contentType: 'application/json', body: JSON.stringify({
+      detail: { code: 'model_unavailable', message: 'Step 5 Preview 暂时不可用，请稍后重试。' },
+    }),
+  }));
+  await page.locator('#chat-input').fill('你好');
+  await page.getByTestId('chat-send-btn').click();
+  await expect(page.getByText('Step 5 Preview 暂时不可用，请稍后重试。').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '重试回答', exact: true }).last()).toBeVisible();
+  await page.route('**/api/execute', (route) => route.fulfill({
+    contentType: 'text/event-stream', body: 'data: {"type":"done","response":""}\n\n',
+  }));
+  await page.getByRole('button', { name: '重试回答', exact: true }).last().click();
+  await expect(page.getByText('模型未返回有效内容，本次分析未完成。请检查模型设置后重试。').first()).toBeVisible();
+  await expect(page.getByTestId('chat-send-btn')).toBeVisible();
 });

@@ -12,20 +12,20 @@ import { Input } from '../ui/Input';
 const selectClassName = 'w-full bg-fin-bg border border-fin-border rounded-lg px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none';
 
 export function ModelSettings() {
-  const { selection, metadata, catalog, setCatalog, applySelection, clearSelection } = useModelSelectionStore();
+  const { selection, pendingCustom, metadata, catalog, defaultModelId, setCatalog, applySelection, clearSelection } = useModelSelectionStore();
   const authUserId = useStore((state) => state.authIdentity?.userId);
   const isAuthenticated = Boolean(authUserId);
   const previousUserId = useRef(authUserId);
   const testVersion = useRef(0);
-  const [source, setSource] = useState<'system' | 'custom'>(selection?.source || 'system');
+  const [source, setSource] = useState<'system' | 'custom'>(selection?.source || pendingCustom?.source || 'system');
   const [systemId, setSystemId] = useState(selection?.source === 'system' ? selection.model_id : '');
   const [systemEffort, setSystemEffort] = useState(selection?.source === 'system' ? selection.effort || '' : '');
   const [custom, setCustom] = useState({
-    base_url: selection?.source === 'custom' ? selection.base_url : '',
-    model: selection?.source === 'custom' ? selection.model : '',
+    base_url: selection?.source === 'custom' ? selection.base_url : pendingCustom?.base_url || '',
+    model: selection?.source === 'custom' ? selection.model : pendingCustom?.model || '',
     api_key: isAuthenticated && selection?.source === 'custom' ? selection.api_key : '',
   });
-  const [customEffort, setCustomEffort] = useState(selection?.source === 'custom' ? selection.effort || '' : '');
+  const [customEffort, setCustomEffort] = useState(selection?.source === 'custom' ? selection.effort || '' : pendingCustom?.effort || '');
   const [capabilities, setCapabilities] = useState<ModelCapabilities | null>(null);
   const [capabilitiesLoading, setCapabilitiesLoading] = useState(false);
   const [capabilitiesError, setCapabilitiesError] = useState(false);
@@ -36,6 +36,17 @@ export function ModelSettings() {
   const [testedSignature, setTestedSignature] = useState<string | null>(null);
   const [status, setStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [contextAcknowledged, setContextAcknowledged] = useState(false);
+
+  useEffect(() => {
+    setSource(selection?.source || pendingCustom?.source || 'system');
+    setSystemId(selection?.source === 'system' ? selection.model_id : '');
+    setSystemEffort(selection?.source === 'system' ? selection.effort || '' : '');
+    const draft = selection?.source === 'custom' ? selection : pendingCustom;
+    setCustom({ base_url: draft?.base_url || '', model: draft?.model || '', api_key: selection?.source === 'custom' ? selection.api_key : '' });
+    setCustomEffort(draft?.effort || '');
+    setContextAcknowledged(false);
+    setTestedSignature(null);
+  }, [selection, pendingCustom]);
 
   useEffect(() => {
     if (previousUserId.current === authUserId) return;
@@ -52,8 +63,8 @@ export function ModelSettings() {
     let active = true;
     setCatalogLoading(true);
     setCatalogError(false);
-    apiClient.getModels().then(({ models }) => {
-      if (active) setCatalog(models);
+    apiClient.getModels().then(({ models, default_model_id }) => {
+      if (active) setCatalog(models, default_model_id);
     }).catch(() => {
       if (active) setCatalogError(true);
     }).finally(() => {
@@ -93,9 +104,8 @@ export function ModelSettings() {
     return () => { active = false; clearTimeout(timer); };
   }, [source, custom.base_url, custom.model, reload]);
 
-  const systemModel = catalog.find((item) => item.id === systemId)
-    || catalog.find((item) => item.available)
-    || catalog[0];
+  const systemModel = catalog.find((item) => item.id === (systemId || defaultModelId))
+    || (!systemId && !defaultModelId ? catalog.find((item) => item.available) || catalog[0] : undefined);
   const selectedCapabilities = source === 'system' ? systemModel : capabilities;
   const effortOptions = selectedCapabilities?.effort_options || [];
   const draftEffort = source === 'system' ? systemEffort : customEffort;
@@ -115,9 +125,10 @@ export function ModelSettings() {
     };
   const signature = candidate ? JSON.stringify(candidate) : '';
   const customReady = source === 'custom' && testedSignature === signature;
-  const currentLabel = selection?.source === 'custom'
+  const currentLabel = pendingCustom ? `${pendingCustom.model}（待补填密钥）` : selection?.source === 'custom'
     ? selection.model
-    : metadata?.label || '系统默认';
+    : selection?.source === 'system' ? metadata?.label || selection.model_id
+      : metadata?.label || catalog.find((model) => model.id === defaultModelId)?.label || '正在读取默认模型…';
 
   const resetTest = () => {
     setTestedSignature(null);
@@ -180,14 +191,14 @@ export function ModelSettings() {
       setTestedSignature(null);
       setContextAcknowledged(false);
     }
-    setStatus({ success: true, message: '已应用，将用于接下来发起的聊天和研究报告。' });
+    setStatus({ success: true, message: '已应用，聊天、报告和个股 AI 判断将统一使用此模型。' });
   };
 
   return (
     <Card className="p-4 bg-fin-bg/40 space-y-4" data-testid="model-settings">
       <div>
         <h3 className="text-sm font-medium text-fin-text">模型选择</h3>
-        <p className="mt-1 text-xs text-fin-muted">用于聊天和研究报告。个股 AI 预测与公开预测战绩使用系统策略配置。</p>
+        <p className="mt-1 text-xs text-fin-muted">聊天、报告和个股 AI 判断统一使用此模型。</p>
         <div className="mt-2 flex items-center gap-2 text-xs text-fin-muted" data-testid="current-model">
           {metadata?.icon_url ? (
             <img src={metadata.icon_url} alt="" className="h-5 w-5 rounded object-contain" />
@@ -196,6 +207,8 @@ export function ModelSettings() {
           {selection?.effort ? <span>· {selection.effort}</span> : null}
         </div>
       </div>
+
+      {pendingCustom ? <p role="alert" className="text-sm leading-relaxed text-fin-warning">自带模型的密钥未保存，请重新填写、测试并应用，或选择内置模型。恢复前不会自动改用其他模型。</p> : null}
 
       {!isAuthenticated ? (
         <div className="rounded-lg border border-fin-border bg-fin-panel p-3 text-xs leading-relaxed text-fin-muted" role="note">
@@ -263,7 +276,7 @@ export function ModelSettings() {
             placeholder="供应商提供的模型名称" maxLength={200} autoComplete="off" spellCheck={false} />
           <Input label="API Key" id="custom-model-api-key" type="password" value={custom.api_key}
             onChange={(event) => updateCustom('api_key', event.target.value)} disabled={testing || !isAuthenticated}
-            placeholder="输入你自己的 API Key" maxLength={4096} autoComplete="off" spellCheck={false} />
+            placeholder="输入你自己的 API Key" maxLength={4096} autoComplete="new-password" spellCheck={false} />
           <p className="text-xs text-fin-muted leading-relaxed">
             密钥仅保存在当前页面内存中；测试和使用时会发送至 FinSight 后端以调用你的服务。刷新页面后需重新填写并测试。
           </p>
@@ -323,13 +336,13 @@ export function ModelSettings() {
           disabled={!isAuthenticated || testing || (source === 'system' ? !systemModel?.available || catalogLoading : !customReady || !contextAcknowledged)}>
           应用模型
         </Button>
-        <Button type="button" size="sm" variant="ghost" disabled={testing || (!selection && !custom.api_key)} onClick={() => {
+        <Button type="button" size="sm" variant="ghost" disabled={testing || (!selection && !pendingCustom && !custom.api_key)} onClick={() => {
           clearSelection();
           setCustom((previous) => ({ ...previous, api_key: '' }));
           setContextAcknowledged(false);
           setTestedSignature(null);
           setSource('system');
-          setStatus({ success: true, message: '已恢复默认模型。' });
+          setStatus({ success: true, message: `已恢复默认模型${catalog.find((model) => model.id === defaultModelId)?.label ? `：${catalog.find((model) => model.id === defaultModelId)?.label}` : ''}。` });
         }}>恢复默认模型</Button>
       </div>
       {source === 'custom' && !customReady ? <p className="text-xs text-fin-muted">测试连接成功后即可应用；修改配置后需要重新测试。</p> : null}

@@ -182,3 +182,32 @@ def test_prediction_success_and_failure_are_atomic_on_real_postgres() -> None:
         _delete_run(engine, run_id=success_run.id, user_id=success_user)
         _delete_run(engine, run_id=rollback_run.id, user_id=rollback_user)
         engine.dispose()
+
+
+def test_recovery_only_selects_stale_active_runs_on_real_postgres() -> None:
+    engine = create_engine(normalize_sync_postgres_dsn(TEST_DSN))
+    store = PredictionRunStore(engine=engine)
+    cases = [("queued", False), ("queued", True), ("running", False), ("running", True), ("cancelled", True)]
+    runs = []
+    expected: set[str] = set()
+    try:
+        for status, stale in cases:
+            user_id = f"model-recovery-{uuid4().hex}"
+            run, _created = store.create_or_get_active(
+                user_id=user_id, symbol="AAPL", timeframe="1d", prompt_version="recovery-fixture-v1",
+            )
+            runs.append(run)
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE prediction_runs SET status=:status,"
+                    "updated_at=now() - make_interval(secs => :age) WHERE id=CAST(:id AS uuid)"
+                ), {"status": status, "age": 120 if stale else 0, "id": run.id})
+            if stale and status in {"queued", "running"}:
+                expected.add(run.id)
+
+        actual = set(store.recoverable_run_ids(limit=1000))
+        assert actual.intersection(run.id for run in runs) == expected
+    finally:
+        for run in runs:
+            _delete_run(engine, run_id=run.id, user_id=run.user_id)
+        engine.dispose()

@@ -1,6 +1,7 @@
 import { buildApiUrl } from '../../config/runtime';
 import type { components } from '../schema';
-import { buildAuthHeaders } from '../http';
+import { buildAuthHeaders, StreamRequestError } from '../http';
+import { ModelSelectionRequiredError } from '../../store/modelSelection';
 
 export type GeneratePredictionResponse = components['schemas']['GeneratePredictionResponse'];
 export type PredictionHistoryItem = components['schemas']['PredictionHistoryItem'];
@@ -23,6 +24,7 @@ export type LatestPredictionApiResult =
   | { status: 'not_found' };
 
 const FAILURE_MESSAGES: Record<string, string> = {
+  model_unavailable: '当前模型暂时不可用，请检查模型设置或稍后重试。',
   auth_required: '登录后才能生成和查看 AI 判断。',
   market_data_unavailable: '当前标的缺少可信 K 线，AI 判断未生成。',
   llm_timeout: 'AI 分析超过时间预算，请稍后重试。',
@@ -67,11 +69,17 @@ export class PredictionApiError extends Error {
 }
 
 export function toPredictionFailure(error: unknown): PredictionFailure {
+  if (error instanceof StreamRequestError) {
+    return { code: error.code, message: error.message, status: error.status };
+  }
   if (error instanceof PredictionApiError) {
     return { code: error.code, message: error.message, status: error.status };
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
     return { code: 'request_cancelled', message: '请求已取消。', status: null };
+  }
+  if (error instanceof ModelSelectionRequiredError) {
+    return { code: 'model_selection_required', message: error.message, status: null };
   }
   return describePredictionFailure(
     'prediction_unavailable',
@@ -104,7 +112,7 @@ async function requestJson<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const authHeaders = await buildAuthHeaders();
+  const authHeaders = await buildAuthHeaders(path);
   const response = await fetch(buildApiUrl(path), {
     ...init,
     headers: {

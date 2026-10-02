@@ -6,7 +6,7 @@ import { api } from './http';
 import { useModelSelectionStore } from '../store/modelSelection';
 import type { ModelCapabilities, ModelSelection } from '../store/modelSelection';
 
-const { adapter } = vi.hoisted(() => ({ adapter: vi.fn() }));
+const { adapter, authSession } = vi.hoisted(() => ({ adapter: vi.fn(), authSession: { available: true } }));
 
 vi.mock('axios', async () => {
   const original = await vi.importActual<typeof import('axios')>('axios');
@@ -20,7 +20,9 @@ vi.mock('axios', async () => {
 });
 
 vi.mock('./supabaseClient', () => ({
-  getSupabaseClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: 'test-auth-token' } } }) } }),
+  getSupabaseClient: () => ({ auth: { getSession: async () => ({ data: {
+    session: authSession.available ? { access_token: 'test-auth-token' } : null,
+  } }) } }),
 }));
 
 const metadata: ModelCapabilities = {
@@ -37,6 +39,7 @@ function decodeHeader(value: string): unknown {
 }
 
 beforeEach(() => {
+  authSession.available = true;
   adapter.mockImplementation(async (config: InternalAxiosRequestConfig) => ({
     status: 200, statusText: 'OK', headers: {}, config, data: { models: [] },
   }));
@@ -108,6 +111,42 @@ describe('model request headers', () => {
       expect(decodeHeader(init.headers['X-FinSight-Model'])).toEqual(custom);
       expect(init.headers.Authorization).toBe('Bearer test-auth-token');
     }
+  });
+
+  it('uses the selected model for stock prediction generation but keeps run reads independent', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    useModelSelectionStore.getState().applySelection(custom, metadata);
+    await apiClient.generatePrediction('AAPL');
+    await apiClient.getPredictionRun('fixture-run');
+    expect(decodeHeader(fetchMock.mock.calls[0][1].headers['X-FinSight-Model'])).toEqual(custom);
+    expect(fetchMock.mock.calls[1][1].headers['X-FinSight-Model']).toBeUndefined();
+  });
+
+  it('rejects a failed model preflight before dispatching any streaming callbacks', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      detail: { code: 'model_unavailable', message: 'Step 5 Preview 暂时不可用，请稍后重试。' },
+    }), { status: 503, headers: { 'Content-Type': 'application/json' } })));
+    const callbacks = { onDone: vi.fn(), onToken: vi.fn(), onThinking: vi.fn() };
+    await expect(apiClient.sendMessageStream({ query: 'AAPL' }, callbacks)).rejects.toThrow('Step 5 Preview 暂时不可用');
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+    expect(callbacks.onToken).not.toHaveBeenCalled();
+    expect(callbacks.onThinking).not.toHaveBeenCalled();
+  });
+
+  it('requires login for an applied model without sending anonymous fallback requests, while data reads still work', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    useModelSelectionStore.getState().applySelection(custom, metadata);
+    authSession.available = false;
+    await expect(apiClient.sendMessageStream({ query: 'AAPL' }, {})).rejects.toThrow('登录状态已失效');
+    await expect(apiClient.generatePrediction('AAPL')).rejects.toThrow('登录状态已失效');
+    await expect(api.post('/api/execute', { query: 'AAPL' })).rejects.toThrow('登录状态已失效');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(adapter).not.toHaveBeenCalled();
+    await api.get('/api/stock/price/AAPL');
+    expect(adapter).toHaveBeenCalledTimes(1);
+    expect(adapter.mock.calls[0][0].headers.get('X-FinSight-Model')).toBeUndefined();
   });
 
   it('removes model credentials from rejected Axios errors and logs', async () => {

@@ -369,6 +369,177 @@ async def test_prediction_llm_attempt_timeout_leaves_budget_for_rotation():
 
 
 @pytest.mark.asyncio
+async def test_selected_model_prediction_uses_reasoning_budget_and_timeout():
+    observed: dict[str, Any] = {}
+
+    async def invoke(_messages: Any, **kwargs: Any) -> Any:
+        observed.update(kwargs)
+        return type("Response", (), {"content": "{}"})()
+
+    from backend.services.model_selection import SelectedModel, model_selection_scope
+
+    selected = SelectedModel(
+        "system", "step-5-preview", "https://api.stepfun.com/step_plan/v1", "test-secret-key",
+        "system-stepfun", "medium",
+    )
+    service = PredictionService(
+        store=_Store(),
+        market_gateway=_Gateway(_market()),
+        invoke_llm=invoke,
+        llm_attempt_timeout_seconds=30,
+    )
+    from backend.services.llm_retry import LLMCallContext
+
+    with model_selection_scope(selected):
+        await service._invoke(
+            "prediction prompt",
+            context=LLMCallContext.create(stage="prediction", max_provider_attempts=1),
+        )
+
+    assert observed["max_tokens"] == 4096
+    assert observed["request_timeout"] == 60
+    assert observed["acquire_timeout_seconds"] == 15
+
+
+@pytest.mark.asyncio
+async def test_prediction_background_preserves_selected_model_and_closes_clients(monkeypatch):
+    from backend.services.model_selection import (
+        SelectedModel, current_model, model_selection_scope, track_model_client,
+    )
+
+    selected = SelectedModel(
+        "custom", "step-5-preview", "https://api.stepfun.com/step_plan/v1",
+        "private-fixture-key", "user-custom", "high",
+    )
+    another_model = SelectedModel(
+        "system", "other-model", "https://models.example/v1", "other-fixture-key", "system-other",
+    )
+    observed: list[Any] = []
+    closed: list[bool] = []
+
+    class Client:
+        async def aclose(self):
+            closed.append(True)
+
+    async def invoke(_messages: Any, *, context: Any, **kwargs: Any):
+        chosen = current_model()
+        observed.append(chosen)
+        assert chosen == selected
+        assert chosen.runtime_config()["reasoning_effort"] == "high"
+        assert kwargs["request_timeout"] == 60
+        assert kwargs["max_tokens"] >= 4096
+        track_model_client(Client())
+        context.on_attempt({
+            "attempt": context.budget.reserve_provider_attempt(),
+            "provider": "openai_compatible", "model": chosen.model, "status": "success",
+            "prompt_tokens": 20, "completion_tokens": 30, "duration_ms": 5,
+        })
+        return type("Response", (), {"content": json.dumps(_draft_payload(), ensure_ascii=False)})()
+
+    monkeypatch.setattr("backend.services.prediction_service._compute_indicators", lambda _bars: {"rsi": 55})
+    store = _Store()
+    service = PredictionService(store=store, market_gateway=_Gateway(_market()), invoke_llm=invoke)
+    schedule = service._schedule
+    monkeypatch.setattr(service, "_schedule", lambda _run_id: None)
+    with model_selection_scope(selected):
+        run, created = await service.generate(user_id="alice", symbol="AAPL")
+    assert created
+    monkeypatch.setattr(service, "_schedule", schedule)
+    # 模拟在另一次请求或恢复扫描上下文中投递，不能继承该请求的模型。
+    with model_selection_scope(another_model):
+        service._schedule(run.id)
+        await service._tasks[run.id]
+        assert current_model() == another_model
+    await asyncio.sleep(0)
+
+    assert observed == [selected]
+    assert closed == [True]
+    assert store.success is not None
+    assert store.success["attempts"][0]["model"] == "step-5-preview"
+    assert service._run_models == {}
+    assert "private-fixture-key" not in store.success["prediction"].model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_prediction_does_not_inherit_user_model(monkeypatch):
+    from backend.services.model_selection import SelectedModel, current_model, model_selection_scope
+
+    selected = SelectedModel("custom", "user-model", "https://custom.example/v1", "fixture-key")
+    observed: list[Any] = []
+    prompts: list[str] = []
+    observed_invoke = _observed_invoke([_draft_payload()], prompts)
+
+    async def invoke(messages: Any, **kwargs: Any):
+        observed.append(current_model())
+        return await observed_invoke(messages, **kwargs)
+
+    monkeypatch.setattr("backend.services.prediction_service._compute_indicators", lambda _bars: {"rsi": 55})
+    store = _Store()
+    service = PredictionService(store=store, market_gateway=_Gateway(_market()), invoke_llm=invoke)
+    service._loop = asyncio.get_running_loop()
+    with model_selection_scope(selected):
+        await asyncio.to_thread(service.enqueue, user_id="alice", symbol="AAPL")
+    while service._tasks:
+        await asyncio.gather(*list(service._tasks.values()))
+
+    assert observed == [None]
+    assert store.success is not None
+
+
+@pytest.mark.asyncio
+async def test_restart_cancels_prediction_without_model_credentials_before_market_fetch():
+    async def unexpected_llm(*_args: Any, **_kwargs: Any):
+        raise AssertionError("恢复旧用户任务不得改用服务器模型")
+
+    store = _Store()
+    gateway = _Gateway(_market())
+    service = PredictionService(store=store, market_gateway=gateway, invoke_llm=unexpected_llm)
+    await service._cancel_without_model_context(RUN_ID)
+
+    assert store.failure is not None
+    assert store.failure["status"] == "cancelled"
+    assert store.failure["failure_code"] == "model_context_lost"
+    assert store.failure["attempts"] == []
+    assert gateway.kline_calls == gateway.news_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_prediction_active_run_reuse_is_partitioned_by_model_and_effort(monkeypatch):
+    from backend.services.model_selection import SelectedModel, model_selection_scope
+
+    class IdentityStore(_Store):
+        def __init__(self):
+            super().__init__()
+            self.identities: dict[str, PredictionRun] = {}
+
+        def create_or_get_active(self, **kwargs: Any):
+            version = kwargs["prompt_version"]
+            if version in self.identities:
+                return self.identities[version], False
+            run = _run(id=str(len(self.identities) + 1), prompt_version=version)
+            self.identities[version] = run
+            return run, True
+
+    store = IdentityStore()
+    service = PredictionService(store=store, market_gateway=_Gateway(_market()))
+    monkeypatch.setattr(service, "_schedule", lambda _run_id: None)
+    first_model = SelectedModel("custom", "first-model", "https://custom.example/v1", "first-key")
+    rotated_key = SelectedModel("custom", "first-model", "https://custom.example/v1", "new-key")
+    second_model = SelectedModel("custom", "second-model", "https://custom.example/v1", "first-key")
+    step_low = SelectedModel("system", "step-5-preview", "https://api.stepfun.com/step_plan/v1", "fixture-key", effort="low")
+    step_high = SelectedModel("system", "step-5-preview", "https://api.stepfun.com/step_plan/v1", "fixture-key", effort="high")
+    runs = []
+    for selected in (first_model, first_model, rotated_key, second_model, step_low, step_high):
+        with model_selection_scope(selected):
+            runs.append(await service.generate(user_id="alice", symbol="AAPL"))
+
+    assert [created for _run_view, created in runs] == [True, False, False, True, True, True]
+    assert runs[0][0].id == runs[1][0].id == runs[2][0].id
+    assert len(store.identities) == 4
+    assert all("https://" not in version and "key" not in version for version in store.identities)
+
+
+@pytest.mark.asyncio
 async def test_optional_news_timeout_does_not_block_prediction(monkeypatch):
     class SlowNewsGateway(_Gateway):
         def get_news(self, _symbol: str, **_kwargs: Any) -> dict[str, Any]:
@@ -411,6 +582,33 @@ class _RecordingEngine:
     def begin(self):
         self.begin_count += 1
         yield self.connection
+
+
+def test_recovery_query_applies_staleness_to_both_active_statuses():
+    captured: dict[str, Any] = {}
+
+    class Result:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [RUN_ID]
+
+    class Connection:
+        def execute(self, statement: Any, params: Any):
+            captured.update(sql=str(statement), params=params)
+            return Result()
+
+    class Engine:
+        @contextmanager
+        def connect(self):
+            yield Connection()
+
+    store = PredictionRunStore(engine=Engine())
+    assert store.recoverable_run_ids(limit=2000) == [RUN_ID]
+    assert "status IN ('queued','running') AND updated_at < now() - interval '90 seconds'" in captured["sql"]
+    assert " OR " not in captured["sql"]
+    assert captured["params"]["limit"] == 1000
 
 
 def test_success_archive_writes_four_core_tables_in_one_transaction():

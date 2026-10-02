@@ -2,17 +2,26 @@ import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
+import { StreamRequestError } from '../api/http';
 import type { ChatContext } from '../api/client';
 import { useToast } from '../components/ui';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useExecutionStore } from '../store/executionStore';
 import { useStore } from '../store/useStore';
+import { ModelSelectionRequiredError } from '../store/modelSelection';
 import { zh } from '../locales/zh';
-import type { AgentLogSource, Message, ThinkingStep } from '../types';
+import type { AgentLogSource, Message, ReportIR, ThinkingStep } from '../types';
 import { injectChartMarkers, shouldGenerateChart } from '../utils/chartIntent';
 import { extractTicker, extractTickers } from '../utils/ticker';
 
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
+export const EMPTY_CHAT_RESPONSE_MESSAGE = '模型未返回有效内容，本次分析未完成。请检查模型设置后重试。';
+
+export function hasChatOutput(content: string, report?: Partial<ReportIR> | null): boolean {
+  const text = content.trim();
+  if (text && text !== '[object Object]') return true;
+  return Boolean(report?.summary?.trim() || report?.synthesis_report?.trim() || report?.sections?.length);
+}
 
 export interface SendChatStreamOptions {
   outputMode?: 'chat' | 'investment_report';
@@ -153,7 +162,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     }
     const aiMsgId = retryMessageId || uuidv4();
     if (retryMessageId) {
-      updateScopedMessage(aiMsgId, { content: '', isLoading: true });
+      updateScopedMessage(aiMsgId, { content: '', isLoading: true, error: undefined, canRetry: false });
     } else {
       initialState.addMessageToSession(requestSessionId, {
         id: aiMsgId, role: 'assistant', content: '', timestamp: Date.now(), isLoading: true,
@@ -320,6 +329,21 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               if (fallback) fullContent = fallback;
             }
             if (!report && meta?.blocked_report && typeof meta.blocked_report === 'object') report = meta.blocked_report;
+            if (!hasChatOutput(fullContent, report)) {
+              thinkingSteps = [...thinkingSteps.filter((step) => step.stage !== 'done'), {
+                stage: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE, timestamp: new Date().toISOString(),
+                eventType: 'error', result: { type: 'error', status: 'error', code: 'empty_model_response' },
+              }];
+              updateScopedMessage(aiMsgId, { content: EMPTY_CHAT_RESPONSE_MESSAGE, isLoading: false,
+                error: EMPTY_CHAT_RESPONSE_MESSAGE, canRetry: true, thinking: thinkingSteps });
+              const current = useStore.getState();
+              current.addAgentLog({ id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE });
+              current.updateAgentStatus('supervisor', { status: 'error', lastMessage: EMPTY_CHAT_RESPONSE_MESSAGE });
+              if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'error', error: EMPTY_CHAT_RESPONSE_MESSAGE });
+              if (isRequestSessionActive()) current.setStatus(null);
+              toast({ type: 'error', title: zh.chat.requestFailed, message: EMPTY_CHAT_RESPONSE_MESSAGE });
+              return;
+            }
             const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
             if (nextFocus) useStore.getState().setTicker(nextFocus);
             updateScopedMessage(aiMsgId, {
@@ -438,13 +462,12 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         finishAbortedStream();
         return;
       }
-      updateScopedMessage(aiMsgId, {
-        content: zh.chat.networkRequestFailed,
-        isLoading: false,
-      });
+      const message = error instanceof StreamRequestError || error instanceof ModelSelectionRequiredError
+        ? error.message : zh.chat.networkRequestFailed;
+      updateScopedMessage(aiMsgId, { content: message, isLoading: false, error: message, canRetry: true });
       const current = useStore.getState();
       if (isRequestSessionActive()) current.setStatus(zh.chat.requestFailed);
-      toast({ type: 'error', title: zh.chat.requestFailed, message: zh.chat.requestFailedMessage });
+      toast({ type: 'error', title: zh.chat.requestFailed, message });
       current.addAgentLog({
         id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error',
         message: error instanceof Error ? error.message : zh.chat.networkRequestFailed,

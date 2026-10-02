@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import base64
+import json
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, Request
+import pytest
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
+import backend.api.predictions_router as predictions_router
 from backend.agents.prediction_contract import AgentPrediction
 from backend.api.predictions_router import PredictionsRouterDeps, create_predictions_router
 from backend.services.llm_usage_store import UserDailyCostLimitExceeded
@@ -17,6 +21,14 @@ from backend.services.prediction_service import PredictionRun
 NOW = datetime(2026, 7, 15, 12, tzinfo=timezone.utc)
 RUN_ID = "00000000-0000-4000-8000-000000000301"
 PREDICTION_ID = "00000000-0000-4000-8000-000000000302"
+
+
+@pytest.fixture(autouse=True)
+def available_model(monkeypatch):
+    async def available():
+        return None
+
+    monkeypatch.setattr(predictions_router, "ensure_model_available", available)
 
 
 def _run() -> PredictionRun:
@@ -103,8 +115,12 @@ class _Service:
         self.generated = False
         self.raise_reads = False
         self.postgres_outcome_shape = False
+        self.selected_model: Any = None
 
     async def generate(self, *, user_id: str, symbol: str, timeframe: str):
+        from backend.services.model_selection import current_model
+
+        self.selected_model = current_model()
         assert user_id == "alice"
         assert symbol == "AAPL"
         assert timeframe == "1d"
@@ -215,6 +231,76 @@ def test_generate_checks_quota_before_creating_run():
     assert response.status_code == 429
     assert response.json()["detail"]["code"] == "llm_quota_exceeded"
     assert checked_users == ["alice"]
+    assert service.generated is False
+
+
+def test_generate_rejects_unavailable_model_before_creating_run(monkeypatch):
+    client, service, _calls = _client()
+
+    async def unavailable():
+        raise HTTPException(503, detail={"code": "model_unavailable", "message": "所选模型暂时无法连接，请稍后重试。"})
+
+    monkeypatch.setattr(predictions_router, "ensure_model_available", unavailable)
+    response = client.post(
+        "/api/predictions/generate",
+        headers={"x-test-user": "alice"},
+        json={"symbol": "AAPL"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "model_unavailable"
+    assert service.generated is False
+
+
+def test_generate_uses_the_same_selected_model_for_preflight_and_background_service(monkeypatch):
+    from backend.services.model_selection import ModelSelectionMiddleware, current_model
+
+    monkeypatch.setenv("STEPFUN_API_KEY", "system-fixture-private-key")
+    client, service, _calls = _client()
+    client.app.add_middleware(ModelSelectionMiddleware, authenticate=lambda _request: {"user_id": "alice"})
+    checked: list[Any] = []
+
+    async def available():
+        checked.append(current_model())
+
+    monkeypatch.setattr(predictions_router, "ensure_model_available", available)
+    encoded = base64.b64encode(json.dumps({
+        "source": "system", "model_id": "stepfun:step-5-preview", "effort": "high",
+    }).encode()).decode()
+    response = client.post(
+        "/api/predictions/generate",
+        headers={"x-test-user": "alice", "X-FinSight-Model": encoded},
+        json={"symbol": "AAPL"},
+    )
+
+    assert response.status_code == 202
+    assert service.selected_model is not None
+    assert checked == [service.selected_model]
+    assert service.selected_model.model == "step-5-preview"
+    assert service.selected_model.effort == "high"
+    assert "system-fixture-private-key" not in response.text
+
+
+def test_generate_checks_authentication_and_quota_before_model_probe(monkeypatch):
+    checked: list[bool] = []
+
+    async def available():
+        checked.append(True)
+
+    monkeypatch.setattr(predictions_router, "ensure_model_available", available)
+
+    def reject_quota(user_id: str):
+        raise UserDailyCostLimitExceeded(user_id=user_id, limit_usd=1, used_usd=2)
+
+    client, service, _calls = _client(check_user_quota=reject_quota)
+    anonymous = client.post("/api/predictions/generate", json={"symbol": "AAPL"})
+    limited = client.post(
+        "/api/predictions/generate", headers={"x-test-user": "alice"}, json={"symbol": "AAPL"},
+    )
+
+    assert anonymous.status_code == 401
+    assert limited.status_code == 429
+    assert checked == []
     assert service.generated is False
 
 

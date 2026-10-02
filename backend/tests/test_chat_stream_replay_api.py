@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
 import backend.api.execution_router as execution_router
@@ -19,6 +19,10 @@ def _events(response) -> list[dict]:
 
 
 def _client(monkeypatch) -> TestClient:
+    async def available_model():
+        return None
+
+    monkeypatch.setattr(execution_router, "ensure_model_available", available_model)
     async def fake_pipeline(**kwargs):
         run_id = kwargs["run_id"]
         yield {"type": "token", "content": "A", "run_id": run_id}
@@ -197,3 +201,42 @@ def test_execute_ignores_forged_user_id_in_request_context(monkeypatch):
     assert response.status_code == 200
     assert captured["user_id"] == "user-a"
     assert captured["ui_context"]["__user_id"] == "user-a"
+
+
+def test_execute_rejects_unavailable_model_before_starting_graph_or_run(monkeypatch):
+    client = _client(monkeypatch)
+    graph_calls: list[dict] = []
+
+    async def unavailable_model():
+        raise HTTPException(503, detail={"code": "model_unavailable", "message": "所选模型暂时无法连接，请稍后重试。"})
+
+    async def unexpected_graph(**kwargs):
+        graph_calls.append(kwargs)
+        yield {"type": "done"}
+
+    monkeypatch.setattr(execution_router, "ensure_model_available", unavailable_model)
+    monkeypatch.setattr(execution_router, "run_graph_pipeline", unexpected_graph)
+    response = client.post("/api/execute", json={"query": "AAPL report", "run_id": "unavailable-model"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "model_unavailable"
+    assert graph_calls == []
+    assert "unavailable-model" not in execution_router._RUN_OWNERS
+
+
+def test_execute_model_preflight_follows_quota_check(monkeypatch):
+    client = _client(monkeypatch)
+    preflight_calls: list[bool] = []
+
+    async def preflight():
+        preflight_calls.append(True)
+
+    def reject_quota(_request):
+        raise HTTPException(429, detail={"code": "llm_quota_exceeded", "message": "额度不足"})
+
+    monkeypatch.setattr(execution_router, "ensure_model_available", preflight)
+    monkeypatch.setattr(execution_router, "_enforce_user_quota", reject_quota)
+    response = client.post("/api/execute", json={"query": "AAPL report"})
+
+    assert response.status_code == 429
+    assert preflight_calls == []

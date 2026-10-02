@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { Message } from '../types';
-import { findRetryQuery } from './useChatStream';
+import { findRetryQuery, hasChatOutput } from './useChatStream';
 
 const messages: Message[] = [
   { id: 'u1', role: 'user', content: 'AAPL first', timestamp: 1 },
@@ -19,6 +19,19 @@ describe('findRetryQuery', () => {
 
   it('目标消息不存在时不猜测 query', () => {
     expect(findRetryQuery(messages, 'missing')).toBeNull();
+  });
+});
+
+describe('chat completion output contract', () => {
+  it.each(['', '   ', '[object Object]'])('rejects empty or invalid completion %j', (content) => {
+    expect(hasChatOutput(content)).toBe(false);
+  });
+
+  it('accepts real text or report content', () => {
+    expect(hasChatOutput('有效分析')).toBe(true);
+    expect(hasChatOutput('', { summary: '报告摘要' })).toBe(true);
+    expect(hasChatOutput('', { synthesis_report: '完整研究报告' })).toBe(true);
+    expect(hasChatOutput('', { summary: '', sections: [] })).toBe(false);
   });
 });
 

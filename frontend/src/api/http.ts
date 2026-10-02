@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/runtime';
 import { getSupabaseClient } from './supabaseClient';
-import { getModelSelectionHeaders, MODEL_SELECTION_HEADER } from '../store/modelSelection';
+import { getModelSelectionHeaders, MODEL_SELECTION_HEADER, useModelSelectionStore } from '../store/modelSelection';
 import { usesModelSelection } from './modelRequestScope';
 
 export const api = axios.create({
@@ -11,6 +11,15 @@ export const api = axios.create({
   },
   timeout: 30_000, // 普通 REST 请求 30s；长任务（聊天/报告/执行）走 SSE 通道不受此限，个别长耗时 POST 在调用处显式覆写
 });
+
+function checkedModelHeaders(path: string, accessToken: string | null): Record<string, string> {
+  if (!usesModelSelection(path)) return {};
+  const { selection, pendingCustom } = useModelSelectionStore.getState();
+  if (!accessToken && (selection || pendingCustom)) {
+    throw new StreamRequestError('auth_required', '登录状态已失效，请重新登录后使用已选择的模型。', 401);
+  }
+  return accessToken ? getModelSelectionHeaders() : {};
+}
 
 /**
  * 与 axios 拦截器同源的鉴权头构造，供绕过 axios 的流式 fetch 复用（FE-05）。
@@ -30,7 +39,7 @@ export async function buildAuthHeaders(path?: string): Promise<Record<string, st
 
   return {
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    ...(accessToken && path && usesModelSelection(path) ? getModelSelectionHeaders() : {}),
+    ...checkedModelHeaders(path || '', accessToken),
   };
 }
 
@@ -48,11 +57,12 @@ api.interceptors.request.use(async (config) => {
     }
   }
 
+  const modelHeaders = checkedModelHeaders(config.url || '', accessToken);
   if (!accessToken) return config;
 
   const headers: any = config.headers ?? {};
   if (usesModelSelection(config.url || '')) {
-    for (const [name, value] of Object.entries(getModelSelectionHeaders())) {
+    for (const [name, value] of Object.entries(modelHeaders)) {
       if (typeof headers.set === 'function') headers.set(name, value);
       else headers[name] = value;
     }
@@ -128,11 +138,33 @@ api.interceptors.response.use(
  * 检查流式 fetch 响应，429 时派发限流事件并抛出友好错误。
  * 其他非 2xx 状态抛出通用 HTTP 错误。
  */
-export function ensureStreamResponseOk(response: Response): void {
+export class StreamRequestError extends Error {
+  readonly code: string;
+  readonly status: number;
+
+  constructor(code: string, message: string, status: number) {
+    super(message);
+    this.name = 'StreamRequestError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export async function ensureStreamResponseOk(response: Response): Promise<void> {
   if (response.ok) return;
   if (response.status === 429) {
     emitRateLimitEvent(parseRetryAfter(response.headers.get('retry-after')));
     throw new Error('请求过于频繁，服务器限流中，请稍后再试');
+  }
+  try {
+    const payload = await response.clone().json();
+    if (payload?.detail?.code === 'model_unavailable') {
+      throw new StreamRequestError('model_unavailable',
+        typeof payload.detail.message === 'string' && payload.detail.message.trim()
+          ? payload.detail.message : '当前模型暂时不可用，请检查模型设置或稍后重试。', response.status);
+    }
+  } catch (error) {
+    if (error instanceof StreamRequestError) throw error;
   }
   throw new Error(`HTTP error! status: ${response.status}`);
 }

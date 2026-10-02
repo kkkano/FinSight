@@ -5,7 +5,9 @@ import type { CatalogModel, ModelSelection } from '../../store/modelSelection';
 
 const state = vi.hoisted(() => ({
   selection: null as ModelSelection | null,
+  pendingCustom: null as { source: 'custom'; base_url: string; model: string } | null,
   metadata: null,
+  defaultModelId: 'stepfun:step-5-preview',
   catalog: [] as CatalogModel[],
   setCatalog: vi.fn(),
   applySelection: vi.fn(),
@@ -19,6 +21,7 @@ vi.mock('../../store/modelSelection', async () => {
 
 beforeEach(() => {
   state.selection = null;
+  state.pendingCustom = null;
   state.catalog = [{
     id: 'stepfun:step-5-preview', label: 'Step 5 Preview', model: 'step-5-preview', provider: 'stepfun',
     icon_url: '/model-icons/stepfun.png', effort_options: ['low', 'medium', 'high'],
@@ -38,6 +41,16 @@ describe('ModelSettings', () => {
     expect(markup).not.toContain('xhigh');
     expect(markup).not.toContain('API Key');
     expect(markup).not.toContain('type="password"');
+    expect(markup).toContain('当前使用：<span class="text-fin-text">Step 5 Preview');
+    expect(markup).toContain('聊天、报告和个股 AI 判断统一使用此模型');
+  });
+
+  it('keeps a restored custom model visible and requests its missing key instead of claiming system default', () => {
+    state.pendingCustom = { source: 'custom', base_url: 'https://api.example.com/v1', model: 'custom-model' };
+    const markup = renderToStaticMarkup(<ModelSettings />);
+    expect(markup).toContain('custom-model（待补填密钥）');
+    expect(markup).toContain('恢复前不会自动改用其他模型');
+    expect(markup).toContain('autoComplete="new-password"');
   });
 
   it('uses a password input only for custom models and explains the memory-only lifetime', () => {

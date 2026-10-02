@@ -2,7 +2,7 @@ import { api } from '../http';
 import type { CatalogModel, ModelCapabilities, ModelTestSelection } from '../../store/modelSelection';
 
 export const modelsApi = {
-  async getModels(): Promise<{ models: CatalogModel[] }> {
+  async getModels(): Promise<{ models: CatalogModel[]; default_model_id?: string | null }> {
     return (await api.get('/api/models', { timeout: 15_000 })).data;
   },
   async getModelCapabilities(model: string, baseUrl: string): Promise<ModelCapabilities> {

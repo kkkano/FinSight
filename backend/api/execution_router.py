@@ -22,6 +22,7 @@ from backend.api.schemas import ChatContext, ChatMessage, ChatOptions
 from backend.api.session_context import SessionOwnershipError, _resolve_owned_thread_id
 from backend.api.stream_replay import replay_buffer
 from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
+from backend.services.model_preflight import ensure_model_available
 
 
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
@@ -282,6 +283,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             raise HTTPException(status_code=422, detail={"code": "invalid_session_id", "message": str(exc)}) from exc
 
         _enforce_user_quota(http_request)
+        await ensure_model_available()
         run_id = _normalize_run_id(request.run_id)
         _register_run_owner(run_id, user_id)
         options = request.options

@@ -29,7 +29,7 @@ GENERATION_PATH_PREFIXES: tuple[str, ...] = (
 
 def is_generation_path(path: str) -> bool:
     """判断请求路径是否属于昂贵的生成端点。"""
-    return any(path.startswith(prefix) for prefix in GENERATION_PATH_PREFIXES)
+    return path.rstrip("/") == "/api/predictions/generate" or any(path.startswith(prefix) for prefix in GENERATION_PATH_PREFIXES)
 
 
 class ConcurrencyLimiter:

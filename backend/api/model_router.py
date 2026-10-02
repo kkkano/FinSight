@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 
 from backend.services.model_selection import (
-    ModelSelectionError, model_capabilities, resolve_selection, system_models, require_model_user,
+    ModelSelectionError, model_capabilities, resolve_selection, system_models, require_model_user, default_model_id,
 )
 
 router = APIRouter(prefix="/api/models", tags=["Models"])
@@ -43,7 +43,7 @@ class ModelTestLimiter:
 
 @router.get("")
 async def list_models():
-    return {"models": system_models()}
+    return {"models": system_models(), "default_model_id": default_model_id()}
 
 
 @router.get("/capabilities")
