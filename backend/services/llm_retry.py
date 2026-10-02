@@ -345,13 +345,17 @@ async def ainvoke_configured_llm(
             raise RuntimeError("llm_rate_limit_acquire_timeout")
         context.budget.rate_limit_token_acquired = True
 
+    from backend.services.model_selection import current_model
+    chosen = current_model()
     manager = _filtered_endpoint_manager(
         get_endpoint_manager(provider=provider, model=model),
-        endpoint_names,
+        None if chosen is not None else endpoint_names,
     )
     enabled_count = len([endpoint for endpoint in manager.endpoints if endpoint.cfg.enabled])
     allowed_attempts = min(3, max(2, enabled_count))
     context.budget.max_provider_attempts = min(context.budget.max_provider_attempts, allowed_attempts)
+    if chosen is not None:
+        context.budget.max_provider_attempts = 1
 
     def _factory(endpoint: EndpointConfig) -> Any:
         client = create_llm_for_endpoint(
@@ -379,7 +383,8 @@ def _exception_chain_summary(exc: BaseException, *, max_depth: int = 4) -> str:
     seen: set[int] = set()
     while current is not None and len(parts) < max_depth and id(current) not in seen:
         seen.add(id(current))
-        message = str(current).replace("\n", " ").strip()
+        from backend.services.model_selection import redact_model_secrets
+        message = redact_model_secrets(str(current)).replace("\n", " ").strip()
         parts.append(f"{current.__class__.__name__}: {message[:240]}")
         current = current.__cause__ or current.__context__
     return " <- ".join(parts)

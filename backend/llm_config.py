@@ -354,6 +354,11 @@ def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]
     if env_endpoints:
         return env_endpoints
 
+    if os.getenv("STEPFUN_API_KEY", "").strip():
+        from backend.services.model_selection import STEP_BASE_URL, STEP_MODEL
+        return [EndpointConfig(name="system-stepfun", provider="openai_compatible", api_base=STEP_BASE_URL,
+                               api_key=os.environ["STEPFUN_API_KEY"].strip(), model=STEP_MODEL)]
+
     raise _endpoint_config_error()
 
 
@@ -365,6 +370,15 @@ def load_user_endpoints(provider: str | None = None, model: str | None = None) -
 
 def get_endpoint_manager(provider: str | None = None, model: str | None = None) -> EndpointManager:
     """Resolve endpoint configuration without selecting or creating a client."""
+    from backend.services.model_selection import current_model
+    chosen = current_model()
+    if chosen is not None:
+        manager = EndpointManager()
+        manager._sync_if_changed([EndpointConfig(
+            name=chosen.endpoint_name, provider="openai_compatible", api_base=chosen.base_url,
+            api_key=chosen.api_key, model=chosen.model,
+        )])
+        return manager
     canonical = _canonical_provider(provider or _default_provider())
     endpoints = _resolve_endpoints(canonical, model)
     _ENDPOINT_MANAGER._sync_if_changed(endpoints)
@@ -372,6 +386,10 @@ def get_endpoint_manager(provider: str | None = None, model: str | None = None) 
 
 
 def get_llm_config(provider: str | None = None, model: str | None = None) -> dict:
+    from backend.services.model_selection import current_model
+    chosen = current_model()
+    if chosen is not None:
+        return chosen.runtime_config()
     manager = get_endpoint_manager(provider=provider, model=model)
     selected = manager.select()
 
@@ -411,10 +429,15 @@ def report_llm_failure(llm: Any, error: BaseException | str | None = None) -> No
         _ENDPOINT_MANAGER.report_failure(endpoint_name, reason=str(error or "unknown"))
 
 
+def get_llm_call_metadata(llm: Any) -> dict[str, Any]:
+    """只读实例实际调用元数据，不触发端点选择。"""
+    return dict(getattr(llm, "_finsight_call_metadata", {}))
+
+
 def create_llm_for_endpoint(
     cfg: EndpointConfig,
     *,
-    temperature: float = 0.3,
+    temperature: float | None = 0.3,
     max_tokens: int | None = None,
     request_timeout: int = 600,
 ):
@@ -426,6 +449,23 @@ def create_llm_for_endpoint(
     if not api_key:
         raise ValueError(f"API key not found for provider '{cfg.provider}'")
     resolved_max_tokens = max(256, int(max_tokens if max_tokens is not None else _env_int("LLM_MAX_TOKENS", 8192)))
+    from backend.services.model_selection import current_model, model_capabilities, track_model_client
+    chosen = current_model()
+    effort = chosen.effort if chosen is not None else model_capabilities(cfg.model).get("default_effort")
+    options: dict[str, Any] = {}
+    if temperature is not None:
+        options["temperature"] = temperature
+    if effort:
+        options["reasoning_effort"] = effort
+        resolved_max_tokens = max(2048, resolved_max_tokens)
+    if chosen is not None:
+        import httpx
+        if chosen.source == "custom":
+            request_timeout = min(60, request_timeout)
+        options["http_client"] = httpx.Client(follow_redirects=False)
+        options["http_async_client"] = httpx.AsyncClient(follow_redirects=False)
+        track_model_client(options["http_client"])
+        track_model_client(options["http_async_client"])
     callbacks = []
     langfuse_cb = get_langfuse_callback()
     if langfuse_cb is not None:
@@ -434,20 +474,31 @@ def create_llm_for_endpoint(
         model=cfg.model,
         openai_api_key=api_key,
         openai_api_base=sdk_api_base,
-        temperature=temperature,
         max_tokens=resolved_max_tokens,
         request_timeout=request_timeout,
         max_retries=0,
         callbacks=callbacks or None,
+        **options,
     )
     bind_llm_instance(llm, cfg.name)
+    parameters = getattr(llm, "_default_params", {})
+    if hasattr(llm, "__dict__"):
+        object.__setattr__(llm, "_finsight_call_metadata", {
+            "endpoint_alias": cfg.name, "configured_model": cfg.model,
+            "request_parameters": {"max_tokens": resolved_max_tokens, "temperature": temperature,
+                                   "reasoning_effort": effort, "request_timeout": request_timeout,
+                                   "max_retries": 0},
+            "submitted_parameters": {key: value for key, value in parameters.items() if key in {
+                "model", "temperature", "max_tokens", "max_completion_tokens", "reasoning_effort", "top_p"}},
+            "provider_parameters": "unknown",
+        })
     return llm
 
 
 def create_llm(
     provider: str | None = None,
     model: str | None = None,
-    temperature: float = 0.3,
+    temperature: float | None = 0.3,
     max_tokens: int | None = None,
     request_timeout: int = 600,
     max_retries: int | None = None,

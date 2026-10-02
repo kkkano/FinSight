@@ -36,6 +36,7 @@ class InvalidTokenError(ValueError):
 class AuthenticatedUser:
     user_id: str
     email: str = ""
+    is_anonymous: bool = False
 
 
 @dataclass
@@ -178,6 +179,7 @@ def verify_supabase_jwt(token: str) -> AuthenticatedUser:
     return AuthenticatedUser(
         user_id=normalized_user_id,
         email=email.strip() if isinstance(email, str) else "",
+        is_anonymous=bool(payload.get("is_anonymous", False)),
     )
 
 

@@ -27,7 +27,7 @@ def is_safe_url(url: str) -> bool:
         return False
     try:
         ip = ipaddress.ip_address(lowered)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+        if not ip.is_global or ip.is_multicast:
             return False
         return True
     except ValueError:
@@ -36,7 +36,7 @@ def is_safe_url(url: str) -> bool:
         infos = socket.getaddrinfo(host, None)
         for info in infos:
             ip = ipaddress.ip_address(info[4][0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            if not ip.is_global or ip.is_multicast:
                 return False
     except Exception:
         return False
