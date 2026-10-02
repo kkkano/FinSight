@@ -27,7 +27,7 @@ export function ContextPanelShell({
         type="button"
         data-testid="context-panel-expand"
         onClick={onExpand}
-        className="absolute right-2 top-1/2 -translate-y-1/2 z-20 min-h-11 min-w-11 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm flex items-center justify-center"
+        className="absolute right-3 bottom-3 z-20 min-h-11 min-w-11 p-2 rounded-md border border-t-border bg-t-card text-t-text2 hover:text-t-accent hover:border-t-accent transition-colors shadow-sm flex items-center justify-center"
         title="展开右侧面板"
         aria-label="展开右侧面板"
       >
@@ -52,7 +52,7 @@ export function ContextPanelShell({
         data-testid="context-panel-shell"
         className={
           isMobile
-            ? 'w-full shrink-0 border-t border-fin-border bg-fin-bg p-3 max-h-[48vh] min-h-[320px]'
+            ? 'h-[42dvh] min-h-[300px] max-h-[480px] w-full shrink-0 border-t border-t-divider bg-t-bg p-3'
             : 'h-full shrink-0 border-l border-fin-border bg-fin-bg p-4'
         }
         style={!isMobile ? { width: panelWidth } : undefined}

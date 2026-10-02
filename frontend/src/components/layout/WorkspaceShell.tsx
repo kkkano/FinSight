@@ -179,7 +179,7 @@ export function WorkspaceShell({
   };
 
   return (
-    <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
+    <div className="flex h-dvh w-full bg-fin-bg text-fin-text font-sans overflow-hidden">
       <Sidebar
         onSettingsClick={() => setIsSettingsOpen(true)}
         onDashboardClick={(s) => { openDashboard(s); setIsSidebarOpen(false); }}

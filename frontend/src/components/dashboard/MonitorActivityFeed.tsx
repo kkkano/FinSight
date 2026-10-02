@@ -1,4 +1,4 @@
-import { ExternalLink, Radio } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ExternalLink, Info, Radio } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -45,6 +45,13 @@ const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN'
   minute: '2-digit',
 });
 
+const LEVELS = {
+  info: { label: '动态', Icon: Info, tone: 'text-t-info' },
+  warn: { label: '注意', Icon: AlertTriangle, tone: 'text-t-warning' },
+  alert: { label: '提醒', Icon: AlertTriangle, tone: 'text-t-warning' },
+  error: { label: '异常', Icon: AlertCircle, tone: 'text-t-down' },
+} as const;
+
 type MonitorActivityFeedProps = {
   sessionId: string | null | undefined;
   symbol: string;
@@ -84,30 +91,30 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
 
   return (
     <section
-      className="shrink-0 border-y border-fin-border bg-fin-bg/40"
+      className="shrink-0 border-b border-t-divider bg-t-bg"
       data-testid="monitor-activity-feed"
       aria-label={`${symbol} AI 动态`}
     >
-      <div className="flex min-h-9 items-center justify-between gap-3 px-5 max-lg:px-3">
-        <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-fin-text">
-          <Radio size={13} className="shrink-0 text-fin-primary" />
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-6 py-2 max-lg:px-4">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-t-text">
+          <Radio size={16} className="shrink-0 text-t-text3" />
           <span>AI 动态</span>
-          <span className="truncate text-2xs font-normal text-fin-muted">{symbol.toUpperCase()}</span>
+          <span className="truncate text-xs font-normal text-t-text3">{symbol.toUpperCase()}</span>
           {alertCount > 0 && (
-            <span className="shrink-0 text-2xs text-fin-danger">未读 {alertCount}</span>
+            <span className="shrink-0 text-xs text-t-warning">未读 {alertCount}</span>
           )}
         </div>
-        {!isAvailable && <span className="shrink-0 text-2xs text-fin-muted">登录后启用</span>}
+        {!isAvailable && <span className="shrink-0 text-xs text-t-text3">登录后启用</span>}
         {isAvailable && unavailable && (
-          <span className="shrink-0 text-2xs text-fin-danger">实时点评服务不可用</span>
+          <span className="text-xs text-t-warning">实时点评服务不可用</span>
         )}
         {isAvailable && error && !unavailable && (
-          <span className="shrink-0 text-2xs text-fin-danger">连接中断，正在重试</span>
+          <span className="text-xs text-t-warning">连接中断，正在重试</span>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="flex min-h-11 items-center px-5 pb-2 text-2xs text-fin-muted max-lg:px-3">
+        <div className="flex min-h-11 items-center px-6 pb-3 text-sm text-t-text3 max-lg:px-4">
           {unavailable
             ? '实时点评存储当前不可访问。'
             : isAvailable
@@ -115,37 +122,42 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
               : '匿名模式不会启动实时 AI 监控。'}
         </div>
       ) : (
-        <div className="max-h-36 overflow-y-auto border-t border-fin-border/70">
-          {items.map((item) => item.kind === 'heartbeat' ? (
+        <div className="max-h-48 overflow-y-auto">
+          {items.map((item) => {
+            if (item.kind === 'heartbeat') return (
             <div
               key={item.id}
-              className="flex min-h-8 items-center px-5 text-2xs text-fin-muted max-lg:px-3"
+              className="flex min-h-9 items-center px-6 py-2 text-xs text-t-text3 max-lg:px-4"
             >
-              {formatTime(item.from)}-{formatTime(item.to)} 无显著变化 x{item.count}
+              {formatTime(item.from)}–{formatTime(item.to)} 无显著变化 · {item.count} 次检查
             </div>
-          ) : (
+            );
+            const level = LEVELS[item.comment.level];
+            const isError = item.comment.level === 'error';
+            return (
             <div
               key={item.comment.id}
-              className="grid min-h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 border-b border-fin-border/60 px-5 py-2 text-xs last:border-b-0 max-lg:px-3"
+              className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 border-b border-t-divider/70 px-6 py-3 last:border-b-0 max-lg:px-4"
               onClick={() => markSeen(item.comment.id)}
             >
-              <span className={[
-                'mt-0.5 text-2xs font-semibold',
-                item.comment.level === 'alert' || item.comment.level === 'error'
-                  ? 'text-fin-danger'
-                  : 'text-fin-primary',
-              ].join(' ')}>
-                {item.comment.level.toUpperCase()}
+              <span className={`mt-1 ${level.tone}`} title={level.label}>
+                <level.Icon size={17} aria-label={level.label} />
               </span>
               <div className="min-w-0">
-                <p className="break-words text-fin-text-secondary">{item.comment.text}</p>
-                <p className="mt-0.5 truncate text-2xs text-fin-muted">
-                  {item.comment.escalated ? '已触发 Prediction 重估 · ' : ''}
+                <p className="break-words text-sm leading-6 text-t-text2">{isError ? '实时点评生成失败，本次未产生新判断。' : item.comment.text}</p>
+                {isError && (
+                  <details className="mt-1 text-xs text-t-text3">
+                    <summary className="cursor-pointer py-1 hover:text-t-text2">错误详情</summary>
+                    <p className="break-words py-1 leading-5">{item.comment.text}</p>
+                  </details>
+                )}
+                <p className="mt-1 break-words text-xs leading-5 text-t-text3">
+                  {item.comment.escalated ? '已触发 AI 判断重估 · ' : ''}
                   {item.comment.trigger.detail}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-2xs text-fin-muted">{formatTime(item.comment.ts)}</span>
+                <span className="tabular-nums text-xs leading-6 text-t-text3">{formatTime(item.comment.ts)}</span>
                 {item.comment.chart_url && (
                   <button
                     type="button"
@@ -154,16 +166,17 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
                       markSeen(item.comment.id);
                       navigate(item.comment.chart_url!);
                     }}
-                    className="inline-flex size-7 items-center justify-center text-fin-primary hover:text-fin-text"
-                    title="查看关联 Prediction"
-                    aria-label="查看关联 Prediction"
+                    className="inline-flex size-9 items-center justify-center rounded text-t-info hover:bg-t-hover hover:text-t-text"
+                    title="查看关联 AI 判断"
+                    aria-label="查看关联 AI 判断"
                   >
-                    <ExternalLink size={13} />
+                    <ExternalLink size={15} />
                   </button>
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

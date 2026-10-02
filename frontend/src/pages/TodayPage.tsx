@@ -159,7 +159,7 @@ function QuoteCard({
     <button
       type="button"
       onClick={onOpen}
-      className="group min-h-[142px] rounded-xl border border-t-border bg-t-surface p-4 text-left transition-colors hover:border-t-accent/50 hover:bg-t-hover"
+      className="group min-h-[160px] min-w-0 rounded-lg border border-t-border bg-t-surface p-5 text-left transition-colors hover:border-t-accent/50 hover:bg-t-hover"
       data-testid="today-watchlist-card"
     >
       <div className="flex items-start justify-between gap-3">
@@ -197,9 +197,9 @@ function PredictionCard({ item, onDashboard, onAsk, onHistory }: {
   const status = outcome?.status || prediction.status;
   const directionTone = getDirectionTone(prediction.direction);
   return (
-    <article className="rounded-xl border border-t-border bg-t-surface p-4" data-testid="today-prediction-card">
+    <article className="rounded-lg border border-t-border bg-t-surface p-5" data-testid="today-prediction-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold text-t-text">{prediction.symbol}</span>
           <span className={`inline-flex items-center gap-1 text-xs font-medium ${directionTone}`}>
             {prediction.direction === 'short' ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
@@ -211,8 +211,8 @@ function PredictionCard({ item, onDashboard, onAsk, onHistory }: {
           <Clock3 size={12} /> {formatDateTime(prediction.created_at)}
         </span>
       </div>
-      <p className="mt-3 text-sm leading-6 text-t-text2">{prediction.thesis || '这条研究判断没有提供文字依据。'}</p>
-      <div className="mt-3 grid gap-2 border-t border-t-border pt-3 text-2xs text-t-text3 sm:grid-cols-3">
+      <p className="mt-3 max-w-[76ch] break-words text-sm leading-7 text-t-text2">{prediction.thesis || '这条研究判断没有提供文字依据。'}</p>
+      <div className="mt-4 grid gap-2 border-t border-t-divider pt-3 text-xs text-t-text3 sm:grid-cols-3">
         <div>来源：{prediction.source_type === 'ai' ? 'AI 研究判断' : '人工研究记录'}</div>
         <div>证据：{prediction.evidence_provider || '未提供'}</div>
         <div>数据截至：{formatDateTime(prediction.evidence_as_of)}</div>
@@ -415,7 +415,7 @@ export function TodayPage() {
             </div>
             <MessageCircleQuestion size={16} className="text-t-accent" />
           </div>
-          <div className="mt-3 rounded-xl border border-t-border bg-t-surface p-4">
+          <div className="mt-3 border-t border-t-divider pt-4">
             {followUps.length === 0 ? (
               <div className="py-5 text-center text-xs text-t-text3" data-testid="today-followups-empty">当前没有待追问项。<button type="button" onClick={() => navigate('/chat')} className="ml-1 text-t-accent hover:underline">去提一个问题</button></div>
             ) : (

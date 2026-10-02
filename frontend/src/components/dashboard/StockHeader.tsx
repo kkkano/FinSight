@@ -92,12 +92,13 @@ export function StockHeader({
   const priceChange = getPriceChange(charts);
 
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-t-border bg-t-surface px-5 py-3 shrink-0 max-lg:px-3 max-lg:flex-wrap max-lg:gap-2">
+    <div className="flex items-center justify-between gap-4 border-b border-t-divider bg-t-surface px-6 py-4 shrink-0 max-lg:px-4 max-lg:flex-wrap max-lg:gap-3">
       {/* Left: Symbol info + Price */}
       <div className="flex items-center gap-4 min-w-0 max-lg:gap-2 max-md:w-full max-md:flex-col max-md:items-start">
         {/* Symbol + Name */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold text-t-text truncate">{displayName || ticker}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
+          <span className="text-lg font-semibold text-t-text">{ticker}</span>
+          {displayName && displayName !== ticker && <span className="text-sm text-t-text2 truncate">{displayName}</span>}
           <span className="text-2xs text-t-text3 bg-t-elevated px-2 py-0.5 rounded shrink-0 uppercase">
             {assetType}
           </span>

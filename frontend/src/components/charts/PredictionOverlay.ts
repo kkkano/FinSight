@@ -34,6 +34,8 @@ function levelColor(kind: 'entry' | 'stop' | 'target'): string {
 }
 
 function toDateKey(value: string): string | null {
+  // 日线交易日没有时区；先保留原日期，避免 UTC 零点转换到本地后偏移一天。
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return [

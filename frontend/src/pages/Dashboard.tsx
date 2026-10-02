@@ -7,7 +7,7 @@
  *                      | DashboardTabs -> [Tab panels]
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Sun, Moon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -44,7 +44,7 @@ const formatClock = (): string =>
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: DashboardProps) {
   const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
-  const { theme, setTheme, entryMode, authIdentity, sessionId } = useStore();
+  const { theme, setTheme, authIdentity, sessionId } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -139,7 +139,6 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   const charts = dashboardData?.charts ?? {};
   const valuation = dashboardData?.valuation ?? null;
   const isTerminalStyle = theme === 'dark';
-  const sessionText = authIdentity?.email || (entryMode === 'anonymous' ? 'ANON' : 'GUEST');
 
   const tickerTapeItems = useMemo(() => {
     const list = marketQuotes
@@ -185,61 +184,36 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   }
 
   return (
-    <div className={[
-      'flex-1 min-h-0 flex flex-col overflow-hidden',
-      isTerminalStyle ? 'bg-[#0a0e17] text-slate-100' : 'bg-fin-bg text-fin-text',
-    ].join(' ')}>
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-t-bg text-t-text">
       {isTerminalStyle && (
-        <div className="h-9 shrink-0 border-b border-[#1e2a3a] bg-[#111827] px-4 flex items-center justify-between text-[11px] font-mono">
-          <div className="flex items-center gap-5 text-slate-400">
-            <span className="text-[#ff8c00] font-semibold tracking-wide">FINSIGHT TERMINAL</span>
-            <span>SESSION: <span className="text-slate-200">{sessionText}</span></span>
-            <span>
-              DATA:
-              <span className="ml-1 text-emerald-400">日线快照</span>
-            </span>
+        <div className="min-h-9 shrink-0 border-b border-t-divider bg-t-surface px-4 py-2 flex items-center justify-between gap-3 text-xs">
+          <div className="flex min-w-0 items-center gap-3 text-t-text3">
+            <span className="font-medium text-t-text2">行情工作区</span>
+            <span className="max-sm:hidden">日线快照</span>
           </div>
-          <div className="text-slate-400">
-            <span className="text-[#ff8c00] font-semibold">{clock}</span>
+          <div className="shrink-0 text-t-text3 tabular-nums">
+            <span>{clock}</span>
             <span className="ml-2">UTC+8</span>
           </div>
         </div>
       )}
 
       <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
-        <aside
-          className={[
-            'w-[220px] shrink-0 border-r flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]',
-            isTerminalStyle ? 'border-[#1e2a3a] bg-[#111827]' : 'border-fin-border bg-fin-card',
-          ].join(' ')}
-        >
+        <aside className="w-[220px] shrink-0 border-r border-t-divider bg-t-surface flex flex-col max-lg:w-full max-lg:h-[180px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]">
           <Watchlist activeSymbol={activeAsset?.symbol || currentSymbol} onSymbolSelect={handleSymbolChange} />
         </aside>
 
-        <main className={[
-          'flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden max-lg:overflow-y-auto',
-          isTerminalStyle ? 'bg-[#0a0e17]' : 'bg-fin-bg',
-        ].join(' ')}>
-          <header
-            className={[
-              'h-[52px] border-b flex items-center justify-between px-5 shrink-0 max-lg:px-3',
-              isTerminalStyle ? 'bg-[#111827] border-[#1e2a3a]' : 'bg-fin-card border-fin-border',
-            ].join(' ')}
-          >
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto bg-t-bg">
+          <header className="min-h-[52px] border-b border-t-divider bg-t-surface flex items-center justify-between gap-3 px-6 py-2 shrink-0 max-lg:px-4">
             <div className="flex items-center gap-3 min-w-0">
               {onBackToChat && (
                 <button
                   type="button"
                   data-testid="dashboard-back-chat"
                   onClick={onBackToChat}
-                  className={[
-                    'px-3 py-1.5 rounded-md border transition-colors text-xs shrink-0',
-                    isTerminalStyle
-                      ? 'border-[#2b3a52] bg-[#0a0e17] text-slate-300 hover:border-[#ff8c00] hover:text-[#ff8c00]'
-                      : 'border-fin-border bg-fin-bg text-fin-text-secondary hover:bg-fin-hover',
-                  ].join(' ')}
+                  className="inline-flex min-h-9 items-center gap-1.5 px-2 rounded-md text-sm shrink-0 text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text"
                 >
-                  对话
+                  <ArrowLeft size={15} /> 对话
                 </button>
               )}
 
@@ -253,13 +227,9 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
                 type="button"
                 onClick={handleRefresh}
                 disabled={isLoading}
-                className={[
-                  'p-2 rounded-lg border transition-colors disabled:opacity-50',
-                  isTerminalStyle
-                    ? 'border-[#2b3a52] bg-[#0a0e17] text-slate-300 hover:border-[#ff8c00] hover:text-[#ff8c00]'
-                    : 'border-fin-border bg-fin-bg text-fin-text-secondary hover:bg-fin-hover',
-                ].join(' ')}
+                className="p-2 rounded-md text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text disabled:opacity-50"
                 title="刷新数据"
+                aria-label="刷新数据"
               >
                 <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
               </button>
@@ -267,13 +237,9 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
               <button
                 type="button"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className={[
-                  'p-2 rounded-lg border transition-colors',
-                  isTerminalStyle
-                    ? 'border-[#2b3a52] bg-[#0a0e17] text-slate-300 hover:border-[#ff8c00] hover:text-[#ff8c00]'
-                    : 'border-fin-border bg-fin-bg text-fin-text-secondary hover:bg-fin-hover',
-                ].join(' ')}
+                className="p-2 rounded-md text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text"
                 title="切换主题"
+                aria-label="切换主题"
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
@@ -333,11 +299,11 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
           <DashboardTabs predictionOverlay={prediction.overlay} />
 
           {isTerminalStyle && (
-            <div className="h-8 shrink-0 border-t border-[#1e2a3a] bg-[#111827] overflow-hidden flex items-center">
-              <div className="flex w-max items-center gap-8 px-4 text-[11px] font-mono text-slate-300" style={{ animation: 'finsight-marquee 36s linear infinite' }}>
+            <div className="h-9 shrink-0 border-t border-t-divider bg-t-surface overflow-hidden flex items-center">
+              <div className="flex w-max items-center gap-8 px-4 text-xs tabular-nums text-t-text2" style={{ animation: 'finsight-marquee 36s linear infinite' }}>
                 {[...tickerTapeItems, ...tickerTapeItems].map((item, idx) => (
                   <span key={`${item.key}-${idx}`} className="whitespace-nowrap">
-                    <span className="text-slate-400 mr-1">{item.label}</span>
+                    <span className="text-t-text3 mr-1">{item.label}</span>
                     <span className={item.up ? 'text-t-up' : 'text-t-down'}>{item.text.replace(`${item.label} `, '')}</span>
                   </span>
                 ))}

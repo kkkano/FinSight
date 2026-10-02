@@ -66,7 +66,7 @@ export function DashboardTabs({ predictionOverlay }: DashboardTabsProps) {
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden max-lg:min-h-[520px] max-lg:flex-none">
+    <div className="flex flex-col shrink-0 min-h-[520px]">
       {/* Tab bar */}
       <Tabs
         items={TABS.map((tab) => ({
@@ -76,14 +76,14 @@ export function DashboardTabs({ predictionOverlay }: DashboardTabsProps) {
         }))}
         value={activeTab}
         onChange={handleTabChange}
-        listClassName="flex items-end gap-0 border-b border-fin-border bg-fin-card px-5 overflow-x-auto scrollbar-hide shrink-0 max-lg:px-3"
+        listClassName="flex items-end gap-0 border-b border-t-divider bg-t-surface px-6 overflow-x-auto scrollbar-hide shrink-0 max-lg:px-4"
         buttonClassName="min-h-11 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 border-transparent"
         activeClassName="text-fin-primary border-fin-primary"
         inactiveClassName="text-fin-muted hover:text-fin-text"
       />
 
       {/* Tab panel */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0">
         <div className="p-5 max-lg:p-3">
           {activeTab === 'overview' && <OverviewTab />}
           {activeTab === 'financial' && <FinancialTab />}

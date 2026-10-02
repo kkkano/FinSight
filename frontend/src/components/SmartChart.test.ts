@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildLineOption,
+  buildCandlestickOption,
+  buildPriceVolumeOption,
   buildKlineSmartChartData,
   formatSmartChartValue,
   getRenderableMessageContent,
@@ -167,6 +169,65 @@ describe('line chart number formatting', () => {
   });
 });
 
+describe('行情图日期与缩放布局', () => {
+  it('一年行情使用横向月日标签，并让日期轴与缩放条分别占位', () => {
+    const labels = Array.from({ length: 252 }, (_, index) => (
+      new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10)
+    ));
+    const option = buildCandlestickOption(
+      { labels, values: Array(252).fill(102), ohlc: Array(252).fill([100, 102, 99, 103]) },
+      'AAPL 日线行情',
+      buildTerminalChartTheme(true),
+    );
+
+    expect(option?.xAxis.axisLabel).toMatchObject({ rotate: 0, interval: 'auto', hideOverlap: true, fontSize: 12 });
+    expect(option?.xAxis.axisLabel.formatter?.('2026-07-10')).toBe('07-10');
+    expect(option?.xAxis.axisLabel.formatter?.('2026-07-11')).toBe('07-11');
+    expect(option?.grid.bottom).toBeGreaterThan(50);
+    expect(option?.dataZoom?.[1]).toMatchObject({ height: 22, showDetail: false });
+    expect(option?.tooltip.confine).toBe(true);
+    expect(option?.animation).toBe(false);
+  });
+
+  it('短时间窗口显示月日，真实日期和 OHLC 数据保持完整', () => {
+    const data = {
+      labels: ['2026-07-10', '2026-07-11'],
+      values: [102, 105],
+      ohlc: [[100, 102, 99, 103], [102, 105, 101, 106]] as [number, number, number, number][],
+    };
+    const option = buildCandlestickOption(data, 'AAPL 日线行情', buildTerminalChartTheme(false));
+
+    expect(option?.xAxis.axisLabel.formatter?.('2026-07-10')).toBe('07-10');
+    expect(option?.xAxis.data).toBe(data.labels);
+    expect(option?.series[0].data).toBe(data.ohlc);
+    expect(option?.dataZoom).toBeUndefined();
+  });
+
+  it('成交量从零起、使用紧凑刻度，并在紧邻价格的副图稳定显示', () => {
+    const labels = Array.from({ length: 252 }, (_, index) => (
+      new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10)
+    ));
+    const volume = Array(252).fill(60_000_000);
+    const option = buildPriceVolumeOption(
+      { labels, values: Array(252).fill(102), ohlc: Array(252).fill([100, 102, 99, 103]), volume },
+      'AAPL 日线行情',
+      buildTerminalChartTheme(true),
+    );
+    const volumeAxis = option?.yAxis[1];
+    const formatter = volumeAxis?.axisLabel.formatter;
+
+    expect(volumeAxis).toMatchObject({ min: 0, scale: false, splitNumber: 2, name: '成交量' });
+    expect(typeof formatter).toBe('function');
+    if (typeof formatter !== 'function') throw new Error('成交量刻度格式化器缺失');
+    expect(formatter(60_000_000)).toBe('60M');
+    expect(formatter(0)).toBe('0');
+    expect(option?.grid).toMatchObject([{ bottom: '36%' }, { top: '68%', bottom: 66 }]);
+    expect(option?.animation).toBe(false);
+    expect(option?.series[1].data).toBe(volume);
+    expect(option?.series[1].itemStyle).toMatchObject({ opacity: 0.55 });
+  });
+});
+
 describe('getRenderableMessageContent', () => {
   const content = [
     'streaming text',
@@ -255,6 +316,28 @@ describe('prediction overlay isolation', () => {
     ]);
     expect(markLine.data.every((line) => line.lineStyle.type === 'dashed')).toBe(true);
     expect(markArea.data).toHaveLength(3);
+  });
+
+  it('日线日期不会因 UTC 零点转换到本地时区而移动到前一天', () => {
+    const prediction = normalizePredictionOverlay(rawPrediction, 'AAPL');
+    expect(prediction).not.toBeNull();
+    const annotations = buildPredictionAnnotations(prediction!, ['7/9/2026', '7/10/2026', '7/11/2026']);
+    const markPoint = annotations.markPoint as { data: Array<{ coord: [string, number] }> };
+
+    expect(markPoint.data[0]?.coord).toEqual(['7/10/2026', 103]);
+  });
+
+  it('带时间戳的锚点继续使用本地日期匹配行情标签', () => {
+    const localNoon = new Date(2026, 6, 10, 12);
+    const prediction = normalizePredictionOverlay({
+      ...rawPrediction,
+      anchor: { ...rawPrediction.anchor, time: localNoon.toISOString() },
+    }, 'AAPL');
+    expect(prediction).not.toBeNull();
+    const annotations = buildPredictionAnnotations(prediction!, ['7/9/2026', '7/10/2026', '7/11/2026']);
+    const markPoint = annotations.markPoint as { data: Array<{ coord: [string, number] }> };
+
+    expect(markPoint.data[0]?.coord).toEqual(['7/10/2026', 103]);
   });
 
   it('degrades 404, unauthorized and symbol-mismatch responses without an overlay', async () => {

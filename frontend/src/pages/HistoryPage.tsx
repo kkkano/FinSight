@@ -18,19 +18,20 @@ import { ReportView } from '../components/report';
 import { usePredictionHistory, usePredictionRun } from '../hooks/usePredictionHistory';
 import { useStore } from '../store/useStore';
 import type { ReportIR } from '../types';
+import { formatPercentagePoints, formatRatioPercent } from './historyFormatting';
 
 type HistoryTab = 'predictions' | 'reports';
 
 const DIRECTION_LABELS = {
-  long: 'LONG · 偏多',
-  short: 'SHORT · 偏空',
-  neutral: 'NEUTRAL · 中性',
+  long: '偏多',
+  short: '偏空',
+  neutral: '中性',
 } as const;
 
 const DIRECTION_CLASSES = {
-  long: 'border-t-up/35 bg-t-up/10 text-t-up',
-  short: 'border-t-down/35 bg-t-down/10 text-t-down',
-  neutral: 'border-t-border bg-t-hover text-t-text2',
+  long: 'bg-t-up/10 text-t-up',
+  short: 'bg-t-down/10 text-t-down',
+  neutral: 'bg-t-hover text-t-text2',
 } as const;
 
 const OUTCOME_LABELS: Record<string, string> = {
@@ -63,11 +64,6 @@ function formatPrice(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '--';
 }
 
-function formatPercent(value: number | null | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
-  return `${(value <= 1 ? value * 100 : value).toFixed(1)}%`;
-}
-
 function resolveBucket(
   buckets: Record<string, PredictionStatBucket> | undefined,
   key: string,
@@ -77,10 +73,10 @@ function resolveBucket(
 
 function StatCell({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="min-w-0 border-r border-t-border px-4 last:border-r-0 max-sm:border-b max-sm:border-r-0 max-sm:py-3 max-sm:last:border-b-0">
-      <div className="text-2xs uppercase text-t-text3">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums text-t-text">{value}</div>
-      {detail ? <div className="mt-0.5 truncate text-2xs text-t-text3">{detail}</div> : null}
+    <div className="min-w-0 px-1 py-2 sm:px-4">
+      <div className="text-xs font-medium text-t-text2">{label}</div>
+      <div className="mt-1.5 text-2xl font-semibold tabular-nums text-t-text">{value}</div>
+      {detail ? <div className="mt-1 text-xs leading-5 text-t-text3">{detail}</div> : null}
     </div>
   );
 }
@@ -100,22 +96,23 @@ function PredictionListItem({
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full border-b border-t-border px-4 py-3 text-left transition-colors last:border-b-0 ${
-        active ? 'bg-t-accent/10' : 'hover:bg-t-hover'
+      aria-pressed={active}
+      className={`w-full border-l-[3px] px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-t-accent ${
+        active ? 'border-l-t-accent bg-t-accent/[0.07]' : 'border-l-transparent hover:bg-t-hover'
       }`}
       data-testid="prediction-history-item"
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-t-text">{prediction.symbol}</span>
-        <span className={`rounded border px-1.5 py-0.5 text-2xs font-semibold ${DIRECTION_CLASSES[prediction.direction]}`}>
+        <span className="text-base font-semibold text-t-text">{prediction.symbol}</span>
+        <span className={`rounded px-2 py-1 text-xs font-medium ${DIRECTION_CLASSES[prediction.direction]}`}>
           {DIRECTION_LABELS[prediction.direction]}
         </span>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-3 text-2xs text-t-text3">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-t-text3">
         <span>{formatDateTime(prediction.created_at)}</span>
-        <span>{OUTCOME_LABELS[status] || status}</span>
+        <span className="text-t-text2">{OUTCOME_LABELS[status] || status}</span>
       </div>
-      <div className="mt-2 line-clamp-2 text-xs leading-5 text-t-text2">{prediction.thesis}</div>
+      <div className="mt-2 line-clamp-2 text-sm leading-6 text-t-text2">{prediction.thesis}</div>
     </button>
   );
 }
@@ -127,7 +124,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
   const run = usePredictionRun(prediction?.run_id);
 
   if (!prediction) {
-    return <div className="flex h-full min-h-56 items-center justify-center text-sm text-t-text3">选择一条 AI 判断查看详情</div>;
+    return <div className="flex min-h-56 items-center justify-center px-6 text-center text-sm text-t-text2 lg:h-full">选择一条 AI 判断查看详情</div>;
   }
 
   const status = outcome?.status || prediction.status;
@@ -140,72 +137,72 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
   ] as const;
 
   return (
-    <div className="h-full overflow-y-auto px-5 py-4 max-sm:px-4" data-testid="prediction-history-detail">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-t-border pb-4">
+    <div className="mx-auto w-full min-w-0 max-w-5xl px-5 py-6 sm:px-7 lg:min-h-0 lg:overflow-y-auto" data-testid="prediction-history-detail">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-t-text">{prediction.symbol}</h2>
-            <span className={`rounded border px-2 py-0.5 text-2xs font-semibold ${DIRECTION_CLASSES[prediction.direction]}`}>
+            <h2 className="text-xl font-semibold text-t-text">{prediction.symbol}</h2>
+            <span className={`rounded px-2 py-1 text-xs font-medium ${DIRECTION_CLASSES[prediction.direction]}`}>
               {DIRECTION_LABELS[prediction.direction]}
             </span>
-            <span className="rounded border border-t-border px-2 py-0.5 text-2xs text-t-text2">
+            <span className="text-sm text-t-text2">
               {OUTCOME_LABELS[status] || status}
             </span>
           </div>
-          <div className="mt-1 text-2xs text-t-text3">创建于 {formatDateTime(prediction.created_at)}</div>
+          <div className="mt-2 text-xs text-t-text3">创建于 {formatDateTime(prediction.created_at)}</div>
         </div>
         <button
           type="button"
           onClick={() => navigate(`/dashboard/${encodeURIComponent(prediction.symbol)}?analysis=prediction&predictionId=${encodeURIComponent(prediction.prediction_id)}`)}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-t-border px-3 text-xs text-t-text2 hover:border-t-accent/50 hover:text-t-text"
+          className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover px-3 text-sm text-t-text2 transition-colors hover:text-t-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent"
         >
-          打开看板 <ArrowRight size={13} />
+          打开看板 <ArrowRight size={15} />
         </button>
       </div>
 
-      <p className="mt-4 text-sm leading-6 text-t-text2">{prediction.thesis}</p>
+      <p className="mt-5 max-w-3xl break-words text-[15px] leading-7 text-t-text">{prediction.thesis}</p>
 
-      <div className="mt-5 grid grid-cols-2 border-y border-t-border py-3 sm:grid-cols-5">
+      <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-4 border-y border-t-divider py-5 sm:grid-cols-5">
         {levels.map(([label, value]) => (
-          <div key={label} className="border-r border-t-border px-3 last:border-r-0 max-sm:py-2">
-            <div className="text-2xs text-t-text3">{label}</div>
-            <div className="mt-1 text-sm font-semibold tabular-nums text-t-text">{formatPrice(value)}</div>
+          <div key={label} className="min-w-0">
+            <div className="text-xs font-medium text-t-text2">{label}</div>
+            <div className="mt-2 text-lg font-semibold tabular-nums text-t-text">{formatPrice(value)}</div>
           </div>
         ))}
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-7 xl:grid-cols-2">
         <section>
-          <h3 className="text-xs font-semibold text-t-text">Outcome</h3>
-          <dl className="mt-2 space-y-2 text-xs">
+          <h3 className="text-sm font-semibold text-t-text">判断结果</h3>
+          <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between gap-4"><dt className="text-t-text3">结果</dt><dd className="text-right text-t-text2">{OUTCOME_LABELS[status] || status}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">锚点后变动</dt><dd className="text-right tabular-nums text-t-text2">{formatPercent(outcome?.pct_since_anchor)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-t-text3">锚点后变动</dt><dd className={`text-right font-medium tabular-nums ${typeof outcome?.pct_since_anchor === 'number' && outcome.pct_since_anchor !== 0 ? outcome.pct_since_anchor > 0 ? 'text-t-up' : 'text-t-down' : 'text-t-text2'}`}>{formatPercentagePoints(outcome?.pct_since_anchor)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-t-text3">评估至</dt><dd className="text-right text-t-text2">{formatDateTime(outcome?.evaluated_through)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">算法</dt><dd className="text-right text-t-text2">{outcome?.algorithm_version || '--'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">评估版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{outcome?.algorithm_version || '--'}</dd></div>
           </dl>
         </section>
         <section>
-          <h3 className="text-xs font-semibold text-t-text">运行来源</h3>
-          <dl className="mt-2 space-y-2 text-xs">
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">行情</dt><dd className="text-right text-t-text2">{prediction.evidence_provider || run?.market_provider || '--'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">证据时间</dt><dd className="text-right text-t-text2">{formatDateTime(prediction.evidence_as_of || run?.market_as_of)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">模型</dt><dd className="text-right text-t-text2">{run?.llm_provider && run.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">Prompt</dt><dd className="text-right text-t-text2">{prediction.prompt_version}</dd></div>
+          <h3 className="text-sm font-semibold text-t-text">数据与模型</h3>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">行情来源</dt><dd className="min-w-0 break-words text-right text-t-text2">{prediction.evidence_provider || run?.market_provider || '--'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">证据时间</dt><dd className="min-w-0 text-right text-t-text2">{formatDateTime(prediction.evidence_as_of || run?.market_as_of)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">模型</dt><dd className="min-w-0 break-words text-right text-t-text2">{run?.llm_provider && run.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">提示词版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{prediction.prompt_version}</dd></div>
           </dl>
         </section>
       </div>
 
       {prediction.scenarios.length > 0 ? (
-        <section className="mt-5 border-t border-t-border pt-4">
-          <h3 className="text-xs font-semibold text-t-text">情景</h3>
-          <div className="mt-2 space-y-2">
+        <section className="mt-7 border-t border-t-divider pt-6">
+          <h3 className="text-sm font-semibold text-t-text">情景与失效条件</h3>
+          <div className="mt-4 space-y-5">
             {prediction.scenarios.map((scenario) => (
-              <div key={`${scenario.name}-${scenario.probability}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-t-border pb-2 text-xs last:border-b-0">
-                <div>
-                  <div className="text-t-text2">{scenario.name}</div>
-                  <div className="mt-1 text-t-text3">失效条件：{scenario.invalidation}</div>
+              <div key={`${scenario.name}-${scenario.probability}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 text-sm">
+                <div className="min-w-0">
+                  <div className="break-words font-medium text-t-text">{scenario.name}</div>
+                  <div className="mt-1.5 max-w-3xl break-words leading-6 text-t-text2">失效条件：{scenario.invalidation}</div>
                 </div>
-                <div className="tabular-nums text-t-text2">{formatPercent(scenario.probability)}</div>
+                <div className="tabular-nums text-t-text2" aria-label={`情景概率 ${formatPercentagePoints(scenario.probability)}`}>{formatPercentagePoints(scenario.probability)}</div>
               </div>
             ))}
           </div>
@@ -225,46 +222,47 @@ function PredictionHistoryPanel() {
   }, [items, selectedId]);
 
   const selected = useMemo(
-    () => items.find((item) => item.prediction.prediction_id === selectedId) ?? null,
+    () => items.find((item) => item.prediction.prediction_id === selectedId) ?? items[0] ?? null,
     [items, selectedId],
   );
   const aiBucket = resolveBucket(stats?.by_source, 'ai');
+  const predictionStats = aiBucket ?? stats;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="grid shrink-0 border border-t-border bg-t-surface py-3 sm:grid-cols-4">
-        <StatCell label="90 天判断" value={String(aiBucket?.predictions ?? stats?.predictions ?? 0)} detail="AI 与人工记录分桶统计" />
-        <StatCell label="已结算" value={String(aiBucket?.resolved ?? stats?.resolved ?? 0)} detail="未结项不进入命中率" />
-        <StatCell label="命中率" value={formatPercent(aiBucket?.hit_rate ?? stats?.hit_rate)} detail={`${aiBucket?.hits ?? stats?.hits ?? 0} 命中 · ${aiBucket?.misses ?? stats?.misses ?? 0} 未命中`} />
-        <StatCell label="方向" value={String(Object.keys(stats?.by_direction ?? {}).length)} detail="LONG / SHORT / NEUTRAL" />
+    <div className="flex shrink-0 flex-col gap-5 lg:min-h-0 lg:flex-1">
+      <div className="grid shrink-0 grid-cols-2 gap-x-4 border-b border-t-divider pb-4 sm:grid-cols-4">
+        <StatCell label="90 天 AI 判断" value={predictionStats ? String(predictionStats.predictions) : '--'} />
+        <StatCell label="已结算" value={predictionStats ? String(predictionStats.resolved) : '--'} />
+        <StatCell label="命中率" value={formatRatioPercent(predictionStats?.hit_rate)} detail={predictionStats ? predictionStats.resolved ? `${predictionStats.hits} 命中 · ${predictionStats.misses} 未命中` : '暂无已结算样本' : undefined} />
+        <StatCell label="已失效" value={predictionStats ? String(predictionStats.invalidated) : '--'} />
       </div>
 
       {failure ? (
-        <div className="flex items-center justify-between gap-3 border border-t-down/30 bg-t-down/10 px-4 py-3 text-xs text-t-down">
-          <span>{failure.message} [{failure.code}]</span>
-          <button type="button" onClick={refresh} className="inline-flex items-center gap-1"><RefreshCw size={13} />重试</button>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-t-down/10 px-4 py-3 text-sm text-t-down" role="alert">
+          <span className="min-w-0 break-words">{failure.message}</span>
+          <button type="button" onClick={refresh} className="inline-flex min-h-9 shrink-0 items-center gap-2"><RefreshCw size={15} />重试</button>
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 overflow-hidden border border-t-border bg-t-surface lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-y-auto border-r border-t-border max-lg:max-h-72 max-lg:border-b max-lg:border-r-0">
+      <div className="grid bg-t-surface lg:min-h-0 lg:flex-1 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="overflow-y-auto border-t-divider max-lg:max-h-80 max-lg:border-b lg:min-h-0 lg:border-r">
           {loading ? (
-            <div className="flex min-h-40 items-center justify-center gap-2 text-xs text-t-text3"><RefreshCw size={14} className="animate-spin" />读取 Prediction 历史...</div>
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取判断记录...</div>
           ) : items.length === 0 ? (
-            <div className="flex min-h-40 flex-col items-center justify-center px-6 text-center text-xs text-t-text3">
-              <Target size={20} className="mb-2" />
-              尚无 AI 判断历史，请先在看板生成。
+            <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-t-text2">
+              <Target size={24} className="text-t-text3" />
+              暂无 AI 判断记录
             </div>
           ) : items.map((item) => (
             <PredictionListItem
               key={item.prediction.prediction_id}
               item={item}
-              active={item.prediction.prediction_id === selectedId}
+              active={item.prediction.prediction_id === selected?.prediction.prediction_id}
               onSelect={() => setSelectedId(item.prediction.prediction_id)}
             />
           ))}
         </div>
-        <PredictionDetail item={selected} />
+        <PredictionDetail key={selected?.prediction.prediction_id ?? 'empty'} item={selected} />
       </div>
     </div>
   );
@@ -329,68 +327,69 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
   const selectedIndex = items.find((item) => item.report_id === selectedId) ?? null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex shrink-0 flex-col gap-5 lg:min-h-0 lg:flex-1">
       {error ? (
-        <div className="flex items-center justify-between gap-3 border border-t-down/30 bg-t-down/10 px-4 py-3 text-xs text-t-down">
-          <span>{error}</span>
-          <button type="button" onClick={refresh} className="inline-flex items-center gap-1"><RefreshCw size={13} />重试</button>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-t-down/10 px-4 py-3 text-sm text-t-down" role="alert">
+          <span className="min-w-0 break-words">{error}</span>
+          <button type="button" onClick={refresh} className="inline-flex min-h-9 shrink-0 items-center gap-2"><RefreshCw size={15} />重试</button>
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 overflow-hidden border border-t-border bg-t-surface lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-y-auto border-r border-t-border max-lg:max-h-72 max-lg:border-b max-lg:border-r-0">
+      <div className="grid bg-t-surface lg:min-h-0 lg:flex-1 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="overflow-y-auto border-t-divider max-lg:max-h-80 max-lg:border-b lg:min-h-0 lg:border-r">
           {loadingList ? (
-            <div className="flex min-h-40 items-center justify-center gap-2 text-xs text-t-text3"><RefreshCw size={14} className="animate-spin" />读取报告历史...</div>
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取报告记录...</div>
           ) : items.length === 0 ? (
-            <div className="flex min-h-40 flex-col items-center justify-center px-6 text-center text-xs text-t-text3">
-              <FileText size={20} className="mb-2" />
-              尚无报告历史，请在对话中生成研究报告。
+            <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-t-text2">
+              <FileText size={24} className="text-t-text3" />
+              暂无研究报告
             </div>
           ) : items.map((item) => (
             <button
               key={item.report_id}
               type="button"
               onClick={() => setSelectedId(item.report_id)}
-              className={`w-full border-b border-t-border px-4 py-3 text-left transition-colors last:border-b-0 ${item.report_id === selectedId ? 'bg-t-accent/10' : 'hover:bg-t-hover'}`}
+              aria-pressed={item.report_id === selectedId}
+              className={`w-full border-l-[3px] px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-t-accent ${item.report_id === selectedId ? 'border-l-t-accent bg-t-accent/[0.07]' : 'border-l-transparent hover:bg-t-hover'}`}
               data-testid="report-history-item"
             >
-              <div className="line-clamp-2 text-sm font-medium leading-5 text-t-text">{item.title || item.ticker || '未命名报告'}</div>
-              <div className="mt-2 flex items-center justify-between gap-3 text-2xs text-t-text3">
+              <div className="line-clamp-2 text-[15px] font-medium leading-6 text-t-text">{item.title || item.ticker || '未命名报告'}</div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-t-text3">
                 <span>{item.ticker || '--'}</span>
                 <span>{formatDateTime(item.generated_at || item.created_at)}</span>
               </div>
-              {item.summary ? <div className="mt-2 line-clamp-2 text-xs leading-5 text-t-text2">{item.summary}</div> : null}
+              {item.summary ? <div className="mt-2 line-clamp-2 text-sm leading-6 text-t-text2">{item.summary}</div> : null}
             </button>
           ))}
         </div>
 
-        <div className="min-h-0 overflow-y-auto">
+        <div key={selectedId ?? 'empty'} className="min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {loadingReport ? (
-            <div className="flex min-h-56 items-center justify-center gap-2 text-xs text-t-text3"><RefreshCw size={14} className="animate-spin" />回放报告...</div>
+            <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取报告...</div>
           ) : report ? (
-            <div className="px-5 py-4 max-sm:px-3">
-              <div className="mb-4 flex flex-wrap items-center justify-end gap-2 border-b border-t-border pb-3">
+            <div className="mx-auto max-w-5xl px-5 py-6 sm:px-7">
+              <div className="mb-5 flex flex-wrap items-center justify-end gap-2 border-b border-t-divider pb-4">
                 {selectedIndex?.ticker ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/dashboard/${encodeURIComponent(selectedIndex.ticker || '')}`)}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-t-border px-3 text-xs text-t-text2 hover:border-t-accent/50 hover:text-t-text"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover px-3 text-sm text-t-text2 hover:text-t-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent"
                   >
-                    <BarChart3 size={13} /> 打开看板
+                    <BarChart3 size={15} /> 打开看板
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => navigate(`/chat?report_id=${encodeURIComponent(report.report_id)}`)}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-t-accent/40 bg-t-accent/10 px-3 text-xs text-t-accent"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-accent/10 px-3 text-sm text-t-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent"
                 >
-                  <MessageSquare size={13} /> 进入对话
+                  <MessageSquare size={15} /> 进入对话
                 </button>
               </div>
               <ReportView report={report} readOnly />
             </div>
           ) : (
-            <div className="flex min-h-56 items-center justify-center text-sm text-t-text3">选择一份报告查看回放</div>
+            <div className="flex min-h-56 items-center justify-center text-sm text-t-text2">选择一份报告查看详情</div>
           )}
         </div>
       </div>
@@ -409,42 +408,41 @@ export function HistoryPage() {
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-t-bg" data-testid="history-page">
-      <header className="shrink-0 border-b border-t-border bg-t-surface px-5 py-4 max-sm:px-3">
+      <header className="shrink-0 border-b border-t-divider bg-t-surface px-5 py-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <History size={18} className="text-t-accent" />
-              <h1 className="text-base font-semibold text-t-text">历史</h1>
+              <History size={20} className="text-t-text2" />
+              <h1 className="text-xl font-semibold text-t-text">历史记录</h1>
             </div>
-            <p className="mt-1 text-xs text-t-text3">Prediction、Outcome 与研究报告的持久化记录</p>
           </div>
-          <div className="inline-flex border border-t-border bg-t-bg p-1" role="tablist" aria-label="历史视图">
+          <div className="inline-flex rounded-md bg-t-bg p-1" role="tablist" aria-label="历史视图">
             <button
               type="button"
               role="tab"
               aria-selected={tab === 'predictions'}
               onClick={() => setTab('predictions')}
-              className={`inline-flex min-h-8 items-center gap-1.5 px-3 text-xs ${tab === 'predictions' ? 'bg-t-accent/15 text-t-accent' : 'text-t-text3 hover:text-t-text'}`}
+              className={`inline-flex min-h-9 items-center gap-2 rounded px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent ${tab === 'predictions' ? 'bg-t-hover font-medium text-t-text' : 'text-t-text2 hover:text-t-text'}`}
             >
-              <Target size={13} /> Predictions
+              <Target size={15} /> AI 判断
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={tab === 'reports'}
               onClick={() => setTab('reports')}
-              className={`inline-flex min-h-8 items-center gap-1.5 px-3 text-xs ${tab === 'reports' ? 'bg-t-accent/15 text-t-accent' : 'text-t-text3 hover:text-t-text'}`}
+              className={`inline-flex min-h-9 items-center gap-2 rounded px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent ${tab === 'reports' ? 'bg-t-hover font-medium text-t-text' : 'text-t-text2 hover:text-t-text'}`}
             >
-              <FileText size={13} /> Reports
+              <FileText size={15} /> 研究报告
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 max-sm:p-3">
-        <div className="mb-3 flex shrink-0 items-center gap-2 text-2xs text-t-text3">
-          {tab === 'predictions' ? <Database size={12} /> : <CalendarClock size={12} />}
-          {tab === 'predictions' ? '统计窗口：最近 90 天' : '按生成时间倒序'}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6">
+        <div className="mb-3 flex shrink-0 items-center gap-2 text-xs text-t-text2">
+          {tab === 'predictions' ? <Database size={14} /> : <CalendarClock size={14} />}
+          {tab === 'predictions' ? '最近 90 天' : '最近生成'}
         </div>
         {tab === 'predictions' ? <PredictionHistoryPanel /> : <ReportsHistoryPanel initialReportId={reportId} />}
       </div>

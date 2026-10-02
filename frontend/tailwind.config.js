@@ -8,35 +8,37 @@ export default {
   theme: {
     extend: {
       fontSize: {
-        '2xs': ['11px', { lineHeight: '16px' }],
+        '2xs': ['12px', { lineHeight: '18px' }],
       },
       colors: {
         t: {
           bg: 'var(--t-bg)', surface: 'var(--t-surface)', card: 'var(--t-card)',
-          elevated: 'var(--t-elevated)', border: 'var(--t-border)', divider: 'var(--t-divider)',
-          hover: 'var(--t-hover)', text: 'var(--t-text)', text2: 'var(--t-text-2)', text3: 'var(--t-text-3)',
+          elevated: 'var(--t-elevated)', border: 'rgb(var(--t-border-rgb) / <alpha-value>)', divider: 'rgb(var(--t-divider-rgb) / <alpha-value>)',
+          hover: 'rgb(var(--t-hover-rgb) / <alpha-value>)', text: 'var(--t-text)', text2: 'var(--t-text-2)', text3: 'var(--t-text-3)',
           accent: 'rgb(var(--t-accent) / <alpha-value>)', 'accent-hi': 'var(--t-accent-hi)',
-          up: 'var(--t-up)', down: 'var(--t-down)', warning: 'var(--t-warning)', info: 'var(--t-info)',
+          up: 'rgb(var(--t-up-rgb) / <alpha-value>)', down: 'rgb(var(--t-down-rgb) / <alpha-value>)',
+          warning: 'rgb(var(--t-warning-rgb) / <alpha-value>)', info: 'rgb(var(--t-info-rgb) / <alpha-value>)',
+          predict: 'rgb(var(--t-predict-rgb) / <alpha-value>)',
         },
         fin: {
           bg: 'var(--fin-bg)',
           'bg-secondary': 'var(--fin-bg-secondary)',
           card: 'var(--fin-card)',
           panel: 'var(--fin-panel)',
-          border: 'var(--fin-border)',
-          hover: 'var(--fin-hover)',
+          border: 'rgb(var(--t-border-rgb) / <alpha-value>)',
+          hover: 'rgb(var(--t-hover-rgb) / <alpha-value>)',
           text: 'var(--fin-text)',
           'text-secondary': 'var(--fin-text-secondary)',
           muted: 'var(--fin-muted)',
           primary: 'rgb(var(--fin-primary) / <alpha-value>)',
-          success: 'var(--fin-success)',
-          danger: 'var(--fin-danger)',
-          warning: 'var(--fin-warning)',
-          predict: 'var(--fin-predict)',
+          success: 'rgb(var(--t-up-rgb) / <alpha-value>)',
+          danger: 'rgb(var(--t-down-rgb) / <alpha-value>)',
+          warning: 'rgb(var(--t-warning-rgb) / <alpha-value>)',
+          predict: 'rgb(var(--t-predict-rgb) / <alpha-value>)',
         },
         trend: {
-          up: 'var(--fin-success)',
-          down: 'var(--fin-danger)',
+          up: 'rgb(var(--t-up-rgb) / <alpha-value>)',
+          down: 'rgb(var(--t-down-rgb) / <alpha-value>)',
         }
       },
       fontFamily: {

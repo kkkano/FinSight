@@ -14,7 +14,7 @@
 
   --t-text: #17191d;
   --t-text-2: #565e6a;
-  --t-text-3: #8a93a1;
+  --t-text-3: #667180;
 
   --t-accent: 184 91 0;        /* #B85B00 终端橙：对白底与黑字均满足 4.5:1 */
   --t-accent-hi: #c96a0e;
@@ -23,7 +23,16 @@
   --t-down: #d13d3d;
   --t-warning: #b97509;
   --t-info: #2f6fd0;
-  --t-predict: #7048e8;
+  --t-predict: #365fa8;
+
+  --t-border-rgb: 226 229 234;
+  --t-divider-rgb: 237 239 243;
+  --t-hover-rgb: 240 242 246;
+  --t-up-rgb: 15 153 96;
+  --t-down-rgb: 209 61 61;
+  --t-warning-rgb: 185 117 9;
+  --t-info-rgb: 47 111 208;
+  --t-predict-rgb: 54 95 168;
 
   --t-chart-grid: #e8eaef;
   --t-shadow-card: 0 1px 2px rgb(16 18 24 / 0.06);
@@ -33,17 +42,17 @@
 
 :root.dark {
   /* ===== TERMINAL 设计语言 · 深色（主态）===== */
-  --t-bg: #0a0c10;
-  --t-surface: #10131a;
-  --t-card: #12161f;
-  --t-elevated: #171c27;
-  --t-border: #232b3a;
-  --t-divider: #1a2130;
-  --t-hover: #182031;
+  --t-bg: #0e1014;
+  --t-surface: #15181e;
+  --t-card: #191d24;
+  --t-elevated: #20252d;
+  --t-border: #2b313b;
+  --t-divider: #232831;
+  --t-hover: #242a34;
 
-  --t-text: #e8eaed;
-  --t-text-2: #9aa3b2;
-  --t-text-3: #5b6472;
+  --t-text: #f0f2f5;
+  --t-text-2: #bcc4d0;
+  --t-text-3: #909baa;
 
   --t-accent: 255 138 0;       /* #FF8A00 */
   --t-accent-hi: #ffa133;
@@ -52,9 +61,18 @@
   --t-down: #ff5d5d;
   --t-warning: #f5a623;
   --t-info: #6b9eff;
-  --t-predict: #9775fa;
+  --t-predict: #84a8ef;
 
-  --t-chart-grid: #1a2130;
+  --t-border-rgb: 43 49 59;
+  --t-divider-rgb: 35 40 49;
+  --t-hover-rgb: 36 42 52;
+  --t-up-rgb: 47 191 127;
+  --t-down-rgb: 255 93 93;
+  --t-warning-rgb: 245 166 35;
+  --t-info-rgb: 107 158 255;
+  --t-predict-rgb: 132 168 239;
+
+  --t-chart-grid: #232831;
   --t-shadow-card: none;       /* 深色不用投影，靠边框分层 */
 
   color-scheme: dark;
@@ -79,14 +97,14 @@
 }
 
 /* ===== A股红涨绿跌模式（08 Task 9 在设置里接线）===== */
-:root.cn-colors { --t-up: #d13d3d; --t-down: #0f9960; }
-:root.dark.cn-colors { --t-up: #ff5d5d; --t-down: #2fbf7f; }
+:root.cn-colors { --t-up: #d13d3d; --t-down: #0f9960; --t-up-rgb: 209 61 61; --t-down-rgb: 15 153 96; }
+:root.dark.cn-colors { --t-up: #ff5d5d; --t-down: #2fbf7f; --t-up-rgb: 255 93 93; --t-down-rgb: 47 191 127; }
 
 /* ===== 全局数字规范 ===== */
 .num, .tabular {
   font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* ===== 终端光标（替代三点弹跳）===== */
@@ -114,8 +132,15 @@
 }
 
 body {
-  @apply bg-fin-bg text-fin-text antialiased overflow-hidden;
+  @apply bg-fin-bg text-fin-text font-sans text-sm antialiased overflow-hidden;
   font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+}
+
+@layer base {
+  button:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid rgb(var(--t-accent));
+    outline-offset: 3px;
+  }
 }
 
 @keyframes finsight-marquee {
@@ -124,6 +149,15 @@ body {
   }
   100% {
     transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

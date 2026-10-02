@@ -800,6 +800,7 @@ function buildSmartChartTitle(title: string, theme: ChartTheme) {
 function buildAxisTooltip(theme: ChartTheme, axisPointerType: 'line' | 'cross' | 'shadow' = 'line') {
   return {
     trigger: 'axis' as const,
+    confine: true,
     axisPointer: {
       type: axisPointerType,
       lineStyle: { color: theme.crosshair, width: 1, type: 'dashed' },
@@ -807,17 +808,26 @@ function buildAxisTooltip(theme: ChartTheme, axisPointerType: 'line' | 'cross' |
     },
     backgroundColor: theme.tooltipBackground,
     borderColor: theme.tooltipBorder,
-    textStyle: { color: theme.tooltipText, fontSize: 11 },
+    textStyle: { color: theme.tooltipText, fontSize: 13 },
   };
 }
 
 function buildCategoryAxis(labels: string[], theme: ChartTheme, rotate = 0) {
+  const dateLabels = labels.every((label) => /^\d{4}-\d{2}-\d{2}/.test(label));
   return {
     type: 'category' as const,
     data: labels,
-    axisLabel: { color: theme.muted, fontSize: 10, rotate, hideOverlap: true },
+    axisLabel: {
+      color: theme.textSecondary,
+      fontSize: 12,
+      rotate: dateLabels ? 0 : rotate,
+      interval: 'auto' as const,
+      hideOverlap: true,
+      margin: 12,
+      ...(dateLabels ? { formatter: (value: string) => value.slice(5, 10) } : {}),
+    },
     axisLine: { lineStyle: { color: theme.border } },
-    axisTick: { alignWithLabel: true },
+    axisTick: { show: false, alignWithLabel: true },
     splitLine: { show: false },
   };
 }
@@ -827,8 +837,8 @@ function buildValueAxis(theme: ChartTheme, unit?: string, scale = false) {
     type: 'value' as const,
     scale,
     axisLabel: {
-      color: theme.muted,
-      fontSize: 9,
+      color: theme.textSecondary,
+      fontSize: 12,
       formatter: unit ? `{value}${unit}` : '{value}',
     },
     splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
@@ -841,12 +851,13 @@ function buildDataZoom(theme: ChartTheme, xAxisIndex: number | number[] = 0) {
     {
       type: 'slider' as const,
       xAxisIndex,
-      bottom: 6,
-      height: 16,
+      bottom: 4,
+      height: 22,
       borderColor: theme.border,
       fillerColor: theme.sliderFiller,
       handleStyle: { color: theme.primary },
-      textStyle: { color: theme.muted, fontSize: 9 },
+      showDetail: false,
+      textStyle: { color: theme.textSecondary, fontSize: 12 },
     },
   ];
 }
@@ -943,8 +954,9 @@ export function buildCandlestickOption(data: SmartChartData, title: string, them
   const eventMarkPoints = buildEventMarkPoints(data.events, data.labels, closeValues, theme);
 
   return {
+    animation: false,
     tooltip: buildAxisTooltip(theme, 'cross'),
-    grid: { left: 52, right: 16, top: 34, bottom: data.labels.length > 24 ? 36 : 26 },
+    grid: { left: 52, right: 16, top: 34, bottom: data.labels.length > 24 ? 66 : 36 },
     title: buildSmartChartTitle(title, theme),
     xAxis: buildCategoryAxis(data.labels, theme, data.labels.length > 8 ? 30 : 0),
     yAxis: buildValueAxis(theme, data.unit, true),
@@ -964,7 +976,8 @@ export function buildCandlestickOption(data: SmartChartData, title: string, them
   };
 }
 
-function buildPriceVolumeOption(data: SmartChartData, title: string, theme: ChartTheme) {
+// eslint-disable-next-line react-refresh/only-export-components -- 价量布局与零基线需独立回归验证
+export function buildPriceVolumeOption(data: SmartChartData, title: string, theme: ChartTheme) {
   if (!data.volume?.length || data.volume.length !== data.labels.length) return null;
 
   const hasOhlc = data.ohlc?.length === data.labels.length;
@@ -1002,11 +1015,12 @@ function buildPriceVolumeOption(data: SmartChartData, title: string, theme: Char
     };
 
   return {
+    animation: false,
     tooltip: buildAxisTooltip(theme, 'cross'),
     title: buildSmartChartTitle(title, theme),
     grid: [
-      { left: 52, right: 18, top: 34, height: '54%' },
-      { left: 52, right: 18, top: '74%', bottom: 22 },
+      { left: 52, right: 18, top: 24, bottom: '36%' },
+      { left: 52, right: 18, top: '68%', bottom: data.labels.length > 24 ? 66 : 36 },
     ],
     xAxis: [
       {
@@ -1023,10 +1037,24 @@ function buildPriceVolumeOption(data: SmartChartData, title: string, theme: Char
     yAxis: [
       { ...buildValueAxis(theme, data.unit, true), gridIndex: 0 },
       {
-        ...buildValueAxis(theme, undefined, true),
+        ...buildValueAxis(theme),
         gridIndex: 1,
-        axisLabel: { color: theme.muted, fontSize: 9 },
-        splitLine: { show: false },
+        min: 0,
+        splitNumber: 2,
+        name: '成交量',
+        nameGap: 12,
+        nameTextStyle: { color: theme.textSecondary, fontSize: 12, align: 'left' },
+        axisLabel: {
+          color: theme.textSecondary,
+          fontSize: 12,
+          formatter: (value: number) => {
+            if (value >= 1_000_000_000) return `${formatSmartChartValue(value / 1_000_000_000)}B`;
+            if (value >= 1_000_000) return `${formatSmartChartValue(value / 1_000_000)}M`;
+            if (value >= 1_000) return `${formatSmartChartValue(value / 1_000)}K`;
+            return formatSmartChartValue(value);
+          },
+        },
+        splitLine: { lineStyle: { color: theme.grid } },
       },
     ],
     dataZoom: data.labels.length > 24 ? buildDataZoom(theme, [0, 1]) : undefined,
@@ -1038,7 +1066,7 @@ function buildPriceVolumeOption(data: SmartChartData, title: string, theme: Char
         data: data.volume,
         xAxisIndex: 1,
         yAxisIndex: 1,
-        itemStyle: { color: theme.primarySoft },
+        itemStyle: { color: theme.textSecondary, opacity: 0.55 },
         barMaxWidth: 12,
       },
     ],
@@ -1819,6 +1847,10 @@ interface SmartChartRendererProps {
   predictionOverlay?: PredictionOverlay | null;
   /** 深链只携带 id；组件通过受鉴权 API 读取完整标注。 */
   predictionId?: string | null;
+  /** 侧栏及放大视图填满调用方提供的高度。 */
+  fillContainer?: boolean;
+  /** 调用方已有行情标题时避免重复显示。 */
+  showTitle?: boolean;
 }
 
 const DENSE_SERIES_TYPES = new Set<SmartChartType>([
@@ -1851,6 +1883,8 @@ export function SmartChartRenderer({
   marketSeries,
   predictionOverlay,
   predictionId,
+  fillContainer = false,
+  showTitle = true,
 }: SmartChartRendererProps) {
   const theme = useChartTheme();
   const dashboardData = useDashboardStore((s) => s.dashboardData);
@@ -1905,30 +1939,34 @@ export function SmartChartRenderer({
     const option = block.mode === 'ref'
       ? applyPredictionOverlay(marketOption, effectivePrediction, data.labels)
       : marketOption;
-    return { option, renderer: getSmartChartRenderer(block.type, data) };
-  }, [block, dashboardData, effectivePrediction, marketSeries, theme]);
+    return {
+      option: showTitle ? option : { ...option, title: { show: false } },
+      renderer: getSmartChartRenderer(block.type, data),
+    };
+  }, [block, dashboardData, effectivePrediction, marketSeries, showTitle, theme]);
 
   if (!chart) return null;
 
-  const height = block.type === 'gauge' ? 200 : block.type === 'pie' ? 220 : 200;
+  const height = block.type === 'price_volume' ? 340 : block.type === 'pie' ? 220 : 200;
   const provenance = getSmartChartProvenance(block);
   const sourceMeta = block.mode === 'ref' && block.source
     ? dashboardData?.meta?.[block.source]
     : undefined;
 
   return (
-    <div className="relative my-3 p-3 bg-fin-card rounded-lg border border-fin-border">
-      <div className="absolute right-3 top-2 z-10 flex items-center gap-2">
+    <div className={fillContainer ? 'flex h-full min-h-0 flex-col' : 'my-3 rounded-lg border border-t-border bg-t-card p-3'}>
+      <div className="mb-2 flex min-h-5 shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
         <SourceBadge
           synthetic={provenance.synthetic}
           source={sourceMeta?.provider ?? provenance.source}
           asOf={provenance.asOf ?? sourceMeta?.as_of}
           degraded={sourceMeta?.fallback_used}
+          className="!font-sans !text-xs !text-t-text2"
         />
         {effectivePrediction && (
           <button
             type="button"
-            className="inline-flex items-center rounded border border-t-warning/50 px-1 text-2xs font-mono text-t-warning hover:bg-t-warning/10"
+            className="inline-flex min-h-7 items-center rounded px-2 text-xs text-t-warning hover:bg-t-warning/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-t-accent"
             onClick={() => setOverlayEnabled(false)}
             title="关闭 AI 标注；真实行情不会重新请求或改变"
           >
@@ -1938,23 +1976,25 @@ export function SmartChartRenderer({
         {!effectivePrediction && (remotePrediction || predictionOverlay) && (
           <button
             type="button"
-            className="inline-flex items-center rounded border border-t-border px-1 text-2xs font-mono text-t-text3 hover:text-t-text1"
+            className="inline-flex min-h-7 items-center rounded px-2 text-xs text-t-text2 hover:bg-t-hover hover:text-t-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-t-accent"
             onClick={() => setOverlayEnabled(true)}
           >
             AI标注 · 开启
           </button>
         )}
         {predictionUnavailable && (
-          <span className="text-2xs font-mono text-t-warning">AI 标注暂不可用</span>
+          <span className="text-xs text-t-warning">AI 标注暂不可用</span>
         )}
       </div>
-      <ReactECharts
-        option={chart.option}
-        style={{ width: '100%', height }}
-        opts={{ renderer: chart.renderer }}
-        notMerge
-        lazyUpdate
-      />
+      <div className={fillContainer ? 'min-h-0 flex-1' : undefined}>
+        <ReactECharts
+          option={chart.option}
+          style={{ width: '100%', height: fillContainer ? '100%' : height }}
+          opts={{ renderer: chart.renderer }}
+          notMerge
+          lazyUpdate
+        />
+      </div>
     </div>
   );
 }

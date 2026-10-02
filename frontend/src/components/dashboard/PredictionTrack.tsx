@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ChevronDown,
   Clock3,
   Database,
   MessageCircleQuestion,
@@ -35,19 +36,19 @@ const DIRECTION = {
     label: 'LONG',
     text: '偏多',
     Icon: TrendingUp,
-    className: 'border-t-up/40 bg-t-up/10 text-t-up',
+    className: 'bg-t-up/10 text-t-up',
   },
   short: {
     label: 'SHORT',
     text: '偏空',
     Icon: TrendingDown,
-    className: 'border-t-down/40 bg-t-down/10 text-t-down',
+    className: 'bg-t-down/10 text-t-down',
   },
   neutral: {
     label: 'NEUTRAL',
     text: '中性',
     Icon: Minus,
-    className: 'border-t-text3/40 bg-t-hover text-t-text2',
+    className: 'bg-t-hover text-t-text2',
   },
 } as const;
 
@@ -87,9 +88,9 @@ function formatDateTime(value: string | null | undefined): string {
 
 function PriceLevel({ label, value }: { label: string; value: number | null | undefined }) {
   return (
-    <div className="min-w-0 border-l border-t-border pl-3 first:border-l-0 first:pl-0">
-      <div className="text-2xs text-t-text3">{label}</div>
-      <div className="mt-1 text-sm font-semibold tabular-nums text-t-text" data-testid="prediction-price-level-value">
+    <div className="min-w-0">
+      <div className="text-xs text-t-text3">{label}</div>
+      <div className="num mt-1.5 text-base font-medium text-t-text" data-testid="prediction-price-level-value">
         {formatPrice(value)}
       </div>
     </div>
@@ -136,27 +137,24 @@ export function PredictionTrack({
   return (
     <section
       data-testid="prediction-track"
-      className="shrink-0 border-y border-t-border bg-t-surface px-5 py-3 max-lg:px-3"
-      aria-label="AI Prediction 价格轨道"
+      className="shrink-0 border-b border-t-divider bg-t-surface px-6 py-5 max-lg:px-4"
+      aria-label="AI 判断"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 max-sm:basis-full">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-t-text">
-              <Sparkles size={14} className="text-t-predict" />
+            <span className="inline-flex items-center gap-2 text-[15px] font-semibold text-t-text">
+              <Sparkles size={17} className="text-t-predict" />
               AI 判断
             </span>
-            <span className="rounded border border-t-predict/35 bg-t-predict/10 px-1.5 py-0.5 text-2xs text-t-predict">
-              PREDICTION
-            </span>
             {direction && (
-              <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-semibold ${direction.className}`}>
-                <direction.Icon size={11} />
-                {direction.label} · {direction.text}
+              <span className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${direction.className}`}>
+                <direction.Icon size={14} />
+                {direction.text}
               </span>
             )}
             {prediction && (
-              <span className="text-2xs text-t-text3">
+              <span className="text-xs text-t-text2">
                 置信度 {formatConfidence(prediction.confidence)} · {STATUS_LABELS[outcome?.status || prediction.status] || outcome?.status || prediction.status}
               </span>
             )}
@@ -164,29 +162,35 @@ export function PredictionTrack({
 
           {prediction ? (
             <>
-              <p className="mt-2 max-w-5xl text-xs leading-5 text-t-text2">{prediction.thesis}</p>
-              <div className="mt-3 grid grid-cols-2 gap-y-3 sm:grid-cols-5">
+              <p className="mt-3 max-w-[76ch] break-words text-sm leading-7 text-t-text2">{prediction.thesis}</p>
+              <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
                 <PriceLevel label="锚点" value={prediction.anchor.price} />
                 <PriceLevel label="入场" value={prediction.entry} />
                 <PriceLevel label="止损" value={prediction.stop} />
                 <PriceLevel label="目标 1" value={prediction.target1} />
                 <PriceLevel label="目标 2" value={prediction.target2} />
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-t-text3">
+              <details className="group mt-4 text-xs text-t-text3">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded py-1 hover:text-t-text2 [&::-webkit-details-marker]:hidden">
+                  <Database size={13} /> 证据与模型来源
+                  <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="mt-2 flex flex-wrap items-start gap-x-5 gap-y-2 break-words leading-5">
                 <span className="inline-flex items-center gap-1">
-                  <Database size={11} />
+                  <Database size={13} className="shrink-0" />
                   行情 {prediction.evidence_provider || eligibility.provider || '--'}
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <Clock3 size={11} />
+                  <Clock3 size={13} className="shrink-0" />
                   证据 {formatDateTime(prediction.evidence_as_of || eligibility.asOf)}
                 </span>
                 <span>模型 {run?.llm_provider && run?.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</span>
-                <span>Prompt {prediction.prompt_version}</span>
-              </div>
+                <span>提示版本 {prediction.prompt_version}</span>
+                </div>
+              </details>
             </>
           ) : (
-            <div className="mt-2 flex items-start gap-2 text-xs text-t-text2" data-testid="prediction-empty-state">
+            <div className="mt-3 flex items-start gap-2 text-sm leading-6 text-t-text2" data-testid="prediction-empty-state" role="status">
               {eligibility.status === 'trusted' ? (
                 <ShieldCheck size={14} className="mt-0.5 shrink-0 text-t-up" />
               ) : (
@@ -197,7 +201,7 @@ export function PredictionTrack({
           )}
 
           {prediction && generationMessage && (
-            <div className={`mt-2 text-2xs ${generationFailure ? 'text-t-warning' : 'text-t-predict'}`}>
+            <div className={`mt-3 text-sm leading-6 ${generationFailure ? 'text-t-warning' : 'text-t-predict'}`} role="status">
               {generationMessage}
               {generationFailure ? ` [${generationFailure.code}]` : ''}
             </div>
@@ -210,20 +214,20 @@ export function PredictionTrack({
             data-testid="prediction-generate"
             onClick={onGenerate}
             disabled={!canGenerate}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-t-predict/45 bg-t-predict/10 px-3 text-xs font-medium text-t-predict transition-colors hover:bg-t-predict/15 disabled:cursor-not-allowed disabled:opacity-45 max-sm:flex-1 max-sm:justify-center"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-predict/10 px-3 text-sm font-medium text-t-predict transition-colors hover:bg-t-predict/20 disabled:cursor-not-allowed disabled:opacity-50 max-sm:flex-1 max-sm:justify-center"
             title={!authenticated ? '登录后才能生成' : eligibility.reason || generateLabel}
           >
-            <RefreshCw size={14} className={isGenerating ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
             {isGenerating ? '生成中' : generateLabel}
           </button>
           <button
             type="button"
             onClick={onAsk}
             disabled={!authenticated}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-t-border px-3 text-xs text-t-text2 transition-colors hover:border-t-accent/50 hover:text-t-text disabled:opacity-45 max-sm:flex-1 max-sm:justify-center"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover/60 px-3 text-sm text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text disabled:opacity-50 max-sm:flex-1 max-sm:justify-center"
             title="带当前标的和判断进入对话"
           >
-            <MessageCircleQuestion size={14} />
+            <MessageCircleQuestion size={16} />
             追问
           </button>
         </div>
