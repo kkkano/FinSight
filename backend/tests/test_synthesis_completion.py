@@ -59,3 +59,27 @@ async def test_step_synthesis_preserves_large_budget_json_mode_and_final_text(mo
     assert captured["client_transform"](Client()) == {"response_format": {"type": "json_object"}}
     assert result["trace"]["synthesize_runtime"]["fallback"] is False
     assert "hidden" not in str(result["artifacts"]["render_vars"])
+
+
+@pytest.mark.asyncio
+async def test_synthesis_extracts_truncated_response_from_sdk_parser_error(monkeypatch):
+    from openai import LengthFinishReasonError
+    from openai.types.chat import ChatCompletion
+    module = importlib.import_module("backend.graph.nodes.synthesize")
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
+    monkeypatch.setattr("backend.llm_config.get_endpoint_manager", lambda *_args, **_kwargs: object())
+    completion = ChatCompletion.model_validate({
+        "id": "fixture", "object": "chat.completion", "created": 1, "model": "step-5-preview",
+        "choices": [{"index": 0, "finish_reason": "length", "message": {"role": "assistant", "content": ""}}],
+        "usage": {"prompt_tokens": 5000, "completion_tokens": 65536, "total_tokens": 70536},
+    })
+    async def invoke(_messages, **_kwargs):
+        raise LengthFinishReasonError(completion=completion)
+    monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
+    result = await module.synthesize({"query": "INTC 分析", "output_mode": "chat", "operation": {"name": "analysis", "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["INTC"]}, "artifacts": {"step_results": {}, "evidence_pool": []}, "trace": {}})
+    runtime = result["trace"]["synthesize_runtime"]
+    assert runtime["reason"] == "llm_output_truncated"
+    assert runtime["completion"]["finish_reason"] == "length"
+    assert runtime["completion"]["completion_tokens"] == 65536

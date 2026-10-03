@@ -217,6 +217,9 @@ def extract_token_usage(response: Any) -> tuple[int, int]:
             prompt = _safe_int(tu.get("prompt_tokens") or tu.get("input_tokens") or 0)
             completion = _safe_int(tu.get("completion_tokens") or tu.get("output_tokens") or 0)
             return prompt, completion
+    native_usage = getattr(response, "usage", None)
+    if native_usage is not None:
+        return _safe_int(getattr(native_usage, "prompt_tokens", None)), _safe_int(getattr(native_usage, "completion_tokens", None))
     return 0, 0
 
 
@@ -229,7 +232,8 @@ def has_reported_token_usage(response: Any) -> bool:
         return True
     response_metadata = getattr(response, "response_metadata", None)
     if not isinstance(response_metadata, dict):
-        return False
+        native_usage = getattr(response, "usage", None)
+        return native_usage is not None and getattr(native_usage, "prompt_tokens", None) is not None
     usage = response_metadata.get("token_usage") or response_metadata.get("usage")
     return isinstance(usage, dict) and any(
         key in usage for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")
@@ -274,7 +278,7 @@ def record_llm_attempt(
         prompt=prompt,
         completion=completion,
         attribution=get_llm_attribution(),
-        usage_reported=has_reported_token_usage(response) if status == "success" and response is not None else False,
+        usage_reported=has_reported_token_usage(response) if response is not None else False,
     )
 
 

@@ -130,6 +130,9 @@ def _exception_chain(exc: BaseException, *, max_depth: int = 4) -> list[BaseExce
 
 def classify_llm_error(exc: BaseException) -> LLMErrorClassification:
     """Classify provider failures conservatively; unknown failures never retry."""
+    completion = getattr(exc, "completion", None)
+    if completion is not None and completion_metadata(completion)["finish_reason"] == "length":
+        return LLMErrorClassification("output_truncated", "llm_output_truncated", None, False, False)
     text = _exception_chain_summary(exc).lower()
     status = _status_from_exception(exc)
     structured_codes = " ".join(
@@ -183,6 +186,9 @@ def _usage_or_none(response: Any) -> tuple[int | None, int | None]:
         usage = metadata.get("token_usage") or metadata.get("usage")
         if isinstance(usage, dict):
             return int(usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0), int(usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0)
+    diagnostics = completion_metadata(response)
+    if diagnostics["prompt_tokens"] is not None or diagnostics["completion_tokens"] is not None:
+        return int(diagnostics["prompt_tokens"] or 0), int(diagnostics["completion_tokens"] or 0)
     return None, None
 
 
@@ -283,7 +289,12 @@ async def ainvoke_llm(
             return result
         except Exception as exc:
             classification = classify_llm_error(exc)
-            record_llm_attempt(model=getattr(client, "model_name", endpoint.model), status="failed", duration_ms=int((perf_counter() - started) * 1000))
+            failed_completion = getattr(exc, "completion", None)
+            prompt_tokens, completion_tokens = _usage_or_none(failed_completion)
+            if failed_completion is not None:
+                record_llm_usage(failed_completion, getattr(client, "model_name", endpoint.model), count_call=False)
+            record_llm_attempt(model=getattr(client, "model_name", endpoint.model), status="failed",
+                               duration_ms=int((perf_counter() - started) * 1000), response=failed_completion)
             attempt_payload = {
                 "logical_call_id": context.logical_call_id, "stage": context.stage, "agent": context.agent, "layer": context.layer,
                 "endpoint_name": endpoint.name, "provider": endpoint.provider,
@@ -291,7 +302,9 @@ async def ainvoke_llm(
                 "attempt": attempt, "max_attempts": context.budget.max_provider_attempts, "status": "failed",
                 "error_kind": classification.kind, "error_code": classification.code, "http_status": classification.http_status,
                 "retryable": classification.retryable, "duration_ms": int((perf_counter() - started) * 1000),
-                "usage_state": "unavailable_due_to_failure", "prompt_tokens": None, "completion_tokens": None,
+                "usage_state": "reported" if prompt_tokens is not None else "unavailable_due_to_failure",
+                "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+                "completion": completion_metadata(failed_completion) if failed_completion is not None else {},
             }
             _emit("llm.attempt", attempt_payload)
             _observe_attempt(context, attempt_payload)

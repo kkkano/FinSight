@@ -770,8 +770,15 @@ summary, highlights, analysis.
         retryable = is_rate_limit_error(exc)
         retry_attempts = max(0, call_context.budget.provider_attempts_used - 1)
         classification = classify_llm_error(exc)
+        # SDK 的 JSON 解析会在 length 时直接抛异常，原始响应仍保存在 completion。
+        native_completion = getattr(exc, "completion", None)
+        if native_completion is not None:
+            response_received = True
+            response_diagnostics = completion_metadata(native_completion)
         if isinstance(exc, LLMCompletionError):
             fallback_reason = exc.code
+        elif response_diagnostics.get("finish_reason") == "length":
+            fallback_reason = "llm_output_truncated"
         elif response_received:
             fallback_reason = "llm_output_invalid"
         else:
