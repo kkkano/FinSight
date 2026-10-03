@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Clock3 } from 'lucide-react';
 
 import type { TimelineEvent } from '../../types/execution';
-import { formatTimelineTime, isTimelineError, summarizeTimelineEvent } from './timelineUtils';
+import { executionSubjectLabel, formatTimelineTime, isTimelineError, summarizeTimelineEvent } from './timelineUtils';
 
 type TimelineGroup = {
   key: string;
@@ -27,10 +27,10 @@ function resolveGroupKey(event: TimelineEvent): string {
 }
 
 function resolveGroupTitle(event: TimelineEvent): string {
-  if (event.stepId) return `Step ${event.stepId}`;
-  if (event.agent) return `Agent ${event.agent}`;
-  if (event.parallelGroup) return `Parallel ${event.parallelGroup}`;
-  if (event.eventType === 'pipeline_stage') return `Stage ${event.stage}`;
+  if (event.agent || event.tool || event.name) return executionSubjectLabel(event.agent || event.tool || event.name!);
+  if (event.stepId) return `步骤 ${event.stepId}`;
+  if (event.parallelGroup) return `并行组 ${event.parallelGroup}`;
+  if (event.eventType === 'pipeline_stage') return executionSubjectLabel(event.stage);
   return event.eventType || 'event';
 }
 
@@ -42,11 +42,13 @@ function resolveGroupStatus(event: TimelineEvent): TimelineGroup['status'] {
 }
 
 function badgeClass(status: TimelineGroup['status']): string {
-  if (status === 'done') return 'bg-emerald-500/15 text-emerald-300';
-  if (status === 'error') return 'bg-red-500/15 text-red-300';
-  if (status === 'running') return 'bg-blue-500/15 text-blue-300';
-  return 'bg-fin-border/60 text-fin-muted';
+  if (status === 'done') return 'text-emerald-600 dark:text-emerald-400';
+  if (status === 'error') return 'text-red-600 dark:text-red-400';
+  if (status === 'running') return 'text-t-info';
+  return 'text-t-text2';
 }
+
+const STATUS_LABELS = { done: '完成', error: '失败', running: '进行中', pending: '等待中' };
 
 export function GroupedTimeline({
   timeline,
@@ -82,41 +84,42 @@ export function GroupedTimeline({
     return Array.from(bucket.values())
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
       .slice(0, maxGroups)
-      .map((group) => ({
-        ...group,
-        events: group.events.slice(-4),
-      }));
-  }, [timeline, maxGroups]);
+      .map((group) => {
+        const unique = new Map<string, TimelineEvent>();
+        group.events.forEach((event) => unique.set(summarizeTimelineEvent(event), event));
+        return { ...group, events: [...unique.values()].slice(compact ? -2 : -4) };
+      });
+  }, [timeline, maxGroups, compact]);
 
   if (!groups.length) {
     return (
-      <div className="rounded-lg border border-fin-border bg-fin-bg/20 px-3 py-3 text-xs text-fin-muted">
+      <div className="py-3 text-sm text-t-text2">
         暂无执行时间线
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-fin-border bg-fin-bg/20">
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-fin-border/60 text-xs text-fin-text-secondary">
-        <Clock3 size={12} />
+    <section className="border-t border-t-divider pt-4">
+      <h3 className="flex items-center gap-2 text-sm font-medium text-t-text">
+        <Clock3 size={16} className="text-t-text2" />
         分组时间线
-      </div>
-      <div className={`${compact ? 'max-h-48' : 'max-h-72'} overflow-y-auto divide-y divide-fin-border/40`}>
+      </h3>
+      <div className="mt-2 divide-y divide-t-divider">
         {groups.map((group) => (
-          <div key={group.key} className="px-3 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs text-fin-text font-medium truncate">{group.title}</div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`px-1.5 py-0.5 rounded text-2xs ${badgeClass(group.status)}`}>
-                  {group.status}
+          <div key={group.key} className="py-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <div className="min-w-0 break-words text-sm font-medium text-t-text">{group.title}</div>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className={`text-xs ${badgeClass(group.status)}`}>
+                  {STATUS_LABELS[group.status]}
                 </span>
-                <span className="text-2xs text-fin-muted">{formatTimelineTime(group.updatedAt)}</span>
+                <time className="num text-xs text-t-text2" dateTime={group.updatedAt}>{formatTimelineTime(group.updatedAt)}</time>
               </div>
             </div>
             <div className="mt-1 space-y-1">
               {group.events.map((event) => (
-                <div key={event.id} className="text-2xs text-fin-muted leading-relaxed">
+                <div key={event.id} className="break-words text-xs leading-relaxed text-t-text2">
                   {summarizeTimelineEvent(event)}
                 </div>
               ))}
@@ -124,9 +127,8 @@ export function GroupedTimeline({
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
 export default GroupedTimeline;
-

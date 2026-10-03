@@ -29,4 +29,12 @@ describe('public prediction ledger client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Internal details', { status: 503 })));
     await expect(apiClient.getPredictionTrackRecord()).rejects.toThrow('战绩数据暂时不可用，请稍后重试。');
   });
+
+  it('sends record filters with the real page offset', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(makeEmptyTrackRecordFixture()), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await apiClient.getPredictionTrackRecord(20, 40, undefined, { ticker: 'AAPL', status: 'pending', prediction_type: 'drawdown' });
+    const url = new URL(fetchMock.mock.calls[0][0], 'https://finsight.test');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ limit: '20', offset: '40', ticker: 'AAPL', status: 'pending', prediction_type: 'drawdown' });
+  });
 });

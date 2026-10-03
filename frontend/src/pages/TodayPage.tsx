@@ -18,6 +18,7 @@ import { usePredictionHistory } from '../hooks/usePredictionHistory';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import type { WatchItem } from '../types/dashboard';
+import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
 
 type QuoteState = {
   price?: number;
@@ -41,11 +42,7 @@ const OUTCOME_LABELS: Record<string, string> = {
   data_pending: '等待公开行情',
 };
 
-const DIRECTION_LABELS = {
-  long: '偏多观点',
-  short: '偏空观点',
-  neutral: '中性观点',
-} as const;
+const DIRECTION_LABELS = { long: '上行假设', short: '回落假设', neutral: '区间假设' } as const;
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return '未提供';
@@ -203,7 +200,7 @@ function PredictionCard({ item, onDashboard, onAsk, onHistory }: {
           <span className="font-mono text-sm font-semibold text-t-text">{prediction.symbol}</span>
           <span className={`inline-flex items-center gap-1 text-xs font-medium ${directionTone}`}>
             {prediction.direction === 'short' ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
-            {DIRECTION_LABELS[prediction.direction]}
+            {getPredictionDirectionPresentation(prediction.direction, status).label}
           </span>
           <StatusBadge status={status} />
         </div>

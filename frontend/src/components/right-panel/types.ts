@@ -1,1 +1,1 @@
-export type RightPanelTab = 'chart' | 'execution';
+export type RightPanelTab = 'chart' | 'execution' | 'track-record';

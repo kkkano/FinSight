@@ -105,8 +105,9 @@ for (const width of [1440, 390]) {
     await installFixtures(page, 'dark');
     await page.goto('/dashboard/AAPL');
     const panel = page.getByTestId('prediction-track');
+    await panel.getByText('历史判断与价位', { exact: true }).click();
     await expect(panel).toContainText('极度超买区');
-    expect(await panel.locator('p').first().evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14);
+    expect(await panel.getByTestId('prediction-thesis').evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14);
     await panel.getByText('证据与模型来源').click();
     await expect(panel).toContainText('step-5-preview');
     const feed = page.getByTestId('monitor-activity-feed');
@@ -122,6 +123,7 @@ for (const width of [1440, 390]) {
     await installFixtures(page, 'dark');
     await page.goto('/dashboard/AAPL');
     await page.getByTestId('context-panel-expand').click();
+    await page.getByTestId('context-panel').getByRole('button', { name: '1 年', exact: true }).click();
     const trigger = page.getByRole('button', { name: '放大行情图', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'AAPL 行情' });

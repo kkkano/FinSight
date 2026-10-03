@@ -10,14 +10,40 @@ function getSubject(event: TimelineEvent): string {
   return event.agent || event.tool || event.name || event.stepId || event.kind || '系统';
 }
 
+const SUBJECT_LABELS: Record<string, string> = {
+  get_stock_price: '获取行情',
+  get_stock_price_market: '获取行情',
+  analyze_historical_drawdowns: '分析历史回撤',
+  get_factor_exposure: '分析因子暴露',
+  get_technical_snapshot: '计算技术指标',
+  get_option_chain_metrics: '分析期权信号',
+  price: '价格分析',
+  technical: '技术分析',
+  risk: '风险分析',
+  fundamental: '基本面分析',
+  news: '新闻分析',
+  macro: '宏观分析',
+  deep_search: '深度检索',
+  planning: '规划',
+  executing: '执行',
+  synthesizing: '综合分析',
+  rendering: '生成回答',
+  done: '完成',
+};
+
+export function executionSubjectLabel(subject: string): string {
+  return SUBJECT_LABELS[subject.replace(/_agent$/, '')] ?? subject;
+}
+
 export function formatTimelineTime(iso?: string): string {
   if (!iso) return '--:--:--';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '--:--:--';
-  return date.toLocaleTimeString();
+  return date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 export function summarizeTimelineEvent(event: TimelineEvent): string {
+  if (event.userMessage?.trim()) return event.userMessage.trim();
   if (event.message && event.message.trim()) return event.message.trim();
 
   const subject = getSubject(event);
@@ -86,5 +112,6 @@ export function isTimelineError(event: TimelineEvent): boolean {
     || event.eventType === 'step_error'
     || event.stage === 'error'
     || event.status === 'error'
+    || event.status === 'failed'
   );
 }

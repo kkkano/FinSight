@@ -4,7 +4,6 @@ import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
 import { ChatInput } from '../ChatInput';
 import { ChatList } from '../ChatList';
-import { ContextPanelShell } from './ContextPanelShell';
 import type { MarketQuote } from '../../hooks/useMarketQuotes';
 import { useDeveloperMode } from '../../hooks/useDeveloperMode';
 import { apiClient } from '../../api/client';
@@ -12,7 +11,6 @@ import { useStore } from '../../store/useStore';
 import type { ConversationSummary } from '../../store/useStore';
 
 type ChatWorkspaceProps = {
-  isMobile: boolean;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onDashboardRequest: (symbol: string) => void;
@@ -55,7 +53,6 @@ const confirmDeleteConversation = (conversation: ConversationSummary) => {
 };
 
 export function ChatWorkspace({
-  isMobile,
   theme,
   onToggleTheme,
   onDashboardRequest,
@@ -277,15 +274,6 @@ export function ChatWorkspace({
           {developerMode && <div className="shrink-0"><AgentLogPanel /></div>}
         </div>
 
-        <ContextPanelShell
-          isMobile={isMobile}
-          panelWidth={contextPanel.panelWidth}
-          isExpanded={contextPanel.isExpanded}
-          onExpand={contextPanel.onExpand}
-          onCollapse={contextPanel.onCollapse}
-          onResizeStart={contextPanel.onResizeStart}
-          autoSwitchExecution={contextPanel.autoSwitchExecution}
-        />
       </div>
     </div>
   );

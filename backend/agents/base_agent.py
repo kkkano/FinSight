@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -151,7 +151,7 @@ class BaseFinancialAgent:
                             "event": "agent_execution",
                             "agent": self.AGENT_NAME,
                             "details": {"type": event_type, **details},
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         }
                     )
                 except Exception:

@@ -19,14 +19,9 @@ import { usePredictionHistory, usePredictionRun } from '../hooks/usePredictionHi
 import { useStore } from '../store/useStore';
 import type { ReportIR } from '../types';
 import { formatPercentagePoints, formatRatioPercent } from './historyFormatting';
+import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
 
 type HistoryTab = 'predictions' | 'reports';
-
-const DIRECTION_LABELS = {
-  long: '偏多',
-  short: '偏空',
-  neutral: '中性',
-} as const;
 
 const DIRECTION_CLASSES = {
   long: 'bg-t-up/10 text-t-up',
@@ -105,7 +100,7 @@ function PredictionListItem({
       <div className="flex items-center justify-between gap-3">
         <span className="text-base font-semibold text-t-text">{prediction.symbol}</span>
         <span className={`rounded px-2 py-1 text-xs font-medium ${DIRECTION_CLASSES[prediction.direction]}`}>
-          {DIRECTION_LABELS[prediction.direction]}
+          {getPredictionDirectionPresentation(prediction.direction, status).label}
         </span>
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-t-text3">
@@ -143,7 +138,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold text-t-text">{prediction.symbol}</h2>
             <span className={`rounded px-2 py-1 text-xs font-medium ${DIRECTION_CLASSES[prediction.direction]}`}>
-              {DIRECTION_LABELS[prediction.direction]}
+              {getPredictionDirectionPresentation(prediction.direction, status).label}
             </span>
             <span className="text-sm text-t-text2">
               {OUTCOME_LABELS[status] || status}
@@ -161,6 +156,8 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
       </div>
 
       <p className="mt-5 max-w-3xl break-words text-[15px] leading-7 text-t-text">{prediction.thesis}</p>
+      <p className="mt-3 max-w-3xl text-sm leading-6 text-t-text2">{getPredictionDirectionPresentation(prediction.direction, status).description}</p>
+      <p className="mt-2 text-xs leading-5 text-t-text3">{getPredictionDirectionPresentation(prediction.direction, status).historical ? '本条判断已结束，展示原判断与复盘结果。' : '未结算的条件假设，需结合入场与失效条件核对。'}</p>
 
       <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-4 border-y border-t-divider py-5 sm:grid-cols-5">
         {levels.map(([label, value]) => (

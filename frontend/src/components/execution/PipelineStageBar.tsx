@@ -30,9 +30,9 @@ function nodeClass(status: PipelineStageState['status'] | undefined, isCurrent: 
     return 'border-red-500 bg-red-500 text-white';
   }
   if (status === 'running' || isCurrent) {
-    return 'border-blue-500 bg-blue-500/20 text-blue-300';
+    return 'border-t-info bg-t-info/10 text-t-info';
   }
-  return 'border-fin-border bg-fin-bg text-fin-muted';
+  return 'border-t-border bg-t-bg text-t-text2';
 }
 
 function lineClass(
@@ -45,7 +45,7 @@ function lineClass(
   if (status === 'error' || nextStatus === 'error') {
     return 'bg-red-500/50';
   }
-  return 'bg-fin-border';
+  return 'bg-t-divider';
 }
 
 export function PipelineStageBar({
@@ -54,8 +54,8 @@ export function PipelineStageBar({
   compact = false,
 }: PipelineStageBarProps) {
   return (
-    <div className="rounded-lg border border-fin-border bg-fin-bg/30 px-3 py-3">
-      <div className="flex items-center gap-2">
+    <div className="py-2">
+      <div className="flex items-center gap-1">
         {STAGE_ORDER.map((stage, index) => {
           const state = stages?.[stage];
           const isCurrent = currentStage === stage;
@@ -63,13 +63,13 @@ export function PipelineStageBar({
             <div key={stage} className="flex items-center flex-1 min-w-0">
               <div className="flex flex-col items-center gap-1 min-w-[42px]">
                 <span
-                  className={`w-6 h-6 rounded-full border text-2xs font-semibold flex items-center justify-center transition-colors ${nodeClass(state?.status, isCurrent)}`}
+                  className={`w-6 h-6 rounded-full border text-xs font-semibold flex items-center justify-center transition-colors ${nodeClass(state?.status, isCurrent)}`}
                   title={state?.message || STAGE_LABEL[stage]}
                 >
                   {index + 1}
                 </span>
                 {!compact && (
-                  <span className={`text-2xs ${isCurrent ? 'text-fin-text' : 'text-fin-muted'}`}>
+                  <span className={`text-xs ${isCurrent ? 'text-t-text' : 'text-t-text2'}`}>
                     {STAGE_LABEL[stage]}
                   </span>
                 )}
@@ -82,7 +82,7 @@ export function PipelineStageBar({
         })}
       </div>
       {!compact && currentStage && (
-        <div className="mt-2 text-2xs text-fin-muted">
+        <div className="mt-3 text-xs leading-relaxed text-t-text2">
           当前阶段：{STAGE_LABEL[currentStage]}
           {stages?.[currentStage]?.message ? ` · ${stages[currentStage].message}` : ''}
         </div>
@@ -92,4 +92,3 @@ export function PipelineStageBar({
 }
 
 export default PipelineStageBar;
-

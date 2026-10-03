@@ -15,6 +15,8 @@ import { TodayPage } from '../../pages/TodayPage';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
 import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
+import { ContextPanelShell } from './ContextPanelShell';
+import { useDashboardStore } from '../../store/dashboardStore';
 
 export type WorkspaceView = 'today' | 'chat' | 'dashboard' | 'history';
 
@@ -29,9 +31,9 @@ type WorkspaceShellProps = {
   navigateToToday: () => void;
 };
 
-const DEFAULT_PANEL_WIDTH = 380;
-const MIN_PANEL_WIDTH = 280;
-const MAX_PANEL_WIDTH = 600;
+const DEFAULT_PANEL_WIDTH = 420;
+const MIN_PANEL_WIDTH = 360;
+const MAX_PANEL_WIDTH = 520;
 const PANEL_WIDTH_STORAGE_KEY = 'finsight_right_panel_width';
 
 const getDynamicPanelMaxWidth = () => {
@@ -62,7 +64,9 @@ export function WorkspaceShell({
   const navigate = useNavigate();
 
   const isMobile = useIsMobileLayout();
-  const { theme, setTheme, showRightPanel, setShowRightPanel } = useStore();
+  const { theme, setTheme, showRightPanel, setShowRightPanel, rightPanelExpanded, setRightPanelExpanded, openRightPanel } = useStore();
+  const activeSymbol = useDashboardStore((state) => state.activeAsset?.symbol);
+  const currentTicker = useStore((state) => state.currentTicker);
   const { quotes: marketQuotes } = useMarketQuotes();
   const [workspaceHealth, setWorkspaceHealth] = useState<WorkspaceHealthStatus | null>(null);
 
@@ -84,9 +88,6 @@ export function WorkspaceShell({
     };
   }, []);
 
-  useEffect(() => {
-    if (isMobile) setShowRightPanel(false);
-  }, [isMobile, setShowRightPanel]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
@@ -169,11 +170,14 @@ export function WorkspaceShell({
     navigateToDashboard(normalized);
   };
 
+  const expandPanel = useCallback(() => setShowRightPanel(true), [setShowRightPanel]);
+  const collapsePanel = useCallback(() => setShowRightPanel(false), [setShowRightPanel]);
+  const togglePanelDetails = useCallback(() => setRightPanelExpanded(!useStore.getState().rightPanelExpanded), [setRightPanelExpanded]);
   const contextPanelProps = {
     panelWidth,
     isExpanded: showRightPanel,
-    onExpand: () => setShowRightPanel(true),
-    onCollapse: () => setShowRightPanel(false),
+    onExpand: expandPanel,
+    onCollapse: collapsePanel,
     onResizeStart: handleResizeStart,
     autoSwitchExecution: true,
   };
@@ -186,6 +190,7 @@ export function WorkspaceShell({
         onChatClick={() => { navigateToChat(); setIsSidebarOpen(false); }}
         onHistoryClick={() => { navigateToHistory(); setIsSidebarOpen(false); }}
         onTodayClick={() => { navigateToToday(); setIsSidebarOpen(false); }}
+        onTrackRecordClick={() => { openRightPanel('track-record', true); setIsSidebarOpen(false); }}
         currentView={view}
         isMobileOpen={isSidebarOpen}
         onMobileOpen={() => setIsSidebarOpen(true)}
@@ -219,7 +224,8 @@ export function WorkspaceShell({
           </div>
         ) : null}
 
-        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           {view === 'today' ? (
             <div className="h-full min-h-0 flex-1 overflow-hidden">
               <div className="h-full min-h-0 overflow-y-auto p-5 max-sm:p-3">
@@ -230,17 +236,14 @@ export function WorkspaceShell({
             </div>
           ) : view === 'dashboard' ? (
             <DashboardWorkspace
-              isMobile={isMobile}
               symbol={dashboardSymbol}
               onBackToChat={navigateToChat}
               onSymbolChange={openDashboard}
-              contextPanel={contextPanelProps}
             />
           ) : view === 'history' ? (
             <HistoryWorkspace />
           ) : (
             <ChatWorkspace
-              isMobile={isMobile}
               theme={theme}
               onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               onDashboardRequest={openDashboard}
@@ -250,6 +253,10 @@ export function WorkspaceShell({
               initialDraft={initialChatDraft}
             />
           )}
+          </div>
+          <ContextPanelShell {...contextPanelProps} isMobile={isMobile}
+            detailExpanded={rightPanelExpanded} onToggleExpanded={togglePanelDetails}
+            symbol={dashboardSymbol || (view === 'chat' ? currentTicker || activeSymbol : activeSymbol) || undefined} />
         </div>
       </div>
 

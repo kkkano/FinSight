@@ -1,30 +1,17 @@
-import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
 import { Dashboard } from '../../pages/Dashboard';
 import { useDeveloperMode } from '../../hooks/useDeveloperMode';
-import { ContextPanelShell } from './ContextPanelShell';
 
 type DashboardWorkspaceProps = {
-  isMobile: boolean;
   symbol: string | null;
   onBackToChat: () => void;
   onSymbolChange: (symbol: string) => void;
-  contextPanel: {
-    panelWidth: number;
-    isExpanded: boolean;
-    onExpand: () => void;
-    onCollapse: () => void;
-    onResizeStart: (event: MouseEvent) => void;
-    autoSwitchExecution?: boolean;
-  };
 };
 
 export function DashboardWorkspace({
-  isMobile,
   symbol,
   onBackToChat,
   onSymbolChange,
-  contextPanel,
 }: DashboardWorkspaceProps) {
   const [developerMode] = useDeveloperMode();
 
@@ -43,15 +30,6 @@ export function DashboardWorkspace({
         )}
       </div>
 
-      <ContextPanelShell
-        isMobile={isMobile}
-        panelWidth={contextPanel.panelWidth}
-        isExpanded={contextPanel.isExpanded}
-        onExpand={contextPanel.onExpand}
-        onCollapse={contextPanel.onCollapse}
-        onResizeStart={contextPanel.onResizeStart}
-        autoSwitchExecution={contextPanel.autoSwitchExecution}
-      />
     </div>
   );
 }

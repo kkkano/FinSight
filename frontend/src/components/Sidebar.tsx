@@ -20,6 +20,7 @@ interface SidebarProps {
   onChatClick?: () => void;
   onHistoryClick?: () => void;
   onTodayClick?: () => void;
+  onTrackRecordClick?: () => void;
   currentView?: 'today' | 'chat' | 'dashboard' | 'history';
   isMobileOpen?: boolean;
   onMobileOpen?: () => void;
@@ -43,6 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onChatClick,
   onHistoryClick,
   onTodayClick,
+  onTrackRecordClick,
   currentView,
   isMobileOpen = false,
   onMobileOpen,
@@ -150,7 +152,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
           <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
           <NavItem icon={<History size={16} />} label="历史" active={activeKey === 'history'} compact={compactMobile} testId="sidebar-nav-history" onClick={() => { onHistoryClick?.(); closeMobile(); }} />
-          <NavItem icon={<Target size={16} />} label="US20 战绩" active={false} compact={compactMobile} testId="sidebar-nav-track-record" onClick={() => { navigate('/track-record'); closeMobile(); }} />
+          <NavItem icon={<Target size={16} />} label="战绩" active={false} compact={compactMobile} testId="sidebar-nav-track-record" onClick={() => { if (onTrackRecordClick) onTrackRecordClick(); else navigate('/track-record'); closeMobile(); }} />
 
           <div className="mt-auto border-t border-t-border pt-2">
             <NavItem icon={<Settings size={16} />} label="设置" active={false} compact={compactMobile} testId="sidebar-nav-settings" onClick={() => { onSettingsClick?.(); closeMobile(); }} />

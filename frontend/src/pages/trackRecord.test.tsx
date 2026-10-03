@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { TrackRecordContent } from './TrackRecordPage';
+import { BenchmarkRecordDetail } from '../components/track-record/BenchmarkTrackRecord';
 import { formatDelta, formatHitRate, formatRatio, predictionLabel, sortRecentRecords, statusLabel } from './trackRecord';
 import { makeEmptyTrackRecordFixture, makePendingTrackRecordFixture, makeTrackRecordFixture } from './trackRecord.fixtures';
 
@@ -68,5 +69,34 @@ describe('prediction track record presentation', () => {
     expect(markup).not.toContain('private.example');
     expect(markup).not.toContain('private-session');
     expect(markup).not.toContain('private-think');
+  });
+
+  it('uses vertical record rows instead of a wide table inside the workspace', () => {
+    const markup = renderToStaticMarkup(<TrackRecordContent data={makeTrackRecordFixture()} />);
+    expect(markup).not.toContain('<table');
+    expect(markup).not.toContain('min-w-[1060px]');
+    expect(markup).toContain('明细筛选与翻页不改变统计');
+  });
+
+  it('shows original prediction, actual prices and source in a record detail without private payloads', () => {
+    const data = makeTrackRecordFixture();
+    const markup = renderToStaticMarkup(<BenchmarkRecordDetail record={data.records[0]} source={data.metadata.source} />);
+    expect(markup).toContain('预先判断');
+    expect(markup).toContain('实际结果');
+    expect(markup).toContain('100.00');
+    expect(markup).toContain('103.00');
+    expect(markup).toContain('fixture-model-a');
+    expect(markup).toContain('yahoo/yfinance-0.2.66');
+  });
+
+  it('keeps pending record outcomes unknown and preserves failed opportunities', () => {
+    const data = makeTrackRecordFixture();
+    const pending = renderToStaticMarkup(<BenchmarkRecordDetail record={data.records[10]} source={data.metadata.source} />);
+    expect(pending).toContain('不计为命中或未命中');
+    expect(pending).not.toContain('100.0%');
+    expect(pending).not.toContain('0.0%');
+    const failed = renderToStaticMarkup(<BenchmarkRecordDetail record={data.records[36]} source={data.metadata.source} />);
+    expect(failed).toContain('fixture_timeout');
+    expect(failed).toContain('未形成可评分结果');
   });
 });

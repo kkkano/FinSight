@@ -18,6 +18,7 @@ import type {
 } from '../../api/domains/predictions';
 import type { PredictionOverlayLoadState } from '../../hooks/usePredictionOverlay';
 import type { PredictionEligibility } from '../../hooks/usePredictionEligibility';
+import { getPredictionDirectionPresentation } from '../../utils/predictionPresentation';
 
 type PredictionTrackProps = {
   authenticated: boolean;
@@ -79,6 +80,7 @@ function formatDateTime(value: string | null | undefined): string {
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('zh-CN', {
     month: '2-digit',
+    year: 'numeric',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
@@ -113,6 +115,8 @@ export function PredictionTrack({
   const run = generationRun?.status === 'succeeded' ? generationRun : loadState.run;
   const canGenerate = authenticated && eligibility.status === 'trusted' && !isGenerating;
   const direction = prediction ? DIRECTION[prediction.direction] : null;
+  const status = outcome?.status || prediction?.status;
+  const meaning = prediction ? getPredictionDirectionPresentation(prediction.direction, status) : null;
 
   const generationMessage = generationPhase === 'submitting'
     ? '正在创建生成任务...'
@@ -132,7 +136,51 @@ export function PredictionTrack({
             ? '尚未生成 AI 判断。'
             : loadState.failure?.message ?? '尚未生成 AI 判断。';
 
-  const generateLabel = prediction ? '刷新判断' : '生成 AI 判断';
+  const generateLabel = meaning?.historical ? '生成当前判断' : prediction ? '刷新判断' : '生成 AI 判断';
+  const controls = <div className="flex shrink-0 items-center gap-2">
+    <button type="button" data-testid="prediction-generate" onClick={onGenerate} disabled={!canGenerate}
+      className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-predict/10 px-3 text-sm font-medium text-t-predict transition-colors hover:bg-t-predict/20 disabled:cursor-not-allowed disabled:opacity-50"
+      title={!authenticated ? '登录后才能生成' : eligibility.reason || generateLabel}>
+      <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />{isGenerating ? '生成中' : generateLabel}
+    </button>
+    <button type="button" onClick={onAsk} disabled={!authenticated}
+      className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover/60 px-3 text-sm text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text disabled:opacity-50"
+      title="带当前标的和判断进入对话"><MessageCircleQuestion size={16} />追问</button>
+  </div>;
+
+  const judgmentContent = prediction && (
+    <>
+      <p data-testid="prediction-thesis" className="mt-3 max-w-[76ch] break-words text-sm leading-7 text-t-text2">{prediction.thesis}</p>
+      <div className="mt-3 max-w-[76ch] space-y-1 text-sm leading-6 text-t-text2" data-testid="prediction-meaning">
+        <p>{meaning?.description}</p>
+        <p className="text-xs text-t-text3">有效条件：{prediction.direction === 'neutral' ? '10 个交易日内保持区间，突破边界则提前失效。' : '未声明固定天数；按入场、目标、止损与失效条件结束。'}</p>
+      </div>
+      <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-x-6 gap-y-4">
+        <PriceLevel label="判断锚点" value={prediction.anchor.price} />
+        {prediction.direction === 'neutral' ? <>
+          <PriceLevel label="区间下沿" value={prediction.range_low} />
+          <PriceLevel label="区间上沿" value={prediction.range_high} />
+        </> : <>
+          <PriceLevel label="入场条件价" value={prediction.entry} />
+          <PriceLevel label="止损边界" value={prediction.stop} />
+          <PriceLevel label="假设目标 1" value={prediction.target1} />
+          <PriceLevel label="假设目标 2" value={prediction.target2} />
+        </>}
+      </div>
+      <details className="group mt-4 text-xs text-t-text3">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded py-1 hover:text-t-text2 [&::-webkit-details-marker]:hidden">
+          <Database size={13} /> 证据与模型来源
+          <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-2 flex flex-wrap items-start gap-x-5 gap-y-2 break-words leading-5">
+          <span className="inline-flex items-center gap-1"><Database size={13} className="shrink-0" />行情 {prediction.evidence_provider || eligibility.provider || '--'}</span>
+          <span className="inline-flex items-center gap-1"><Clock3 size={13} className="shrink-0" />证据 {formatDateTime(prediction.evidence_as_of || eligibility.asOf)}</span>
+          <span>模型 {run?.llm_provider && run?.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</span>
+          <span>提示版本 {prediction.prompt_version}</span>
+        </div>
+      </details>
+    </>
+  );
 
   return (
     <section
@@ -140,54 +188,36 @@ export function PredictionTrack({
       className="shrink-0 border-b border-t-divider bg-t-surface px-6 py-5 max-lg:px-4"
       aria-label="AI 判断"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 max-sm:basis-full">
+      <div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 text-[15px] font-semibold text-t-text">
               <Sparkles size={17} className="text-t-predict" />
-              AI 判断
+              {meaning?.historical ? '最近已结束判断' : 'AI 条件判断'}
             </span>
             {direction && (
               <span className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${direction.className}`}>
                 <direction.Icon size={14} />
-                {direction.text}
+                {meaning?.label}
               </span>
             )}
             {prediction && (
               <span className="text-xs text-t-text2">
-                置信度 {formatConfidence(prediction.confidence)} · {STATUS_LABELS[outcome?.status || prediction.status] || outcome?.status || prediction.status}
+                {meaning?.historical ? '已结束' : `模型自报置信度 ${formatConfidence(prediction.confidence)}`} · {STATUS_LABELS[status || ''] || status}
               </span>
             )}
+          </div>
+          {controls}
           </div>
 
           {prediction ? (
             <>
-              <p className="mt-3 max-w-[76ch] break-words text-sm leading-7 text-t-text2">{prediction.thesis}</p>
-              <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
-                <PriceLevel label="锚点" value={prediction.anchor.price} />
-                <PriceLevel label="入场" value={prediction.entry} />
-                <PriceLevel label="止损" value={prediction.stop} />
-                <PriceLevel label="目标 1" value={prediction.target1} />
-                <PriceLevel label="目标 2" value={prediction.target2} />
-              </div>
-              <details className="group mt-4 text-xs text-t-text3">
-                <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded py-1 hover:text-t-text2 [&::-webkit-details-marker]:hidden">
-                  <Database size={13} /> 证据与模型来源
-                  <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="mt-2 flex flex-wrap items-start gap-x-5 gap-y-2 break-words leading-5">
-                <span className="inline-flex items-center gap-1">
-                  <Database size={13} className="shrink-0" />
-                  行情 {prediction.evidence_provider || eligibility.provider || '--'}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock3 size={13} className="shrink-0" />
-                  证据 {formatDateTime(prediction.evidence_as_of || eligibility.asOf)}
-                </span>
-                <span>模型 {run?.llm_provider && run?.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</span>
-                <span>提示版本 {prediction.prompt_version}</span>
-                </div>
-              </details>
+              <p className="mt-2 text-xs leading-5 text-t-text3">生成于 {formatDateTime(prediction.created_at)}{meaning?.historical ? ' · 历史结果，当前没有新的有效 AI 判断' : ` · 证据截至 ${formatDateTime(prediction.evidence_as_of)}`}</p>
+              {meaning?.historical ? <details className="mt-2" data-testid="prediction-archived">
+                <summary className="cursor-pointer py-2 text-sm text-t-text2">历史判断与价位</summary>
+                {judgmentContent}
+              </details> : judgmentContent}
             </>
           ) : (
             <div className="mt-3 flex items-start gap-2 text-sm leading-6 text-t-text2" data-testid="prediction-empty-state" role="status">
@@ -208,29 +238,6 @@ export function PredictionTrack({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-          <button
-            type="button"
-            data-testid="prediction-generate"
-            onClick={onGenerate}
-            disabled={!canGenerate}
-            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-predict/10 px-3 text-sm font-medium text-t-predict transition-colors hover:bg-t-predict/20 disabled:cursor-not-allowed disabled:opacity-50 max-sm:flex-1 max-sm:justify-center"
-            title={!authenticated ? '登录后才能生成' : eligibility.reason || generateLabel}
-          >
-            <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
-            {isGenerating ? '生成中' : generateLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onAsk}
-            disabled={!authenticated}
-            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover/60 px-3 text-sm text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text disabled:opacity-50 max-sm:flex-1 max-sm:justify-center"
-            title="带当前标的和判断进入对话"
-          >
-            <MessageCircleQuestion size={16} />
-            追问
-          </button>
-        </div>
       </div>
     </section>
   );

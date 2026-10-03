@@ -14,6 +14,7 @@ import type { TimelineEvent } from '../../types/execution';
 import { buildWaterfallLayout } from './waterfallLayout';
 import { WaterfallBar } from './WaterfallBar';
 import { waterfallDotClass, formatDuration } from './colorMaps';
+import { executionSubjectLabel } from './timelineUtils';
 
 interface ParallelWaterfallProps {
   timeline: TimelineEvent[];
@@ -25,7 +26,7 @@ export function ParallelWaterfall({ timeline, compact = false }: ParallelWaterfa
 
   if (!layout.hasData) {
     return (
-      <div className="rounded-lg border border-fin-border bg-fin-card px-3 py-3 text-xs text-fin-muted">
+      <div className="py-3 text-sm text-t-text2">
         暂无并行执行步骤
       </div>
     );
@@ -34,59 +35,58 @@ export function ParallelWaterfall({ timeline, compact = false }: ParallelWaterfa
   const { lanes, totalSpanMs } = layout;
 
   return (
-    <div className="rounded-lg border border-fin-border bg-fin-card">
+    <section className="border-t border-t-divider pt-4">
       {/* 标题栏 */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-fin-border">
-        <div className="flex items-center gap-1.5 text-xs text-fin-text-secondary">
-          <Layers size={12} className="text-fin-primary" />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 text-sm font-medium text-t-text">
+          <Layers size={16} className="text-t-text2" />
           并行执行瀑布
-        </div>
-        <div className="text-2xs text-fin-muted tabular-nums">
+        </h3>
+        <div className="num text-xs text-t-text2">
           总跨度 {formatDuration(totalSpanMs)}
         </div>
       </div>
 
       {/* 泳道 */}
-      <div className={`px-3 py-2 ${compact ? 'max-h-56' : 'max-h-80'} overflow-y-auto`}>
+      <div className="mt-4 space-y-4">
         {lanes.map((lane) => (
-          <div key={lane.group} className="mb-2 last:mb-0">
+          <div key={lane.group}>
             {/* 泳道标题 */}
-            <div className="flex items-center gap-1.5 mb-1 text-[10px] text-fin-text-secondary">
-              <GitBranch size={10} className="text-fin-muted" />
-              <span className="font-medium">
-                {lane.group === '(serial)' ? '串行' : lane.group}
+            <div className="mb-2 flex flex-wrap items-start gap-1.5 text-xs text-t-text2">
+              <GitBranch size={14} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-all font-medium">
+                {lane.group === '(serial)' ? '串行步骤' : lane.group}
               </span>
               {lane.steps.length > 1 && (
-                <span className="px-1 py-px rounded bg-fin-primary/10 text-fin-primary tabular-nums">
+                <span className="num shrink-0 text-t-accent">
                   并行 ×{lane.steps.length}
                 </span>
               )}
             </div>
 
             {/* 步骤行 */}
-            <div className="space-y-1">
+            <div className={compact ? 'space-y-3' : 'space-y-4'}>
               {lane.steps.map((step) => {
                 const bar = layout.bars.get(step.stepId);
                 return (
-                  <div key={step.stepId} className="flex items-center gap-2">
+                  <div key={step.stepId}>
                     {/* 左：状态点 + 名称 */}
-                    <div className="w-32 shrink-0 flex items-center gap-1.5 min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${waterfallDotClass(step.status)}`} />
-                      <span className="truncate text-[11px] text-fin-text" title={step.name}>
-                        {step.name}
-                      </span>
+                    <div className="mb-1.5 flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-1.5">
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${waterfallDotClass(step.status)}`} />
+                        <span className="min-w-0 break-words text-xs text-t-text" title={step.name}>
+                          {executionSubjectLabel(step.name)}
+                        </span>
+                      </div>
+                      <span className="num shrink-0 text-xs text-t-text2">{formatDuration(step.durationMs)}</span>
                     </div>
                     {/* 中：bar 轨道 */}
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0">
                       {bar ? (
                         <WaterfallBar bar={bar} />
                       ) : (
                         <div className="h-4 rounded bg-slate-500/10" />
                       )}
-                    </div>
-                    {/* 右：耗时 */}
-                    <div className="w-12 shrink-0 text-right text-[10px] text-fin-muted tabular-nums">
-                      {formatDuration(step.durationMs)}
                     </div>
                   </div>
                 );
@@ -96,17 +96,15 @@ export function ParallelWaterfall({ timeline, compact = false }: ParallelWaterfa
         ))}
 
         {/* 时间刻度 */}
-        <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-fin-border">
-          <div className="w-32 shrink-0 text-[9px] text-fin-muted">时间轴</div>
-          <div className="flex-1 flex justify-between text-[9px] text-fin-muted tabular-nums">
+        <div className="border-t border-t-divider pt-3">
+          <div className="num flex justify-between text-xs text-t-text2">
             <span>0</span>
             <span>{formatDuration(totalSpanMs / 2)}</span>
             <span>{formatDuration(totalSpanMs)}</span>
           </div>
-          <div className="w-12 shrink-0" />
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 

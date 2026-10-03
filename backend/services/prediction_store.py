@@ -269,12 +269,13 @@ class PredictionStore:
                     "accepted": sum(row[2] is not None for row in rows), "counts": dict(Counter(row[0] for row in rows)),
                     "attempts": sum(row[1] for row in rows), "last_update": batch["last_update"]}
 
-    def public_report(self, *, enabled=False, limit=50, offset=0) -> dict:
+    def public_report(self, *, enabled=False, limit=50, offset=0, ticker=None, status=None, prediction_type=None) -> dict:
         rows = self._rows()
         counts = Counter(row["status"] for row in rows)
         groups = {}
         public_rows = []
-        for index, row in enumerate(rows):
+        matched_count = 0
+        for row in rows:
             context = json.loads(row["context_json"])
             prediction = json.loads(row["payload"]) if row["payload"] else json.loads(row["last_attempt_json"] or "{}")
             audit = prediction.get("metadata", {})
@@ -297,8 +298,11 @@ class PredictionStore:
                 if row["prediction_type"] == "drawdown":
                     label = ("t" if outcome["hit"] else "f") + ("p" if prediction["event_occurs"] else "n")
                     group[label] += 1
-            if offset <= index < offset + limit:
-                # Deliberate whitelist: no credentials, endpoint, raw response, snapshot or request identity.
+            matches = ((not ticker or row["ticker"] == ticker)
+                       and (not status or row["status"] == status)
+                       and (not prediction_type or row["prediction_type"] == prediction_type))
+            if matches and offset <= matched_count < offset + limit:
+                # 公开字段白名单：筛选只影响明细，累计统计保留全部历史。
                 public_rows.append({"id": row["id"], "ticker": row["ticker"], "agent": row["agent"],
                     "prediction_type": row["prediction_type"], "batch_date": row["batch_date"], "status": row["status"],
                     "direction": prediction.get("direction"), "event_occurs": prediction.get("event_occurs"),
@@ -306,6 +310,7 @@ class PredictionStore:
                     "issued_at": row["issued_at"] or prediction.get("issued_at"), "window_start": context["window_start"], "window_end": context["window_end"],
                     "actual_model": actual_model, "model_confirmed": confirmed, "prompt_version": prompt,
                     "outcome": outcome, "error_code": row["error_code"]})
+            matched_count += int(matches)
         for group in groups.values():
             group["hit_rate"] = group["hits"] / group["n"]
             group["baseline_hit_rate"] = group["baseline_hits"] / group["n"]
@@ -316,7 +321,7 @@ class PredictionStore:
                     **{status: counts[status] for status in ("settled", "pending", "failed", "missed", "abstained", "awaiting_data", "queued", "running", "interrupted")},
                     "batch_count": len({row["batch_date"] for row in rows}), "stock_count": len({row["ticker"] for row in rows})},
                 "groups": list(groups.values()), "records": public_rows,
-                "pagination": {"offset": offset, "limit": limit, "total": len(rows), "has_more": offset + limit < len(rows)},
+                "pagination": {"offset": offset, "limit": limit, "total": matched_count, "has_more": offset + limit < matched_count},
                 "metadata": {"source": SOURCE, "horizon_sessions": 5, "direction_threshold": .005, "drawdown_threshold": .05}}
 
 

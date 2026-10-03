@@ -13,18 +13,20 @@ import {
 } from '../SmartChart';
 import { Dialog } from '../ui/Dialog';
 import { EmptyState } from '../ui/EmptyState';
+import { CHART_RANGES, selectChartRange, type ChartRange } from './chartRange';
 
-export function RightPanelChartTab() {
+export function RightPanelChartTab({ symbol: selectedSymbol }: { symbol?: string } = {}) {
   const [isChartMaximized, setIsChartMaximized] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const activeSymbol = useDashboardStore((state) => state.activeAsset?.symbol);
   const currentTicker = useStore((state) => state.currentTicker);
-  const symbol = (activeSymbol || currentTicker || '').trim().toUpperCase();
+  const symbol = (selectedSymbol || currentTicker || activeSymbol || '').trim().toUpperCase();
   const [marketSeries, setMarketSeries] = useState<SmartChartData | null>(null);
   const [source, setSource] = useState<string>('market_chart');
   const [asOf, setAsOf] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  const [range, setRange] = useState<ChartRange>('3m');
 
   useEffect(() => {
     if (!isChartMaximized) return;
@@ -66,6 +68,7 @@ export function RightPanelChartTab() {
       return;
     }
     let cancelled = false;
+    setMarketSeries(null);
     setLoading(true);
     apiClient.fetchKline(symbol, '1y', '1d')
       .then((response) => {
@@ -103,17 +106,38 @@ export function RightPanelChartTab() {
     ? ((lastClose - previousClose) / previousClose) * 100
     : undefined;
   const formatPrice = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const visibleSeries = useMemo(() => marketSeries ? selectChartRange(marketSeries, range) : null, [marketSeries, range]);
+  const rangeLabel = CHART_RANGES.find((item) => item.value === range)!.label;
+  const rangeHigh = visibleSeries?.ohlc?.length ? Math.max(...visibleSeries.ohlc.map((row) => row[3])) : undefined;
+  const rangeLow = visibleSeries?.ohlc?.length ? Math.min(...visibleSeries.ohlc.map((row) => row[2])) : undefined;
+
+  const rangeControls = (
+    <div className="flex shrink-0 items-center gap-1 rounded-md bg-t-bg p-1" role="group" aria-label="行情周期">
+      {CHART_RANGES.map((item) => (
+        <button
+          key={item.value}
+          type="button"
+          aria-pressed={range === item.value}
+          onClick={() => setRange(item.value)}
+          className={`min-h-8 flex-1 rounded px-3 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-t-accent ${range === item.value ? 'bg-t-card text-t-text shadow-sm' : 'text-t-text2 hover:text-t-text'}`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
 
   const renderChart = (expanded = false) => loading ? (
     <div className="flex h-full items-center justify-center text-sm text-t-text2" role="status">
       <Loader2 className="mr-2 animate-spin" size={16} /> 正在加载真实行情…
     </div>
-  ) : marketSeries ? (
+  ) : visibleSeries ? (
     <SmartChartRenderer
-      block={expanded && marketSeries.volume?.some((value) => value > 0) ? { ...block, type: 'price_volume' } : block}
-      marketSeries={marketSeries}
+      block={expanded && visibleSeries.volume?.some((value) => value > 0) ? { ...block, type: 'price_volume' } : block}
+      marketSeries={visibleSeries}
       fillContainer
       showTitle={false}
+      fullRange
     />
   ) : (
     <div className="flex h-full items-center justify-center">
@@ -123,8 +147,8 @@ export function RightPanelChartTab() {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden p-3">
-        <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
+      <div className="h-full overflow-y-auto p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <span className="text-sm font-semibold text-t-text">{symbol || '市场'} 行情</span>
             <span className="ml-2 text-xs text-t-text2">日线</span>
@@ -139,16 +163,49 @@ export function RightPanelChartTab() {
             <Maximize2 size={16} />
           </button>
         </div>
-        <div className="min-h-0 flex-1">
+        {!loading && lastClose !== undefined && (
+          <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="num text-2xl font-semibold text-t-text">{formatPrice(lastClose)}</span>
+            {dailyChange !== undefined && (
+              <span className={`num text-sm font-medium ${dailyChange > 0 ? 'text-t-up' : dailyChange < 0 ? 'text-t-down' : 'text-t-text2'}`}>
+                {dailyChange > 0 ? '+' : ''}{dailyChange.toFixed(2)}%
+              </span>
+            )}
+            <span className="text-xs text-t-text2">最近收盘 · 当日涨跌</span>
+          </div>
+        )}
+        {rangeControls}
+        <div className="mt-3 aspect-[4/3] max-h-[340px] min-h-[240px] w-full" data-testid="context-chart-surface">
           {renderChart()}
         </div>
+        {!loading && visibleSeries && (
+          <div className="mt-4 border-t border-t-divider pt-4">
+            <dl className="grid grid-cols-3 gap-3">
+              <div>
+                <dt className="text-xs text-t-text2">区间最高</dt>
+                <dd className="num mt-1 text-sm font-medium text-t-text">{rangeHigh === undefined ? '—' : formatPrice(rangeHigh)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-t-text2">区间最低</dt>
+                <dd className="num mt-1 text-sm font-medium text-t-text">{rangeLow === undefined ? '—' : formatPrice(rangeLow)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-t-text2">交易日</dt>
+                <dd className="num mt-1 text-sm font-medium text-t-text">{visibleSeries.labels.length}</dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-xs leading-relaxed text-t-text2">
+              {visibleSeries.labels[0]?.slice(0, 10)} 至 {visibleSeries.labels.at(-1)?.slice(0, 10)}
+            </p>
+          </div>
+        )}
       </div>
 
       <Dialog
         open={isChartMaximized}
         onClose={() => setIsChartMaximized(false)}
         labelledBy="right-panel-chart-title"
-        overlayClassName="!p-2 sm:!p-6"
+        overlayClassName="!z-[70] !p-2 sm:!p-6"
         panelClassName="h-[90dvh] max-h-[900px] w-full max-w-7xl overflow-hidden rounded-lg border border-t-border bg-t-surface shadow-2xl"
       >
         <div ref={dialogRef} className="flex h-full min-h-0 flex-col">
@@ -159,7 +216,7 @@ export function RightPanelChartTab() {
                 <h2 id="right-panel-chart-title" className="text-lg font-semibold text-t-text">
                   {symbol || '市场'} 行情
                 </h2>
-                <p className="mt-1 text-xs text-t-text2">日线 · 近一年</p>
+                <p className="mt-1 text-xs text-t-text2">日线 · 近 {rangeLabel}</p>
               </div>
             </div>
             <button
@@ -189,6 +246,7 @@ export function RightPanelChartTab() {
               </dl>
             )}
           </div>
+          <div className="shrink-0 px-4 pt-3 sm:px-6">{rangeControls}</div>
           <div className="min-h-0 flex-1 overflow-hidden px-2 py-3 sm:px-5 sm:py-4">
             {renderChart(true)}
           </div>

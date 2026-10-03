@@ -5,6 +5,7 @@ import { useModelSelectionStore } from './modelSelection';
 import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
 import type { PendingChatHandoffContext } from '../types/chatHandoff';
+import type { RightPanelTab } from '../components/right-panel/types';
 
 type Theme = 'dark' | 'light';
 export type ColorConvention = 'intl' | 'cn';
@@ -267,6 +268,11 @@ interface AppState {
   setRequestMetrics: (metrics: Partial<{ llmTotalCalls: number; toolTotalCalls: number; updatedAt: string | null }>) => void;
   // 右侧面板全局可见性 - 供快捷键切换
   showRightPanel: boolean;
+  rightPanelTab: RightPanelTab;
+  rightPanelExpanded: boolean;
+  setRightPanelTab: (tab: RightPanelTab) => void;
+  setRightPanelExpanded: (expanded: boolean) => void;
+  openRightPanel: (tab: RightPanelTab, expanded?: boolean) => void;
   setShowRightPanel: (show: boolean) => void;
   toggleRightPanel: () => void;
 }
@@ -689,6 +695,8 @@ export const useStore = create<AppState>((set) => ({
   },
   // 右侧市场与执行面板默认收起，按需展开。
   showRightPanel: false,
+  rightPanelTab: 'chart',
+  rightPanelExpanded: false,
 
   addMessage: (message) =>
     set((state) => {
@@ -1370,7 +1378,11 @@ export const useStore = create<AppState>((set) => ({
     })),
 
   setShowRightPanel: (show) =>
-    set(() => ({ showRightPanel: show })),
+    set((state) => ({ showRightPanel: show, rightPanelExpanded: show && state.rightPanelExpanded })),
+
+  setRightPanelTab: (rightPanelTab) => set({ rightPanelTab }),
+  setRightPanelExpanded: (rightPanelExpanded) => set({ rightPanelExpanded }),
+  openRightPanel: (rightPanelTab, rightPanelExpanded = false) => set({ showRightPanel: true, rightPanelTab, rightPanelExpanded }),
 
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),

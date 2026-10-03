@@ -58,24 +58,41 @@ export function usePredictionHistory(options: PredictionHistoryOptions = {}) {
   return { items, stats, loading, failure, refresh };
 }
 
-export function usePredictionRun(runId: string | null | undefined) {
+export function usePredictionRunState(runId: string | null | undefined) {
   const [run, setRun] = useState<PredictionRunView | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState<PredictionFailure | null>(null);
+  const [requestKey, setRequestKey] = useState(0);
+  const refresh = useCallback(() => setRequestKey((value) => value + 1), []);
 
   useEffect(() => {
     const normalized = String(runId || '').trim();
     if (!normalized) {
       setRun(null);
+      setLoading(false);
+      setFailure(null);
       return undefined;
     }
     const controller = new AbortController();
     setRun(null);
+    setLoading(true);
+    setFailure(null);
     void apiClient.getPredictionRun(normalized, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) setRun(value);
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        if (!controller.signal.aborted) setFailure(toPredictionFailure(error));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
-  }, [runId]);
+  }, [runId, requestKey]);
 
-  return run;
+  return { run, loading, failure, refresh };
+}
+
+export function usePredictionRun(runId: string | null | undefined) {
+  return usePredictionRunState(runId).run;
 }

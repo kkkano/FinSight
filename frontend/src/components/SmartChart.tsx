@@ -1851,6 +1851,8 @@ interface SmartChartRendererProps {
   fillContainer?: boolean;
   /** 调用方已有行情标题时避免重复显示。 */
   showTitle?: boolean;
+  /** 调用方已筛选周期时，初始展示完整区间。 */
+  fullRange?: boolean;
 }
 
 const DENSE_SERIES_TYPES = new Set<SmartChartType>([
@@ -1885,6 +1887,7 @@ export function SmartChartRenderer({
   predictionId,
   fillContainer = false,
   showTitle = true,
+  fullRange = false,
 }: SmartChartRendererProps) {
   const theme = useChartTheme();
   const dashboardData = useDashboardStore((s) => s.dashboardData);
@@ -1939,11 +1942,14 @@ export function SmartChartRenderer({
     const option = block.mode === 'ref'
       ? applyPredictionOverlay(marketOption, effectivePrediction, data.labels)
       : marketOption;
+    if (fullRange && Array.isArray(option.dataZoom)) {
+      option.dataZoom = option.dataZoom.map((zoom) => ({ ...zoom, start: 0, end: 100 }));
+    }
     return {
       option: showTitle ? option : { ...option, title: { show: false } },
       renderer: getSmartChartRenderer(block.type, data),
     };
-  }, [block, dashboardData, effectivePrediction, marketSeries, showTitle, theme]);
+  }, [block, dashboardData, effectivePrediction, fullRange, marketSeries, showTitle, theme]);
 
   if (!chart) return null;
 
