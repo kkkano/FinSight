@@ -1,6 +1,6 @@
 # LangGraph 生产设计规范
 
-更新时间：2026-07-16
+更新时间：2026-10-03
 
 本文记录当前分支的运行时不变量。节点与边以 `backend/graph/runner.py` 为最终事实源；本文不代表某个 commit 已部署，也不替代生产验收证据。
 
@@ -24,21 +24,23 @@ flowchart LR
 | `direct` | 0 | 0 | 确定性术语解释或直接回复 |
 | `clarify` | 0 | 0 | 缺失标的或范围的明确追问 |
 | `research` 事实查询 | 按计划 | 0 | 基于证据的确定性渲染 |
-| `research` 分析/观点 | 按计划 | 最多 1 次 `ResearchAnalyst` | 经验证的分析答案 |
-| 长报告 | 按计划 | 1 次分析，可追加 1 次 verifier | 质量门通过后发布 |
+| `research` 分析/观点 | 按校验后的计划 | 按任务与实际重试记录 `ResearchAnalyst` 调用 | 唯一研究结果及逐维度缺口 |
+| 长报告 | 按校验后的计划 | 结构化草稿及条件核验，按实际 usage 归因 | 受支持论据和质量门均满足后发布 |
 
 Prediction 不经过 Chat 图生成，由独立 `PredictionAnalyst` 服务处理。
 
 ## 2. 节点职责
 
 1. `prepare_context`：初始化本轮状态，裁剪/摘要当前 thread 历史，规范化 UI 上下文；不得读取跨 thread 用户画像。
-2. `route_request`：用确定性规则生成 understanding、request frame、tasks、blocked tasks 和 render identity；不得调用 LLM。
-3. `collect_evidence`：只对 `research` lane 执行 policy、规则计划、DAG 和外部 I/O；其他 lane 必须零 I/O。
-4. `analyze`：事实查询构造确定性 render vars；需要判断的请求最多调用一次 `ResearchAnalyst`。
+2. `route_request`：主体绑定后通过 `request_compiler` 统一 frame、tasks、证据义务和 render identity；operation 是兼容投影，不得调用路由 LLM。
+3. `collect_evidence`：只对 `research` lane 执行 policy、规则计划、工具 schema/依赖/覆盖校验与 DAG；其他 lane 必须零业务工具 I/O。
+4. `analyze`：事实可确定性生成；研究产出唯一 `research_result`，每次模型调用有明确消费者，不追加竞争正文。
 5. `validate`：汇总 evidence、Claim、引用、拒绝项和质量阻断状态；diagnostics 不能进入 evidence pool。
 6. `render`：只消费已验证产物并生成最终回复，同时把当前 thread 的必要焦点和报告上下文写入 checkpoint。
 
 planning、policy、execution、synthesis 和 rendering 的实现分别归属对应目录。节点只做边界编排，不在节点里复制另一层的规则。
+
+计划在 I/O 前验证唯一 ID、任务引用、实际工具 `args_schema`、依赖引用与无环性。覆盖单位固定为 `(task_id, subject, evidence_kind)`，成本 profile 不删除显式义务。`depends_on` 是成功依赖，`data_dependencies` 是终态等待；Agent 可以处理某来源失败，无依赖分支不能被连带跳过。tool/Agent 通过单轮 `RequestData` 共享数据和失败状态，不跨用户或运行共享私有结果。
 
 ## 3. Collector 与 LLM 边界
 
@@ -57,14 +59,21 @@ planning、policy、execution、synthesis 和 rendering 的实现分别归属对
 - `quality != trusted` 的 Kline 不得进入 Prediction anchor 或 Outcome。
 - synthesis 与 renderer 不调用工具，不制造证据池外的数字、时间序列或引用。
 - 每个 task 必须结算为 `answered`、`partial`、`unavailable` 或 `blocked`，不能静默丢失。
+- 财务证据明确实际主体、指标、财期、频率、单位和来源；单季/累计、同比/环比和发行人不得靠模糊匹配替代校验。
+- Claim 的相反方向只有在主体、指标、维度、期限及情景可比时才构成冲突；长期趋势与短期回撤分别披露。
+- 唯一质量枚举为 `pass/warn/block`，按最严重状态合并。任何下游不得把 block 覆盖成 pass；未知质量值不能默认为成功。
+- 完整研究报告必须包含规范化受支持论据。只有事实或存在必需维度缺口时保留预览/partial，不能以非空正文作为可发布标准。
 
 ## 5. 状态与持久化
 
 - 生产 LangGraph checkpointer 使用 PostgreSQL；开发测试可显式使用内存 checkpointer。
 - 同一 thread 的焦点与报告追问上下文随 checkpoint 保存；不存在 JSON Memory 或跨 thread 用户画像回退。
-- 会话、Watchlist、报告、Prediction、Outcome、Monitor、LLM usage 均以 PostgreSQL 为核心写路径。
+- 会话、研究运行终态、权威消息、Watchlist、报告、Prediction、Outcome、Monitor、LLM usage 均以 PostgreSQL 为核心写路径。
 - RAG 的 memory 只消费当前 thread 的可信上下文；working set 与 knowledge base 使用 PostgreSQL/pgvector。
 - 应用启动只检查 Alembic revision，不在启动或请求路径创建核心表。
+- 登录运行先存问题/助手占位，终态事务提交后发完成；旧快照不能删除或覆盖权威回复。相同 run 恢复不重复模型调用，主动重新生成才分配新 run/assistant ID。
+- `GET /api/execute/runs/{run_id}` 读取 owner 隔离的终态；失联租约转为 interrupted。保存失败必须保留预览并明确 failed，不承诺未落库内容能跨重启恢复。
+- BGE/reranker 位于私网 worker；同维但不同 `embedding_identity` 的向量不可混比。语义不可用时允许 PostgreSQL 词法降级，并在健康状态明确披露。
 
 ## 6. 事件与安全
 
@@ -80,6 +89,8 @@ planning、policy、execution、synthesis 和 rendering 的实现分别归属对
 - 不从任意 collector 执行后隐式生成 Prediction。
 - 不用 synthetic/mock OHLC、搜索摘要数字或模型生成序列替代真实 Kline。
 - 不在下游重新按原始 query 猜 operation、ticker、render kind 或安全策略。
+- 不以任务数、角色数或节点数宣称实际 LLM 调用次数；必须以 usage 与阶段记录为依据。
+- 不把内存 SSE 缓冲或浏览器保存成功当成后端最终回复已提交。
 
 ## 8. 变更验收
 

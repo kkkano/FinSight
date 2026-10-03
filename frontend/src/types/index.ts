@@ -136,6 +136,8 @@ export interface QueryCoverage {
 }
 
 export interface Message {
+  runId?: string;
+  replyTo?: string;
   id: string;
   role: Role;
   content: string;

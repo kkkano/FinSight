@@ -17,6 +17,8 @@ import {
   computeNewsTags,
   filterByTimeRange,
   filterBreakingNews,
+  deduplicateNews,
+  newsIdentity,
 } from '../../../utils/news';
 import { generateNewsId } from '../../../utils/hash';
 import { SentimentStatsBar } from './news/SentimentStatsBar';
@@ -25,21 +27,6 @@ import { NewsTagChips } from './news/NewsTagChips';
 import { NewsTimeRange } from './news/NewsTimeRange';
 import { NewsCard } from './news/NewsCard';
 import { NewsSentimentOverview } from './news/NewsSentimentOverview';
-
-// ---------------------------------------------------------------------------
-// Deduplicate news items by title+source key
-// ---------------------------------------------------------------------------
-function deduplicateNews(items: NewsItem[]): NewsItem[] {
-  const seen = new Set<string>();
-  const result: NewsItem[] = [];
-  for (const item of items) {
-    const key = `${item.title || ''}::${item.source || ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // Detect which tag groups have matching items
@@ -92,8 +79,8 @@ export function NewsTab() {
   const ticker = activeAsset?.symbol ?? null;
 
   // --- Raw data arrays ---
-  const marketNews = useMemo(() => dashboardData?.news?.market ?? [], [dashboardData]);
-  const impactNews = useMemo(() => dashboardData?.news?.impact ?? [], [dashboardData]);
+  const marketNews = useMemo(() => deduplicateNews(dashboardData?.news?.market ?? []), [dashboardData]);
+  const impactNews = useMemo(() => deduplicateNews(dashboardData?.news?.impact ?? []), [dashboardData]);
 
   // --- Sub-tab counts (before time/tag filtering) ---
   const allCombined = useMemo(
@@ -166,16 +153,11 @@ export function NewsTab() {
   // --- Render ---
   return (
     <div className="space-y-4">
-      {/* 舆情总览：REST 未暴露 NewsSentimentSnapshot 时，先用新闻列表做客户端聚合。 */}
       <NewsSentimentOverview
         news={overviewNews}
         timeRange={newsTimeRange}
         ticker={ticker ?? undefined}
       />
-
-      <div className="border-y border-t-border py-2 text-2xs text-t-text3">
-        新闻排序与情绪统计为确定性规则；需要观点时使用“问这条”进入主对话。
-      </div>
 
       {/* Sub-tabs: stock / market / breaking */}
       <NewsSubTabs
@@ -218,8 +200,7 @@ export function NewsTab() {
         <div className="flex flex-col items-center justify-center h-32 text-fin-muted text-sm gap-1">
           {newsSubTab === 'breaking' ? (
             <>
-              <span className="text-lg">✅</span>
-              <span>近期无重大事件</span>
+              <span>暂无符合时效与出处要求的高影响报道</span>
             </>
           ) : (
             <span>
@@ -233,7 +214,7 @@ export function NewsTab() {
         <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
           {timeFiltered.map((news) => (
             <NewsCard
-              key={`${news.title}-${news.source}-${news.ts}`}
+              key={newsIdentity(news)}
               news={news}
               ticker={ticker ?? undefined}
               isSelected={activeSelections.some(

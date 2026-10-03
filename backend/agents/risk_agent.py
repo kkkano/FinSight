@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import re
+import json
 from typing import Any, Dict, Iterable, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
@@ -27,6 +28,7 @@ from backend.research.agent_research_loop import apply_agent_self_check
 from backend.research.prediction_contract import ForecastContext, ForecastResult
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.utils.quote import resolve_live_quote, safe_float
+from backend.tools.financial_facts import fact_date
 
 
 class RiskLevel(str, Enum):
@@ -302,7 +304,7 @@ class RiskAgent(BaseFinancialAgent):
     @classmethod
     def _build_summary(cls, ticker: str, score: float, level: RiskLevel, signals: list[RiskSignal]) -> str:
         if not signals:
-            return f"{ticker} 风险评分 {score:.1f}/100，等级 {level.value}，未发现显著风险信号。"
+            return f"{ticker} 已取得的指标未触发预设风险阈值；这不代表整体投资风险低，也不抵消已经发生的历史回撤。"
 
         category_counts: dict[str, int] = {}
         for signal in signals:
@@ -492,6 +494,44 @@ class RiskAgent(BaseFinancialAgent):
 
         return signals
 
+    @staticmethod
+    def _risk_tool_payload(raw: Any) -> dict[str, Any]:
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                return {"error": "invalid_risk_payload"}
+        return raw if isinstance(raw, dict) else {"error": "invalid_risk_payload"}
+
+    @staticmethod
+    async def _call_risk_tool(tool: Any, *args: Any, **kwargs: Any) -> Any:
+        if not callable(tool):
+            return {"error": "risk_tool_unavailable"}
+        try:
+            return await asyncio.to_thread(tool, *args, **kwargs)
+        except Exception as exc:
+            return {"error": "risk_tool_failed", "error_type": type(exc).__name__}
+
+    @classmethod
+    def _historical_drawdown_payload(cls, raw: Any, ticker: str) -> dict[str, Any]:
+        payload = cls._risk_tool_payload(raw)
+        if not payload.get("error"):
+            subject = str(payload.get("ticker") or ticker).upper()
+            value = safe_float(payload.get("max_drawdown"))
+            if subject != ticker.upper() or value is None or not -1 <= value <= 0:
+                return {"error": "historical_drawdown_unverified"}
+            return payload
+        if not isinstance(raw, str):
+            return payload
+        coverage = re.search(r"(?:Top 3 Historical Drawdowns|No significant drawdowns found) for ([A-Za-z0-9.^=-]+).*?(?:coverage|Coverage:)\s*([\d-]{10}) to ([\d-]{10})", raw, re.IGNORECASE | re.DOTALL)
+        if not coverage or coverage.group(1).upper() != ticker.upper() or not fact_date(coverage.group(2)) or not fact_date(coverage.group(3)) or coverage.group(2) > coverage.group(3):
+            return {"error": "historical_drawdown_unverified"}
+        values = [safe_float(value) for value in re.findall(r"- Drawdown:\s*(-?\d+(?:\.\d+)?)%", raw)]
+        values = [value / 100 for value in values if value is not None and -100 <= value <= 0]
+        if not values and "No significant drawdowns found" not in raw:
+            return {"error": "historical_drawdown_unverified"}
+        return {"ticker": ticker, "source": "historical_price_analysis", "period_start": coverage.group(2), "period_end": coverage.group(3), "max_drawdown": min(values) if values else 0.0, "definition": "historical_close_to_running_peak", "error": None}
+
     async def research(
         self,
         query: str,
@@ -513,13 +553,21 @@ class RiskAgent(BaseFinancialAgent):
 
         positions = [{"ticker": clean_ticker, "weight": 1.0}]
         get_factor_exposure = getattr(self.tools, "get_factor_exposure", None)
-        factor_payload = (
-            await asyncio.to_thread(get_factor_exposure, positions, lookback_days=252)
-            if get_factor_exposure
-            else {}
+        factor_payload = await self._call_risk_tool(get_factor_exposure, positions, lookback_days=252)
+        factor_payload = self._risk_tool_payload(factor_payload)
+        positions_payload = factor_payload.get("positions")
+        if isinstance(positions_payload, list) and any(str(position.get("ticker") or "").upper() != clean_ticker for position in positions_payload if isinstance(position, dict)):
+            factor_payload = {"error": "factor_subject_mismatch"}
+        valid_factor = not factor_payload.get("error") and (
+            any(safe_float((factor_payload.get("factor_beta") or {}).get(key)) is not None for key in ("market", "growth"))
+            if isinstance(factor_payload.get("factor_beta"), dict) else False
         )
-        if not isinstance(factor_payload, dict):
-            factor_payload = {"error": "invalid_factor_payload"}
+        volatility_value = safe_float(factor_payload.get("annualized_volatility"))
+        valid_factor = valid_factor or (not factor_payload.get("error") and volatility_value is not None and volatility_value >= 0)
+        get_drawdowns = getattr(self.tools, "analyze_historical_drawdowns", None)
+        drawdown_payload = self._historical_drawdown_payload(
+            await self._call_risk_tool(get_drawdowns, clean_ticker), clean_ticker,
+        )
 
         extra_signals = self._build_factor_signals(
             ticker=clean_ticker,
@@ -547,35 +595,42 @@ class RiskAgent(BaseFinancialAgent):
         fallback_used = source == "yfinance_fallback" or quote is None
         evidence_text = str(raw_payload) if raw_payload is not None else str(quote or {})
 
+        score_available = valid_factor or any(signal.category != "data_quality" for signal in assessment.signals)
         evidence = [
             EvidenceItem(
                 text=evidence_text[:1000],
                 source=source,
                 timestamp=assessment.assessed_at,
                 meta={
-                    "risk_score": assessment.risk_score,
-                    "risk_level": assessment.risk_level.value,
+                    "risk_score": assessment.risk_score if score_available else None,
+                    "risk_level": assessment.risk_level.value if score_available else "unknown",
+                    "risk_score_available": score_available,
                 },
             )
-        ]
-        data_sources = [source]
+        ] if quote is not None else []
+        data_sources = [source] if quote is not None else []
 
         if (
-            isinstance(factor_payload, dict)
-            and not factor_payload.get("error")
-            and isinstance(factor_payload.get("factor_beta"), dict)
+            valid_factor
         ):
             evidence.append(
                 EvidenceItem(
                     text="Single-symbol factor exposure snapshot.",
                     source=str(factor_payload.get("source") or "factor_model"),
-                    timestamp=assessment.assessed_at,
+                    timestamp=str(factor_payload.get("as_of") or assessment.assessed_at),
                     meta=factor_payload,
                 )
             )
             data_sources.append(str(factor_payload.get("source") or "factor_model"))
+        if not drawdown_payload.get("error") and safe_float(drawdown_payload.get("max_drawdown")) is not None:
+            evidence.append(EvidenceItem(
+                text=f"历史最大回撤 {safe_float(drawdown_payload['max_drawdown']):.2%}，覆盖 {drawdown_payload.get('period_start') or '未知起点'} 至 {drawdown_payload.get('period_end') or '未知终点'}；这是历史事实，不是未来回撤预测。",
+                source=str(drawdown_payload.get("source") or "historical_price_analysis"),
+                timestamp=drawdown_payload.get("period_end"), meta=drawdown_payload,
+            ))
+            data_sources.append(str(drawdown_payload.get("source") or "historical_price_analysis"))
 
-        if not isinstance(factor_payload, dict) or factor_payload.get("error"):
+        if not valid_factor:
             fallback_used = True
 
         assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
@@ -586,7 +641,7 @@ class RiskAgent(BaseFinancialAgent):
             evidence=evidence,
             factor_payload=factor_payload,
             confidence=0.75 if quote is not None else 0.45,
-        )
+        ) if score_available else []
 
         # P2-8：风险维度雷达图 + 综合风险仪表盘，维度/评分不足时返回 []
         chart_specs = build_risk_chart_specs(
@@ -594,11 +649,11 @@ class RiskAgent(BaseFinancialAgent):
             assessment.risk_score,
             assessment.risk_level.value,
             self._dimension_scores(assessment.signals),
-        )
+        ) if score_available else []
 
         output = AgentOutput(
             agent_name=self.AGENT_NAME,
-            summary=assessment.summary,
+            summary=(assessment.summary if score_available else f"{clean_ticker} 综合风险评分未知。[数据缺失] 未取得有效因子/波动风险输入，不能据此断言低风险。") + (" [数据缺失] 因子风险数据不可用，当前评分仅覆盖已取得的风险输入。" if score_available and not valid_factor else ""),
             evidence=evidence,
             confidence=0.75 if quote is not None else 0.45,
             data_sources=list(dict.fromkeys(data_sources)),
@@ -607,7 +662,7 @@ class RiskAgent(BaseFinancialAgent):
             chart_specs=chart_specs,
             fallback_used=fallback_used,
             risks=[signal.description for signal in assessment.signals],
-            fallback_reason="quote_unavailable" if quote is None else None,
+            fallback_reason="risk_inputs_unavailable" if not score_available else "quote_unavailable" if quote is None else None,
             retryable=True,
         )
         output = apply_agent_quality_contract(output, query=query_text, ticker=clean_ticker)
@@ -635,16 +690,20 @@ class RiskAgent(BaseFinancialAgent):
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} 综合风险评分为 {assessment.risk_score:.1f}/100（{_risk_level_cn(assessment.risk_level.value)}风险）。",
-                    evidence_ids=[source_ids[0]],
+                    claim=(f"{ticker} 已取得的指标未触发预设风险阈值；这不代表整体投资风险低。"
+                           if not assessment.signals else
+                           f"{ticker} 已观测规则的风险评分为 {assessment.risk_score:.1f}/100（{_risk_level_cn(assessment.risk_level.value)}规则信号强度）。"),
+                    evidence_ids=source_ids,
                     stance="risk",
                     confidence=confidence,
-                    limitations=["基于规则的综合风险评分，形成判断前请核实驱动因素。"],
-                    metadata={"claim_type": "risk_score", "risk_level": assessment.risk_level.value},
+                    limitations=["仅衡量本轮可观测指标触发预设规则的程度，不等于对整体投资风险的完整评级。"],
+                    metadata={"claim_type": "risk_score", "risk_level": assessment.risk_level.value,
+                              "assessment_scope": "observed_rule_signals"},
                 )
             )
 
-        if len(source_ids) >= 2 and isinstance(factor_payload.get("factor_beta"), dict):
+        factor_source_ids = [str((item.meta or {}).get("source_id") or "") for item in evidence if isinstance((item.meta or {}).get("factor_beta"), dict)]
+        if factor_source_ids and isinstance(factor_payload.get("factor_beta"), dict):
             beta = factor_payload.get("factor_beta") or {}
             claims.append(
                 build_agent_claim(
@@ -652,10 +711,10 @@ class RiskAgent(BaseFinancialAgent):
                     ticker=ticker,
                     query=query,
                     claim=(
-                        f"{ticker} 因子暴露偏高：市场 beta={safe_float(beta.get('market'))}，"
+                        f"{ticker} 因子暴露快照：市场 beta={safe_float(beta.get('market'))}，"
                         f"成长 beta={safe_float(beta.get('growth'))}。"
                     ),
-                    evidence_ids=[source_ids[1]],
+                    evidence_ids=factor_source_ids,
                     stance="risk",
                     confidence=confidence,
                     limitations=["因子暴露基于历史模型快照，不代表未来表现。"],

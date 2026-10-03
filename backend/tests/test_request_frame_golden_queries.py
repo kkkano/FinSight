@@ -26,6 +26,7 @@ class GoldenQueryCase:
 GOLDEN_QUERY_CASES = [
     GoldenQueryCase(
         query="NVDA and AMD which valuation is more reasonable",
+        expected_frame_count=3,
         expected_relation="rank",
         expected_tickers=["NVDA", "AMD"],
         expected_evidence=["price_snapshot", "company_profile", "earnings_estimates"],
@@ -124,6 +125,7 @@ GOLDEN_QUERY_CASES = [
     ),
     GoldenQueryCase(
         query="Compare AAPL and MSFT risk",
+        expected_frame_count=3,
         expected_relation="compare",
         expected_tickers=["AAPL", "MSFT"],
         expected_evidence=["price_snapshot", "risk_profile"],

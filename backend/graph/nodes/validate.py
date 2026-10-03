@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from backend.graph.state import GraphState
+from backend.report.quality_engine import evaluate_result_quality
 
 
 def _mapping_size(value: Any) -> int:
@@ -25,9 +26,15 @@ def validate(state: GraphState) -> dict[str, Any]:
         1 for item in evidence_pool
         if isinstance(item, dict) and str(item.get("url") or item.get("source_url") or "").strip()
     )
-    blocked = bool(artifacts.get("quality_blocked"))
+    quality = evaluate_result_quality(state=state)
+    artifacts["result_quality"] = quality
+    artifacts["quality_blocked"] = quality["state"] == "block"
+    artifacts["publishable"] = quality["publishable"]
+    blocked = artifacts["quality_blocked"]
     validation = {
-        "status": "blocked" if blocked else "passed",
+        "status": "blocked" if blocked else "partial" if quality["state"] == "warn" else "passed",
+        "answer_status": quality["answer_status"],
+        "quality": quality,
         "evidence_ledger_entries": _mapping_size(ledger.get("items") if isinstance(ledger, dict) else {}),
         "evidence_count": len(evidence_pool),
         "citation_count": citation_count,

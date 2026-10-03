@@ -66,6 +66,8 @@ services:
       no_proxy:                     ${no_proxy:-host.docker.internal,localhost,127.0.0.1}
       # HuggingFace mirror (bypasses GFW, used by BGE-M3 / reranker model downloads)
       HF_ENDPOINT:                  https://hf-mirror.com
+      RAG_WORKER_URL:               http://rag-inference:8010
+      RAG_RERANKER:                 ${RAG_RERANKER:-none}
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
       RAG_V2_ALLOW_MEMORY_FALLBACK: "false"
@@ -97,6 +99,36 @@ services:
       - finsight-net
 
   # ── Frontend (Nginx + React SPA) ────────────────────────────────────────────
+  rag-inference:
+    image: finsight-backend:${IMAGE_TAG:-local}
+    build: *backend-build
+    container_name: finsight-rag-inference
+    restart: "on-failure:3"
+    command: ["python", "-m", "uvicorn", "backend.rag.worker:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1"]
+    environment:
+      RAG_WORKER_TOKEN: ${RAG_WORKER_TOKEN:?RAG_WORKER_TOKEN is required}
+      RAG_RERANKER: ${RAG_RERANKER:-none}
+      HF_ENDPOINT: https://hf-mirror.com
+      BGE_M3_DEVICE: cpu
+      RAG_WORKER_MIN_AVAILABLE_MB: ${RAG_WORKER_MIN_AVAILABLE_MB:-2400}
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    mem_limit: ${RAG_WORKER_MEMORY_LIMIT:-3000m}
+    memswap_limit: ${RAG_WORKER_MEMORY_SWAP_LIMIT:-3600m}
+    cpus: ${RAG_WORKER_CPUS:-1.0}
+    pids_limit: 128
+    volumes:
+      - model_cache:/app/.cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8010/health',timeout=2))['inference_verified']"]
+      interval: 30s
+      timeout: 5s
+      start_period: 180s
+      retries: 3
+    networks:
+      - finsight-net
+
   frontend:
     image: finsight-frontend:${IMAGE_TAG:-local}
     build:

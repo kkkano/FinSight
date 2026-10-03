@@ -142,8 +142,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     const pendingHandoff = initialState.takePendingChatHandoffContext(requestSessionId);
 
     const isRequestSessionActive = () => useStore.getState().sessionId === requestSessionId;
+    let serverSaved = false;
     const updateScopedMessage = (id: string, patch: Partial<Message>) => {
-      useStore.getState().updateMessageInSession(requestSessionId, id, patch);
+      useStore.getState().updateMessageInSession(requestSessionId, id, patch, { syncBackend: !serverSaved });
     };
 
     // 2. 历史与消息槽位：发送新增消息，重试原位复用 assistant 消息。
@@ -155,17 +156,23 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       .slice(-DEFAULT_HISTORY_LIMIT)
       .map((message) => ({ role: message.role, content: message.content }));
 
+    const requestRunId = uuidv4();
+    const userMessageId = retryMessageId
+      ? [...historySource].reverse().find((message) => message.role === 'user')?.id || uuidv4()
+      : uuidv4();
     if (!retryMessageId) {
       initialState.addMessageToSession(requestSessionId, {
-        id: uuidv4(), role: 'user', content: userMsgContent, timestamp: Date.now(),
+        id: userMessageId, role: 'user', content: userMsgContent, timestamp: Date.now(),
       });
     }
-    const aiMsgId = retryMessageId || uuidv4();
+    const aiMsgId = uuidv4();
     if (retryMessageId) {
-      updateScopedMessage(aiMsgId, { content: '', isLoading: true, error: undefined, canRetry: false });
+      updateScopedMessage(retryMessageId, { id: aiMsgId, runId: requestRunId, replyTo: userMessageId,
+        content: '', isLoading: true, error: undefined, canRetry: false });
     } else {
       initialState.addMessageToSession(requestSessionId, {
-        id: aiMsgId, role: 'assistant', content: '', timestamp: Date.now(), isLoading: true,
+        id: aiMsgId, runId: requestRunId, replyTo: userMessageId,
+        role: 'assistant', content: '', timestamp: Date.now(), isLoading: true,
       });
     }
 
@@ -189,6 +196,14 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     let terminalHandlingPromise: Promise<void> | null = null;
     const outputMode = opts.outputMode ?? 'chat';
     const requestStartedAt = Date.now();
+    const confirmAnswerSaved = async (persistenceStatus?: string) => {
+      if (persistenceStatus === 'saved' || persistenceStatus === 'ephemeral') return;
+      if (isRequestSessionActive()) useStore.getState().setStatus(zh.chat.savingAnswer);
+      const saved = persistenceStatus === 'failed' ? false : await useStore.getState().flushConversationSync(requestSessionId);
+      if (!saved && isRequestSessionActive()) {
+        toast({ type: 'warning', title: zh.chat.answerSaveFailedTitle, message: zh.chat.answerSaveFailedMessage });
+      }
+    };
 
     // 3. 断流后的报告回捞。
     const recoverReportIfAvailable = async (): Promise<boolean> => {
@@ -260,6 +275,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       await apiClient.sendMessageStream(
         {
           query: userMsgContent,
+          run_id: requestRunId,
+          client_user_message_id: userMessageId,
+          client_assistant_message_id: aiMsgId,
           history,
           context: streamContext,
           options: {
@@ -297,9 +315,12 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           onDone: (report, thinking, meta) => {
             terminalHandlingPromise = (async () => {
               const degraded = meta?.degraded === true;
+              serverSaved = meta?.persistence_status === 'saved';
+              if (typeof meta?.assistant_message?.content === 'string') fullContent = meta.assistant_message.content;
               const doneStep: ThinkingStep = {
                 stage: 'done',
-                message: zh.chat.analysisDone,
+                message: meta?.quality_blocked ? zh.chat.qualityBlocked
+                  : meta?.answer_status === 'partial' ? zh.chat.analysisPartial : zh.chat.analysisDone,
                 timestamp: new Date().toISOString(),
                 eventType: 'done',
                 result: { type: 'done', status: 'done', reason: meta?.reason },
@@ -352,7 +373,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 evidence_pool: meta?.evidence_pool ?? meta?.data?.evidence_pool,
                 fallback_used: degraded,
                 data_origin: degraded ? 'LLM' : undefined,
+                canRetry: meta?.quality_blocked === true || meta?.persistence_status === 'failed',
               });
+              await confirmAnswerSaved(meta?.persistence_status);
               if (degraded) {
                 toast({ type: 'warning', title: zh.chat.degradedTitle, message: typeof meta?.degradation_message === 'string' && meta.degradation_message.trim()
                   ? meta.degradation_message : zh.chat.degradedMessage });

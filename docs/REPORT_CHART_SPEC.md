@@ -1,8 +1,16 @@
 # Report 与 Chart 合同
 
-更新时间：2026-07-13　前端基线：ECharts 6
+更新时间：2026-10-03　前端基线：ECharts 6
 
 FinSight 支持两类图表：报告 `ReportIR` 中的结构化 chart，以及对话 Markdown 中的 `<chart>` / `<chart_ref>`。优先使用真实数据引用，避免 LLM 重写数值。
+
+## 报告与研究结果
+
+报告消费唯一 `research_result` 中的任务结果、事实、受支持 Claim、引用和缺口。renderer 展示已确定的主体/维度，不重新选择意图，也不另生成竞争正文。
+
+质量由 `evaluate_result_quality` 统一合并为 `pass/warn/block`，已有阻断不可被报告构建覆盖。完整报告必须有规范化受支持论据并满足必需维度；facts-only 或缺口结果可以返回 `blocked_report` 预览，但不能进入报告索引、分享或最终缓存。内部 conflict ID 留在诊断数据，正文说明实际冲突的指标和期限。
+
+`done`、`publishable`、`archived`、`persistence_status` 各有独立含义。正文生成后须保存服务器终态与助手消息，报告归档失败或会话保存失败均保留预览并明确提示。刷新恢复按 run/message ID 读取权威内容，不能依赖浏览器最后一次快照。
 
 ## ReportIR chart
 
@@ -36,10 +44,13 @@ FinSight 支持两类图表：报告 `ReportIR` 中的结构化 chart，以及�
 
 - `citation_refs` 必须指向报告 citations 中存在的 source id。
 - 所有时间序列标明时区/as-of、币种、单位和复权口径（适用时）。
+- 财务序列保留实际财期、单季/累计频率与指标定义；不能把非日历财年改成日历季末，也不能混画季度与年度值而不说明。
+- 多标的图表逐项核对发行人和证据绑定；官方 URL 不等于已核验属于目标公司。
 - 前端不得执行任意函数、HTML 或由模型提供的 JavaScript；只接受数据型 ECharts option。
 - 限制点数、series 数和字符串长度；超大数据在后端抽样/聚合。
 - 缺失值使用 `null`，不要用 0 冒充。
 - 图表说明不得与 series 数值或引用证据冲突。
 - tooltip 与坐标轴必须按币种/百分比格式化并限制小数位，不显示二进制浮点长尾。
+- 客户端异步注入的图表标记不属于服务器权威正文，不能通过整份会话快照覆盖已保存回复；需要刷新可恢复的图表应使用服务器 artifact 或明确的持久视图数据。
 
 修改合同必须同步后端 ReportIR/schema、前端 SmartChart/报告渲染、OpenAPI/TypeScript 类型和单测。

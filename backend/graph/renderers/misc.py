@@ -12,6 +12,7 @@ from urllib.parse import quote_plus
 from backend.graph.state import GraphState
 from backend.graph.renderers.news import _format_news_item
 from backend.graph.renderers.price import _format_price_line
+from backend.graph.renderers.synthesis_vars import _useful_render_var
 from backend.graph.renderers.shared import (
     _append_render_var_block,
     _append_sources_for_state,
@@ -96,18 +97,78 @@ def render_last_report_followup(state: GraphState, ctx: dict[str, Any]) -> str |
     binding = ctx["binding"]
     if not (last_report and binding.get("source") == "last_report"):
         return None
+    query = str(state.get("query") or "").strip()
+    artifacts = ctx["artifacts"]
+    draft = artifacts.get("draft_markdown")
+    # artifacts 每轮重置；本轮已生成的答复不能被上一份报告的风险摘要覆盖。
+    if isinstance(draft, str) and draft.strip() and draft.strip() != query:
+        return _finalize_chat_markdown([draft.strip()], state)
+
     title = str(last_report.get("title") or "刚才那份报告").strip()
     summary = str(last_report.get("summary") or "").strip()
-    risks = last_report.get("risks") if isinstance(last_report.get("risks"), list) else []
     lines = [f"可以，按《{title}》继续聊。"]
-    if risks:
-        lines.append("")
-        lines.append("这份报告里最需要先看的风险是：")
-        for item in risks[:4]:
-            text = str(item or "").strip()
-            if text:
-                lines.append(f"- {text}")
-    elif summary:
+    topics = (
+        ("催化剂", r"催化|事件|\b(?:catalysts?|events?)\b", ("catalysts", "next_watch")),
+        ("估值", r"估值|市盈率|市净率|贵不贵|\b(?:valuation|valuations|p/e|p/b|multiples?)\b", ("valuation",)),
+        ("财务", r"财务|财报|营收|收入|盈利|利润|现金流|\b(?:financials?|earnings|revenue|profit|cash\s*flow)\b", ("financials", "financial_summary", "valuation")),
+        ("风险", r"风险|\brisks?\b", ("risks",)),
+    )
+    matched_topic = False
+    used_report_sections = False
+    for label, pattern, keys in topics:
+        if not re.search(pattern, query, re.IGNORECASE):
+            continue
+        matched_topic = True
+        blocks: list[str] = []
+        for payload in (ctx["render_vars"], last_report):
+            for key in keys:
+                value = payload.get(key)
+                if key == "risks" and isinstance(value, list):
+                    value = "\n".join(f"- {item.strip()}" for item in value[:4] if isinstance(item, str) and item.strip())
+                if not isinstance(value, str):
+                    continue
+                text = _useful_render_var({key: value}, key)
+                if label == "风险":
+                    text = "\n".join(
+                        line for line in text.splitlines()
+                        if not any(marker in line for marker in ("仅供参考", "不构成投资建议", "免责声明"))
+                    ).strip()
+                if label == "财务" and key == "valuation" and not re.search(pattern, text, re.IGNORECASE):
+                    continue
+                if text and "将基于新闻/财报证据进一步细化" not in text:
+                    blocks.append(text)
+            if blocks:
+                break
+        if not blocks:
+            sections = list(last_report.get("sections") or [])
+            for section in sections:
+                if not isinstance(section, dict):
+                    continue
+                sections.extend(section.get("subsections") or [])
+                if not re.search(pattern, str(section.get("title") or ""), re.IGNORECASE):
+                    continue
+                for content in section.get("contents") or []:
+                    if not isinstance(content, dict) or content.get("type", "text") != "text":
+                        continue
+                    value = content.get("content")
+                    if isinstance(value, str):
+                        text = _useful_render_var({"section": value}, "section")
+                        if text:
+                            blocks.append(text)
+            used_report_sections = used_report_sections or bool(blocks)
+        heading = "这份报告里最需要先看的风险是：" if label == "风险" else f"**{label}**"
+        lines.extend(["", heading])
+        if blocks:
+            lines.extend(dict.fromkeys(blocks))
+        else:
+            lines.append(f"[数据缺失] 当前报告上下文没有可用的{label}正文，本轮也没有生成对应证据，无法据此补充具体判断。")
+    if matched_topic:
+        if used_report_sections:
+            citations = last_report.get("citations")
+            _append_sources_for_state(lines, citations if isinstance(citations, list) else [], state)
+        return _finalize_chat_markdown(lines, state)
+
+    if summary:
         lines.append("")
         lines.append(summary[:700])
     else:

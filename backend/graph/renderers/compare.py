@@ -25,6 +25,7 @@ from backend.graph.renderers.shared import (
 )
 from backend.graph.renderers.synthesis_vars import _agent_summary
 from backend.graph.state import GraphState
+from backend.tools.financial_facts import normalize_currency, parse_profile_market_cap
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE
 
 
@@ -75,11 +76,17 @@ def _first_number(payload: dict[str, Any], aliases: tuple[str, ...]) -> float | 
     return None
 
 
-def _parse_company_valuation(output: Any) -> dict[str, float]:
+def _parse_company_valuation(output: Any) -> dict[str, Any]:
     parsed = _parse_jsonish(output)
-    metrics: dict[str, float] = {}
+    metrics: dict[str, Any] = {}
+    amount = parse_profile_market_cap(parsed)
+    if amount.value is not None and amount.value > 0:
+        metrics["market_cap"] = amount.value
+        metrics["currency"] = amount.currency
     if isinstance(parsed, dict):
         for field, aliases in _VALUATION_FIELD_ALIASES.items():
+            if field == "market_cap":
+                continue
             value = _first_number(parsed, aliases)
             if value is not None and value > 0:
                 metrics[field] = value
@@ -87,6 +94,8 @@ def _parse_company_valuation(output: Any) -> dict[str, float]:
     if not isinstance(parsed, str):
         return metrics
     for field, labels in _VALUATION_TEXT_LABELS.items():
+        if field == "market_cap":
+            continue
         for label in labels:
             match = re.search(
                 rf"(?:^|\n)\s*-?\s*{re.escape(label)}\s*:\s*([^\n]+)",
@@ -108,6 +117,9 @@ def _forward_eps_from_estimates(payload: dict[str, Any]) -> tuple[float | None, 
         return None, ""
     for row in rows:
         if not isinstance(row, dict):
+            continue
+        period = str(row.get("period") or "").strip().lower()
+        if period not in {"0y", "+1y", "current_year", "next_year", "currentyear", "nextyear"} and str(row.get("frequency") or payload.get("frequency") or "").lower() != "annual":
             continue
         estimate = _first_number(
             row,
@@ -146,6 +158,7 @@ def _valuation_evidence_by_ticker(
             if forward_eps is not None:
                 row["forward_eps"] = forward_eps
                 row["forward_eps_period"] = period
+                row["eps_currency"] = normalize_currency(parsed.get("currency") or parsed.get("financialCurrency"))
             continue
         metrics = parsed.get("metrics")
         if isinstance(metrics, dict):
@@ -159,20 +172,22 @@ def _valuation_evidence_by_ticker(
             continue
         price = _as_number((prices.get(ticker) or {}).get("price"))
         forward_eps = _as_number(row.get("forward_eps"))
-        if price is not None and forward_eps is not None and forward_eps > 0:
+        quote_currency = normalize_currency((prices.get(ticker) or {}).get("currency"))
+        if price is not None and forward_eps is not None and forward_eps > 0 and quote_currency and quote_currency == row.get("eps_currency"):
             row["forward_pe"] = price / forward_eps
             row["forward_pe_derived"] = True
     return evidence
 
 
-def _format_market_cap(value: float) -> str:
+def _format_market_cap(value: float, currency: str | None = None) -> str:
+    prefix = f"{currency} " if currency else "[币种未提供] "
     if value >= 1e12:
-        return f"${value / 1e12:.2f}T"
+        return f"{prefix}{value / 1e12:.2f}T"
     if value >= 1e9:
-        return f"${value / 1e9:.2f}B"
+        return f"{prefix}{value / 1e9:.2f}B"
     if value >= 1e6:
-        return f"${value / 1e6:.2f}M"
-    return f"${value:,.0f}"
+        return f"{prefix}{value / 1e6:.2f}M"
+    return f"{prefix}{value:,.0f}"
 
 
 def _valuation_conclusion(tickers: list[str], evidence: dict[str, dict[str, Any]]) -> str:
@@ -357,7 +372,7 @@ def _render_research_compare_markdown(
         if "valuation" in facets:
             valuation = valuation_evidence.get(ticker, {})
             if valuation.get("market_cap"):
-                lines.append(f"  - 市值：{_format_market_cap(float(valuation['market_cap']))}")
+                lines.append(f"  - 市值：{_format_market_cap(float(valuation['market_cap']), valuation.get('currency'))}")
             multiple_lines: list[str] = []
             for field, label_text in (
                 ("trailing_pe", "Trailing P/E"),

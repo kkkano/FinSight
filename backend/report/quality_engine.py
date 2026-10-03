@@ -305,6 +305,82 @@ def apply_quality_to_report(report: Any) -> tuple[dict[str, Any], bool]:
     return quality, blocked
 
 
+def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | None = None) -> dict[str, Any]:
+    """聊天、报告和终态服务共用裁决；已有阻断不得被后续成功覆盖。"""
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    quality = extract_report_quality(report)
+    sources = [
+        artifacts.get("result_quality"), artifacts.get("research_synthesis_gate"),
+        artifacts.get("research_result_quality"),
+    ]
+    for source in sources:
+        if isinstance(source, dict):
+            quality = merge_report_quality_payload(
+                existing_quality={**quality, "state": merge_quality_states(quality.get("state"), source.get("state"))},
+                reason_groups=[normalize_quality_reasons(source.get("reasons"))],
+            )
+
+    result = artifacts.get("research_result")
+    if not isinstance(result, dict):
+        result = artifacts.get("research_synthesis") if isinstance(artifacts.get("research_synthesis"), dict) else {}
+    tasks = result.get("task_results")
+    if not isinstance(tasks, list):
+        tasks = artifacts.get("task_outcomes") if isinstance(artifacts.get("task_outcomes"), list) else []
+    tasks = [task for task in tasks if isinstance(task, dict)]
+    claims = result.get("claim_index") if isinstance(result.get("claim_index"), dict) else {}
+    evidence = result.get("evidence_index") if isinstance(result.get("evidence_index"), dict) else {}
+    if not evidence:
+        normalization = artifacts.get("task_evidence_normalization") or {}
+        evidence = normalization.get("evidence_index") if isinstance(normalization, dict) else {}
+        evidence = evidence if isinstance(evidence, dict) else {}
+    supported_facts = [item for item in evidence.values() if isinstance(item, dict) and item.get("usage") == "fact"]
+    supported = bool(claims or supported_facts)
+    reasons: list[dict[str, Any]] = []
+
+    def reason(code: str, severity: str, message: str) -> None:
+        reasons.append(_quality_reason(code=code, severity=severity, metric="answer", actual=False, threshold=True, message=message))
+
+    if artifacts.get("quality_blocked"):
+        reason(str(artifacts.get("error_code") or "RESULT_QUALITY_BLOCKED"), "block", "研究结果未通过质量检查。")
+    structural = artifacts.get("task_structural_block_reasons") or artifacts.get("research_structural_block_reasons") or []
+    for code in structural if isinstance(structural, list) else []:
+        reason(str(code), "block", "任务或引用结构不一致。")
+    report_mode = str(state.get("output_mode") or "") == "investment_report"
+    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
+    coverage = trace.get("coverage_validator") if isinstance(trace.get("coverage_validator"), dict) else {}
+    missing_requirements = coverage.get("missing_requirements") if isinstance(coverage.get("missing_requirements"), list) else []
+    for missing in missing_requirements:
+        if isinstance(missing, dict):
+            reasons.append(_quality_reason(
+                code="REQUIRED_EVIDENCE_MISSING", severity="block" if report_mode or not supported else "warn",
+                metric="task_evidence", actual=missing, threshold="verified_evidence",
+                message="请求中的主体或证据维度尚未满足。",
+            ))
+    if tasks and not supported:
+        reason("NO_SUPPORTED_CONTENT", "block", "本轮没有可展示的已验证事实或论据。")
+    if any(task.get("status") != "answered" or task.get("missing_evidence") for task in tasks):
+        missing_required = any(task.get("missing_evidence") for task in tasks)
+        reason("TASK_PARTIALLY_ANSWERED", "block" if not supported or report_mode and missing_required else "warn", "部分请求维度仍缺少证据。")
+    if report_mode and result and not claims:
+        reason("NO_SUPPORTED_REPORT_CLAIMS", "block", "报告缺少受支持的研究论据，不能发布或归档。")
+    if isinstance(report, dict) and isinstance(report.get("meta"), dict) and report["meta"].get("builder_fallback"):
+        reason("REPORT_BUILD_FAILED", "block", "报告构建失败，当前内容仅为错误说明。")
+    if any(item.get("kind") == "price_snapshot" and not item.get("as_of") for item in supported_facts):
+        reason("PRICE_TIME_MISSING", "warn", "报价缺少源数据时间，不能确认其时效。")
+    quality = merge_report_quality_payload(existing_quality=quality, reason_groups=[reasons])
+    blocked = quality["state"] == "block"
+    answer_status = "blocked" if blocked else "partial" if quality["state"] == "warn" else "answered"
+    if tasks and not supported and not any(task.get("status") == "blocked" for task in tasks):
+        answer_status = "unavailable"
+    quality.update({
+        "answer_status": answer_status,
+        "has_supported_content": supported if tasks else bool(str(artifacts.get("draft_markdown") or "").strip()),
+        "publishable": not blocked,
+        "missing_requirements": missing_requirements,
+    })
+    return quality
+
+
 def is_quality_blocked(payload: Any) -> bool:
     if isinstance(payload, dict) and ("state" in payload or "reasons" in payload):
         return normalize_quality_state(payload.get("state")) == "block"
@@ -354,6 +430,7 @@ __all__ = [
     "build_runtime_quality_reasons",
     "dedupe_quality_reasons",
     "evaluate_runtime_report_quality",
+    "evaluate_result_quality",
     "is_quality_blocked",
     "load_runtime_quality_thresholds",
     "merge_report_quality_payload",

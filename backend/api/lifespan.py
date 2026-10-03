@@ -31,8 +31,7 @@ async def lifespan(_app: FastAPI):
 
     run_startup_checks()
 
-    # Warm the production RAG model once before accepting traffic. The result
-    # is cached by app_factory; readiness requests never reload or re-encode.
+    # 检查独立推理 worker 的实际状态；API 进程不加载模型。
     try:
         from backend.api.app_factory import _is_production_runtime, warm_rag_readiness_probe
 

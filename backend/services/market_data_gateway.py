@@ -155,7 +155,7 @@ def validate_news_items(raw: Any) -> tuple[list[dict[str, Any]], datetime]:
         raise MarketDataValidationError("News 数据不是列表")
 
     normalized: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
+    seen_articles: set[tuple[str, str]] = set()
     newest: datetime | None = None
     for item in items:
         if not isinstance(item, Mapping):
@@ -171,9 +171,10 @@ def validate_news_items(raw: Any) -> tuple[list[dict[str, Any]], datetime]:
         parsed_url = urlparse(url)
         if not title or not source or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
             continue
-        if url in seen_urls:
+        article_key = (url, published.isoformat())
+        if article_key in seen_articles:
             continue
-        seen_urls.add(url)
+        seen_articles.add(article_key)
         newest = published if newest is None or published > newest else newest
         normalized.append(
             {
@@ -184,6 +185,11 @@ def validate_news_items(raw: Any) -> tuple[list[dict[str, Any]], datetime]:
                 "snippet": str(item.get("snippet") or item.get("summary") or "").strip(),
                 "published_at": published.isoformat().replace("+00:00", "Z"),
                 "datetime": published.isoformat().replace("+00:00", "Z"),
+                # 日期精度和检索来源不能被网关规范化成精确、已核实的报道。
+                "published_at_precision": item.get("published_at_precision") or (
+                    "date" if len(str(published_value)) == 10 else "timestamp"
+                ),
+                "retrieval_kind": item.get("retrieval_kind") or "provider_feed",
                 "ticker": item.get("ticker"),
                 "confidence": item.get("confidence"),
                 "tags": list(item.get("tags") or []),
@@ -639,16 +645,27 @@ class MarketDataGateway:
         )
 
     def get_news(self, symbol: str, *, limit: int = 5) -> dict[str, Any]:
+        from backend.research.news_event_quality import prepare_news_items
+
         normalized_limit = max(1, min(int(limit), 20))
-        return self._request(
+        def normalize(raw):
+            items, published = validate_news_items(raw)
+            return prepare_news_items(items, ticker=str(symbol).upper()), published
+
+        result = self._request(
             capability="news",
             symbol=symbol,
             cache_parts=(str(normalized_limit),),
             invoke=lambda provider: provider(str(symbol or "").strip().upper(), normalized_limit),
-            normalize=validate_news_items,
+            normalize=normalize,
             success_aliases=lambda items: {"news": items},
             error_aliases={"data": [], "news": []},
         )
+        # 缓存命中仍重新判断时效；合同保留首次观察时间，不假装重新采集。
+        if not result.get("error_code"):
+            items = prepare_news_items(result.get("data") or [], ticker=str(symbol).upper())
+            return {**result, "data": items, "news": items}
+        return result
 
     def get_financials(self, symbol: str) -> dict[str, Any]:
         return self._request(

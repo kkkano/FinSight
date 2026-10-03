@@ -16,7 +16,7 @@ def _reset_gateway():
 def test_convert_sec_companyfacts_payload_builds_agent_tables():
     payload = {
         "ticker": "MSFT",
-        "periods": ["2025Q3", "2025Q2"],
+        "periods": ["2025-09-30", "2025-06-30"],
         "revenue": [70.0, 65.0],
         "gross_profit": [48.0, 44.0],
         "operating_income": [30.0, 27.0],
@@ -112,6 +112,7 @@ def test_get_company_info_includes_available_valuation_multiples(monkeypatch):
                 "sector": "Technology",
                 "industry": "Semiconductors",
                 "marketCap": 4_000_000_000_000,
+                "currency": "USD",
                 "trailingPE": 52.1234,
                 "forwardPE": 35.4567,
                 "priceToBook": 40.2,
@@ -125,7 +126,8 @@ def test_get_company_info_includes_available_valuation_multiples(monkeypatch):
 
     result = financial.get_company_info("NVDA")
 
-    assert "- Market Cap: $4,000,000,000,000" in result
+    assert "- Market Cap: USD 4,000,000,000,000" in result
+    assert "- Currency: USD" in result
     assert "- Trailing P/E: 52.12" in result
     assert "- Forward P/E: 35.46" in result
     assert "- Price/Book: 40.20" in result

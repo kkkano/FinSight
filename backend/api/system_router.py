@@ -90,7 +90,7 @@ def _component_ready(
     if status not in {"ok", "disabled", "initializing", "degraded", "error"}:
         status = "error"
     normalized: dict[str, Any] = {"status": status}
-    for key in ("error_code", "reason", "backend", "backend_requested", "embedding", "reranker"):
+    for key in ("error_code", "reason", "backend", "backend_requested", "embedding", "reranker", "semantic_ready", "lexical_ready"):
         value = component.get(key)
         if value not in (None, ""):
             if key == "reason":
@@ -240,6 +240,9 @@ def _readiness_components(deps: SystemRouterDeps) -> tuple[dict[str, dict[str, A
         default_error_code="rag_unavailable",
     )
     rag_component["required"] = rag_required
+    if rag_raw.get("status") == "degraded" and rag_raw.get("lexical_ready") is True:
+        rag_ready = True
+        rag_component.pop("error_code", None)
     components["rag"] = rag_component
     if not rag_ready:
         failures.append("rag")

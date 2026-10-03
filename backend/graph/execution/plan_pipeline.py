@@ -150,21 +150,24 @@ async def execute_plan_node(state: GraphState) -> dict:
     settings = executor_settings()
     live_tools = settings.live_tools
 
-    tool_invokers = None
-    agent_invokers = None
-    if live_tools:
-        policy = state.get("policy") or {}
-        allowed_tools = policy.get("allowed_tools") if isinstance(policy, dict) else []
-        allowed_agents = policy.get("allowed_agents") if isinstance(policy, dict) else []
-        tool_invokers = build_tool_invokers(list(allowed_tools or []))
-        agent_invokers = build_collector_invokers(list(allowed_agents or []), state)
+    from backend.graph.execution.request_data import request_data_scope
+    with request_data_scope() as shared_data:
+        tool_invokers = None
+        agent_invokers = None
+        if live_tools:
+            policy = state.get("policy") or {}
+            allowed_tools = policy.get("allowed_tools") if isinstance(policy, dict) else []
+            allowed_agents = policy.get("allowed_agents") if isinstance(policy, dict) else []
+            tool_invokers = build_tool_invokers(list(allowed_tools or []))
+            agent_invokers = build_collector_invokers(list(allowed_agents or []), state)
 
-    artifacts, exec_events = await execute_plan_dag(
-        plan_ir,
-        tool_invokers=tool_invokers,
-        agent_invokers=agent_invokers,
-        dry_run=not live_tools,
-    )
+        artifacts, exec_events = await execute_plan_dag(
+            plan_ir,
+            tool_invokers=tool_invokers,
+            agent_invokers=agent_invokers,
+            dry_run=not live_tools,
+        )
+    trace["shared_data"] = {"calls": shared_data.calls, "reused": shared_data.reused}
     artifacts = _merge_prior_artifacts(state.get("artifacts"), artifacts)
 
     # Evidence normalization may enrich short snippets through synchronous

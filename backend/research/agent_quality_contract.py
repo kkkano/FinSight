@@ -93,13 +93,22 @@ def _dedupe_strings(values: list[str]) -> list[str]:
 def _evidence_identity(item: Any, agent_name: str, index: int) -> dict[str, Any]:
     del index
     meta = _meta(item)
+    event_quality = _get_value(item, "event_quality") or meta.get("event_quality")
+    event_quality = event_quality if isinstance(event_quality, dict) else {}
     return {
         "agent_name": agent_name,
         "source": _clean_text(_get_value(item, "source") or meta.get("source")),
         "url": _clean_text(_get_value(item, "url") or meta.get("url")),
         "timestamp": _clean_text(_get_value(item, "timestamp") or meta.get("timestamp") or meta.get("as_of")),
         "text": _clean_text(_get_value(item, "text") or meta.get("text"))[:300],
-        "metric_key": _clean_text(meta.get("metric_key")),
+        "subject": _clean_text(_get_value(item, "subject") or _get_value(item, "ticker") or meta.get("subject") or meta.get("ticker")).upper(),
+        "metric_key": _clean_text(_get_value(item, "metric") or meta.get("metric_key") or meta.get("metric")),
+        "event_id": _clean_text(_get_value(item, "event_id") or meta.get("event_id") or event_quality.get("event_id")),
+        "published_at": _clean_text(_get_value(item, "published_at") or meta.get("published_at") or event_quality.get("published_at")),
+        "period_start": _clean_text(_get_value(item, "period_start") or meta.get("period_start") or meta.get("start")),
+        "period_end": _clean_text(_get_value(item, "period_end") or meta.get("period_end") or meta.get("end") or meta.get("latest_period")),
+        "frequency": _clean_text(_get_value(item, "frequency") or meta.get("frequency")),
+        "unit": _clean_text(_get_value(item, "unit") or meta.get("unit")),
     }
 
 

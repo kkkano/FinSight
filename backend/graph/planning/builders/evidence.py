@@ -36,6 +36,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=False,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "company_profile":
             _append_tool_step(ctx, 
@@ -45,6 +47,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=False,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "earnings_estimates":
             _append_tool_step(ctx, 
@@ -54,6 +58,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=False,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             _append_tool_step(ctx, 
                 "get_eps_revisions",
@@ -62,6 +68,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "fundamental_snapshot":
             _append_agent_step(ctx, 
@@ -71,6 +79,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=False,
                 parallel_group=f"{group}_fundamental_agents" if group else "fundamental_agents",
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "technical_snapshot":
             _append_tool_step(ctx, 
@@ -80,6 +90,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=False,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             _append_agent_step(ctx, 
                 "technical_agent",
@@ -88,6 +100,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=f"{group}_technical_agents" if group else "technical_agents",
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "news_context":
             _append_tool_step(ctx, 
@@ -97,6 +111,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             _append_tool_step(ctx, 
                 "get_authoritative_media_news",
@@ -105,6 +121,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             if not lightweight_external_impact:
                 _append_agent_step(ctx, 
@@ -114,6 +132,8 @@ def _append_evidence_steps_for_ticker(ctx,
                     optional=True,
                     parallel_group=f"{group}_news_agents" if group else "news_agents",
                     task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
                 )
         elif kind == "risk_profile":
             positions = [{"ticker": ticker, "weight": 1.0}]
@@ -124,6 +144,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             _append_tool_step(ctx, 
                 "get_factor_exposure",
@@ -132,6 +154,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             if not lightweight_external_impact:
                 _append_agent_step(ctx, 
@@ -141,6 +165,8 @@ def _append_evidence_steps_for_ticker(ctx,
                     optional=True,
                     parallel_group=f"{group}_risk_agents" if group else "risk_agents",
                     task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
                 )
         elif kind == "filing_context":
             if ctx.market == "US":
@@ -151,14 +177,18 @@ def _append_evidence_steps_for_ticker(ctx,
                     optional=False,
                     parallel_group=group,
                     task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
                 )
                 _append_tool_step(ctx, 
                     "get_sec_filings",
-                    {"ticker": ticker, "forms": ["10-K", "10-Q"], "limit": 4},
+                    {"ticker": ticker, "forms": "10-K,10-Q", "limit": 4},
                     why=f"{ticker} evidence contract: SEC filings.",
                     optional=True,
                     parallel_group=group,
                     task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
                 )
             else:
                 _append_tool_step(ctx, 
@@ -168,6 +198,8 @@ def _append_evidence_steps_for_ticker(ctx,
                     optional=False,
                     parallel_group=group,
                     task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
                 )
         elif kind == "transcript_context":
             _append_tool_step(ctx, 
@@ -177,15 +209,20 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "event_calendar":
+            days = max([int((ctx.ready_tasks_by_id.get(task_id, {}).get("time_scope") or {}).get("days_ahead", 30)) for task_id in task_ids] or [30])
             _append_tool_step(ctx, 
                 "get_event_calendar",
-                {"ticker": ticker},
+                {"ticker": ticker, "days_ahead": min(120, days)},
                 why=f"{ticker} evidence contract: event calendar.",
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
         elif kind == "options_derivatives":
             _append_tool_step(ctx, 
@@ -195,7 +232,17 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
+        elif kind == "document_context":
+            _append_tool_step(ctx, "search", {"query": f"{ticker} {ctx.query}"},
+                why=f"{ticker}：补充业务及竞争材料。", optional=False, parallel_group=group,
+                task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
+            _append_agent_step(ctx, "deep_search_agent", {"query": ctx.query, "ticker": ticker},
+                why=f"{ticker}：核对业务与竞争材料的来源。", optional=True,
+                parallel_group=f"{group}_research_agents", task_ids=task_ids,
+                subject_tickers=[ticker], evidence_kind=kind)
         elif kind == "holdings_ownership":
             if not _sec_holdings_enabled():
                 continue
@@ -206,6 +253,8 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=True,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )
             _append_tool_step(ctx, 
                 "get_institution_holdings_by_ticker",
@@ -214,4 +263,6 @@ def _append_evidence_steps_for_ticker(ctx,
                 optional=False,
                 parallel_group=group,
                 task_ids=task_ids,
+                subject_tickers=[ticker],
+                evidence_kind=kind,
             )

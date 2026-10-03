@@ -43,6 +43,8 @@ _VALUATION_HINTS = (
     "cheap",
 )
 _TECHNICAL_HINTS = ("技术面", "技术分析", "k线", "均线", "macd", "rsi", "technical", "chart", "support", "resistance")
+_FUNDAMENTAL_HINTS = ("基本面", "fundamental")
+_CATALYST_HINTS = ("催化", "catalyst")
 _PRICE_HINTS = ("价格", "股价", "涨跌幅", "涨幅", "跌幅", "表现", "行情", "price", "quote", "performance")
 _NEWS_HINTS = ("新闻", "消息", "headline", "latest", "news")
 _RISK_HINTS = ("风险", "risk", "drawdown", "volatility", "压力")
@@ -78,6 +80,10 @@ def infer_facets(query: str, *, output_mode: str = "") -> list[dict[str, Any]]:
     if _contains_any(query, _VALUATION_HINTS):
         add("valuation")
         add("fundamental")
+    if _contains_any(query, _FUNDAMENTAL_HINTS):
+        add("fundamental")
+    if _contains_any(query, _CATALYST_HINTS):
+        add("news")
     if query_requests_earnings_price_impact(query):
         add("earnings")
         add("price")

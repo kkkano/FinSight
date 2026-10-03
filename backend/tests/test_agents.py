@@ -298,10 +298,10 @@ async def test_news_agent_adds_event_calendar_evidence(mock_llm, mock_cache, moc
 async def test_news_agent_deduplication(mock_llm, mock_cache, mock_tools, circuit_breaker):
     # Setup tools to return same URL from both sources
     mock_tools._fetch_with_finnhub_news.return_value = [
-        {"headline": "News A", "url": "http://same.com", "source": "finnhub"}
+        {"headline": "Apple News A", "url": "http://same.com", "source": "finnhub"}
     ]
     mock_tools._search_company_news.return_value = [
-        {"title": "News A Duplicate", "url": "http://same.com", "source": "tavily"}
+        {"title": "Apple News A Duplicate", "url": "http://same.com", "source": "tavily"}
     ]
 
     # Ensure fallback triggers

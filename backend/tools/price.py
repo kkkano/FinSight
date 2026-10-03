@@ -635,7 +635,7 @@ def get_stock_price(ticker: str) -> str:
         text += f" | Change: {float(change):+.2f} ({float(change_percent):+.2f}%)"
     return (
         f"{text} | Provider: {provider} | As of: {result.get('as_of')} "
-        f"| Quality: {result.get('quality')}"
+        f"| Currency: {quote.get('currency') or 'USD'} | Quality: {result.get('quality')}"
     )
 
 # ============================================

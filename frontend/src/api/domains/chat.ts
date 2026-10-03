@@ -6,6 +6,10 @@ import type { StreamOpts } from '../sse';
 import type * as Contracts from '../contracts';
 
 export const chatApi = {
+  async getExecutionRun(runId: string, signal?: AbortSignal): Promise<Contracts.ExecutionRunRecord> {
+    const response = await api.get(`/api/execute/runs/${encodeURIComponent(runId)}`, { signal });
+    return response.data;
+  },
 async createConversation(
     sessionId?: string,
     payload?: {
@@ -13,7 +17,9 @@ async createConversation(
       messages?: Array<Record<string, unknown>>;
       pinned?: boolean;
       archived?: boolean;
+      expected_version?: number;
     },
+    options?: { headers?: Record<string, string>; signal?: AbortSignal },
   ): Promise<{
     success: boolean;
     session_id: string;
@@ -22,7 +28,7 @@ async createConversation(
     const response = await api.post('/api/conversations', {
       ...(payload || {}),
       ...(sessionId ? { session_id: sessionId } : {}),
-    });
+    }, options);
     return response.data;
   },
 

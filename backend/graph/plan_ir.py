@@ -14,7 +14,9 @@ from pydantic import BaseModel, Field
 
 class PlanBudget(BaseModel):
     max_rounds: int = Field(ge=0, le=50)
-    max_tools: int = Field(ge=0, le=50)
+    max_tools: int = Field(ge=0)
+    planned_tool_calls: int = Field(default=0, ge=0)
+    planned_agent_calls: int = Field(default=0, ge=0)
 
     model_config = {"extra": "forbid"}
 
@@ -33,8 +35,11 @@ class PlanStep(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     task_id: Optional[str] = None
     task_ids: list[str] = Field(default_factory=list)
+    subject_tickers: list[str] = Field(default_factory=list)
+    evidence_kinds: list[str] = Field(default_factory=list)
     parallel_group: Optional[str] = None
     depends_on: list[str] = Field(default_factory=list)   # 前置 step id；空=无依赖
+    data_dependencies: list[str] = Field(default_factory=list)
     why: Optional[str] = None
     optional: bool = False
 

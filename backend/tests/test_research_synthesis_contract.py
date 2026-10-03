@@ -155,6 +155,80 @@ def test_descriptor_build_preserves_raw_ordinals_duplicates_and_invalid_order():
     assert {"duplicate_task", "duplicate_order_index", "invalid_task_identity", "invalid_order_index"} <= set(result.quality_block_reasons)
 
 
+@pytest.mark.parametrize("contract_source", ["task", "plan", "empty_task", "legacy"])
+def test_compiled_task_contract_is_authoritative_over_collector_inputs(contract_source):
+    task = {"id": "t1", "order_index": 0, "title": "公司研究", "subject_label": "AAPL", "operation": {"name": "qa"}, "request_frame_id": "f1", "render_kind": "single", "render_group_id": "f1"}
+    plan_task = {"id": "t1"}
+    if contract_source == "task":
+        task["required_evidence"] = ["price_snapshot"]
+        plan_task["required_evidence"] = ["price_snapshot", "options_derivatives"]
+    elif contract_source == "plan":
+        plan_task["required_evidence"] = ["price_snapshot"]
+    elif contract_source == "empty_task":
+        task["required_evidence"] = []
+    steps = [
+        {"id": "core", "task_ids": ["t1"], "optional": False, "inputs": {"required_evidence": ["price_snapshot", "filing_context"]}},
+        {"id": "enrichment", "task_ids": ["t1"], "optional": True, "inputs": {"required_evidence": ["options_derivatives", "performance_comparison"]}},
+    ]
+    descriptor = build_task_descriptors(understanding_tasks=[task], blocked_tasks=[], plan_tasks=[plan_task], plan_steps=steps).descriptors[0]
+    expected = [] if contract_source == "empty_task" else ["price_snapshot", "filing_context"] if contract_source == "legacy" else ["price_snapshot"]
+    assert descriptor.required_evidence == expected
+    assert descriptor.required_step_ids == ["core"]
+
+
+def test_true_contract_evidence_gap_still_blocks_report_despite_optional_producer():
+    from backend.report.quality_engine import evaluate_result_quality
+
+    descriptors, evidence, claims, _, _ = _pipeline()
+    descriptors[0] = descriptors[0].model_copy(update={"required_evidence": ["price_snapshot", "risk_profile"]})
+    outcome = finalize_task_outcomes(descriptors=descriptors, plan_steps=[{"id": "risk", "optional": True}],
+                                     task_results={"step-t1": {"output": {"ok": True}}}, evidence_normalization=evidence, claim_validation=claims).outcomes[0]
+    assert outcome.missing_evidence == ["risk_profile"]
+    quality = evaluate_result_quality(state={"output_mode": "investment_report", "artifacts": {"research_result": {
+        "task_results": [outcome.model_dump()], "claim_index": {key: value.model_dump() for key, value in claims.valid_claims.items()},
+        "evidence_index": {key: value.model_dump() for key, value in evidence.evidence_index.items()},
+    }}})
+    assert quality["state"] == "block" and quality["publishable"] is False
+
+
+def test_optional_collector_inputs_do_not_block_a_satisfied_compiled_report():
+    from backend.report.quality_engine import evaluate_result_quality
+
+    _, evidence, claims, _, _ = _pipeline()
+    task = {"id": "t1", "order_index": 0, "title": "公司研究", "subject_label": "AAPL", "operation": {"name": "investment_opinion"}, "request_frame_id": "f1", "render_kind": "single", "render_group_id": "f1", "required_evidence": ["price_snapshot"]}
+    steps = [
+        {"id": "step-t1", "task_ids": ["t1"], "optional": False, "inputs": {}},
+        {"id": "enrichment", "task_ids": ["t1"], "optional": True, "inputs": {"required_evidence": ["options_derivatives", "performance_comparison"]}},
+    ]
+    descriptors = build_task_descriptors(understanding_tasks=[task], blocked_tasks=[], plan_tasks=[{"id": "t1"}], plan_steps=steps)
+    outcome = finalize_task_outcomes(descriptors=descriptors.descriptors, plan_steps=steps,
+                                     task_results={"step-t1": {"output": {"ok": True}}}, evidence_normalization=evidence, claim_validation=claims).outcomes[0]
+    assert outcome.status == "answered" and outcome.missing_evidence == []
+    quality = evaluate_result_quality(state={"output_mode": "investment_report", "artifacts": {"research_result": {
+        "task_results": [outcome.model_dump()], "claim_index": {key: value.model_dump() for key, value in claims.valid_claims.items()},
+        "evidence_index": {key: value.model_dump() for key, value in evidence.evidence_index.items()},
+    }}})
+    assert quality["state"] == "pass" and quality["publishable"] is True
+
+
+def test_search_error_and_empty_collector_summary_do_not_fulfill_document_obligation():
+    from backend.graph.request_task_contract import output_is_error_like
+    from backend.graph.synthesis.contracts import EvidenceNormalizationResult
+
+    descriptors, _, claims, _, _ = _pipeline()
+    descriptors[0] = descriptors[0].model_copy(update={"required_evidence": ["document_context"]})
+    rows = [
+        NormalizedEvidence(source_id="search-error", task_ids=["t1"], kind="document_context", usage="raw", text="Search error: 所有搜索源均失败，无法获取搜索结果。"),
+        NormalizedEvidence(source_id="empty-summary", task_ids=["t1"], kind="document_context", usage="summary", text="本轮未取得研究原文。"),
+    ]
+    evidence = EvidenceNormalizationResult(evidence_index={row.source_id: row for row in rows}, evidence_by_task={"t1": rows}, rejected_evidence=[], quality_block_reasons=[])
+    outcome = finalize_task_outcomes(descriptors=descriptors, plan_steps=[], task_results={"step-t1": {"output": rows[0].text}}, evidence_normalization=evidence, claim_validation=claims).outcomes[0]
+    assert output_is_error_like(rows[0].text)
+    assert not output_is_error_like("搜索文章正文讨论 Search error: 的原因。")
+    assert outcome.missing_evidence == ["document_context"]
+    assert "required_step_unavailable" in outcome.error_codes
+
+
 def test_evidence_canonical_merge_and_content_conflict():
     descriptors = [_descriptor("t1", 0), _descriptor("t2", 1)]
     merged = normalize_evidence(
@@ -229,7 +303,8 @@ def test_finding_summary_without_claim_is_limitation_not_conclusion():
     )
     assert findings[0].conclusion is None
     assert findings[0].fallback_used is True
-    assert "自由文本摘要" in findings[0].limitations
+    assert "自由文本摘要" not in findings[0].limitations
+    assert "暂未提供通过引用校验的原生论据" in findings[0].limitations[0]
 
 
 @pytest.mark.asyncio
@@ -291,24 +366,25 @@ async def test_fallback_gate_renderer_and_finalize_are_deterministic():
         task_results=task_results, claim_validation=validation,
         evidence_normalization=evidence, llm_call_context_factory=lambda: None,
     )
-    assert task_results[0].fallback_used is True
-    assert draft.fallback_used is True
+    assert task_results[0].fallback_used is False
+    assert draft.fallback_used is False
     pre_gate = evaluate_synthesis_quality(
         draft=draft, requested_task_ids=["t1"], evidence_index=evidence.evidence_index,
     )
-    assert pre_gate.state == "degraded"
+    assert pre_gate.state == "pass"
     rendered = render_research_report(draft)
     assert rendered.rendered_task_ids == ["t1"]
-    assert [line for line in rendered.markdown.splitlines() if line.startswith("## ")] == [
-        "## 总判断", "## 分任务结论", "## 关键论据与证据", "## 分歧与风险", "## 限制", "## 引用",
-    ]
+    assert "## 总判断" in rendered.markdown
+    assert "## 任务 t1 · 已回答" in rendered.markdown
+    assert "## 来源" in rendered.markdown
+    assert "c-t1" not in rendered.markdown and "e-t1" not in rendered.markdown
     final_gate = evaluate_synthesis_quality(
         draft=draft, requested_task_ids=["t1"], evidence_index=evidence.evidence_index,
         rendered_task_ids=rendered.rendered_task_ids,
     )
     final = finalize_report_synthesis(draft=draft, final_gate=final_gate)
     assert final.model_dump(exclude={"degraded"}) == draft.model_dump()
-    assert final.degraded is True
+    assert final.degraded is False
 
     blocked = evaluate_synthesis_quality(
         draft=draft, requested_task_ids=["t1", "missing"],

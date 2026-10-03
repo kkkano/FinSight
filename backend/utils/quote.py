@@ -23,16 +23,26 @@ def safe_float(value: Any) -> Optional[float]:
 
 
 def parse_quote_payload(payload: Any) -> dict[str, Any] | None:
-    """Parse raw quote payload into ``{price, change, change_percent}``."""
+    """Parse quote values while preserving their source, time and currency."""
     if payload is None:
         return None
 
     if isinstance(payload, dict):
+        metadata = {}
+        for field, aliases in {
+            "as_of": ("as_of", "timestamp", "regularMarketTime"),
+            "source": ("source", "provider"),
+            "currency": ("currency", "financialCurrency"),
+            "quality": ("quality",),
+        }.items():
+            value = next((payload[key] for key in aliases if payload.get(key) is not None), None)
+            if value is not None:
+                metadata[field] = value
         nested = payload.get("data")
         if nested is not None:
             inner = parse_quote_payload(nested)
             if inner:
-                return inner
+                return {**metadata, **inner}
 
         price = safe_float(payload.get("price"))
         if price is not None:
@@ -40,6 +50,7 @@ def parse_quote_payload(payload: Any) -> dict[str, Any] | None:
                 "price": price,
                 "change": safe_float(payload.get("change")),
                 "change_percent": safe_float(payload.get("change_percent")),
+                **metadata,
             }
         return None
 
@@ -58,11 +69,18 @@ def parse_quote_payload(payload: Any) -> dict[str, Any] | None:
     if price is None:
         return None
 
-    return {
+    result = {
         "price": price,
         "change": safe_float(change_match.group(1)) if change_match else None,
         "change_percent": safe_float(pct_match.group(1)) if pct_match else None,
     }
+    for field, label in {
+        "source": "(?:Provider|Source)", "as_of": "As of", "currency": "Currency", "quality": "Quality",
+    }.items():
+        match = re.search(rf"\b{label}:\s*([^|\r\n]+)", text, re.IGNORECASE)
+        if match and match.group(1).strip().lower() not in {"none", "null", "unknown"}:
+            result[field] = match.group(1).strip()
+    return result
 
 
 def fallback_quote_yfinance(ticker: str) -> dict[str, Any] | None:
@@ -109,7 +127,7 @@ def resolve_live_quote(
 
         parsed = parse_quote_payload(raw_payload)
         if parsed:
-            parsed["source"] = "tools_bridge"
+            parsed.setdefault("source", "tools_bridge")
             return parsed, raw_payload
 
     fallback = fallback_quote_yfinance(ticker)

@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from .python_sandbox import PythonComputeRejected, validate_compute_request, run_with_timeout
+from .financial_facts import fact_date, normalize_currency, parse_profile_market_cap
 
 
 def _safe_float(value: Any) -> float | None:
@@ -37,11 +38,23 @@ def _coerce_rows(payload: Any) -> list[dict[str, Any]]:
         return [dict(item) for item in payload if isinstance(item, dict)]
     if not isinstance(payload, dict):
         return []
+    periods = payload.get("period_ends") or payload.get("periods")
+    if isinstance(periods, list) and isinstance(payload.get("revenue"), list):
+        rows = []
+        for index, period in enumerate(periods):
+            row = {"period": period, "currency": payload.get("currency"), "frequency": payload.get("frequency"), "metric_metadata": {}}
+            for metric in ("revenue", "net_income"):
+                series = payload.get(metric) or []
+                row[metric] = series[index] if index < len(series) else None
+                metadata = (payload.get("fact_metadata") or {}).get(metric) or []
+                row["metric_metadata"][metric] = metadata[index] if index < len(metadata) else None
+            rows.append(row)
+        return rows
     for key in ("quarterly", "quarters", "rows", "data", "facts", "results"):
         value = payload.get(key)
         rows = _coerce_rows(value)
         if rows:
-            return rows
+            return [{"frequency": payload.get("frequency") or ("quarterly" if key in {"quarterly", "quarters"} else None), "currency": payload.get("currency"), **row} for row in rows]
     return []
 
 
@@ -65,25 +78,8 @@ def _pick_number(payload: Any, keys: tuple[str, ...]) -> float | None:
             if nested is not None:
                 return nested
     if isinstance(payload, str):
-        label_map = {
-            "marketCap": ("Market Cap", "Market Capitalization"),
-            "market_cap": ("Market Cap", "Market Capitalization"),
-            "marketCapitalization": ("Market Cap", "Market Capitalization"),
-        }
-        labels = {label for key in keys for label in label_map.get(key, ())}
-        for label in labels:
-            match = re.search(
-                rf"(?:^|\n)\s*-?\s*{re.escape(label)}\s*:\s*\$?([\d,.]+)\s*([KMBT])?",
-                payload,
-                re.IGNORECASE,
-            )
-            if not match:
-                continue
-            number = _safe_float(match.group(1).replace(",", ""))
-            if number is None:
-                continue
-            scale = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}.get((match.group(2) or "").upper(), 1.0)
-            return number * scale
+        if set(keys) & {"marketCap", "market_cap", "marketCapitalization"}:
+            return parse_profile_market_cap(payload).value
     return None
 
 
@@ -146,23 +142,41 @@ def _compute_valuation_sanity(
     rows = _coerce_rows(facts)
 
     price = _pick_number(quote, ("price", "current_price", "regularMarketPrice", "close"))
-    market_cap = _pick_number(company, ("marketCap", "market_cap", "marketCapitalization"))
+    cap_amount = parse_profile_market_cap(company)
+    market_cap, market_cap_currency = cap_amount.value, cap_amount.currency
     shares = _safe_float(params.get("shares_outstanding"))
     if market_cap is None and price is not None and shares is not None:
         market_cap = price * shares
+        market_cap_currency = normalize_currency(quote.get("currency")) if isinstance(quote, dict) else None
 
+    if rows and all(fact_date(row.get("period")) for row in rows):
+        rows.sort(key=lambda row: row["period"])
     latest = rows[-1] if rows else {}
     previous = rows[-2] if len(rows) >= 2 else {}
     revenue = _safe_float(latest.get("revenue") or latest.get("revenues"))
     net_income = _safe_float(latest.get("net_income") or latest.get("netIncome"))
     previous_revenue = _safe_float(previous.get("revenue") or previous.get("revenues"))
-    annualized_revenue = revenue * 4 if revenue is not None else None
-    annualized_net_income = net_income * 4 if net_income is not None else None
-    ps = market_cap / annualized_revenue if market_cap is not None and annualized_revenue else None
-    pe = market_cap / annualized_net_income if market_cap is not None and annualized_net_income else None
+    is_quarterly = latest.get("frequency") == "quarterly"
+    annualized_revenue = revenue * 4 if revenue is not None and is_quarterly else None
+    annualized_net_income = net_income * 4 if net_income is not None and is_quarterly else None
+    metadata = latest.get("metric_metadata") or {}
+    revenue_meta, income_meta = metadata.get("revenue") or {}, metadata.get("net_income") or {}
+    financial_currency = normalize_currency(latest.get("currency"))
+    revenue_currency = normalize_currency(revenue_meta.get("unit")) or financial_currency
+    income_currency = normalize_currency(income_meta.get("unit")) or financial_currency
+    ps_currency_aligned = bool(market_cap_currency and revenue_currency == market_cap_currency)
+    pe_currency_aligned = bool(market_cap_currency and income_currency == market_cap_currency)
+    ps = market_cap / annualized_revenue if market_cap is not None and annualized_revenue and ps_currency_aligned else None
+    pe = market_cap / annualized_net_income if market_cap is not None and annualized_net_income and pe_currency_aligned else None
     revenue_growth = _round(_growth_pct(previous_revenue, revenue), 4)
 
     warnings: list[str] = []
+    if not ps_currency_aligned:
+        warnings.append("price_to_sales unavailable: market-cap/revenue currency missing or mismatched; no FX conversion applied")
+    if not pe_currency_aligned:
+        warnings.append("price_to_earnings unavailable: market-cap/net-income currency missing or mismatched; no FX conversion applied")
+    if not is_quarterly:
+        warnings.append("quarterly frequency not verified; financial values were not annualized")
     if market_cap is None:
         warnings.append("market_cap missing")
     if annualized_revenue is None:
@@ -184,7 +198,11 @@ def _compute_valuation_sanity(
         "columns": ["metric", "value"],
         "rows": [{"metric": key, "value": value} for key, value in metrics.items()],
     }
-    return {"metrics": metrics, "tables": [table], "warnings": warnings}
+    return {"metrics": metrics, "tables": [table], "warnings": warnings, "metric_metadata": {
+        "market_cap": {"currency": market_cap_currency},
+        "annualized_revenue": {"currency": revenue_currency, "period_end": latest.get("period"), "definition": "single_quarter_times_four"},
+        "annualized_net_income": {"currency": income_currency, "period_end": latest.get("period"), "definition": "single_quarter_times_four"},
+    }}
 
 
 def _compute_surprise_impact(
@@ -321,6 +339,7 @@ def run_python_compute(
             "tables": payload.get("tables") if isinstance(payload.get("tables"), list) else [],
             "charts": payload.get("charts") if isinstance(payload.get("charts"), list) else [],
             "warnings": payload.get("warnings") if isinstance(payload.get("warnings"), list) else [],
+            "metric_metadata": payload.get("metric_metadata") if isinstance(payload.get("metric_metadata"), dict) else {},
             "code_hash": _code_hash(op_name, clean_params),
             "input_refs": refs,
             "duration_ms": int((time.perf_counter() - start) * 1000),

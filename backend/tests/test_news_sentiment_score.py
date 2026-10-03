@@ -16,8 +16,10 @@ get_news_sentiment_score 结构化舆情分数测试（mock HTTP）。
 from __future__ import annotations
 
 import pytest
+from datetime import UTC, datetime
 
 from backend.tools import news
+from backend.research import news_event_quality
 
 
 class _FakeResponse:
@@ -32,10 +34,10 @@ class _FakeResponse:
 
 def _feed_item(score, label="Somewhat-Bullish", ticker="AAPL"):
     return {
-        "title": "Some headline",
+        "title": f"{ticker} article {score}",
         "source": "Reuters",
         "time_published": "20260603T120000",
-        "url": "https://example.com/a",
+        "url": f"https://www.reuters.com/technology/{ticker}-{score}",
         "overall_sentiment_score": 0.0,
         "overall_sentiment_label": "Neutral",
         "ticker_sentiment": [
@@ -136,9 +138,10 @@ def test_get_news_sentiment_text_unchanged(with_api_key, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _clear_sentiment_cache():
+def _clear_sentiment_cache(monkeypatch):
     """每个测试前后清空进程内舆情缓存，避免测试间污染。"""
     news._SENTIMENT_SCORE_CACHE.clear()
+    monkeypatch.setattr(news_event_quality, "utc_now", lambda: datetime(2026, 6, 4, tzinfo=UTC))
     yield
     news._SENTIMENT_SCORE_CACHE.clear()
 

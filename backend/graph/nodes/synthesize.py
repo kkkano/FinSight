@@ -225,7 +225,7 @@ async def synthesize(state: GraphState) -> dict:
         state, chat_task_contract = prepare_chat_task_contract(state, trace)
 
     # 深度报告只产生结构化 draft；Markdown 所有权属于 render_node。
-    if output_mode == "investment_report" and structured_synthesis_mode in {"shadow", "on"}:
+    if output_mode == "investment_report":
         state, structured_result = await synthesize_structured_report(
             state,
             trace,
@@ -243,6 +243,20 @@ async def synthesize(state: GraphState) -> dict:
             structured_synthesis_mode=structured_synthesis_mode,
             env_mode=env_mode,
         )
+        result_artifacts = state.get("artifacts") or {}
+        if result_artifacts.get("error_code") == "missing_task_contract":
+            trace["synthesize_runtime"] = build_runtime(mode="research_result", fallback=False, reason="missing_task_contract")
+            await _emit_synth_stage_done(status="done", message="Research result unavailable")
+            return {"artifacts": result_artifacts, "trace": trace}
+        if isinstance(result_artifacts.get("research_result"), dict):
+            tasks = result_artifacts["research_result"].get("task_results") or []
+            failures = [code for task in tasks if isinstance(task, dict) and task.get("fallback_used") for code in (task.get("error_codes") or []) if str(code).startswith(("llm_", "task_synthesis_", "explanation_"))]
+            trace.update({"synthesize_runtime": build_runtime(
+                mode="research_result", fallback=any(task.get("fallback_used") for task in tasks if isinstance(task, dict)),
+                reason=failures[0] if failures else None,
+            )})
+            await _emit_synth_stage_done(status="done", message="Research result completed")
+            return {"artifacts": result_artifacts, "trace": trace}
 
     # ── Emit decision_note when compare intent has no evidence ──
     # should_render_compare() now requires BOTH operation=compare AND valid

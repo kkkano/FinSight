@@ -15,7 +15,7 @@ from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, project_v2_tasks_to_legacy
 from backend.graph.planning.builders.evidence import _append_evidence_steps_for_ticker
-from backend.graph.planning.steps import _append_tool_step
+from backend.graph.planning.steps import _append_tool_step, _append_agent_step
 
 
 def _frame_id(ctx, frame: dict, index: int) -> str:
@@ -86,7 +86,7 @@ def _frame_evidence_profile(ctx, frame: dict) -> str:
 def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[str]) -> None:
     frame_subject = _frame_subject(ctx, frame)
     label = str(frame_subject.get("label") or frame.get("subject_label") or "").strip()
-    macro_query = label if label else ctx.query
+    macro_query = str(frame.get("query_text") or label or ctx.query)
     _append_tool_step(ctx, 
         "get_current_datetime",
         {},
@@ -99,6 +99,7 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[st
         "get_official_macro_releases",
         {"query": macro_query, "max_results": 8},
         why="Request frame macro evidence: official macro releases.",
+        evidence_kind="macro_context",
         optional=False,
         parallel_group=group,
         task_ids=task_ids,
@@ -107,6 +108,7 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[st
         "get_authoritative_media_news",
         {"query": macro_query, "max_results": 6, "authoritative_only": True},
         why="Request frame macro evidence: authoritative market context.",
+        evidence_kind="macro_context",
         optional=True,
         parallel_group=group,
         task_ids=task_ids,
@@ -115,10 +117,14 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[st
         "search",
         {"query": macro_query},
         why="Request frame macro evidence: supplemental search.",
+        evidence_kind="macro_context",
         optional=True,
         parallel_group=group,
         task_ids=task_ids,
     )
+    _append_agent_step(ctx, "macro_agent", {"query": macro_query, "ticker": "MACRO"},
+        why="结合带观测期和单位的官方宏观指标解释政策影响。", optional=True,
+        parallel_group=f"{group}_macro", task_ids=task_ids, evidence_kind="macro_context")
 
 
 def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, task_ids: list[str]) -> bool:
@@ -149,6 +155,9 @@ def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, t
 
 def _append_request_frame_steps(ctx) -> bool:
     if not ctx.request_frames:
+        return False
+    bound_frames = {str(frame.get("frame_id")) for frame in ctx.request_frames}
+    if any(str(task.get("request_frame_id")) not in bound_frames for task in ctx.ready_tasks):
         return False
     # Frame 是执行分组，任务 ID 才是结果合同的身份；缺绑定时交回任务规划器。
     if any(not _frame_task_ids(ctx, _frame_id(ctx, frame, index)) for index, frame in enumerate(ctx.request_frames[:16], 1)):

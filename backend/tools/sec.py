@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
+from .financial_facts import FinancialFact, duration_frequency, fact_date, fact_number
 from .http import _http_get
 
 logger = logging.getLogger(__name__)
@@ -155,32 +156,17 @@ def _quarter_from_end_date(value: str) -> int:
 
 
 def _parse_companyfacts_period(entry: dict[str, Any]) -> str | None:
-    end = str(entry.get("end") or "").strip()
-    if not end:
-        return None
-    try:
-        year = datetime.fromisoformat(end.split(" ")[0]).year
-    except Exception:
-        return None
-    fp = str(entry.get("fp") or "").strip().upper()
-    if fp in {"Q1", "Q2", "Q3", "Q4"}:
-        return f"{year}{fp}"
-    quarter = _quarter_from_end_date(end)
-    return f"{year}Q{quarter}" if quarter in {1, 2, 3, 4} else None
+    return fact_date(entry.get("end"))
 
 
 def _is_quarterly_companyfacts_entry(entry: dict[str, Any]) -> bool:
-    form = str(entry.get("form") or "").strip().upper()
-    fp = str(entry.get("fp") or "").strip().upper()
-    frame = str(entry.get("frame") or "").strip().upper()
-    return bool(
-        form.startswith("10-Q")
-        or fp in {"Q1", "Q2", "Q3", "Q4"}
-        or re.search(r"Q[1-4](?:I)?$", frame)
-    )
+    return duration_frequency(entry.get("start"), entry.get("end")) == "quarterly"
 
 
 def _period_sort_key(period: str) -> tuple[int, int]:
+    if parsed := fact_date(period):
+        point = datetime.fromisoformat(parsed)
+        return (point.year, point.month * 32 + point.day)
     match = re.match(r"^(20\d{2})Q([1-4])$", str(period or ""))
     if not match:
         return (0, 0)
@@ -193,9 +179,26 @@ def _extract_companyfacts_metric(
     concepts: tuple[str, ...],
     unit_candidates: tuple[str, ...],
 ) -> dict[str, float]:
+    return {
+        end: fact.value for end, fact in _extract_companyfacts_facts(
+            payload, concepts=concepts, unit_candidates=unit_candidates,
+        ).items()
+    }
+
+
+def _extract_companyfacts_facts(
+    payload: dict[str, Any],
+    *,
+    concepts: tuple[str, ...],
+    unit_candidates: tuple[str, ...],
+    subject: str = "",
+    metric: str = "",
+    instant: bool = False,
+    source_url: str | None = None,
+) -> dict[str, FinancialFact]:
     facts = payload.get("facts") if isinstance(payload.get("facts"), dict) else {}
     gaap = facts.get("us-gaap") if isinstance(facts.get("us-gaap"), dict) else {}
-    rows_by_period: dict[str, tuple[str, float]] = {}
+    rows_by_period: dict[str, FinancialFact] = {}
 
     for concept in concepts:
         fact_obj = gaap.get(concept)
@@ -208,24 +211,43 @@ def _extract_companyfacts_metric(
             entries = units.get(unit)
             if not isinstance(entries, list):
                 continue
+            valid: dict[str, list[dict[str, Any]]] = {}
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
-                if not _is_quarterly_companyfacts_entry(entry):
+                form = str(entry.get("form") or "").upper()
+                if form not in {"10-Q", "10-Q/A", "10-K", "10-K/A"}:
                     continue
                 period = _parse_companyfacts_period(entry)
-                if not period:
+                if not period or fact_number(entry.get("val")) is None:
                     continue
-                val = entry.get("val")
-                try:
-                    number = float(val)
-                except Exception:
+                if instant:
+                    if entry.get("start"):
+                        continue
+                elif not _is_quarterly_companyfacts_entry(entry):
                     continue
-                filed = str(entry.get("filed") or "")
-                prev = rows_by_period.get(period)
-                if prev is None or filed > prev[0]:
-                    rows_by_period[period] = (filed, number)
-    return {period: value for period, (_, value) in rows_by_period.items()}
+                valid.setdefault(period, []).append(entry)
+            for period, candidates in valid.items():
+                if period in rows_by_period:
+                    continue
+                # 同财期按提交时间、真实区间挑选；同版冲突值不任意挑一条。
+                rank = lambda row: (str(row.get("filed") or ""), str(row.get("start") or ""))
+                latest_rank = max(rank(row) for row in candidates)
+                chosen = [row for row in candidates if rank(row) == latest_rank]
+                values = {fact_number(row.get("val")) for row in chosen}
+                if len(values) != 1:
+                    continue
+                entry = min(chosen, key=lambda row: str(row.get("accn") or ""))
+                rows_by_period[period] = FinancialFact(
+                    subject=subject, metric=metric, value=float(entry["val"]), unit=unit,
+                    source="sec_companyfacts", period_end=period,
+                    period_start=None if instant else fact_date(entry.get("start")),
+                    frequency="instant" if instant else "quarterly",
+                    filed=fact_date(entry.get("filed")), accession=entry.get("accn"),
+                    concept=concept, form=str(entry.get("form") or ""),
+                    source_url=source_url,
+                )
+    return rows_by_period
 
 
 def _build_filing_url(cik: str, accession_number: str, primary_doc: str) -> str:
@@ -541,18 +563,27 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
 
         cik = company["cik"]
         payload = _fetch_companyfacts(cik, headers)
+        if payload.get("cik") is not None and str(payload["cik"]).lstrip("0") != str(cik).lstrip("0"):
+            return _error_payload(normalized_ticker, error="issuer_mismatch", message="SEC response issuer does not match requested CIK.", market=market)
 
         metric_maps: dict[str, dict[str, float]] = {}
+        metric_facts: dict[str, dict[str, FinancialFact]] = {}
         for field, (concepts, units) in _COMPANYFACTS_METRIC_MAP.items():
-            metric_maps[field] = _extract_companyfacts_metric(
+            metric_facts[field] = _extract_companyfacts_facts(
                 payload,
                 concepts=concepts,
                 unit_candidates=units,
+                subject=normalized_ticker,
+                metric=field,
+                instant=field in {"total_assets", "total_liabilities"},
+                source_url=_SEC_COMPANYFACTS_URL.format(cik=cik),
             )
+            metric_maps[field] = {end: fact.value for end, fact in metric_facts[field].items()}
 
         all_periods: set[str] = set()
-        for series in metric_maps.values():
-            all_periods.update(series.keys())
+        for field, series in metric_maps.items():
+            if field not in {"total_assets", "total_liabilities"}:
+                all_periods.update(series.keys())
         period_labels = sorted(all_periods, key=_period_sort_key, reverse=True)[: max(1, min(limit, 12))]
         if not period_labels:
             return {
@@ -573,6 +604,18 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
             "company_name": company.get("title"),
             "cik": cik,
             "periods": period_labels,
+            "period_ends": period_labels,
+            "frequency": "quarterly",
+            "currency": "USD",
+            "fact_metadata": {
+                field: [facts[period].metadata() if period in facts else None for period in period_labels]
+                for field, facts in metric_facts.items()
+            },
+            "metric_gaps": {
+                field: [period for period in period_labels if period not in values]
+                for field, values in metric_maps.items() if any(period not in values for period in period_labels)
+            },
+            "warnings": ["季度流量仅接受可核验的单季起止区间；累计值与未知期间不补作季度。"],
             "revenue": [metric_maps["revenue"].get(period) for period in period_labels],
             "gross_profit": [metric_maps["gross_profit"].get(period) for period in period_labels],
             "operating_income": [metric_maps["operating_income"].get(period) for period in period_labels],
@@ -589,9 +632,15 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
             ocf = metric_maps["operating_cash_flow"].get(period)
             capex = metric_maps["capital_expenditures"].get(period)
             fcf = None
-            if ocf is not None and capex is not None:
+            ocf_fact = metric_facts["operating_cash_flow"].get(period)
+            capex_fact = metric_facts["capital_expenditures"].get(period)
+            if ocf is not None and capex is not None and ocf_fact and capex_fact and ocf_fact.period_start == capex_fact.period_start and ocf_fact.unit == capex_fact.unit:
                 fcf = ocf + capex if capex < 0 else ocf - capex
             result["free_cash_flow"].append(fcf)
+            result["fact_metadata"].setdefault("free_cash_flow", []).append(
+                {**ocf_fact.metadata(), "metric": "free_cash_flow", "value": fcf, "derived_from": ["operating_cash_flow", "capital_expenditures"]}
+                if fcf is not None and ocf_fact else None
+            )
 
         has_any = any(
             any(v is not None for v in (result.get(field) or []))

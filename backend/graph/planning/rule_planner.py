@@ -35,6 +35,7 @@ from backend.graph.planning.frames import (
 from backend.graph.planning.report_mode import _append_report_mode_enrichment_steps
 from backend.graph.planning.roles import assign_agent_roles
 from backend.graph.planning.steps import _append_tool_step, finalize_step_dependencies
+from backend.graph.planning.validation import validate_executable_plan
 from backend.graph.planning.util import (
     _contains_any,
     _plan_subject_payload,
@@ -277,7 +278,7 @@ def rule_based_planner(state: GraphState) -> dict:
             "budget": budget.model_dump(),
         }
         try:
-            plan = PlanIR.model_validate(raw_plan)
+            plan = validate_executable_plan(raw_plan)
             coverage_validation = validate_plan_coverage_for_frames(
                 request_frames=ctx.request_frames,
                 plan_ir=plan.model_dump(),
@@ -822,7 +823,7 @@ def rule_based_planner(state: GraphState) -> dict:
     }
 
     try:
-        plan = PlanIR.model_validate(raw_plan)
+        plan = validate_executable_plan(raw_plan)
         coverage_validation = validate_plan_coverage_for_frames(
             request_frames=ctx.request_frames,
             plan_ir=plan.model_dump(),

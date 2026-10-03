@@ -16,6 +16,21 @@ def test_only_final_text_blocks_are_answers():
     assert final_completion_text(value) == '{"answer":"真实正文"}'
 
 
+def test_structured_response_keeps_raw_usage_finish_and_final_content():
+    from backend.services.llm_usage import extract_token_usage, has_reported_token_usage
+    from backend.services.llm_retry import _usage_or_none
+    value = {"raw": response('{"answer":"真实正文"}'), "parsed": {"answer": "真实正文"}, "parsing_error": None}
+    assert final_completion_text(value) == '{"answer":"真实正文"}'
+    assert completion_metadata(value)["actual_model"] == "fixture-model"
+    assert extract_token_usage(value) == _usage_or_none(value) == (100, 3000)
+    assert has_reported_token_usage(value)
+    value["raw"] = response("", "length")
+    assert completion_metadata(value)["finish_reason"] == "length"
+    with pytest.raises(LLMCompletionError, match="llm_output_truncated"):
+        final_completion_text(value)
+    assert "private-fixture-key" not in str(completion_metadata(value))
+
+
 def test_thinking_json_is_not_mistaken_for_final_json():
     value = response('<think>{"wrong":"internal"}</think>```json\n{"answer":"final"}\n```')
     assert "wrong" not in final_completion_text(value)

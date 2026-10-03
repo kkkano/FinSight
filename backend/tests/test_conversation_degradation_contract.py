@@ -87,3 +87,26 @@ def test_llm_degradation_does_not_mark_recovered_retry():
         {"trace": {}},
         {"llm_token_calls": 2, "failed_llm_calls": 1},
     ) is None
+
+
+def test_failed_opinion_selection_is_degraded_even_when_general_synthesis_succeeds():
+    result = _llm_degradation({
+        "trace": {"synthesize_runtime": {"fallback": False}},
+        "artifacts": {"opinion_synthesis": {"task_results_by_task": {
+            "task_1": {"fallback_used": True, "error_codes": ["llm_unavailable"]},
+        }}},
+    }, {"llm_token_calls": 2, "failed_llm_calls": 1})
+    assert result == {"used": True, "stage": "opinion_synthesis", "reason": "llm_unavailable"}
+
+
+def test_rule_based_agent_findings_do_not_imply_model_failure():
+    assert _llm_degradation({"artifacts": {"opinion_synthesis": {"task_results_by_task": {
+        "task_1": {"fallback_used": True, "error_codes": []},
+    }}}}) is None
+
+
+@pytest.mark.parametrize("reason", [None, "explanation_contains_unbound_number", "structured_selection_invalid"])
+def test_partial_structured_research_does_not_claim_provider_is_unavailable(reason):
+    assert _llm_degradation({"trace": {"synthesize_runtime": {
+        "mode": "research_result", "fallback": True, "reason": reason,
+    }}}, {"llm_token_calls": 1, "failed_llm_calls": 0}) is None

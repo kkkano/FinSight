@@ -11,6 +11,7 @@ import pytest
 from backend.utils.quote import (
     fallback_quote_yfinance,
     parse_quote_payload,
+    resolve_live_quote,
     safe_float,
 )
 
@@ -98,6 +99,38 @@ class TestParseQuotePayload:
         assert parsed is not None
         assert "change_percent" in parsed
         assert "change_pct" not in parsed
+
+    def test_nested_envelope_preserves_quote_metadata(self):
+        parsed = parse_quote_payload({
+            "provider": "twelve_data", "as_of": "2026-10-02T00:00:00Z",
+            "data": {"price": 333.69, "currency": "USD"},
+        })
+        assert parsed["source"] == "twelve_data"
+        assert parsed["as_of"] == "2026-10-02T00:00:00Z"
+        assert parsed["currency"] == "USD"
+
+    def test_live_quote_text_preserves_metadata_and_actual_provider(self):
+        payload = ("AAPL Current Price: $333.69 | Change: +3.37 (+1.02%) "
+                   "| Provider: twelve_data | As of: 2026-10-02T00:00:00Z "
+                   "| Currency: USD | Quality: verified")
+        parsed, raw = resolve_live_quote("AAPL", lambda _: payload)
+        assert raw == payload
+        assert parsed["source"] == "twelve_data"
+        assert parsed["as_of"] == "2026-10-02T00:00:00Z"
+        assert parsed["currency"] == "USD"
+        assert parsed["quality"] == "verified"
+
+    def test_nested_data_metadata_takes_precedence(self):
+        parsed = parse_quote_payload({"source": "tools_bridge", "currency": "USD", "data": {
+            "price": 500, "provider": "eastmoney", "currency": "CNY", "as_of": "2026-10-02",
+        }})
+        assert parsed["source"] == "eastmoney"
+        assert parsed["currency"] == "CNY"
+
+    def test_text_unknown_metadata_is_not_present(self):
+        parsed = parse_quote_payload("Current Price: $100 | Provider: None | As of: None")
+        assert "source" not in parsed
+        assert "as_of" not in parsed
 
 
 class TestFallbackQuoteYfinance:

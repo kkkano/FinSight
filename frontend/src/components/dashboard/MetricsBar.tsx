@@ -70,7 +70,7 @@ function buildMetrics(
     w52Low === '--' && w52High === '--' ? '--' : `${cur}${w52Low} - ${w52High}`;
 
   return [
-    { label: '总市值', value: formatMarketCapForMarket(v.market_cap, ticker) },
+    { label: '总市值', value: formatMarketCapForMarket(v.market_cap, ticker, v.market_cap_currency) },
     { label: 'P/E', value: fmtRatio(v.trailing_pe) },
     { label: 'P/B', value: fmtRatio(v.price_to_book) },
     { label: 'EPS', value: s.eps !== null && s.eps !== undefined ? `${cur}${s.eps.toFixed(2)}` : '--' },

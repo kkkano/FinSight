@@ -438,16 +438,6 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
         company_intent_contract: dict[str, Any] | None = None
         company_request_frame: dict[str, Any] | None = None
         if contract_enforced or contract_shadow:
-            company_intent_contract = derive_intent_contract(
-                query=query,
-                tickers=scoped_tickers,
-                output_mode=output_mode,
-                comparison_requested=multi_ticker_compare,
-                domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
-                lightweight_requested=_is_explicit_brief_request(query) or _is_lightweight_representative_compare(query),
-                subject_type="company",
-                frame_id="primary_company",
-            )
             company_request_frame = compile_request_frame(
                 query=query,
                 tickers=scoped_tickers,
@@ -457,6 +447,7 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
                 subject_type="company",
                 frame_id="primary_company",
             )
+            company_intent_contract = company_request_frame["intent_contract"]
             if contract_enforced:
                 intent_contract = company_intent_contract
                 request_frame = company_request_frame
@@ -663,11 +654,30 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
             reason="same-thread history deterministically binds the research subject",
         )
         trace["conversation_router"] = conversation_decision.model_dump()
+        history_operation = _operation("qa", 0.72)
+        if contract_enforced or contract_shadow:
+            bound_frame = compile_request_frame(
+                query=query,
+                tickers=history_tickers[:3],
+                output_mode=output_mode,
+                subject_type="company",
+                frame_id="primary_request",
+            )
+            bound_contract = bound_frame.get("intent_contract") or {}
+            if contract_enforced:
+                request_frame = bound_frame
+                request_frames = [bound_frame]
+                intent_contract = bound_contract
+                intent_contracts.append(dict(bound_contract))
+                history_operation = bound_frame.get("legacy_operation") or history_operation
+            else:
+                trace["request_frame_shadow"] = bound_frame
+                trace["intent_contract_shadow"] = bound_contract
         _add_task(
             tasks,
             subject_type="company",
             subject_label=", ".join(history_tickers[:3]),
-            operation=_operation("qa", 0.72),
+            operation=history_operation,
             query=query,
             tickers=history_tickers[:3],
             priority=45,

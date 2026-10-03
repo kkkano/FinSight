@@ -1,12 +1,12 @@
 # FinSight 当前架构
 
-更新时间：2026-10-02
+更新时间：2026-10-03
 
 ## 1. 产品边界
 
 FinSight 的产品目标是：先把与用户关注标的有关的变化摆到面前，再用可信行情、可验证 Prediction、证据化追问和历史复盘帮助用户理解公开金融信息。
 
-当前主工作区为 Today、Dashboard、Chat、History；另有 Welcome/Login 与只读 Shared Report。Today 是默认入口，登录用户可查看自选报价、最近 Prediction/Outcome 和待跟进判断；匿名用户只看到登录引导并可转到只读 Dashboard。Ask、Research、Portfolio、Library 是后续目标信息架构，不是当前已注册路由。
+当前主工作区为 Today、Dashboard、Chat、History；另有 Welcome/Login 与只读 Shared Report。右侧战绩工作区区分个人 Prediction 与 US20；`/track-record` 是独立公开分享页。Today 是默认入口，登录用户可查看自选报价、最近 Prediction/Outcome 和待跟进判断；匿名用户只看到登录引导并可转到只读 Dashboard。Ask、Research、Portfolio、Library 是后续目标信息架构，不是当前已注册路由。
 
 组合工作台、Screener、Backtest、A 股榜单、Attribution、Rebalance、独立 Morning Brief/Daily Tasks、邮件订阅、Alert Feed、RAG Inspector、Cost Audit、Skills/Agents/Tools 目录均不属于当前产品。
 
@@ -14,15 +14,21 @@ FinSight 的产品目标是：先把与用户关注标的有关的变化摆到�
 
 ```mermaid
 flowchart LR
-    WEB[React SPA] -->|HTTP / SSE| API[FastAPI · 9 Routers]
+    WEB[React SPA] -->|HTTP / SSE| API[FastAPI]
     API --> GRAPH[六节点 LangGraph]
-    GRAPH --> PLAN[planning / policy]
-    PLAN --> EXEC[execution / evidence]
+    GRAPH --> REQUEST[request_compiler]
+    REQUEST --> PLAN[类型校验与逐任务覆盖]
+    PLAN --> EXEC[DAG / RequestData]
     EXEC --> COLLECT[确定性 collectors]
-    EXEC --> ANALYZE[ResearchAnalyst]
+    COLLECT --> RESULT[research_result]
+    RESULT --> QUALITY[统一质量裁决]
+    QUALITY --> SAVE[运行终态与权威消息事务]
+    SAVE --> WEB
+    SAVE --> CORE
     API --> PRED[Prediction service]
     COLLECT --> TOOL[Market · SEC · FRED · Search]
     EXEC <--> RAG[(PostgreSQL + pgvector)]
+    EXEC --> WORKER[私网 embedding / 可选 reranker]
     GRAPH <--> CP[(PostgreSQL checkpoints)]
     PRED <--> CORE[(PostgreSQL core tables)]
     API --> BENCH[固定 US20 公开评估]
@@ -39,14 +45,14 @@ FastAPI 注册以下十一个 Router：
 | `watchlist_router` | Watchlist 增删查 |
 | `conversation_router` | 对话列表与历史 |
 | `market_router` | quote、Kline、financials、news、Dashboard snapshot |
-| `execution_router` | 唯一 Chat/Report SSE 执行、回放与取消 |
+| `execution_router` | 唯一 Chat/Report SSE 执行、持久运行状态、回放与取消 |
 | `predictions_router` | 用户触发的 PostgreSQL PredictionTrack：generate、run、latest、history、detail、stats、Outcome 运维入口；保留旧账本地址的隐藏兼容入口 |
 | `monitor_router` | 页面 lease 与当前标的 comments feed |
 | `report_router` | 报告索引、回放、分享与公开只读读取 |
 | `model_router` | 公开模型目录与能力、登录用户的连接测试 |
 | `prediction_router` | 独立 `/api/benchmarks/us20-v1/track-record`：固定 US20 五日公开基准账本，只读 |
 
-当前 OpenAPI 为 41 个操作。其中 `/api/models`、`/api/models/capabilities`、`/api/models/test` 提供请求级模型配置；`/api/benchmarks/us20-v1/track-record` 提供固定公开样本的只读账本。旧 `/api/predictions/track-record` 是现有 `predictions_router` 内部的静态兼容入口，排在详情查询之前，不进入 OpenAPI。两个 Router 的应用注册顺序可以互换。
+操作清单以生成的 OpenAPI 为准。其中 `/api/models`、`/api/models/capabilities`、`/api/models/test` 提供请求级模型配置；`/api/execute/runs/{run_id}` 提供持久研究运行状态；`/api/benchmarks/us20-v1/track-record` 提供固定公开样本的只读账本。旧 `/api/predictions/track-record` 是现有 `predictions_router` 内部的静态兼容入口，排在详情查询之前，不进入 OpenAPI。两个 Router 的应用注册顺序可以互换。
 
 聊天和研究报告的模型选择通过 `backend/services/model_selection.py` 进入现有 LLM 调用链；使用单独端点池，保持全站共享报告缓存停用。详见 [模型选择](MODEL_SELECTION.md)。
 
@@ -68,20 +74,24 @@ flowchart TD
 ```
 
 - `prepare_context`：恢复同 thread 上下文并建立本轮状态。
-- `route_request`：只使用确定性规则生成 route、request frame、tasks 与 render identity，不调用 LLM。
-- `collect_evidence`：规划、策略检查和并行工具采集；collector 被强制关闭自身 LLM 与 reflection。
-- `analyze`：事实查询直接构建渲染变量；研究请求最多调用一次 ResearchAnalyst。
+- `route_request`：确定性理解并绑定本轮主体后，通过 `request_compiler.finalize_request_contract` 生成关联一致的 frame、tasks、证据义务及兼容 operation，不调用路由 LLM。
+- `collect_evidence`：实际工具 schema、任务引用、依赖和无环校验后执行计划；覆盖按 `(task_id, subject, evidence_kind)` 检查。工具和 collector 共享本轮 `RequestData`，collector 关闭自身 LLM 与 reflection。
+- `analyze`：基于规范化 evidence/claim 生成唯一 `research_result`；事实可确定性渲染，分析、报告草稿及核验调用按真实 usage 统计。
 - `validate`：统一检查 Claim、引用、TaskOutcome、报告/回答质量与失败披露。
 - `render`：按 Chat 或 Report 合同输出，不重新取数或发明证据。
 
 `GraphState` 保存 query、thread、UI 上下文、请求帧、计划、证据、产物、trace 与最终回复。用户本轮显式标的优先于历史和 UI hint；diagnostics 不得进入 evidence；取消信号贯穿 SSE、图和执行器。
+
+`depends_on` 表示必须成功的控制依赖；`data_dependencies` 表示等待数据生产者进入成功或失败终态后再分析。某个来源失败不会让仅等待其数据的 Agent 或无依赖分支被连带跳过。用户明确要求的维度不能被成本 profile 删除；缺失按任务披露。
+
+`research_result` 保留事实、判断、引用、每个任务的结果和缺口。质量统一为 `pass/warn/block` 并按最严重状态合并，不能由报告构建器或 `report=None` 覆盖已有聊天阻断。完整报告必须有受支持论据；仅有事实时可以展示预览但不能冒充完整报告发布。
 
 ## 4. AI 角色
 
 用户可感知的业务 LLM 角色只有两个：
 
 1. `PredictionAnalyst`：消费可信 K 线、服务端指标和新闻摘要，输出受校验的 Prediction JSON；独立异步执行，最多一次纠错。
-2. `ResearchAnalyst`：消费 collectors 的结构化证据，生成 Chat 答案或报告草稿；普通研究最多一个业务分析调用，长报告才允许一次 verifier。
+2. `ResearchAnalyst`：消费规范化证据和论据，生成任务分析及报告草稿；按任务、草稿、核验和重试阶段记录实际调用，不把一个角色等同于一次模型调用。
 
 Price、Technical、Fundamental、News、Macro、Risk、Deep Search 只作为内部 evidence collector/profile。Technical 指标由代码计算。任何 collector 都不得自行调用 LLM、reflection 或补充搜索循环。
 
@@ -95,18 +105,23 @@ Price、Technical、Fundamental、News、Macro、Risk、Deep Search 只作为内
 - Prediction 与 Outcome 只接受 `quality=trusted` 的真实 K 线。
 - 单价拼接 OHLC、mock、synthetic 或搜索结果数字不得进入分析。
 - degraded 数据可只读展示，但必须显式标记并禁用 Prediction。
+- `financial_facts.py` 统一主体、指标、实际起止日期、频率、单位和来源；SEC 单季度按真实 duration 选择，不能把半年累计或年度数据当单季。
+- 财务行按明确别名及优先级匹配，增长按真实日期对齐同比/环比；缺对应期间就缺失。
+- 本地公告必须核验发行人代码/名称；官方域名本身不够。新闻格式头不是新闻，CPI 指数水平不是通胀同比。
 
 ## 6. 数据与认证
 
 | 数据 | 生产事实源 |
 |---|---|
-| 会话、Watchlist、报告与引用 | PostgreSQL |
+| 会话、权威消息、研究运行终态、Watchlist、报告与引用 | PostgreSQL |
 | Prediction、Outcome、run archive、LLM usage | PostgreSQL |
 | Monitor leases/comments | PostgreSQL |
 | LangGraph checkpoint | PostgreSQL |
 | RAG chunks、embedding、observability | PostgreSQL + pgvector |
 
 核心 schema 由 Alembic 管理；应用启动只校验 revision，不执行运行时 DDL。`scripts/migrate_legacy_storage.py` 仅用于一次性 dry-run/import/verify/rollback，不是运行路径。
+
+`research_runs` 与 `conversation_messages` 使用 owner 复合键、外键和 RLS；会话 `version` 支持乐观版本检查。运行开始先保存问题及助手占位，终态在短事务中保存后才交付 `done`。旧浏览器快照采用合并，不能抹掉权威回复。运行恢复读取持久终态，租约失联后标为 `interrupted`，不自动重新付费执行。完整协议见 [执行事件合同](execution-event-contract.md)。
 
 生产启用 `APP_MODE=production` 和 `SUPABASE_AUTH_REQUIRED=true`。Prediction、Chat、History、Watchlist、Monitor 与私有报告必须带有效 Supabase JWT。公开面仅包括 `/livez`、`/readyz`、`/health`、明确允许的只读 quote/news/Kline/Dashboard GET，以及 share token 报告。前端的欢迎门只控制页面进入体验，不替代后端身份校验；Today 在没有有效用户身份时不得请求或展示个人自选与历史判断。
 
@@ -124,11 +139,14 @@ Price、Technical、Fundamental、News、Macro、Risk、Deep Search 只作为内
 - `/chat`
 - `/history`
 - `/share/r/:token`
+- `/track-record`（公开分享）
 
 `/` 默认重定向到 `/today`；若 query 带 `symbol`，则进入对应 Dashboard。`/chat` 与 `/history` 使用强登录 Guard，Today 与 Dashboard 使用欢迎门，其中个人数据仍由用户身份和后端 JWT 控制。Dashboard 的“问 AI”通过 handoff 进入主 Chat，不创建第二条 SSE。History 统一承载 Prediction/Outcome 与报告。后端合同变化必须同步 API client、OpenAPI snapshot、生成类型、store 和测试。
 
 ## 8. 部署边界
 
-Docker Compose 运行 PostgreSQL/pgvector、FastAPI/Uvicorn 后端和 Nginx/React 前端。后端宿主端口仅绑定 `127.0.0.1:8000`；前端映射 `5173:80`，默认由 Nginx 同源代理 API、SSE 与健康探针。后端容器以 `/readyz` 为健康检查；`/livez` 只判断进程存活，`/health` 保留为组件状态摘要。生产 lifespan 接流量前会执行一次真实 BGE-M3 embedding probe，结果缓存给 readiness；Dockerfile 与 Compose 为 CPU 模型冷启动配置 180 秒 start period。镜像用 commit SHA 标记，数据库先迁移，随后依次部署后端和前端。
+Docker Compose 运行 PostgreSQL/pgvector、FastAPI/Uvicorn、私网 `rag-inference` 和 Nginx/React。后端宿主端口仅绑定 `127.0.0.1:8000`；前端映射 `5173:80`，默认由 Nginx 同源代理。worker 不映射宿主端口，只接收有 token 的推理请求，默认限制 3000 MiB 内存、3600 MiB 内存加 swap、1 CPU，reranker 默认关闭。首次加载前取 `/proc/meminfo` 的 `MemAvailable` 与 cgroup `memory.max-memory.current` 的较小值，默认至少需要 2400 MiB；不足则为 `resource_limited`，不加载模型。API 不在请求或验收子进程里另加载 BGE 副本。
 
-当前 Prediction worker、Monitor scheduler、Outcome scheduler，以及 run owner/replay buffer 仍在 Web 进程内，因此生产拓扑只支持一个 backend 副本。独立 worker/outbox 和持久 RunService 完成前不得水平扩展 backend。完整操作与 canary 标准见 [11_PRODUCTION_RUNBOOK.md](11_PRODUCTION_RUNBOOK.md)。
+向量携带实际模型、版本和维数形成的 `metadata.embedding_identity`，查询只比较相同身份；旧身份未知的向量不自动标为 BGE。worker 不可用时保留 PostgreSQL 词法检索，`/readyz` 可就绪并明确语义降级，不把词法可用说成语义推理成功。健康成功状态短期缓存后重查。
+
+研究终态已持久化，但正在执行的 Python task、取消路由、Prediction worker、Monitor/Outcome scheduler 仍在 Web 进程内；本次不声明支持 backend 横向扩容。镜像用 commit SHA 标记，先迁移，再部署 API、worker 与前端。数据库 `0005/0006` 为保留数据的前向迁移，回滚须使用认识新 head 的兼容镜像。完整操作与验收证据要求见 [11_PRODUCTION_RUNBOOK.md](11_PRODUCTION_RUNBOOK.md)。

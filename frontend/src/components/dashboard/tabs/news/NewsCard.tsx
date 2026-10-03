@@ -13,7 +13,8 @@ import { ExternalLink, MessageCircleQuestion } from 'lucide-react';
 
 import type { NewsItem, SelectionItem } from '../../../../types/dashboard';
 import { generateNewsId } from '../../../../utils/hash';
-import { computeNewsTags, deriveImpactLevel, formatNewsTime } from '../../../../utils/news';
+import { computeNewsTags, deriveImpactLevel, formatNewsTime, isCurrentNewsSample,
+  newsPublishedAt, newsQualityLabels } from '../../../../utils/news';
 import { SourceBadge } from '../../../ui/SourceBadge';
 
 interface NewsCardProps {
@@ -79,6 +80,9 @@ export function NewsCard({
   const impactLevel = deriveImpactLevel(news);
   const reliability = news.source_reliability ?? 0;
   const reliabilityTier = getReliabilityTier(reliability);
+  const qualityLabels = newsQualityLabels(news);
+  const current = isCurrentNewsSample(news);
+  const publishedAt = newsPublishedAt(news);
 
   const selection: SelectionItem = {
     type: 'news',
@@ -86,7 +90,8 @@ export function NewsCard({
     title: news.title,
     url: news.url,
     source: news.source,
-    ts: news.ts,
+    ts: publishedAt || undefined,
+    event_quality: news.event_quality,
     snippet: (news.summary || news.title || '').slice(0, 100),
   };
 
@@ -121,16 +126,20 @@ export function NewsCard({
             </span>
           ))}
           {/* Impact badge */}
-          <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-medium ${IMPACT_STYLES[impactLevel]}`}>
+          {current && <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-medium ${IMPACT_STYLES[impactLevel]}`}>
             {IMPACT_LABELS[impactLevel]}
-          </span>
+          </span>}
         </div>
 
         {/* Source + reliability */}
         <div className={`shrink-0 flex items-center gap-1 ${reliabilityTier.className}`}>
-          <SourceBadge source={news.source || 'hybrid_news'} asOf={news.ts} />
-          {reliabilityTier.label && <span className="text-2xs opacity-60">({reliabilityTier.label})</span>}
+          <SourceBadge source={news.source || 'hybrid_news'} asOf={publishedAt || undefined} />
+          {current && reliabilityTier.label && <span className="text-2xs opacity-60">({reliabilityTier.label})</span>}
         </div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-fin-muted" data-testid="news-quality-labels">
+        {qualityLabels.map((label) => <span key={label}>{label}</span>)}
       </div>
 
       {/* Row 2: Checkbox + Title */}
@@ -167,7 +176,7 @@ export function NewsCard({
       {/* Row 3: Meta + Actions */}
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-2 text-2xs text-fin-muted">
-          <span>{formatNewsTime(news.ts)}</span>
+          <span>{formatNewsTime(publishedAt)}</span>
           {typeof news.ranking_score === 'number' && (
             <>
               <span>·</span>

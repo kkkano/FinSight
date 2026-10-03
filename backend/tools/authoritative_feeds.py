@@ -233,11 +233,42 @@ def get_authoritative_media_news(
             max_results=limit,
             authoritative_only=bool(authoritative_only),
         )
+        from backend.research.news_event_quality import (
+            news_subject_match, normalized_news_time, prepare_news_items,
+        )
+
+        tickers = _extract_tickers(query_text)
+        prepared = []
+        excluded_subject_count = 0
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            published_at, precision = normalized_news_time(
+                row.get("published_at") or row.get("published_date") or row.get("datetime")
+            )
+            row["published_at"] = published_at
+            row["published_at_precision"] = row.get("published_at_precision") or precision
+            origin = str(row.get("retrieval_kind") or row.get("provider") or row.get("source") or "").lower()
+            row["retrieval_kind"] = "search" if origin in {"search", "search_snippet", "search_fallback", "tavily", "exa", "serpapi"} else row.get("retrieval_kind") or "provider_feed"
+            # 查询可以包含比较的多个标的；只标注该篇实际提及的主体，不复制归属。
+            matches = {ticker: news_subject_match(ticker, str(row.get("title") or row.get("headline") or ""),
+                                                   str(row.get("snippet") or row.get("summary") or "")) for ticker in tickers}
+            bound = [ticker for ticker, match in matches.items() if match in {"headline", "summary_only"}]
+            if tickers and not bound:
+                excluded_subject_count += 1
+                continue
+            row["subject_tickers"] = bound
+            row["subject_matches"] = matches
+            row["ticker"] = bound[0] if len(bound) == 1 else ""
+            prepared.append(row)
+        articles = prepare_news_items(prepared)
         return {
             "query": query_text,
             "source": "authoritative_feeds",
-            "articles": rows,
-            "count": len(rows),
+            "articles": articles,
+            "count": len(articles),
+            "excluded_subject_count": excluded_subject_count,
             "error": None,
         }
     except Exception as exc:  # pragma: no cover - best effort

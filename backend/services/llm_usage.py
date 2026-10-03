@@ -21,6 +21,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Any
+from backend.services.llm_response import raw_completion
 
 # ---------------------------------------------------------------------------
 # Accumulator
@@ -202,6 +203,7 @@ def _safe_int(value: Any) -> int:
 
 def extract_token_usage(response: Any) -> tuple[int, int]:
     """从 LangChain 响应提取 (prompt_tokens, completion_tokens)，兼容新旧字段。"""
+    response = raw_completion(response)
     # 新版 usage_metadata
     um = getattr(response, "usage_metadata", None)
     if isinstance(um, dict):
@@ -225,6 +227,7 @@ def extract_token_usage(response: Any) -> tuple[int, int]:
 
 def has_reported_token_usage(response: Any) -> bool:
     """Return true when the provider explicitly supplied usage, including 0/0."""
+    response = raw_completion(response)
     usage_metadata = getattr(response, "usage_metadata", None)
     if isinstance(usage_metadata, dict) and any(
         key in usage_metadata for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")

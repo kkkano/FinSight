@@ -42,7 +42,7 @@ from backend.services.llm_usage import (
     record_llm_selection_failure,
     record_llm_usage,
 )
-from backend.services.llm_response import completion_metadata
+from backend.services.llm_response import completion_metadata, raw_completion
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +178,7 @@ def _retry_after_seconds(exc: BaseException) -> int | None:
 
 
 def _usage_or_none(response: Any) -> tuple[int | None, int | None]:
+    response = raw_completion(response)
     metadata = getattr(response, "usage_metadata", None)
     if isinstance(metadata, dict) and any(key in metadata for key in ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens")):
         return int(metadata.get("input_tokens", metadata.get("prompt_tokens", 0)) or 0), int(metadata.get("output_tokens", metadata.get("completion_tokens", 0)) or 0)

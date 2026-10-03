@@ -85,7 +85,7 @@ class IntentContract(TypedDict, total=False):
 
 _CONTRACT_VERSION = "intent_contract.v1"
 EXTERNAL_IMPACT_LIGHT_PROFILE = "external_entity_impact_light"
-_HIGH_ORDER_FACETS = {"valuation", "risk", "trend", "earnings", "investment_opinion", "technical", "external_entity_impact"}
+_HIGH_ORDER_FACETS = {"valuation", "fundamental", "business", "competition", "catalyst", "risk", "trend", "earnings", "investment_opinion", "technical", "external_entity_impact"}
 _COMPARISON_RELATION_RE = re.compile(r"\b(?:compare|versus|vs|which|who|better|stronger|relative)\b", re.IGNORECASE)
 _EXTERNAL_IMPACT_RELATION_RE = re.compile(
     r"(影响|冲击|拖累|利好|利空|受.{0,24}影响|被.{0,24}影响|"
@@ -254,8 +254,9 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
     "document_context": EvidenceDefinition(
         "document_context",
         scope="per_document",
-        producer="tool_only",
+        producer="tool_then_agent",
         tools=("fetch_url_content", "search"),
+        agents=("deep_search_agent",),
     ),
 }
 
@@ -332,6 +333,17 @@ def _has_risk_facet(query: str) -> bool:
     text = str(query or "")
     lowered = text.lower()
     return bool("\u98ce\u9669" in text or "risk" in lowered or "drawdown" in lowered or "downside" in lowered)
+
+
+def _has_fundamental_facet(query: str) -> bool:
+    text = str(query or "").lower()
+    return bool(any(word in text for word in ("基本面", "增长", "成长", "盈利能力", "现金流"))
+                or re.search(r"\b(?:fundamentals?|growth|profitability|cash\s+flow)\b", text))
+
+
+def _has_catalyst_facet(query: str) -> bool:
+    text = str(query or "").lower()
+    return bool("催化" in text or re.search(r"\bcatalysts?\b", text))
 
 
 def _has_trend_facet(query: str) -> bool:
@@ -601,6 +613,14 @@ def _derive_facets(query: str, *, domain_intent: str = "", tickers: list[str] | 
         facets.append("external_entity_impact")
     if _has_valuation_facet(query):
         facets.append("valuation")
+    if _has_fundamental_facet(query):
+        facets.append("fundamental")
+    if re.search(r"业务|商业模式|产品线|\bbusiness(?:\s+model)?\b", query, re.IGNORECASE):
+        facets.append("business")
+    if re.search(r"竞争|竞品|\b(?:competition|competitive|competitors?)\b", query, re.IGNORECASE):
+        facets.append("competition")
+    if not wants_no_news_or_links(query) and _has_catalyst_facet(query):
+        facets.append("catalyst")
     earnings_price_impact = query_requests_earnings_price_impact(query)
     if earnings_price_impact or query_requests_earnings_performance(query):
         facets.append("earnings")
@@ -634,6 +654,14 @@ def _required_evidence_for_facets(facets: list[str], *, per_ticker_required: boo
         evidence.extend(["price_snapshot", "news_context", "risk_profile"])
     if "valuation" in facet_set:
         evidence.extend(["price_snapshot", "company_profile", "earnings_estimates", "fundamental_snapshot"])
+    if "fundamental" in facet_set:
+        evidence.extend(["company_profile", "earnings_estimates", "fundamental_snapshot", "filing_context"])
+    if "business" in facet_set:
+        evidence.extend(["company_profile", "filing_context"])
+    if "competition" in facet_set:
+        evidence.extend(["company_profile", "news_context", "document_context"])
+    if "catalyst" in facet_set:
+        evidence.extend(["news_context", "event_calendar"])
     if "earnings" in facet_set:
         evidence.extend(["company_profile", "earnings_estimates", "fundamental_snapshot", "news_context", "event_calendar", "transcript_context", "filing_context"])
         if "price" in facet_set:
@@ -664,6 +692,12 @@ def _comparison_dimensions(facets: list[str]) -> list[str]:
     for facet in facets:
         if facet == "valuation":
             dims.append("valuation_reasonableness")
+        elif facet == "fundamental":
+            dims.append("fundamental_quality")
+        elif facet == "business":
+            dims.append("business_model")
+        elif facet == "competition":
+            dims.append("competition")
         elif facet == "risk":
             dims.append("risk_level")
         elif facet == "earnings":
@@ -674,13 +708,13 @@ def _comparison_dimensions(facets: list[str]) -> list[str]:
             dims.append("investment_attractiveness")
         elif facet == "technical":
             dims.append("technical_quality")
-        elif facet == "news":
+        elif facet in {"news", "catalyst"}:
             dims.append("news_catalysts")
         elif facet == "external_entity_impact":
             dims.append("external_impact")
         elif facet == "price_performance":
             dims.append("performance")
-    return dims or ["performance"]
+    return _dedupe(dims) or ["performance"]
 
 
 def canonical_evidence_kinds(required_evidence: list[str] | tuple[str, ...] | None) -> list[str]:
@@ -796,7 +830,7 @@ def derive_intent_contract(
     mode = str(output_mode or "").strip().lower()
     if "external_entity_impact" in facets and mode in {"chat", "brief"}:
         budget_profile = EXTERNAL_IMPACT_LIGHT_PROFILE
-    elif "valuation" in facets and per_ticker_required and mode in {"chat", "brief"}:
+    elif set(facets) <= {"valuation", "price"} and "valuation" in facets and per_ticker_required and mode in {"chat", "brief"}:
         budget_profile = "valuation_compare_light"
     elif "valuation" in facets and per_ticker_required:
         budget_profile = "valuation_compare"
@@ -870,7 +904,7 @@ def evidence_focused_operation(contract: dict[str, Any] | None) -> dict[str, Any
     if isinstance(contract, dict) and contract.get("budget_profile"):
         params["budget_profile"] = str(contract.get("budget_profile") or "")
         params["evidence_profile"] = str(contract.get("budget_profile") or "")
-    if "technical" in facet_set and not {"valuation", "risk", "investment_opinion"}.intersection(facet_set):
+    if "technical" in facet_set and not ((_HIGH_ORDER_FACETS - {"technical", "trend"}) | {"news"}).intersection(facet_set):
         return {"name": "technical", "confidence": 0.84, "params": params}
     if "external_entity_impact" in facet_set:
         return {"name": "analyze_impact", "confidence": 0.84, "params": params}
@@ -879,13 +913,11 @@ def evidence_focused_operation(contract: dict[str, Any] | None) -> dict[str, Any
     if "earnings" in facet_set:
         return {"name": "earnings_performance", "confidence": 0.84, "params": params}
     focus = "investment_opinion"
-    if "valuation" in facet_set:
+    if facet_set == {"valuation"}:
         focus = "valuation"
-    elif "risk" in facet_set:
+    elif facet_set == {"risk"}:
         focus = "risk"
     params["evidence_focus"] = focus
-    if focus == "valuation":
-        params["facets"] = ["valuation"]
     return {"name": "investment_opinion", "confidence": 0.86 if focus == "valuation" else 0.84, "params": params}
 
 
@@ -908,14 +940,14 @@ def legacy_operation_for_contract(contract: dict[str, Any] | None, *, subject_ty
         return {"name": "earnings_impact", "confidence": 0.84, "params": params}
     if "earnings" in facet_set:
         return {"name": "earnings_performance", "confidence": 0.84, "params": params}
-    if "technical" in facet_set and not {"valuation", "risk"}.intersection(facet_set):
+    if "technical" in facet_set and not ((_HIGH_ORDER_FACETS - {"technical", "trend"}) | {"news"}).intersection(facet_set):
         return {"name": "technical", "confidence": 0.82, "params": params}
     if (
         "trend" in facet_set
-        and not {"valuation", "risk", "investment_opinion"}.intersection(facet_set)
+        and not ((_HIGH_ORDER_FACETS - {"technical", "trend"}) | {"news"}).intersection(facet_set)
     ):
         return {"name": "technical", "confidence": 0.82, "params": params}
-    if {"valuation", "risk", "investment_opinion"}.intersection(facet_set):
+    if {"valuation", "fundamental", "business", "competition", "catalyst", "risk", "investment_opinion"}.intersection(facet_set):
         return evidence_focused_operation(contract)
     if "news" in facet_set:
         return {"name": "fetch", "confidence": 0.78, "params": {**params, "topic": "news"}}

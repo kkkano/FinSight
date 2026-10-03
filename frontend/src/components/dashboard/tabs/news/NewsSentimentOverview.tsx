@@ -15,6 +15,9 @@ import {
   classifySentiment,
   deriveImpactLevel,
   formatNewsTime,
+  currentNewsSamples,
+  newsPublishedAt,
+  newsIdentity,
   type SentimentType,
 } from '../../../../utils/news';
 
@@ -72,9 +75,9 @@ const TIME_RANGE_LABELS: Record<NewsTimeRange, string> = {
 };
 
 const SENTIMENT_LABELS: Record<SentimentType, string> = {
-  bullish: '看多',
+  bullish: '积极',
   neutral: '中性',
-  bearish: '看空',
+  bearish: '消极',
 };
 
 const SENTIMENT_TONE: Record<SentimentType, string> = {
@@ -157,7 +160,7 @@ const buildTimeline = (news: NewsItem[], timeRange: NewsTimeRange): SentimentBuc
   >();
 
   for (const item of news) {
-    const timestamp = parseTimestamp(item.ts);
+    const timestamp = parseTimestamp(newsPublishedAt(item));
     if (timestamp == null) continue;
 
     const key = bucketTimestamp(timestamp, timeRange);
@@ -222,23 +225,25 @@ const buildCatalysts = (news: NewsItem[]): CatalystEvent[] => {
     .sort((a, b) => {
       const scoreDelta = impactValue(b) - impactValue(a);
       if (Math.abs(scoreDelta) > 0.001) return scoreDelta;
-      return (parseTimestamp(b.ts) ?? 0) - (parseTimestamp(a.ts) ?? 0);
+      return (parseTimestamp(newsPublishedAt(b)) ?? 0) - (parseTimestamp(newsPublishedAt(a)) ?? 0);
     });
 
-  return highImpact.slice(0, 5).map((item, index) => ({
-    id: `${item.title}-${item.source}-${item.ts}-${index}`,
+  return highImpact.slice(0, 5).map((item) => ({
+    id: newsIdentity(item),
     title: item.title,
     source: item.source ?? '',
-    ts: item.ts,
+    ts: newsPublishedAt(item),
     sentiment: classifySentiment(item),
     impactScore: impactValue(item),
   }));
 };
 
-const computeOverviewStats = (
+// eslint-disable-next-line react-refresh/only-export-components -- 统计合同供定向测试复用。
+export const computeOverviewStats = (
   news: NewsItem[],
   timeRange: NewsTimeRange,
 ): SentimentOverviewStats => {
+  news = currentNewsSamples(news);
   let bullish = 0;
   let neutral = 0;
   let bearish = 0;
@@ -278,15 +283,15 @@ const computeOverviewStats = (
   const densityTarget = timeRange === '24h' ? 8 : timeRange === '7d' ? 16 : 28;
   const density = clamp(total / densityTarget, 0, 1);
   const highImpactShare = total > 0 ? highImpactCount / total : 0;
-  const heatScore = Math.round(
+  const heatScore = total === 0 ? 0 : Math.round(
     (density * 0.36 + avgImpact * 0.32 + highImpactShare * 0.2 + (avgReliability ?? 0.6) * 0.12) * 100,
   );
   const timeline = buildTimeline(news, timeRange);
   const trend = resolveTrend(timeline);
 
-  let biasLabel = '中性';
-  if (score >= 12) biasLabel = '偏多';
-  else if (score <= -12) biasLabel = '偏空';
+  let biasLabel = total === 0 ? '样本不足' : '中性';
+  if (total > 0 && score >= 12) biasLabel = '积极';
+  else if (total > 0 && score <= -12) biasLabel = '消极';
 
   let heatLabel = '低热';
   if (heatScore >= 75) heatLabel = '高热';
@@ -357,9 +362,9 @@ function DistributionChart({ stats, theme }: { stats: SentimentOverviewStats; th
         },
         labelLine: { length: 8, length2: 6 },
         data: [
-          { name: '看多', value: stats.bullish, itemStyle: { color: theme.success } },
+          { name: '积极', value: stats.bullish, itemStyle: { color: theme.success } },
           { name: '中性', value: stats.neutral, itemStyle: { color: theme.muted } },
-          { name: '看空', value: stats.bearish, itemStyle: { color: theme.danger } },
+          { name: '消极', value: stats.bearish, itemStyle: { color: theme.danger } },
         ],
       },
     ],
@@ -465,11 +470,11 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
             {ticker && <span className="text-xs font-medium text-fin-muted">{ticker}</span>}
           </div>
           <p className="text-xs text-fin-muted">
-            {TIME_RANGE_LABELS[timeRange]} · 基于 Dashboard 新闻列表客户端聚合
+            {TIME_RANGE_LABELS[timeRange]} · 有明确发布时间与出处的近期报道
           </p>
         </div>
         <div className="text-xs text-fin-muted">
-          样本 {stats.total} 条 · 高影响 {stats.highImpactCount} 条
+          合格报道 {stats.total} 条 · 高影响 {stats.highImpactCount} 条
         </div>
       </div>
 
@@ -480,7 +485,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
             <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className={`text-2xl font-semibold ${scoreTone}`}>{formatSignedScore(stats.score)}</span>
+            <span className={`text-2xl font-semibold ${scoreTone}`}>{stats.total ? formatSignedScore(stats.score) : '--'}</span>
             <span className="text-sm font-medium text-fin-text">{stats.biasLabel}</span>
           </div>
           <div className="mt-2 text-2xs text-fin-muted">加权分 -100 到 +100</div>
@@ -513,8 +518,8 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-fin-text">{stats.heatScore}</span>
-            <span className="text-sm font-medium text-fin-warning">{stats.heatLabel}</span>
+            <span className="text-2xl font-semibold text-fin-text">{stats.total ? stats.heatScore : '--'}</span>
+            <span className="text-sm font-medium text-fin-warning">{stats.total ? stats.heatLabel : '样本不足'}</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-fin-border">
             <div
@@ -567,13 +572,13 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-fin-text">催化事件时间线</h3>
+            <h3 className="text-sm font-semibold text-fin-text">近期催化报道</h3>
             <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           {/* TODO: 后端 dashboard.news 接入 NewsSentimentSnapshot.catalyst_events 后，优先展示后端聚合催化事件。 */}
           {stats.catalysts.length === 0 ? (
             <div className="flex h-24 items-center justify-center text-sm text-fin-muted">
-              暂无高影响催化事件
+              暂无合格的高影响报道
             </div>
           ) : (
             <div className="space-y-3">
@@ -591,6 +596,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
                         {SENTIMENT_LABELS[event.sentiment]}
                       </span>
                       <span>影响 {Math.round(event.impactScore * 100)}%</span>
+                      <span>报道待核原文</span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-sm font-medium text-fin-text">{event.title}</p>
                   </div>

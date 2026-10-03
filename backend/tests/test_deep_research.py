@@ -1,11 +1,25 @@
 import pytest
 import asyncio
+import socket
 from unittest.mock import MagicMock, AsyncMock
 from typing import Any
 import backend.agents.deep_search_agent as deep_search_module
 from backend.agents.deep_search_agent import DeepSearchAgent
 from backend.agents.macro_agent import MacroAgent
 from backend.agents.base_agent import AgentOutput
+
+
+@pytest.fixture
+def public_document_dns(monkeypatch):
+    """只隔离 fixture 域名的 DNS，真实 SSRF 地址校验仍完整执行。"""
+    hosts = {"www.sec.gov", "example.com", "www.reuters.com", "www.wsj.com", "random-finance.cc"}
+
+    def resolve(host, *_args, **_kwargs):
+        if host not in hosts:
+            raise socket.gaierror("未声明的测试域名，禁止真实 DNS 请求")
+        return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
 
 @pytest.mark.asyncio
 async def test_deep_search_agent():
@@ -178,7 +192,7 @@ async def test_macro_agent_fallback_structured():
 
 
 @pytest.mark.asyncio
-async def test_macro_agent_conflict_merge_prefers_fred():
+async def test_macro_agent_keeps_fred_and_treats_search_disagreement_as_unverified():
     mock_llm = MagicMock()
     mock_cache = MagicMock()
     mock_tools = MagicMock()
@@ -192,9 +206,12 @@ async def test_macro_agent_conflict_merge_prefers_fred():
     result = await agent.research("macro update", "N/A")
 
     assert result.agent_name == "macro"
-    assert result.evidence_quality.get("has_conflicts") is True
-    # 冲突风险文案已中文化（P2-5 claim 中文化）：匹配中文"冲突"关键词
-    assert any("冲突" in str(risk) for risk in result.risks)
+    assert result.evidence_quality.get("has_conflicts") is False
+    assert result.conflicting_claims == []
+    assert any(item.source == "FRED" and "5.50%" in item.text and item.meta["usage"] == "fact" for item in result.evidence)
+    search_evidence = next(item for item in result.evidence if item.source == "Web Search")
+    assert search_evidence.meta["usage"] == "raw"
+    assert search_evidence.meta["verification"] == "discovery_only"
 
 def test_deep_search_queries_dynamic():
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())
@@ -246,7 +263,7 @@ def test_deep_search_filter_results_finance_mode_blocks_untrusted_domains(monkey
 
 
 @pytest.mark.asyncio
-async def test_deep_search_initial_search_applies_domain_filter(monkeypatch):
+async def test_deep_search_initial_search_applies_domain_filter(monkeypatch, public_document_dns):
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())
     monkeypatch.setenv("DEEPSEARCH_STRICT_FINANCE_SOURCES", "true")
 
@@ -273,7 +290,7 @@ async def test_deep_search_initial_search_applies_domain_filter(monkeypatch):
     assert all(item.get("url") != untrusted_url for item in docs)
 
 
-def test_fetch_documents_pdf_without_reader_uses_snippet_fallback(monkeypatch):
+def test_fetch_documents_pdf_without_reader_uses_snippet_fallback(monkeypatch, public_document_dns):
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     agent = DeepSearchAgent(None, mock_cache, mock_tools)
@@ -484,7 +501,7 @@ def test_search_web_supplements_authoritative_feeds_when_trusted_results_insuffi
     assert any(item.get("source") == "authoritative_feed" for item in results)
 
 
-def test_fetch_document_uses_jina_fallback_for_short_trusted_content(monkeypatch):
+def test_fetch_document_uses_jina_fallback_for_short_trusted_content(monkeypatch, public_document_dns):
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     agent = DeepSearchAgent(None, mock_cache, mock_tools)
@@ -531,7 +548,7 @@ def test_fetch_document_uses_jina_fallback_for_short_trusted_content(monkeypatch
     assert bool(doc.get("degraded")) is False
 
 
-def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch):
+def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch, public_document_dns):
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     agent = DeepSearchAgent(None, mock_cache, mock_tools)
@@ -581,7 +598,7 @@ def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch):
     assert bool(doc.get("degraded")) is False
 
 
-def test_fetch_document_uses_bounded_http_budget(monkeypatch):
+def test_fetch_document_uses_bounded_http_budget(monkeypatch, public_document_dns):
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     agent = DeepSearchAgent(None, mock_cache, mock_tools)
@@ -608,6 +625,18 @@ def test_fetch_document_uses_bounded_http_budget(monkeypatch):
 
     assert doc is None
     assert captured["timeout"] == 3
+
+
+@pytest.mark.parametrize("address", ["10.0.0.5", "127.0.0.1", "198.18.0.1"])
+def test_fetch_document_rejects_nonpublic_dns_before_http(monkeypatch, address):
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, 443))
+    ])
+    session_factory = MagicMock()
+    monkeypatch.setattr(agent, "_get_session", session_factory)
+    assert agent._fetch_document({"url": "https://www.reuters.com/fixture"}) is None
+    session_factory.assert_not_called()
 
 
 def test_deep_search_http_session_disables_retries_by_default(monkeypatch):

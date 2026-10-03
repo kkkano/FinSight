@@ -6,10 +6,104 @@ import json
 from typing import Any
 
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.intent_contract import canonical_evidence_kinds, evidence_registry
 from backend.graph.request_task_contract import output_is_error_like
+from backend.utils.quote import parse_quote_payload
 
 
-def append_tool_evidence(
+def evidence_is_global(raw: dict[str, Any], producer_name: str = "") -> bool:
+    meta = raw.get("meta") if isinstance(raw.get("meta"), dict) else {}
+    if raw.get("subject") or raw.get("ticker") or meta.get("subject") or meta.get("ticker"):
+        return False
+    source = str(raw.get("source") or raw.get("source_name") or meta.get("source") or "").strip().lower()
+    return bool(meta.get("indicator_key") or producer_name == "macro_agent"
+                or source in {"fred", "market_sentiment", "cnn fear & greed"})
+
+
+def evidence_contract_metadata(
+    raw: dict[str, Any],
+    *,
+    producer_name: str = "",
+    producer_kind: str = "",
+    required_evidence: list[str] | None = None,
+    quote_payload: Any = None,
+) -> dict[str, Any]:
+    """保留原始证据，补齐执行层与合成合同共同消费的来源元数据。"""
+    result = dict(raw)
+    meta = dict(raw.get("meta") or {}) if isinstance(raw.get("meta"), dict) else {}
+    if "meta" in raw:
+        result["meta"] = meta
+    source_id = raw.get("source_id") or meta.get("source_id") or raw.get("id")
+    if source_id:
+        result["source_id"] = source_id
+
+    registry = evidence_registry()
+    kind = None
+    for value in (raw.get("kind"), meta.get("evidence_kind"), meta.get("kind")):
+        if value == "unknown":
+            kind = "unknown"
+            break
+        canonical = canonical_evidence_kinds([value]) if isinstance(value, str) else []
+        if canonical:
+            kind = canonical[0]
+            break
+    if kind is None:
+        candidates = {
+            key for key, definition in registry.items()
+            if producer_name in (definition.agents if producer_kind == "agent" else definition.tools)
+        }
+        if producer_kind == "tool" and producer_name == "get_stock_price":
+            kind = "price_snapshot"
+        elif producer_kind == "agent" and producer_name == "price_agent":
+            kind = "price_snapshot"
+        else:
+            selected = candidates.intersection(canonical_evidence_kinds(required_evidence))
+            if len(selected) == 1:
+                kind = next(iter(selected))
+            elif len(candidates) == 1:
+                kind = next(iter(candidates))
+            else:
+                kind = "unknown"
+    result["kind"] = kind
+    if producer_kind == "agent" and producer_name:
+        result.setdefault("agent_name", producer_name)
+    for key, values in {
+        "as_of": (raw.get("as_of"), meta.get("as_of"), raw.get("timestamp"), meta.get("timestamp"), raw.get("published_date")),
+        "source_name": (raw.get("source_name"), meta.get("source_name"), raw.get("source"), producer_name),
+        "market_price": (raw.get("market_price"), meta.get("market_price")),
+    }.items():
+        value = next((item for item in values if item not in (None, "")), None)
+        if value is not None:
+            result[key] = value
+    if producer_kind == "tool" and producer_name == "get_stock_price":
+        quote = parse_quote_payload(quote_payload)
+        if quote:
+            result["market_price"] = quote["price"]
+            for key in ("as_of", "currency", "quality"):
+                if quote.get(key) is not None:
+                    result[key] = quote[key]
+            if quote.get("source"):
+                result["source_name"] = quote["source"]
+    return result
+
+
+def _contract_fields(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    fields = {
+        key: raw[key] for key in (
+            "source_id", "kind", "as_of", "market_price", "source_name", "agent_name", "meta",
+            "price", "current_price", "close", "timestamp",
+            "event_quality", "supporting_reports", "retrieval_kind", "published_at", "published_at_precision",
+            "subject", "metric", "period_start", "period_end", "frequency", "unit", "currency", "usage", "structured_data",
+        ) if key in raw
+    }
+    if raw.get("url") or raw.get("filing_url") or raw.get("source_url"):
+        fields.setdefault("structured_data", dict(raw))
+    return fields
+
+
+def _append_tool_evidence(
     evidence_pool: list[dict[str, Any]],
     tool_name: str,
     step_id: str,
@@ -35,6 +129,7 @@ def append_tool_evidence(
         if output.get("error"):
             evidence_pool.append(
                 {
+                    **_contract_fields(output),
                     "title": f"Technical snapshot ({output.get('ticker','N/A')})",
                     "url": None,
                     "snippet": f"error={output.get('error')} points={output.get('points','N/A')}",
@@ -63,6 +158,7 @@ def append_tool_evidence(
 
         evidence_pool.append(
             {
+                **_contract_fields(output),
                 "title": f"Technical snapshot ({output.get('ticker','N/A')})",
                 "url": None,
                 "snippet": " | ".join(parts) if parts else None,
@@ -87,6 +183,7 @@ def append_tool_evidence(
             description = str(filing.get("primary_doc_description") or form_type).strip()
             evidence_pool.append(
                 {
+                    **_contract_fields(filing),
                     "title": f"{company_name} {form_type} ({filing_date or 'N/A'})".strip(),
                     "url": filing_url or None,
                     "snippet": f"SEC EDGAR {form_type} filing. Filed: {filing_date or 'N/A'}. {description}",
@@ -103,6 +200,7 @@ def append_tool_evidence(
             selected = output.get("selected_filing") if isinstance(output.get("selected_filing"), dict) else {}
             evidence_pool.append(
                 {
+                    **_contract_fields(selected),
                     "title": f"{company_name} Risk Factors (Item 1A)".strip(),
                     "url": str(selected.get("filing_url") or "").strip() or None,
                     "snippet": risk_excerpt[:800],
@@ -131,6 +229,7 @@ def append_tool_evidence(
             ).strip()
             evidence_pool.append(
                 {
+                    **_contract_fields(filing),
                     "title": title or f"{ticker} {form_type} ({filing_date or 'N/A'})".strip(),
                     "url": filing_url or None,
                     "snippet": f"{market} local disclosure {form_type}. Filed: {filing_date or 'N/A'}. {description}",
@@ -162,6 +261,7 @@ def append_tool_evidence(
                 continue
             evidence_pool.append(
                 {
+                    **_contract_fields(article),
                     "title": title or f"authoritative media {i+1}",
                     "url": url or None,
                     "snippet": snippet[:800],
@@ -186,6 +286,7 @@ def append_tool_evidence(
                 continue
             evidence_pool.append(
                 {
+                    **_contract_fields(release),
                     "title": title or f"macro release {i+1}",
                     "url": url or None,
                     "snippet": snippet[:800],
@@ -210,6 +311,7 @@ def append_tool_evidence(
                 continue
             evidence_pool.append(
                 {
+                    **_contract_fields(item),
                     "title": title or f"earnings transcript {i+1}",
                     "url": url or None,
                     "snippet": snippet[:800],
@@ -228,6 +330,7 @@ def append_tool_evidence(
         snippet = str(output.get("description") or output.get("content") or output.get("error") or "").strip()
         evidence_pool.append(
             {
+                **_contract_fields(output),
                 "title": title,
                 "url": url or None,
                 "snippet": snippet[:1200],
@@ -246,6 +349,7 @@ def append_tool_evidence(
                 continue
             evidence_pool.append(
                 {
+                    **_contract_fields(item),
                     "title": item.get("title") or item.get("headline") or f"{tool_name} result {i+1}",
                     "url": item.get("url"),
                     "snippet": item.get("snippet") or item.get("summary") or item.get("content"),
@@ -261,6 +365,7 @@ def append_tool_evidence(
     snippet = json_dumps_safe(output, ensure_ascii=False) if isinstance(output, dict) else str(output)
     evidence_pool.append(
         {
+            **_contract_fields(output),
             "title": f"{tool_name} output",
             "url": None,
             "snippet": snippet[:800],
@@ -271,3 +376,29 @@ def append_tool_evidence(
             "id": f"{tool_name}:{step_id}",
             }
         )
+
+
+def append_tool_evidence(
+    evidence_pool: list[dict[str, Any]],
+    tool_name: str,
+    step_id: str,
+    output: Any,
+    *,
+    required_evidence: list[str] | None = None,
+) -> None:
+    before_count = len(evidence_pool)
+    _append_tool_evidence(evidence_pool, tool_name, step_id, output)
+    quote_payload = output
+    if isinstance(output, str) and tool_name == "get_stock_price":
+        try:
+            quote_payload = json.loads(output)
+        except (TypeError, ValueError):
+            pass
+    for evidence in evidence_pool[before_count:]:
+        evidence.update(evidence_contract_metadata(
+            evidence,
+            producer_name=tool_name,
+            producer_kind="tool",
+            required_evidence=required_evidence,
+            quote_payload=quote_payload,
+        ))

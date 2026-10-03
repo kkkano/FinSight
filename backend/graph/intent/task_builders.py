@@ -1060,6 +1060,7 @@ def _add_task(
     tasks.append(
         {
             "id": task_id,
+            "request_text": query,
             "subject_type": subject_type,
             "subject_label": subject_label,
             "tickers": tickers or [],

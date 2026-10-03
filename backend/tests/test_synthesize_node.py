@@ -586,11 +586,11 @@ def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
     conclusion = str(render_vars.get("conclusion") or "")
 
     assert "Gemini 2.0 will launch in 2026Q2" not in conclusion
-    assert synth_mod._HALLUCINATION_SAFE_PLACEHOLDER in conclusion
-    verifier = artifacts.get("verifier_result") or {}
-    assert verifier.get("checked") is True
-    assert len(verifier.get("unsupported_claims") or []) == 1
-    assert len(verifier.get("unresolved_unsupported_claims") or []) == 0
+    assert artifacts.get("research_result")
+    from backend.graph.nodes.render_node import render_node
+    rendered = render_node({**state, **out})
+    assert rendered["artifacts"]["quality_blocked"] is True
+    assert "Gemini 2.0 will launch in 2026Q2" not in rendered["artifacts"]["draft_markdown"]
 
 
 def test_synthesize_report_accepts_large_budgets_with_finite_attempts(monkeypatch):
@@ -641,12 +641,9 @@ def test_synthesize_report_accepts_large_budgets_with_finite_attempts(monkeypatc
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
     limits = runtime.get("llm_limits") or {}
 
-    assert retry_kwargs.get("request_timeout") == 800
-    assert retry_kwargs.get("context").budget.max_provider_attempts == 1
-    assert retry_kwargs.get("acquire_timeout_seconds") == 300.0
-    assert limits.get("request_timeout") == 800
-    assert limits.get("max_attempts") == 1
-    assert limits.get("acquire_timeout") == 300
+    assert retry_kwargs == {}, "没有经校验证据的报告不应花费模型预算"
+    assert (out.get("artifacts") or {}).get("research_result")
+    assert runtime.get("mode") == "research_structured"
 
 
 def test_synthesize_narrative_persists_verifier_result(monkeypatch):
@@ -680,10 +677,8 @@ def test_synthesize_narrative_persists_verifier_result(monkeypatch):
 
     out = _run(synth_mod.synthesize(state))
     artifacts = out.get("artifacts") or {}
-    assert artifacts.get("draft_markdown")
-    verifier = artifacts.get("verifier_result") or {}
-    assert verifier.get("checked") is True
-    assert len(verifier.get("unsupported_claims") or []) == 1
+    assert artifacts.get("research_result")
+    assert not artifacts.get("draft_markdown"), "Markdown 所有权属于 renderer"
 
 
 def test_compute_unresolved_unsupported_claims_returns_residual_claims():
@@ -804,10 +799,10 @@ def test_synthesize_llm_mode_uses_llm_for_non_price_chat_tasks(monkeypatch):
 
     out = _run(synth_mod.synthesize(state))
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
-    assert called["llm"] is True
-    assert runtime.get("mode") == "llm"
+    assert called["llm"] is False
+    assert runtime.get("mode") == "research_result"
     assert runtime.get("fallback") is False
-    assert "render_vars" in (out.get("artifacts") or {})
+    assert (out.get("artifacts") or {}).get("error_code") == "missing_task_contract"
 
 
 def test_synthesize_chat_technical_task_skips_llm_for_latency(monkeypatch):
@@ -856,9 +851,9 @@ def test_synthesize_chat_technical_task_skips_llm_for_latency(monkeypatch):
     out = _run(synth_mod.synthesize(state))
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
     assert called["llm"] is False
-    assert runtime.get("mode") == "task_graph_stub"
-    assert runtime.get("reason") == "quote_or_technical_uses_short_task_graph_renderer"
-    assert "render_vars" in (out.get("artifacts") or {})
+    assert runtime.get("mode") == "research_result"
+    assert runtime.get("reason") == "missing_task_contract"
+    assert (out.get("artifacts") or {}).get("quality_blocked") is True
 
 
 def test_synthesize_chat_preserves_natural_text_when_llm_ignores_json(monkeypatch):
@@ -895,9 +890,8 @@ def test_synthesize_chat_preserves_natural_text_when_llm_ignores_json(monkeypatc
     out = _run(synth_mod.synthesize(state))
     render_vars = (out.get("artifacts") or {}).get("render_vars") or {}
     runtime = (out.get("trace") or {}).get("synthesize") or {}
-    assert runtime.get("natural_text") is True
-    assert "折现率" in str(render_vars.get("conclusion") or "")
-    assert "关注" in str(render_vars.get("conclusion") or "")
+    assert (out.get("artifacts") or {}).get("error_code") == "missing_task_contract"
+    assert not render_vars, "无任务合同的自然语言输出不能绕过引用门禁"
 
 
 def test_synthesize_chat_empty_llm_output_records_specific_reason(monkeypatch):
@@ -936,8 +930,8 @@ def test_synthesize_chat_empty_llm_output_records_specific_reason(monkeypatch):
 
     out = _run(synth_mod.synthesize(state))
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
-    assert runtime.get("fallback") is True
-    assert runtime.get("reason") == "llm_empty_output"
+    assert runtime.get("fallback") is False
+    assert runtime.get("reason") == "missing_task_contract"
 
 
 def test_synthesize_brief_router_task_graph_skips_llm_for_latency(monkeypatch):
@@ -983,12 +977,12 @@ def test_synthesize_brief_router_task_graph_skips_llm_for_latency(monkeypatch):
     out = _run(synth_mod.synthesize(state))
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
     assert called["llm"] is False
-    assert runtime.get("mode") == "stub"
-    assert "render_vars" in (out.get("artifacts") or {})
+    assert runtime.get("mode") == "research_result"
+    assert (out.get("artifacts") or {}).get("quality_blocked") is True
 
 
-def test_synthesize_off_mode_keeps_legacy_narrative_for_investment_report(monkeypatch):
-    """结构化开关关闭时保留可回滚的 legacy narrative 路径。"""
+def test_synthesize_off_mode_keeps_contract_validation_for_investment_report(monkeypatch):
+    """关闭模型选择不会绕过统一研究合同。"""
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
     monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
 
@@ -1011,7 +1005,8 @@ def test_synthesize_off_mode_keeps_legacy_narrative_for_investment_report(monkey
 
     out = _run(synth_mod.synthesize(state))
     artifacts = out.get("artifacts") or {}
-    assert artifacts.get("draft_markdown") == "## report\n\ncontent"
+    assert artifacts.get("research_result")
+    assert not artifacts.get("draft_markdown")
 
 
 def test_synthesize_off_mode_multi_task_forces_stub_even_with_narrative_env(monkeypatch):
@@ -1069,4 +1064,4 @@ def test_synthesize_off_mode_multi_task_forces_stub_even_with_narrative_env(monk
         "narrative cannot disambiguate multiple independent tickers"
     )
     artifacts = out.get("artifacts") or {}
-    assert "render_vars" in artifacts
+    assert artifacts.get("research_result")

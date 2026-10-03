@@ -218,7 +218,10 @@ async def test_fundamental_agent_outputs_supported_native_claims() -> None:
 
 
 @pytest.mark.asyncio
-async def test_news_agent_outputs_catalyst_noise_and_calendar_claims() -> None:
+async def test_news_agent_outputs_catalyst_noise_and_calendar_claims(monkeypatch) -> None:
+    from datetime import UTC, datetime
+    monkeypatch.setattr("backend.research.news_event_quality.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
+    monkeypatch.setattr("backend.agents.news_agent.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
     output = await NewsAgent(None, _Cache(), _NewsTools()).research(
         "AAPL 最近新闻哪些是真的催化剂，哪些只是噪音？",
         "AAPL",
@@ -230,7 +233,10 @@ async def test_news_agent_outputs_catalyst_noise_and_calendar_claims() -> None:
 
 
 @pytest.mark.asyncio
-async def test_news_agent_outputs_aggregate_sentiment_snapshot_claims() -> None:
+async def test_news_agent_outputs_aggregate_sentiment_snapshot_claims(monkeypatch) -> None:
+    from datetime import UTC, datetime
+    monkeypatch.setattr("backend.research.news_event_quality.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
+    monkeypatch.setattr("backend.agents.news_agent.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
     output = await NewsAgent(None, _Cache(), _NewsSentimentTools()).research(
         "AAPL 最近整体舆情、催化事件和价格反应怎么看？",
         "AAPL",

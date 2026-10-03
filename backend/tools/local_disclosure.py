@@ -2,9 +2,13 @@
 
 import logging
 import re
+from io import BytesIO
 from typing import Any
 from urllib.parse import urlparse
 
+from backend.config.ticker_mapping import CN_TO_TICKER
+from .financial_facts import fact_date, search_line_is_noise
+from .http import _http_get_no_retry
 from .search import search
 
 logger = logging.getLogger(__name__)
@@ -31,7 +35,7 @@ def _detect_market(ticker: str) -> str:
 
 def _normalize_domain(url: str) -> str:
     try:
-        return urlparse(str(url or "").strip().lower()).netloc.lstrip("www.")
+        return str(urlparse(str(url or "").strip().lower()).hostname or "").removeprefix("www.")
     except Exception:
         return ""
 
@@ -53,7 +57,7 @@ def _parse_search_text(raw: str) -> list[dict[str, str]]:
 
     for raw_line in text.splitlines():
         line = str(raw_line or "").strip()
-        if not line:
+        if search_line_is_noise(line):
             continue
 
         md_match = re.search(r"\[([^\]]+)\]\((https?://[^\)]+)\)", line)
@@ -128,12 +132,12 @@ def _extract_date(text: str) -> str | None:
     iso_match = re.search(r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})", raw)
     if iso_match:
         y, m, d = iso_match.groups()
-        return f"{int(y):04d}-{int(m):02d}-{int(d):02d}"
+        return fact_date(f"{int(y):04d}-{int(m):02d}-{int(d):02d}")
 
     cn_match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", raw)
     if cn_match:
         y, m, d = cn_match.groups()
-        return f"{int(y):04d}-{int(m):02d}-{int(d):02d}"
+        return fact_date(f"{int(y):04d}-{int(m):02d}-{int(d):02d}")
 
     return None
 
@@ -153,6 +157,50 @@ def _build_queries(ticker: str, market: str) -> list[str]:
             f"site:hkex.com.hk {ticker_norm} announcement",
         ]
     return []
+
+
+def _issuer_identity(text: str, ticker: str) -> str | None:
+    front = str(text or "")[:5000]
+    requested_code = str(ticker).split(".")[0].lstrip("0")
+    codes = re.findall(r"(?:证券代码|股票代码|股份代號|股份代号|stock\s*code)\s*[:：]?\s*(\d{1,6})", front, re.IGNORECASE)
+    if codes:
+        return "document_stock_code" if requested_code in {code.lstrip("0") for code in codes} else None
+    aliases = [name for name, symbol in CN_TO_TICKER.items() if symbol.upper() == ticker.upper() and len(name) >= 4]
+    aliases += {"0700.HK": ["腾讯控股", "騰訊控股", "Tencent Holdings"], "9988.HK": ["阿里巴巴集團", "Alibaba Group"]}.get(ticker.upper(), [])
+    declared_name = any(
+        re.search(r"(?:^|\n)\s*" + re.escape(alias) + r"\s*(?:股份有限公司|有限公司|集團有限公司|集团有限公司|Limited|Ltd\.?)(?:\s|$|[，。,])", front[:1500], re.IGNORECASE)
+        for alias in aliases
+    )
+    return "document_company_name" if declared_name else None
+
+
+def _fetch_disclosure_text(url: str) -> str:
+    """只读取已核验交易所域名的原文；搜索摘要不能替代发行人身份。"""
+    try:
+        response = _http_get_no_retry(url, timeout=8, allow_redirects=False, stream=True)
+        try:
+            if response.status_code != 200:
+                return ""
+            chunks = []
+            size = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                size += len(chunk)
+                if size > 3_000_000:
+                    return ""
+                chunks.append(chunk)
+            content = b"".join(chunks)
+        finally:
+            response.close()
+        if content.startswith(b"%PDF"):
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(content))
+            return "\n".join(page.extract_text() or "" for page in reader.pages[:3])
+        from bs4 import BeautifulSoup
+
+        return BeautifulSoup(content, "html.parser").get_text("\n", strip=True)
+    except Exception:
+        return ""
 
 
 def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
@@ -183,7 +231,9 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
         }
 
     rows: list[dict[str, Any]] = []
+    discoveries: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
+    verification_attempts = 0
 
     for query in _build_queries(ticker_norm, market):
         try:
@@ -217,6 +267,13 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
             joined_text = f"{title} {snippet} {url}"
 
             seen_urls.add(url)
+            issuer_method = None
+            if verification_attempts < min(capped_limit, 3):
+                verification_attempts += 1
+                issuer_method = _issuer_identity(_fetch_disclosure_text(url), ticker_norm)
+            if not issuer_method:
+                discoveries.append({"title": title, "url": url, "snippet": snippet, "issuer_verified": False, "reason": "issuer_not_verified"})
+                continue
             rows.append(
                 {
                     "title": title or f"{ticker_norm} local filing",
@@ -226,7 +283,10 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
                     "primary_doc_description": snippet or title,
                     "source": domain,
                     "market": market,
-                    "confidence": 0.78,
+                    "confidence": 0.95,
+                    "issuer_verified": True,
+                    "issuer_ticker": ticker_norm,
+                    "identity_method": issuer_method,
                 }
             )
             if len(rows) >= capped_limit:
@@ -240,7 +300,9 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
         "source": "local_disclosure_free",
         "filings": rows,
         "count": len(rows),
-        "error": None,
+        "discovery_candidates": discoveries[:capped_limit],
+        "error": None if rows else "issuer_verified_filings_unavailable",
+        "message": None if rows else "未取得可核验发行人身份的公告原文；搜索结果仅作为发现线索。",
     }
 
 

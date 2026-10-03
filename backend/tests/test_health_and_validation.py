@@ -47,8 +47,11 @@ def test_health_endpoint_exposes_only_core_readiness(client):
         "langgraph_runner",
         "checkpointer",
         "llm",
+        "prediction_collection",
     }
-    assert all(set(component).issubset({"status", "error_code"}) for component in components.values())
+    assert all(set(component).issubset({"status", "error_code"}) for name, component in components.items()
+               if name != "prediction_collection")
+    assert "status" in components["prediction_collection"]
     assert components["checkpointer"]["status"] in ("ok", "initializing", "error")
     serialized = repr(data).lower()
     for forbidden in ("embedding_model", "vector_dim", "doc_count", "fallback_reason", "recent_runs"):

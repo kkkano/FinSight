@@ -11,6 +11,8 @@ def test_investment_opinion_intent_matches_semantic_patterns():
         "MSFT 短中期风险机会怎么看",
         "Should I buy AMD shares here?",
         "What is your bullish or bearish view on NVDA?",
+        "AAPL 技术面值得买吗",
+        "AAPL 的 RSI 和 MACD 看多还是看空？",
     ]
 
     for query in positive_queries:
@@ -24,6 +26,8 @@ def test_investment_opinion_intent_avoids_plain_news_and_price_queries():
         "INTC 财报发布日期",
         "帮我总结这个链接",
         "美联储利率路径对科技股估值有什么影响",
+        "AAPL 的短线趋势、RSI、MACD 和支撑阻力怎么看？",
+        "What is your view on AAPL RSI and MACD?",
     ]
 
     for query in negative_queries:

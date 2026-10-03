@@ -208,6 +208,8 @@ def render_news_impact(state: GraphState, ctx: dict[str, Any]) -> str | None:
     """原分支#12：fetch / analyze_impact / 有新闻。"""
     operations = ctx["operations"]
     news = ctx["news"]
+    if "technical" in operations and not operations.intersection({"fetch", "news_impact", "analyze_impact"}):
+        return None
     if not ("fetch" in operations or "analyze_impact" in operations or news):
         return None
     ticker_label = ctx["ticker_label"]

@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from backend.graph.request_task_contract import output_is_error_like
+
 from backend.graph.intent_contract import EvidenceKind
 from backend.graph.synthesis.contracts import (
     ClaimValidationResult,
@@ -166,15 +168,20 @@ def build_task_descriptors(
             _text(step.get("id")) for step in plan_steps
             if _text(step.get("id")) and task_id in _step_task_ids(step) and not bool(step.get("optional"))
         ] if intent_status == "ready" else []
-        required = _required_evidence(raw)
-        required.extend(item for item in _required_evidence(plan_task) if item not in required)
-        for step in plan_steps:
-            if task_id not in _step_task_ids(step):
-                continue
-            inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
-            for item in _required_evidence(inputs):
-                if item not in required:
-                    required.append(item)
+        if isinstance(raw.get("required_evidence"), list):
+            required = _required_evidence(raw)
+        elif isinstance(plan_task.get("required_evidence"), list):
+            required = _required_evidence(plan_task)
+        else:
+            # 旧任务没有编译合同，仅回退到必需步骤的输入义务。
+            required = []
+            for step in plan_steps:
+                if task_id not in _step_task_ids(step) or bool(step.get("optional")):
+                    continue
+                inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+                for item in _required_evidence(inputs):
+                    if item not in required:
+                        required.append(item)
         subject_label = _text(raw.get("subject_label")) or _text(raw.get("subject_type")) or "未指定分析对象"
         title = _text(raw.get("title")) or subject_label
         frame_id = _text(raw.get("request_frame_id") or raw.get("frame_id"))
@@ -223,8 +230,8 @@ def _step_succeeded(result: Any) -> bool:
         if _text(result.get("status")).lower() in {"error", "failed", "timeout", "empty", "unavailable"}:
             return False
         value = result.get("output", result.get("result", result.get("data")))
-        return value not in (None, "", [], {})
-    return result not in ("", [], {})
+        return value not in (None, "", [], {}) and not output_is_error_like(value)
+    return result not in ("", [], {}) and not output_is_error_like(result)
 
 
 def finalize_task_outcomes(
@@ -241,7 +248,10 @@ def finalize_task_outcomes(
         evidence = evidence_normalization.evidence_by_task.get(descriptor.task_id, [])
         evidence_ids = [item.source_id for item in evidence]
         covered = stable_unique([
-            kind for item in evidence for kind in [item.kind] if kind != "unknown"
+            item.kind for item in evidence if item.kind != "unknown"
+            and item.usage not in {"summary", "diagnostic"}
+            and not output_is_error_like(item.text)
+            and not output_is_error_like(item.structured_data)
         ])
         missing = [item for item in descriptor.required_evidence if item not in covered]
         successful = [

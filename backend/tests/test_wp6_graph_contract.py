@@ -34,10 +34,10 @@ def test_direct_and_clarify_lanes_do_not_call_external_io(monkeypatch):
 def test_fact_query_uses_deterministic_renderer_without_llm(monkeypatch):
     analyze_module = importlib.import_module("backend.graph.nodes.analyze")
 
-    async def forbidden_llm(_state):
+    async def forbidden_llm(**_kwargs):
         raise AssertionError("fact query must not invoke ResearchAnalyst")
 
-    monkeypatch.setattr(analyze_module, "synthesize", forbidden_llm)
+    monkeypatch.setattr(importlib.import_module("backend.graph.synthesis.research_synthesis"), "_invoke_structured", forbidden_llm)
 
     from backend.graph import GraphRunner
 
@@ -78,7 +78,7 @@ def test_regular_research_invokes_one_research_analyst(monkeypatch):
         )
     )
     assert calls == 1
-    assert (result.get("trace") or {}).get("analysis", {}).get("business_llm_calls") == 1
+    assert (result.get("trace") or {}).get("analysis", {}).get("business_llm_calls") is None
     assert (result.get("trace") or {}).get("analysis", {}).get("verifier_allowed") is False
 
 
@@ -90,10 +90,15 @@ def test_collectors_are_constructed_without_llm_or_reflection(monkeypatch):
         def __init__(self, llm, _cache, _tools):
             seen["llm"] = llm
 
+        async def research(self, **_kwargs):
+            return {"summary": "fixture evidence", "confidence": 0.7, "evidence": []}
+
     monkeypatch.setattr("backend.agents.price_agent.PriceAgent", FakeCollector)
     invokers = adapter.build_collector_invokers(
         allowed_collectors=["price_agent"],
         state={"query": "AAPL", "subject": {"tickers": ["AAPL"]}},
     )
     assert set(invokers) == {"price_agent"}
+    assert seen == {}
+    _run(invokers["price_agent"]({"ticker": "AAPL"}))
     assert seen == {"llm": None}

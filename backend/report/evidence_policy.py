@@ -78,11 +78,11 @@ def _is_internal_citation_url(url: Any) -> bool:
 
 def normalize_quality_state(value: Any) -> QualityState:
     text = str(value or "").strip().lower()
-    if text == "block":
+    if text in {"block", "blocked", "error", "failed"}:
         return "block"
-    if text in {"warn", "warning"}:
+    if text in {"warn", "warning", "degraded", "partial"}:
         return "warn"
-    return "pass"
+    return "pass" if text in {"", "pass", "passed", "ok"} else "block"
 
 
 def merge_quality_states(*states: Any) -> QualityState:
@@ -95,6 +95,8 @@ def merge_quality_states(*states: Any) -> QualityState:
 
 
 def normalize_quality_reason(item: Any) -> QualityReason | None:
+    if isinstance(item, str) and item.strip():
+        item = {"code": item.strip(), "severity": "warn", "message": item.strip()}
     if not isinstance(item, dict):
         return None
     code = str(item.get("code") or "").strip()
@@ -130,15 +132,21 @@ def extract_report_quality(report: Any) -> dict[str, Any]:
     if not isinstance(report, dict):
         return {"state": "pass", "reasons": [], "schema_version": QUALITY_SCHEMA_VERSION}
 
+    meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
     direct = report.get("report_quality")
-    if isinstance(direct, dict):
-        quality = dict(direct)
-    else:
-        meta = report.get("meta")
-        quality = dict(meta.get("report_quality") or {}) if isinstance(meta, dict) else {}
-
-    state = normalize_quality_state(quality.get("state"))
-    reasons = normalize_quality_reasons(quality.get("reasons"))
+    nested = meta.get("report_quality")
+    qualities = [value for value in (direct, nested) if isinstance(value, dict)]
+    policy = meta.get("evidence_policy")
+    if isinstance(policy, dict) and policy.get("quality_state"):
+        qualities.append({"state": policy["quality_state"], "reasons": policy.get("quality_reasons") or []})
+    quality = dict(qualities[0]) if qualities else {}
+    state = merge_quality_states(*(value.get("state") for value in qualities))
+    reasons = []
+    for value in qualities:
+        for reason in normalize_quality_reasons(value.get("reasons")):
+            if reason not in reasons:
+                reasons.append(reason)
+    state = merge_quality_states(state, *(reason["severity"] for reason in reasons))
     if not reasons and state != "pass":
         reasons = [
             {

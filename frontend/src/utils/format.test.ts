@@ -54,6 +54,11 @@ describe('formatPriceForMarket', () => {
 });
 
 describe('formatMarketCapForMarket', () => {
+  it('uses provider currency and preserves an explicitly unknown unit', () => {
+    expect(formatMarketCapForMarket(3e9, '0700.HK', 'USD')).toBe('$3.00B');
+    expect(formatMarketCapForMarket(3e9, '0700.HK', 'CNY')).toBe('¥30.0亿');
+    expect(formatMarketCapForMarket(3e9, 'AAPL', null)).toContain('币种未提供');
+  });
   it('uses 万亿/亿 units for A-shares', () => {
     expect(formatMarketCapForMarket(2.1e12, '600519.SS')).toBe('¥2.10万亿');
     expect(formatMarketCapForMarket(4.5e11, '600519.SS')).toBe('¥4500.0亿');

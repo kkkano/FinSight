@@ -8,7 +8,9 @@ from typing import Any, Dict, List, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, ConflictClaim, EvidenceItem
 from backend.agents.chart_specs_extra import build_macro_chart_specs
+from backend.graph.request_task_contract import output_is_error_like
 from backend.services.circuit_breaker import CircuitBreaker
+from backend.tools.financial_facts import search_line_is_noise
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,7 @@ class MacroAgent(BaseFinancialAgent):
 
     _INDICATORS: Dict[str, Dict[str, str]] = {
         "fed_rate": {"label": "Federal funds rate", "unit": "%"},
-        "cpi": {"label": "CPI inflation", "unit": "%"},
+        "cpi": {"label": "CPI inflation (year-over-year)", "unit": "%"},
         "unemployment": {"label": "Unemployment rate", "unit": "%"},
         "gdp_growth": {"label": "GDP growth", "unit": "%"},
         "treasury_10y": {"label": "10Y Treasury yield", "unit": "%"},
@@ -44,6 +46,18 @@ class MacroAgent(BaseFinancialAgent):
         "treasury_10y": 0.35,
         "yield_spread": 0.35,
     }
+
+    @staticmethod
+    def _source_text(value: Any) -> tuple[str, str]:
+        """复用执行失败合同，并识别现有文本工具的明确失败信封。"""
+        text = str(value or "").strip()
+        if output_is_error_like(value) or text.lower().startswith((
+            "search error:", "error:", "fear & greed index: unable to fetch.",
+        )):
+            return "", "failed:tool_error"
+        if not text or all(search_line_is_noise(line) for line in text.splitlines()):
+            return "", "empty"
+        return text, "ok"
 
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         source_health: Dict[str, str] = {}
@@ -106,14 +120,12 @@ class MacroAgent(BaseFinancialAgent):
         market_sentiment = ""
         try:
             if hasattr(self.tools, "get_market_sentiment"):
-                market_sentiment = str(
-                    await asyncio.to_thread(self.tools.get_market_sentiment) or ""
-                ).strip()
+                market_sentiment, health = self._source_text(await asyncio.to_thread(self.tools.get_market_sentiment))
                 if market_sentiment:
                     source_health["market_sentiment"] = "ok"
                     used_sources.append("market_sentiment")
                 else:
-                    source_health["market_sentiment"] = "empty"
+                    source_health["market_sentiment"] = health
             else:
                 source_health["market_sentiment"] = "unavailable"
         except Exception as exc:
@@ -123,14 +135,12 @@ class MacroAgent(BaseFinancialAgent):
         economic_events = ""
         try:
             if hasattr(self.tools, "get_economic_events"):
-                economic_events = str(
-                    await asyncio.to_thread(self.tools.get_economic_events) or ""
-                ).strip()
+                economic_events, health = self._source_text(await asyncio.to_thread(self.tools.get_economic_events))
                 if economic_events:
-                    source_health["economic_events"] = "ok"
+                    source_health["economic_events"] = "discovery_only"
                     used_sources.append("economic_events")
                 else:
-                    source_health["economic_events"] = "empty"
+                    source_health["economic_events"] = health
             else:
                 source_health["economic_events"] = "unavailable"
         except Exception as exc:
@@ -138,22 +148,21 @@ class MacroAgent(BaseFinancialAgent):
             logger.info("[MacroAgent] Economic events fetch failed: %s", exc)
 
         cross_check_text = ""
-        cross_check_metrics: Dict[str, float] = {}
         try:
             if hasattr(self.tools, "search"):
-                cross_check_text = str(
+                cross_check_text, health = self._source_text(
                     await asyncio.to_thread(
                         self.tools.search,
                         "latest US CPI federal funds rate unemployment 10Y Treasury yield",
                     )
-                    or ""
                 )
-                cross_check_metrics = self._extract_numeric_metrics_from_text(cross_check_text)
                 if cross_check_text:
-                    source_health["search_cross_check"] = "ok"
+                    source_health["search_cross_check"] = "discovery_only"
                     used_sources.append("search_cross_check")
                 else:
-                    source_health["search_cross_check"] = "empty"
+                    source_health["search_cross_check"] = health
+            else:
+                source_health["search_cross_check"] = "unavailable"
         except Exception as exc:
             source_health["search_cross_check"] = f"failed:{exc.__class__.__name__}"
             logger.info("[MacroAgent] Search cross-check failed: %s", exc)
@@ -162,11 +171,12 @@ class MacroAgent(BaseFinancialAgent):
             primary_source="fred",
             primary=fred_metrics,
             secondary_source="search_cross_check",
-            secondary=cross_check_metrics,
+            # 未核验搜索文本没有发布期/指标口径，不构成正式读数或数据冲突。
+            secondary={},
         )
 
         if merged["coverage_count"] <= 0:
-            status = "fallback" if cross_check_text else "error"
+            status = "fallback" if cross_check_text or economic_events or official_releases or market_sentiment else "error"
         elif source_health.get("fred") == "ok":
             status = "success"
         else:
@@ -201,6 +211,14 @@ class MacroAgent(BaseFinancialAgent):
             payload[key] = value
             if value is not None:
                 payload[f"{key}_formatted"] = self._format_percentage_value(value, digits=2 if key in ("fed_rate", "treasury_10y", "yield_spread") else 1)
+                if key == "cpi":
+                    payload[f"{key}_formatted"] += " (同比)"
+        fact_metadata = fred_payload.get("indicator_metadata") or {}
+        for indicator in payload["indicators"]:
+            metadata = fact_metadata.get(indicator["key"], {}) if indicator.get("source") == "fred" else {}
+            indicator["period_end"] = metadata.get("period_end")
+            indicator["definition"] = metadata.get("definition")
+            indicator["transformation"] = metadata.get("transformation")
         if payload.get("yield_spread") is not None and float(payload["yield_spread"]) < 0:
             payload["recession_warning"] = True
 
@@ -228,15 +246,7 @@ class MacroAgent(BaseFinancialAgent):
             return "无法从已配置的数据源获取宏观数据。"
 
         if status == "fallback":
-            names = [
-                item.get("name")
-                for item in data.get("indicators", [])
-                if isinstance(item, dict) and item.get("name")
-            ]
-            summary = "主要宏观数据源不可用，正在使用兜底信号。"
-            if names:
-                summary += " 指标：" + "、".join(names[:6]) + "。"
-            return summary
+            return "主要宏观指标不可用；兜底公告与检索线索需按来源核验，不能据此给出当前指标读数。"
 
         parts: List[str] = ["美国宏观快照："]
         if data.get("fed_rate_formatted"):
@@ -280,8 +290,10 @@ class MacroAgent(BaseFinancialAgent):
         risks: List[str] = []
         fallback_used = False
         evidence_quality: Dict[str, Any] = {}
+        source_health: Dict[str, str] = {}
 
         if isinstance(raw_data, dict):
+            source_health = dict(raw_data.get("source_health") or {})
             source_name_map = {
                 "fred": "FRED",
                 "official_releases": "US Official Releases",
@@ -301,6 +313,7 @@ class MacroAgent(BaseFinancialAgent):
                     continue
                 name = item.get("name") or "宏观指标"
                 source = item.get("source") or "unknown"
+                discovery = source not in {"fred", "official_releases"}
                 conflict = bool(item.get("conflict"))
                 evidence.append(
                     EvidenceItem(
@@ -311,29 +324,52 @@ class MacroAgent(BaseFinancialAgent):
                             "indicator_key": item.get("key"),
                             "conflict_flag": conflict,
                             "candidates": item.get("candidates") if isinstance(item.get("candidates"), list) else [],
+                            "unit": item.get("unit"),
+                            "definition": item.get("definition"),
+                            "period_end": item.get("period_end"),
+                            "transformation": item.get("transformation"),
+                            "usage": "raw" if discovery else "fact",
+                            "verification": "discovery_only" if discovery else "provider_reported",
                         },
+                        timestamp=item.get("period_end"),
                     )
                 )
 
-            sentiment = str(raw_data.get("market_sentiment") or "").strip()
+            sentiment, sentiment_health = self._source_text(raw_data.get("market_sentiment"))
+            if sentiment_health.startswith("failed"):
+                source_health["market_sentiment"] = sentiment_health
             if sentiment:
                 evidence.append(
                     EvidenceItem(
                         text=f"市场情绪监测: {sentiment[:240]}",
                         source="CNN Fear & Greed",
                         confidence=0.65,
+                        meta={"usage": "raw", "verification": "discovery_only"} if "via search" in sentiment.lower() else {"usage": "fact", "verification": "provider_reported"},
                     )
                 )
 
-            events = str(raw_data.get("economic_events") or "").strip()
+            events, events_health = self._source_text(raw_data.get("economic_events"))
+            if events_health.startswith("failed"):
+                source_health["economic_events"] = events_health
             if events:
                 evidence.append(
                     EvidenceItem(
-                        text=f"Macro calendar: {events[:240]}",
+                        text=f"宏观日程检索线索（待核实）: {events[:240]}",
                         source="Economic Calendar",
                         confidence=0.60,
+                        meta={"usage": "raw", "verification": "discovery_only", "evidence_kind": "macro_context"},
                     )
                 )
+
+            cross_check, cross_check_health = self._source_text(raw_data.get("cross_check_raw"))
+            if cross_check_health.startswith("failed"):
+                source_health["search_cross_check"] = cross_check_health
+            if cross_check:
+                evidence.append(EvidenceItem(
+                    text=f"宏观检索线索（待核实）: {cross_check[:2000]}",
+                    source="Web Search", confidence=0.4,
+                    meta={"usage": "raw", "verification": "discovery_only", "evidence_kind": "macro_context"},
+                ))
 
             official_releases = raw_data.get("official_releases") if isinstance(raw_data.get("official_releases"), list) else []
             for item in official_releases[:5]:
@@ -356,10 +392,14 @@ class MacroAgent(BaseFinancialAgent):
                             "published_date": item.get("published_date"),
                             "domain": item.get("domain"),
                             "doc_type": "official_release",
+                            "usage": "fact",
+                            "verification": "provider_reported",
                         },
+                        timestamp=item.get("published_date"),
                     )
                 )
-            evidence_quality = raw_data.get("evidence_quality") if isinstance(raw_data.get("evidence_quality"), dict) else {}
+            evidence_quality = dict(raw_data.get("evidence_quality") or {})
+            evidence_quality["source_health"] = source_health
             fallback_used = str(raw_data.get("status") or "").lower() in {"fallback", "error"}
             conflicts = raw_data.get("conflicts") if isinstance(raw_data.get("conflicts"), list) else []
             if conflicts:
@@ -408,8 +448,11 @@ class MacroAgent(BaseFinancialAgent):
             conflict_flags = []
             conflicting_claims = []
 
+        data_sources = [source for source in data_sources if source not in {
+            source_name_map.get(key, key) for key, health in source_health.items() if health.startswith("failed")
+        }] if isinstance(raw_data, dict) else data_sources
         if not data_sources:
-            data_sources = ["FRED"]
+            data_sources = sorted({item.source for item in evidence})
         if not risks:
             risks = ["Policy transmission lag risk", "Macro data revision risk"]
 
@@ -427,7 +470,9 @@ class MacroAgent(BaseFinancialAgent):
             confidence = min(confidence, 0.6)
 
         # P2-8：宏观指标横截面柱状图（各指标当前读数），无有效数值时返回 []
-        chart_specs = build_macro_chart_specs(raw_data) if isinstance(raw_data, dict) else []
+        chart_payload = {**raw_data, "indicators": [item for item in raw_data.get("indicators", [])
+                         if isinstance(item, dict) and item.get("source") in {"fred", "official_releases"}]} if isinstance(raw_data, dict) else {}
+        chart_specs = build_macro_chart_specs(chart_payload)
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
@@ -450,6 +495,10 @@ class MacroAgent(BaseFinancialAgent):
     def _extract_numeric_metrics(self, payload: Dict[str, Any]) -> Dict[str, float]:
         values: Dict[str, float] = {}
         for key in self._INDICATORS:
+            if key == "cpi":
+                metadata = (payload.get("indicator_metadata") or {}).get("cpi", {})
+                if metadata.get("unit") != "percent" or metadata.get("definition") != "inflation_yoy":
+                    continue
             value = payload.get(key)
             try:
                 if value is not None:
@@ -467,7 +516,8 @@ class MacroAgent(BaseFinancialAgent):
                 r"(?:federal funds(?: rate)?|fed funds(?: rate)?)\D{0,25}(-?\d{1,2}(?:\.\d+)?)\s*%",
             ],
             "cpi": [
-                r"(?:cpi|inflation(?: rate)?)\D{0,25}(-?\d{1,2}(?:\.\d+)?)\s*%",
+                r"(?:cpi|inflation(?: rate)?|通胀)\D{0,20}(?:yoy|year[- ]over[- ]year|同比|annual)\D{0,12}(-?\d{1,2}(?:\.\d+)?)\s*%",
+                r"(?:cpi|inflation(?: rate)?|通胀)\D{0,20}(-?\d{1,2}(?:\.\d+)?)\s*%\s*(?:yoy|year[- ]over[- ]year|同比)",
             ],
             "unemployment": [
                 r"(?:unemployment(?: rate)?)\D{0,25}(-?\d{1,2}(?:\.\d+)?)\s*%",

@@ -13,7 +13,8 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from backend.research.query_coverage import coverage_warning_text
-from backend.report.quality_engine import evaluate_runtime_report_quality
+from backend.report.quality_engine import evaluate_result_quality, evaluate_runtime_report_quality
+from backend.report.evidence_policy import extract_report_quality, normalize_quality_state
 from backend.report.validator import ReportValidator
 
 
@@ -1293,7 +1294,7 @@ def _build_structured_report_payload(
     ]
     public_synthesis = None if blocked else synthesis
     report_quality = {
-        "state": "block" if blocked else ("degraded" if gate.get("state") == "degraded" else "pass"),
+        "state": normalize_quality_state(gate.get("state")),
         "reasons": list(gate.get("reasons") or []),
         "synthesis_gate": gate,
     }
@@ -1304,7 +1305,7 @@ def _build_structured_report_payload(
         "title": "报告暂不可用" if blocked else f"{ticker_label} 分析报告",
         "summary": "本轮结果未通过内部一致性校验。" if blocked else (overall or "证据不足，无法形成总判断。"),
         "sentiment": "neutral",
-        "confidence_score": 0.0 if blocked else (0.45 if gate.get("state") == "degraded" else 0.8),
+        "confidence_score": 0.0 if blocked else (0.45 if normalize_quality_state(gate.get("state")) == "warn" else 0.8),
         "generated_at": _now_iso(),
         "sections": [{
             "title": "研究报告",
@@ -1328,12 +1329,14 @@ def _build_structured_report_payload(
     }
     validated = ReportValidator.validate_and_fix(base, as_dict=True)
     payload = validated if isinstance(validated, dict) else base
+    report_quality = evaluate_result_quality(state=state, report=payload)
+    blocked = report_quality["state"] == "block"
     payload.update({
         "synthesis_report": markdown,
         "draft_markdown": markdown,
         "report_quality": report_quality,
         "quality_blocked": blocked,
-        "publishable": not blocked,
+        "publishable": report_quality["publishable"],
         "agent_claims": [] if blocked else list(claim_index.values()),
         "agent_evidence": [] if blocked else list(evidence_index.values()),
         "chart_specs": [],
@@ -1404,6 +1407,11 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
             validated_fallback["agent_status"] = fallback["agent_status"]
             validated_fallback["report_hints"] = fallback["report_hints"]
             validated_fallback["meta"] = fallback["meta"]
+            quality = evaluate_result_quality(state=state, report=validated_fallback)
+            validated_fallback["report_quality"] = quality
+            validated_fallback["meta"]["report_quality"] = quality
+            validated_fallback["publishable"] = False
+            validated_fallback["quality_blocked"] = True
             return validated_fallback
         return fallback
 

@@ -12,6 +12,11 @@ from backend.agents.chart_specs import build_news_sentiment_chart_specs
 from backend.agents.sentiment_brief import render_stock_brief
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
+from backend.tools.financial_facts import search_line_is_noise
+from backend.research.news_event_quality import (
+    domain_matches, news_domain, news_quality_label, news_source_tier,
+    parse_news_time, prepare_news_items, utc_now,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +93,22 @@ class NewsAgent(BaseFinancialAgent):
         self._last_event_calendar: Dict[str, Any] = {}
         self._last_reliability_summary: Dict[str, Any] = {}
         self._last_sentiment_snapshot: Optional[NewsSentimentSnapshot] = None
+        self._last_subject_exclusions: List[Dict[str, Any]] = []
+
+    def _prepare_news_items(self, items: List[Dict[str, Any]], ticker: str) -> List[Dict[str, Any]]:
+        """确定无关的个股新闻仅留诊断，不以“待核实”名义占据正文。"""
+        rows = prepare_news_items(items, ticker=ticker)
+        retained = []
+        for row in rows:
+            quality = row["event_quality"]
+            if ticker and not ticker.startswith("^") and quality["subject_match"] == "none":
+                self._last_subject_exclusions.append({
+                    "title": row["title"], "url": row.get("url"), "source": row.get("source"),
+                    "event_id": quality["event_id"], "reason": "subject_unrelated",
+                })
+            else:
+                retained.append(row)
+        return retained
 
     def _is_finance_research_intent(self, query: str) -> bool:
         text = str(query or "").lower()
@@ -109,11 +130,7 @@ class NewsAgent(BaseFinancialAgent):
         return any(token in text for token in signals)
 
     def _domain_from_url(self, url: str) -> str:
-        try:
-            host = urlparse(str(url or "").strip().lower()).netloc
-        except Exception:
-            host = ""
-        return host.lstrip("www.")
+        return news_domain(url)
 
     def _recover_original_article_url(self, url: str) -> str:
         text = str(url or "").strip()
@@ -124,7 +141,7 @@ class NewsAgent(BaseFinancialAgent):
         except Exception:
             return ""
 
-        domain = (parsed.netloc or "").lower().lstrip("www.")
+        domain = news_domain(text)
         path = (parsed.path or "").lower()
         query = parse_qs(parsed.query)
 
@@ -153,7 +170,7 @@ class NewsAgent(BaseFinancialAgent):
         host = str(domain or "").strip().lower()
         if not host:
             return False
-        return any(hint in host for hint in self._AUTHORITATIVE_DOMAIN_HINTS)
+        return any(domain_matches(host, hint) for hint in self._AUTHORITATIVE_DOMAIN_HINTS if not hint.endswith("."))
 
     def _filter_authoritative_news(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         filtered: List[Dict[str, Any]] = []
@@ -163,7 +180,7 @@ class NewsAgent(BaseFinancialAgent):
             url = str(item.get("url") or "").strip()
             if not url:
                 continue
-            if self._is_authoritative_domain(self._domain_from_url(url)):
+            if news_source_tier(url, str(item.get("ticker") or self._current_ticker or "")) in {"primary", "established_media"}:
                 filtered.append(item)
         return filtered
 
@@ -322,6 +339,8 @@ class NewsAgent(BaseFinancialAgent):
                         "bucket": self._sentiment_bucket(score, label),
                         "date": date_match.group(1) if date_match else None,
                         "source": "get_news_sentiment",
+                        "headline": re.sub(r"^\s*\d+\.\s*", "", line).split("情绪:")[0].strip(),
+                        "url": (re.search(r"\]\((https?://[^)]+)\)", line).group(1) if re.search(r"\]\((https?://[^)]+)\)", line) else ""),
                     }
                 )
             if observations or explicit_average is not None:
@@ -392,6 +411,8 @@ class NewsAgent(BaseFinancialAgent):
             "bucket": self._sentiment_bucket(score, label),
             "date": item.get("datetime") or item.get("published_at") or item.get("time_published"),
             "source": item.get("source") or "news_item",
+            "headline": item.get("title") or item.get("headline") or "",
+            "url": item.get("url") or "",
         }
 
     def _build_sentiment_bias(
@@ -481,16 +502,18 @@ class NewsAgent(BaseFinancialAgent):
 
     def _event_counts(self, calendar: Dict[str, Any]) -> Dict[str, int]:
         return {
-            "earnings": len(calendar.get("earnings_events") or []) if isinstance(calendar.get("earnings_events"), list) else 0,
-            "dividends": len(calendar.get("dividend_events") or []) if isinstance(calendar.get("dividend_events"), list) else 0,
-            "macro": len(calendar.get("macro_events") or []) if isinstance(calendar.get("macro_events"), list) else 0,
+            name: sum(1 for item in calendar.get(key, []) if isinstance(item, dict) and item.get("date")
+                      and item.get("verification") != "discovery_only" and item.get("source") not in {"search_macro_calendar", "macro_watchlist"})
+            if isinstance(calendar.get(key), list) else 0
+            for name, key in (("earnings", "earnings_events"), ("dividends", "dividend_events"), ("macro", "macro_events"))
         }
 
     def _build_sentiment_heat(self, items: List[Dict[str, Any]], observations: List[Dict[str, Any]]) -> Dict[str, Any]:
         calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
         event_counts = self._event_counts(calendar)
         event_count = sum(event_counts.values())
-        news_count = len([item for item in items if isinstance(item, dict)])
+        recent = [item for item in items if isinstance(item, dict) and (item.get("event_quality") or {}).get("usable_as_catalyst")]
+        news_count = len(recent)
         discussion_proxy_score = min(1.0, (news_count / 8.0) * 0.7 + (event_count / 6.0) * 0.3)
         if news_count >= 6 or event_count >= 4:
             level = "elevated"
@@ -507,7 +530,10 @@ class NewsAgent(BaseFinancialAgent):
             "event_count": event_count,
             "event_counts": event_counts,
             "discussion_proxy_score": round(discussion_proxy_score, 4),
-            "discussion_proxy": "news_volume_plus_event_calendar",
+            "discussion_proxy": "deduplicated_recent_reports_plus_calendar",
+            "source_count": len({news_domain(item.get("url")) for item in recent if news_domain(item.get("url"))}),
+            "independence": "unverified",
+            "limitations": "仅代表本次采集的去重报道覆盖度，不是全市场热度或多方独立核实。",
         }
 
     def _news_title(self, item: Dict[str, Any]) -> str:
@@ -577,6 +603,8 @@ class NewsAgent(BaseFinancialAgent):
             for event in raw_events[:4]:
                 if not isinstance(event, dict):
                     continue
+                if not event.get("date") or event.get("verification") == "discovery_only" or event.get("source") in {"search_macro_calendar", "macro_watchlist"}:
+                    continue
                 title = str(event.get("title") or event.get("event") or category).strip()
                 events.append(
                     {
@@ -585,12 +613,15 @@ class NewsAgent(BaseFinancialAgent):
                         "title": title,
                         "date": event.get("date"),
                         "source": event.get("source") or "event_calendar",
+                        "status": "scheduled",
                     }
                 )
 
         high_impact_news = 0
         for item in items:
             if not isinstance(item, dict):
+                continue
+            if not (item.get("event_quality") or {}).get("usable_as_catalyst"):
                 continue
             impact_score = self._item_impact_score(item)
             if impact_score < 0.7:
@@ -604,6 +635,9 @@ class NewsAgent(BaseFinancialAgent):
                     "date": item.get("datetime") or item.get("published_at"),
                     "source": item.get("source") or "news",
                     "impact_score": round(impact_score, 4),
+                    "event_id": item["event_quality"]["event_id"],
+                    "verification": "headline_only",
+                    "occurred_at": None,
                 }
             )
 
@@ -730,7 +764,21 @@ class NewsAgent(BaseFinancialAgent):
             if observation:
                 observations.append(observation)
 
-        bias = self._build_sentiment_bias(observations, parsed.get("explicit_average"))
+        # 无时间的总均值不能替代当前样本；未知、过期和未来情绪不混入最近一周。
+        now = utc_now()
+        recent_observations = []
+        seen_observations = set()
+        for observation in observations:
+            published, _ = parse_news_time(observation.get("date"))
+            if published is not None and 0 <= (now - published).total_seconds() <= 7 * 86400:
+                key = (observation.get("url") or observation.get("headline"), published.date().isoformat())
+                if key in seen_observations:
+                    continue
+                seen_observations.add(key)
+                recent_observations.append(observation)
+        observations = recent_observations
+        observations.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
+        bias = self._build_sentiment_bias(observations, None)
         return NewsSentimentSnapshot(
             ticker=str(ticker or "").upper(),
             as_of=datetime.now().isoformat(),
@@ -777,13 +825,14 @@ class NewsAgent(BaseFinancialAgent):
         return False
 
     async def _initial_search(self, query: str, ticker: str) -> List[Any]:
-        cache_key = f"{ticker}:news:24h"
+        cache_key = f"{ticker}:news:7d:event-v1"
         self._last_event_calendar = {}
         self._last_reliability_summary = {}
         self._last_sentiment_snapshot = None
+        self._last_subject_exclusions = []
         cached = self.cache.get(cache_key)
         if isinstance(cached, list):
-            annotated_cached = self._annotate_reliability(cached)
+            annotated_cached = self._annotate_reliability(self._prepare_news_items(cached, ticker))
             self._last_reliability_summary = self._summarize_reliability(annotated_cached)
             self._last_event_calendar = await asyncio.to_thread(self._load_event_calendar, ticker)
             self._last_sentiment_snapshot = await asyncio.to_thread(
@@ -848,6 +897,7 @@ class NewsAgent(BaseFinancialAgent):
                                 continue
                             item.setdefault("ticker", ticker)
                             item.setdefault("source", "tavily")
+                            item["retrieval_kind"] = "search_snippet"
                             results.append(item)
                         if t_results:
                             self.circuit_breaker.record_success("tavily")
@@ -879,31 +929,8 @@ class NewsAgent(BaseFinancialAgent):
             cloned["url"] = self._recover_original_article_url(cloned.get("url"))
             normalized_results.append(cloned)
 
-        seen_titles = set()
-        unique_results = []
-        for item in normalized_results:
-            title = item.get("headline", item.get("title", ""))
-            if title and title not in seen_titles:
-                seen_titles.add(title)
-                unique_results.append(item)
-
-        # Apply search convergence (content-level dedupe + info gain)
-        try:
-            from backend.agents.search_convergence import SearchConvergence
-            sc = SearchConvergence()
-            docs = []
-            for item in unique_results:
-                docs.append({
-                    "url": item.get("url", ""),
-                    "content": item.get("headline", item.get("title", "")),
-                    "source": item.get("source", "news"),
-                    "_item": item,
-                })
-            filtered_docs, metrics = sc.process_round(docs, previous_summary="")
-            self._last_convergence = asdict(metrics)
-            unique_results = [doc.get("_item") for doc in filtered_docs if doc.get("_item")]
-        except Exception:
-            self._last_convergence = None
+        # 同公司不同事件和后续进展不能因为标题相似被收敛器吞掉。
+        unique_results = normalized_results
 
         strict_sources = str(os.getenv("NEWS_STRICT_FINANCE_SOURCES", "true")).strip().lower() in {
             "1",
@@ -938,12 +965,13 @@ class NewsAgent(BaseFinancialAgent):
                                     continue
                                 unique_results.append(
                                     {
+                                        **article,
                                         "headline": article.get("title") or "",
                                         "title": article.get("title") or "",
                                         "url": url,
                                         "source": article.get("source") or "authoritative_feed",
-                                        "datetime": article.get("published_date"),
-                                        "published_at": article.get("published_date"),
+                                        "datetime": article.get("published_at") or article.get("published_date"),
+                                        "published_at": article.get("published_at") or article.get("published_date"),
                                         "ticker": ticker,
                                         "confidence": article.get("confidence", 0.8),
                                     }
@@ -954,6 +982,8 @@ class NewsAgent(BaseFinancialAgent):
             if authoritative:
                 unique_results = authoritative
 
+        unique_results = self._prepare_news_items(unique_results, ticker)
+        self._last_convergence = {"input_count": len(results), "event_group_count": len(unique_results), "method": "exact_headline_same_publication_day"}
         unique_results = self._annotate_reliability(unique_results)
         self._last_reliability_summary = self._summarize_reliability(unique_results)
         self._last_event_calendar = await asyncio.to_thread(self._load_event_calendar, ticker)
@@ -975,7 +1005,7 @@ class NewsAgent(BaseFinancialAgent):
         # 格式示例: "1. 2025-01-13 - [Title](url) - Source [Tags]"
         lines = news_text.split('\n')
         for line in lines:
-            if not line.strip() or line.startswith('Latest'):
+            if search_line_is_noise(line):
                 continue
 
             # 提取标题和URL
@@ -996,7 +1026,7 @@ class NewsAgent(BaseFinancialAgent):
             source_match = re.search(r'-\s+([A-Za-z0-9\s]+)\s*\[', line)
             source = source_match.group(1).strip() if source_match else "Unknown"
 
-            if title and len(title) > 10:
+            if title and len(title) > 10 and not search_line_is_noise(title):
                 results.append({
                     "headline": title,
                     "title": title,
@@ -1006,45 +1036,20 @@ class NewsAgent(BaseFinancialAgent):
                     "published_at": date_str,
                     "ticker": ticker,
                     "confidence": 0.7,
+                    "retrieval_kind": "search_snippet",
                 })
 
         return results
 
     def _parse_search_results(self, search_text: str, ticker: str) -> List[Dict[str, Any]]:
         """解析搜索结果为新闻格式"""
-        import re
-        results = []
+        from backend.tools.news import _build_search_news_items
 
-        lines = search_text.split('\n')
-        for line in lines:
-            if not line.strip():
-                continue
-
-            # 提取URL
-            url_match = re.search(r'https?://[^\s\)]+', line)
-            url = url_match.group(0) if url_match else ""
-
-            # 提取标题（去除URL和标点）
-            title = re.sub(r'https?://[^\s]+', '', line)
-            title = re.sub(r'^\d+\.\s*', '', title).strip()
-            title = title[:150] if len(title) > 150 else title
-
-            if title and len(title) > 15:
-                results.append({
-                    "headline": title,
-                    "title": title,
-                    "url": url,
-                    "source": "search",
-                    "published_at": None,
-                    "datetime": None,
-                    "ticker": ticker,
-                    "confidence": 0.4,
-                })
-
-        return results[:5]  # 限制数量
+        return [{**item, "ticker": ticker} for item in _build_search_news_items(search_text, limit=5) if item.get("url")]
 
     async def _first_summary(self, data: List[Any]) -> str:
         """输出只由已采集证据构成的确定性舆情简报。"""
+        data = self._prepare_news_items(data, str(self._current_ticker or ""))
         if not data:
             return "未找到相关新闻。"
 
@@ -1057,6 +1062,9 @@ class NewsAgent(BaseFinancialAgent):
         avg_rel = reliability_summary.get("avg_reliability")
         if isinstance(avg_rel, (int, float)) and float(avg_rel) < 0.65:
             extra_risks.append("新闻来源整体可靠度偏低，关键结论建议以官方披露为准")
+        if any((item.get("event_quality") or {}).get("evidence_role") != "reported_news" for item in data if isinstance(item, dict)):
+            extra_risks.append("旧闻、未知发布时间、观点及检索线索已单独标注，不计入当前新闻催化。")
+        extra_risks.append("报道标题尚未逐条核验原文；报道数量表示采集覆盖度，不代表事实获得独立证实。")
 
         if snapshot_dict:
             return render_stock_brief(snapshot_dict, list(data), None, extra_risks=extra_risks)
@@ -1067,13 +1075,13 @@ class NewsAgent(BaseFinancialAgent):
         if not data:
             return "No recent news found."
         snapshot = self._last_sentiment_snapshot
-        titles = [item.get("headline", item.get("title", "")) for item in data[:5]]
+        titles = [f"{item.get('headline', item.get('title', ''))}（{news_quality_label(item)}）" for item in data[:5] if isinstance(item, dict)]
         if isinstance(snapshot, NewsSentimentSnapshot) and self._snapshot_has_aggregate_signal(snapshot):
             summary = self._snapshot_text(snapshot)
             if titles:
                 summary += f" 核心新闻: {'; '.join(titles)}"
         else:
-            summary = f"Recent news includes: {'; '.join(titles)}"
+            summary = f"新闻与待核实线索：{'; '.join(titles)}"
         calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
         earnings_count = len(calendar.get("earnings_events") or []) if isinstance(calendar.get("earnings_events"), list) else 0
         dividend_count = len(calendar.get("dividend_events") or []) if isinstance(calendar.get("dividend_events"), list) else 0
@@ -1090,10 +1098,12 @@ class NewsAgent(BaseFinancialAgent):
         sources = set()
         fallback_used = False
         ticker = (
-            str(raw_data[0].get("ticker") or "")
+            str(raw_data[0].get("ticker") or self._current_ticker or "")
             if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict)
             else str(self._current_ticker or "")
         )
+        if isinstance(raw_data, list):
+            raw_data = self._prepare_news_items(raw_data, ticker)
 
         # Handle None or non-list raw_data
         if raw_data and isinstance(raw_data, list):
@@ -1106,18 +1116,38 @@ class NewsAgent(BaseFinancialAgent):
                     confidence = item.get("confidence", 0.7)
                     if isinstance(rel_score, (int, float)):
                         confidence = max(0.1, min(0.95, float(rel_score)))
+                    event_quality = item.get("event_quality") or {}
+                    if event_quality.get("evidence_role") != "reported_news":
+                        confidence = min(float(confidence or 0.4), 0.4)
+                    evidence_meta = {
+                        "source_reliability": source_reliability,
+                        "event_quality": event_quality,
+                        "supporting_reports": item.get("supporting_reports") or [],
+                        "subject": ticker, "evidence_kind": "news_context",
+                        "verification": event_quality.get("verification"),
+                    }
+                    if event_quality.get("evidence_role") != "reported_news":
+                        evidence_meta["usage"] = "raw"
                     evidence.append(EvidenceItem(
                         text=item.get("headline", item.get("title", "")),
+                        title=item.get("headline", item.get("title", "")),
                         source=source,
                         url=item.get("url"),
                         timestamp=item.get("datetime", item.get("published_at")),
                         confidence=confidence,
-                        meta={"source_reliability": source_reliability} if source_reliability else {},
+                        meta=evidence_meta,
                     ))
         else:
             fallback_used = True
 
         trace = []
+        if self._last_subject_exclusions:
+            from backend.orchestration.trace_schema import create_trace_event
+            trace.append(create_trace_event(
+                "news_quality_filter", agent=self.AGENT_NAME,
+                excluded_count=len(self._last_subject_exclusions),
+                excluded=self._last_subject_exclusions,
+            ))
         if self._last_convergence:
             try:
                 from backend.orchestration.trace_schema import create_trace_event
@@ -1136,6 +1166,8 @@ class NewsAgent(BaseFinancialAgent):
             fallback_reason = "no_news_data"
 
         risks: List[str] = []
+        if isinstance(raw_data, list) and any(not (item.get("event_quality") or {}).get("usable_as_catalyst") for item in raw_data):
+            risks.append("旧闻、未知发布时间、观点及检索线索不计入当前新闻催化，需结合原始披露核实。")
         reliability_summary = self._last_reliability_summary if isinstance(self._last_reliability_summary, dict) else {}
         avg_reliability = reliability_summary.get("avg_reliability")
         low_count = reliability_summary.get("low_reliability_count")
@@ -1146,9 +1178,8 @@ class NewsAgent(BaseFinancialAgent):
 
         event_calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
         if event_calendar:
-            earnings_count = len(event_calendar.get("earnings_events") or []) if isinstance(event_calendar.get("earnings_events"), list) else 0
-            dividend_count = len(event_calendar.get("dividend_events") or []) if isinstance(event_calendar.get("dividend_events"), list) else 0
-            macro_count = len(event_calendar.get("macro_events") or []) if isinstance(event_calendar.get("macro_events"), list) else 0
+            event_counts = self._event_counts(event_calendar)
+            earnings_count, dividend_count, macro_count = event_counts["earnings"], event_counts["dividends"], event_counts["macro"]
             if earnings_count or dividend_count or macro_count:
                 evidence.append(
                     EvidenceItem(
@@ -1186,6 +1217,8 @@ class NewsAgent(BaseFinancialAgent):
         output_confidence = 0.8 if evidence else 0.1
         if isinstance(avg_reliability, (int, float)):
             output_confidence = max(0.1, min(0.9, float(avg_reliability)))
+        if isinstance(raw_data, list) and not any((item.get("event_quality") or {}).get("usable_as_catalyst") for item in raw_data):
+            output_confidence = min(output_confidence, 0.4)
         assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
         claims = self._build_native_claims(
             query=self._current_query or "",
@@ -1237,15 +1270,19 @@ class NewsAgent(BaseFinancialAgent):
         snapshot_confidence = self._coerce_float(bias.get("confidence"))
         claim_confidence = max(0.3, min(0.9, snapshot_confidence if snapshot_confidence is not None else confidence))
 
+        sentiment_statement = (
+            f"{ticker_value} 整体新闻舆情倾向{_bias_label_cn(bias_label)}（平均情绪分 {avg_text}）。"
+            if int(bias.get("sample_size") or 0) >= 3 else
+            f"{ticker_value} 当前舆情样本不足，无法判断整体偏多或偏空。"
+        )
+        if int(bias.get("sample_size") or 0) < 3:
+            stance = "neutral"
         claims = [
             build_agent_claim(
                 agent_name=self.AGENT_NAME,
                 ticker=ticker_value,
                 query=query,
-                claim=(
-                    f"{ticker_value} 整体新闻舆情倾向{_bias_label_cn(bias_label)}"
-                    f"（平均情绪分 {avg_text}）。"
-                ),
+                claim=sentiment_statement,
                 evidence_ids=[source_id],
                 stance=stance,
                 confidence=claim_confidence,
@@ -1358,20 +1395,22 @@ class NewsAgent(BaseFinancialAgent):
             rel_score = rel.get("reliability_score") if isinstance(rel, dict) else None
             score = float(rel_score) if isinstance(rel_score, (int, float)) else float(item.confidence or 0.5)
             lowered = headline.lower()
-            is_primary_catalyst = score >= 0.85 and any(
+            event_quality = (item.meta or {}).get("event_quality") or {}
+            is_primary_catalyst = event_quality.get("usable_as_catalyst") and score >= 0.85 and any(
                 token in lowered
                 for token in ("beat", "beats", "earnings", "revenue", "guidance", "approval", "launch")
             )
             if is_primary_catalyst:
                 claim_type = "catalyst_candidate"
                 stance = "bull" if any(token in lowered for token in ("beat", "beats", "strong", "upgrade")) else "neutral"
-                claim_text = f"{ticker} 候选新闻催化剂：{headline}"
-                limitations = ["催化剂分类需经一手申报文件或管理层评论确认。"]
+                claim_text = f"{ticker} 候选新闻催化剂（{source_name} 报道）：{headline}"
+                limitations = ["仅为来源报道，尚未逐条核验原文；催化剂分类需经一手申报文件或管理层评论确认。"]
             else:
                 claim_type = "noise_or_secondary_signal"
                 stance = "neutral"
-                claim_text = f"{ticker} 次要新闻信号或潜在噪音：{headline}"
-                limitations = ["次要市场媒体信号，请勿将其作为独立投资证据。"]
+                quality_label = news_quality_label({"event_quality": event_quality})
+                claim_text = f"{ticker} 次要新闻信号或待核实线索（{quality_label or '待核实'}）：{headline}"
+                limitations = ["次要市场媒体信号，请勿将其作为独立投资证据。", *event_quality.get("reasons", [])]
 
             claims.append(
                 build_agent_claim(
@@ -1383,7 +1422,7 @@ class NewsAgent(BaseFinancialAgent):
                     stance=stance,
                     confidence=max(0.3, min(0.9, score)),
                     limitations=limitations,
-                    metadata={"claim_type": claim_type, "source_reliability": round(score, 4)},
+                    metadata={"claim_type": claim_type, "source_reliability": round(score, 4), "event_quality": event_quality},
                 )
             )
         return claims[:9]

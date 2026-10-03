@@ -40,6 +40,7 @@ TimeScopeKind = Literal[
     "latest",
     "recent",
     "explicit_range",
+    "forward",
     "unspecified",
 ]
 
@@ -65,6 +66,7 @@ class TimeScope(TypedDict, total=False):
     label: str
     start: str
     end: str
+    days_ahead: int
 
 
 class ContextRef(TypedDict, total=False):

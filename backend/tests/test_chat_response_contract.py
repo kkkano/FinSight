@@ -148,6 +148,25 @@ def test_price_chat_answer_does_not_leak_tool_or_template_terms() -> None:
     assert "912.34" in markdown
 
 
+def test_price_chat_preserves_live_tool_source_time_and_currency() -> None:
+    markdown = _render_chat({
+        "query": "腾讯现在多少钱？",
+        "subject": {"subject_type": "company", "tickers": ["0700.HK"]},
+        "operation": {"name": "price"},
+        "plan_ir": {"steps": [{"id": "s1", "kind": "tool", "name": "get_stock_price",
+                                "inputs": {"ticker": "0700.HK"}}]},
+        "artifacts": {"step_results": {"s1": {"output": (
+            "0700.HK Current Price: $500.00 | Provider: twelve_data "
+            "| As of: 2026-10-02T00:00:00Z | Currency: HKD | Quality: verified"
+        )}}},
+    })
+    assert "500.00 HKD" in markdown
+    assert "2026-10-02T00:00:00Z" in markdown
+    assert "行情来源：twelve_data" in markdown
+    assert "最新可用报价" in markdown
+    assert "实时" not in markdown
+
+
 def test_chat_renderer_uses_tool_data_instead_of_existing_fallback_draft() -> None:
     markdown = _render_chat(
         {
@@ -1351,6 +1370,185 @@ def test_report_followup_chat_uses_last_report_context_without_report_mode() -> 
     assert "Valuation remains sensitive to rates." in markdown
 
 
+def _report_followup_state(query: str, report: dict, *, artifacts: dict | None = None) -> dict:
+    return {
+        "query": query,
+        "subject": {"subject_type": "company", "tickers": ["INTC"]},
+        "operation": {"name": "qa"},
+        "memory_context": {"current_report": report},
+        "artifacts": {
+            "conversation_decision": {"context_binding": {"source": "last_report"}},
+            **(artifacts or {}),
+        },
+    }
+
+
+def test_report_followup_preserves_current_answer_instead_of_old_risks() -> None:
+    answer = "INTC 下一季度先跟踪财报指引，其次观察代工客户验证进展；事件日期仍待公司确认。"
+    markdown = _render_chat(_report_followup_state(
+        "你刚才提到的催化剂，未来一个季度哪些最值得跟踪？",
+        {"title": "INTC 研究报告", "risks": ["旧风险：流动性承压。"]},
+        artifacts={"draft_markdown": answer},
+    ))
+
+    _assert_chat_contract(markdown)
+    assert markdown.strip() == answer
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_catalysts_prefers_current_render_vars() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "未来一个季度哪些催化剂最值得跟踪？",
+        {
+            "title": "INTC 研究报告",
+            "risks": ["旧风险：流动性承压。"],
+            "catalysts": "旧催化剂：上一季度的产品发布。",
+        },
+        artifacts={"render_vars": {"catalysts": "本轮证据：观察下一季财报中的毛利率指引。"}},
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "本轮证据" in markdown
+    assert "毛利率指引" in markdown
+    assert "旧催化剂" not in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_catalysts_reads_report_section_and_sources() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "刚才报告里的催化剂有哪些？",
+        {
+            "title": "INTC 研究报告",
+            "risks": ["旧风险：流动性承压。"],
+            "sections": [{
+                "title": "关键催化剂",
+                "contents": [{"type": "text", "content": "优先跟踪代工客户验证进展；报告未确认落地日期。[1]"}],
+            }],
+            "citations": [{"title": "Intel company update", "url": "https://example.com/intel/update"}],
+        },
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "代工客户验证进展" in markdown
+    assert "未确认落地日期" in markdown
+    assert "https://example.com/intel/update" in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_valuation_reads_matching_section() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "刚才报告的估值贵不贵？",
+        {
+            "title": "INTC 研究报告",
+            "summary": "不相关的报告总摘要。",
+            "risks": ["旧风险：流动性承压。"],
+            "sections": [{
+                "title": "估值",
+                "contents": [{"type": "text", "content": "Forward P/E 为 28 倍，但需要结合盈利兑现评估。"}],
+            }],
+        },
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "Forward P/E 为 28 倍" in markdown
+    assert "不相关的报告总摘要" not in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_financials_reads_nested_section() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "展开报告里的财务和现金流。",
+        {
+            "title": "INTC 研究报告",
+            "risks": ["旧风险：流动性承压。"],
+            "sections": [{"title": "公司研究", "subsections": [{
+                "title": "财务与现金流",
+                "contents": [{"type": "text", "content": "报告财期内经营现金流为 20 亿美元，资本开支为 25 亿美元。"}],
+            }]}],
+        },
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "经营现金流为 20 亿美元" in markdown
+    assert "资本开支为 25 亿美元" in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_missing_topic_evidence_does_not_reuse_risks_or_titles() -> None:
+    for query, topic in (
+        ("未来一个季度哪些催化剂最值得跟踪？", "催化剂"),
+        ("报告的估值是否合理？", "估值"),
+        ("展开报告里的财务表现。", "财务"),
+    ):
+        markdown = _render_chat(_report_followup_state(
+            query,
+            {
+                "title": "INTC 研究报告",
+                "summary": "无对应维度的摘要。",
+                "section_titles": [topic],
+                "risks": ["旧风险：流动性承压。"],
+            },
+            artifacts={"draft_markdown": query},
+        ))
+
+        _assert_chat_contract(markdown)
+        assert "[数据缺失]" in markdown
+        assert f"没有可用的{topic}正文" in markdown
+        assert "旧风险" not in markdown
+        assert "无对应维度的摘要" not in markdown
+
+
+def test_report_followup_catalysts_rejects_generic_template() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "下一季度的催化剂是什么？",
+        {"title": "INTC 研究报告", "risks": ["旧风险：流动性承压。"]},
+        artifacts={"render_vars": {"catalysts": (
+            "- 可能催化：财报、产品发布、政策变化、行业景气度变化。\n"
+            "- 将基于新闻/财报证据进一步细化。"
+        )}},
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "[数据缺失]" in markdown
+    assert "可能催化" not in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_summary_request_does_not_default_to_risks() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "再概括一下报告结论。",
+        {"title": "INTC 研究报告", "summary": "结论是盈利修复仍需后续验证。", "risks": ["旧风险：流动性承压。"]},
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "结论是盈利修复仍需后续验证" in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_risks_prefers_current_evidence() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "刚才报告最大的风险是什么？",
+        {"title": "INTC 研究报告", "risks": ["旧风险：流动性承压。"]},
+        artifacts={"render_vars": {"risks": "本轮风险证据：资本开支可能超过经营现金流。"}},
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "资本开支可能超过经营现金流" in markdown
+    assert "旧风险" not in markdown
+
+
+def test_report_followup_risks_ignores_disclaimer_template() -> None:
+    markdown = _render_chat(_report_followup_state(
+        "刚才报告最大的风险是什么？",
+        {"title": "INTC 研究报告", "risks": ["报告风险：资本开支可能超过经营现金流。"]},
+        artifacts={"render_vars": {"risks": "- 注：以上仅供参考，不构成投资建议。"}},
+    ))
+
+    _assert_chat_contract(markdown)
+    assert "报告风险：资本开支可能超过经营现金流" in markdown
+    assert "仅供参考" not in markdown
+
+
 def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkeypatch) -> None:
     from backend.graph.renderers import news_fallback as chat_renderer_news
 
@@ -1705,7 +1903,7 @@ def test_chat_renderer_valuation_compare_uses_actual_multiples_and_answers_the_r
     )
 
     _assert_chat_contract(markdown)
-    assert "市值：$4.00T" in markdown
+    assert "市值：[币种未提供] 4.00T" in markdown
     assert "Forward P/E 35.00x" in markdown
     assert "Forward P/E 28.00x" in markdown
     assert "EPS 修正信号：上修" in markdown

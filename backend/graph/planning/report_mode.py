@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import json
+from dataclasses import replace
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
@@ -18,6 +19,17 @@ from backend.graph.planning.steps import _append_agent_step, _append_tool_step, 
 
 
 def _append_report_mode_enrichment_steps(ctx) -> None:
+    if ctx.output_mode != "investment_report":
+        return
+    tickers = list(dict.fromkeys(ticker for task in ctx.ready_tasks for ticker in task.get("tickers", []))) or list(ctx.tickers or [])
+    for ticker in tickers:
+        relevant_ids = {str(task.get("id")) for task in ctx.ready_tasks if ticker in task.get("tickers", [])}
+        local = replace(ctx, primary_ticker=ticker, ready_task_id_set=relevant_ids)
+        _append_report_ticker_enrichment(local)
+        ctx.step_id = local.step_id
+
+
+def _append_report_ticker_enrichment(ctx) -> None:
     if ctx.output_mode != "investment_report" or not ctx.primary_ticker:
         return
 
@@ -28,15 +40,14 @@ def _append_report_mode_enrichment_steps(ctx) -> None:
         if str(task_id).strip()
     ] or None
 
-    if not _has_step(ctx, "tool", "get_stock_price"):
-        _append_tool_step(ctx, 
-            "get_stock_price",
-            {"ticker": ctx.primary_ticker},
-            why="研报模式：补充当前价格作为估值、风险和结论锚点。",
-            optional=True,
-            parallel_group="report_evidence",
-            task_ids=task_ids,
-        )
+    _append_tool_step(ctx,
+        "get_stock_price",
+        {"ticker": ctx.primary_ticker},
+        why="研报模式：补充当前价格作为估值、风险和结论锚点。",
+        optional=True,
+        parallel_group="report_evidence",
+        task_ids=task_ids,
+    )
     _append_tool_step(ctx, 
         "analyze_historical_drawdowns",
         {"ticker": ctx.primary_ticker},

@@ -1,6 +1,7 @@
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
 import { apiClient } from '../api/client';
+import { buildAuthHeaders } from '../api/http';
 import { useModelSelectionStore } from './modelSelection';
 import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
@@ -193,7 +194,8 @@ interface AppState {
   addMessage: (message: Message) => void;
   addMessageToSession: (sessionId: string, message: Message) => void;
   updateMessage: (id: string, patch: Partial<Message>) => void;
-  updateMessageInSession: (sessionId: string, id: string, patch: Partial<Message>) => void;
+  updateMessageInSession: (sessionId: string, id: string, patch: Partial<Message>, options?: { syncBackend?: boolean }) => void;
+  flushConversationSync: (sessionId: string) => Promise<boolean>;
   updateLastMessage: (content: string) => void;
   removeMessage: (id: string) => void;
   setLoading: (loading: boolean) => void;
@@ -317,6 +319,48 @@ const canSyncBackendConversation = (sessionId: string): boolean => {
   return Boolean(identity?.userId && sessionBelongsToIdentity(sessionId, identity));
 };
 
+type ConversationPayload = Parameters<typeof apiClient.createConversation>[1];
+interface ConversationSync {
+  owner: string;
+  pending: ConversationPayload;
+  hasPending: boolean;
+  running: Promise<void> | null;
+  controller: AbortController;
+  failed: boolean;
+}
+const conversationSyncs = new Map<string, ConversationSync>();
+
+const cancelConversationSync = (sessionId: string) => {
+  conversationSyncs.get(sessionId)?.controller.abort();
+  conversationSyncs.delete(sessionId);
+};
+
+const syncBelongsToCurrentUser = (sessionId: string, sync: ConversationSync) =>
+  !sync.controller.signal.aborted && conversationSyncs.get(sessionId) === sync
+  && useStore.getState().authIdentity?.userId === sync.owner && canSyncBackendConversation(sessionId);
+
+const startConversationSync = (sessionId: string, sync: ConversationSync) => {
+  if (sync.running) return;
+  // 同会话只发送一个快照，等待期间的新快照合并为最新版本。
+  sync.running = Promise.resolve().then(async () => {
+    while (sync.hasPending && syncBelongsToCurrentUser(sessionId, sync)) {
+      const headers = await buildAuthHeaders();
+      if (!headers.Authorization || !syncBelongsToCurrentUser(sessionId, sync)) {
+        sync.failed = true;
+        return;
+      }
+      const nextPayload = sync.pending;
+      sync.hasPending = false;
+      await apiClient.createConversation(sessionId, nextPayload, { headers, signal: sync.controller.signal });
+    }
+  }).catch(() => {
+    sync.failed = true;
+  }).finally(() => {
+    sync.running = null;
+    if (sync.hasPending && !sync.failed && syncBelongsToCurrentUser(sessionId, sync)) startConversationSync(sessionId, sync);
+  });
+};
+
 const createBackendConversation = (sessionId: string, messages?: Message[]) => {
   if (!sessionId || !canSyncBackendConversation(sessionId)) return;
   const payload = messages
@@ -325,7 +369,23 @@ const createBackendConversation = (sessionId: string, messages?: Message[]) => {
         messages: serializeBackendMessages(messages),
       }
     : undefined;
-  void apiClient.createConversation(sessionId, payload).catch(() => undefined);
+  let sync = conversationSyncs.get(sessionId);
+  if (!sync) {
+    sync = { owner: useStore.getState().authIdentity!.userId, pending: undefined,
+      hasPending: false, running: null, controller: new AbortController(), failed: false };
+    conversationSyncs.set(sessionId, sync);
+  }
+  sync.pending = payload;
+  sync.hasPending = true;
+  sync.failed = false;
+  startConversationSync(sessionId, sync);
+};
+
+const flushConversationSync = async (sessionId: string): Promise<boolean> => {
+  const sync = conversationSyncs.get(sessionId);
+  if (!sync) return !canSyncBackendConversation(sessionId);
+  while (sync.running) await sync.running;
+  return syncBelongsToCurrentUser(sessionId, sync) && !sync.failed && !sync.hasPending;
 };
 
 const deleteBackendConversation = (sessionId: string) => {
@@ -532,6 +592,12 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
       role: role as Message['role'],
       content,
       timestamp: typeof row.timestamp === 'number' ? row.timestamp : Date.now(),
+      runId: typeof row.run_id === 'string' ? row.run_id : undefined,
+      replyTo: typeof row.reply_to === 'string' ? row.reply_to : undefined,
+      isLoading: row.isLoading === true || row.answer_status === 'running',
+      canRetry: row.canRetry === true,
+      report: row.report && typeof row.report === 'object' ? row.report as Message['report'] : undefined,
+      ...(row.error ? { error: String(row.error), canRetry: row.canRetry === true } : {}),
     });
   }
   return out;
@@ -544,6 +610,7 @@ const hydrateMessagesFromBackend = (sessionId: string): void => {
   const sid = String(sessionId || '').trim();
   if (!sid || !canSyncBackendConversation(sid)) return;
   const originalMessages = useStore.getState().messages;
+  recoverPendingRun(sid);
   void apiClient
     .getConversation(sid)
     .then((resp) => {
@@ -573,8 +640,59 @@ const hydrateMessagesFromBackend = (sessionId: string): void => {
           recovered,
         ),
       });
+      recoverPendingRun(sid);
     })
     .catch(() => undefined);
+};
+
+const recoverPendingRun = (sessionId: string): void => {
+  const initial = useStore.getState();
+  if (initial.sessionId !== sessionId || initial.chatLoadingBySession[sessionId] || !initial.authIdentity) return;
+  const pending = [...initial.messages].reverse().find((message) => message.role === 'assistant'
+    && message.runId && (message.error === zh.chat.savedAnswerInterrupted || message.isLoading));
+  if (!pending?.runId) return;
+  const runId = pending.runId;
+  const owner = initial.authIdentity.userId;
+  const controller = new AbortController();
+  initial.setSessionLoading(sessionId, true);
+  initial.setSessionAbortController(sessionId, controller);
+  initial.setStatus(zh.chat.recoveringAnswer);
+  const stillOwned = () => useStore.getState().authIdentity?.userId === owner && !controller.signal.aborted;
+  void (async () => {
+    try {
+      while (stillOwned()) {
+        const run = await apiClient.getExecutionRun(runId, controller.signal);
+        if (!stillOwned()) return;
+        const result = run.result;
+        if (run.status !== 'running') {
+          const message = result?.assistant_message;
+          const content = typeof message?.content === 'string' ? message.content
+            : typeof result?.response === 'string' ? result.response : zh.chat.savedAnswerInterrupted;
+          const completed = result?.type === 'done' && run.status === 'completed';
+          useStore.getState().updateMessageInSession(sessionId, pending.id, {
+            id: run.assistant_message_id || pending.id, content, isLoading: false,
+            report: message?.report || result?.report || result?.blocked_report,
+            error: completed ? undefined : String(message?.error || content),
+            canRetry: !completed || message?.canRetry === true || result?.quality_blocked === true,
+          }, { syncBackend: false });
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => { controller.signal.removeEventListener('abort', stop); resolve(); }, 1500);
+          const stop = () => { clearTimeout(timer); resolve(); };
+          controller.signal.addEventListener('abort', stop, { once: true });
+        });
+      }
+    } catch {
+      // 网络暂不可用时保留已有正文和重试入口，下一次打开继续恢复同一 run。
+    } finally {
+      const current = useStore.getState();
+      if (current.authIdentity?.userId === owner && current.abortControllersBySession[sessionId] === controller) {
+        current.setSessionLoading(sessionId, false);
+        current.setSessionAbortController(sessionId, null);
+      }
+    }
+  })();
 };
 
 const persistMessages = (
@@ -777,7 +895,7 @@ export const useStore = create<AppState>((set) => ({
       };
     }),
 
-  updateMessageInSession: (sessionId, id, patch) =>
+  updateMessageInSession: (sessionId, id, patch, options = {}) =>
     set((state) => {
       const normalized = String(sessionId || '').trim();
       if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
@@ -802,12 +920,14 @@ export const useStore = create<AppState>((set) => ({
         return { messages: next };
       }
       if (finalized) cancelPersist(normalized);
-      persistMessages(next, normalized, { syncBackend: finalized });
+      persistMessages(next, normalized, { syncBackend: finalized && options.syncBackend !== false });
       return {
         messages: isActiveSession ? next : state.messages,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, next),
       };
     }),
+
+  flushConversationSync,
 
   updateLastMessage: (content) =>
     set((state) => {
@@ -1169,6 +1289,7 @@ export const useStore = create<AppState>((set) => ({
         activeController?.abort();
       }
       cancelPersist(normalized); // FE-01：丢弃 pending 写盘，防止定时器把已删会话写回
+      cancelConversationSync(normalized);
       deleteBackendConversation(normalized);
       clearPersistedConversation(normalized);
       const remaining = state.conversationSummaries
@@ -1238,6 +1359,8 @@ export const useStore = create<AppState>((set) => ({
       useModelSelectionStore.getState().setUser(nextUserId || null);
       if (currentUserId === nextUserId) return { authIdentity: normalizedIdentity };
 
+      for (const sessionId of conversationSyncs.keys()) cancelConversationSync(sessionId);
+
       for (const controller of Object.values(state.abortControllersBySession)) {
         controller?.abort();
       }
@@ -1250,7 +1373,8 @@ export const useStore = create<AppState>((set) => ({
       for (const priorSessionId of priorSessionIds) cancelPersist(priorSessionId);
 
       const nextSessionId = normalizedIdentity?.userId
-        ? buildUserSessionId(normalizedIdentity.userId)
+        ? (sessionBelongsToIdentity(state.sessionId, normalizedIdentity)
+          ? state.sessionId : buildUserSessionId(normalizedIdentity.userId))
         : buildAnonymousSessionId();
       const nextMessages = loadMessagesForSession(nextSessionId);
       const nextSummaries = loadConversationSummaries(nextSessionId, nextMessages);

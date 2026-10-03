@@ -499,7 +499,7 @@ async def test_detached_custom_stream_times_out_and_closes_its_clients(monkeypat
     monkeypatch.setattr(selection, "CUSTOM_REQUEST_TIMEOUT_SECONDS", .01)
     token = selection._selected_model.set(selection.SelectedModel("custom", "own-model", "https://api.example.com/v1", "fixture-secret"))
     try:
-        response = _buffered_sse_response(pipeline(), run_id="fixture-custom-timeout", thread_id="fixture-thread")
+        response = _buffered_sse_response(pipeline(), run_id="fixture-custom-timeout", thread_id="fixture-thread", user_id="public")
         chunks = [chunk async for chunk in response.body_iterator]
         assert "model_timeout" in "".join(chunk.decode() if isinstance(chunk, bytes) else chunk for chunk in chunks)
         assert ended == [True]

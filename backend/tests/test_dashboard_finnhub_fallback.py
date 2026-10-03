@@ -12,7 +12,7 @@ def test_fetch_valuation_uses_finnhub_fallback_when_yfinance_empty(monkeypatch):
         def __init__(self, symbol: str):
             self.info = {}
 
-    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=EmptyTicker))
+    monkeypatch.setattr(data_service, "_create_ticker", EmptyTicker)
     monkeypatch.setattr(
         data_service,
         "_fetch_valuation_from_finnhub",
@@ -30,7 +30,7 @@ def test_peer_service_uses_finnhub_when_yfinance_info_empty(monkeypatch):
         def __init__(self, symbol: str):
             self.info = {}
 
-    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=EmptyTicker))
+    monkeypatch.setattr(peer_service, "_create_ticker", EmptyTicker)
     monkeypatch.setattr(
         peer_service,
         "_fetch_single_peer_metrics_from_finnhub",
@@ -61,7 +61,7 @@ def test_resolve_peers_falls_back_to_default_list_when_sector_unknown(monkeypatc
         def __init__(self, symbol: str):
             self.info = {}
 
-    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=EmptyTicker))
+    monkeypatch.setattr(peer_service, "_create_ticker", EmptyTicker)
     peers = peer_service.resolve_peers("ZZZZ", limit=4)
     assert len(peers) == 4
     assert all(p != "ZZZZ" for p in peers)

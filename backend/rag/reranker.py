@@ -97,6 +97,7 @@ class RerankerService:
         self._requested_backend = backend
         self._enabled = backend != "none"
         self._available: bool | None = None
+        self._worker_url = str(os.getenv("RAG_WORKER_URL") or "").strip().rstrip("/")
         if not self._enabled:
             _log_reranker_degraded(
                 reason="configured_none_backend",
@@ -109,6 +110,8 @@ class RerankerService:
 
     def _check_available(self) -> bool:
         """Lazy check whether sentence_transformers CrossEncoder is importable."""
+        if self._worker_url:
+            return self._enabled
         if self._available is not None:
             return self._available
         if not self._enabled:
@@ -145,7 +148,18 @@ class RerankerService:
 
         try:
             pairs = [(query, str(doc.get(content_key) or "")) for doc in doc_list]
-            scores = _get_reranker().predict(pairs)
+            if self._worker_url:
+                import httpx
+                with httpx.Client(timeout=float(os.getenv("RAG_WORKER_TIMEOUT_SECONDS", "60")), trust_env=False) as client:
+                    response = client.post(self._worker_url + "/rerank", json={"query": query,
+                        "documents": [pair[1] for pair in pairs]},
+                        headers={"Authorization": "Bearer " + os.getenv("RAG_WORKER_TOKEN", "")})
+                    response.raise_for_status()
+                    scores = response.json()["scores"]
+                    if len(scores) != len(doc_list):
+                        raise ValueError("reranker_invalid_response")
+            else:
+                scores = _get_reranker().predict(pairs)
             ranked = sorted(zip(doc_list, scores), key=lambda item: item[1], reverse=True)
             return [{**doc, "rerank_score": score} for doc, score in ranked[:top_n]]
         except Exception as exc:

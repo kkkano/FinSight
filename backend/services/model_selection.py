@@ -33,9 +33,9 @@ def is_model_generation_path(path: str) -> bool:
 
 def require_model_access(request) -> dict:
     from fastapi import HTTPException
-    from backend.api.security_gate import _is_internal_api_key_authorized
+    from backend.security.api_keys import is_internal_api_key_authorized
     from backend.security.supabase_auth import resolve_request_user
-    if _is_internal_api_key_authorized(request):
+    if is_internal_api_key_authorized(request):
         return {"user_id": "internal", "auth_type": "api_key"}
     user = resolve_request_user(request)
     if user is None or user.is_anonymous:
@@ -275,7 +275,8 @@ class ModelSelectionMiddleware:
             try:
                 selected = resolve_default_model()
             except RuntimeError:
-                return await JSONResponse({"detail": {"code": "model_unavailable", "message": "系统模型尚未配置，请联系管理员。"}}, status_code=503)(scope, receive, send)
+                # 先让认证和请求 schema 校验运行；有效请求由端点预检报模型不可用。
+                selected = None
         else:
             try:
                 await require_model_user(Request(scope, receive), self.authenticate)
@@ -310,7 +311,7 @@ class ModelSelectionMiddleware:
             await send(message)
 
         try:
-            if selected.source == "custom":
+            if selected is not None and selected.source == "custom":
                 await asyncio.wait_for(self.app(scope, receive, observe_send), timeout=CUSTOM_REQUEST_TIMEOUT_SECONDS)
             else:
                 await self.app(scope, receive, observe_send)

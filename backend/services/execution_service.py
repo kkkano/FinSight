@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable
 from uuid import uuid4
 
-from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
+from backend.report.quality_engine import evaluate_result_quality, record_quality_metrics
 from backend.services.llm_usage import (
     TokenUsageAccumulator,
     set_token_accumulator,
@@ -139,11 +139,24 @@ def _llm_degradation(
         }
     synth = trace.get("synthesize_runtime") if isinstance(trace, dict) else None
     if isinstance(synth, dict) and synth.get("fallback"):
+        reason = str(synth.get("reason") or "")
+        structured = synth.get("mode") in {"research_result", "research_structured"}
+        # 确定性事实/部分证据或解释校验不等同供应商不可用。
+        if structured and (not reason or reason.startswith(("explanation_", "task_synthesis_", "structured_selection_"))):
+            return None
         return {
             "used": True,
             "stage": "synthesis",
             "reason": _stable_reason(synth.get("reason")),
         }
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    opinion = artifacts.get("opinion_synthesis")
+    results = opinion.get("task_results_by_task") if isinstance(opinion, dict) else None
+    if isinstance(results, dict) and any(
+        isinstance(result, dict) and "llm_unavailable" in (result.get("error_codes") or [])
+        for result in results.values()
+    ):
+        return {"used": True, "stage": "opinion_synthesis", "reason": "llm_unavailable"}
     usage = usage_summary if isinstance(usage_summary, dict) else {}
     calls = max(0, int(usage.get("llm_token_calls") or 0))
     failed_calls = max(0, int(usage.get("failed_llm_calls") or 0))
@@ -172,10 +185,16 @@ def _degradation_message(degradation: dict[str, Any]) -> str:
 
 def _apply_quality_gate(
     *,
+    state: dict[str, Any],
     report: dict[str, Any] | None,
     source: str,
 ) -> tuple[dict[str, Any], bool]:
-    quality, blocked = apply_quality_to_report(report)
+    quality = evaluate_result_quality(state=state, report=report)
+    blocked = quality.get("state") == "block"
+    if isinstance(report, dict):
+        report["report_quality"] = quality
+        meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
+        report["meta"] = {**meta, "report_quality": quality}
     record_quality_metrics(quality, source=source)
     return quality, blocked
 
@@ -234,9 +253,9 @@ async def _replay_cached_report(
         {
             "schema_version": deps.sse_event_schema_version,
             "type": "pipeline_stage",
-            "stage": "done",
-            "status": "done",
-            "message": "Execution completed (cached)",
+            "stage": "persistence",
+            "status": "start",
+            "message": "正在保存缓存回答",
             "timestamp": _utc_iso_now(),
         }
     )
@@ -322,6 +341,7 @@ class ExecutionDeps:
     is_raw_trace_event: Callable[[dict[str, Any]], bool]
     contract_info: Callable[[], dict[str, str]]
     sse_event_schema_version: str
+    persist_run_event: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +405,7 @@ async def run_graph_pipeline(
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
     token_acc = TokenUsageAccumulator(user_id=user_id)
+    streamed_preview: list[str] = []
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
         "llm_call": 0,
@@ -417,6 +438,24 @@ async def run_graph_pipeline(
 
     async def _queue_event(payload: dict[str, Any], *, record_metric: bool = True) -> None:
         outgoing = _stamp_ids(payload)
+        if outgoing.get("type") == "token" and isinstance(outgoing.get("content"), str):
+            streamed_preview.append(outgoing["content"])
+        if outgoing.get("type") in {"done", "error", "cancelled"}:
+            if outgoing.get("type") != "done" and not outgoing.get("response") and streamed_preview:
+                outgoing["response"] = "".join(streamed_preview)
+            if deps.persist_run_event is not None:
+                # 唯一完成边界：事务提交后才允许客户端收到终态。
+                outgoing = await deps.persist_run_event(outgoing)
+            else:
+                outgoing.setdefault("persistence_status", "ephemeral")
+            if outgoing.get("type") == "done":
+                failed_save = outgoing.get("persistence_status") == "failed"
+                await queue.put(_stamp_ids({
+                    "type": "pipeline_stage", "stage": "persistence" if failed_save else "done",
+                    "status": "error" if failed_save else "done",
+                    "message": "回答保存失败，请保留当前预览。" if failed_save else "Execution completed",
+                    "timestamp": _utc_iso_now(),
+                }))
         if record_metric:
             _record_stream_metric(outgoing)
         await queue.put(outgoing)
@@ -532,6 +571,7 @@ async def run_graph_pipeline(
                     exc_info=True,
                 )
             report_quality, quality_blocked = _apply_quality_gate(
+                state=state,
                 report=report,
                 source="execute_run",
             )
@@ -630,13 +670,17 @@ async def run_graph_pipeline(
                     )
 
             # 5. Update conversational session context
-            deps.update_session_context(
-                thread_id=thread_id,
-                original_query=original_query or query,
-                response_markdown=response_markdown,
-                subject=state.get("subject"),
-                skip_context=bool(state.get("skip_session_context")),
-            )
+            try:
+                deps.update_session_context(
+                    thread_id=thread_id,
+                    original_query=original_query or query,
+                    response_markdown=response_markdown,
+                    subject=state.get("subject"),
+                    skip_context=bool(state.get("skip_session_context")),
+                )
+            except Exception as exc:
+                # 派生会话摘要失败不能丢掉已经生成的最终回答。
+                logger.warning("会话上下文更新失败 thread_id=%s error_type=%s", thread_id, type(exc).__name__)
 
             if not quality_blocked or soft_blocked:
                 # 6. Stream markdown in chunks
@@ -677,9 +721,9 @@ async def run_graph_pipeline(
                     {
                         "schema_version": deps.sse_event_schema_version,
                         "type": "pipeline_stage",
-                        "stage": "done",
-                        "status": "done",
-                        "message": "Execution completed",
+                        "stage": "persistence",
+                        "status": "start",
+                        "message": "正在保存回答",
                         "timestamp": _utc_iso_now(),
                     }
                 )
@@ -717,6 +761,8 @@ async def run_graph_pipeline(
                     "report": persisted_report,
                     "blocked_report": blocked_report_preview,
                     "quality": report_quality,
+                    "answer_status": report_quality.get("answer_status"),
+                    "has_supported_content": report_quality.get("has_supported_content"),
                     "quality_blocked": quality_blocked,
                     "publishable": not quality_blocked and not execution_failed and not persistence_failed,
                     "archived": report_archived,
@@ -776,6 +822,7 @@ async def run_graph_pipeline(
             cancel_event.set()
             await _queue_event(_cancelled_trace_payload(), record_metric=False)
             await _queue_event(_cancelled_pipeline_payload(), record_metric=False)
+            await _queue_event({"type": "cancelled", "message": "已停止生成，可重新生成。", "publishable": False}, record_metric=False)
             logger.info("[execution_service] graph run cancelled thread_id=%s", thread_id)
         except Exception as exc:
             logger.error(

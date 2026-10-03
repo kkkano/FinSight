@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiClient } from '../api/client';
+import * as http from '../api/http';
 import { zh } from '../locales/zh';
 import { useStore } from './useStore';
 
 describe('useStore conversation lifecycle', () => {
   afterEach(() => {
+    useStore.getState().setAuthIdentity(null);
     vi.restoreAllMocks();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.spyOn(http, 'buildAuthHeaders').mockResolvedValue({ Authorization: 'Bearer fixture-token' });
     vi.spyOn(apiClient, 'createConversation').mockResolvedValue({
       success: true,
       session_id: 'public:test-user:default',
@@ -26,9 +29,11 @@ describe('useStore conversation lifecycle', () => {
       window.localStorage.clear();
     }
     const state = useStore.getState();
+    state.setAuthIdentity(null);
     state.setAuthIdentity({ userId: 'test-user', email: null });
     state.setSessionId('public:test-user:default');
     state.clearConversationContext();
+    await useStore.getState().flushConversationSync(useStore.getState().sessionId);
     vi.clearAllMocks();
   });
 
@@ -173,6 +178,7 @@ describe('useStore conversation lifecycle', () => {
       messages: [{ id: 'research-user', role: 'user', content: 'INTC research', timestamp: 1 },
         { id: 'saved-answer', role: 'assistant', content: 'Verified INTC answer', timestamp: 2 }],
     } });
+    await useStore.getState().flushConversationSync(useStore.getState().sessionId);
     vi.clearAllMocks();
     useStore.getState().selectConversation(sid);
     expect(useStore.getState().messages.at(-1)?.error).toBe(zh.chat.missingSavedAnswer);
@@ -198,16 +204,98 @@ describe('useStore conversation lifecycle', () => {
     expect(useStore.getState().messages.at(-1)?.id).toBe('new-user');
   });
 
-  it('still saves the answer remotely when local storage fails', () => {
+  it('still saves the answer remotely when local storage fails', async () => {
     const setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
     vi.stubGlobal('window', { localStorage: { setItem, getItem: () => null } });
     try {
       useStore.getState().addMessage({ id: 'answer-without-storage', role: 'assistant', content: 'Answer survives quota', timestamp: 4 });
+      await useStore.getState().flushConversationSync(useStore.getState().sessionId);
       expect(apiClient.createConversation).toHaveBeenCalledWith(useStore.getState().sessionId,
-        expect.objectContaining({ messages: expect.arrayContaining([expect.objectContaining({ content: 'Answer survives quota' })]) }));
+        expect.objectContaining({ messages: expect.arrayContaining([expect.objectContaining({ content: 'Answer survives quota' })]) }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }));
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('keeps the selected conversation on same-owner token and profile updates', () => {
+    useStore.getState().selectConversation('public:test-user:selected-thread');
+    useStore.getState().setAuthIdentity({ userId: 'test-user', email: 'updated@example.com' });
+    expect(useStore.getState().sessionId).toBe('public:test-user:selected-thread');
+  });
+
+  it('restores the initial persisted thread only when its owner matches authenticated identity', () => {
+    useStore.setState({ authIdentity: null, sessionId: 'public:test-user:saved-thread' });
+    useStore.getState().setAuthIdentity({ userId: 'test-user', email: null });
+    expect(useStore.getState().sessionId).toBe('public:test-user:saved-thread');
+    useStore.setState({ authIdentity: null, sessionId: 'public:another-user:private-thread' });
+    useStore.getState().setAuthIdentity({ userId: 'test-user', email: null });
+    expect(useStore.getState().sessionId).toBe('public:test-user:default');
+  });
+
+  it('serializes snapshots and merges waiting updates before confirming final persistence', async () => {
+    let releaseFirst: () => void = () => undefined;
+    let savedMessages: Array<Record<string, unknown>> = [];
+    vi.mocked(apiClient.createConversation).mockImplementationOnce((_sid, payload) => new Promise((resolve) => {
+      releaseFirst = () => { savedMessages = payload?.messages || []; resolve({ success: true, session_id: _sid! }); };
+    })).mockImplementation(async (sid, payload) => {
+      savedMessages = payload?.messages || [];
+      return { success: true, session_id: sid! };
+    });
+    const state = useStore.getState();
+    const sid = state.sessionId;
+    state.addMessage({ id: 'serial-user', role: 'user', content: 'INTC analysis', timestamp: 1 });
+    await vi.waitFor(() => expect(apiClient.createConversation).toHaveBeenCalledOnce());
+    state.addMessage({ id: 'serial-assistant', role: 'assistant', content: '', timestamp: 2, isLoading: true });
+    state.updateMessageInSession(sid, 'serial-assistant', { content: 'Completed answer', isLoading: false });
+    let confirmed = false;
+    const completed = state.flushConversationSync(sid).then((saved) => { confirmed = saved; });
+    await Promise.resolve();
+    expect(confirmed).toBe(false);
+    expect(apiClient.createConversation).toHaveBeenCalledOnce();
+    releaseFirst();
+    await completed;
+    expect(apiClient.createConversation).toHaveBeenCalledTimes(2);
+    expect(confirmed).toBe(true);
+    expect(savedMessages.at(-1)).toMatchObject({ role: 'assistant', content: 'Completed answer' });
+  });
+
+  it('preserves completed local content when remote persistence rejects', async () => {
+    vi.mocked(apiClient.createConversation).mockRejectedValueOnce(new Error('fixture network failure'));
+    const state = useStore.getState();
+    state.addMessage({ id: 'unsynced-answer', role: 'assistant', content: 'Generated answer remains', timestamp: 1 });
+    expect(await state.flushConversationSync(state.sessionId)).toBe(false);
+    expect(useStore.getState().messages.at(-1)?.content).toBe('Generated answer remains');
+  });
+
+  it('discards old-owner pending snapshots after asynchronous token lookup', async () => {
+    let resolveHeaders: (headers: Record<string, string>) => void = () => undefined;
+    vi.mocked(http.buildAuthHeaders).mockReturnValueOnce(new Promise((resolve) => { resolveHeaders = resolve; }));
+    useStore.getState().addMessage({ id: 'old-owner', role: 'user', content: 'Private request', timestamp: 1 });
+    await Promise.resolve();
+    useStore.getState().setAuthIdentity({ userId: 'new-user', email: null });
+    resolveHeaders({ Authorization: 'Bearer fixture-old-owner' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(apiClient.createConversation).not.toHaveBeenCalled();
+  });
+
+  it('aborts old-owner in-flight persistence and clears later queued snapshots on account change', async () => {
+    let requestSignal: AbortSignal | undefined;
+    let finish: () => void = () => undefined;
+    vi.mocked(apiClient.createConversation).mockImplementation((_sid, _payload, options) => new Promise((resolve) => {
+      requestSignal = options?.signal;
+      finish = () => resolve({ success: true, session_id: _sid! });
+    }));
+    useStore.getState().addMessage({ id: 'queued-user', role: 'user', content: 'Old account', timestamp: 1 });
+    await vi.waitFor(() => expect(apiClient.createConversation).toHaveBeenCalledOnce());
+    useStore.getState().addMessage({ id: 'queued-answer', role: 'assistant', content: 'Old account answer', timestamp: 2 });
+    useStore.getState().setAuthIdentity({ userId: 'new-user', email: null });
+    expect(requestSignal?.aborted).toBe(true);
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(apiClient.createConversation).toHaveBeenCalledOnce();
   });
 
   it('starts a new chat by rotating session id and resetting transient state', () => {

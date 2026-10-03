@@ -397,7 +397,7 @@ def is_probably_ticker(ticker: str) -> bool:
 
 def _is_structured_market_ticker(ticker: str) -> bool:
     text = str(ticker or "").strip().upper()
-    return bool(re.match(r"^(?:\d{5,6}\.(?:SS|SZ|BJ)|\d{4,5}\.HK)$", text))
+    return bool(re.match(r"^(?:\d{5,6}\.(?:SS|SH|SZ|BJ)|\d{4,5}\.HK)$", text))
 
 
 def _alias_appears_in_text(query: str, alias: str) -> bool:
@@ -425,6 +425,8 @@ def normalize_ticker(raw: str) -> str:
     stripped = raw.strip()
     if not stripped:
         return stripped
+    if re.fullmatch(r"\d{6}\.SH", stripped, flags=re.IGNORECASE):
+        return stripped[:-3] + ".SS"
 
     # 中文名 → ticker
     if stripped in CN_TO_TICKER:
@@ -467,6 +469,15 @@ def extract_tickers(query: str) -> Dict[str, Any]:
         'is_comparison': False
     }
 
+    # “公司名（明确代码）”是一项标的；名称的默认 ADR 不能再扩成另一项任务。
+    aliases = set(CN_TO_TICKER) | {name for name in COMPANY_MAP if name != name.upper()}
+    named_symbol = re.compile(
+        r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(name) for name in sorted(aliases, key=len, reverse=True))
+        + r")\s*[（(]\s*([A-Za-z0-9^][A-Za-z0-9.^-]{0,14})\s*[)）]", re.IGNORECASE,
+    )
+    query = named_symbol.sub(
+        lambda match: " " + match[1] + " " if is_probably_ticker(match[1].upper()) else match[0], query,
+    )
     query_lower = query.lower()
     query_original = query
 
@@ -493,7 +504,7 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     raw_matches.extend(index_tickers)
     dotted_tickers = re.findall(r'(?<![A-Za-z])([A-Za-z]{1,5}[.-][A-Za-z]{1,4})(?![A-Za-z])', query)
     raw_matches.extend(dotted_tickers)
-    cn_dotted_tickers = re.findall(r'(?<![A-Za-z0-9])((?:\d{5,6}\.(?:SS|SZ|BJ)|\d{4,5}\.HK))(?![A-Za-z0-9])', query, flags=re.IGNORECASE)
+    cn_dotted_tickers = re.findall(r'(?<![A-Za-z0-9])((?:\d{5,6}\.(?:SS|SH|SZ|BJ)|\d{4,5}\.HK))(?![A-Za-z0-9])', query, flags=re.IGNORECASE)
     raw_matches.extend(cn_dotted_tickers)
     potential_tickers = [t.upper() for t in raw_matches]
 

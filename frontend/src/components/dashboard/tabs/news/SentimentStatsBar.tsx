@@ -8,51 +8,15 @@ import { useMemo } from 'react';
 
 import type { NewsItem } from '../../../../types/dashboard.ts';
 import { DashboardSourceBadge } from '../../DashboardSourceBadge';
-
-// --- keyword lists for naive sentiment classification ---
-const POSITIVE_KEYWORDS = [
-  'surge', 'jump', 'rise', 'gain', 'bull', 'rally', 'upgrade', 'beat',
-  'profit', 'growth', 'record', 'high', 'strong', 'positive', 'optimis',
-  'outperform', 'buy', 'upside',
-];
-
-const NEGATIVE_KEYWORDS = [
-  'drop', 'fall', 'decline', 'loss', 'bear', 'crash', 'downgrade', 'miss',
-  'debt', 'risk', 'weak', 'negative', 'pessimis', 'sell', 'cut', 'low',
-  'slump', 'warning', 'fear',
-];
-
-function classifyItem(item: NewsItem): 'positive' | 'negative' | 'neutral' {
-  const text = `${item.title ?? ''} ${item.summary ?? ''}`.toLowerCase();
-  const posHits = POSITIVE_KEYWORDS.filter((kw) => text.includes(kw)).length;
-  const negHits = NEGATIVE_KEYWORDS.filter((kw) => text.includes(kw)).length;
-  if (posHits > negHits) return 'positive';
-  if (negHits > posHits) return 'negative';
-  return 'neutral';
-}
+import { computeSentimentStats, currentNewsSamples } from '../../../../utils/news';
 
 interface SentimentStatsBarProps {
   news: NewsItem[];
 }
 
 export function SentimentStatsBar({ news }: SentimentStatsBarProps) {
-  const stats = useMemo(() => {
-    const total = news.length;
-    if (total === 0) return { positive: 0, neutral: 0, negative: 0 };
-    let pos = 0;
-    let neg = 0;
-    for (const item of news) {
-      const cls = classifyItem(item);
-      if (cls === 'positive') pos += 1;
-      else if (cls === 'negative') neg += 1;
-    }
-    const neu = total - pos - neg;
-    return {
-      positive: Math.round((pos / total) * 100),
-      neutral: Math.round((neu / total) * 100),
-      negative: Math.round((neg / total) * 100),
-    };
-  }, [news]);
+  const samples = useMemo(() => currentNewsSamples(news), [news]);
+  const stats = useMemo(() => computeSentimentStats(samples), [samples]);
 
   const cards: { label: string; value: number; color: string; barColor: string }[] = [
     { label: '积极', value: stats.positive, color: 'text-fin-success', barColor: 'bg-fin-success' },
@@ -71,7 +35,7 @@ export function SentimentStatsBar({ news }: SentimentStatsBarProps) {
             <span className="text-xs text-fin-muted">{card.label}</span>
             <div className="flex items-center gap-2">
               <span className={`text-sm font-semibold ${card.color}`}>
-                {news.length === 0 ? '--' : `${card.value}%`}
+                {samples.length === 0 ? '--' : `${card.value}%`}
               </span>
               <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
             </div>

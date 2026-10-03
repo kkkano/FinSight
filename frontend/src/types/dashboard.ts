@@ -93,6 +93,29 @@ export interface ChartPoint {
 }
 
 // === 新闻条目 ===
+export interface NewsEventQuality {
+  version?: string;
+  event_id?: string;
+  published_at?: string | null;
+  published_precision?: 'timestamp' | 'date' | 'unknown';
+  observed_at?: string;
+  occurred_at?: string | null;
+  freshness?: 'fresh' | 'stale' | 'unknown' | 'future';
+  max_age_hours?: number;
+  source_domain?: string;
+  source_tier?: 'primary' | 'established_media' | 'opinion_or_community' | 'unknown';
+  subject_match?: 'headline' | 'market' | 'summary_only' | 'none';
+  content_kind?: 'report' | 'discovery' | 'rumor' | 'opinion';
+  evidence_role?: 'reported_news' | 'historical_news' | 'opinion' | 'discovery';
+  usable_as_catalyst?: boolean;
+  verification?: 'headline_only' | 'discovery_only';
+  reasons?: string[];
+  report_count?: number;
+  source_count?: number;
+  independence?: string;
+  grouping?: string;
+}
+
 export interface NewsItem {
   title: string;
   url: string;
@@ -108,6 +131,7 @@ export interface NewsItem {
   source_penalty?: number;
   ranking_score?: number;
   ranking_reason?: string;
+  event_quality?: NewsEventQuality;
   ranking_factors?: {
     mode?: string;
     half_life_hours?: number;
@@ -167,6 +191,7 @@ export interface SelectionItem {
   source?: string;
   ts?: string;
   snippet?: string;     // 摘要/前100字
+  event_quality?: NewsEventQuality;
 }
 
 // === Dashboard 数据 ===
@@ -222,6 +247,8 @@ export interface DashboardErrorResponse {
 // === v2 Valuation Data ===
 export interface ValuationData {
   market_cap?: number | null;
+  currency?: string | null;
+  market_cap_currency?: string | null;
   trailing_pe?: number | null;
   forward_pe?: number | null;
   price_to_book?: number | null;
@@ -236,6 +263,9 @@ export interface ValuationData {
 // === v2 Financial Statement ===
 export interface FinancialStatement {
   periods: string[];
+  period_ends?: string[];
+  currency?: string | null;
+  fact_metadata?: Record<string, unknown>;
   revenue: (number | null)[];
   gross_profit: (number | null)[];
   operating_income: (number | null)[];

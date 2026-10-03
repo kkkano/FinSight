@@ -85,6 +85,7 @@ def _rag_probe_key() -> tuple[str, ...]:
         str(os.getenv("RAG_EMBEDDING") or "bge-m3").strip().lower(),
         str(os.getenv("RAG_V2_VECTOR_DIM") or "").strip(),
         str(os.getenv("RAG_RERANKER") or "bge-reranker").strip().lower(),
+        str(os.getenv("RAG_WORKER_URL") or ""),
     )
 
 
@@ -134,6 +135,15 @@ def _rag_health_uncached() -> dict[str, object]:
         from backend.rag.reranker import get_reranker_service
 
         service = get_rag_service()
+        if str(os.getenv("RAG_WORKER_URL") or "").strip():
+            health = service._embedder.worker_health()
+            semantic_ready = bool(health.get("inference_verified") and health.get("status") == "ok")
+            lexical_ready = service.backend_name == "postgres"
+            return {"status": "ok" if semantic_ready else ("degraded" if lexical_ready else "error"),
+                    "backend": service.backend_name, "backend_requested": os.getenv("RAG_V2_BACKEND", "postgres"),
+                    "embedding": service.embedding_model, "semantic_ready": semantic_ready,
+                    "lexical_ready": lexical_ready, "reranker": health.get("reranker", "disabled"),
+                    "reason": None if semantic_ready else "semantic_retrieval_unavailable_using_lexical"}
         backend_actual = str(getattr(service, "backend_name", "unknown") or "unknown").lower()
         embedding = str(getattr(service, "embedding_model", "unknown") or "unknown").lower()
         fallback_reason = str(getattr(service, "fallback_reason", "") or "").strip()
@@ -218,18 +228,16 @@ def warm_rag_readiness_probe(*, force: bool = False) -> dict[str, object]:
         now = time.monotonic()
         if not force and _rag_probe_result is not None and _rag_probe_fingerprint == fingerprint:
             status = str(_rag_probe_result.get("status") or "").strip().lower()
-            if status in {"ok", "disabled"}:
+            if status in {"ok", "disabled"} and (status == "disabled" or _rag_probe_failed_at is not None
+                                                  and now - _rag_probe_failed_at < 15):
                 return dict(_rag_probe_result)
             failure_ttl = _rag_probe_failure_ttl_seconds()
-            if _rag_probe_failed_at is not None and now - _rag_probe_failed_at < failure_ttl:
+            if status not in {"ok", "disabled"} and _rag_probe_failed_at is not None and now - _rag_probe_failed_at < failure_ttl:
                 return dict(_rag_probe_result)
         result = _rag_health_uncached()
         _rag_probe_fingerprint = fingerprint
         _rag_probe_result = dict(result)
-        if str(result.get("status") or "").strip().lower() in {"ok", "disabled"}:
-            _rag_probe_failed_at = None
-        else:
-            _rag_probe_failed_at = now
+        _rag_probe_failed_at = now
         return dict(result)
 
 

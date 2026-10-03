@@ -8,9 +8,10 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from backend.graph.intent_contract import EvidenceKind
+from backend.report.evidence_policy import QualityState, normalize_quality_state
 
 SCHEMA_VERSION = "2026-07-14.research-synthesis.v1"
 
@@ -68,6 +69,16 @@ class NormalizedEvidence(StrictContract):
     url: NonEmptyStr | None = None
     as_of: NonEmptyStr | None = None
     market_price: float | None = Field(default=None, gt=0)
+    usage: Literal["raw", "fact", "summary", "diagnostic"] = "raw"
+    subject: NonEmptyStr | None = None
+    metric: NonEmptyStr | None = None
+    period_start: NonEmptyStr | None = None
+    period_end: NonEmptyStr | None = None
+    frequency: NonEmptyStr | None = None
+    unit: NonEmptyStr | None = None
+    currency: NonEmptyStr | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    structured_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class RejectedEvidence(StrictContract):
@@ -108,6 +119,23 @@ class Claim(StrictContract):
     confidence: float = Field(ge=0.0, le=1.0)
     evidence_ids: list[NonEmptyStr] = Field(min_length=1)
     limitations: list[NonEmptyStr]
+    assertion_type: Literal["fact", "opinion", "risk"] = "opinion"
+    subject: NonEmptyStr | None = None
+    metric: NonEmptyStr | None = None
+    horizon: NonEmptyStr | None = None
+    scenario: NonEmptyStr | None = None
+    directional: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _classify_legacy_assertion(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "assertion_type" not in value:
+            value = dict(value)
+            value["assertion_type"] = "risk" if value.get("stance") == "risk" else "fact" if value.get("stance") in {"neutral", "unknown"} else "opinion"
+        if isinstance(value, dict) and "directional" not in value:
+            value = dict(value)
+            value["directional"] = value.get("stance") in {"bull", "bear"}
+        return value
 
 
 class ClaimConflict(StrictContract):
@@ -135,6 +163,10 @@ class RejectedClaim(StrictContract):
         "missing_claim_identity", "missing_evidence_reference",
         "invalid_claim_reference", "cross_task_claim_reference",
         "claim_id_content_conflict",
+        "diagnostic_claim_text",
+        "unverified_subject_reference",
+        "unsupported_risk_reference",
+        "unsupported_news_reference",
     ]
 
 
@@ -186,6 +218,13 @@ class TaskSynthesisResult(StrictContract):
     limitations: list[NonEmptyStr]
     fallback_used: bool
     error_codes: list[NonEmptyStr]
+    fact_ids: list[NonEmptyStr] = Field(default_factory=list)
+    selected_fact_ids: list[NonEmptyStr] = Field(default_factory=list)
+    missing_evidence: list[NonEmptyStr] = Field(default_factory=list)
+    subject: NonEmptyStr | None = None
+    operation: NonEmptyStr | None = None
+    missing_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    requested_dimensions: list[NonEmptyStr] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_direction_refs(self) -> "TaskSynthesisResult":
@@ -194,6 +233,8 @@ class TaskSynthesisResult(StrictContract):
         claim_ids = set(self.claim_ids)
         if any(item not in claim_ids for item in self.direction_supporting_claim_ids):
             raise ValueError("方向 supporting claim 必须是 task claim 子集")
+        if any(item not in self.fact_ids for item in self.selected_fact_ids):
+            raise ValueError("展示事实必须是本任务已验证事实子集")
         return self
 
 
@@ -210,6 +251,7 @@ class ReportSynthesisDraft(StrictContract):
     risks: list[NonEmptyStr]
     limitations: list[NonEmptyStr]
     fallback_used: bool
+    error_codes: list[NonEmptyStr] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_indexes_and_direction(self) -> "ReportSynthesisDraft":
@@ -235,8 +277,13 @@ class ResearchReportRenderResult(StrictContract):
 
 
 class SynthesisQualityGateResult(StrictContract):
-    state: Literal["pass", "degraded", "block"]
+    state: QualityState
     reasons: list[NonEmptyStr]
+
+    @field_validator("state", mode="before")
+    @classmethod
+    def _read_legacy_quality_state(cls, value: Any) -> QualityState:
+        return normalize_quality_state(value)
 
 
 __all__ = [

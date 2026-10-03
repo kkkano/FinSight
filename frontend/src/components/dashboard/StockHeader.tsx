@@ -120,7 +120,7 @@ export function StockHeader({
             )}
             {marketCap !== null && (
               <span className="num text-xs text-t-text3">
-                {formatMarketCapForMarket(marketCap, ticker)}
+                {formatMarketCapForMarket(marketCap, ticker, valuation?.market_cap_currency)}
               </span>
             )}
             <DashboardSourceBadge metaKey="market_chart" fallbackSource="yfinance" />

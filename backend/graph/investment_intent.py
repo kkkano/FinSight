@@ -35,6 +35,15 @@ _TRADE_DECISION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_TECHNICAL_OBJECT_RE = re.compile(
+    r"(技术面|技术分析|均线|支撑|阻力|\b(?:technicals?|rsi|macd|support|resistance)\b)",
+    re.IGNORECASE,
+)
+_DIRECTIONAL_VIEW_RE = re.compile(
+    r"(看好|看坏|看壞|看多|看空|偏多|偏空|\b(?:bullish|bearish)\b)",
+    re.IGNORECASE,
+)
+
 _COMPARATIVE_SELECTION_RE = re.compile(
     r"("
     r"(谁|誰|哪(?:个|個|只|支)).{0,20}(更|较|較|比较|比較|优先|優先|推荐|推薦|值得|买|買|持有)"
@@ -60,6 +69,9 @@ def query_requests_investment_opinion(query: str) -> bool:
     )
     if _TRADE_DECISION_RE.search(compact):
         return True
+    # 指标读法中的“怎么看”只要求技术解释，买卖和明确方向判断仍走投资观点。
+    if _TECHNICAL_OBJECT_RE.search(compact) and not _DIRECTIONAL_VIEW_RE.search(compact):
+        return False
     return bool(has_market_object and _VIEW_QUESTION_RE.search(compact))
 
 

@@ -33,9 +33,10 @@ def test_python_compute_valuation_sanity_uses_existing_datasets_only():
         operation="valuation_sanity",
         params={"shares_outstanding": 100.0},
         datasets={
-            "step:get_stock_price": {"price": 50.0},
-            "step:get_company_info": {"marketCap": 5000.0},
+            "step:get_stock_price": {"price": 50.0, "currency": "USD"},
+            "step:get_company_info": {"marketCap": 5000.0, "currency": "USD"},
             "step:get_sec_company_facts_quarterly": {
+                "currency": "USD",
                 "quarterly": [
                     {"period": "2025Q1", "revenue": 100.0, "net_income": 10.0},
                     {"period": "2025Q2", "revenue": 125.0, "net_income": 15.0},
@@ -59,8 +60,10 @@ def test_python_compute_valuation_sanity_parses_company_profile_market_cap():
         params={"ticker": "NVDA"},
         datasets={
             "step:get_stock_price": {"price": 100.0},
-            "step:get_company_info": "Company Profile (NVDA):\n- Market Cap: $5.0B",
+            "step:get_company_info": "Company Profile (NVDA):\n- Market Cap: USD 5.0B\n- Currency: USD",
             "step:get_sec_company_facts_quarterly": {
+                "currency": "USD",
+                "frequency": "quarterly",
                 "rows": [
                     {"period": "2025Q4", "revenue": 450.0, "net_income": 90.0},
                     {"period": "2026Q1", "revenue": 500.0, "net_income": 100.0},

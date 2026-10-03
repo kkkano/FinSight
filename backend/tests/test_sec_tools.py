@@ -195,24 +195,24 @@ def test_get_sec_company_facts_quarterly_success(monkeypatch):
                             "Revenues": {
                                 "units": {
                                     "USD": [
-                                        {"end": "2025-06-30", "val": 100.0, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
-                                        {"end": "2025-03-31", "val": 90.0, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
+                                        {"start": "2025-04-01", "end": "2025-06-30", "val": 100.0, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
+                                        {"start": "2025-01-01", "end": "2025-03-31", "val": 90.0, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
                                     ]
                                 }
                             },
                             "NetIncomeLoss": {
                                 "units": {
                                     "USD": [
-                                        {"end": "2025-06-30", "val": 25.0, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
-                                        {"end": "2025-03-31", "val": 21.0, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
+                                        {"start": "2025-04-01", "end": "2025-06-30", "val": 25.0, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
+                                        {"start": "2025-01-01", "end": "2025-03-31", "val": 21.0, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
                                     ]
                                 }
                             },
                             "EarningsPerShareDiluted": {
                                 "units": {
                                     "USD/shares": [
-                                        {"end": "2025-06-30", "val": 1.55, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
-                                        {"end": "2025-03-31", "val": 1.42, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
+                                        {"start": "2025-04-01", "end": "2025-06-30", "val": 1.55, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
+                                        {"start": "2025-01-01", "end": "2025-03-31", "val": 1.42, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
                                     ]
                                 }
                             },
@@ -226,7 +226,7 @@ def test_get_sec_company_facts_quarterly_success(monkeypatch):
     payload = sec.get_sec_company_facts_quarterly("AAPL", limit=4)
     assert payload.get("error") is None
     assert payload.get("source") == "sec_companyfacts"
-    assert payload.get("periods")[:2] == ["2025Q3", "2025Q2"]
+    assert payload.get("periods")[:2] == ["2025-06-30", "2025-03-31"]
     assert (payload.get("revenue") or [None])[0] == 100.0
     assert (payload.get("net_income") or [None])[0] == 25.0
     assert (payload.get("eps") or [None])[0] == 1.55

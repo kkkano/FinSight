@@ -54,6 +54,16 @@ afterEach(() => {
 });
 
 describe('model request headers', () => {
+  it('preserves captured conversation authentication and cancellation through the API wrapper', async () => {
+    const controller = new AbortController();
+    await apiClient.createConversation('public:fixture:thread', { messages: [] }, {
+      headers: { Authorization: 'Bearer captured-fixture-token' }, signal: controller.signal,
+    });
+    const config = adapter.mock.calls[0][0] as InternalAxiosRequestConfig;
+    expect(config.headers.get('Authorization')).toBe('Bearer captured-fixture-token');
+    expect(config.signal).toBe(controller.signal);
+  });
+
   it('attaches the selected model only to generation requests while preserving authentication', async () => {
     useModelSelectionStore.getState().applySelection(custom, metadata);
     await api.post('/api/execute', { query: 'AAPL' });

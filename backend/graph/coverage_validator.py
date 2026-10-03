@@ -11,6 +11,8 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 from backend.graph.intent_contract import canonical_evidence_kinds, evidence_plan_for_kinds
+from backend.graph.evidence_dependencies import step_evidence_kinds, step_subjects, step_task_ids
+from backend.config.ticker_mapping import normalize_ticker
 
 
 class CoverageValidation(TypedDict, total=False):
@@ -18,6 +20,7 @@ class CoverageValidation(TypedDict, total=False):
     fulfilled_evidence: list[str]
     missing_evidence: list[str]
     frame_results: list[dict[str, Any]]
+    missing_requirements: list[dict[str, Any]]
 
 
 def _plan_step_names(plan_ir: dict[str, Any] | None) -> set[str]:
@@ -43,7 +46,14 @@ def validate_plan_coverage(
     plan_ir: dict[str, Any] | None,
     market: str = "US",
 ) -> CoverageValidation:
-    step_names = _plan_step_names(plan_ir)
+    frame = request_frame if isinstance(request_frame, dict) else {}
+    plan = plan_ir if isinstance(plan_ir, dict) else {}
+    steps = [step for step in plan.get("steps", []) if isinstance(step, dict)]
+    task_ids = [str(value) for value in frame.get("task_ids", []) if value]
+    if not task_ids:
+        task_ids = [str(task["id"]) for task in plan.get("tasks", [])
+                    if task.get("request_frame_id") == frame.get("frame_id")]
+    tickers = [normalize_ticker(str(value)) for value in (frame.get("subject") or {}).get("tickers", []) if value]
     required_evidence = canonical_evidence_kinds(
         request_frame.get("evidence_obligations")
         if isinstance(request_frame, dict) and isinstance(request_frame.get("evidence_obligations"), list)
@@ -51,18 +61,32 @@ def validate_plan_coverage(
     )
     fulfilled_evidence: list[str] = []
     missing_evidence: list[str] = []
+    missing_requirements: list[dict[str, Any]] = []
     for kind in required_evidence:
-        producers = _evidence_producers(kind, market=market)
-        if producers and step_names.intersection(producers):
-            fulfilled_evidence.append(kind)
-        else:
+        for task_id in task_ids or [None]:
+            for ticker in tickers or [None]:
+                required_market = "HK" if ticker and ticker.endswith(".HK") else ("CN" if ticker and ticker.endswith((".SS", ".SZ", ".BJ")) else market)
+                producers = _evidence_producers(kind, market=required_market)
+                candidates = [step for step in steps
+                    if step.get("name") in producers
+                    and kind in step_evidence_kinds(step)
+                    and (task_id is None or task_id in step_task_ids(step))
+                    and (ticker is None or ticker in step_subjects(step))]
+                if not candidates:
+                    missing_requirements.append({"task_id": task_id, "subject": ticker,
+                        "evidence_kind": kind, "frame_id": frame.get("frame_id"),
+                        "reason": "producer_unavailable" if not producers else "producer_not_planned"})
+        if any(item["evidence_kind"] == kind for item in missing_requirements):
             missing_evidence.append(kind)
+        else:
+            fulfilled_evidence.append(kind)
 
     status = "ok" if not missing_evidence else "missing"
     return {
         "status": status,
         "fulfilled_evidence": fulfilled_evidence,
         "missing_evidence": missing_evidence,
+        "missing_requirements": missing_requirements,
     }
 
 
@@ -89,6 +113,7 @@ def validate_plan_coverage_for_frames(
     seen_fulfilled_evidence: set[str] = set()
     seen_missing_evidence: set[str] = set()
     frame_results: list[dict[str, Any]] = []
+    missing_requirements: list[dict[str, Any]] = []
 
     for index, frame in enumerate(frames, 1):
         result = validate_plan_coverage(request_frame=frame, plan_ir=plan_ir, market=market)
@@ -97,8 +122,10 @@ def validate_plan_coverage_for_frames(
             "status": result.get("status", ""),
             "fulfilled_evidence": result.get("fulfilled_evidence", []),
             "missing_evidence": result.get("missing_evidence", []),
+            "missing_requirements": result.get("missing_requirements", []),
         }
         frame_results.append(frame_result)
+        missing_requirements.extend(result.get("missing_requirements", []))
         _append_unique(fulfilled_evidence, result.get("fulfilled_evidence", []), seen_fulfilled_evidence)
         _append_unique(missing_evidence, result.get("missing_evidence", []), seen_missing_evidence)
 
@@ -108,6 +135,7 @@ def validate_plan_coverage_for_frames(
         "fulfilled_evidence": fulfilled_evidence,
         "missing_evidence": missing_evidence,
         "frame_results": frame_results,
+        "missing_requirements": missing_requirements,
     }
 
 

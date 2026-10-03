@@ -567,6 +567,17 @@ def _with_existing_prefixes(markdown: str, state: GraphState) -> str:
 
 
 def render_chat_markdown(state: GraphState) -> str:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    research_result = artifacts.get("research_result")
+    if isinstance(research_result, dict):
+        from backend.graph.synthesis.contracts import ReportSynthesisDraft
+        from backend.graph.renderers.research_report import render_research_report
+        opinion = artifacts.get("opinion_synthesis") if isinstance(artifacts.get("opinion_synthesis"), dict) else {}
+        rendered = render_research_report(
+            ReportSynthesisDraft.model_validate(research_result), output_mode=str(state.get("output_mode") or "chat"),
+            direction_readiness=opinion.get("readiness_by_task"),
+        )
+        return rendered.markdown
     grouped = render_task_groups(state)
     if grouped is not None:
         return grouped[0]

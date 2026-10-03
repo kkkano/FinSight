@@ -24,6 +24,9 @@ export interface ChatOptions {
 
 export interface SendMessageBody {
   query: string;
+  run_id?: string;
+  client_user_message_id?: string;
+  client_assistant_message_id?: string;
   history?: Array<{ role: string; content: string }>;
   context?: ChatContext;
   options?: ChatOptions;
@@ -61,6 +64,8 @@ export interface ReportIndexItem {
  */
 export interface ExecuteRequest {
   query: string;
+  client_user_message_id?: string;
+  client_assistant_message_id?: string;
   tickers?: string[];
   output_mode?: string;
   analysis_depth?: 'quick' | 'report' | 'deep_research';
@@ -74,6 +79,15 @@ export interface ExecuteAgentOptions {
   traceRawEnabled?: boolean;
   signal?: AbortSignal;
   endpoint?: string;
+}
+
+export interface ExecutionRunRecord {
+  run_id: string;
+  session_id: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'persistence_failed';
+  user_message_id: string;
+  assistant_message_id: string;
+  result: Record<string, any> | null;
 }
 
 /**

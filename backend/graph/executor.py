@@ -295,6 +295,14 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
     inputs = _inject_python_compute_datasets(
         str(name), dict(raw_inputs), steps=ctx.steps, artifacts=ctx.artifacts
     )
+    if kind == "agent":
+        producers = {str(item.get("id")): item for item in ctx.steps}
+        inputs["__evidence_inputs"] = [
+            {"step_id": dependency, "name": producers[dependency].get("name"),
+             "inputs": producers[dependency].get("inputs") or {},
+             **ctx.artifacts.get("step_results", {}).get(dependency, {})}
+            for dependency in step.get("data_dependencies", []) if dependency in producers
+        ]
     optional = bool(step.get("optional"))
     parallel_group = step.get("parallel_group") if isinstance(step.get("parallel_group"), str) else None
     task_ids = step_task_ids(step)

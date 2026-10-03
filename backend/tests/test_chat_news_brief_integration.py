@@ -7,8 +7,20 @@
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
+import pytest
+
 from backend.agents.sentiment_brief import build_light_snapshot
 from backend.graph.nodes.render_node import render_node
+
+
+@pytest.fixture(autouse=True)
+def _news_clock(monkeypatch):
+    monkeypatch.setattr("backend.research.news_event_quality.utc_now", lambda: datetime(2026, 6, 2, tzinfo=UTC))
+
+
+def _dated_article(title, url="https://www.reuters.com/technology/article", **fields):
+    return {"title": title, "url": url, "published_at": "2026-06-01T12:00:00Z", "source": "Reuters", **fields}
 
 
 # ──────────────────────────────────────────────────────────────
@@ -19,15 +31,15 @@ from backend.graph.nodes.render_node import render_node
 def test_build_light_snapshot_from_news_items():
     """从新闻列表构建轻量快照：ticker / heat / catalyst / price_transmission=todo。"""
     news_items = [
-        {"title": "Apple Q2 earnings beat expectations", "url": "https://x.com/a", "source": "Reuters"},
-        {"title": "Apple announces new product launch", "url": "https://x.com/b", "source": "CNBC"},
+        _dated_article("Apple Q2 earnings beat expectations", "https://www.reuters.com/technology/apple-earnings"),
+        _dated_article("Apple announces new product launch", "https://www.cnbc.com/apple-launch", source="CNBC"),
         {"title": "Random commentary", "url": "https://x.com/c", "source": "blog"},
     ]
     snap = build_light_snapshot("AAPL", news_items)
 
     assert snap["ticker"] == "AAPL"
-    # heat = 新闻数量
-    assert snap["heat"]["news_count"] == 3
+    # 无关、未知时间的评论不增加当前报道覆盖。
+    assert snap["heat"]["news_count"] == 2
     # 催化：earnings / launch 命中关键词
     assert snap["catalyst_events"]["count"] >= 2
     catalyst_titles = [e["title"] for e in snap["catalyst_events"]["events"]]
@@ -39,8 +51,8 @@ def test_build_light_snapshot_from_news_items():
 def test_build_light_snapshot_chinese_catalyst():
     """中文催化关键词识别（A 股新闻）。"""
     news_items = [
-        {"title": "某公司发布业绩预告，净利润超预期", "url": "", "source": "新浪财经"},
-        {"title": "控股股东宣布增持计划", "url": "", "source": "东方财富"},
+        _dated_article("贵州茅台发布业绩预告，净利润超预期", "https://www.cninfo.com.cn/new/disclosure/detail?id=1", source="巨潮资讯"),
+        _dated_article("茅台控股股东宣布增持计划", "https://www.cninfo.com.cn/new/disclosure/detail?id=2", source="巨潮资讯"),
         {"title": "今日天气晴朗", "url": "", "source": "blog"},
     ]
     snap = build_light_snapshot("600519.SS", news_items)
@@ -65,10 +77,10 @@ def test_build_light_snapshot_empty_news():
 def test_build_light_snapshot_sentiment_from_item_fields():
     """新闻条目自带 sentiment 字段时统计样本（与 NewsAgent 字段约定一致）。"""
     news_items = [
-        {"title": "A", "sentiment_score": 0.5},
-        {"title": "B", "sentiment_score": 0.4},
-        {"title": "C", "sentiment_score": -0.3},
-        {"title": "D", "sentiment_label": "positive"},
+        _dated_article("Apple article A", "https://www.reuters.com/a", sentiment_score=0.5),
+        _dated_article("Apple article B", "https://www.reuters.com/b", sentiment_score=0.4),
+        _dated_article("Apple article C", "https://www.reuters.com/c", sentiment_score=-0.3),
+        _dated_article("Apple article D", "https://www.reuters.com/d", sentiment_label="positive"),
     ]
     snap = build_light_snapshot("AAPL", news_items)
     bias = snap["sentiment_bias"]
@@ -79,7 +91,7 @@ def test_build_light_snapshot_sentiment_from_item_fields():
 
 def test_build_light_snapshot_catalyst_english_word():
     """英文 "catalyst" 关键词识别（实测 "WWDC Key Catalyst" 标题没被识别的小修）。"""
-    snap = build_light_snapshot("AAPL", [{"title": "WWDC Key Catalyst for AAPL", "url": ""}])
+    snap = build_light_snapshot("AAPL", [_dated_article("WWDC Key Catalyst for AAPL")])
     assert snap["catalyst_events"]["count"] == 1
     assert any("Catalyst" in e["title"] for e in snap["catalyst_events"]["events"])
 
@@ -87,7 +99,7 @@ def test_build_light_snapshot_catalyst_english_word():
 def test_build_light_snapshot_no_extra_api_calls():
     """轻量快照纯确定性：不依赖任何 tools / agent 实例。"""
     # 仅传 ticker + dict 列表即可完整构建，无任何外部依赖
-    snap = build_light_snapshot("NVDA", [{"title": "NVDA revenue guidance raised", "url": ""}])
+    snap = build_light_snapshot("NVDA", [_dated_article("NVDA revenue guidance raised")])
     assert snap["catalyst_events"]["count"] == 1  # revenue + guidance
 
 

@@ -28,17 +28,8 @@ def _extract_price(output: Any) -> dict[str, Any]:
         parsed = parsed[0]
     parsed_quote = parse_quote_payload(parsed)
     if parsed_quote:
-        parsed_quote["currency"] = "USD"
-        if isinstance(parsed, dict):
-            data = parsed.get("data") if isinstance(parsed.get("data"), dict) else parsed
-            parsed_quote["currency"] = data.get("currency") or data.get("financialCurrency") or "USD"
-            parsed_quote["as_of"] = data.get("as_of") or data.get("timestamp") or data.get("regularMarketTime")
+        parsed_quote.setdefault("currency", "USD")
         return parsed_quote
-    if isinstance(parsed, str):
-        parsed_quote = parse_quote_payload(parsed)
-        if parsed_quote:
-            parsed_quote["currency"] = "USD"
-            return parsed_quote
     if not isinstance(parsed, dict):
         return {}
 
@@ -64,13 +55,14 @@ def _extract_price(output: Any) -> dict[str, Any]:
         "change_percent": change_pct,
         "currency": currency,
         "as_of": as_of,
+        "source": data.get("source") or data.get("provider") or parsed.get("source") or parsed.get("provider"),
     }
 
 def _format_price_line(ticker: str, price: dict[str, Any]) -> str:
     if not price.get("price"):
-        return f"{ticker} 的实时价格这次没有拿到可用报价。可以稍后重试，或切到行情页确认最新成交价。"
+        return f"{ticker} 这次没有拿到可用报价。可以稍后重试，或切到行情页确认最新成交价。"
 
-    parts = [f"{ticker} 最新价格约为 {_format_number(price['price'])} {price.get('currency') or 'USD'}"]
+    parts = [f"{ticker} 最新可用报价约为 {_format_number(price['price'])} {price.get('currency') or 'USD'}"]
     change = price.get("change")
     change_pct = price.get("change_percent") if "change_percent" in price else price.get("change_pct")
     if change is not None or change_pct is not None:
@@ -87,7 +79,8 @@ def _format_price_line(ticker: str, price: dict[str, Any]) -> str:
     if price.get("as_of"):
         parts.append(f"。数据时间：{price['as_of']}")
     else:
-        parts.append("。")
+        parts.append("。数据时间：来源未提供")
+    parts.append(f"；行情来源：{price.get('source') or price.get('provider') or '来源未提供'}。")
     return "".join(parts)
 
 def _price_change_pct(price: dict[str, Any]) -> float | None:

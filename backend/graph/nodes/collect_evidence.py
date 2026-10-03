@@ -24,6 +24,15 @@ async def collect_evidence(state: GraphState) -> dict[str, Any]:
     plan_result = rule_based_planner(working)  # type: ignore[arg-type]
     working.update(plan_result)
 
+    if (working.get("trace", {}).get("planner") or {}).get("validated") is False:
+        blocked_trace = dict(working.get("trace") or {})
+        blocked_trace["collect_evidence"] = {"status": "blocked", "reason": "invalid_execution_plan"}
+        artifacts = dict(state.get("artifacts") or {})
+        artifacts.setdefault("errors", []).append({"stage": "planning", "error_type": "PlanValidationError",
+            "error": "执行计划未通过参数或依赖校验，未调用外部工具。", "retryable": False})
+        return {"policy": working.get("policy"), "plan_ir": working.get("plan_ir"),
+                "artifacts": artifacts, "trace": blocked_trace}
+
     planner_trace = dict(working.get("trace") or {})
     planner_trace["planner_runtime"] = {
         "mode": "deterministic_rules",

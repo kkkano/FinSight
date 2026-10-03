@@ -9,6 +9,9 @@ from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, ConflictC
 from backend.agents.chart_specs import build_fundamental_chart_specs
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
+from backend.tools.financial_facts import (
+    comparison_point, growth_rate, statement_dates, statement_frequency, statement_row,
+)
 
 
 # 方向枚举 → 中文文案（用户可见 claim 中文化，B 类固定模板）
@@ -33,10 +36,10 @@ class FundamentalAgent(BaseFinancialAgent):
     _METRIC_DEFINITIONS: List[Dict[str, Any]] = [
         {"key": "revenue", "label": "营收", "table": "income", "candidates": ["total revenue", "revenue"]},
         {"key": "net_income", "label": "净利润", "table": "income", "candidates": ["net income"]},
-        {"key": "operating_income", "label": "营业利润", "table": "income", "candidates": ["operating income", "ebit"]},
+        {"key": "operating_income", "label": "营业利润", "table": "income", "candidates": ["operating income"]},
         {"key": "operating_cash_flow", "label": "经营现金流", "table": "cashflow", "candidates": ["operating cash flow"]},
         {"key": "total_assets", "label": "总资产", "table": "balance", "candidates": ["total assets"]},
-        {"key": "total_liabilities", "label": "总负债", "table": "balance", "candidates": ["total liabilities"]},
+        {"key": "total_liabilities", "label": "总负债", "table": "balance", "candidates": ["total liabilities", "total liabilities net minority interest"]},
     ]
 
     @staticmethod
@@ -77,6 +80,8 @@ class FundamentalAgent(BaseFinancialAgent):
             if financials_func
             else {"error": "missing_financials_tool"}
         )
+        if isinstance(financials, dict) and financials.get("ticker") and str(financials["ticker"]).upper() != ticker.upper():
+            financials = {"error": "issuer_mismatch", "ticker": ticker}
         company_info = await asyncio.to_thread(company_func, ticker) if company_func else ""
         earnings_estimates = (
             await asyncio.to_thread(earnings_func, ticker)
@@ -166,6 +171,13 @@ class FundamentalAgent(BaseFinancialAgent):
         summary_parts.append(self._format_metric_sentence("净利润", net_income))
         summary_parts.append(self._format_metric_sentence("营业利润", operating_income))
         summary_parts.append(self._format_metric_sentence("经营现金流", operating_cash_flow))
+        missing_labels = [definition["label"] for definition in self._METRIC_DEFINITIONS if definition["table"] != "balance" and metric_map.get(definition["key"], {}).get("latest") is None]
+        if missing_labels:
+            summary_parts.append(f"[数据缺失] 当前报告期同口径的{'、'.join(missing_labels)}不可用，未使用其他财期或累计值补齐。")
+        if revenue.get("latest") is not None and revenue.get("yoy") is None:
+            summary_parts.append("[数据缺失] 未取得可对齐的上年同期营收，不能计算营收同比。")
+        if any(metric.get("latest") is not None and not metric.get("currency") for metric in metric_map.values()):
+            summary_parts.append("[数据缺失] 部分财务数值的报表币种未核验。")
 
         assets_value = self._safe_float(total_assets.get("latest"))
         liabilities_value = self._safe_float(total_liabilities.get("latest"))
@@ -211,11 +223,11 @@ class FundamentalAgent(BaseFinancialAgent):
         normalized: Dict[str, Any] = {}
         if isinstance(raw_data, dict):
             financials = raw_data.get("financials") or {}
-            source = "yfinance"
+            source = str(financials.get("source") or financials.get("provider") or "unknown")
             data_sources.append(source)
             # 构造 Yahoo Finance 财务页面 URL，供证据池可点击跳转
             _ticker = str(raw_data.get("ticker") or "").strip().upper()
-            _yf_financials_url = f"https://finance.yahoo.com/quote/{_ticker}/financials/" if _ticker else None
+            _yf_financials_url = f"https://finance.yahoo.com/quote/{_ticker}/financials/" if _ticker and source == "yfinance" else None
             fallback_used = bool(
                 isinstance(financials, dict)
                 and financials.get("error")
@@ -237,17 +249,28 @@ class FundamentalAgent(BaseFinancialAgent):
                     continue
                 evidence.append(
                     EvidenceItem(
-                        text=f"{definition['label']}: {self._format_value(latest_value)}",
+                        text=f"{definition['label']}: {self._format_value(latest_value, metric.get('currency'))}",
                         source=source,
-                        url=_yf_financials_url,  # Yahoo Finance 财务页面，供证据池点击跳转
+                        url=metric.get("source_url") or _yf_financials_url,
                         timestamp=str(metric.get("latest_period") or ""),
                         meta={
                             "metric_key": key,
+                            "metric": key,
+                            "subject": _ticker,
                             "period_type": metric.get("period_type"),
+                            "frequency": metric.get("period_type"),
+                            "period_end": metric.get("latest_period"),
                             "yoy": metric.get("yoy"),
                             "qoq": metric.get("qoq"),
                             "latest_period": metric.get("latest_period"),
                             "comparison_period": metric.get("comparison_period"),
+                            "currency": metric.get("currency"),
+                            "period_start": metric.get("period_start"),
+                            "unit": metric.get("unit"),
+                            "source": metric.get("source"),
+                            "filed": metric.get("filed"),
+                            "concept": metric.get("concept"),
+                            "accession": metric.get("accession"),
                         },
                     )
                 )
@@ -513,7 +536,8 @@ class FundamentalAgent(BaseFinancialAgent):
         cashflow = financials.get("cashflow") if isinstance(financials, dict) else None
 
         columns = self._extract_columns(income, balance, cashflow)
-        period_type = self._infer_period_type(columns)
+        primary_table = next((table for table in (income, balance, cashflow) if isinstance(table, dict) and statement_dates(table)), {})
+        period_type = statement_frequency(primary_table, columns)
         latest_period = columns[0] if columns else None
         comparison_period = columns[1] if len(columns) > 1 else None
 
@@ -526,38 +550,47 @@ class FundamentalAgent(BaseFinancialAgent):
         metrics: Dict[str, Dict[str, Any]] = {}
         for definition in self._METRIC_DEFINITIONS:
             table = table_map.get(definition["table"], {})
-            series = self._extract_metric_series(table, definition["candidates"], columns)
-            latest = series[0]["value"] if series else None
-            previous = series[1]["value"] if len(series) > 1 else None
-
-            yoy: Optional[float] = None
-            yoy_period: Optional[str] = None
-            qoq: Optional[float] = None
-            if period_type == "quarterly":
-                if len(series) > 1:
-                    qoq = self._growth_pct(latest, previous)
-                if len(series) > 4:
-                    yoy = self._growth_pct(latest, series[4]["value"])
-                    yoy_period = series[4]["period"]
-                elif len(series) > 1:
-                    yoy = self._growth_pct(latest, previous)
-                    yoy_period = series[1]["period"]
-            else:
-                if len(series) > 1:
-                    yoy = self._growth_pct(latest, previous)
-                    yoy_period = series[1]["period"]
+            table_columns = statement_dates(table)
+            metric_period_type = statement_frequency(table, table_columns)
+            series = self._extract_metric_series(table, definition["candidates"], table_columns)
+            is_balance = definition["table"] == "balance"
+            same_end = bool(table_columns and table_columns[0] == latest_period)
+            same_frequency = is_balance or metric_period_type == period_type
+            missing_reason = None
+            if not same_end:
+                missing_reason = "report_period_mismatch"
+            elif not same_frequency:
+                missing_reason = "statement_frequency_mismatch"
+            latest = series[0]["value"] if series and not missing_reason else None
+            previous_point = comparison_point(series, days=91, tolerance=20) if metric_period_type == "quarterly" else None
+            yoy_point = comparison_point(series, days=365, tolerance=15) if metric_period_type in {"quarterly", "annual", "instant"} else None
+            previous = previous_point.get("value") if previous_point else None
+            qoq = growth_rate(latest, previous) if not is_balance else None
+            yoy = growth_rate(latest, yoy_point.get("value")) if yoy_point else None
+            metadata = table.get("fact_metadata") or {}
+            raw_facts = (metadata.get(definition["key"]) or []) if isinstance(metadata, dict) else []
+            fact = next((item for item in raw_facts if isinstance(item, dict) and item.get("period_end") == latest_period), {})
 
             metrics[definition["key"]] = {
                 "label": definition["label"],
                 "latest": latest,
                 "previous": previous,
-                "latest_period": latest_period,
-                "comparison_period": comparison_period,
-                "period_type": period_type,
+                "latest_period": table_columns[0] if table_columns else None,
+                "comparison_period": previous_point.get("period") if previous_point else None,
+                "period_type": "instant" if is_balance else metric_period_type,
                 "qoq": qoq,
                 "yoy": yoy,
-                "yoy_period": yoy_period,
+                "yoy_period": yoy_point.get("period") if yoy_point else None,
                 "series": series[:8],
+                "currency": table.get("currency") or financials.get("currency"),
+                "unit": fact.get("unit") or table.get("currency") or financials.get("currency"),
+                "period_start": fact.get("period_start"),
+                "source": table.get("source") or financials.get("source"),
+                "source_url": fact.get("source_url"),
+                "filed": fact.get("filed"),
+                "concept": fact.get("concept"),
+                "accession": fact.get("accession"),
+                "missing_reason": missing_reason or ("metric_not_available" if latest is None else None),
             }
 
         return {
@@ -574,11 +607,7 @@ class FundamentalAgent(BaseFinancialAgent):
         for table in tables:
             if not isinstance(table, dict):
                 continue
-            cols = table.get("columns")
-            if not isinstance(cols, list) or not cols:
-                continue
-            normalized = [self._normalize_period_label(col) for col in cols]
-            normalized = [item for item in normalized if item]
+            normalized = statement_dates(table)
             if normalized:
                 return normalized
         return []
@@ -587,22 +616,8 @@ class FundamentalAgent(BaseFinancialAgent):
         if not isinstance(table, dict) or not columns:
             return []
 
-        index = table.get("index")
-        rows = table.get("data")
-        if not isinstance(index, list) or not isinstance(rows, list):
-            return []
-
-        row_idx: Optional[int] = None
-        for idx, row_name in enumerate(index):
-            row_name_lower = str(row_name).lower()
-            if any(candidate in row_name_lower for candidate in candidates):
-                row_idx = idx
-                break
-        if row_idx is None or row_idx >= len(rows):
-            return []
-
-        row = rows[row_idx] if isinstance(rows[row_idx], dict) else {}
-        if not isinstance(row, dict):
+        row = statement_row(table, candidates)
+        if row is None:
             return []
 
         series: List[Dict[str, Any]] = []
@@ -663,7 +678,7 @@ class FundamentalAgent(BaseFinancialAgent):
         latest = self._safe_float(metric.get("latest"))
         if latest is None:
             return ""
-        bits = [f"{label} {self._format_value(latest)}"]
+        bits = [f"{label} {self._format_value(latest, metric.get('currency'))}"]
         growth_bits: List[str] = []
         qoq = self._safe_float(metric.get("qoq"))
         yoy = self._safe_float(metric.get("yoy"))
@@ -715,14 +730,15 @@ class FundamentalAgent(BaseFinancialAgent):
 
         return safe_float(value)
 
-    def _format_value(self, value: float) -> str:
+    def _format_value(self, value: float, currency: str | None = None) -> str:
+        prefix = "$" if currency == "USD" else f"{currency} " if currency else ""
         if abs(value) >= 1e12:
-            return f"${value/1e12:.2f}T"
+            return f"{prefix}{value/1e12:.2f}T"
         if abs(value) >= 1e9:
-            return f"${value/1e9:.2f}B"
+            return f"{prefix}{value/1e9:.2f}B"
         if abs(value) >= 1e6:
-            return f"${value/1e6:.2f}M"
-        return f"${value:.2f}"
+            return f"{prefix}{value/1e6:.2f}M"
+        return f"{prefix}{value:.2f}"
 
     def _parse_company_info(self, text: str) -> Dict[str, str]:
         if not text:

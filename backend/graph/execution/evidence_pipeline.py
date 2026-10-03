@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from backend.config.settings import executor_settings
-from backend.graph.execution.evidence_tools import append_tool_evidence
+from backend.graph.execution.evidence_tools import append_tool_evidence, evidence_contract_metadata, evidence_is_global
 from backend.graph.request_task_contract import build_tool_diagnostic, output_is_error_like
 from backend.graph.state import GraphState
 
@@ -136,6 +136,10 @@ def normalize_execution_evidence(
                     "type": item.get("type") or "selection",
                     "id": item.get("id"),
                     "task_ids": _selection_task_ids(item),
+                    **({"usage": "raw", "meta": {
+                        "usage": "raw", "verification": "user_provided_selection",
+                        "event_quality": item.get("event_quality") or {},
+                    }} if item.get("type") == "news" else {}),
                 }
             )
 
@@ -246,11 +250,13 @@ def normalize_execution_evidence(
             source = item.get("source") or agent_name
             evidence_pool.append(
                 {
-                    "title": item.get("title") or f"{agent_name} evidence {i+1}",
+                    **item,
+                    "title": item.get("title") or (f"{agent_name} evidence" if evidence_is_global(item, agent_name) else f"{agent_name} evidence {i+1}"),
                     "url": url,
                     "snippet": str(snippet).strip()[:800],
+                    "text": item.get("text") or item.get("snippet") or item.get("summary"),
                     "source": source,
-                    "published_date": item.get("timestamp") or as_of,
+                    "published_date": item.get("timestamp") or (None if evidence_is_global(item, agent_name) else as_of),
                     "confidence": item.get("confidence", confidence_base if isinstance(confidence_base, (int, float)) else 0.6),
                     "type": "agent",
                     "id": item.get("id") or f"{agent_name}:{step_id}:{i+1}",
@@ -272,6 +278,11 @@ def normalize_execution_evidence(
                             if isinstance(evidence, dict):
                                 evidence["step_id"] = str(step_id)
                                 evidence["task_ids"] = _step_task_ids(step)
+                                inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+                                evidence.update(evidence_contract_metadata(
+                                    evidence, producer_name=str(agent_name), producer_kind="agent",
+                                    required_evidence=inputs.get("required_evidence"),
+                                ))
                 continue
             tool_name = step.get("name") or ""
             if not tool_name:
@@ -288,7 +299,11 @@ def normalize_execution_evidence(
                 )
                 continue
             before_count = len(evidence_pool)
-            append_tool_evidence(evidence_pool, str(tool_name), str(step_id), output)
+            inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+            append_tool_evidence(
+                evidence_pool, str(tool_name), str(step_id), output,
+                required_evidence=step.get("evidence_kinds") or inputs.get("required_evidence"),
+            )
             for evidence in evidence_pool[before_count:]:
                 if isinstance(evidence, dict):
                     evidence["step_id"] = str(step_id)
@@ -306,6 +321,26 @@ def normalize_execution_evidence(
     def _dedupe_key(item: dict[str, Any]) -> str:
         url = str(item.get("url") or "").strip()
         if url:
+            meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
+            row_payload = item.get("structured_data") if isinstance(item.get("structured_data"), dict) else {}
+            subject = item.get("subject") or meta.get("subject") or meta.get("ticker") or row_payload.get("ticker")
+            event_quality = item.get("event_quality") or meta.get("event_quality")
+            if isinstance(event_quality, dict):
+                published = item.get("published_at") or event_quality.get("published_at") or item.get("published_date") or item.get("timestamp")
+                return "news:" + json.dumps([subject, url, event_quality.get("event_id"), published], ensure_ascii=False, default=str)
+            if item.get("kind") == "news_context" or item.get("type") == "news":
+                published = item.get("published_at") or item.get("published_date") or item.get("timestamp")
+                if published:
+                    return "news:" + json.dumps([subject, url, published], ensure_ascii=False, default=str)
+            period_start = item.get("period_start") or meta.get("period_start") or meta.get("start")
+            period_end = item.get("period_end") or meta.get("period_end") or meta.get("end") or meta.get("latest_period")
+            if period_start or period_end:
+                return "period:" + json.dumps([
+                    url, subject,
+                    item.get("metric") or meta.get("metric") or meta.get("metric_key"),
+                    period_start, period_end, item.get("frequency") or meta.get("frequency"),
+                    item.get("unit") or meta.get("unit"),
+                ], ensure_ascii=False, default=str)
             return f"url:{url}"
         explicit_id = str(item.get("id") or item.get("source_id") or "").strip()
         if explicit_id:

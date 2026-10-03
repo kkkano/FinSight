@@ -71,6 +71,27 @@ def test_assign_evidence_source_ids_do_not_depend_on_evidence_order() -> None:
     assert reordered_ids == original_ids
 
 
+@pytest.mark.parametrize("first_meta,second_meta", [
+    ({"subject": "0700.HK"}, {"subject": "TCEHY"}),
+    ({"event_quality": {"event_id": "launch"}}, {"event_quality": {"event_id": "recall"}}),
+    ({"event_quality": {"published_at": "2026-10-01"}}, {"event_quality": {"published_at": "2026-10-02"}}),
+    ({"period_start": "2026-01-01", "period_end": "2026-03-31"}, {"period_start": "2026-04-01", "period_end": "2026-06-30"}),
+    ({"frequency": "quarterly"}, {"frequency": "annual"}),
+    ({"unit": "USD"}, {"unit": "shares"}),
+])
+def test_shared_source_ids_distinguish_subject_event_and_period(first_meta, second_meta) -> None:
+    def evidence(meta):
+        return EvidenceItem(text="同一篇报道或相同展示文本。", source="Reuters",
+                            url="https://example.invalid/shared-source", timestamp="2026-10-02",
+                            meta=meta)
+
+    items = [evidence(first_meta), evidence(second_meta)]
+    source_ids = assign_evidence_source_ids(items, agent_name="news_agent")
+    assert len(set(source_ids)) == 2
+    assert source_ids == assign_evidence_source_ids(items, agent_name="news_agent")
+    assert source_ids[0] == assign_evidence_source_ids([evidence(first_meta)], agent_name="news_agent")[0]
+
+
 def test_evaluate_agent_quality_scores_supported_claims() -> None:
     output = _output_with_evidence()
     source_ids = assign_evidence_source_ids(output.evidence, agent_name=output.agent_name)

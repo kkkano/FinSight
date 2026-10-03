@@ -15,6 +15,7 @@ from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, project_v2_tasks_to_legacy
+from backend.graph.evidence_dependencies import input_tickers
 
 
 def _step_task_ids(step: dict) -> list[str]:
@@ -52,55 +53,32 @@ def _contiguous_groups(steps: list[dict]) -> list[list[dict]]:
 
 
 def finalize_step_dependencies(steps: list[dict]) -> list[dict]:
-    """补齐显式 DAG：同 task 串联，不同 task 的根阶段保持并发。"""
-    valid_ids = {str(step.get("id") or "").strip() for step in steps}
-    valid_ids.discard("")
-    last_ids_by_task: dict[str, list[str]] = {}
-    latest_unscoped_group: list[str] = []
-    previous_group_ids: list[str] = []
+    """依赖指向实际输入证据，与 steps 的展示顺序及分组无关。"""
+    from backend.graph.evidence_dependencies import AGENT_INPUT_EVIDENCE, step_evidence_kinds, step_subjects
 
-    for group in _contiguous_groups(steps):
-        group_ids = [str(step.get("id") or "").strip() for step in group]
-        group_ids = [step_id for step_id in group_ids if step_id]
-        group_tasks = {task_id for step in group for task_id in _step_task_ids(step)}
-        has_unscoped_step = any(not _step_task_ids(step) for step in group)
-
-        for step in group:
-            step_id = str(step.get("id") or "").strip()
-            raw_dependencies = step.get("depends_on")
-            explicit_values: Iterable = raw_dependencies if isinstance(raw_dependencies, list) else []
-            explicit: list[str] = []
-            for value in explicit_values:
-                dependency = str(value or "").strip()
-                if dependency and dependency != step_id and dependency in valid_ids and dependency not in explicit:
-                    explicit.append(dependency)
-            if isinstance(raw_dependencies, list):
-                step["depends_on"] = explicit
+    tools = [step for step in steps if step.get("kind") == "tool"]
+    for step in steps:
+        step.setdefault("depends_on", [])
+        if step.get("kind") != "agent":
+            step.setdefault("data_dependencies", [])
+            continue
+        wanted = AGENT_INPUT_EVIDENCE.get(str(step.get("name")), set())
+        subjects = step_subjects(step)
+        inputs = step.setdefault("inputs", {})
+        inputs["required_evidence"] = sorted(wanted)
+        dependencies = []
+        for producer in tools:
+            if not wanted.intersection(step_evidence_kinds(producer)):
                 continue
-
-            task_ids = _step_task_ids(step)
-            inferred: list[str] = []
-            for task_id in task_ids:
-                for dependency in last_ids_by_task.get(task_id, latest_unscoped_group):
-                    if dependency != step_id and dependency not in inferred:
-                        inferred.append(dependency)
-            if not task_ids:
-                inferred = list(previous_group_ids)
-            step["depends_on"] = inferred
-
-        for task_id in group_tasks:
-            last_ids_by_task[task_id] = [
-                str(step.get("id") or "").strip()
-                for step in group
-                if task_id in _step_task_ids(step) and str(step.get("id") or "").strip()
-            ]
-        if has_unscoped_step:
-            latest_unscoped_group = list(group_ids)
-            for task_id in last_ids_by_task:
-                last_ids_by_task[task_id] = list(group_ids)
-        previous_group_ids = list(group_ids)
+            producer_subjects = step_subjects(producer)
+            if subjects and producer_subjects and not subjects.intersection(producer_subjects):
+                continue
+            if subjects and not producer_subjects and "macro_context" not in wanted.intersection(step_evidence_kinds(producer)):
+                continue
+            dependencies.append(str(producer["id"]))
+        # 数据依赖等待终态；替代来源失败不会阻止 Agent 使用其余有效证据。
+        step["data_dependencies"] = sorted(set(dependencies))
     return steps
-
 
 def _append_tool_step(ctx, 
     name: str,
@@ -110,6 +88,8 @@ def _append_tool_step(ctx,
     optional: bool = True,
     parallel_group: str | None = None,
     task_ids: list[str] | None = None,
+    subject_tickers: list[str] | None = None,
+    evidence_kind: str | None = None,
 ) -> None:
     if name not in ctx.allowed_tools:
         return
@@ -117,13 +97,14 @@ def _append_tool_step(ctx,
         inputs_key = json.dumps(inputs, ensure_ascii=False, sort_keys=True, default=str)
     except Exception:
         inputs_key = str(sorted(inputs.items())) if isinstance(inputs, dict) else str(inputs)
-    group_key = str(parallel_group or "")
-    key = (name, inputs_key, group_key)
+    key = (name, inputs_key)
     normalized_task_ids = [str(task_id).strip() for task_id in (task_ids or []) if str(task_id).strip()]
     if not normalized_task_ids and isinstance(parallel_group, str) and parallel_group in ctx.ready_task_id_set:
         normalized_task_ids = [parallel_group]
     existing = ctx.step_index.get(key)
     if existing is not None:
+        if evidence_kind and evidence_kind not in existing.setdefault("evidence_kinds", []):
+            existing["evidence_kinds"].append(evidence_kind)
         if optional is False:
             existing["optional"] = False
         if normalized_task_ids:
@@ -146,6 +127,8 @@ def _append_tool_step(ctx,
         "kind": "tool",
         "name": name,
         "inputs": inputs,
+        "subject_tickers": sorted(set(subject_tickers or input_tickers(inputs))),
+        "evidence_kinds": [evidence_kind] if evidence_kind else [],
         "why": why,
         "optional": optional,
     }
@@ -167,6 +150,8 @@ def _append_agent_step(ctx,
     optional: bool = True,
     parallel_group: str | None = None,
     task_ids: list[str] | None = None,
+    subject_tickers: list[str] | None = None,
+    evidence_kind: str | None = None,
 ) -> None:
     if name not in ctx.allowed_agents:
         return
@@ -174,13 +159,14 @@ def _append_agent_step(ctx,
         inputs_key = json.dumps(inputs, ensure_ascii=False, sort_keys=True, default=str)
     except Exception:
         inputs_key = str(sorted(inputs.items())) if isinstance(inputs, dict) else str(inputs)
-    group_key = str(parallel_group or "")
-    key = (f"agent:{name}", inputs_key, group_key)
+    key = (f"agent:{name}", inputs_key)
     normalized_task_ids = [str(task_id).strip() for task_id in (task_ids or []) if str(task_id).strip()]
     if not normalized_task_ids and isinstance(parallel_group, str) and parallel_group in ctx.ready_task_id_set:
         normalized_task_ids = [parallel_group]
     existing = ctx.step_index.get(key)
     if existing is not None:
+        if evidence_kind and evidence_kind not in existing.setdefault("evidence_kinds", []):
+            existing["evidence_kinds"].append(evidence_kind)
         if optional is False:
             existing["optional"] = False
         if normalized_task_ids:
@@ -231,6 +217,8 @@ def _append_agent_step(ctx,
         "kind": "agent",
         "name": name,
         "inputs": enriched_inputs,
+        "subject_tickers": sorted(set(subject_tickers or input_tickers(inputs))),
+        "evidence_kinds": [evidence_kind] if evidence_kind else [],
         "why": why,
         "optional": optional,
     }

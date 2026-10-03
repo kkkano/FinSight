@@ -92,7 +92,8 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
         "yield_spread": None,
         "status": "success",
         "source": "FRED",
-        "as_of": datetime.now().isoformat()
+        "as_of": datetime.now().isoformat(),
+        "indicator_metadata": {},
     }
 
     # FRED API 配置
@@ -122,6 +123,8 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
                 "sort_order": "desc",
                 "limit": 1
             }
+            if key == "cpi":
+                params["units"] = "pc1"
 
             if api_key:
                 response = _http_get(base_url, params=params, timeout=10)
@@ -132,6 +135,12 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
                         value = observations[0].get("value", ".")
                         if value != ".":
                             result[key] = float(value)
+                            result["indicator_metadata"][key] = {
+                                "series_id": sid, "source": "FRED", "period_end": observations[0].get("date"),
+                                "unit": "percent" if key != "custom" else "unknown",
+                                "definition": "inflation_yoy" if key == "cpi" else key,
+                                "transformation": "pc1" if key == "cpi" else "lin",
+                            }
             else:
                 # 无 API key：诚实返回不可用，绝不编造数值（P0-1）
                 result["status"] = "data_unavailable"
@@ -144,7 +153,7 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
 
     # 格式化输出
     if result.get("cpi"):
-        result["cpi_formatted"] = f"{result['cpi']:.1f}"
+        result["cpi_formatted"] = f"{result['cpi']:.1f}% (同比)"
     if result.get("fed_rate"):
         result["fed_rate_formatted"] = f"{result['fed_rate']:.2f}%"
     if result.get("unemployment"):

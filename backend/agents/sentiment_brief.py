@@ -11,6 +11,7 @@
 - 未评估可靠度 -> 不显示假分数
 """
 from typing import Any, Dict, List, Optional
+from backend.research.news_event_quality import news_quality_label, prepare_news_items
 
 _BIAS_LABELS = {"bullish": "偏多", "bearish": "偏空", "neutral": "中性"}
 _HEAT_LABELS = {"elevated": "高热", "active": "活跃", "normal": "一般", "thin": "清淡"}
@@ -36,10 +37,10 @@ def _render_title_line(snapshot: Dict[str, Any]) -> str:
     parts = [sentiment_part]
     heat_label = _HEAT_LABELS.get(str(heat.get("level")), "")
     if heat_label:
-        parts.append(f"热度：{heat_label}")
+        parts.append(f"报道覆盖：{heat_label}")
     catalyst_count = int(catalysts.get("count") or 0)
     if catalyst_count > 0:
-        parts.append(f"{catalyst_count} 条催化")
+        parts.append(f"{catalyst_count} 条候选催化/日程")
     return " · ".join(parts)
 
 
@@ -58,10 +59,10 @@ def _render_catalysts(snapshot: Dict[str, Any], has_news: bool) -> Optional[str]
         if not title:
             continue
         date = str(event.get("date") or "").strip()
-        impact = event.get("impact_score")
-        impact_text = f" (影响:{'高' if impact and impact >= 0.8 else '中'})" if isinstance(impact, (int, float)) else ""
-        date_text = f" — {date[:10]}" if date else ""
-        lines.append(f"- {title}{impact_text}{date_text}")
+        is_schedule = event.get("kind") == "event_calendar" or event.get("status") == "scheduled"
+        date_text = f" — {'计划日' if is_schedule else '报道日'} {date[:10]}" if date else ""
+        qualifier = "（供应商日程，可能变更）" if is_schedule else "（报道线索，尚未核验原文）"
+        lines.append(f"- {title}{date_text}{qualifier}")
     return "\n".join(lines) if len(lines) > 2 else None
 
 
@@ -108,14 +109,16 @@ def _render_news_list(news_items: List[Dict[str, Any]]) -> Optional[str]:
             continue
         url = str(item.get("url") or "").strip()
         source = str(item.get("source") or "").strip()
-        date = str(item.get("datetime") or item.get("published_at") or "").strip()[:10]
+        date = str(item.get("datetime") or item.get("published_at") or "发布时间未知").strip()[:10]
         title_part = f"[{headline}]({url})" if url else headline
         meta_parts = [p for p in (source, date) if p]
         meta_text = f" — {' · '.join(meta_parts)}" if meta_parts else ""
         # spec 防线5：低置信（搜索硬解析等）新闻标注 ⚠️，提醒读者甄别
         confidence = item.get("confidence")
         low_conf_mark = " ⚠️" if isinstance(confidence, (int, float)) and confidence < _LOW_CONFIDENCE_THRESHOLD else ""
-        lines.append(f"{idx}. {title_part}{meta_text}{low_conf_mark}")
+        quality_label = news_quality_label(item)
+        quality_text = f"（{quality_label}）" if quality_label else ""
+        lines.append(f"{idx}. {title_part}{meta_text}{quality_text}{low_conf_mark}")
     return "\n".join(lines) if len(lines) > 2 else None
 
 
@@ -134,6 +137,7 @@ def render_stock_brief(
         extra_risks: 额外风险（如来源可靠度警告）
     """
     ticker = str(snapshot.get("ticker") or "").upper()
+    news_items = prepare_news_items(news_items or [], ticker=ticker)
     has_news = bool(news_items)
 
     sections: List[Optional[str]] = [
@@ -173,6 +177,7 @@ def render_market_brief(
         opinion: LLM 核心观点；None 时跳过
     """
     sections: List[Optional[str]] = ["## 市场舆情简报"]
+    news_items = prepare_news_items(news_items or [])
 
     valid_themes = [t for t in (themes or []) if isinstance(t, dict) and t.get("name")]
     title_parts = [f"{len(news_items)} 条新闻"]
@@ -370,6 +375,8 @@ def _light_catalyst_events(news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     for item in news_items:
         if not isinstance(item, dict):
             continue
+        if not (item.get("event_quality") or {}).get("usable_as_catalyst"):
+            continue
         title = _light_item_title(item)
         if not title:
             continue
@@ -386,6 +393,9 @@ def _light_catalyst_events(news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
                 or item.get("published")
                 or item.get("date"),
                 "source": item.get("source") or "news",
+                "event_id": item["event_quality"]["event_id"],
+                "verification": "headline_only",
+                "occurred_at": None,
             }
         )
     return {"count": len(events), "events": events[:8]}
@@ -408,11 +418,14 @@ def build_light_snapshot(ticker: str, news_items: List[Dict[str, Any]]) -> Dict[
     Returns:
         与 render_stock_brief 期望的 snapshot 结构兼容的 dict
     """
-    safe_items = [item for item in (news_items or []) if isinstance(item, dict)]
+    safe_items = prepare_news_items(news_items or [], ticker=ticker)
+    recent_items = [item for item in safe_items if (item.get("event_quality") or {}).get("freshness") == "fresh"
+                    and (item.get("event_quality") or {}).get("subject_match") in {"headline", "market"}
+                    and (item.get("event_quality") or {}).get("content_kind") not in {"discovery", "rumor"}]
     return {
         "ticker": str(ticker or "").strip().upper(),
-        "sentiment_bias": _light_sentiment_bias(safe_items),
-        "heat": _light_heat(len(safe_items)),
+        "sentiment_bias": _light_sentiment_bias(recent_items),
+        "heat": {**_light_heat(len(recent_items)), "basis": "deduplicated_recent_reports", "independence": "unverified"},
         "catalyst_events": _light_catalyst_events(safe_items),
         "price_transmission": {
             "status": "todo",

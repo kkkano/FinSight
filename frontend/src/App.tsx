@@ -10,7 +10,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
 import { SharedReportPage } from './pages/SharedReportPage';
 import { TrackRecordPage } from './pages/TrackRecordPage';
-import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
+import { buildAnonymousSessionId, useStore } from './store/useStore';
 import { useDashboardStore } from './store/dashboardStore';
 import { resolveProtectedRouteAccess } from './auth/access';
 
@@ -194,6 +194,7 @@ function App() {
     }
 
     let isMounted = true;
+    let authEventVersion = 0;
     const applySession = (session: { user?: { id?: string; email?: string | null } } | null | undefined) => {
       if (!isMounted) return;
 
@@ -205,7 +206,6 @@ function App() {
         markWelcomeGatePassed();
         setAuthIdentity({ userId, email });
         setEntryMode('authenticated');
-        setSessionId(buildUserSessionId(userId));
         return;
       }
 
@@ -220,13 +220,14 @@ function App() {
     client.auth
       .getSession()
       .then(({ data }) => {
-        applySession(data.session as { user?: { id?: string; email?: string | null } } | null);
+        if (authEventVersion === 0) applySession(data.session as { user?: { id?: string; email?: string | null } } | null);
       })
       .catch(() => {
-        applySession(null);
+        if (authEventVersion === 0) applySession(null);
       });
 
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+      authEventVersion += 1;
       applySession(session as { user?: { id?: string; email?: string | null } } | null);
     });
 

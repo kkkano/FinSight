@@ -11,7 +11,15 @@ class LLMCompletionError(ValueError):
         super().__init__(code)
 
 
+def raw_completion(response: Any) -> Any:
+    """LangChain include_raw 信封不应丢失实际响应、结束原因或用量。"""
+    if isinstance(response, dict) and "raw" in response:
+        return response["raw"]
+    return response
+
+
 def completion_metadata(response: Any) -> dict[str, Any]:
+    response = raw_completion(response)
     metadata = getattr(response, "response_metadata", None) or {}
     choices = getattr(response, "choices", None) or []
     choice = choices[0] if choices else None
@@ -32,6 +40,7 @@ def completion_metadata(response: Any) -> dict[str, Any]:
 
 
 def final_completion_text(response: Any) -> str:
+    response = raw_completion(response)
     finish = completion_metadata(response)["finish_reason"].lower()
     if finish in {"length", "max_tokens", "max_output_tokens"}:
         raise LLMCompletionError("llm_output_truncated")

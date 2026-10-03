@@ -2,12 +2,16 @@
 
 ## 当前架构
 
+- `backend/graph/request_compiler.py`：任务/主体/维度合同唯一出口，下游不重新解析用户意图。
 - `backend/graph/planning/`：请求理解后的计划生成、依赖与策略约束。
 - `backend/graph/policy/`：执行前的能力、证据和安全边界。
 - `backend/graph/execution/`：计划执行、工具证据收集与执行观测。
 - `backend/graph/synthesis/`、`backend/graph/renderers/`：结果合成和不同回答形态的渲染。
 - `backend/agents/`：专项研究能力；公共质量合同应集中复用，避免各 Agent 自建协议。
+- `backend/research/news_event_quality.py`：新闻时效、主体、出处和报道/线索合同；网关、执行、合成和前端必须保留其语义。
+- `backend/services/research_run_store.py`：服务器权威消息、运行终态与幂等恢复；保存成功后才交付 `done`，旧快照不能覆盖最终回答。
 - `backend/rag/`：memory / working set / knowledge base 的摄取、检索与观测。
+- `backend/rag/worker.py`：私网重型推理进程；API 不加载本地模型，资源不足时明确词法降级。
 - `frontend/src/`：用户交互、状态和诊断界面；后端契约变化必须同步类型与测试。
 
 ## 修改规则

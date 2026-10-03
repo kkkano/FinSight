@@ -15,6 +15,7 @@ from backend.graph.synthesis.research_synthesis import (
     synthesize_report_draft,
     synthesize_task_results,
     validate_claims,
+    evaluate_synthesis_quality,
 )
 from backend.graph.synthesis.task_outcomes import (
     TaskDescriptor,
@@ -25,6 +26,27 @@ from backend.services.llm_retry import LLMCallContext
 
 
 ChatTaskContract = tuple[Any, Any, Any, Any, list[dict[str, Any]], dict[str, Any]]
+
+
+def _requested_dimensions_by_task(state: GraphState, results) -> dict[str, list[str]]:
+    dimensions = {}
+    frames = state.get("request_frames") if isinstance(state.get("request_frames"), list) else []
+    frame = state.get("request_frame")
+    if isinstance(frame, dict) and frame not in frames:
+        frames = [*frames, frame]
+    for result in results:
+        bound = next((frame for frame in frames if isinstance(frame, dict) and str(frame.get("frame_id") or frame.get("id") or "") == result.request_frame_id), None)
+        contract = bound.get("intent_contract") if isinstance(bound, dict) and isinstance(bound.get("intent_contract"), dict) else state.get("intent_contract") if len(results) == 1 else {}
+        contract = contract if isinstance(contract, dict) else {}
+        render = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else bound.get("render_contract") if isinstance(bound, dict) and isinstance(bound.get("render_contract"), dict) else {}
+        dimensions[result.task_id] = stable_unique([str(value) for value in render.get("dimensions", []) if isinstance(value, str) and value.strip()])
+    return dimensions
+
+
+def _attach_requested_dimensions(state: GraphState, results: list[TaskSynthesisResult]) -> None:
+    dimensions = _requested_dimensions_by_task(state, results)
+    for result in results:
+        result.requested_dimensions = dimensions.get(result.task_id, [])
 
 
 def prepare_chat_task_contract(
@@ -51,7 +73,7 @@ def prepare_chat_task_contract(
     agent_outputs = {
         str(step_id): bucket["output"]
         for step_id, bucket in step_results.items()
-        if isinstance(bucket, dict) and isinstance(bucket.get("output"), dict)
+        if isinstance(bucket, dict) and bucket.get("output") is not None
     }
     descriptor_build = build_task_descriptors(
         understanding_tasks=ready,
@@ -170,7 +192,7 @@ async def synthesize_structured_report(
     agent_outputs = {
         str(step_id): bucket["output"]
         for step_id, bucket in step_results.items()
-        if isinstance(bucket, dict) and isinstance(bucket.get("output"), dict)
+        if isinstance(bucket, dict) and bucket.get("output") is not None
     }
     descriptor_build = build_task_descriptors(
         understanding_tasks=[item for item in (ready or []) if isinstance(item, dict)],
@@ -229,18 +251,20 @@ async def synthesize_structured_report(
         evidence_normalization=evidence_normalization,
     )
     task_synthesis = await synthesize_task_results(
+        requested_dimensions_by_task=_requested_dimensions_by_task(state, outcome_build.outcomes),
         task_outcomes=outcome_build.outcomes,
         findings=findings,
         claim_validation=claim_validation,
         evidence_normalization=evidence_normalization,
         llm_call_context_factory=(
             lambda task: LLMCallContext.create(
-                stage="synthesize", agent=f"task_synthesis:{task.task_id}", layer="synthesis",
+                stage="report_task_synthesize", agent=f"task_synthesis:{task.task_id}", layer="synthesis",
             )
-            if structured_synthesis_mode == "on" and env_mode == "llm"
+            if structured_synthesis_mode == "on" and env_mode in {"llm", "narrative"}
             else None
         ),
     )
+    _attach_requested_dimensions(state, task_synthesis)
     report_draft = await synthesize_report_draft(
         task_results=task_synthesis,
         claim_validation=claim_validation,
@@ -249,7 +273,7 @@ async def synthesize_structured_report(
             lambda: LLMCallContext.create(
                 stage="report_synthesize", agent="research_report", layer="synthesis",
             )
-            if structured_synthesis_mode == "on" and env_mode == "llm"
+            if structured_synthesis_mode == "on" and env_mode in {"llm", "narrative"}
             else None
         ),
     )
@@ -264,6 +288,7 @@ async def synthesize_structured_report(
             if reason not in structural_reasons:
                 structural_reasons.append(reason)
     structured_artifacts = {
+        "research_result": report_draft.model_dump(),
         "research_synthesis_draft": report_draft.model_dump(),
         "research_requested_task_ids": descriptor_build.requested_task_ids,
         "research_structural_block_reasons": structural_reasons,
@@ -273,7 +298,8 @@ async def synthesize_structured_report(
     artifacts.update(structured_artifacts)
     trace.update({
         "synthesize_runtime": build_runtime(
-            mode="research_structured", fallback=report_draft.fallback_used,
+            mode="research_structured", fallback=report_draft.fallback_used or any(task.fallback_used for task in task_synthesis),
+            reason=next(iter(report_draft.error_codes + [code for task in task_synthesis if task.fallback_used for code in task.error_codes if code.startswith(("llm_", "task_synthesis_", "explanation_"))]), None),
         ),
         "research_synthesis": {
             "mode": structured_synthesis_mode,
@@ -281,14 +307,7 @@ async def synthesize_structured_report(
             "structural_reasons": structural_reasons,
         },
     })
-    if structured_synthesis_mode == "on":
-        return state, {"artifacts": artifacts, "trace": trace}
-
-    artifacts["research_synthesis_shadow"] = structured_artifacts
-    for key in structured_artifacts:
-        artifacts.pop(key, None)
-    next_state: GraphState = {**state, "artifacts": artifacts, "trace": trace}
-    return next_state, None
+    return state, {"artifacts": artifacts, "trace": trace}
 
 
 async def prepare_opinion_synthesis(
@@ -298,17 +317,7 @@ async def prepare_opinion_synthesis(
     structured_synthesis_mode: str,
     env_mode: str,
 ) -> GraphState:
-    raw_ready = state.get("tasks") if isinstance(state.get("tasks"), list) else []
-    has_opinion_task = any(
-        str(
-            (task.get("operation") or {}).get("name")
-            if isinstance(task.get("operation"), dict)
-            else task.get("operation") or ""
-        ).strip() == "investment_opinion"
-        for task in raw_ready
-        if isinstance(task, dict)
-    )
-    if not has_opinion_task or chat_task_contract is None:
+    if chat_task_contract is None:
         return state
 
     artifacts = dict(state.get("artifacts") or {})
@@ -327,9 +336,15 @@ async def prepare_opinion_synthesis(
         claim_validation=claim_validation,
         evidence_normalization=evidence_normalization,
     )
-    opinion_outcomes = [
-        item for item in outcome_build.outcomes if item.operation == "investment_opinion"
-    ]
+    research_outcomes = outcome_build.outcomes
+    if not research_outcomes:
+        artifacts.update({
+            "research_result_quality": {"state": "block", "reasons": descriptor_build.quality_block_reasons or ["missing_task_contract"]},
+            "quality_blocked": True, "publishable": False,
+            "error_code": "missing_task_contract",
+            "draft_markdown": "[数据缺失] 本轮没有取得可用的研究结果，现有上下文已保留。\n",
+        })
+        return {**state, "artifacts": artifacts}
     quality_blocked = bool(
         descriptor_build.quality_block_reasons
         or evidence_normalization.quality_block_reasons
@@ -360,26 +375,51 @@ async def prepare_opinion_synthesis(
                 limitations=[],
                 fallback_used=False,
                 error_codes=[*item.error_codes, "synthesis_quality_blocked"],
+                fact_ids=[evidence.source_id for evidence in evidence_normalization.evidence_by_task.get(item.task_id, []) if evidence.usage == "fact"],
+                missing_evidence=item.missing_evidence, subject=item.subject_label, operation=item.operation,
             )
-            for item in opinion_outcomes
+            for item in research_outcomes
         ]
     else:
         task_synthesis = await synthesize_task_results(
-            task_outcomes=opinion_outcomes,
+            requested_dimensions_by_task=_requested_dimensions_by_task(state, research_outcomes),
+            task_outcomes=research_outcomes,
             findings=findings,
             claim_validation=claim_validation,
             evidence_normalization=evidence_normalization,
             llm_call_context_factory=(
                 lambda task: LLMCallContext.create(
-                    stage="synthesize", agent=f"opinion_synthesis:{task.task_id}", layer="synthesis",
+                    stage="synthesize", agent=f"task_synthesis:{task.task_id}", layer="synthesis",
                 )
-                if structured_synthesis_mode == "on" and env_mode == "llm"
+                if structured_synthesis_mode == "on" and env_mode == "llm" and (state.get("trace") or {}).get("analysis", {}).get("mode") != "deterministic"
                 else None
             ),
         )
     results_by_task = {item.task_id: item for item in task_synthesis}
+    _attach_requested_dimensions(state, task_synthesis)
+    research_result = await synthesize_report_draft(
+        task_results=task_synthesis,
+        claim_validation=claim_validation,
+        evidence_normalization=evidence_normalization,
+        llm_call_context_factory=lambda: None,
+    )
+    structural_reasons = stable_unique([
+        *descriptor_build.quality_block_reasons, *evidence_normalization.quality_block_reasons,
+        *claim_validation.quality_block_reasons, *outcome_build.quality_block_reasons,
+    ])
+    gate = evaluate_synthesis_quality(
+        draft=research_result, requested_task_ids=descriptor_build.requested_task_ids,
+        evidence_index=evidence_normalization.evidence_index,
+        structural_block_reasons=structural_reasons, require_claims=False,
+    )
+    artifacts["research_result"] = research_result.model_dump()
+    artifacts["research_result_quality"] = gate.model_dump()
+    artifacts["research_requested_task_ids"] = descriptor_build.requested_task_ids
+    artifacts["research_structural_block_reasons"] = structural_reasons
     readiness_by_task = {}
-    for outcome in opinion_outcomes:
+    for outcome in research_outcomes:
+        if outcome.operation != "investment_opinion":
+            continue
         result = results_by_task[outcome.task_id]
         readiness = build_opinion_readiness(
             task_outcome=outcome,

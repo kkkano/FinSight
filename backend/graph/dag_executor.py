@@ -104,15 +104,14 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
     deps: dict[str, set[str]] = {
         sid: set(map(str, s.get("depends_on") or [])) for sid, s in by_id.items()
     }
-    if not any(deps.values()):
+    data_deps = {sid: set(map(str, step.get("data_dependencies") or [])) for sid, step in by_id.items()}
+    if not any("depends_on" in step or "data_dependencies" in step for step in steps):
         deps = _implicit_deps_from_groups(list(by_id.values()))
-    # 未知依赖 id 视为已满足，避免 plan 笔误造成死锁（记 debug 留痕）
     known = set(by_id)
     for sid, ups in deps.items():
-        unknown = ups - known
+        unknown = (ups | data_deps[sid]) - known
         if unknown:
-            logger.debug("[DagExecutor] step %s has unknown depends_on ids: %s", sid, sorted(unknown))
-            deps[sid] = ups & known
+            raise ValueError(f"unknown_plan_dependency:{sid}")
 
     dependents: dict[str, set[str]] = defaultdict(set)
     for sid, ups in deps.items():
@@ -129,6 +128,7 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
             sid
             for sid in by_id
             if sid not in done and sid not in failed and sid not in in_flight and deps[sid] <= done
+            and data_deps[sid] <= (done | failed)
         ]
 
     async def _mark_skipped_closure(root: str) -> None:

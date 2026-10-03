@@ -20,6 +20,7 @@ import hashlib
 import logging
 import os
 import re
+import math
 import threading
 from dataclasses import dataclass, field
 from math import sqrt
@@ -39,6 +40,8 @@ _HASH_DIM_DEFAULT = 96
 
 def _is_production_env() -> bool:
     values = [
+        os.getenv("FINSIGHT_RUNTIME_PROFILE", ""),
+        os.getenv("APP_MODE", ""),
         os.getenv("APP_ENV", ""),
         os.getenv("ENV", ""),
         os.getenv("NODE_ENV", ""),
@@ -86,6 +89,15 @@ class EmbeddingResult:
     sparse: list[SparseVector]  # N sparse vectors
     model_name: str = "hash"
     dim: int = _HASH_DIM_DEFAULT
+    model_version: str = "v1"
+
+
+class EmbeddingUnavailable(RuntimeError):
+    """推理不可用；调用方可以使用明确标记的词法检索。"""
+
+
+def embedding_identity(result: EmbeddingResult) -> str:
+    return f"{result.model_name}:{result.model_version}:{result.dim}"
 
 
 # ---------------------------------------------------------------------------
@@ -177,11 +189,14 @@ class _BGEM3Wrapper:
         raw_dense = output.get("dense_vecs") if isinstance(output, dict) else getattr(output, "dense_vecs", None)
         raw_sparse = output.get("lexical_weights") if isinstance(output, dict) else getattr(output, "lexical_weights", None)
 
+        if raw_dense is None or len(raw_dense) != len(texts):
+            raise EmbeddingUnavailable("bge_dense_output_missing")
+
         for idx, text in enumerate(texts):
-            if raw_dense is not None:
-                dense_vecs.append([float(value) for value in raw_dense[idx]])
-            else:
-                dense_vecs.append(_hash_embedding(text, _BGE_M3_DIM))
+            vector = [float(value) for value in raw_dense[idx]]
+            if len(vector) != _BGE_M3_DIM or not all(math.isfinite(value) for value in vector):
+                raise EmbeddingUnavailable("bge_dense_output_invalid")
+            dense_vecs.append(vector)
 
             if raw_sparse is not None:
                 row = raw_sparse[idx]
@@ -225,11 +240,16 @@ class EmbeddingService:
         self._use_bge = backend != "hash"
         self._bge_available: bool | None = None
         self._hash_dim = int(os.getenv("RAG_HASH_DIM", str(_HASH_DIM_DEFAULT)))
+        self._worker_url = str(os.getenv("RAG_WORKER_URL") or "").strip().rstrip("/") if self._use_bge else ""
+        self._worker_available = False
+        self._worker_version = "unknown"
         if not self._use_bge:
             _log_hash_fallback(reason="configured_hash_backend", requested_backend=backend)
 
     @property
     def model_name(self) -> str:
+        if self._worker_url:
+            return "bge-m3" if self._worker_available else "unavailable"
         if self._use_bge and self._check_bge():
             return "bge-m3"
         return "hash"
@@ -241,11 +261,13 @@ class EmbeddingService:
         仅当用户期望真实向量模型（bge-m3）但 FlagEmbedding 不可用而退回 hash
         时返回 True；显式配置 RAG_EMBEDDING=hash 时不算降级（用户主动选择）。
         """
-        return self._use_bge and not self._check_bge()
+        return not self._worker_url and self._use_bge and not self._check_bge()
 
     @property
     def fallback_reason(self) -> str | None:
         """hash 降级时返回人类可读原因，否则 None。"""
+        if self._worker_url:
+            return None if self._worker_available else "embedding_worker_unavailable"
         if self.is_hash_fallback:
             return (
                 f"embedding degraded to hash (requested '{self._requested_backend}', "
@@ -255,12 +277,16 @@ class EmbeddingService:
 
     @property
     def dim(self) -> int:
+        if self._worker_url:
+            return _BGE_M3_DIM
         if self._use_bge and self._check_bge():
             return _BGE_M3_DIM
         return self._hash_dim
 
     def _check_bge(self) -> bool:
         """Lazy check whether FlagEmbedding is importable."""
+        if self._worker_url:
+            return self._worker_available
         if self._bge_available is not None:
             return self._bge_available
         try:
@@ -282,6 +308,9 @@ class EmbeddingService:
         if not text_list:
             return EmbeddingResult(dense=[], sparse=[], model_name=self.model_name, dim=self.dim)
 
+        if self._worker_url:
+            return self._encode_remote(text_list)
+
         if self._use_bge and self._check_bge():
             try:
                 return _get_bge_m3().encode(text_list)
@@ -294,8 +323,59 @@ class EmbeddingService:
                 self._hash_dim = _BGE_M3_DIM
                 self._bge_available = False
 
+        if self._use_bge and _is_production_env():
+            raise EmbeddingUnavailable("embedding_unavailable")
+
         fallback_dim = _BGE_M3_DIM if self._use_bge else self._hash_dim
         return _hash_encode_batch(text_list, fallback_dim)
+
+    def _encode_remote(self, texts: list[str]) -> EmbeddingResult:
+        import httpx
+        dense: list[list[float]] = []
+        sparse: list[SparseVector] = []
+        version: str | None = None
+        try:
+            with httpx.Client(timeout=float(os.getenv("RAG_WORKER_TIMEOUT_SECONDS", "60")), trust_env=False) as client:
+                for offset in range(0, len(texts), 8):
+                    batch = texts[offset:offset + 8]
+                    response = client.post(self._worker_url + "/encode", json={"texts": batch},
+                        headers={"Authorization": "Bearer " + os.getenv("RAG_WORKER_TOKEN", "")})
+                    response.raise_for_status()
+                    payload = response.json()
+                    rows = payload.get("dense") or []
+                    actual_version = str(payload.get("model_version") or "")
+                    if payload.get("model_name") != "bge-m3" or not actual_version or len(rows) != len(batch):
+                        raise ValueError("embedding_worker_invalid_response")
+                    if version is not None and version != actual_version:
+                        raise ValueError("embedding_worker_model_changed")
+                    for row in rows:
+                        if len(row) != _BGE_M3_DIM or not all(math.isfinite(float(value)) for value in row):
+                            raise ValueError("embedding_worker_invalid_vector")
+                    version = actual_version
+                    dense.extend(rows)
+                    sparse.extend(_hash_sparse(text) for text in batch)
+            self._worker_available = True
+            self._worker_version = version or "unknown"
+            return EmbeddingResult(dense=dense, sparse=sparse, model_name="bge-m3", dim=_BGE_M3_DIM,
+                                   model_version=self._worker_version)
+        except Exception as exc:
+            self._worker_available = False
+            raise EmbeddingUnavailable("embedding_worker_unavailable") from exc
+
+    def worker_health(self) -> dict[str, Any]:
+        import httpx
+        try:
+            with httpx.Client(timeout=3, trust_env=False) as client:
+                response = client.get(self._worker_url + "/health")
+                response.raise_for_status()
+                payload = response.json()
+            self._worker_available = bool(payload.get("inference_verified") and payload.get("status") == "ok"
+                                          and payload.get("model_name") == "bge-m3")
+            self._worker_version = str(payload.get("model_version") or "unknown")
+            return payload
+        except Exception:
+            self._worker_available = False
+            return {"status": "error", "inference_verified": False}
 
     def encode_single(self, text: str) -> tuple[list[float], SparseVector]:
         """Convenience: encode one text, return (dense_vec, sparse_vec)."""

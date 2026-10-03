@@ -1,0 +1,15 @@
+[
+  {"id":"hello","query":"hi","origin":"curated","expect":"直接回答，不启动外部研究"},
+  {"id":"quote","query":"AAPL 现在多少钱？","origin":"curated","expect":"价格、币种、实际时点、来源"},
+  {"id":"intc_research","query":"分析一下 英特尔 的最新基本面、技术面、催化剂与主要风险","origin":"user","thread":"intc","expect":"四个维度分别有依据或明确缺口"},
+  {"id":"intc_followup","query":"你刚才提到的催化剂，未来一个季度哪些最值得跟踪？","origin":"curated","thread":"intc","expect":"继承INTC，回答季度观察事件与条件，不编造事件日期"},
+  {"id":"technical","query":"AAPL 的短线趋势、RSI、MACD 和支撑阻力怎么看？","origin":"curated","expect":"技术指标解释，不被新闻简报取代"},
+  {"id":"earnings","query":"NVDA 最新一季财报表现怎么样，对股价有什么影响？","origin":"curated","expect":"真实单季、实际报告期、币种、预期差与风险"},
+  {"id":"compare","query":"比较 NVDA 和 AMD 的估值、增长与投资风险，哪个更适合长期研究？","origin":"curated","expect":"双方同口径维度比较，缺数不冒充已回答"},
+  {"id":"macro","query":"美联储最近一次利率决定是什么，对美股科技股有哪些影响？","origin":"curated","expect":"具体政策事实或缺口，以及传导解释"},
+  {"id":"hong_kong","query":"分析腾讯控股（0700.HK）的最新财报、估值与主要风险。","origin":"curated","expect":"腾讯来源、真实币种与财期，不引用其他发行人公告"},
+  {"id":"china","query":"分析贵州茅台（600519.SH）的最新财报、估值与主要风险。","origin":"curated","expect":"茅台来源，禁止宝钢或600016公告冒领"},
+  {"id":"news","query":"关于 AAOI 的新闻动态，","origin":"user","expect":"相关文章、时点和链接，搜索格式头不是新闻"},
+  {"id":"company_report","query":"生成一份 AAPL 深度投资报告，覆盖业务、财务、估值、竞争、催化剂与风险。","origin":"curated","mode":"investment_report","expect":"六维有依据研究；不足时预览明确阻断，不伪造完整报告"},
+  {"id":"compare_report","query":"生成 NVDA 与 AMD 的对比研究报告，重点比较盈利能力、估值、产品竞争与未来12个月风险。","origin":"curated","mode":"investment_report","expect":"双方横向比较；有效论据、引用、质量和归档一致"}
+]

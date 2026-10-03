@@ -51,7 +51,7 @@ def _multi_frame_state() -> dict:
     }
 
 
-def test_rule_planner_emits_dependencies_between_serial_groups() -> None:
+def test_rule_planner_emits_data_dependencies_without_artificial_serial_groups() -> None:
     state = _multi_frame_state()
     plan = rule_based_planner({**state, **policy_gate(state)})["plan_ir"]
     steps = plan["steps"]
@@ -59,11 +59,11 @@ def test_rule_planner_emits_dependencies_between_serial_groups() -> None:
     assert len(steps) >= 3
     assert all("depends_on" in step for step in steps)
     assert steps[0]["depends_on"] == []
-    assert any(step["depends_on"] for step in steps[1:])
+    assert any(step["data_dependencies"] for step in steps[1:])
     q2_roots = {step["id"] for step in steps if step.get("parallel_group") == "q2"}
     q2_agents = [step for step in steps if step.get("parallel_group") == "q2_news_agents"]
     assert q2_roots and q2_agents
-    assert set(q2_agents[0]["depends_on"]) == q2_roots
+    assert set(q2_agents[0]["data_dependencies"]) == q2_roots
     assert all(step["depends_on"] == [] for step in steps if step.get("parallel_group") == "q3")
 
 
@@ -89,6 +89,7 @@ def _mixed_task_dependency_steps() -> list[dict]:
         },
         {
             "id": "a-followup",
+            "depends_on": ["a-root"],
             "kind": "tool",
             "name": "fixture",
             "inputs": {"step": "a-followup"},
@@ -98,6 +99,7 @@ def _mixed_task_dependency_steps() -> list[dict]:
         },
         {
             "id": "b-followup",
+            "depends_on": ["b-root"],
             "kind": "tool",
             "name": "fixture",
             "inputs": {"step": "b-followup"},
@@ -108,7 +110,7 @@ def _mixed_task_dependency_steps() -> list[dict]:
     ]
 
 
-def test_parallel_group_dependencies_stay_within_each_task() -> None:
+def test_explicit_dependencies_stay_within_each_task() -> None:
     steps = finalize_step_dependencies(_mixed_task_dependency_steps())
     by_id = {step["id"]: step for step in steps}
 
@@ -136,28 +138,32 @@ def test_explicit_empty_depends_on_keeps_step_as_root() -> None:
     assert steps[1]["depends_on"] == []
 
 
-def test_scoped_and_unscoped_groups_form_global_barriers_without_cross_task_dependencies() -> None:
+def test_global_barriers_are_explicit_and_do_not_depend_on_array_group_order() -> None:
     steps = finalize_step_dependencies(
         [
             {"id": "global-setup", "parallel_group": "setup"},
             {
                 "id": "a-root",
+                "depends_on": ["global-setup"],
                 "parallel_group": "task-roots",
                 "task_ids": ["task-a"],
             },
             {
                 "id": "b-root",
+                "depends_on": ["global-setup"],
                 "parallel_group": "task-roots",
                 "task_ids": ["task-b"],
             },
-            {"id": "global-join", "parallel_group": "join"},
+            {"id": "global-join", "parallel_group": "join", "depends_on": ["a-root", "b-root"]},
             {
                 "id": "a-followup",
+                "depends_on": ["global-join"],
                 "parallel_group": "task-followups",
                 "task_ids": ["task-a"],
             },
             {
                 "id": "b-followup",
+                "depends_on": ["global-join"],
                 "parallel_group": "task-followups",
                 "task_ids": ["task-b"],
             },

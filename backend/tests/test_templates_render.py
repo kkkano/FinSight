@@ -570,7 +570,7 @@ def test_render_chat_mixed_url_and_focus_task_does_not_become_empty_portfolio():
 
     assert md.strip()
     assert "我先按你给的持仓看" not in md
-    assert "AAPL 最新价格" in md
+    assert "AAPL 最新可用报价" in md
     assert "折现率" in md
     assert "关注" in md
 

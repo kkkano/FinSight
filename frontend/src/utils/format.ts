@@ -77,10 +77,13 @@ export function formatPriceForMarket(
 export function formatMarketCapForMarket(
   value: number | null | undefined,
   ticker: string | null | undefined,
+  currency?: string | null,
 ): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return '--';
+  if (value === null || value === undefined || !Number.isFinite(value)) return '--';
+  if (currency === null || currency === '') return `${value.toLocaleString()}（币种未提供）`;
 
-  const prefix = currencySymbolForTicker(ticker);
+  const symbols: Record<string, string> = { USD: '$', CNY: '¥', HKD: 'HK$', EUR: '€', GBP: '£' };
+  const prefix = currency === undefined ? currencySymbolForTicker(ticker) : symbols[currency] || `${currency} `;
   const cn = prefix === '¥' || prefix === 'HK$';
   const abs = Math.abs(value);
   const sign = value < 0 ? '-' : '';

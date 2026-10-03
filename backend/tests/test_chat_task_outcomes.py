@@ -60,8 +60,8 @@ def test_chat_pipeline_builds_all_four_outcome_states_and_render_coverage(monkey
                 "s-partial-a": {"output": {"ticker": "AAPL", "price": 200.0}},
             },
             "evidence_by_task": {
-                "price": [{"source_id": "e-price", "task_ids": ["price"], "kind": "price_snapshot", "text": "AAPL 200", "title": "行情", "url": "https://example.com/price"}],
-                "partial": [{"source_id": "e-partial", "task_ids": ["partial"], "kind": "price_snapshot", "text": "AAPL 200"}],
+                "price": [{"source_id": "e-price", "step_id": "s-price", "task_ids": ["price"], "subject": "AAPL", "kind": "price_snapshot", "market_price": 200.0, "currency": "USD", "as_of": "2026-10-02T20:00:00Z", "text": "AAPL 200", "title": "行情", "url": "https://example.com/price"}],
+                "partial": [{"source_id": "e-partial", "step_id": "s-partial-a", "task_ids": ["partial"], "subject": "AAPL", "kind": "price_snapshot", "market_price": 200.0, "currency": "USD", "as_of": "2026-10-02T20:00:00Z", "text": "AAPL 200"}],
             },
             "evidence_pool": [{"title": "行情", "url": "https://example.com/price", "source": "fixture"}],
         },
@@ -80,9 +80,10 @@ def test_chat_pipeline_builds_all_four_outcome_states_and_render_coverage(monkey
     })
     markdown = rendered["artifacts"]["draft_markdown"]
     assert rendered["trace"]["rendered_task_ids"] == ["price", "technical", "partial", "blocked"]
-    for suffix in ("已回答", "暂不可用", "部分完成", "需要补充"):
+    for suffix in ("已回答", "证据不足", "部分完成", "需要补充"):
         assert suffix in markdown
-    assert markdown.count("来源：") == 1
+    assert markdown.count("## 来源") == 1
+    assert "200 USD" in markdown and "2026-10-02T20:00:00Z" in markdown
 
 
 def _outcome(task_id: str, order: int, *, group: str, kind: str, operation: str, title: str) -> dict:

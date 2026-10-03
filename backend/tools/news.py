@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta, date
 from email.utils import parsedate_to_datetime
 from typing import Optional, List, Dict, Any
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -16,9 +16,13 @@ from .yfinance_client import create_ticker
 from .env import ALPHA_VANTAGE_API_KEY, finnhub_client
 from .authoritative_feeds import search_authoritative_feeds
 from .http import _http_get
+from .financial_facts import search_line_is_noise
 from .search import search
-from .utils import _normalize_published_date
 from backend.config.ticker_mapping import CN_TO_TICKER, COMPANY_MAP
+from backend.research.news_event_quality import (
+    domain_matches, news_domain, news_quality_label, normalized_news_time,
+    news_subject_match, prepare_news_items,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -286,12 +290,7 @@ def _format_headline_line(
 
 
 def _domain_from_url(url: str) -> str:
-    try:
-        parsed = urlparse(url)
-        host = parsed.netloc or ""
-        return host.replace("www.", "")
-    except Exception:
-        return ""
+    return news_domain(url)
 
 
 
@@ -393,13 +392,14 @@ def _build_news_item(
     snippet: str = "",
     ticker: Optional[str] = None,
     confidence: float = 0.7,
+    retrieval_kind: str = "provider_feed",
 ) -> Dict[str, Any]:
     if not title:
         return {}
     normalized_url = (url or "").strip()
     if "finnhub.io/api/news" in normalized_url.lower():
         normalized_url = ""
-    published_date = _normalize_published_date(published_at)
+    published_date, published_precision = normalized_news_time(published_at)
     # Compute tags from headline + snippet for structured output
     tags = _headline_tags(f"{title} {snippet}".strip())
     return {
@@ -410,6 +410,8 @@ def _build_news_item(
         "snippet": snippet or "",
         "published_at": published_date,
         "datetime": published_date,
+        "published_at_precision": published_precision,
+        "retrieval_kind": retrieval_kind,
         "ticker": ticker,
         "confidence": confidence,
         "tags": tags,
@@ -510,8 +512,11 @@ def format_news_items(items: List[Dict[str, Any]], title: str = "Latest News") -
         source = item.get("source") or "Unknown"
         url = item.get("url") or ""
         snippet = item.get("snippet") or ""
-        date_str = item.get("published_at") or item.get("datetime") or "Recent"
+        date_str = item.get("published_at") or item.get("datetime") or "发布时间未知"
         line = _format_headline_line(date_str, headline, source, url, snippet)
+        quality_label = news_quality_label(item)
+        if quality_label:
+            line += f"（{quality_label}）"
         lines.append(f"{idx}. {line}")
     return f"{title}:\n" + "\n".join(lines)
 
@@ -523,11 +528,25 @@ def _extract_search_items(text: str) -> List[Dict[str, str]]:
 
     for line in text.splitlines():
         stripped = line.strip()
+        if search_line_is_noise(stripped):
+            continue
         if re.match(r"^\d+\.", stripped):
             if current:
                 items.append(current)
             title = re.sub(r"^\d+\.\s*", "", stripped).strip()
+            if search_line_is_noise(title):
+                current = None
+                continue
             current = {"title": title, "snippet": "", "url": ""}
+            markdown = re.search(r"\[([^\]]+)\]\((https?://[^)]+)\)", title)
+            if markdown:
+                current["title"], current["url"] = markdown.groups()
+            continue
+        markdown = re.search(r"\[([^\]]+)\]\((https?://[^)]+)\)", stripped)
+        if markdown:
+            if current:
+                items.append(current)
+            current = {"title": markdown.group(1), "snippet": "", "url": markdown.group(2)}
             continue
         if stripped.startswith("http"):
             if current and not current.get("url"):
@@ -579,7 +598,7 @@ def _format_search_news_items(
     recent = [
         item
         for item in enriched
-        if item["date"] and (now - item["date"]) <= timedelta(days=max_age_days)
+        if item["date"] and timedelta(0) <= (now - item["date"]) <= timedelta(days=max_age_days)
     ]
     use_items = recent if recent else enriched
 
@@ -596,6 +615,7 @@ def _format_search_news_items(
                 url,
                 item.get("snippet", ""),
             )
+            + "（检索线索，发布时间与原文待核实）"
         )
 
     return lines, bool(recent)
@@ -638,7 +658,7 @@ def _build_search_news_items(
     recent = [
         item
         for item in enriched
-        if item["date"] and (now - item["date"]) <= timedelta(days=max_age_days)
+        if item["date"] and timedelta(0) <= (now - item["date"]) <= timedelta(days=max_age_days)
     ]
     use_items = recent if recent else enriched
 
@@ -650,12 +670,16 @@ def _build_search_news_items(
                 title=item["title"],
                 source=item["source"] or "search",
                 url=item["url"],
-                published_at=published_at,
+                published_at=None,
                 snippet=item.get("snippet", ""),
                 confidence=0.4,
+                retrieval_kind="search_snippet",
             )
         )
-    return [item for item in results if item]
+        if results[-1]:
+            results[-1]["date_hint"] = published_at
+            results[-1]["date_hint_basis"] = "search_text_or_url"
+    return prepare_news_items([item for item in results if item], now=now.replace(tzinfo=UTC), max_age_hours=max_age_days * 24)
 
 
 
@@ -689,9 +713,9 @@ def _parse_rss_items(
         if not dt:
             continue
         if dt.tzinfo:
-            dt = dt.astimezone(tz=None).replace(tzinfo=None)
+            dt = dt.astimezone(UTC).replace(tzinfo=None)
 
-        if (now - dt) > timedelta(days=max_age_days):
+        if not timedelta(0) <= (now - dt) <= timedelta(days=max_age_days):
             continue
 
         source = _domain_from_url(link)
@@ -746,7 +770,7 @@ def _fetch_finnhub_market_news(limit: int = 5, max_age_hours: int = 48) -> tuple
             dt = datetime.utcfromtimestamp(ts)
         except Exception:
             continue
-        if (now - dt) > timedelta(hours=max_age_hours):
+        if not timedelta(0) <= (now - dt) <= timedelta(hours=max_age_hours):
             continue
         title = item.get("headline") or item.get("summary") or "No title"
         snippet = item.get("summary") or ""
@@ -853,7 +877,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
                 continue
             if not _headline_is_useful(title, window):
                 continue
-            date_str = date_match.group(1) if date_match else 'Recent'
+            date_str = date_match.group(1) if date_match else None
             item = _build_news_item(
                 title=title,
                 source="search",
@@ -862,6 +886,7 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
                 snippet=window,
                 ticker=ticker,
                 confidence=0.4,
+                retrieval_kind="search_snippet",
             )
             if item:
                 news_items.append(item)
@@ -876,13 +901,13 @@ def _fast_company_news_links(ticker: str, limit: int = 5) -> List[Dict[str, Any]
     symbol = str(ticker or "").strip().upper()
     if not symbol:
         return []
-    today = date.today().isoformat()
     rows = [
         {
             "title": f"{symbol} Yahoo Finance news",
             "source": "Yahoo Finance",
             "url": f"https://finance.yahoo.com/quote/{quote_plus(symbol)}/news",
-            "published_at": today,
+            "published_at": None,
+            "retrieval_kind": "search_snippet",
             "snippet": "Fast linked news entry for latency-sensitive brief answers.",
             "ticker": symbol,
             "confidence": 0.5,
@@ -891,7 +916,8 @@ def _fast_company_news_links(ticker: str, limit: int = 5) -> List[Dict[str, Any]
             "title": f"{symbol} latest stock news search",
             "source": "Search",
             "url": f"https://www.google.com/search?q={quote_plus(symbol + ' latest stock news')}",
-            "published_at": today,
+            "published_at": None,
+            "retrieval_kind": "search_snippet",
             "snippet": "Fast search fallback when live headline APIs are slow or rate-limited.",
             "ticker": symbol,
             "confidence": 0.45,
@@ -1043,7 +1069,7 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Di
             }
         )
         output.append(item)
-    return output
+    return prepare_news_items(output, ticker=ticker)
 
 
 
@@ -1088,12 +1114,12 @@ def score_news_source_reliability(source: str = "", url: str = "") -> Dict[str, 
 
     if domain:
         for hint, hint_score in _RELIABILITY_DOMAIN_SCORE_HINTS.items():
-            if hint in domain:
+            if domain_matches(domain, hint):
                 score = hint_score
                 reason = f"domain:{hint}"
                 break
 
-    if reason == "default" and source_text:
+    if reason == "default" and source_text and not str(url or "").strip():
         lowered = source_text.lower()
         for hint, hint_score in _RELIABILITY_SOURCE_SCORE_HINTS.items():
             if hint in lowered:
@@ -1178,6 +1204,7 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
         "earnings_events": [],
         "dividend_events": [],
         "macro_events": [],
+        "discovery_candidates": [],
         "error": None,
     }
     if not ticker:
@@ -1199,6 +1226,9 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
                         "date": candidate.isoformat(),
                         "title": str(key or "calendar_event"),
                         "source": "yfinance_calendar",
+                        "status": "scheduled",
+                        "verification": "provider_reported",
+                        "occurred_at": None,
                     }
                     if "earn" in key_text:
                         result["earnings_events"].append(event)
@@ -1216,6 +1246,9 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
                         "date": candidate.isoformat(),
                         "title": "Earnings Date",
                         "source": "yfinance_earnings_dates",
+                        "status": "scheduled",
+                        "verification": "provider_reported",
+                        "occurred_at": None,
                     }
                 )
     except Exception as e:
@@ -1249,24 +1282,20 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
                 if candidate and not _within_window(candidate, today, end_date):
                     continue
 
-                result["macro_events"].append(
+                result["discovery_candidates"].append(
                     {
-                        "date": candidate.isoformat() if candidate else None,
+                        "date": None,
+                        "date_hint": candidate.isoformat() if candidate else None,
                         "title": line[:160],
                         "source": "search_macro_calendar",
+                        "verification": "discovery_only",
+                        "reason": "event_date_not_verified",
                     }
                 )
-                if len(result["macro_events"]) >= 8:
+                if len(result["discovery_candidates"]) >= 8:
                     break
     except Exception as e:
         logger.info(f"[News] get_event_calendar macro search failed: {e}")
-
-    if not result["macro_events"]:
-        result["macro_events"] = [
-            {"date": None, "title": "Monitor upcoming CPI release window", "source": "macro_watchlist"},
-            {"date": None, "title": "Monitor upcoming FOMC decision window", "source": "macro_watchlist"},
-            {"date": None, "title": "Monitor upcoming Nonfarm Payrolls release window", "source": "macro_watchlist"},
-        ]
 
     def _dedupe_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen = set()
@@ -1338,7 +1367,24 @@ def _extract_ticker_sentiment(item: Dict[str, Any], symbol: str):
     for ts in item.get('ticker_sentiment', []):
         if ts.get('ticker', '').upper() == symbol_upper:
             return ts.get('ticker_sentiment_score'), ts.get('ticker_sentiment_label')
+    if item.get('ticker_sentiment'):
+        return None, None
     return item.get('overall_sentiment_score'), item.get('overall_sentiment_label')
+
+
+def _current_sentiment_feed(feed: List[Dict[str, Any]], ticker: str) -> List[Dict[str, Any]]:
+    """情绪只是供应商对当前报道的判断，去重且限定时间与主体。"""
+    current = []
+    for item in prepare_news_items(feed, ticker=ticker):
+        quality = item["event_quality"]
+        attributed = any(str(row.get("ticker") or "").upper() == ticker.upper()
+                         for row in item.get("ticker_sentiment", []) if isinstance(row, dict))
+        if quality["freshness"] != "fresh" or not item.get("url"):
+            continue
+        if not attributed and news_subject_match(ticker, item["title"], item.get("snippet", "")) != "headline":
+            continue
+        current.append(item)
+    return current
 
 
 def get_news_sentiment(ticker: str, limit: int = 5) -> str:
@@ -1355,7 +1401,9 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
         fetched = _fetch_av_sentiment_feed(ticker, limit)
         if fetched.get("error") or fetched.get("feed") is None:
             return f"News Sentiment: {fetched.get('error') or 'no data found.'}"
-        feed = fetched["feed"]
+        feed = _current_sentiment_feed(fetched["feed"], ticker)
+        if not feed:
+            return f"News Sentiment ({ticker}): 最近7天无可核对发布时间和主体的情绪样本。"
 
         lines = []
         scores: List[float] = []
@@ -1447,7 +1495,7 @@ def get_news_sentiment_score(ticker: str, limit: int = 10) -> Dict[str, Any]:
         result["error"] = fetched.get("error") or "no data found."
         return result
 
-    feed = fetched["feed"]
+    feed = _current_sentiment_feed(fetched["feed"], symbol)
     scores: List[float] = []
     for item in feed[:limit]:
         score, _label = _extract_ticker_sentiment(item, symbol)
@@ -1578,13 +1626,13 @@ def get_market_news_headlines(limit: int = 5) -> str:
             retry_text = "\n\n".join(retry_combined)
             retry_lines, retry_recent = _format_search_news_items(retry_text, limit=limit, max_age_days=7)
             if retry_lines and retry_recent:
-                return "最近市场热点(近7天):\n" + "\n".join(retry_lines)
+                return "市场新闻检索线索（原文与发布时间待核实）:\n" + "\n".join(retry_lines)
             if retry_recent:
                 lines = retry_lines
                 has_recent = True
 
     if has_recent and lines:
-        return "最近市场热点(近7天):\n" + "\n".join(lines)
+        return "市场新闻检索线索（原文与发布时间待核实）:\n" + "\n".join(lines)
 
     return "近7天内未检索到可靠市场热点，请直接查看 Bloomberg/Reuters/WSJ 等权威来源。"
 # ============================================

@@ -16,6 +16,7 @@ import pandas as pd
 
 from backend.dashboard.cache import dashboard_cache
 from backend.utils.quote import safe_float
+from backend.tools.financial_facts import fact_number, monetary_amount
 
 logger = logging.getLogger(__name__)
 
@@ -553,6 +554,9 @@ def _to_news_item(item: Any) -> dict[str, Any]:
             "ts": ts,
             "summary": str(summary).strip(),
         }
+        for key in ("event_quality", "supporting_reports", "published_at_precision", "retrieval_kind"):
+            if item.get(key) is not None:
+                result[key] = item[key]
         # Attach tags if present (Phase H)
         if tags and isinstance(tags, list):
             result["tags"] = tags
@@ -653,7 +657,8 @@ def fetch_news(symbol: str, limit: int = 20) -> dict[str, Any]:
         rows = gateway_result.get("data") if isinstance(gateway_result, dict) else None
         if not isinstance(rows, list) or gateway_result.get("error_code"):
             return None
-        impact_raw = [_to_news_item(item) for item in rows[:limit]]
+        impact_raw = [_to_news_item(item) for item in rows[:limit]
+                      if (item.get("event_quality") or {}).get("subject_match") != "none"]
 
         result = {
             "market": [],
@@ -854,14 +859,6 @@ def _finnhub_percent_to_ratio(value: Any) -> Optional[float]:
     return number / 100.0
 
 
-def _finnhub_market_cap_to_usd(value: Any) -> Optional[float]:
-    """Finnhub marketCapitalization is in millions of USD."""
-    number = safe_float(value)
-    if number is None:
-        return None
-    return number * 1_000_000.0
-
-
 def _fetch_valuation_from_finnhub(symbol: str) -> dict[str, Any] | None:
     """Fallback valuation fetcher using Finnhub free endpoints."""
     profile = _finnhub_request("stock/profile2", {"symbol": symbol})
@@ -870,10 +867,12 @@ def _fetch_valuation_from_finnhub(symbol: str) -> dict[str, Any] | None:
     if not isinstance(metric, dict):
         metric = {}
 
+    profile = profile if isinstance(profile, dict) else {}
+    market_cap = monetary_amount(profile.get("marketCapitalization"), profile.get("currency"), scale=1_000_000)
     result = {
-        "market_cap": _finnhub_market_cap_to_usd(
-            (profile or {}).get("marketCapitalization") if isinstance(profile, dict) else metric.get("marketCapitalization")
-        ),
+        "market_cap": market_cap.value if market_cap.currency else None,
+        "market_cap_currency": market_cap.currency,
+        "currency": market_cap.currency,
         "trailing_pe": safe_float(metric.get("peTTM") or metric.get("peBasicExclExtraTTM")),
         "forward_pe": safe_float(metric.get("forwardPE") or metric.get("peExclExtraAnnual")),
         "price_to_book": safe_float(metric.get("pbQuarterly")),
@@ -884,7 +883,7 @@ def _fetch_valuation_from_finnhub(symbol: str) -> dict[str, Any] | None:
         "week52_high": safe_float(metric.get("52WeekHigh")),
         "week52_low": safe_float(metric.get("52WeekLow")),
     }
-    if all(v is None for v in result.values()):
+    if not any(fact_number(value) is not None for value in result.values()):
         return None
     return result
 
@@ -897,7 +896,7 @@ def _fetch_valuation_from_cn_hk_market(symbol: str) -> dict[str, Any] | None:
         if not isinstance(payload, dict):
             return None
         result = {
-            "market_cap": safe_float(payload.get("market_cap")),
+            "market_cap": None,
             "trailing_pe": safe_float(payload.get("trailing_pe")),
             "forward_pe": safe_float(payload.get("forward_pe")),
             "price_to_book": safe_float(payload.get("price_to_book")),
@@ -908,7 +907,9 @@ def _fetch_valuation_from_cn_hk_market(symbol: str) -> dict[str, Any] | None:
             "week52_high": safe_float(payload.get("week52_high")),
             "week52_low": safe_float(payload.get("week52_low")),
         }
-        if all(v is None for v in result.values()):
+        market_cap = monetary_amount(payload.get("market_cap"), payload.get("market_cap_currency") or payload.get("currency"))
+        result.update({"market_cap": market_cap.value if market_cap.currency else None, "market_cap_currency": market_cap.currency, "currency": market_cap.currency})
+        if not any(fact_number(value) is not None for value in result.values()):
             return None
         return result
     except Exception as exc:
@@ -953,8 +954,11 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
     try:
 
         info = _create_ticker(symbol).info or {}
+        market_cap = monetary_amount(info.get("marketCap"), info.get("currency"))
         result = {
-            "market_cap": safe_float(info.get("marketCap")),
+            "market_cap": market_cap.value if market_cap.currency else None,
+            "market_cap_currency": market_cap.currency,
+            "currency": market_cap.currency,
             "trailing_pe": safe_float(info.get("trailingPE")),
             "forward_pe": safe_float(info.get("forwardPE")),
             "price_to_book": safe_float(info.get("priceToBook")),
@@ -965,7 +969,7 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
             "week52_high": safe_float(info.get("fiftyTwoWeekHigh")),
             "week52_low": safe_float(info.get("fiftyTwoWeekLow")),
         }
-        if any(v is not None for v in result.values()):
+        if any(fact_number(value) is not None for value in result.values()):
             return result
     except Exception as exc:
         logger.warning("[DataService] fetch_valuation failed for %s: %s", symbol, exc)

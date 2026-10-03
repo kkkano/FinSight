@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from urllib.parse import quote
 
 from .yfinance_client import create_ticker
+from .financial_facts import fact_date, market_cap_lines as _company_market_cap_lines
 
 from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY, finnhub_client
 from .http import _http_get, _http_post
@@ -14,19 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _quarter_label_to_date(label: Any) -> str | None:
-    text = str(label or "").strip().upper()
-    match = re.match(r"^(20\d{2})Q([1-4])$", text)
-    if not match:
-        return None
-    year = match.group(1)
-    quarter = int(match.group(2))
-    quarter_end = {
-        1: "03-31",
-        2: "06-30",
-        3: "09-30",
-        4: "12-31",
-    }
-    return f"{year}-{quarter_end[quarter]}"
+    return fact_date(label)
 
 
 def _build_table_payload(columns: List[str], row_series: List[tuple[str, List[Any]]]) -> dict | None:
@@ -70,9 +59,9 @@ def _convert_sec_companyfacts_payload(payload: Dict[str, Any]) -> dict | None:
     if not isinstance(raw_periods, list) or not raw_periods:
         return None
 
-    columns = [(_quarter_label_to_date(period) or str(period)) for period in raw_periods]
-    columns = [col for col in columns if col]
-    if not columns:
+    raw_ends = payload.get("period_ends") or raw_periods
+    columns = [fact_date(period) for period in raw_ends]
+    if len(columns) != len(raw_periods) or not all(columns):
         return None
 
     income_table = _build_table_payload(
@@ -103,6 +92,13 @@ def _convert_sec_companyfacts_payload(payload: Dict[str, Any]) -> dict | None:
     if not income_table and not balance_table and not cashflow_table:
         return None
 
+    for table, frequency in ((income_table, "quarterly"), (balance_table, "instant"), (cashflow_table, "quarterly")):
+        if table:
+            table.update({
+                "frequency": frequency, "currency": payload.get("currency"),
+                "source": "sec_companyfacts", "fact_metadata": payload.get("fact_metadata") or {},
+            })
+
     return {
         "ticker": str(payload.get("ticker") or "").upper(),
         "timestamp": datetime.now().isoformat(),
@@ -110,7 +106,8 @@ def _convert_sec_companyfacts_payload(payload: Dict[str, Any]) -> dict | None:
         "balance_sheet": balance_table,
         "cashflow": cashflow_table,
         "error": None,
-        "warnings": ["fallback:sec_companyfacts"],
+        "warnings": ["fallback:sec_companyfacts", *(payload.get("warnings") or [])],
+        "currency": payload.get("currency"),
         "source": "sec_companyfacts",
     }
 
@@ -143,7 +140,7 @@ def _fetch_financials_from_yfinance(ticker: str) -> dict:
             'warnings': [],
         }
 
-        def _to_payload(table: Any) -> dict | None:
+        def _to_payload(table: Any, *, attr: str) -> dict | None:
             if table is None:
                 return None
             try:
@@ -158,13 +155,15 @@ def _fetch_financials_from_yfinance(ticker: str) -> dict:
                 'columns': columns,
                 'index': index,
                 'data': table.to_dict('records'),
+                'frequency': 'quarterly' if attr.startswith('quarterly_') else 'annual',
+                'source': 'yfinance',
             }
 
         def _fetch_with_fallbacks(table_label: str, attr_candidates: list[str]) -> dict | None:
             for attr in attr_candidates:
                 try:
                     table = getattr(stock, attr)
-                    payload = _to_payload(table)
+                    payload = _to_payload(table, attr=attr)
                     if payload:
                         logger.info(f"[Financials] ✅ 成功获取 {ticker} {table_label} 数据 ({attr})")
                         return payload
@@ -180,12 +179,22 @@ def _fetch_financials_from_yfinance(ticker: str) -> dict:
         )
         result['balance_sheet'] = _fetch_with_fallbacks(
             '资产负债表',
-            ['balance_sheet', 'quarterly_balance_sheet'],
+            ['quarterly_balance_sheet', 'balance_sheet'],
         )
         result['cashflow'] = _fetch_with_fallbacks(
             '现金流量表',
-            ['cashflow', 'quarterly_cashflow'],
+            ['quarterly_cashflow', 'cashflow'],
         )
+
+        try:
+            info = stock.info
+            currency = info.get('financialCurrency') if isinstance(info, dict) else None
+        except Exception:
+            currency = None
+        result['currency'] = currency
+        for name in ('financials', 'balance_sheet', 'cashflow'):
+            if result[name]:
+                result[name]['currency'] = currency
 
         if not result['financials'] and not result['balance_sheet'] and not result['cashflow']:
             result['error'] = "无法获取任何财报数据，请检查股票代码是否正确"
@@ -350,7 +359,7 @@ def get_company_info(ticker: str) -> str:
 - Name: {info.get('longName', 'Unknown')}
 - Sector: {info.get('sector', 'Unknown')}
 - Industry: {info.get('industry', 'Unknown')}
-- Market Cap: ${info.get('marketCap', 0):,.0f}
+{_company_market_cap_lines(info.get('marketCap'), info.get('currency'))}
 {valuation_lines}
 - Website: {info.get('website', 'N/A')}
 - Description: {description}"""
@@ -366,7 +375,7 @@ def get_company_info(ticker: str) -> str:
                 return f"""Company Profile ({ticker}):
 - Name: {profile.get('name', 'Unknown')}
 - Sector: {profile.get('finnhubIndustry', 'Unknown')}
-- Market Cap: ${int(profile.get('marketCapitalization', 0) * 1_000_000):,}
+{_company_market_cap_lines(profile.get('marketCapitalization'), profile.get('currency'), scale=1_000_000)}
 - Website: {profile.get('weburl', 'N/A')}
 - Description: Search online for more details.""" # Finnhub profile doesn't include a long description
         except Exception as e:
@@ -392,7 +401,7 @@ def get_company_info(ticker: str) -> str:
 - Name: {data.get('Name', 'Unknown')}
 - Sector: {data.get('Sector', 'Unknown')}
 - Industry: {data.get('Industry', 'Unknown')}
-- Market Cap: ${int(data.get('MarketCapitalization', 0)):,}
+{_company_market_cap_lines(data.get('MarketCapitalization'), data.get('Currency'))}
 {valuation_lines}
 - Description: {description}"""
     except Exception as e:

@@ -19,6 +19,9 @@ from backend.rag.embedder import (
     EmbeddingService,
     SparseVector,
     get_embedding_service,
+    EmbeddingUnavailable,
+    embedding_identity,
+    _hash_sparse,
 )
 from backend.rag.layering import collection_details, enrich_metadata
 
@@ -439,11 +442,15 @@ class _InMemoryHybridStore:
 
         if pending:
             contents = [item[2] for item in pending]
-            embed_result = self._embedder.encode(contents)
+            try:
+                embed_result = self._embedder.encode(contents)
+            except EmbeddingUnavailable:
+                embed_result = None
             with self._lock:
                 for index, (key, payload, _content) in enumerate(pending):
-                    payload["embedding"] = embed_result.dense[index]
-                    payload["sparse"] = embed_result.sparse[index]
+                    payload["embedding"] = embed_result.dense[index] if embed_result else None
+                    payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
+                    payload["sparse"] = _hash_sparse(_content)
                     self._docs[key] = payload
                     indexed += 1
 
@@ -470,7 +477,13 @@ class _InMemoryHybridStore:
         if not docs:
             return []
 
-        q_dense, q_sparse = _embed_text(query_text, self._embedder)
+        try:
+            query_embedding = self._embedder.encode([query_text])
+            q_dense = query_embedding.dense[0]
+            identity = embedding_identity(query_embedding)
+        except EmbeddingUnavailable:
+            q_dense, identity = [], None
+        q_sparse = _hash_sparse(query_text)
 
         dense_scored: list[tuple[str, float]] = []
         sparse_scored: list[tuple[str, float]] = []
@@ -478,7 +491,8 @@ class _InMemoryHybridStore:
         for payload in docs:
             source_id = payload["source_id"]
             by_source[source_id] = payload
-            dense_scored.append((source_id, _cosine(q_dense, payload["embedding"])))
+            if identity and payload["metadata"].get("embedding_identity") == identity and payload.get("embedding"):
+                dense_scored.append((source_id, _cosine(q_dense, payload["embedding"])))
             doc_sparse = payload.get("sparse", SparseVector())
             sparse_scored.append((source_id, _sparse_score(q_sparse, doc_sparse)))
 
@@ -500,6 +514,8 @@ class _InMemoryHybridStore:
         for sid, payload in by_source.items():
             d_rank = dense_rank.get(sid)
             s_rank = sparse_rank.get(sid)
+            if d_rank is None and s_rank is None:
+                continue
             rrf = 0.0
             if d_rank is not None:
                 rrf += 1.0 / (self._rrf_k + d_rank)
@@ -699,8 +715,11 @@ class _PostgresHybridStore:
                 doc_fingerprint = EXCLUDED.doc_fingerprint,
                 parent_collection = EXCLUDED.parent_collection,
                 parent_run_id = EXCLUDED.parent_run_id,
-                metadata = EXCLUDED.metadata,
-                embedding = EXCLUDED.embedding,
+                metadata = CASE WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
+                    THEN EXCLUDED.metadata || jsonb_build_object('embedding_identity', rag_documents_v2.metadata->'embedding_identity')
+                    ELSE EXCLUDED.metadata END,
+                embedding = CASE WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
+                    THEN rag_documents_v2.embedding ELSE EXCLUDED.embedding END,
                 search_vector = EXCLUDED.search_vector,
                 created_at = EXCLUDED.created_at,
                 expires_at = EXCLUDED.expires_at
@@ -719,8 +738,11 @@ class _PostgresHybridStore:
 
         if pending:
             contents = [payload["content"] for payload in pending]
-            embed_result = self._embedder.encode(contents)
-            if int(embed_result.dim or 0) != int(self._vector_dim):
+            try:
+                embed_result = self._embedder.encode(contents)
+            except EmbeddingUnavailable:
+                embed_result = None
+            if embed_result is not None and int(embed_result.dim or 0) != int(self._vector_dim):
                 raise ValueError(
                     _vector_dim_mismatch_message(
                         store_dim=int(self._vector_dim),
@@ -731,6 +753,7 @@ class _PostgresHybridStore:
                 )
             with self._engine.begin() as conn:
                 for index, payload in enumerate(pending):
+                    payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
                     conn.execute(
                         sql,
                         {
@@ -750,7 +773,7 @@ class _PostgresHybridStore:
                             "parent_collection": payload["parent_collection"],
                             "parent_run_id": payload["parent_run_id"],
                             "metadata": json.dumps(payload["metadata"], ensure_ascii=False),
-                            "embedding": _vector_literal(embed_result.dense[index]),
+                            "embedding": _vector_literal(embed_result.dense[index]) if embed_result else None,
                             "created_at": payload["created_at"],
                             "expires_at": payload["expires_at"],
                         },
@@ -763,8 +786,13 @@ class _PostgresHybridStore:
         query_text = (query or "").strip()
         if not query_text:
             return []
-        q_dense, _q_sparse = _embed_text(query_text, self._embedder)
-        if len(q_dense) != int(self._vector_dim):
+        try:
+            query_embedding = self._embedder.encode([query_text])
+            q_dense = query_embedding.dense[0]
+            identity = embedding_identity(query_embedding)
+        except EmbeddingUnavailable:
+            q_dense, identity = [], None
+        if identity is not None and len(q_dense) != int(self._vector_dim):
             raise ValueError(
                 _vector_dim_mismatch_message(
                     store_dim=int(self._vector_dim),
@@ -773,7 +801,7 @@ class _PostgresHybridStore:
                     model_name=self._embedder.model_name,
                 )
             )
-        q_emb = _vector_literal(q_dense)
+        q_emb = _vector_literal(q_dense) if identity else None
         candidate_k = max(12, int(top_k) * 4)
         scope_boost_persistent = 0.15
         scope_boost_medium = 0.05
@@ -791,6 +819,8 @@ class _PostgresHybridStore:
                     row_number() OVER (ORDER BY embedding <=> CAST(:query_embedding AS vector)) AS dense_rank,
                     1 - (embedding <=> CAST(:query_embedding AS vector)) AS dense_score
                 FROM live_docs
+                WHERE embedding IS NOT NULL AND CAST(:embedding_identity AS text) IS NOT NULL
+                  AND metadata->>'embedding_identity' = CAST(:embedding_identity AS text)
                 ORDER BY embedding <=> CAST(:query_embedding AS vector)
                 LIMIT :candidate_k
             ),
@@ -856,6 +886,7 @@ class _PostgresHybridStore:
                     "collection": collection,
                     "query": query_text,
                     "query_embedding": q_emb,
+                    "embedding_identity": identity,
                     "candidate_k": candidate_k,
                     "top_k": max(1, int(top_k)),
                     "rrf_k": self._rrf_k,
@@ -1017,10 +1048,9 @@ class HybridRAGService:
         self.vector_dim = int(effective_dim)
         self.rrf_k = max(1, int(rrf_k))
         self.backend_name = "memory"
-        self.embedding_model = self._embedder.model_name
         # embedding 层降级（请求 bge-m3 但 FlagEmbedding 不可用，实际退回 hash）也要诚实暴露。
         # 用 embedder 自身的降级标记作为 fallback_reason 的初始值；后续 postgres 降级原因会拼接而非覆盖。
-        self.fallback_reason: Optional[str] = getattr(self._embedder, "fallback_reason", None)
+        self._backend_fallback_reason: Optional[str] = None
         # 标记 postgres 降级是否已记日志，与 fallback_reason 解耦（后者可能仅由 embedding 降级占用）。
         postgres_fallback_logged = False
 
@@ -1033,7 +1063,7 @@ class HybridRAGService:
             message = "postgres backend requested but no DSN configured"
             if not allow_memory_fallback:
                 raise ValueError(message)
-            self.fallback_reason = _merge_fallback_reason(self.fallback_reason, message)
+            self._backend_fallback_reason = _merge_fallback_reason(self._backend_fallback_reason, message)
             _log_backend_fallback(
                 reason="postgres_dsn_missing",
                 detail=message,
@@ -1051,7 +1081,7 @@ class HybridRAGService:
             except Exception as exc:
                 if not allow_memory_fallback:
                     raise
-                self.fallback_reason = _merge_fallback_reason(self.fallback_reason, str(exc))
+                self._backend_fallback_reason = _merge_fallback_reason(self._backend_fallback_reason, str(exc))
                 postgres_fallback_logged = True
                 _log_backend_fallback(
                     reason="postgres_init_failed",
@@ -1068,6 +1098,15 @@ class HybridRAGService:
                 reason="postgres_unavailable_use_memory",
                 backend_requested=backend_norm,
             )
+    @property
+    def embedding_model(self) -> str:
+        return self._embedder.model_name
+
+    @property
+    def fallback_reason(self) -> str | None:
+        return _merge_fallback_reason(self._backend_fallback_reason,
+            getattr(self._embedder, "fallback_reason", None)) or None
+
     @classmethod
     def from_env(cls) -> "HybridRAGService":
         backend = os.getenv("RAG_V2_BACKEND", "auto")

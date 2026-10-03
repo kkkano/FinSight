@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Request
+from backend.services.conversation_store import ConversationVersionConflict
 
 
 @dataclass(frozen=True)
@@ -109,7 +111,7 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
             for item in context_items
             if _belongs_to_user(str(item.get("session_id") or "").strip(), user_id)
         }
-        records = deps.list_conversation_records(user_id) if deps.list_conversation_records else []
+        records = await asyncio.to_thread(deps.list_conversation_records, user_id) if deps.list_conversation_records else []
         items: list[dict[str, Any]] = []
         for record in records:
             if not isinstance(record, dict):
@@ -139,11 +141,13 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
             generate_when_missing=True,
         )
         manager = deps.get_session_context(session_id)
-        record = (
-            deps.upsert_conversation_record(session_id, payload, user_id)
-            if deps.upsert_conversation_record
-            else None
-        )
+        try:
+            record = (
+                await asyncio.to_thread(deps.upsert_conversation_record, session_id, payload, user_id)
+                if deps.upsert_conversation_record else None
+            )
+        except ConversationVersionConflict as exc:
+            raise HTTPException(409, detail={"code": "conversation_version_conflict", "message": "会话已更新，请读取最新内容后再保存。"}) from exc
         return {
             "success": True,
             "session_id": session_id,
@@ -157,7 +161,7 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
     @router.get("/api/conversations/{session_id}")
     async def get_conversation(session_id: str, request: Request):
         normalized, user_id = _owned_session(session_id, request)
-        record = deps.get_conversation_record(normalized, user_id) if deps.get_conversation_record else None
+        record = await asyncio.to_thread(deps.get_conversation_record, normalized, user_id) if deps.get_conversation_record else None
         manager = deps.get_session_context(normalized) if record is not None else None
         return {
             "success": True,
@@ -173,7 +177,7 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
     async def delete_conversation(session_id: str, request: Request):
         normalized, user_id = _owned_session(session_id, request)
         owned_record = (
-            deps.get_conversation_record(normalized, user_id)
+            await asyncio.to_thread(deps.get_conversation_record, normalized, user_id)
             if deps.get_conversation_record
             else None
         )
@@ -189,7 +193,7 @@ def create_conversation_router(deps: ConversationRouterDeps) -> APIRouter:
         if deps.delete_conversation_record:
             cleared = dict(cleared)
             cleared["conversation_store"] = (
-                1 if deps.delete_conversation_record(normalized, user_id) else 0
+                1 if await asyncio.to_thread(deps.delete_conversation_record, normalized, user_id) else 0
             )
         return {
             "success": True,

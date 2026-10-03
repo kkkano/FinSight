@@ -5,6 +5,7 @@ import asyncio
 import copy
 from dataclasses import asdict, is_dataclass
 import logging
+import os
 import time
 from typing import Any, Iterable, Mapping
 
@@ -256,6 +257,8 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
         return {}
 
     cache = DataCache()
+    from backend.graph.execution.request_data import SharedToolView, current_request_data
+    shared_tools = SharedToolView(tools_module, current_request_data())
     agent_classes: dict[str, Any] = {
         "price_agent": PriceAgent,
         "news_agent": NewsAgent,
@@ -285,14 +288,14 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
             init_errors[name] = "agent_class_not_found"
             continue
         try:
-            agent_instance = cls(None, cache, tools_module)
-            agents[name] = agent_instance
+            agents[name] = cls
         except Exception as exc:
             logger.exception("collector adapter failed to instantiate %s", name)
             init_errors[name] = f"init_failed:{exc.__class__.__name__}"
 
     invokers: dict[str, Any] = {}
-    timeout_seconds = 60.0
+    timeout_name = "COLLECTOR_REPORT_TIMEOUT_SECONDS" if state.get("output_mode") == "investment_report" else "COLLECTOR_TIMEOUT_SECONDS"
+    timeout_seconds = float(os.getenv(timeout_name, "300" if state.get("output_mode") == "investment_report" else "180"))
 
     for name in names:
         agent = agents.get(name)
@@ -332,8 +335,10 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
                 return fallback
 
             try:
+                # 每个任务独立 Agent 实例，缓存与工具视图仅共享本轮不可变数据。
+                instance = _agent(None, cache, shared_tools)
                 result = await asyncio.wait_for(
-                    _agent.research(query=query or "N/A", ticker=ticker),
+                    instance.research(query=query or "N/A", ticker=ticker),
                     timeout=timeout_seconds,
                 )
                 normalized = _normalize_agent_output(

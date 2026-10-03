@@ -110,6 +110,10 @@ class NewsItem(BaseModel):
     source: str = ""
     ts: str = ""
     summary: str = ""
+    event_quality: Optional[Dict[str, Any]] = None
+    supporting_reports: Optional[list[Dict[str, Any]]] = None
+    published_at_precision: Optional[str] = None
+    retrieval_kind: Optional[str] = None
     # Phase H: server-computed topic tags (max 3)
     tags: Optional[list[str]] = None
     # Ranking fields (injected by _rank_news_items)
@@ -127,6 +131,8 @@ class NewsItem(BaseModel):
 class ValuationData(BaseModel):
     """估值指标 (v2 新增)"""
     market_cap: Optional[float] = None
+    currency: Optional[str] = None
+    market_cap_currency: Optional[str] = None
     trailing_pe: Optional[float] = None
     forward_pe: Optional[float] = None
     price_to_book: Optional[float] = None
@@ -140,7 +146,10 @@ class ValuationData(BaseModel):
 
 class FinancialStatement(BaseModel):
     """财务报表结构化 (v2 新增)"""
-    periods: List[str] = Field(default_factory=list, description="e.g. ['2024Q4','2024Q3',...]")
+    periods: List[str] = Field(default_factory=list, description="实际财务期末日期，兼容历史显示标签")
+    period_ends: List[str] = Field(default_factory=list)
+    currency: Optional[str] = None
+    fact_metadata: Dict[str, Any] = Field(default_factory=dict)
     revenue: List[Optional[float]] = Field(default_factory=list)
     gross_profit: List[Optional[float]] = Field(default_factory=list)
     operating_income: List[Optional[float]] = Field(default_factory=list)

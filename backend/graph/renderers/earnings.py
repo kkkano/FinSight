@@ -33,7 +33,8 @@ def _latest_quarter_facts(state: GraphState) -> list[str]:
     payload = _first_matching_output(state, {"get_sec_company_facts_quarterly"})
     parsed = _parse_jsonish(payload)
     if isinstance(parsed, dict) and not parsed.get("error"):
-        periods = parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
+        periods = parsed.get("period_ends") if isinstance(parsed.get("period_ends"), list) else parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
+        fact_metadata = parsed.get("fact_metadata") if isinstance(parsed.get("fact_metadata"), dict) else {}
         period_label = str(periods[0] if periods else "最新季度").strip() or "最新季度"
         metric_specs = (
             ("revenue", "营收", True),
@@ -50,9 +51,13 @@ def _latest_quarter_facts(state: GraphState) -> list[str]:
             values = parsed.get(key)
             if not isinstance(values, list) or not values:
                 continue
-            formatted = _format_compact_number(values[0], money=money)
+            metadata_rows = fact_metadata.get(key)
+            metadata = metadata_rows[0] if isinstance(metadata_rows, list) and metadata_rows and isinstance(metadata_rows[0], dict) else {}
+            actual_period = str(metadata.get("period_end") or period_label)
+            unit = str(metadata.get("unit") or parsed.get("currency") or "")
+            formatted = _format_compact_number(values[0], money=False if metadata or unit else money)
             if formatted:
-                lines.append(f"{period_label} {label} {formatted}")
+                lines.append(f"{actual_period} {label} {formatted}" + (f" {unit}" if unit else ""))
             if len(lines) >= 4:
                 break
         if lines:

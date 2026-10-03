@@ -14,6 +14,7 @@ from backend.graph.intent_contract import is_research_compare_contract
 from backend.graph.renderers import render_chat_markdown, render_research_report, render_task_groups
 from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
+from backend.report.quality_engine import evaluate_result_quality
 from backend.graph.synthesis.contracts import ReportSynthesisDraft
 from backend.graph.synthesis.research_synthesis import (
     evaluate_synthesis_quality,
@@ -456,6 +457,34 @@ def render_node(state: GraphState) -> dict:
     for stub / empty drafts.
     """
     artifacts = state.get("artifacts") or {}
+    research_result = artifacts.get("research_result") if isinstance(artifacts, dict) else None
+    if isinstance(research_result, dict):
+        draft = ReportSynthesisDraft.model_validate(research_result)
+        coverage = (state.get("trace") or {}).get("coverage_validator") or {}
+        missing_requirements = coverage.get("missing_requirements") or []
+        for task in draft.task_results:
+            task.missing_requirements = [item for item in missing_requirements if isinstance(item, dict) and item.get("task_id") == task.task_id]
+            if task.missing_requirements and task.status == "answered":
+                task.status = "partial"
+        report_mode = state.get("output_mode") == "investment_report"
+        opinion = artifacts.get("opinion_synthesis") if isinstance(artifacts.get("opinion_synthesis"), dict) else {}
+        rendered = render_research_report(
+            draft, output_mode=str(state.get("output_mode") or "chat"),
+            direction_readiness=opinion.get("readiness_by_task"),
+        )
+        gate = evaluate_synthesis_quality(
+            draft=draft, requested_task_ids=artifacts.get("research_requested_task_ids") or [task.task_id for task in draft.task_results],
+            evidence_index=draft.evidence_index, rendered_task_ids=rendered.rendered_task_ids,
+            structural_block_reasons=artifacts.get("research_structural_block_reasons") or [],
+            require_claims=report_mode,
+        )
+        result_artifacts = {**artifacts, "research_result": draft.model_dump(), "draft_markdown": rendered.markdown, "research_report_render": rendered.model_dump(), "research_result_quality": gate.model_dump()}
+        if report_mode:
+            result_artifacts["research_synthesis"] = finalize_report_synthesis(draft=draft, final_gate=gate).model_dump()
+            result_artifacts["research_synthesis_gate"] = gate.model_dump()
+        quality = evaluate_result_quality(state={**state, "artifacts": result_artifacts})
+        result_artifacts.update({"result_quality": quality, "quality_blocked": quality["state"] == "block", "publishable": quality["publishable"]})
+        return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)], "trace": {**(state.get("trace") or {}), "rendered_task_ids": rendered.rendered_task_ids}}
     if state.get("output_mode") == "investment_report" and isinstance(artifacts, dict):
         raw_draft = artifacts.get("research_synthesis_draft")
         if isinstance(raw_draft, dict):

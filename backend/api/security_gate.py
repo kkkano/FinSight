@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
 from backend.config.settings import security_settings
 from backend.security.supabase_auth import resolve_request_user
+from backend.security.api_keys import configured_api_keys, request_api_key, is_internal_api_key_authorized
 
 logger = logging.getLogger(__name__)
 
@@ -58,18 +59,10 @@ def _parse_csv_env(key: str, default: str) -> list[str]:
     return _parse_csv(raw or default)
 
 def _parse_api_keys() -> set[str]:
-    settings = security_settings()
-    raw = settings.api_auth_keys or settings.api_auth_key
-    return {item.strip() for item in raw.split(",") if item.strip()}
+    return configured_api_keys()
 
 def _extract_api_key(request: Request) -> Optional[str]:
-    header_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
-    if header_key:
-        return header_key.strip()
-    auth = request.headers.get("Authorization") or ""
-    if auth.lower().startswith("bearer "):
-        return auth.split(" ", 1)[1].strip()
-    return None
+    return request_api_key(request)
 
 def _resolve_supabase_auth_config() -> tuple[str, str]:
     settings = security_settings()
@@ -96,8 +89,7 @@ def validate_runtime_auth_configuration() -> None:
             )
 
 def _is_internal_api_key_authorized(request: Request) -> bool:
-    api_key = _extract_api_key(request)
-    return bool(api_key and api_key in _parse_api_keys())
+    return is_internal_api_key_authorized(request)
 
 def _path_matches(path: str, configured: list[str]) -> bool:
     exact_paths: set[str] = set()
@@ -262,6 +254,9 @@ async def security_gate(request: Request, call_next):
 
     if model_user is not None:
         request.state.user_id = model_user["user_id"]
+        request.state.user_email = ""
+    elif not public_request and _is_internal_api_key_authorized(request):
+        request.state.user_id = "internal"
         request.state.user_email = ""
     elif public_request:
         # Public product reads skip authentication but still enter the IP rate
