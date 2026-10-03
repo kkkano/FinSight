@@ -294,97 +294,96 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               message: zh.chat.toolCompleted,
             });
           },
-          onDone: async (report, thinking, meta) => {
-            const degraded = meta?.degraded === true;
-            const doneStep: ThinkingStep = {
-              stage: 'done',
-              message: zh.chat.analysisDone,
-              timestamp: new Date().toISOString(),
-              eventType: 'done',
-              result: { type: 'done', status: 'done', reason: meta?.reason },
-            };
-            thinkingSteps = [...thinkingSteps, doneStep];
-            const metrics = meta?.metrics || {};
-            if (metrics && typeof metrics === 'object') {
-              useStore.getState().setRequestMetrics({
-                llmTotalCalls: Number(metrics.llm_total_calls || 0),
-                toolTotalCalls: Number(metrics.tool_total_calls || 0),
-                updatedAt: new Date().toISOString(),
-              });
-            }
-            if (isRequestSessionActive() && typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== requestSessionId) {
-              useStore.getState().setSessionId(meta.session_id);
-            }
-            if (thinking?.length) {
-              const existing = new Set(thinkingSteps.map((step) => `${step.stage}-${step.message}`));
-              const additions = thinking.filter((step) => !existing.has(`${step.stage}-${step.message}`));
-              if (additions.length > 0 && thinkingSteps.length > 0) thinkingSteps = [...thinkingSteps, ...additions];
-              else if (thinking.length >= thinkingSteps.length) thinkingSteps = thinking;
-            }
-            if (!fullContent || fullContent.trim() === '' || fullContent.trim() === '[object Object]') {
-              const blockedReport = meta?.blocked_report && typeof meta.blocked_report === 'object' ? meta.blocked_report : null;
-              const fallback = typeof meta?.response === 'string' && meta.response.trim()
-                ? meta.response
-                : report?.summary || blockedReport?.summary || '';
-              if (fallback) fullContent = fallback;
-            }
-            if (!report && meta?.blocked_report && typeof meta.blocked_report === 'object') report = meta.blocked_report;
-            if (!hasChatOutput(fullContent, report)) {
-              thinkingSteps = [...thinkingSteps.filter((step) => step.stage !== 'done'), {
-                stage: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE, timestamp: new Date().toISOString(),
-                eventType: 'error', result: { type: 'error', status: 'error', code: 'empty_model_response' },
-              }];
-              updateScopedMessage(aiMsgId, { content: EMPTY_CHAT_RESPONSE_MESSAGE, isLoading: false,
-                error: EMPTY_CHAT_RESPONSE_MESSAGE, canRetry: true, thinking: thinkingSteps });
-              const current = useStore.getState();
-              current.addAgentLog({ id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE });
-              current.updateAgentStatus('supervisor', { status: 'error', lastMessage: EMPTY_CHAT_RESPONSE_MESSAGE });
-              if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'error', error: EMPTY_CHAT_RESPONSE_MESSAGE });
-              if (isRequestSessionActive()) current.setStatus(null);
-              toast({ type: 'error', title: zh.chat.requestFailed, message: EMPTY_CHAT_RESPONSE_MESSAGE });
-              return;
-            }
-            const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
-            if (nextFocus) useStore.getState().setTicker(nextFocus);
-            updateScopedMessage(aiMsgId, {
-              content: fullContent,
-              isLoading: false,
-              report,
-              thinking: thinkingSteps,
-              evidence_pool: meta?.evidence_pool ?? meta?.data?.evidence_pool,
-              fallback_used: degraded,
-              data_origin: degraded ? 'LLM' : undefined,
-            });
-            if (degraded) {
-              toast({ type: 'warning', title: zh.chat.degradedTitle, message: typeof meta?.degradation_message === 'string' && meta.degradation_message.trim()
-                ? meta.degradation_message : zh.chat.degradedMessage });
-            }
-
-            // 5. 文本先落定，图表异步补挂。
-            void (async () => {
-              let patched = fullContent;
-              try {
-                const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || initialState.currentTicker || null);
-                const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(userMsgContent);
-                const forceMulti = tickers.length > 1;
-                if (chartInfo.chartType || forceMulti) {
-                  const withMarkers = injectChartMarkers(patched, tickers, chartInfo.chartType, {
-                    valueMode: chartInfo.valueMode,
-                    period: chartInfo.period,
-                  });
-                  if (withMarkers !== patched && tickers.length === 1) useStore.getState().setTicker(tickers[0]);
-                  patched = withMarkers;
-                }
-                if (patched !== fullContent) updateScopedMessage(aiMsgId, { content: patched });
-              } catch (error) {
-                console.warn('chart enrichment skipped:', error);
+          onDone: (report, thinking, meta) => {
+            terminalHandlingPromise = (async () => {
+              const degraded = meta?.degraded === true;
+              const doneStep: ThinkingStep = {
+                stage: 'done',
+                message: zh.chat.analysisDone,
+                timestamp: new Date().toISOString(),
+                eventType: 'done',
+                result: { type: 'done', status: 'done', reason: meta?.reason },
+              };
+              thinkingSteps = [...thinkingSteps, doneStep];
+              const metrics = meta?.metrics || {};
+              if (metrics && typeof metrics === 'object') {
+                useStore.getState().setRequestMetrics({
+                  llmTotalCalls: Number(metrics.llm_total_calls || 0),
+                  toolTotalCalls: Number(metrics.tool_total_calls || 0),
+                  updatedAt: new Date().toISOString(),
+                });
               }
+              if (thinking?.length) {
+                const existing = new Set(thinkingSteps.map((step) => `${step.stage}-${step.message}`));
+                const additions = thinking.filter((step) => !existing.has(`${step.stage}-${step.message}`));
+                if (additions.length > 0 && thinkingSteps.length > 0) thinkingSteps = [...thinkingSteps, ...additions];
+                else if (thinking.length >= thinkingSteps.length) thinkingSteps = thinking;
+              }
+              if (!fullContent || fullContent.trim() === '' || fullContent.trim() === '[object Object]') {
+                const blockedReport = meta?.blocked_report && typeof meta.blocked_report === 'object' ? meta.blocked_report : null;
+                const fallback = typeof meta?.response === 'string' && meta.response.trim()
+                  ? meta.response
+                  : report?.summary || blockedReport?.summary || '';
+                if (fallback) fullContent = fallback;
+              }
+              if (!report && meta?.blocked_report && typeof meta.blocked_report === 'object') report = meta.blocked_report;
+              if (!hasChatOutput(fullContent, report)) {
+                thinkingSteps = [...thinkingSteps.filter((step) => step.stage !== 'done'), {
+                  stage: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE, timestamp: new Date().toISOString(),
+                  eventType: 'error', result: { type: 'error', status: 'error', code: 'empty_model_response' },
+                }];
+                updateScopedMessage(aiMsgId, { content: EMPTY_CHAT_RESPONSE_MESSAGE, isLoading: false,
+                  error: EMPTY_CHAT_RESPONSE_MESSAGE, canRetry: true, thinking: thinkingSteps });
+                const current = useStore.getState();
+                current.addAgentLog({ id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE });
+                current.updateAgentStatus('supervisor', { status: 'error', lastMessage: EMPTY_CHAT_RESPONSE_MESSAGE });
+                if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'error', error: EMPTY_CHAT_RESPONSE_MESSAGE });
+                if (isRequestSessionActive()) current.setStatus(null);
+                toast({ type: 'error', title: zh.chat.requestFailed, message: EMPTY_CHAT_RESPONSE_MESSAGE });
+                return;
+              }
+              const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
+              if (nextFocus) useStore.getState().setTicker(nextFocus);
+              updateScopedMessage(aiMsgId, {
+                content: fullContent,
+                isLoading: false,
+                report,
+                thinking: thinkingSteps,
+                evidence_pool: meta?.evidence_pool ?? meta?.data?.evidence_pool,
+                fallback_used: degraded,
+                data_origin: degraded ? 'LLM' : undefined,
+              });
+              if (degraded) {
+                toast({ type: 'warning', title: zh.chat.degradedTitle, message: typeof meta?.degradation_message === 'string' && meta.degradation_message.trim()
+                  ? meta.degradation_message : zh.chat.degradedMessage });
+              }
+
+              // 5. 文本先落定，图表异步补挂。
+              void (async () => {
+                let patched = fullContent;
+                try {
+                  const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || initialState.currentTicker || null);
+                  const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(userMsgContent);
+                  const forceMulti = tickers.length > 1;
+                  if (chartInfo.chartType || forceMulti) {
+                    const withMarkers = injectChartMarkers(patched, tickers, chartInfo.chartType, {
+                      valueMode: chartInfo.valueMode,
+                      period: chartInfo.period,
+                    });
+                    if (withMarkers !== patched && tickers.length === 1) useStore.getState().setTicker(tickers[0]);
+                    patched = withMarkers;
+                  }
+                  if (patched !== fullContent) updateScopedMessage(aiMsgId, { content: patched });
+                } catch (error) {
+                  console.warn('chart enrichment skipped:', error);
+                }
             })();
 
             if (execRunId) {
               useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'done', report: report ?? null, meta });
             }
             if (isRequestSessionActive()) useStore.getState().setStatus(null);
+            })();
           },
           onError: (error) => {
             terminalHandlingPromise = (async () => {

@@ -43,6 +43,8 @@ export const zh = {
     reconnecting: '已断线，正在重连…',
     streamInterrupted: '连接中断，内容可能不完整',
     streamInterruptedTitle: '流式连接中断',
+    savedAnswerInterrupted: '上次回答未完整保存，可以重新生成。',
+    missingSavedAnswer: '这条问题没有已保存的回答，可以重新生成。',
     streamInterruptedMessage: '已保留收到的内容，可以点击重试继续',
     requestFailed: '请求失败',
     requestFailedMessage: '网络异常或服务不可用，请稍后重试',

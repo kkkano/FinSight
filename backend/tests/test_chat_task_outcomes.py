@@ -177,3 +177,18 @@ def test_duplicate_render_identity_fails_closed():
     assert ok is False
     assert rendered_ids == ["same", "same"]
     assert "内部任务渲染检查未通过" in markdown
+
+
+def test_single_task_slice_preserves_its_synthesis_but_multi_task_slices_do_not():
+    from backend.graph.renderers.registry import _task_section_state
+
+    task = _task("one", 0, "qa", "研究")
+    variables = {"conclusion": "本轮研究结论", "impact_analysis": "已生成的证据分析"}
+    state = {"tasks": [task], "artifacts": {"render_vars": variables}}
+    single = _task_section_state(state, task, {"step_ids": [], "results": {}})
+    assert single["artifacts"]["render_vars"] == variables
+    multi = _task_section_state(
+        {**state, "tasks": [task, _task("two", 1, "qa", "其他研究")]},
+        task, {"step_ids": [], "results": {}},
+    )
+    assert "render_vars" not in multi["artifacts"]

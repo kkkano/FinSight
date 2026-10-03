@@ -22,6 +22,20 @@ def _frame_id(ctx, frame: dict, index: int) -> str:
     return str(frame.get("frame_id") or f"frame_{index}").strip() or f"frame_{index}"
 
 
+def _frame_task_ids(ctx, frame_id: str) -> list[str]:
+    if not ctx.ready_tasks:
+        return [frame_id]
+    return list(dict.fromkeys(
+        str(task.get("id") or "").strip()
+        for task in ctx.ready_tasks
+        if str(task.get("id") or "").strip()
+        and (
+            str(task.get("request_frame_id") or "").strip() == frame_id
+            or (not task.get("request_frame_id") and str(task.get("id") or "").strip() == frame_id)
+        )
+    ))
+
+
 def _frame_subject(ctx, frame: dict) -> dict:
     subject_payload = frame.get("subject")
     return subject_payload if isinstance(subject_payload, dict) else {}
@@ -69,7 +83,7 @@ def _frame_evidence_profile(ctx, frame: dict) -> str:
     ).strip()
 
 
-def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_id: str) -> None:
+def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[str]) -> None:
     frame_subject = _frame_subject(ctx, frame)
     label = str(frame_subject.get("label") or frame.get("subject_label") or "").strip()
     macro_query = label if label else ctx.query
@@ -79,7 +93,7 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_id: str) -> 
         why="Request frame macro evidence: current date guard.",
         optional=True,
         parallel_group=group,
-        task_ids=[task_id],
+        task_ids=task_ids,
     )
     _append_tool_step(ctx, 
         "get_official_macro_releases",
@@ -87,7 +101,7 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_id: str) -> 
         why="Request frame macro evidence: official macro releases.",
         optional=False,
         parallel_group=group,
-        task_ids=[task_id],
+        task_ids=task_ids,
     )
     _append_tool_step(ctx, 
         "get_authoritative_media_news",
@@ -95,7 +109,7 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_id: str) -> 
         why="Request frame macro evidence: authoritative market context.",
         optional=True,
         parallel_group=group,
-        task_ids=[task_id],
+        task_ids=task_ids,
     )
     _append_tool_step(ctx, 
         "search",
@@ -103,11 +117,11 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_id: str) -> 
         why="Request frame macro evidence: supplemental search.",
         optional=True,
         parallel_group=group,
-        task_ids=[task_id],
+        task_ids=task_ids,
     )
 
 
-def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, task_id: str) -> bool:
+def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, task_ids: list[str]) -> bool:
     if "get_performance_comparison" not in ctx.allowed_tools:
         return False
     frame_tickers = _frame_tickers(ctx, frame)
@@ -126,7 +140,7 @@ def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, t
         why="Request frame compare evidence: cross-subject performance comparison.",
         optional=False,
         parallel_group=group,
-        task_ids=[task_id],
+        task_ids=task_ids,
     )
     return True
 
@@ -136,20 +150,24 @@ def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, t
 def _append_request_frame_steps(ctx) -> bool:
     if not ctx.request_frames:
         return False
+    # Frame 是执行分组，任务 ID 才是结果合同的身份；缺绑定时交回任务规划器。
+    if any(not _frame_task_ids(ctx, _frame_id(ctx, frame, index)) for index, frame in enumerate(ctx.request_frames[:16], 1)):
+        return False
     appended = False
     for index, frame in enumerate(ctx.request_frames[:16], 1):
         frame_id = _frame_id(ctx, frame, index)
+        task_ids = _frame_task_ids(ctx, frame_id)
         group = frame_id
         required_evidence = _frame_required_evidence(ctx, frame)
         if not required_evidence:
             continue
 
         if "macro_context" in required_evidence or _frame_subject_type(ctx, frame) == "macro":
-            _append_macro_frame_steps(ctx, frame, group=group, task_id=frame_id)
+            _append_macro_frame_steps(ctx, frame, group=group, task_ids=task_ids)
             appended = True
 
         if "performance_comparison" in required_evidence:
-            appended = _append_performance_comparison_frame_step(ctx, frame, group=group, task_id=frame_id) or appended
+            appended = _append_performance_comparison_frame_step(ctx, frame, group=group, task_ids=task_ids) or appended
 
         per_ticker_evidence = [
             kind
@@ -166,7 +184,7 @@ def _append_request_frame_steps(ctx) -> bool:
                 ticker,
                 per_ticker_evidence,
                 group=group,
-                task_ids=[frame_id],
+                task_ids=task_ids,
                 evidence_profile=_frame_evidence_profile(ctx, frame),
             )
             appended = True

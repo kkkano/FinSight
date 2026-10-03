@@ -156,3 +156,32 @@ def test_keyword_bias_helper_is_removed():
     import backend.graph.renderers.opinion as module
 
     assert not hasattr(module, "_investment_opinion_bias")
+
+
+def test_direction_block_preserves_verified_facts_risks_and_excludes_directional_claims():
+    claims = [
+        _claim("fact", "technical", "fact-e", stance="neutral"),
+        _claim("risk", "risk", "risk-e", stance="risk"),
+        _claim("direction", "fundamental", "direction-e", stance="bull"),
+    ]
+    readiness, result, validation, evidence = _readiness_case(anchor=False, claims=claims)
+    assert not readiness.direction_allowed
+    state = {
+        "tasks": [{"id": "t1", "operation": {"name": "investment_opinion"}}],
+        "artifacts": {
+            "render_vars": {"conclusion": "偏多，建议买入", "impact_analysis": "未经证据绑定的正文"},
+            "opinion_synthesis": {
+                "task_results_by_task": {"t1": result.model_dump()},
+                "readiness_by_task": {"t1": readiness.model_dump()},
+                "claim_validation": validation.model_dump(),
+                "evidence_normalization": evidence.model_dump(),
+            },
+        },
+    }
+    markdown = render_investment_opinion(state, {"operations": {"investment_opinion"}})
+    assert "已验证的研究要点" in markdown
+    assert claims[0].text in markdown and "[fact-e]" in markdown
+    assert claims[1].text in markdown and "[risk-e]" in markdown
+    assert claims[2].text not in markdown
+    assert "买入" not in markdown and "未经证据绑定" not in markdown
+    assert "缺少带时间的有效价格锚点" in markdown

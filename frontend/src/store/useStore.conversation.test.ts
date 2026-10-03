@@ -143,15 +143,71 @@ describe('useStore conversation lifecycle', () => {
     expect(useStore.getState().conversationSummaries.some((item) => item.sessionId === aliceSessionId)).toBe(false);
   });
 
-  it('syncs an authenticated conversation and hydrates empty local history', async () => {
+  it('reads an authenticated conversation without overwriting its saved history', async () => {
     const createConversation = vi.mocked(apiClient.createConversation);
     const getConversation = vi.mocked(apiClient.getConversation);
 
     useStore.getState().setSessionId('public:test-user:second');
     await Promise.resolve();
 
-    expect(createConversation).toHaveBeenCalledOnce();
+    expect(createConversation).not.toHaveBeenCalled();
     expect(getConversation).toHaveBeenCalledOnce();
+  });
+
+  it('shows interrupted empty assistant slots as retryable after reopening', () => {
+    const sid = useStore.getState().sessionId;
+    useStore.getState().addMessage({ id: 'pending-user', role: 'user', content: 'INTC research', timestamp: 1 });
+    useStore.getState().addMessage({ id: 'pending-assistant', role: 'assistant', content: '', timestamp: 2, isLoading: true });
+    useStore.getState().startNewChat();
+    useStore.getState().selectConversation(sid);
+    const answer = useStore.getState().messages.find((message) => message.id === 'pending-assistant');
+    expect(answer).toMatchObject({ content: zh.chat.savedAnswerInterrupted, error: zh.chat.savedAnswerInterrupted,
+      isLoading: false, canRetry: true });
+  });
+
+  it('restores a completed backend answer for a missing local reply', async () => {
+    const sid = useStore.getState().sessionId;
+    useStore.getState().addMessage({ id: 'research-user', role: 'user', content: 'INTC research', timestamp: 1 });
+    useStore.getState().startNewChat();
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid, conversation: {
+      messages: [{ id: 'research-user', role: 'user', content: 'INTC research', timestamp: 1 },
+        { id: 'saved-answer', role: 'assistant', content: 'Verified INTC answer', timestamp: 2 }],
+    } });
+    vi.clearAllMocks();
+    useStore.getState().selectConversation(sid);
+    expect(useStore.getState().messages.at(-1)?.error).toBe(zh.chat.missingSavedAnswer);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ content: 'Verified INTC answer', error: undefined, canRetry: false });
+    expect(apiClient.createConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not replace newly sent messages with late backend recovery', async () => {
+    const sid = useStore.getState().sessionId;
+    useStore.getState().addMessage({ id: 'research-user', role: 'user', content: 'INTC research', timestamp: 1 });
+    useStore.getState().startNewChat();
+    let resolve: (value: Awaited<ReturnType<typeof apiClient.getConversation>>) => void = () => undefined;
+    vi.mocked(apiClient.getConversation).mockReturnValue(new Promise((complete) => { resolve = complete; }));
+    useStore.getState().selectConversation(sid);
+    useStore.getState().addMessage({ id: 'new-user', role: 'user', content: 'New question', timestamp: 3 });
+    resolve({ success: true, session_id: sid, conversation: { messages: [
+      { id: 'research-user', role: 'user', content: 'INTC research', timestamp: 1 },
+      { id: 'saved-answer', role: 'assistant', content: 'Old recovered answer', timestamp: 2 },
+    ] } });
+    await Promise.resolve();
+    expect(useStore.getState().messages.at(-1)?.id).toBe('new-user');
+  });
+
+  it('still saves the answer remotely when local storage fails', () => {
+    const setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
+    vi.stubGlobal('window', { localStorage: { setItem, getItem: () => null } });
+    try {
+      useStore.getState().addMessage({ id: 'answer-without-storage', role: 'assistant', content: 'Answer survives quota', timestamp: 4 });
+      expect(apiClient.createConversation).toHaveBeenCalledWith(useStore.getState().sessionId,
+        expect.objectContaining({ messages: expect.arrayContaining([expect.objectContaining({ content: 'Answer survives quota' })]) }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('starts a new chat by rotating session id and resetting transient state', () => {

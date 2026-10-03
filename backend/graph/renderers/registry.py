@@ -237,6 +237,9 @@ def _task_section_state(
         "evidence_by_task": {task_id: task_evidence},
         "render_group_body": group_body,
     }
+    # 全局合成字段只属于唯一任务；多任务继续消费各自结构化切片。
+    if set(_raw_task_index(state)) == {task_id} and isinstance(artifacts.get("render_vars"), dict):
+        sub_artifacts["render_vars"] = artifacts["render_vars"]
     opinion = artifacts.get("opinion_synthesis") if isinstance(artifacts.get("opinion_synthesis"), dict) else None
     if opinion is not None:
         results = opinion.get("task_results_by_task") if isinstance(opinion.get("task_results_by_task"), dict) else {}

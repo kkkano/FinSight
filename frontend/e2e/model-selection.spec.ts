@@ -307,3 +307,62 @@ test('truncated model output keeps verified data and displays the actual cause',
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('truncated-completion.png') });
 });
+
+test('canonical completion IDs do not move the answer out of the current conversation', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/execute', (route) => {
+    const session = route.request().postDataJSON().session_id;
+    return route.fulfill({ contentType: 'text/event-stream', body: `data: ${JSON.stringify({
+      type: 'done', session_id: `${session}-canonical`, response: '当前会话中的英特尔研究回答',
+    })}\n\n` });
+  });
+  await page.locator('#chat-input').fill('分析英特尔');
+  await page.getByTestId('chat-send-btn').click();
+  await expect(page.locator('#chat-scroll-container').getByText('分析英特尔', { exact: true })).toBeVisible();
+  await expect(page.locator('#chat-scroll-container').getByText('当前会话中的英特尔研究回答', { exact: true })).toBeVisible();
+});
+
+test('answers remain visible and restore after refresh when local storage is full', async ({ page }, testInfo) => {
+  await setup(page);
+  let savedMessages: Array<{ id: string; role: string; content: string; timestamp: number }> = [];
+  await page.route('**/api/conversations**', (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      const payload = request.postDataJSON();
+      if (payload.messages) savedMessages = payload.messages;
+      return fulfillJson(route, { success: true });
+    }
+    return fulfillJson(route, { success: true, conversation: { messages: savedMessages }, items: [] });
+  });
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('finsight-messages:') || key === 'finsight-conversations') {
+        throw new DOMException('Storage is full', 'QuotaExceededError');
+      }
+      original.call(this, key, value);
+    };
+  });
+  await page.locator('#chat-input').fill('分析英特尔');
+  await page.getByTestId('chat-send-btn').click();
+  await expect(page.locator('#chat-scroll-container').getByText('模型测试回复', { exact: true })).toBeVisible();
+  await expect.poll(() => savedMessages.some((message) => message.role === 'assistant' && message.content === '模型测试回复')).toBe(true);
+  await page.reload();
+  await expect(page.locator('#chat-scroll-container').getByText('模型测试回复', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('restored-answer-after-refresh.png') });
+});
+
+test('reopening an interrupted empty answer shows a visible retry state', async ({ page }) => {
+  await setup(page);
+  await page.evaluate(() => {
+    const session = localStorage.getItem('finsight-session-id');
+    localStorage.setItem(`finsight-messages:${session}`, JSON.stringify([
+      { id: 'old-user', role: 'user', content: 'hi', timestamp: 1 },
+      { id: 'old-answer', role: 'assistant', content: '', timestamp: 2, isLoading: true },
+    ]));
+  });
+  await page.reload();
+  await expect(page.locator('#chat-scroll-container').getByText('上次回答未完整保存，可以重新生成。', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '重试回答', exact: true }).last().click();
+  await expect(page.locator('#chat-scroll-container').getByText('模型测试回复', { exact: true })).toBeVisible();
+});

@@ -344,10 +344,23 @@ const normalizePersistedMessages = (
   try {
     const parsed = JSON.parse(raw) as Message[];
     if (!Array.isArray(parsed) || parsed.length === 0) return [];
-    return parsed.map((m) => ({
-      ...m,
-      isLoading: options.preserveLoading ? Boolean(m.isLoading) : false,
-    }));
+    const messages = parsed.map((m) => {
+      const hasReport = Boolean(m.report?.summary?.trim() || m.report?.synthesis_report?.trim() || m.report?.sections?.length);
+      const interrupted = !options.preserveLoading && m.role === 'assistant'
+        && (m.isLoading || (!m.content?.trim() && !hasReport));
+      return {
+        ...m,
+        isLoading: options.preserveLoading ? Boolean(m.isLoading) : false,
+        ...(interrupted ? { content: m.content?.trim() ? m.content : zh.chat.savedAnswerInterrupted,
+          error: zh.chat.savedAnswerInterrupted, canRetry: true } : {}),
+      };
+    });
+    const last = messages.at(-1);
+    if (!options.preserveLoading && last?.role === 'user') {
+      messages.push({ id: `unanswered:${last.id}`, role: 'assistant', timestamp: last.timestamp + 1,
+        content: zh.chat.missingSavedAnswer, error: zh.chat.missingSavedAnswer, canRetry: true, isLoading: false });
+    }
+    return messages;
   } catch {
     return [];
   }
@@ -408,7 +421,9 @@ const persistConversationSummaries = (summaries: ConversationSummary[]) => {
     memoryConversationSummaries = normalized;
     return;
   }
-  window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(normalized));
+  try {
+    window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(normalized));
+  } catch { /* 会话摘要缓存失败不能中断正文更新。 */ }
 };
 
 const loadConversationSummaries = (activeSessionId: string, activeMessages: Message[]): ConversationSummary[] => {
@@ -499,6 +514,9 @@ const isEmptyLocalHistory = (messages: Message[]): boolean => {
   return messages.every((m) => m.id === WELCOME_MESSAGE.id);
 };
 
+const needsBackendHistory = (messages: Message[]): boolean => isEmptyLocalHistory(messages)
+  || messages.some((message) => message.error === zh.chat.savedAnswerInterrupted || message.error === zh.chat.missingSavedAnswer);
+
 /** 把后端 sanitize 过的消息行（{id, role, content, timestamp}）还原为 Message。 */
 const deserializeBackendMessages = (raw: unknown): Message[] => {
   if (!Array.isArray(raw)) return [];
@@ -520,17 +538,12 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
 };
 
 /**
- * 后端回退：本地无历史时异步拉后端会话快照回填（换设备 / 清缓存找回）。
- *
- * 原则（不破坏现有同步加载逻辑）：
- *   - 调用方只在「本地加载结果为空」时触发，本地有就用本地，本地空才回后端
- *   - 拉到非空历史后，仅当此刻仍停留在同一 session 且本地仍为空时才填充（避免覆盖用户已新发的消息 / 切走的会话）
- *   - 拿到的历史写回 localStorage 作为缓存（syncBackend=false：不要再反向写后端，避免回环）
- *   - 任何失败静默忽略，保持纯回退语义
+ * 恢复空历史或未保存的回答；只替换同一问题的已完成快照，不覆盖新消息或正在生成的内容。
  */
 const hydrateMessagesFromBackend = (sessionId: string): void => {
   const sid = String(sessionId || '').trim();
   if (!sid || !canSyncBackendConversation(sid)) return;
+  const originalMessages = useStore.getState().messages;
   void apiClient
     .getConversation(sid)
     .then((resp) => {
@@ -539,16 +552,25 @@ const hydrateMessagesFromBackend = (sessionId: string): void => {
       if (!restored.length) return;
 
       const state = useStore.getState();
-      // 仅当仍在该 session 且本地仍为空时回填（防竞态覆盖）
-      if (state.sessionId !== sid || !isEmptyLocalHistory(state.messages)) return;
+      if (state.sessionId !== sid || state.messages !== originalMessages || state.chatLoadingBySession[sid]) return;
+      if (!isEmptyLocalHistory(state.messages)) {
+        const lastUser = [...state.messages].reverse().find((message) => message.role === 'user');
+        const index = restored.findIndex((message) => message.role === 'user' && message.id === lastUser?.id);
+        const answer = restored[index + 1];
+        if (index < 0 || answer?.role !== 'assistant'
+          || answer.content === zh.chat.savedAnswerInterrupted || answer.content === zh.chat.missingSavedAnswer) return;
+      }
 
-      persistMessages(restored, sid, { syncBackend: false });
+      const localById = new Map(state.messages.map((message) => [message.id, message]));
+      const recovered = restored.map((message) => ({ ...localById.get(message.id), ...message,
+        isLoading: false, error: undefined, canRetry: false }));
+      persistMessages(recovered, sid, { syncBackend: false });
       useStore.setState({
-        messages: restored,
+        messages: recovered,
         conversationSummaries: upsertConversationSummary(
           state.conversationSummaries,
           sid,
-          restored,
+          recovered,
         ),
       });
     })
@@ -563,20 +585,24 @@ const persistMessages = (
   const sid = String(sessionId || '').trim();
   if (!sid) return;
   const syncBackend = options.syncBackend !== false;
+  const toSave = messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-MAX_PERSISTED_MESSAGES);
   try {
-    const toSave = messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(-MAX_PERSISTED_MESSAGES);
     if (typeof window === 'undefined') {
       memoryMessageStore.set(messageStorageKey(sid), JSON.stringify(toSave));
-      if (syncBackend) createBackendConversation(sid, toSave);
-      return;
+    } else {
+      window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
     }
-    window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
-    if (syncBackend) createBackendConversation(sid, toSave);
   } catch {
-    // localStorage full or unavailable — silently ignore
+    // 容量不足时优先保存正文，调试轨迹仍留在当前页面内存中。
+    try {
+      window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave.map(
+        ({ id, role, content, timestamp, isLoading, error, canRetry }) => ({ id, role, content, timestamp, isLoading, error, canRetry }),
+      )));
+    } catch { /* 后端同步不依赖本地存储是否可用。 */ }
   }
+  if (syncBackend) createBackendConversation(sid, toSave);
 };
 
 const appendMessageForSession = (messages: Message[], message: Message): Message[] => {
@@ -1070,9 +1096,8 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
-      createBackendConversation(normalized, messages);
-      // 本地无历史 → 标记需回后端回退（在 set 外异步执行，避免 reducer 内副作用）
-      if (isEmptyLocalHistory(messages)) {
+      // 空历史或中断回答只读取服务器快照，不能用旧本地内容覆盖它。
+      if (needsBackendHistory(messages) && !state.chatLoadingBySession[normalized]) {
         needHydrate = true;
         hydrateSid = normalized;
       }
@@ -1105,8 +1130,7 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
-      // 本地无历史 → 标记需回后端回退（切换到旧会话时找回历史的核心路径）
-      if (isEmptyLocalHistory(messages)) {
+      if (needsBackendHistory(messages) && !state.chatLoadingBySession[normalized]) {
         needHydrate = true;
         hydrateSid = normalized;
       }
@@ -1204,7 +1228,7 @@ export const useStore = create<AppState>((set) => ({
       };
     }),
 
-  setAuthIdentity: (identity) =>
+  setAuthIdentity: (identity) => {
     set((state) => {
       const normalizedIdentity = identity?.userId
         ? { userId: String(identity.userId).trim(), email: identity.email }
@@ -1262,7 +1286,11 @@ export const useStore = create<AppState>((set) => ({
           updatedAt: null,
         },
       };
-    }),
+    });
+    const current = useStore.getState();
+    if (current.authIdentity?.userId && needsBackendHistory(current.messages)
+      && !current.chatLoadingBySession[current.sessionId]) hydrateMessagesFromBackend(current.sessionId);
+  },
 
   setDraft: (text) =>
     set((state) => ({

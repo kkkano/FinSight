@@ -61,6 +61,21 @@ def render_investment_opinion(state: GraphState, ctx: dict[str, Any]) -> str | N
             claim = claims[claim_id]
             refs = " ".join(f"[{item}]" for item in claim.evidence_ids)
             lines.append(f"- {claim.text} {refs}".rstrip())
+    displayed = set(readiness.supporting_claim_ids) if readiness.direction_allowed else set()
+    factual_claims = [
+        claim for claim in claims.values()
+        if claim.task_id == result.task_id
+        and claim.claim_id not in displayed
+        and claim.stance in {"neutral", "unknown", "risk"}
+        and all(source_id in evidence and result.task_id in evidence[source_id].task_ids for source_id in claim.evidence_ids)
+    ]
+    for heading, stances in (("已验证的研究要点", {"neutral", "unknown"}), ("风险", {"risk"})):
+        items = [claim for claim in factual_claims if claim.stance in stances][:8]
+        if items:
+            lines.extend(["", f"**{heading}**"])
+            for claim in items:
+                refs = " ".join(f"[{item}]" for item in claim.evidence_ids)
+                lines.append(f"- {claim.text} {refs}".rstrip())
     if readiness.qualified_dimensions:
         lines.extend(["", "**已验证维度**"])
         lines.extend(f"- {item}" for item in readiness.qualified_dimensions)
