@@ -32,6 +32,8 @@
 
 文档更新不代表部署或外部验收通过。主代理在执行完成后同步计划勾选、发布 SHA 和各项验证状态，未完成项保持明确待补。
 
+本轮实际运行版本为 `94a0171a`，生产 schema 已升级 `0006`，公开就绪与持久化 canary 通过；语义 RAG 因内存限制使用明确的词法降级。具体证据和待补的 24 小时观察见 [发布记录](archive/2026-10-03-foundation-refactor/RELEASE.md)。
+
 本轮新增的实时新闻/事件质量合同参见 [`HALLUCINATION_MITIGATION.md`](HALLUCINATION_MITIGATION.md) 和 [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)；[AIHOT 固定版本参考与取舍](archive/2026-10-03-foundation-refactor/NEWS_EVENT_QUALITY.md) 保存在归档中。
 
 已完成的 2026-07 生产质量修复 Spec 与一次性发布证据已归档到 [`archive/2026-07-production-quality-remediation/`](archive/2026-07-production-quality-remediation/)，不再作为当前规范入口。
