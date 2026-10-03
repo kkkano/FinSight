@@ -38,3 +38,5 @@ worker 实测 `resource_limited`、`inference_verified=false`。API 明确返回
 SSH 管道发布脚本中的 Compose 一次性迁移命令最初消费了后续标准输入，导致迁移完成后没有继续启动服务；已显式接续启动并完成上述验证，脚本修正为 `run -T ... < /dev/null`。发布必须核对容器镜像、schema 和实际健康结果，不能只依赖脚本退出码。
 
 24 小时运行观察尚未完成；真实语义 RAG 需足够内存后另行验收。没有发送额外测试告警邮件。
+
+后续前端独立修复已发布 `4cd9e1c1`，后端继续运行 `94a0171a`。详情见 [聊天交付修复](CHAT_DELIVERY_FOLLOWUP.md)，两者版本差异是有意的独立发布。

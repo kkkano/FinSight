@@ -22,4 +22,6 @@
 
 67项聚焦unit通过；6项会话浏览器测试通过，包括“回复槽丢失+SSE挂住+99%交付+服务器正文恢复”；新版本提示浏览器测试通过。TypeScript使用512MB串行通过，受影响ESLint通过。所有浏览器用例使用fixture，不重发用户问题或产生供应商费用。
 
-仅发布前端与对应Compose配置，后端及已保存答案保留运行；实际版本在发布后追加。
+已提交、push 并独立发布前端版本 `4cd9e1c1159778e1ba0185bf4fb0e99ce39ba76f`，镜像 ID 为 `sha256:cf4c93c3ea44e6929050fcdb66b5cb59d50516b68e9d2292198eec517a0c4b8e`。后端仍运行 `94a0171a`，没有重启或重新调用模型。
+
+旧执行面板 E2E 补齐点击真实“执行详情”展开操作后，2 项失败用例重跑通过；本轮合计 10 个不同浏览器用例通过。发布后 `/app-version.json` 版本匹配并带 `no-cache, no-store, must-revalidate`，公开 `/chat` HTML 版本匹配，生成 Service Worker 包含 NetworkFirst 导航，`/readyz` 返回 ready；欢迎页与公开战绩页均 200 且无 JavaScript 运行时错误。当前用户页面需要一次强制刷新加载本次修复；未自动操作其浏览器或修改其历史记录。
