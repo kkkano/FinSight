@@ -282,7 +282,7 @@ def normalize_evidence(
                     raw["title"] = f"{agent_name} evidence" if evidence_is_global(raw, agent_name) else f"{agent_name} evidence {evidence_ordinal + 1}"
                 if not raw.get("text"):
                     raw["text"] = raw.get("snippet") or raw.get("summary")
-                if output.get("as_of") is not None and not evidence_is_global(raw, agent_name or "") and not any(
+                if output.get("as_of") is not None and _meta(raw).get("source_time_status") != "unknown" and not evidence_is_global(raw, agent_name or "") and not any(
                     raw.get(key) or _meta(raw).get(key)
                     for key in ("as_of", "timestamp", "published_date")
                 ):

@@ -67,11 +67,17 @@ def evidence_contract_metadata(
     result["kind"] = kind
     if producer_kind == "agent" and producer_name:
         result.setdefault("agent_name", producer_name)
+    if meta.get("source_time_status") == "unknown":
+        for time_field in ("as_of", "timestamp", "published_date"):
+            result[time_field] = None
     for key, values in {
         "as_of": (raw.get("as_of"), meta.get("as_of"), raw.get("timestamp"), meta.get("timestamp"), raw.get("published_date")),
         "source_name": (raw.get("source_name"), meta.get("source_name"), raw.get("source"), producer_name),
         "market_price": (raw.get("market_price"), meta.get("market_price")),
     }.items():
+        if key == "as_of" and meta.get("source_time_status") == "unknown":
+            result["as_of"] = None
+            continue
         value = next((item for item in values if item not in (None, "")), None)
         if value is not None:
             result[key] = value

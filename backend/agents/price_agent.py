@@ -11,6 +11,7 @@ from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceI
 from backend.agents.chart_specs import build_price_behavior_chart_specs
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
+from backend.utils.quote import parse_quote_payload
 
 
 # 价格行为枚举 → 中文（用户可见 claim 中文化，B 类固定模板）
@@ -68,13 +69,14 @@ class PriceBehaviorSnapshot:
     fallback_used: bool = False
     fallback_reason: Optional[str] = None
     source: str = "price_behavior_snapshot"
+    analyzed_at: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         quote = payload.get("quote") if isinstance(payload.get("quote"), dict) else {}
         payload["snapshot_type"] = "PriceBehaviorSnapshot"
         payload["price"] = quote.get("price")
-        payload["currency"] = quote.get("currency", "USD")
+        payload["currency"] = quote.get("currency")
         payload["change"] = quote.get("change")
         payload["change_percent"] = quote.get("change_percent")
         payload["source"] = quote.get("source") or payload.get("source")
@@ -305,7 +307,8 @@ class PriceAgent(BaseFinancialAgent):
 
         return PriceBehaviorSnapshot(
             ticker=ticker,
-            as_of=str(quote.get("as_of") or datetime.now().isoformat()),
+            as_of=str(quote.get("as_of") or ""),
+            analyzed_at=datetime.now().isoformat(),
             quote=quote,
             trend=trend,
             momentum=momentum,
@@ -329,68 +332,38 @@ class PriceAgent(BaseFinancialAgent):
         )
 
     def _normalize_quote(self, ticker: str, payload: Any) -> dict[str, Any]:
-        if isinstance(payload, dict):
-            price = self._safe_float(
-                payload.get("price")
-                or payload.get("current_price")
-                or payload.get("regularMarketPrice")
-                or payload.get("last")
-            )
-            change = self._safe_float(payload.get("change") if payload.get("change") is not None else payload.get("change_abs"))
-            change_percent = self._safe_float(
-                payload.get("change_percent")
-                if payload.get("change_percent") is not None
-                else payload.get("change_pct")
-            )
-            source = str(payload.get("source") or "quote")
+        normalized = dict(payload) if isinstance(payload, dict) else payload
+        if isinstance(normalized, dict):
+            for field, aliases in {
+                "price": ("current_price", "regularMarketPrice", "last"),
+                "change": ("change_abs",), "change_percent": ("change_pct",),
+            }.items():
+                if normalized.get(field) is None:
+                    normalized[field] = next((normalized[key] for key in aliases if normalized.get(key) is not None), None)
+        parsed = parse_quote_payload(normalized)
+        if parsed:
+            source = parsed.get("source")
+            fallback = bool(payload.get("fallback_used")) if isinstance(payload, dict) else "via search" in str(payload).lower()
             return {
-                "ticker": str(payload.get("ticker") or ticker),
-                "price": price,
-                "currency": payload.get("currency") or "USD",
-                "change": change,
-                "change_percent": change_percent,
+                "ticker": str(payload.get("ticker") or ticker) if isinstance(payload, dict) else ticker,
+                **parsed,
                 "source": source,
-                "as_of": payload.get("as_of") or datetime.now().isoformat(),
-                "fallback_used": bool(payload.get("fallback_used")) or source in {"search", "tavily"},
-                "fallback_reason": payload.get("fallback_detail") or payload.get("error"),
-                "raw": payload,
-            }
-        if isinstance(payload, str):
-            price = None
-            change = None
-            change_percent = None
-            price_match = re.search(r"Current Price(?: \(via search\))?:\s*\$?([0-9,]+(?:\.[0-9]+)?)", payload, re.IGNORECASE)
-            if price_match:
-                price = self._safe_float(price_match.group(1))
-            change_match = re.search(
-                r"Change:\s*\$?([+-]?[0-9,]+(?:\.[0-9]+)?)\s*\(\s*([+-]?[0-9.]+)%\s*\)",
-                payload,
-                re.IGNORECASE,
-            )
-            if change_match:
-                change = self._safe_float(change_match.group(1))
-                change_percent = self._safe_float(change_match.group(2))
-            source = "search" if "via search" in payload.lower() else "quote"
-            return {
-                "ticker": ticker,
-                "price": price,
-                "currency": "USD",
-                "change": change,
-                "change_percent": change_percent,
-                "source": source,
-                "as_of": datetime.now().isoformat(),
-                "fallback_used": source == "search",
-                "fallback_reason": None if price is not None else "unparsed_quote",
+                "as_of": parsed.get("as_of"),
+                "source_time_status": "known" if parsed.get("as_of") is not None else "unknown",
+                "currency": parsed.get("currency"),
+                "fallback_used": fallback or source in {"search", "tavily"},
+                "fallback_reason": payload.get("fallback_detail") or payload.get("error") if isinstance(payload, dict) else None,
                 "raw": payload,
             }
         return {
             "ticker": ticker,
             "price": None,
-            "currency": "USD",
+            "currency": None,
             "change": None,
             "change_percent": None,
             "source": "unknown",
-            "as_of": datetime.now().isoformat(),
+            "as_of": None,
+            "source_time_status": "unknown",
             "fallback_used": True,
             "fallback_reason": "unsupported_quote_payload",
             "raw": payload,
@@ -772,7 +745,7 @@ class PriceAgent(BaseFinancialAgent):
                 ticker = data.get("ticker", "N/A")
                 quote = data.get("quote") if isinstance(data.get("quote"), dict) else {}
                 price = quote.get("price", data.get("price"))
-                currency = quote.get("currency", data.get("currency", "USD"))
+                currency = quote.get("currency") or data.get("currency") or "币种未核验"
                 change = quote.get("change", data.get("change"))
                 change_pct = quote.get("change_percent", data.get("change_percent"))
                 trend = data.get("trend") if isinstance(data.get("trend"), dict) else {}
@@ -828,8 +801,10 @@ class PriceAgent(BaseFinancialAgent):
                         price_bits.append(f"日内{direction} {pct_text}")
                 if quote.get("source"):
                     price_bits.append(f"来源 {quote.get('source')}")
-                if quote.get("as_of") or data.get("as_of"):
-                    price_bits.append(f"时间 {quote.get('as_of') or data.get('as_of')}")
+                if quote.get("as_of"):
+                    price_bits.append(f"时间 {quote.get('as_of')}")
+                else:
+                    price_bits.append("[数据缺失] 报价时间未核验")
                 add_section(sections, "价格状态", price_bits)
 
                 trend_bits = []
@@ -937,7 +912,7 @@ class PriceAgent(BaseFinancialAgent):
 
             ticker = data.get("ticker", "N/A")
             price = data.get("price", "N/A")
-            currency = data.get("currency", "USD")
+            currency = data.get("currency") or "币种未核验"
             change_pct = data.get("change_percent") or data.get("change_pct")
             text = f"{ticker} 当前价格: {currency} {price}"
             if change_pct is not None:
@@ -1225,7 +1200,8 @@ class PriceAgent(BaseFinancialAgent):
     def _format_snapshot_output(self, summary: str, raw_data: dict[str, Any]) -> AgentOutput:
         quote = raw_data.get("quote") if isinstance(raw_data.get("quote"), dict) else {}
         source = str(quote.get("source") or raw_data.get("source") or "price_behavior_snapshot")
-        as_of = str(quote.get("as_of") or raw_data.get("as_of") or datetime.now().isoformat())
+        as_of = quote.get("as_of")
+        analyzed_at = str(raw_data.get("analyzed_at") or datetime.now().isoformat())
         fallback_used = bool(raw_data.get("fallback_used"))
         data_sources = list(raw_data.get("data_sources") or raw_data.get("sources") or [source])
         if source not in data_sources:
@@ -1245,7 +1221,7 @@ class PriceAgent(BaseFinancialAgent):
             text: str,
             source_name: str,
             meta: dict[str, Any],
-            timestamp: str = as_of,
+            timestamp: Optional[str] = as_of,
             include_data_source: bool = True,
         ) -> None:
             if not text:
@@ -1254,6 +1230,7 @@ class PriceAgent(BaseFinancialAgent):
             payload["metric_key"] = metric_key
             payload.setdefault("ticker", ticker)
             payload.setdefault("as_of", timestamp)
+            payload.setdefault("source_time_status", "known" if timestamp is not None else "unknown")
             evidence.append(
                 EvidenceItem(
                     text=text,
@@ -1277,9 +1254,9 @@ class PriceAgent(BaseFinancialAgent):
         )
 
         price = quote.get("price", raw_data.get("price"))
-        currency = quote.get("currency", raw_data.get("currency", "USD"))
+        currency = quote.get("currency") or raw_data.get("currency")
         change_pct = quote.get("change_percent", raw_data.get("change_percent"))
-        quote_bits = [f"Current quote: {currency} {price}" if price is not None else "Current quote unavailable"]
+        quote_bits = [f"Current quote: {currency or '[币种未核验]'} {price}" if price is not None else "Current quote unavailable"]
         if change_pct is not None:
             try:
                 quote_bits.append(f"intraday {float(change_pct):+.2f}%")
@@ -1289,7 +1266,7 @@ class PriceAgent(BaseFinancialAgent):
             metric_key="price_quote",
             text=", ".join(quote_bits),
             source_name=source,
-            meta=quote or {"price": price, "currency": currency, "change_percent": change_pct},
+            meta={**(quote or {"price": price, "currency": currency, "change_percent": change_pct}), "timestamp_semantics": "source_observation", "source_time_status": "known" if as_of is not None else "unknown"},
         )
 
         trend = raw_data.get("trend") if isinstance(raw_data.get("trend"), dict) else {}
@@ -1376,7 +1353,7 @@ class PriceAgent(BaseFinancialAgent):
                     f"options={', '.join(option_bits) if option_bits else 'available'}"
                 ),
                 source_name=str(option_metrics.get("source") or "price_history"),
-                timestamp=str(option_metrics.get("as_of") or as_of),
+                timestamp=option_metrics.get("as_of"),
                 meta={"volatility_structure": volatility, "options": option_metrics},
                 include_data_source=bool(option_metrics),
             )
@@ -1437,7 +1414,7 @@ class PriceAgent(BaseFinancialAgent):
             evidence=evidence,
             confidence=confidence,
             data_sources=list(dict.fromkeys(data_sources)),
-            as_of=as_of,
+            as_of=analyzed_at,
             claims=claims,
             chart_specs=build_price_behavior_chart_specs(raw_data),
             fallback_used=fallback_used,
@@ -1452,10 +1429,12 @@ class PriceAgent(BaseFinancialAgent):
 
         if isinstance(raw_data, dict):
             price = raw_data.get("price", "N/A")
-            currency = raw_data.get("currency", "USD")
+            currency = raw_data.get("currency") or "币种未核验"
             ticker = raw_data.get("ticker", "UNKNOWN")
             source = raw_data.get("source", "yfinance")
-            as_of = raw_data.get("as_of", datetime.now().isoformat())
+            parsed_quote = self._normalize_quote(ticker, raw_data)
+            as_of = parsed_quote.get("as_of")
+            source = str(parsed_quote.get("source") or "unknown")
             fallback_used = raw_data.get("fallback_used", False)
             change = raw_data.get("change")
             change_percent = raw_data.get("change_percent")
@@ -1477,8 +1456,9 @@ class PriceAgent(BaseFinancialAgent):
                 summary_text = summary.strip()
         elif isinstance(raw_data, str) and raw_data:
             summary_text = raw_data
-            source = "yfinance"
-            as_of = datetime.now().isoformat()
+            parsed_quote = self._normalize_quote(self._current_ticker or "UNKNOWN", raw_data)
+            source = str(parsed_quote.get("source") or "unknown")
+            as_of = parsed_quote.get("as_of")
             fallback_used = False
             evidence_text = raw_data
             try:
@@ -1494,7 +1474,7 @@ class PriceAgent(BaseFinancialAgent):
         else:
             summary_text = summary or "价格数据获取失败"
             source = "unknown"
-            as_of = datetime.now().isoformat()
+            as_of = None
             fallback_used = True
             evidence_text = str(raw_data) if raw_data else "暂无数据"
 
@@ -1503,6 +1483,7 @@ class PriceAgent(BaseFinancialAgent):
                 text=evidence_text,
                 source=source,
                 timestamp=as_of,
+                meta={"timestamp_semantics": "source_observation", "source_time_status": "known" if as_of is not None else "unknown"},
             )
         ]
         data_sources = [source]
@@ -1510,7 +1491,7 @@ class PriceAgent(BaseFinancialAgent):
         option_metrics = self._last_option_metrics if isinstance(self._last_option_metrics, dict) else {}
         if option_metrics and not option_metrics.get("error"):
             option_source = str(option_metrics.get("source") or "yfinance_options")
-            option_as_of = str(option_metrics.get("as_of") or as_of)
+            option_as_of = option_metrics.get("as_of")
             pcr = option_metrics.get("put_call_ratio_oi") or option_metrics.get("put_call_ratio_volume")
             iv_atm = option_metrics.get("iv_atm")
             skew = option_metrics.get("iv_skew_25d")
@@ -1556,7 +1537,7 @@ class PriceAgent(BaseFinancialAgent):
             evidence=evidence,
             confidence=1.0 if not fallback_used else 0.5,
             data_sources=data_sources,
-            as_of=as_of,
+            as_of=datetime.now().isoformat(),
             fallback_used=fallback_used,
             fallback_reason=fallback_reason,
             retryable=True,

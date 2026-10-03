@@ -376,8 +376,7 @@ def get_company_info(ticker: str) -> str:
 - Name: {profile.get('name', 'Unknown')}
 - Sector: {profile.get('finnhubIndustry', 'Unknown')}
 {_company_market_cap_lines(profile.get('marketCapitalization'), profile.get('currency'), scale=1_000_000)}
-- Website: {profile.get('weburl', 'N/A')}
-- Description: Search online for more details.""" # Finnhub profile doesn't include a long description
+- Website: {profile.get('weburl', 'N/A')}"""  # Finnhub 不提供业务正文，不填充建议性占位文本。
         except Exception as e:
             logger.info(f"Finnhub profile fetch failed: {e}")
 
