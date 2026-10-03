@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
+from backend.api.client_recovery import router as client_recovery_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 from backend.api.lifespan import lifespan
 from backend.api.market_router import MarketRouterDeps, create_market_router
@@ -379,6 +380,7 @@ def create_app() -> FastAPI:
     for router in (
         model_router,
         system_router,
+        client_recovery_router,
         user_router,
         watchlist_router,
         conversation_router,

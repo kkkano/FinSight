@@ -619,21 +619,43 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
 const hydrateMessagesFromBackend = (sessionId: string): void => {
   const sid = String(sessionId || '').trim();
   if (!sid || !canSyncBackendConversation(sid)) return;
+  const ownerId = useStore.getState().authIdentity?.userId;
   const originalMessages = useStore.getState().messages;
   recoverPendingRun(sid);
   void apiClient
     .getConversation(sid)
     .then((resp) => {
       const conversation = resp?.conversation as Record<string, unknown> | undefined;
-      const restored = deserializeBackendMessages(conversation?.messages);
+      let restored = deserializeBackendMessages(conversation?.messages);
       if (!restored.length) return;
 
       const state = useStore.getState();
-      if (state.sessionId !== sid || state.messages !== originalMessages || state.chatLoadingBySession[sid]) return;
+      if (state.authIdentity?.userId !== ownerId || !canSyncBackendConversation(sid)
+        || (resp.session_id && resp.session_id !== sid)
+        || state.sessionId !== sid || state.messages !== originalMessages || state.chatLoadingBySession[sid]) return;
       if (!isEmptyLocalHistory(state.messages)) {
         const lastUser = [...state.messages].reverse().find((message) => message.role === 'user');
         const index = restored.findIndex((message) => message.role === 'user' && message.id === lastUser?.id);
-        const answer = restored[index + 1];
+        if (index < 0 || restored[index].content !== lastUser?.content) return;
+        let answer = restored[index + 1];
+        if (answer?.role === 'user') {
+          // 旧客户端缺少消息 ID 时，服务器在同文旧问题后写入带 run 绑定的标准问题/回答。
+          // 尾部必须全部是同文、已完成且逐轮绑定的配对；保留每个真实 run，只合并旧副本。
+          const tail = restored.slice(index + 1);
+          if (lastUser?.runId || restored[index].runId || tail.length < 2 || tail.length % 2 !== 0) return;
+          for (let offset = 0; offset < tail.length; offset += 2) {
+            const canonicalUser = tail[offset];
+            const canonicalAnswer = tail[offset + 1];
+            if (canonicalUser.role !== 'user' || canonicalUser.id === lastUser?.id
+              || canonicalUser.content !== lastUser?.content || !canonicalUser.runId
+              || canonicalAnswer.role !== 'assistant' || canonicalAnswer.runId !== canonicalUser.runId
+              || canonicalAnswer.replyTo !== canonicalUser.id || canonicalAnswer.isLoading || canonicalAnswer.error
+              || canonicalAnswer.content === zh.chat.savedAnswerInterrupted
+              || canonicalAnswer.content === zh.chat.missingSavedAnswer) return;
+          }
+          answer = tail[1];
+          restored = [...restored.slice(0, index), ...restored.slice(index + 1)];
+        }
         if (index < 0 || answer?.role !== 'assistant'
           || answer.content === zh.chat.savedAnswerInterrupted || answer.content === zh.chat.missingSavedAnswer) return;
       }

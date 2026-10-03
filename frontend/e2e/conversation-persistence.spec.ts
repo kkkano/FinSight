@@ -239,3 +239,39 @@ test('回答槽丢失且SSE挂住时保留99%交付状态并取回同轮已保�
   expect(await page.evaluate(() => ({ sends: window.deliveryFixture.sends, cancels: window.deliveryFixture.cancels })))
     .toEqual({ sends: 1, cancels: 0 });
 });
+
+test('刷新旧客户端问题和空回答时恢复紧邻的同文canonical回答', async ({ page }) => {
+  await setup(page);
+  const query = '分析一下 英特尔 的最新基本面、技术面、催化剂与主要风险';
+  const history = Array.from({ length: 8 }, (_, index) => ({ id: `legacy-history-${index}`,
+    role: index % 2 === 0 ? 'user' : 'assistant', content: `Earlier saved turn ${index}`, timestamp: index + 1 }));
+  const legacyUser = { id: 'legacy-user', role: 'user', content: query, timestamp: 1000 };
+  const canonicalUser = { id: 'canonical-user', role: 'user', content: query,
+    timestamp: 1000 + 9 * 3600000, run_id: 'legacy-saved-run' };
+  const canonicalAnswer = { id: 'canonical-answer', role: 'assistant', content: ANSWER,
+    timestamp: canonicalUser.timestamp + 1, run_id: canonicalUser.run_id, reply_to: canonicalUser.id };
+  const repeatedUser = { ...canonicalUser, id: 'canonical-repeat-user', run_id: 'legacy-repeat-run' };
+  const repeatedAnswer = { ...canonicalAnswer, id: 'canonical-repeat-answer', content: '第二轮 INTC 研究已保存，保留独立研究记录。',
+    run_id: repeatedUser.run_id, reply_to: repeatedUser.id };
+  let reads = 0;
+  let writes = 0;
+  await page.route('**/api/conversations/**', (route) => {
+    reads += 1;
+    return json(route, { success: true, session_id: SESSION,
+      conversation: { messages: [...history, legacyUser, canonicalUser, canonicalAnswer, repeatedUser, repeatedAnswer] } });
+  });
+  await page.route('**/api/conversations', (route) => { writes += 1; return json(route, { success: true }); });
+  await page.goto('/chat');
+  await expect(page.locator('#chat-scroll-container').getByText('Saved thread restored', { exact: true })).toBeVisible();
+  await page.evaluate(({ sid, history, legacyUser }) => {
+    localStorage.setItem(`finsight-messages:${sid}`, JSON.stringify([...history, legacyUser,
+      { id: 'empty-legacy-answer', role: 'assistant', content: '', timestamp: 1001, isLoading: true }]));
+  }, { sid: SESSION, history, legacyUser });
+  await page.reload();
+  await expect(page.locator('#chat-scroll-container').getByText(ANSWER, { exact: true })).toBeVisible();
+  await expect(page.locator('#chat-scroll-container').getByText(repeatedAnswer.content, { exact: true })).toBeVisible();
+  await expect.poll(async () => (await snapshot(page)).loading).toBe(false);
+  await expect(page.locator('#chat-scroll-container').getByText(query, { exact: true })).toHaveCount(2);
+  expect(reads).toBeGreaterThan(0);
+  expect(writes).toBe(0);
+});

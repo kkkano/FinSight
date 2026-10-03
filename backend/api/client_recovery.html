@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinSight · 恢复已保存的回答</title>
+<style>
+  :root { color-scheme:light dark; font-family:system-ui,sans-serif; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#111827; color:#e5e7eb; }
+  main { width:min(480px,calc(100% - 48px)); line-height:1.8; }
+  small { color:#f59e0b; letter-spacing:.14em; }
+  h1 { font-size:26px; line-height:1.4; margin:14px 0; }
+  p { color:#aeb9ca; }
+  button,a { display:inline-block; border:0; border-radius:10px; padding:12px 20px; background:#f59e0b; color:#111827; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; }
+  button:disabled { opacity:.65; cursor:wait; }
+  #status { min-height:52px; }
+</style>
+<main>
+  <small>FINSIGHT</small>
+  <h1>恢复已保存的回答</h1>
+  <p>将清除旧版页面缓存并加载最新界面。登录状态、模型设置、未删除的聊天记录都会保留；不会重新生成或消耗模型额度。</p>
+  <button id="repair" type="button">修复页面并打开原会话</button>
+  <p id="status" role="status"></p>
+</main>
+<script>
+  document.getElementById('repair').addEventListener('click', async () => {
+    const button=document.getElementById('repair');
+    const status=document.getElementById('status');
+    button.disabled=true;
+    try {
+      status.textContent='正在检查最新版本…';
+      const response=await fetch('/app-version.json?repair='+Date.now(),{cache:'no-store'});
+      if (!response.ok) throw new Error('version_unavailable');
+      const version=await response.json();
+      if (typeof version.build_id!=='string' || !/^[a-f0-9]{40}$/.test(version.build_id)) throw new Error('version_invalid');
+      status.textContent='正在更新页面缓存，聊天记录保持不变…';
+      if ('serviceWorker' in navigator) {
+        for (const registration of await navigator.serviceWorker.getRegistrations()) {
+          const worker=registration.active || registration.waiting || registration.installing;
+          if (worker && new URL(worker.scriptURL).origin===location.origin && new URL(worker.scriptURL).pathname==='/sw.js') await registration.unregister();
+        }
+      }
+      if ('caches' in window) {
+        for (const name of await caches.keys()) {
+          if (name.startsWith('workbox-precache-') || name.startsWith('finsight-')) await caches.delete(name);
+        }
+      }
+      location.replace('/chat?client_recovered='+version.build_id);
+    } catch {
+      status.textContent='暂时无法读取最新页面。请检查网络后再试；聊天记录没有被清除。';
+      button.disabled=false;
+    }
+  });
+</script>
+</html>

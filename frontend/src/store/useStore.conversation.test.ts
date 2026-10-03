@@ -5,6 +5,33 @@ import * as http from '../api/http';
 import { zh } from '../locales/zh';
 import { useStore } from './useStore';
 
+const legacyRecoveryFixture = () => {
+  const query = '分析一下 英特尔 的最新基本面、技术面、催化剂与主要风险';
+  const prefix = Array.from({ length: 8 }, (_, index) => ({ id: `legacy-history-${index}`,
+    role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
+    content: `Earlier saved turn ${index}`, timestamp: index + 1 }));
+  const legacyUser = { id: 'legacy-question-id', role: 'user' as const, content: query, timestamp: 1000 };
+  const canonicalUser = { id: 'canonical-question-id', role: 'user' as const, content: query,
+    timestamp: 1000 + 9 * 3600000, run_id: 'saved-legacy-run' };
+  const answer = { id: 'canonical-answer-id', role: 'assistant' as const, content: 'Recovered INTC canonical analysis',
+    timestamp: canonicalUser.timestamp + 1, run_id: canonicalUser.run_id, reply_to: canonicalUser.id };
+  return { prefix, legacyUser, canonicalUser, answer, backend: [...prefix, legacyUser, canonicalUser, answer] };
+};
+
+const openLegacyRecovery = async () => {
+  const fixture = legacyRecoveryFixture();
+  const state = useStore.getState();
+  const sid = state.sessionId;
+  useStore.setState({ messages: [] });
+  for (const message of [...fixture.prefix, fixture.legacyUser]) state.addMessage(message);
+  state.addMessage({ id: 'legacy-empty-answer', role: 'assistant', content: '', timestamp: 1001, isLoading: true });
+  await state.flushConversationSync(sid);
+  state.startNewChat();
+  await state.flushConversationSync(useStore.getState().sessionId);
+  vi.clearAllMocks();
+  return { sid, fixture };
+};
+
 describe('useStore conversation lifecycle', () => {
   afterEach(() => {
     useStore.getState().setAuthIdentity(null);
@@ -202,6 +229,101 @@ describe('useStore conversation lifecycle', () => {
     ] } });
     await Promise.resolve();
     expect(useStore.getState().messages.at(-1)?.id).toBe('new-user');
+  });
+
+  it('restores an eleven-message legacy snapshot through its adjacent canonical reply without clock matching or remote writes', async () => {
+    const { sid, fixture } = await openLegacyRecovery();
+    expect(fixture.backend).toHaveLength(11);
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid,
+      conversation: { messages: fixture.backend } });
+    useStore.getState().selectConversation(sid);
+    await Promise.resolve();
+    await Promise.resolve();
+    const restored = useStore.getState().messages;
+    expect(restored).toHaveLength(10);
+    expect(restored.at(-2)?.id).toBe(fixture.canonicalUser.id);
+    expect(restored.at(-1)).toMatchObject({ id: fixture.answer.id, content: fixture.answer.content,
+      runId: fixture.canonicalUser.run_id, replyTo: fixture.canonicalUser.id, isLoading: false });
+    expect(restored.some((message) => message.id === fixture.legacyUser.id)).toBe(false);
+    expect(apiClient.createConversation).not.toHaveBeenCalled();
+  });
+
+  it('restores thirteen legacy messages while retaining both genuinely repeated canonical research runs', async () => {
+    const { sid, fixture } = await openLegacyRecovery();
+    const repeatedUser = { ...fixture.canonicalUser, id: 'canonical-repeat-user', run_id: 'saved-repeat-run' };
+    const repeatedAnswer = { ...fixture.answer, id: 'canonical-repeat-answer', content: 'Second saved INTC research answer',
+      run_id: repeatedUser.run_id, reply_to: repeatedUser.id };
+    const backend = [...fixture.backend, repeatedUser, repeatedAnswer];
+    expect(backend).toHaveLength(13);
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid,
+      conversation: { messages: backend } });
+    useStore.getState().selectConversation(sid);
+    await Promise.resolve();
+    await Promise.resolve();
+    const restored = useStore.getState().messages;
+    expect(restored).toHaveLength(12);
+    expect(restored.filter((message) => message.role === 'user' && message.content === fixture.legacyUser.content))
+      .toHaveLength(2);
+    expect(restored.some((message) => message.content === fixture.answer.content)).toBe(true);
+    expect(restored.at(-1)).toMatchObject({ id: repeatedAnswer.id, content: repeatedAnswer.content,
+      runId: repeatedUser.run_id, replyTo: repeatedUser.id });
+    expect(restored.some((message) => message.id === fixture.legacyUser.id)).toBe(false);
+    expect(apiClient.createConversation).not.toHaveBeenCalled();
+  });
+
+  it.each(['different-query', 'unbound-user', 'running-answer', 'error-answer', 'incomplete-tail'])('rejects a multi-run legacy tail with %s', async (reason) => {
+    const { sid, fixture } = await openLegacyRecovery();
+    const repeatedUser = { ...fixture.canonicalUser, id: 'repeat-user', run_id: 'repeat-run',
+      ...(reason === 'different-query' ? { content: 'A different INTC question' } : {}),
+      ...(reason === 'unbound-user' ? { run_id: '' } : {}) };
+    const repeatedAnswer = { ...fixture.answer, id: 'repeat-answer', run_id: 'repeat-run', reply_to: repeatedUser.id,
+      ...(reason === 'running-answer' ? { answer_status: 'running' } : {}),
+      ...(reason === 'error-answer' ? { error: 'Incomplete research' } : {}) };
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid,
+      conversation: { messages: [...fixture.backend, repeatedUser, ...(reason === 'incomplete-tail' ? [] : [repeatedAnswer])] } });
+    useStore.getState().selectConversation(sid);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(useStore.getState().messages.some((message) => message.id === fixture.answer.id)).toBe(false);
+    expect(useStore.getState().messages.some((message) => message.id === fixture.legacyUser.id)).toBe(true);
+    expect(apiClient.createConversation).not.toHaveBeenCalled();
+  });
+
+  it.each(['query', 'run', 'reply', 'bound-legacy', 'later-question', 'session'])('rejects an unsafe adjacent legacy recovery: %s', async (reason) => {
+    const { sid, fixture } = await openLegacyRecovery();
+    let backend: Array<Record<string, unknown>> = fixture.backend;
+    if (reason === 'query') backend = [...fixture.prefix, fixture.legacyUser,
+      { ...fixture.canonicalUser, content: 'A different INTC question' }, fixture.answer];
+    if (reason === 'run') backend = [...fixture.prefix, fixture.legacyUser, fixture.canonicalUser,
+      { ...fixture.answer, run_id: 'another-run' }];
+    if (reason === 'reply') backend = [...fixture.prefix, fixture.legacyUser, fixture.canonicalUser,
+      { ...fixture.answer, reply_to: fixture.legacyUser.id }];
+    if (reason === 'bound-legacy') backend = [...fixture.prefix,
+      { ...fixture.legacyUser, run_id: 'real-earlier-run' }, fixture.canonicalUser, fixture.answer];
+    if (reason === 'later-question') backend = [...fixture.backend,
+      { id: 'later-real-question', role: 'user', content: fixture.legacyUser.content, timestamp: 99999999 }];
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true,
+      session_id: reason === 'session' ? 'public:other-user:default' : sid, conversation: { messages: backend } });
+    useStore.getState().selectConversation(sid);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(useStore.getState().messages.some((message) => message.id === fixture.answer.id)).toBe(false);
+    expect(useStore.getState().messages.some((message) => message.id === fixture.legacyUser.id)).toBe(true);
+    expect(apiClient.createConversation).not.toHaveBeenCalled();
+  });
+
+  it.each(['new-message', 'new-owner'])('does not let late legacy hydration override %s', async (change) => {
+    const { sid, fixture } = await openLegacyRecovery();
+    let resolve: (value: Awaited<ReturnType<typeof apiClient.getConversation>>) => void = () => undefined;
+    vi.mocked(apiClient.getConversation).mockReturnValue(new Promise((complete) => { resolve = complete; }));
+    useStore.getState().selectConversation(sid);
+    if (change === 'new-message') useStore.getState().addMessage({ id: 'new-local-question', role: 'user', content: 'New research request', timestamp: 2 });
+    else useStore.getState().setAuthIdentity({ userId: 'another-user', email: null });
+    resolve({ success: true, session_id: sid, conversation: { messages: fixture.backend } });
+    await Promise.resolve();
+    expect(useStore.getState().messages.some((message) => message.id === fixture.answer.id)).toBe(false);
+    if (change === 'new-message') expect(useStore.getState().messages.at(-1)?.id).toBe('new-local-question');
+    else expect(useStore.getState().authIdentity?.userId).toBe('another-user');
   });
 
   it('still saves the answer remotely when local storage fails', async () => {
