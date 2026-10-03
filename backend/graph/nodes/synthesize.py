@@ -534,6 +534,7 @@ summary, highlights, analysis.
 9) 输出必须为合法 JSON 对象。
 10) 禁止开场白、寒暄。直接输出 JSON。
 11) chat/brief 模式下必须产出 conclusion 和 impact_analysis；用 2-5 条自然要点回答用户真正问的问题，报告结构只用于 investment_report。
+conclusion 和 impact_analysis 必须为非空字符串；证据不足时说明已知信息与缺口，禁止返回空对象或空字段。
 12) chat/brief 模式下不要漏掉用户的最后一个明确请求；如果用户要求“最后/一句话/关注什么/怎么做”，用 next_watch 给出自然收束句。
 13) 如 inputs.query_coverage.unanswered_targets 非空，第一段先回答已覆盖目标，并明确披露尚未覆盖的目标。
 </constraints>
@@ -555,7 +556,18 @@ summary, highlights, analysis.
         )
         from backend.services.model_selection import STEP_MODEL, current_model
         selected = current_model()
-        json_transform = (lambda client: client.bind(response_format={"type": "json_object"})) if selected and selected.model == STEP_MODEL else None
+        json_transform = None
+        if selected and selected.model == STEP_MODEL:
+            from backend.graph.render_vars.model import RenderVars
+            response_format = {"type": "json_object"}
+            if output_mode in {"chat", "brief"}:
+                response_format = {"type": "json_schema", "json_schema": {
+                    "name": "finsight_analysis", "strict": True,
+                    "schema": {"type": "object", "properties": {
+                        key: {"type": "string", "minLength": 1} for key in RenderVars.model_fields
+                    }, "required": ["conclusion", "impact_analysis"], "additionalProperties": False},
+                }}
+            json_transform = lambda client: client.bind(response_format=response_format)
         resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
             context=call_context,
@@ -608,6 +620,8 @@ summary, highlights, analysis.
         from backend.graph.render_vars.model import RenderVars
 
         llm_render_vars = RenderVars.model_validate(payload).model_dump()
+        if not any(value.strip() for value in llm_render_vars.values() if isinstance(value, str)):
+            raise LLMCompletionError("llm_output_invalid")
         # Merge with deterministic stub defaults so omitted keys never fall back
         # to template placeholders. Some keys are "data sections" that must stay
         # evidence-driven; keep the stub version to avoid hallucinated metrics.

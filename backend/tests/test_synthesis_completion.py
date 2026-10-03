@@ -56,7 +56,10 @@ async def test_step_synthesis_preserves_large_budget_json_mode_and_final_text(mo
     class Client:
         def bind(self, **params):
             return params
-    assert captured["client_transform"](Client()) == {"response_format": {"type": "json_object"}}
+    response_format = captured["client_transform"](Client())["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["schema"]["required"] == ["conclusion", "impact_analysis"]
+    assert response_format["json_schema"]["schema"]["properties"]["conclusion"]["minLength"] == 1
     assert result["trace"]["synthesize_runtime"]["fallback"] is False
     assert "hidden" not in str(result["artifacts"]["render_vars"])
 
@@ -83,3 +86,19 @@ async def test_synthesis_extracts_truncated_response_from_sdk_parser_error(monke
     assert runtime["reason"] == "llm_output_truncated"
     assert runtime["completion"]["finish_reason"] == "length"
     assert runtime["completion"]["completion_tokens"] == 65536
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content", ['{}', '{"conclusion":"  "}', '{"unexpected":"not an answer"}'])
+async def test_empty_json_objects_do_not_masquerade_as_success(monkeypatch, content):
+    module = importlib.import_module("backend.graph.nodes.synthesize")
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+    monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
+    monkeypatch.setattr("backend.llm_config.get_endpoint_manager", lambda *_args, **_kwargs: object())
+    async def invoke(_messages, **_kwargs):
+        return SimpleNamespace(content=content, response_metadata={"finish_reason": "stop"})
+    monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
+    result = await module.synthesize({"query": "INTC 分析", "output_mode": "chat", "operation": {"name": "analysis", "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["INTC"]}, "artifacts": {"step_results": {}, "evidence_pool": []}, "trace": {}})
+    assert result["trace"]["synthesize_runtime"]["fallback"] is True
+    assert result["trace"]["synthesize_runtime"]["reason"] == "llm_output_invalid"
