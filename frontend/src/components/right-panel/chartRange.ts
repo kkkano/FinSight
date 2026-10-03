@@ -10,7 +10,7 @@ export const CHART_RANGES = [
 export type ChartRange = typeof CHART_RANGES[number]['value'];
 
 export function selectChartRange(data: SmartChartData, range: ChartRange): SmartChartData {
-  if (range === '1y' || data.labels.length === 0) return data;
+  if (data.labels.length === 0) return data;
   const last = new Date(data.labels.at(-1)!.slice(0, 10));
   if (!Number.isFinite(last.getTime())) return data;
   const months = CHART_RANGES.find((item) => item.value === range)!.months;

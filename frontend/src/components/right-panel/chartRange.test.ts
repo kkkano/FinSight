@@ -12,6 +12,14 @@ function series(labels: string[]): SmartChartData {
 }
 
 describe('selectChartRange', () => {
+  it('一年周期裁掉供应商额外返回的旧数据并保留真实十二个月', () => {
+    const data = series(['2025-04-17', '2025-10-01', '2025-10-02', '2026-09-30', '2026-10-02']);
+    const selected = selectChartRange(data, '1y');
+    expect(selected.labels).toEqual(['2025-10-02', '2026-09-30', '2026-10-02']);
+    expect(selected.values).toEqual([102, 103, 104]);
+    expect(selected.volume).toEqual([1002, 1003, 1004]);
+    expect(data.labels).toHaveLength(5);
+  });
   it('从末个真实交易日回看且保持价格、OHLC和成交量对齐', () => {
     const data = series(['2026-06-30', '2026-07-01', '2026-07-02', '2026-09-30', '2026-10-02']);
     const selected = selectChartRange(data, '3m');
