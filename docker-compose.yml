@@ -130,7 +130,7 @@ services:
       - finsight-net
 
   frontend:
-    image: finsight-frontend:${IMAGE_TAG:-local}
+    image: finsight-frontend:${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-local}}
     build:
       context: ./frontend
       dockerfile: Dockerfile

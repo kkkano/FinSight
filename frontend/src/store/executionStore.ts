@@ -380,6 +380,8 @@ function mergePatchAndEstimateEta(run: ExecutionRun, patch: Partial<ExecutionRun
   };
 
   if (nextRun.status === 'running') {
+    patch.progress = Math.min(nextRun.progress, 99);
+    if (nextRun.pipelineCurrentStage === 'done') patch.currentStep = zh.chat.deliveringAnswer;
     patch.etaSeconds = computeEstimatedEtaSeconds(nextRun);
   } else {
     patch.etaSeconds = null;
@@ -496,9 +498,13 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
         durationMs: asFiniteNumber(result.duration_ms) ?? existing.durationMs,
         error: typeof result.error === 'string' ? result.error : existing.error,
       };
+      if (stageName === 'done' && run.status === 'running') {
+        nextStages.done = { ...nextStages.done, status: 'running', message: zh.chat.deliveringAnswer };
+      }
       patch.pipelineStages = nextStages;
       patch.pipelineCurrentStage = stageName;
       patch.currentStep = message || nextStages[stageName].message || run.currentStep;
+      if (stageName === 'done' && run.status === 'running') patch.currentStep = zh.chat.deliveringAnswer;
       const stageProgress = PIPELINE_STAGE_BASE_PROGRESS[stageName];
       const explicitProgress = clampPercent(result.progress_percent ?? result.progress);
       if (status === 'running') {

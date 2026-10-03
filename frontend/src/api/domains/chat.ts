@@ -95,6 +95,7 @@ async deleteConversation(sessionId: string): Promise<{
     let attempt = 0;
 
     opts.signal?.addEventListener('abort', () => {
+      if (opts.shouldCancelRunOnAbort?.() === false) return;
       const activeRunId = runId;
       if (!activeRunId) return;
       void buildAuthHeaders().then((headers) => fetch(

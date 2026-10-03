@@ -18,6 +18,7 @@
 - [验收记录](VALIDATION.md)：自动化、真实问题、资源事故与尚未验证的边界。
 - [执行计划](PLAN.md)：本轮范围、原因、步骤和完成状态。
 - [发布记录](RELEASE.md)：实际提交/镜像、备份恢复、生产迁移、持久化 canary、公开浏览器及 RAG 降级状态。
+- [聊天交付后续修复](CHAT_DELIVERY_FOLLOWUP.md)：服务器已保存正文但界面缺回复的证据、修复与浏览器验收。
 - `PLAN.md` 与本地 `.omx/plans/2026-10-03-foundation-refactor.md` 保持同步。
 - 脱敏测试和发布证据已归档；记录不包含密钥、Cookie、DSN 或完整私人研究上下文。
 

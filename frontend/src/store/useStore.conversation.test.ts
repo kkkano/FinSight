@@ -531,4 +531,55 @@ describe('useStore conversation lifecycle', () => {
     expect(next.executionProgress).toBe(40);
     expect(next.abortController).toBeNull();
   });
+
+  it('recovers a lost assistant slot only for the still-owned run and matching question', () => {
+    const state = useStore.getState();
+    const sid = state.sessionId;
+    const controller = new AbortController();
+    state.addMessage({ id: 'owned-question', role: 'user', content: 'INTC research', timestamp: 1 });
+    state.setSessionLoading(sid, true);
+    state.setSessionAbortController(sid, controller);
+    state.updateMessageInSession(sid, 'lost-answer', { content: 'Recovered canonical answer', isLoading: false }, {
+      syncBackend: false, recovery: { ownerId: 'test-user', runId: 'owned-run', userMessageId: 'owned-question', controller, timestamp: 2 },
+    });
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ id: 'lost-answer', content: 'Recovered canonical answer',
+      runId: 'owned-run', replyTo: 'owned-question' });
+  });
+
+  it.each(['clear', 'delete', 'account', 'abort', 'question', 'other-run'])('never resurrects a revoked slot after %s', (reason) => {
+    const state = useStore.getState();
+    const sid = state.sessionId;
+    const controller = new AbortController();
+    state.addMessage({ id: 'revoked-question', role: 'user', content: 'INTC research', timestamp: 1 });
+    state.setSessionLoading(sid, true);
+    state.setSessionAbortController(sid, controller);
+    if (reason === 'clear') state.clearConversationContext();
+    if (reason === 'delete') state.deleteConversation(sid);
+    if (reason === 'account') state.setAuthIdentity({ userId: 'other-user', email: null });
+    if (reason === 'abort') controller.abort();
+    if (reason === 'question') state.removeMessage('revoked-question');
+    if (reason === 'other-run') state.addMessage({ id: 'new-answer', role: 'assistant', content: 'New run answer',
+      timestamp: 2, runId: 'new-run', replyTo: 'revoked-question' });
+    state.updateMessageInSession(sid, 'lost-answer', { content: 'Must not return', isLoading: false }, {
+      syncBackend: false, recovery: { ownerId: 'test-user', runId: 'revoked-run', userMessageId: 'revoked-question', controller, timestamp: 3 },
+    });
+    expect(useStore.getState().messages.some((message) => message.content === 'Must not return')).toBe(false);
+    expect(useStore.getState().conversationSummaries.some((summary) => summary.lastMessagePreview === 'Must not return')).toBe(false);
+  });
+
+  it('updates the same-run canonical slot without creating a duplicate', () => {
+    const state = useStore.getState();
+    const sid = state.sessionId;
+    const controller = new AbortController();
+    state.addMessage({ id: 'canonical-question', role: 'user', content: 'INTC research', timestamp: 1 });
+    state.addMessage({ id: 'server-answer', role: 'assistant', content: 'Saved answer', timestamp: 2,
+      runId: 'same-run', replyTo: 'canonical-question' });
+    state.setSessionLoading(sid, true);
+    state.setSessionAbortController(sid, controller);
+    state.updateMessageInSession(sid, 'client-answer', { content: 'Canonical final text', isLoading: false }, {
+      syncBackend: false, recovery: { ownerId: 'test-user', runId: 'same-run', userMessageId: 'canonical-question', controller, timestamp: 2 },
+    });
+    expect(useStore.getState().messages.filter((message) => message.replyTo === 'canonical-question')).toHaveLength(1);
+    expect(useStore.getState().messages.at(-1)?.content).toBe('Canonical final text');
+  });
 });

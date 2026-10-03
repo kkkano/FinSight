@@ -14,6 +14,7 @@ import { HistoryWorkspace } from './HistoryWorkspace';
 import { TodayPage } from '../../pages/TodayPage';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
+import { ApplicationUpdateBanner } from '../common/ApplicationUpdateBanner';
 import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
 import { ContextPanelShell } from './ContextPanelShell';
 import { useDashboardStore } from '../../store/dashboardStore';
@@ -198,6 +199,7 @@ export function WorkspaceShell({
       />
 
       <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden max-md:ml-14">
+        <ApplicationUpdateBanner />
         <div className="mx-3 mt-3 shrink-0">
           <AiDisclaimer variant="banner" />
         </div>

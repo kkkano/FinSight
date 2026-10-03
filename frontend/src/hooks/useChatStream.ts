@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
 import { StreamRequestError } from '../api/http';
-import type { ChatContext } from '../api/client';
+import type { ChatContext, SSECallbacks, SendMessageBody } from '../api/client';
 import { useToast } from '../components/ui';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useExecutionStore } from '../store/executionStore';
@@ -142,9 +142,13 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     const pendingHandoff = initialState.takePendingChatHandoffContext(requestSessionId);
 
     const isRequestSessionActive = () => useStore.getState().sessionId === requestSessionId;
+    const streamController = new AbortController();
     let serverSaved = false;
-    const updateScopedMessage = (id: string, patch: Partial<Message>) => {
-      useStore.getState().updateMessageInSession(requestSessionId, id, patch, { syncBackend: !serverSaved });
+    const updateScopedMessage = (id: string, patch: Partial<Message>, allowRecovery = false) => {
+      useStore.getState().updateMessageInSession(requestSessionId, id, patch, { syncBackend: !serverSaved,
+        ...(allowRecovery ? { recovery: { ownerId: initialState.authIdentity?.userId || null,
+          runId: requestRunId, userMessageId, controller: streamController, timestamp: requestStartedAt } } : {}),
+      });
     };
 
     // 2. 历史与消息槽位：发送新增消息，重试原位复用 assistant 消息。
@@ -165,7 +169,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         id: userMessageId, role: 'user', content: userMsgContent, timestamp: Date.now(),
       });
     }
-    const aiMsgId = uuidv4();
+    let aiMsgId = uuidv4();
     if (retryMessageId) {
       updateScopedMessage(retryMessageId, { id: aiMsgId, runId: requestRunId, replyTo: userMessageId,
         content: '', isLoading: true, error: undefined, canRetry: false });
@@ -179,7 +183,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     const store = useStore.getState();
     store.setSessionLoading(requestSessionId, true);
     if (isRequestSessionActive()) store.setStatus(retryMessageId ? zh.chat.retrying : zh.chat.streaming);
-    const streamController = new AbortController();
     store.setSessionAbortController(requestSessionId, streamController);
     store.addAgentLog({
       id: uuidv4(),
@@ -194,6 +197,10 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     let thinkingSteps: ThinkingStep[] = [];
     let execRunId: string | null = null;
     let terminalHandlingPromise: Promise<void> | null = null;
+    let terminalClaimed = false;
+    let recoveredFromServer = false;
+    const recoveryController = new AbortController();
+    streamController.signal.addEventListener('abort', () => recoveryController.abort(), { once: true });
     const outputMode = opts.outputMode ?? 'chat';
     const requestStartedAt = Date.now();
     const confirmAnswerSaved = async (persistenceStatus?: string) => {
@@ -246,7 +253,8 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         thinking: thinkingSteps,
       });
       const current = useStore.getState();
-      if (isRequestSessionActive()) current.setStatus(zh.chat.stopped);
+      if (isRequestSessionActive() && (!current.abortControllersBySession[requestSessionId]
+        || current.abortControllersBySession[requestSessionId] === streamController)) current.setStatus(zh.chat.stopped);
       current.addAgentLog({
         id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'warn', message: zh.chat.stopped,
       });
@@ -272,8 +280,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       const streamContext = Object.keys(context).length > 0 ? context : undefined;
 
       // 4. 所有发送/重试共用同一个 SSE 管线。
-      await apiClient.sendMessageStream(
-        {
+      const request: SendMessageBody = {
           query: userMsgContent,
           run_id: requestRunId,
           client_user_message_id: userMessageId,
@@ -286,15 +293,66 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             trace_raw_override: initialState.traceRawEnabled ? 'on' : 'off',
           },
           session_id: requestSessionId || undefined,
-        },
-        {
+        };
+      const ownsRequest = () => {
+        const current = useStore.getState();
+        return !streamController.signal.aborted && !recoveryController.signal.aborted
+          && (current.authIdentity?.userId || null) === (initialState.authIdentity?.userId || null)
+          && current.abortControllersBySession[requestSessionId] === streamController
+          && current.chatLoadingBySession[requestSessionId];
+      };
+      let pendingRecovery: Promise<boolean> | null = null;
+      const recoverDelivery = (): Promise<boolean> => {
+        if (pendingRecovery) return pendingRecovery;
+        pendingRecovery = (async () => {
+          if (!ownsRequest() || terminalClaimed || !initialState.authIdentity) return false;
+          try {
+            const run = await apiClient.getExecutionRun(execRunId || requestRunId, recoveryController.signal);
+            if (!ownsRequest() || terminalClaimed || run.run_id !== (execRunId || requestRunId)
+              || run.session_id !== requestSessionId || run.user_message_id !== userMessageId
+              || run.status !== 'completed' || run.result?.type !== 'done') return false;
+            const result = run.result;
+            const content = result.assistant_message?.content || result.response || '';
+            if (typeof content !== 'string' || !hasChatOutput(content, result.report || result.blocked_report)) return false;
+            recoveredFromServer = true;
+            callbacks.onDone?.(result.report, result.thinking, result);
+            const completion = terminalHandlingPromise;
+            if (completion) await completion;
+            streamController.abort();
+            return true;
+          } catch {
+            return false;
+          } finally {
+            pendingRecovery = null;
+          }
+        })();
+        return pendingRecovery;
+      };
+      let polling = false;
+      const startDeliveryRecovery = () => {
+        if (polling || terminalClaimed || !initialState.authIdentity) return;
+        polling = true;
+        void (async () => {
+          while (ownsRequest() && !terminalClaimed) {
+            if (await recoverDelivery()) break;
+            await new Promise<void>((resolve) => {
+              const stop = () => { clearTimeout(timer); resolve(); };
+              const timer = setTimeout(() => { recoveryController.signal.removeEventListener('abort', stop); resolve(); }, 1500);
+              if (recoveryController.signal.aborted) stop();
+              else recoveryController.signal.addEventListener('abort', stop, { once: true });
+            });
+          }
+        })();
+      };
+      const callbacks: SSECallbacks = {
           onToken: (token) => {
+            if (terminalClaimed) return;
             const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
             if (safeToken) {
               fullContent += safeToken;
               if (execRunId) useExecutionStore.getState().ingestExternalToken(execRunId, safeToken);
             }
-            updateScopedMessage(aiMsgId, { content: fullContent, isLoading: true });
+            updateScopedMessage(aiMsgId, { content: fullContent, isLoading: true }, true);
           },
           onToolStart: (name) => {
             const current = useStore.getState();
@@ -313,6 +371,8 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             });
           },
           onDone: (report, thinking, meta) => {
+            if (terminalClaimed) return;
+            terminalClaimed = true;
             terminalHandlingPromise = (async () => {
               const degraded = meta?.degraded === true;
               serverSaved = meta?.persistence_status === 'saved';
@@ -365,7 +425,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               }
               const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
               if (nextFocus) useStore.getState().setTicker(nextFocus);
+              const canonicalId = typeof meta?.assistant_message?.id === 'string' ? meta.assistant_message.id : aiMsgId;
               updateScopedMessage(aiMsgId, {
+                id: canonicalId,
                 content: fullContent,
                 isLoading: false,
                 report,
@@ -374,7 +436,8 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 fallback_used: degraded,
                 data_origin: degraded ? 'LLM' : undefined,
                 canRetry: meta?.quality_blocked === true || meta?.persistence_status === 'failed',
-              });
+              }, true);
+              aiMsgId = canonicalId;
               await confirmAnswerSaved(meta?.persistence_status);
               if (degraded) {
                 toast({ type: 'warning', title: zh.chat.degradedTitle, message: typeof meta?.degradation_message === 'string' && meta.degradation_message.trim()
@@ -409,7 +472,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             })();
           },
           onError: (error) => {
+            if (terminalClaimed) return;
             terminalHandlingPromise = (async () => {
+              if (await recoverDelivery() || terminalClaimed) return;
               if (await recoverReportIfAvailable()) return;
               updateScopedMessage(aiMsgId, {
                 content: fullContent || zh.chat.streamInterrupted,
@@ -428,6 +493,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             })();
           },
           onThinking: (step) => {
+            if (terminalClaimed) return;
             const stepRunId = (typeof step.runId === 'string' && step.runId)
               || (step.result && typeof (step.result as Record<string, unknown>).run_id === 'string'
                 ? (step.result as Record<string, string>).run_id
@@ -447,6 +513,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               // 6. 进度只由 executionStore reducer 推导，不再维护 ChatInput 本地百分比表。
               execution.ingestExternalThinking(stepRunId, step);
             }
+            if (step.eventType === 'pipeline_stage' && step.result?.stage === 'done') startDeliveryRecovery();
             thinkingSteps = [...thinkingSteps, step];
             updateScopedMessage(aiMsgId, { thinking: thinkingSteps });
             const source = mapStageToSource(step.stage);
@@ -464,23 +531,24 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             else if (isError) current.updateAgentStatus(source, { status: 'error', endTime: step.timestamp || new Date().toISOString(), lastMessage: step.message });
           },
           onRawEvent: (event) => useStore.getState().addRawEvent(event),
-        },
-        {
+        };
+      await apiClient.sendMessageStream(request, callbacks, {
           traceRawEnabled: initialState.traceRawEnabled,
           signal: streamController.signal,
+          shouldCancelRunOnAbort: () => !recoveredFromServer,
           onConnectionState: (state) => {
-            if (!isRequestSessionActive()) return;
+            if (terminalClaimed || !isRequestSessionActive()) return;
             const current = useStore.getState();
             if (state === 'reconnecting') current.setStatus(zh.chat.reconnecting);
             else if (state === 'connected') current.setStatus(zh.chat.streaming);
             else current.setStatus(zh.chat.streamInterrupted);
           },
-        },
-      );
+        });
       const pendingTerminalHandling = terminalHandlingPromise;
       if (pendingTerminalHandling) await pendingTerminalHandling;
-      if (streamController.signal.aborted) finishAbortedStream();
+      if (streamController.signal.aborted && !recoveredFromServer) finishAbortedStream();
     } catch (error) {
+      if (streamController.signal.aborted && recoveredFromServer) return;
       if (streamController.signal.aborted) {
         finishAbortedStream();
         return;
@@ -496,15 +564,19 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         message: error instanceof Error ? error.message : zh.chat.networkRequestFailed,
       });
     } finally {
+      terminalClaimed = true;
+      recoveryController.abort();
       // 7. 会话级 loading/AbortController 收尾；executionStore 保持唯一进度真相源。
       const current = useStore.getState();
-      current.setSessionLoading(requestSessionId, false);
-      if (isRequestSessionActive()) {
-        if (streamController.signal.aborted) current.setStatus(zh.chat.stopped);
-        else current.setStatus(null);
-        current.resetExecutionState();
+      if (current.abortControllersBySession[requestSessionId] === streamController) {
+        current.setSessionLoading(requestSessionId, false);
+        if (isRequestSessionActive()) {
+          if (streamController.signal.aborted && !recoveredFromServer) current.setStatus(zh.chat.stopped);
+          else current.setStatus(null);
+          current.resetExecutionState();
+        }
+        current.setSessionAbortController(requestSessionId, null);
       }
-      current.setSessionAbortController(requestSessionId, null);
     }
   }, [sessionId, toast]);
 

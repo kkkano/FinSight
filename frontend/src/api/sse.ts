@@ -20,6 +20,7 @@ export interface StreamOpts {
   readTimeoutMs?: number;
   reconnectDelaysMs?: number[];
   onConnectionState?: (state: 'reconnecting' | 'connected' | 'lost', attempt: number) => void;
+  shouldCancelRunOnAbort?: () => boolean;
 }
 
 export interface GuardedSSECallbacks extends SSECallbacks {
@@ -109,6 +110,7 @@ export async function parseSSEStream(
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let eventCounter = 0;
+  let terminalReceived = false;
 
   /**
    * P1-2: 带超时的 read。超过 readTimeoutMs 未收到任何数据（含心跳帧）
@@ -256,9 +258,13 @@ export async function parseSSEStream(
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (data.type === 'done') {
+            terminalReceived = true;
             onDone?.(data.report, data.thinking, data);
+            return;
           } else if (data.type === 'error') {
+            terminalReceived = true;
             onError?.(data.message);
+            return;
           } else if (
             ['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)
           ) {
@@ -295,6 +301,7 @@ export async function parseSSEStream(
       }
     }
   } finally {
+    if (terminalReceived) await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

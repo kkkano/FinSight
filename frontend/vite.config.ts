@@ -1,10 +1,17 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const rawBuildId = process.env.FRONTEND_BUILD_ID?.trim() || 'local'
 const serviceWorkerBuildId = rawBuildId.replace(/[^A-Za-z0-9._-]/g, '-') || 'local'
 const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(serviceWorkerBuildId)}`
+
+const applicationVersion: Plugin = {
+  name: 'application-version',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'app-version.json', source: JSON.stringify({ build_id: serviceWorkerBuildId }) })
+  },
+}
 
 const versionedServiceWorkerRegistration = {
   name: 'versioned-service-worker-registration',
@@ -54,12 +61,23 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallbackDenylist: [/^\/api\//],
+        // 刷新必须先取服务器 HTML，不能继续由旧 app shell 启动上一版客户端。
+        navigateFallback: null,
+        globIgnores: ['**/app-version.json'],
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname === '/app-version.json',
+            handler: 'NetworkOnly',
+          },
           {
             // API（包括 SSE）始终直连网络，禁止进入 Service Worker 缓存。
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
             handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/api/'),
+            handler: 'NetworkFirst',
+            options: { cacheName: 'finsight-navigation', expiration: { maxEntries: 8 } },
           },
           {
             urlPattern: ({ request, url }) =>
@@ -78,9 +96,11 @@ export default defineConfig({
       },
     }),
     versionedServiceWorkerRegistration,
+    applicationVersion,
   ],
   define: {
-    'process.env': {}
+    'process.env': {},
+    'import.meta.env.VITE_APP_BUILD_ID': JSON.stringify(serviceWorkerBuildId),
   },
   build: {
     // ECharts is intentionally kept in its own vendor chunk; raise warning limit

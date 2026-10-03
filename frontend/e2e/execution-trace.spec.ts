@@ -15,6 +15,12 @@ const openExecutionPanel = async (page: any) => {
   const expand = page.getByTestId('context-panel-expand');
   if (await expand.isVisible()) await expand.click();
   await page.getByTestId('context-tab-execution').click();
+  const details = page.getByTestId('execution-details');
+  await expect(details).toBeVisible();
+  if (!(await details.evaluate((element: HTMLDetailsElement) => element.open))) {
+    await details.locator('summary').first().click();
+  }
+  await expect(details).toHaveAttribute('open', '');
 };
 
 const buildDashboardPayload = (symbol = 'AAPL') => ({

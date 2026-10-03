@@ -1,4 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import type { SendMessageBody, SSECallbacks } from '../src/api/contracts';
+import type { StreamOpts } from '../src/api/sse';
 
 const USER = 'persistence-user';
 const SESSION = `public:${USER}:saved-thread`;
@@ -9,6 +11,7 @@ const json = (route: Route, body: unknown, status = 200) => route.fulfill({ stat
 declare global {
   interface Window {
     emitPersistenceAuth: (event: string, user?: string) => void;
+    deliveryFixture: { sends: number; reads: number; cancels: number; release?: () => void };
   }
 }
 
@@ -179,4 +182,60 @@ test('刷新后按run恢复回答且不重新触发模型', async ({ page }) => 
   expect(posts).toBe(0);
   expect(reads).toBeGreaterThanOrEqual(2);
   await expect.poll(async () => (await snapshot(page)).loading).toBe(false);
+});
+
+test('回答槽丢失且SSE挂住时保留99%交付状态并取回同轮已保存正文', async ({ page }) => {
+  await setup(page);
+  await page.goto('/chat');
+  await expect(page.locator('#chat-scroll-container').getByText('Saved thread restored', { exact: true })).toBeVisible();
+  await page.evaluate(async (answer) => {
+    const apiPath = '/src/api/client.ts';
+    const storePath = '/src/store/useStore.ts';
+    const { apiClient } = await import(apiPath);
+    const { useStore } = await import(storePath);
+    const fixture = window.deliveryFixture = { sends: 0, reads: 0, cancels: 0,
+      release: undefined as (() => void) | undefined };
+    let request: SendMessageBody;
+    apiClient.getExecutionRun = async () => {
+      fixture.reads += 1;
+      await new Promise<void>((resolve) => { fixture.release = resolve; });
+      return { run_id: request.run_id, session_id: request.session_id, user_message_id: request.client_user_message_id,
+        assistant_message_id: request.client_assistant_message_id, status: 'completed',
+        result: { type: 'done', response: answer, persistence_status: 'saved', run_id: request.run_id,
+          assistant_message: { id: request.client_assistant_message_id, content: answer } } };
+    };
+    apiClient.sendMessageStream = async (body: SendMessageBody, callbacks: SSECallbacks, opts: StreamOpts) => {
+      fixture.sends += 1;
+      request = body;
+      useStore.setState({ messages: useStore.getState().messages.filter(
+        (message: { id: string }) => message.id !== body.client_assistant_message_id,
+      ) });
+      callbacks.onThinking?.({ stage: 'rendering', eventType: 'pipeline_stage', runId: body.run_id,
+        timestamp: new Date().toISOString(), result: { stage: 'rendering', status: 'done' } });
+      callbacks.onToken?.('已收到本轮研究正文，等待服务器交付确认。');
+      callbacks.onThinking?.({ stage: 'done', eventType: 'pipeline_stage', runId: body.run_id,
+        timestamp: new Date().toISOString(), message: 'Execution completed', result: { stage: 'done', status: 'done' } });
+      await new Promise<void>((resolve) => opts.signal!.addEventListener('abort', () => {
+        if (opts.shouldCancelRunOnAbort?.() !== false) fixture.cancels += 1;
+        resolve();
+      }, { once: true }));
+    };
+  }, ANSWER);
+  await page.getByRole('textbox', { name: '输入聊天消息' }).fill('分析 INTC 的基本面与风险');
+  await page.getByRole('textbox', { name: '输入聊天消息' }).press('Enter');
+  await expect(page.locator('#chat-scroll-container').getByText('已收到本轮研究正文，等待服务器交付确认。', { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.deliveryFixture.reads)).toBe(1);
+  const pending = await page.evaluate(async () => {
+    const executionPath = '/src/store/executionStore.ts';
+    const { useExecutionStore } = await import(executionPath);
+    const run = useExecutionStore.getState().activeRuns.at(-1);
+    return { progress: run.progress, status: run.status, currentStep: run.currentStep };
+  });
+  expect(pending).toMatchObject({ progress: 99, status: 'running', currentStep: '正在保存并交付回答…' });
+  expect((await snapshot(page)).loading).toBe(true);
+  await page.evaluate(() => window.deliveryFixture.release!());
+  await expect(page.locator('#chat-scroll-container').getByText(ANSWER, { exact: true })).toBeVisible();
+  await expect.poll(async () => (await snapshot(page)).loading).toBe(false);
+  expect(await page.evaluate(() => ({ sends: window.deliveryFixture.sends, cancels: window.deliveryFixture.cancels })))
+    .toEqual({ sends: 1, cancels: 0 });
 });

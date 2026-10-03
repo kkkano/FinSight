@@ -461,6 +461,8 @@ curl -fsS http://127.0.0.1:5173/readyz >/dev/null
 
 ## 10. 完成证据
 
+前端可独立通过 `FRONTEND_IMAGE_TAG` 发布，未设置时沿用 `IMAGE_TAG`。发布后核对 `/app-version.json` 的 `build_id` 和实际 frontend image；后端未变更时无需重启正在运行的研究任务。版本文件及 Service Worker 禁止缓存；页面导航使用 NetworkFirst，避免 F5 仍从旧 app shell 启动旧客户端。打开的页面发现新版本时提示刷新，生成中或有未发送输入时不会自动重载。
+
 发布记录必须区分已经完成的发布验收和后续观察，并包含以下证据或准确的待补状态：
 
 1. 部署 commit SHA、backend/frontend image ID，以及运行容器对应关系。

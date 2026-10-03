@@ -189,12 +189,22 @@ const initialTraceRawShowRawJson = getInitialTraceRawShowRawJson();
 applyThemeClass(initialTheme);
 applyColorConventionClass(initialColorConvention);
 
+interface MessageRecoveryGuard {
+  ownerId: string | null;
+  runId: string;
+  userMessageId: string;
+  controller: AbortController;
+  timestamp: number;
+}
+
 interface AppState {
   messages: Message[];
   addMessage: (message: Message) => void;
   addMessageToSession: (sessionId: string, message: Message) => void;
   updateMessage: (id: string, patch: Partial<Message>) => void;
-  updateMessageInSession: (sessionId: string, id: string, patch: Partial<Message>, options?: { syncBackend?: boolean }) => void;
+  updateMessageInSession: (sessionId: string, id: string, patch: Partial<Message>, options?: {
+    syncBackend?: boolean; recovery?: MessageRecoveryGuard;
+  }) => void;
   flushConversationSync: (sessionId: string) => Promise<boolean>;
   updateLastMessage: (content: string) => void;
   removeMessage: (id: string) => void;
@@ -900,12 +910,32 @@ export const useStore = create<AppState>((set) => ({
       const normalized = String(sessionId || '').trim();
       if (!normalized || !sessionBelongsToIdentity(normalized, state.authIdentity)) return {};
       const isActiveSession = normalized === state.sessionId;
-      const baseMessages = isActiveSession
+      let baseMessages = isActiveSession
         ? state.messages
         : loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
-      // 异步补挂可能晚于会话删除返回；目标消息已不存在时不得重建会话摘要或本地存储。
-      if (!baseMessages.some((message) => message.id === id)) return {};
-      const next = patchMessageForSession(baseMessages, id, patch);
+      const recovery = options.recovery;
+      if (recovery && (recovery.controller.signal.aborted
+          || (state.authIdentity?.userId || null) !== recovery.ownerId
+          || state.abortControllersBySession[normalized] !== recovery.controller
+          || !state.chatLoadingBySession[normalized]
+          || !baseMessages.some((message) => message.id === recovery.userMessageId && message.role === 'user'))) return {};
+      let targetId = id;
+      if (!baseMessages.some((message) => message.id === targetId)) {
+        // 只有仍拥有问题和 AbortController 的本轮正文可恢复；图表等补挂不传此守卫。
+        if (!recovery || !patch.content?.trim()) return {};
+        const counterpart = baseMessages.find((message) => message.role === 'assistant'
+          && message.replyTo === recovery.userMessageId);
+        if (counterpart) {
+          if (counterpart.runId !== recovery.runId) return {};
+          targetId = counterpart.id;
+        } else {
+          baseMessages = [...baseMessages, { id, role: 'assistant', content: '', timestamp: recovery.timestamp,
+            runId: recovery.runId, replyTo: recovery.userMessageId, isLoading: true }];
+        }
+      }
+      if (recovery && baseMessages.some((message) => message.id === targetId
+        && (message.role !== 'assistant' || message.runId !== recovery.runId || message.replyTo !== recovery.userMessageId))) return {};
+      const next = patchMessageForSession(baseMessages, targetId, patch);
       const finalized = patch.isLoading === false;
       if (!finalized && isActiveSession) {
         // FE-01：流式中间态去抖（仅当前会话；跨会话更新低频，保持原直写路径）

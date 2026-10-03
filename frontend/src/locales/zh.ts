@@ -47,6 +47,7 @@ export const zh = {
     missingSavedAnswer: '这条问题没有已保存的回答，可以重新生成。',
     savingAnswer: '正在保存回答…',
     recoveringAnswer: '正在恢复服务器上的回答…',
+    deliveringAnswer: '正在保存并交付回答…',
     answerSaveFailedTitle: '云端保存失败',
     answerSaveFailedMessage: '回答已保留在当前页面和可用的本地缓存中，云端保存未成功。请保持此页面打开并检查登录状态与网络。',
     streamInterruptedMessage: '已保留收到的内容，可以点击重试继续',

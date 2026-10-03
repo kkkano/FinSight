@@ -22,6 +22,19 @@ function sseResponseWithHeaders(
 }
 
 describe('parseSSEStream', () => {
+  it('finishes delivery on done without waiting for the server to close the connection', async () => {
+    const cancelled = vi.fn();
+    const stream = new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode('data: {"type":"done","response":"Saved answer"}\n\n'));
+    }, cancel: cancelled });
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    await parseSSEStream(new Response(stream), { onDone, onError }, { readTimeoutMs: 1000 });
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

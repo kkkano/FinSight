@@ -171,7 +171,7 @@ describe('pipelineReducer', () => {
     expect(patch.progress).toBe(58);
   });
 
-  it('maps final pipeline done stage to 100 percent', () => {
+  it('keeps pipeline done below 100 until the final answer is delivered', () => {
     const run = buildRun({ progress: 95 });
     const step = {
       eventType: 'pipeline_stage',
@@ -187,8 +187,9 @@ describe('pipelineReducer', () => {
 
     const patch = pipelineReducer(run, step, [buildTimelineEvent('pipeline_stage')]);
     expect(patch.pipelineCurrentStage).toBe('done');
-    expect(patch.pipelineStages?.done.status).toBe('done');
-    expect(patch.progress).toBe(100);
+    expect(patch.progress).toBe(99);
+    expect(patch.currentStep).toBe(zh.chat.deliveringAnswer);
+    expect(patch.pipelineStages?.done.status).toBe('running');
   });
 
   it('maps agent_done metrics into AgentRunInfo', () => {
