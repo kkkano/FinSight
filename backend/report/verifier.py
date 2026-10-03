@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage
 
 from backend.graph.failure import utc_now_iso
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, is_rate_limit_error
+from backend.utils.env import env_int
 
 if TYPE_CHECKING:  # GraphState 仅作类型注解——避免触发 backend.graph.__init__ 饿加载环
     from backend.graph.state import GraphState
@@ -28,9 +29,9 @@ def _synth():
 
 logger = logging.getLogger(__name__)
 
-_DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC = 45
+_DEEP_VERIFIER_DEFAULT_REQUEST_TIMEOUT_SEC = 1200
 _DEEP_VERIFIER_MAX_ATTEMPTS = 1
-_DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC = 20
+_DEEP_VERIFIER_DEFAULT_ACQUIRE_TIMEOUT_SEC = 120
 
 
 def _normalize_verifier_claims(raw_claims: Any, *, max_items: int) -> list[dict[str, str]]:
@@ -131,7 +132,15 @@ async def _run_deep_report_verifier(
         return {"enabled": True, "checked": False, "unsupported_claims": [], "reason": "empty_text"}
 
     max_issues = max(1, _synth()._env_int("LANGGRAPH_DEEP_VERIFIER_MAX_ISSUES", 6))
-    verifier_tokens = max(256, _synth()._env_int("LANGGRAPH_DEEP_VERIFIER_MAX_TOKENS", 900))
+    verifier_tokens = max(256, _synth()._env_int("LANGGRAPH_DEEP_VERIFIER_MAX_TOKENS", 8192))
+    request_timeout = max(1, env_int(
+        "LANGGRAPH_DEEP_VERIFIER_REQUEST_TIMEOUT_SECONDS",
+        env_int("LLM_REQUEST_TIMEOUT_SECONDS", _DEEP_VERIFIER_DEFAULT_REQUEST_TIMEOUT_SEC),
+    ))
+    acquire_timeout = max(1, env_int(
+        "LANGGRAPH_DEEP_VERIFIER_ACQUIRE_TIMEOUT_SECONDS",
+        _DEEP_VERIFIER_DEFAULT_ACQUIRE_TIMEOUT_SEC,
+    ))
     retry_attempts = 0
 
     current_date = utc_now_iso()[:10]
@@ -182,9 +191,9 @@ async def _run_deep_report_verifier(
             context=context,
             temperature=0.0,
             max_tokens=verifier_tokens,
-            request_timeout=_DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC,
+            request_timeout=request_timeout,
             acquire_token=True,
-            acquire_timeout_seconds=float(_DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC),
+            acquire_timeout_seconds=float(acquire_timeout),
         )
         content = resp.content if hasattr(resp, "content") else str(resp)
         payload = json.loads(_synth()._extract_json_object(str(content)))

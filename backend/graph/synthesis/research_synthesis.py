@@ -34,6 +34,7 @@ from backend.graph.synthesis.contracts import (
 )
 from backend.graph.synthesis.task_outcomes import TaskDescriptor, TaskOutcome
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
+from backend.utils.env import env_int
 
 _EVIDENCE_KINDS = set(EvidenceKind.__args__)
 _STANCE = {"bull", "bear", "neutral", "risk", "unknown"}
@@ -464,14 +465,20 @@ async def _invoke_structured(
     """结构化解析失败时复用同一 context，修复请求不能重置预算。"""
     current_prompt = prompt
     last_error: Exception | None = None
+    max_tokens = max(512, env_int("LANGGRAPH_STRUCTURED_SYNTHESIS_MAX_TOKENS", 8192))
+    request_timeout = max(1, env_int(
+        "LANGGRAPH_STRUCTURED_SYNTHESIS_REQUEST_TIMEOUT_SECONDS",
+        env_int("LLM_REQUEST_TIMEOUT_SECONDS", 1200),
+    ))
+    acquire_timeout = max(1, env_int("LANGGRAPH_STRUCTURED_SYNTHESIS_ACQUIRE_TIMEOUT_SECONDS", 120))
     while context.budget.remaining > 0:
         response = await ainvoke_configured_llm(
             [HumanMessage(content=current_prompt)],
             context=context,
             temperature=0.1,
-            max_tokens=1800,
-            request_timeout=120,
-            acquire_timeout_seconds=45,
+            max_tokens=max_tokens,
+            request_timeout=request_timeout,
+            acquire_timeout_seconds=acquire_timeout,
             acquire_token=True,
             client_transform=lambda client: client.with_structured_output(schema),
         )

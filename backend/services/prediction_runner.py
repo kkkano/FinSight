@@ -29,7 +29,7 @@ def create_forecast_llm():
     from backend.services.model_selection import server_model_scope
     with server_model_scope():
         return create_llm(temperature=None, max_tokens=max(2048, int(os.getenv("PREDICTION_OUTPUT_TOKENS", "4096"))),
-                          request_timeout=60, max_retries=0)
+                          request_timeout=60, max_retries=0, preserve_output_budget=True)
 
 
 async def forecast_once(agent_name: str, context: dict, snapshot: dict) -> dict:

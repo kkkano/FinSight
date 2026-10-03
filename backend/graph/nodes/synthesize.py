@@ -61,11 +61,13 @@ from backend.report.verifier import (  # WP3-T4 verifier 搬家回接
     _run_deep_report_verifier,
 )
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, is_rate_limit_error
+from backend.services.llm_retry import classify_llm_error
+from backend.services.llm_response import LLMCompletionError, completion_metadata, final_completion_text
 
 logger = logging.getLogger(__name__)
 
-_REPORT_SYNTHESIS_MAX_REQUEST_TIMEOUT_SEC = 120
-_REPORT_SYNTHESIS_MAX_ACQUIRE_TIMEOUT_SEC = 45
+_REPORT_SYNTHESIS_MAX_REQUEST_TIMEOUT_SEC = 1800
+_REPORT_SYNTHESIS_MAX_ACQUIRE_TIMEOUT_SEC = 300
 _REPORT_SYNTHESIS_MAX_ATTEMPTS = 1
 _REPORT_SYNTHESIS_SDK_MAX_RETRIES = 0
 
@@ -357,15 +359,15 @@ async def synthesize(state: GraphState) -> dict:
 
     # ── llm mode: LLM fills render_vars JSON ──
     llm_limits = {
-        "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_TIMEOUT_SEC", 150),
-        "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_MAX_TOKENS", 3000),
+        "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_TIMEOUT_SEC", 1200),
+        "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_MAX_TOKENS", 65536),
         "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_MAX_ATTEMPTS", 2),
         "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_ACQUIRE_TIMEOUT_SEC", 120),
     }
     if output_mode == "investment_report":
         llm_limits = {
-            "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", 180),
-            "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_TOKENS", 6000),
+            "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", 1200),
+            "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_TOKENS", 65536),
             "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", 1),
             "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", 60),
         }
@@ -539,11 +541,9 @@ summary, highlights, analysis.
 
     retry_attempts = 0
 
-    def _on_retry(attempt: int, _exc: BaseException) -> None:
-        nonlocal retry_attempts
-        retry_attempts = max(retry_attempts, int(attempt))
-
     raw_content = ""
+    response_received = False
+    response_diagnostics: dict[str, Any] = {}
     try:
         await emit_event(
             {
@@ -553,6 +553,9 @@ summary, highlights, analysis.
                 "timestamp": utc_now_iso(),
             }
         )
+        from backend.services.model_selection import STEP_MODEL, current_model
+        selected = current_model()
+        json_transform = (lambda client: client.bind(response_format={"type": "json_object"})) if selected and selected.model == STEP_MODEL else None
         resp = await ainvoke_configured_llm(
             [HumanMessage(content=prompt)],
             context=call_context,
@@ -561,7 +564,11 @@ summary, highlights, analysis.
             request_timeout=int(llm_limits["request_timeout"]),
             acquire_token=True,
             acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
+            client_transform=json_transform,
         )
+        response_received = True
+        response_diagnostics = completion_metadata(resp)
+        retry_attempts = max(0, call_context.budget.provider_attempts_used - 1)
         await emit_event(
             {
                 "type": "thinking",
@@ -570,8 +577,7 @@ summary, highlights, analysis.
                 "timestamp": utc_now_iso(),
             }
         )
-        content = resp.content if hasattr(resp, "content") else str(resp)
-        raw_content = str(content or "").strip()
+        raw_content = final_completion_text(resp)
         try:
             payload = json.loads(_extract_json_object(raw_content))
         except Exception:
@@ -731,6 +737,7 @@ summary, highlights, analysis.
             **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
             "keys": sorted(render_vars.keys()),
             "llm_limits": llm_limits,
+            "completion": response_diagnostics,
         }
         if isinstance(verifier_result, dict):
             synth_runtime["verifier_enabled"] = bool(verifier_result.get("enabled"))
@@ -761,15 +768,27 @@ summary, highlights, analysis.
         return {"artifacts": merged_artifacts, "trace": trace}
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
+        retry_attempts = max(0, call_context.budget.provider_attempts_used - 1)
+        classification = classify_llm_error(exc)
+        if isinstance(exc, LLMCompletionError):
+            fallback_reason = exc.code
+        elif response_received:
+            fallback_reason = "llm_output_invalid"
+        else:
+            fallback_reason = {
+                "timeout": "provider_timeout", "rate_limit": "rate_limited", "quota_exhausted": "quota_exhausted",
+                "authentication": "authentication", "configuration": "configuration", "invalid_request": "invalid_request",
+            }.get(classification.kind, "llm_unavailable")
         logger.warning(
-            "[Synthesize] LLM call FAILED (retryable=%s, attempts=%d): %s — falling back to stub",
-            retryable, retry_attempts, exc,
+            "[Synthesize] 合成失败 code=%s finish=%s chars=%s output_limit=%s attempts=%s",
+            fallback_reason, response_diagnostics.get("finish_reason"), response_diagnostics.get("response_characters"),
+            llm_limits["max_tokens"], call_context.budget.provider_attempts_used,
         )
         append_failure(
             trace,
             node="synthesize",
             stage="llm_call",
-            error=str(exc),
+            error=fallback_reason,
             fallback="synthesize_stub",
             retryable=retryable,
             retry_attempts=retry_attempts,
@@ -783,7 +802,6 @@ summary, highlights, analysis.
             }
         )
         render_vars = _stub_render_vars(state)
-        fallback_reason = "llm_empty_output" if not str(raw_content or "").strip() else "llm_output_invalid"
         trace.update(
             {
                 "synthesize_runtime": build_runtime(
@@ -791,13 +809,13 @@ summary, highlights, analysis.
                     fallback=True,
                     reason=fallback_reason,
                     retry_attempts=retry_attempts,
-                )
+                ) | {"completion": response_diagnostics, "llm_limits": llm_limits}
             }
         )
         await _emit_synth_stage_done(
             status="error",
             message="Synthesize failed, fallback to stub",
-            error=str(exc),
+            error=fallback_reason,
         )
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
 

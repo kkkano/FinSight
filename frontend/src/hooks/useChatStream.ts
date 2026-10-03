@@ -356,7 +356,8 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               data_origin: degraded ? 'LLM' : undefined,
             });
             if (degraded) {
-              toast({ type: 'warning', title: zh.chat.degradedTitle, message: zh.chat.degradedMessage });
+              toast({ type: 'warning', title: zh.chat.degradedTitle, message: typeof meta?.degradation_message === 'string' && meta.degradation_message.trim()
+                ? meta.degradation_message : zh.chat.degradedMessage });
             }
 
             // 5. 文本先落定，图表异步补挂。

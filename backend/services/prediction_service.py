@@ -41,6 +41,7 @@ from backend.services.model_selection import (
     model_selection_scope,
     redact_model_secrets,
 )
+from backend.utils.env import env_int
 
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,8 @@ PREDICTION_AGENT = "prediction_analyst"
 PREDICTION_OPERATION = "technical"
 PREDICTION_MIN_BARS = 60
 PREDICTION_MAX_PROVIDER_ATTEMPTS = 2
-PREDICTION_HARD_TIMEOUT_SECONDS = 75.0
-PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS = 30.0
+PREDICTION_HARD_TIMEOUT_SECONDS = 1800.0
+PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS = 1200.0
 PREDICTION_NEWS_TIMEOUT_SECONDS = 5.0
 PREDICTION_DEFAULT_LLM_ENDPOINT_NAMES = ("openai-compatible-primary",)
 
@@ -653,11 +654,8 @@ class PredictionService:
         self.market_gateway = market_gateway
         self.invoke_llm = invoke_llm
         self.prompt_version = str(prompt_version or PREDICTION_PROMPT_VERSION)
-        self.timeout_seconds = max(10.0, min(PREDICTION_HARD_TIMEOUT_SECONDS, float(timeout_seconds)))
-        self.llm_attempt_timeout_seconds = max(
-            5.0,
-            min(32.0, float(llm_attempt_timeout_seconds)),
-        )
+        self.timeout_seconds = max(10.0, float(timeout_seconds))
+        self.llm_attempt_timeout_seconds = max(5.0, float(llm_attempt_timeout_seconds))
         self.news_timeout_seconds = max(0.1, min(10.0, float(news_timeout_seconds)))
         self.llm_endpoint_names = _prediction_llm_endpoint_names(llm_endpoint_names)
         self.enabled = bool(enabled)
@@ -1025,15 +1023,9 @@ class PredictionService:
     async def _invoke(self, prompt: str, *, context: LLMCallContext) -> Any:
         from langchain_core.messages import HumanMessage
 
-        selected = current_model()
-        if selected is not None:
-            # 推理模型的思考过程也消耗输出预算；沿用旧的 1600/30 会在
-            # JSON 合同完成前截断，随后被误报成预测合同失败。
-            max_tokens = max(4096, min(8192, int(os.getenv("PREDICTION_LLM_MAX_TOKENS", "4096"))))
-            request_timeout = 60
-        else:
-            max_tokens = max(512, min(2400, int(os.getenv("PREDICTION_LLM_MAX_TOKENS", "1600"))))
-            request_timeout = int(self.llm_attempt_timeout_seconds)
+        # 推理 token 与正文共用输出预算；具体模型的最低预算由中央配置保证。
+        max_tokens = max(512, env_int("PREDICTION_LLM_MAX_TOKENS", 8192))
+        request_timeout = int(self.llm_attempt_timeout_seconds)
         return await self.invoke_llm(
             [HumanMessage(content=prompt)],
             context=context,
@@ -1041,7 +1033,7 @@ class PredictionService:
             max_tokens=max_tokens,
             request_timeout=request_timeout,
             acquire_token=True,
-            acquire_timeout_seconds=min(15.0 if selected else 10.0, float(request_timeout)),
+            acquire_timeout_seconds=min(120.0, float(request_timeout)),
             endpoint_names=self.llm_endpoint_names,
         )
 
@@ -1222,9 +1214,9 @@ def get_prediction_service() -> PredictionService:
                 store=PredictionRunStore(dsn=dsn),
                 market_gateway=get_market_data_gateway(),
                 prompt_version=str(os.getenv("PREDICTION_PROMPT_VERSION") or PREDICTION_PROMPT_VERSION),
-                timeout_seconds=float(os.getenv("PREDICTION_RUN_TIMEOUT_SECONDS", "75")),
+                timeout_seconds=float(os.getenv("PREDICTION_RUN_TIMEOUT_SECONDS", "1800")),
                 llm_attempt_timeout_seconds=float(
-                    os.getenv("PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS", "30")
+                    os.getenv("PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS", "1200")
                 ),
                 news_timeout_seconds=float(os.getenv("PREDICTION_NEWS_TIMEOUT_SECONDS", "5")),
                 max_concurrent_runs=int(os.getenv("PREDICTION_MAX_CONCURRENT_RUNS", "2")),

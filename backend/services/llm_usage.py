@@ -344,7 +344,7 @@ def estimate_cost(by_model: dict[str, dict[str, int]]) -> float:
 # P1-5: 单请求 token 预算上限
 # ---------------------------------------------------------------------------
 
-_DEFAULT_REQUEST_TOKEN_BUDGET = 300_000
+_DEFAULT_REQUEST_TOKEN_BUDGET = 3_000_000
 
 
 class TokenBudgetExceededError(RuntimeError):

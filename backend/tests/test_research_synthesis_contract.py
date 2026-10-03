@@ -22,6 +22,38 @@ from backend.graph.synthesis.task_outcomes import (
 from backend.services.llm_retry import LLMCallContext
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("request_timeout,max_tokens", [(1200, 8192), (1800, 65536)])
+async def test_structured_synthesis_large_budget_keeps_schema_repairs_bounded(monkeypatch, request_timeout, max_tokens):
+    import backend.graph.synthesis.research_synthesis as module
+    from backend.graph.synthesis.contracts import StrictContract
+
+    class Reply(StrictContract):
+        conclusion: str
+
+    observed = []
+    context = LLMCallContext.create(stage="report_synthesize", max_provider_attempts=2)
+    monkeypatch.setenv("LANGGRAPH_STRUCTURED_SYNTHESIS_REQUEST_TIMEOUT_SECONDS", str(request_timeout))
+    monkeypatch.setenv("LANGGRAPH_STRUCTURED_SYNTHESIS_MAX_TOKENS", str(max_tokens))
+    monkeypatch.setenv("LANGGRAPH_STRUCTURED_SYNTHESIS_ACQUIRE_TIMEOUT_SECONDS", "120")
+
+    async def invoke(_messages, **kwargs):
+        observed.append(kwargs)
+        kwargs["context"].budget.reserve_provider_attempt()
+        return {} if len(observed) == 1 else {"conclusion": "受支持的结论"}
+
+    monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
+    result = await module._invoke_structured(prompt="证据", context=context, schema=Reply, stage="report")
+
+    assert result.conclusion == "受支持的结论"
+    assert len(observed) == 2
+    assert context.budget.remaining == 0
+    assert all(item["context"] is context for item in observed)
+    assert all(item["request_timeout"] == request_timeout for item in observed)
+    assert all(item["max_tokens"] == max_tokens for item in observed)
+    assert all(item["acquire_timeout_seconds"] == 120 for item in observed)
+
+
 def _descriptor(task_id: str, order: int, *, required: list[str] | None = None) -> TaskDescriptor:
     return TaskDescriptor(
         task_id=task_id,

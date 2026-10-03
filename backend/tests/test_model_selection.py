@@ -338,7 +338,8 @@ async def test_create_llm_uses_selected_model_and_official_effort(monkeypatch):
         create_llm(model="ignored-global-model", max_tokens=512, max_retries=0)
         assert captured["model"] == "step-5-preview"
         assert captured["reasoning_effort"] == "low"
-        assert captured["max_tokens"] >= 2048
+        assert captured["max_tokens"] == 65536
+        assert captured["request_timeout"] == 1200
         assert captured["openai_api_key"] == "private-test-key"
         assert captured["http_client"].follow_redirects is False
         assert captured["http_async_client"].follow_redirects is False
@@ -348,7 +349,41 @@ async def test_create_llm_uses_selected_model_and_official_effort(monkeypatch):
         await captured["http_async_client"].aclose()
 
 
-@pytest.mark.parametrize("requested_timeout,expected_timeout", [(600, 60), (15, 15)])
+@pytest.mark.parametrize("frozen,expected_tokens,expected_timeout", [
+    (False, 65536, 1200), (True, 4096, 60),
+])
+def test_background_step_budget_preserves_only_explicit_frozen_calls(monkeypatch, frozen, expected_tokens, expected_timeout):
+    import langchain_openai
+    from backend.llm_config import EndpointConfig, create_llm_for_endpoint
+
+    captured = {}
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", lambda **kwargs: captured.update(kwargs) or object())
+    monkeypatch.setenv("LLM_FOREGROUND_MAX_TOKENS", "65536")
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT_SECONDS", "1200")
+    with selection.server_model_scope():
+        create_llm_for_endpoint(
+            EndpointConfig("system-stepfun", "openai", selection.STEP_BASE_URL, "fixture-key", selection.STEP_MODEL),
+            max_tokens=4096, request_timeout=60, preserve_output_budget=frozen,
+        )
+    assert captured["max_tokens"] == expected_tokens
+    assert captured["request_timeout"] == expected_timeout
+    assert captured["max_retries"] == 0
+
+
+def test_public_forecast_explicitly_freezes_its_budget(monkeypatch):
+    import backend.llm_config as config
+    from backend.services import prediction_runner
+
+    captured = {}
+    monkeypatch.setenv("PREDICTION_OUTPUT_TOKENS", "4096")
+    monkeypatch.setattr(config, "create_llm", lambda **kwargs: captured.update(kwargs) or object())
+    prediction_runner.create_forecast_llm()
+    assert captured["max_tokens"] == 4096
+    assert captured["request_timeout"] == 60
+    assert captured["preserve_output_budget"] is True
+
+
+@pytest.mark.parametrize("requested_timeout,expected_timeout", [(600, 600), (15, 15), (2400, 1200)])
 @pytest.mark.asyncio
 async def test_custom_llm_bounds_sdk_timeout_and_disables_retries(monkeypatch, requested_timeout, expected_timeout):
     import langchain_openai

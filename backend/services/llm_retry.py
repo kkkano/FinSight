@@ -42,6 +42,7 @@ from backend.services.llm_usage import (
     record_llm_selection_failure,
     record_llm_usage,
 )
+from backend.services.llm_response import completion_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,7 @@ async def ainvoke_llm(
                 "duration_ms": int((perf_counter() - started) * 1000),
                 "usage_state": "reported" if prompt_tokens is not None else "not_reported",
                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+                "completion": completion_metadata(result),
             }
             _emit("llm.attempt", attempt_payload)
             _observe_attempt(context, attempt_payload)

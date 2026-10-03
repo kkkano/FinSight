@@ -445,6 +445,7 @@ def create_llm_for_endpoint(
     temperature: float | None = 0.3,
     max_tokens: int | None = None,
     request_timeout: int = 600,
+    preserve_output_budget: bool = False,
 ):
     """Build one client for an already selected endpoint without re-selecting."""
     from langchain_openai import ChatOpenAI
@@ -453,9 +454,13 @@ def create_llm_for_endpoint(
     sdk_api_base = _to_chatopenai_base(cfg.api_base)
     if not api_key:
         raise ValueError(f"API key not found for provider '{cfg.provider}'")
-    resolved_max_tokens = max(256, int(max_tokens if max_tokens is not None else _env_int("LLM_MAX_TOKENS", 8192)))
-    from backend.services.model_selection import current_model, model_capabilities, track_model_client
+    resolved_max_tokens = max(256, int(max_tokens if max_tokens is not None else _env_int("LLM_MAX_TOKENS", 65536)))
+    from backend.services.model_selection import current_model, model_capabilities, track_model_client, STEP_MODEL
     chosen = current_model()
+    if cfg.model == STEP_MODEL and not preserve_output_budget:
+        # 推理与最终文本共享输出额度；固定评测显式保留冻结预算。
+        resolved_max_tokens = min(65536, max(resolved_max_tokens, _env_int("LLM_FOREGROUND_MAX_TOKENS", 65536)))
+        request_timeout = max(request_timeout, _env_int("LLM_REQUEST_TIMEOUT_SECONDS", 1200))
     effort = chosen.effort if chosen is not None else model_capabilities(cfg.model).get("default_effort")
     options: dict[str, Any] = {}
     if temperature is not None:
@@ -466,7 +471,7 @@ def create_llm_for_endpoint(
     if chosen is not None:
         import httpx
         if chosen.source == "custom":
-            request_timeout = min(60, request_timeout)
+            request_timeout = min(1200, request_timeout)
         options["http_client"] = httpx.Client(follow_redirects=False)
         options["http_async_client"] = httpx.AsyncClient(follow_redirects=False)
         track_model_client(options["http_client"])
@@ -507,13 +512,15 @@ def create_llm(
     max_tokens: int | None = None,
     request_timeout: int = 600,
     max_retries: int | None = None,
+    preserve_output_budget: bool = False,
 ):
     cfg = get_llm_config(provider=provider, model=model)
     endpoint = EndpointConfig(
         name=str(cfg.get("endpoint_name") or "unknown"), provider=str(cfg["provider"]),
         api_base=cfg.get("api_base"), api_key=str(cfg["api_key"]), model=str(cfg["model"]),
     )
-    return create_llm_for_endpoint(endpoint, temperature=temperature, max_tokens=max_tokens, request_timeout=request_timeout)
+    return create_llm_for_endpoint(endpoint, temperature=temperature, max_tokens=max_tokens, request_timeout=request_timeout,
+                                   preserve_output_budget=preserve_output_budget)
 
 
 LANGSMITH_CONFIG = {

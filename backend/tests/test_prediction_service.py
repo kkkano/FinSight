@@ -343,7 +343,7 @@ async def test_llm_authentication_failure_uses_stable_public_error_code(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_prediction_llm_attempt_timeout_leaves_budget_for_rotation():
+async def test_prediction_llm_attempt_timeout_respects_explicit_override():
     observed: dict[str, Any] = {}
 
     async def invoke(_messages: Any, **kwargs: Any) -> Any:
@@ -364,13 +364,14 @@ async def test_prediction_llm_attempt_timeout_leaves_budget_for_rotation():
     )
 
     assert observed["request_timeout"] == 30
-    assert observed["acquire_timeout_seconds"] == 10
+    assert observed["acquire_timeout_seconds"] == 30
     assert observed["endpoint_names"] == ("openai-compatible-primary",)
 
 
 @pytest.mark.asyncio
-async def test_selected_model_prediction_uses_reasoning_budget_and_timeout():
+async def test_selected_model_prediction_uses_reasoning_budget_and_timeout(monkeypatch):
     observed: dict[str, Any] = {}
+    monkeypatch.delenv("PREDICTION_LLM_MAX_TOKENS", raising=False)
 
     async def invoke(_messages: Any, **kwargs: Any) -> Any:
         observed.update(kwargs)
@@ -386,7 +387,6 @@ async def test_selected_model_prediction_uses_reasoning_budget_and_timeout():
         store=_Store(),
         market_gateway=_Gateway(_market()),
         invoke_llm=invoke,
-        llm_attempt_timeout_seconds=30,
     )
     from backend.services.llm_retry import LLMCallContext
 
@@ -396,9 +396,33 @@ async def test_selected_model_prediction_uses_reasoning_budget_and_timeout():
             context=LLMCallContext.create(stage="prediction", max_provider_attempts=1),
         )
 
-    assert observed["max_tokens"] == 4096
-    assert observed["request_timeout"] == 60
-    assert observed["acquire_timeout_seconds"] == 15
+    assert observed["max_tokens"] == 8192
+    assert observed["request_timeout"] == 1200
+    assert observed["acquire_timeout_seconds"] == 120
+    assert service.timeout_seconds == 1800
+
+
+@pytest.mark.asyncio
+async def test_prediction_large_budgets_are_not_silently_clamped(monkeypatch):
+    from backend.services.llm_retry import LLMCallContext
+
+    observed: dict[str, Any] = {}
+    monkeypatch.setenv("PREDICTION_LLM_MAX_TOKENS", "65536")
+
+    async def invoke(_messages: Any, **kwargs: Any) -> Any:
+        observed.update(kwargs)
+        return type("Response", (), {"content": "{}"})()
+
+    service = PredictionService(
+        store=_Store(), market_gateway=_Gateway(_market()), invoke_llm=invoke,
+        timeout_seconds=3600, llm_attempt_timeout_seconds=1800,
+    )
+    await service._invoke("prediction prompt", context=LLMCallContext.create(stage="prediction"))
+
+    assert service.timeout_seconds == 3600
+    assert service.llm_attempt_timeout_seconds == 1800
+    assert observed["request_timeout"] == 1800
+    assert observed["max_tokens"] == 65536
 
 
 @pytest.mark.asyncio
@@ -426,7 +450,7 @@ async def test_prediction_background_preserves_selected_model_and_closes_clients
         observed.append(chosen)
         assert chosen == selected
         assert chosen.runtime_config()["reasoning_effort"] == "high"
-        assert kwargs["request_timeout"] == 60
+        assert kwargs["request_timeout"] == 1200
         assert kwargs["max_tokens"] >= 4096
         track_model_client(Client())
         context.on_attempt({

@@ -286,3 +286,24 @@ test('model preflight failure and empty completions show explicit retryable mess
   await expect(page.getByText('模型未返回有效内容，本次分析未完成。请检查模型设置后重试。').first()).toBeVisible();
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
 });
+
+test('truncated model output keeps verified data and displays the actual cause', async ({ page }, testInfo) => {
+  await setup(page);
+  const message = '模型输出达到长度上限，回答被截断；本轮保留已核验数据，请重新生成。';
+  await page.route('**/api/execute', (route) => route.fulfill({
+    contentType: 'text/event-stream',
+    body: [
+      { type: 'degraded', stage: 'synthesis', reason: 'llm_output_truncated', message },
+      { type: 'done', response: '已核验的英特尔研究数据。', degraded: true,
+        degradation_reason: 'llm_output_truncated', degradation_message: message },
+    ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+  }));
+  await page.locator('#chat-input').fill('分析英特尔');
+  await page.getByTestId('chat-send-btn').click();
+  await expect(page.locator('#chat-scroll-container').getByText('已核验的英特尔研究数据。', { exact: true })).toBeVisible();
+  await expect(page.getByText('本轮回答未完整生成', { exact: true })).toBeVisible();
+  await expect(page.getByText(message, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('LLM 暂时不可用', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('chat-send-btn')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('truncated-completion.png') });
+});

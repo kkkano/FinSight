@@ -23,6 +23,7 @@ from langchain_core.messages import HumanMessage
 
 from backend.graph.nodes.query_intent import has_financial_intent
 from backend.graph.state import GraphState
+from backend.utils.env import env_float, env_int
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,8 @@ _CLASSIFY_PROMPT = (
 # 宁可多澄清，也不要误绑定 → threshold 偏高
 _FINANCIAL_CONFIDENCE_THRESHOLD = 75
 
-# LLM call hard timeout (seconds)
-_LLM_CLASSIFY_TIMEOUT = 5.0
+# 意图分类保持有限等待，但不再在推理模型返回正文前以 5 秒截断。
+_LLM_CLASSIFY_TIMEOUT = 120.0
 
 _MACRO_OR_THEME_HINTS = (
     "macro",
@@ -95,6 +96,7 @@ async def _llm_classify_financial(query: str) -> tuple[bool, int]:
         from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
 
         prompt = _CLASSIFY_PROMPT.format(query=query)
+        timeout = max(1.0, env_float("SUBJECT_RESOLVER_TIMEOUT_SECONDS", _LLM_CLASSIFY_TIMEOUT))
 
         response = await asyncio.wait_for(
             ainvoke_configured_llm(
@@ -103,10 +105,11 @@ async def _llm_classify_financial(query: str) -> tuple[bool, int]:
                     stage="subject_resolver", agent="subject_resolver", layer="routing", max_provider_attempts=2,
                 ),
                 temperature=0.0,
-                max_tokens=256,
-                request_timeout=10,
+                max_tokens=max(256, env_int("SUBJECT_RESOLVER_MAX_TOKENS", 8192)),
+                request_timeout=int(timeout),
+                acquire_timeout_seconds=min(15.0, timeout),
             ),
-            timeout=_LLM_CLASSIFY_TIMEOUT,
+            timeout=timeout,
         )
         text = (response.content or "").strip()
         match = re.search(r"\d+", text)

@@ -22,7 +22,7 @@ STEP_MODEL = "step-5-preview"
 STEP_BASE_URL = "https://api.stepfun.com/step_plan/v1"
 STEP_DOCS = "https://platform.stepfun.com/docs/zh/guides/models/step-5-preview"
 MODEL_HEADER = b"x-finsight-model"
-CUSTOM_REQUEST_TIMEOUT_SECONDS = 120.0
+CUSTOM_REQUEST_TIMEOUT_SECONDS = 3600.0
 _model_clients: ContextVar[list | None] = ContextVar("finsight_model_clients", default=None)
 
 

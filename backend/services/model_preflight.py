@@ -12,7 +12,7 @@ from backend.services.model_selection import (
 )
 
 logger = logging.getLogger(__name__)
-PREFLIGHT_TIMEOUT_SECONDS = 20.0
+PREFLIGHT_TIMEOUT_SECONDS = 60.0
 MODEL_UNAVAILABLE_MESSAGE = "当前模型暂时不可用，尚未启动研究。请稍后重试或在设置中切换模型。"
 
 
@@ -23,7 +23,7 @@ async def ensure_model_available() -> None:
                              selected.api_key, selected.model)
         async with asyncio.timeout(PREFLIGHT_TIMEOUT_SECONDS), model_client_scope():
             with model_selection_scope(selected):
-                llm = create_llm_for_endpoint(cfg, temperature=None, max_tokens=4096,
+                llm = create_llm_for_endpoint(cfg, temperature=None, max_tokens=65536,
                                               request_timeout=PREFLIGHT_TIMEOUT_SECONDS)
                 response = await llm.ainvoke("连接检查。仅回复 OK，不需要解释。")
         content = response.content

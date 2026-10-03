@@ -593,7 +593,7 @@ def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
     assert len(verifier.get("unresolved_unsupported_claims") or []) == 0
 
 
-def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
+def test_synthesize_report_accepts_large_budgets_with_finite_attempts(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
     monkeypatch.setenv("FINSIGHT_STRUCTURED_SYNTHESIS", "off")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", "800")
@@ -641,12 +641,12 @@ def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
     runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
     limits = runtime.get("llm_limits") or {}
 
-    assert retry_kwargs.get("request_timeout") == 120
+    assert retry_kwargs.get("request_timeout") == 800
     assert retry_kwargs.get("context").budget.max_provider_attempts == 1
-    assert retry_kwargs.get("acquire_timeout_seconds") == 45.0
-    assert limits.get("request_timeout") == 120
+    assert retry_kwargs.get("acquire_timeout_seconds") == 300.0
+    assert limits.get("request_timeout") == 800
     assert limits.get("max_attempts") == 1
-    assert limits.get("acquire_timeout") == 45
+    assert limits.get("acquire_timeout") == 300
 
 
 def test_synthesize_narrative_persists_verifier_result(monkeypatch):

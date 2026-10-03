@@ -73,7 +73,7 @@ async def test_model(request: Request):
         raise HTTPException(status_code=400, detail=message) from None
 
     body = {
-        "model": selected.model, "max_tokens": 4096,
+        "model": selected.model, "max_tokens": 65536,
         "messages": [{"role": "user", "content": "这是连接测试。请仅回复：连接成功"}],
     }
     if selected.effort:

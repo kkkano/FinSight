@@ -29,7 +29,7 @@ async def test_probe_uses_exact_selection_and_closes_clients(monkeypatch):
     cfg, kwargs, pinned = calls[0]
     assert cfg.model == selected.model and cfg.api_base == selected.base_url and cfg.api_key == selected.api_key
     assert pinned.effort == "high"
-    assert kwargs["max_tokens"] == 4096 and kwargs["request_timeout"] == 20
+    assert kwargs["max_tokens"] == 65536 and kwargs["request_timeout"] == 60
     client.aclose.assert_awaited_once()
     assert model_selection.current_model() is None
 

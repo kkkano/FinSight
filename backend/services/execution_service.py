@@ -117,6 +117,7 @@ def _llm_degradation(
             "rate_limited",
             "all_llm_attempts_failed",
             "configuration",
+            "llm_output_truncated", "llm_empty_output", "llm_output_invalid", "authentication", "quota_exhausted", "invalid_request",
         }
         if raw in allowed:
             return raw
@@ -153,6 +154,20 @@ def _llm_degradation(
             "reason": "all_llm_attempts_failed",
         }
     return None
+
+
+def _degradation_message(degradation: dict[str, Any]) -> str:
+    return {
+        "llm_output_truncated": "模型输出达到长度上限，回答被截断；本轮保留已核验数据，请重新生成。",
+        "llm_empty_output": "模型返回空正文，研究回答未完成；本轮保留已核验数据，可重新生成。",
+        "llm_output_invalid": "模型返回格式无法解析，本轮已使用已核验数据生成降级回答。",
+        "provider_timeout": "模型生成超时，本轮保留已核验数据，请稍后重试。",
+        "rate_limited": "模型服务触发频率限制，本轮保留已核验数据，请稍后重试。",
+        "quota_exhausted": "模型供应商拒绝了调用额度，请检查供应商账户后重试。",
+        "authentication": "模型服务认证失败，请检查模型配置后重试。",
+        "invalid_request": "模型服务拒绝了请求参数，请检查模型兼容配置。",
+        "configuration": "模型配置异常，本轮保留已核验数据，请检查配置。",
+    }.get(str(degradation.get("reason") or ""), "模型调用失败，本轮已使用降级回答；结果可能不完整，请稍后重试。")
 
 
 def _apply_quality_gate(
@@ -251,13 +266,13 @@ def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
 
-    - brief/chat/default: LANGGRAPH_EXECUTION_TIMEOUT_SECONDS (default 500s)
-    - investment_report: LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS (default 900s)
+    - brief/chat/default: LANGGRAPH_EXECUTION_TIMEOUT_SECONDS (default 3600s)
+    - investment_report: LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS (default 7200s)
       fallback to LANGGRAPH_EXECUTION_TIMEOUT_SECONDS when report-specific key is absent.
     """
     mode = (output_mode or "").strip().lower()
-    default_base = "500"
-    default_report = "900"
+    default_base = "3600"
+    default_report = "7200"
     raw = (
         os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS", default_report)
         if mode == "investment_report"
@@ -266,7 +281,7 @@ def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     try:
         default_timeout = max(60.0, float(raw))
     except Exception:
-        default_timeout = 900.0 if mode == "investment_report" else 500.0
+        default_timeout = 7200.0 if mode == "investment_report" else 3600.0
     return default_timeout
 
 
@@ -685,7 +700,7 @@ async def run_graph_pipeline(
                     {
                         "schema_version": deps.sse_event_schema_version,
                         "type": "degraded",
-                        "message": "LLM 暂时不可用，本轮已使用降级回答；结果可能不完整，请稍后重试。",
+                        "message": _degradation_message(degradation),
                         "degradation": degradation,
                     }
                 )
@@ -724,6 +739,7 @@ async def run_graph_pipeline(
                     "soft_blocked": soft_blocked,
                     "degraded": bool(degradation),
                     "degradation": degradation,
+                    "degradation_message": _degradation_message(degradation) if degradation else None,
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),

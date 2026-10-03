@@ -6,6 +6,35 @@ import pytest
 from backend.graph.nodes.resolve_subject import resolve_subject
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("timeout", [120, 180])
+async def test_subject_classifier_does_not_cancel_reasoning_after_five_seconds(monkeypatch, timeout):
+    import importlib
+    from types import SimpleNamespace
+
+    module = importlib.import_module("backend.graph.nodes.resolve_subject")
+    observed = {}
+    monkeypatch.setenv("SUBJECT_RESOLVER_TIMEOUT_SECONDS", str(timeout))
+    monkeypatch.setenv("SUBJECT_RESOLVER_MAX_TOKENS", "8192")
+
+    async def invoke(_messages, **kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(content="90")
+
+    async def wait_for(awaitable, *, timeout):
+        observed["outer_timeout"] = timeout
+        return await awaitable
+
+    monkeypatch.setattr("backend.services.llm_retry.ainvoke_configured_llm", invoke)
+    monkeypatch.setattr(module.asyncio, "wait_for", wait_for)
+
+    assert await module._llm_classify_financial("继续看这个公司的发展") == (True, 90)
+    assert observed["outer_timeout"] == timeout
+    assert observed["request_timeout"] == timeout
+    assert observed["max_tokens"] == 8192
+    assert observed["context"].budget.max_provider_attempts == 2
+
+
 def _make_state(
     query: str = "",
     active_symbol: str | None = None,
