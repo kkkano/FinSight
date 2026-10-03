@@ -16,6 +16,8 @@
 
 新增独立 `/api/client-recovery` 修复页与真实 Service Worker 浏览器fixture：旧导航缓存仍控制页面时也能进入修复页，点击后加载新界面；登录Cookie、模型设置和聊天localStorage均保留，无关缓存保留。新legacy浏览器fixture直接覆盖13条历史中的两组canonical答案，验证恢复后无写入、无重复生成。
 
+该补充修复已发布 `ec3a47dbc2086830e2999d0998fbe76001e15e5a`；后端镜像 `sha256:d6788e487647acb62821c703f41e8540ca4da9a7cebd5def318dc9e933fceada`，前端镜像 `sha256:501173ca82528d494dca81bbba1b60af9382ec8dd2a433c83fb86c7fcd40262f`。公开恢复入口返回200、版本文件一致、`/chat` HTML已带no-store、`/readyz`正常。补充50项store单测、3项会话浏览器、1项实际Service Worker缓存修复测试通过；TypeScript及受影响ESLint通过。没有修改生产用户记录或重发用户研究问题。
+
 - running 进度不超过99%；pipeline完成阶段显示交付中，真正最终事件才显示100%。
 - 同 owner/session/user message/run/controller 的本轮正文可以恢复丢失占位；删除、清空、换账号、撤销或新运行接管均禁止旧回复复活。
 - 流挂住或中断时读取同 run 的服务器终态，应用已经保存的正文并收尾，不重复付费调用。
