@@ -18,7 +18,7 @@ flowchart TD
 | 节点 | 输入重点 | 输出与硬约束 |
 |---|---|---|
 | `prepare_context` | query、thread id、UI context、checkpoint | 本轮 GraphState；不得跨租户复用上下文 |
-| `route_request` | query、当前 thread 历史、active symbol/selection | 确定性路由和主体绑定；`request_compiler` 统一 frame/task/operation 与证据义务 |
+| `route_request` | query、当前 thread 历史、active symbol/selection | 简单请求走明确规则；复杂请求由当前选定模型提取原始要求，再由 `request_compiler` 校验和投影 frame/task/operation 与证据义务 |
 | `collect_evidence` | 请求合同、planning、policy | 真实工具 schema 与 DAG 校验、逐任务/主体/维度覆盖、共享取数、证据和 diagnostics |
 | `analyze` | 规范化 evidence/claim、任务结果 | 确定性事实或受证据约束的研究结果；模型调用按实际任务/草稿/核验与重试记录 |
 | `validate` | `research_result`、引用、outcome | `pass/warn/block` 按严重程度合并；保留缺口与已有阻断 |
@@ -34,6 +34,8 @@ flowchart TD
 - 工具不可用、数据不足、认证失败和 LLM 错误均使用稳定状态码并进入 diagnostics。
 - 标的绑定完成后，一次性编译 `request_frame_id`、task ID、`required_evidence` 与 render identity；兼容 operation 是投影视图，不能成为另一个意图所有者。
 - 多标的请求逐项检查 `(task_id, subject, evidence_kind)`，只取得 AAPL 报价不能满足 MSFT 的技术或基本面义务。
+- 复杂请求的原始分母保存在 `understanding.semantic_contract`，包括指标、交易日/日历/财期、否定约束及输入依赖。后续计划丢项不能缩小完整性检查范围；未知能力保留为未支持，缺公司或旧报告时明确澄清。
+- 模型只抽取语义，注册能力、证据类别和工具参数由代码确定。结构校验失败最多在同一模型、同一预算上下文中纠正一次；仍失败则在 `trace.request_requirements` 记录 `request_contract_unconfirmed`，沿用规则任务继续作答，同时把 `requirements_status` 标为 `deterministic_fallback`：聊天结果质量追加 `REQUEST_REQUIREMENTS_UNCONFIRMED` 警告，最多为 partial；正式报告直接阻断归档。不会让用户空等后只看到“稍后重试”，也不会把规则结果宣称为完整回答。
 
 ## 采集与回答边界
 

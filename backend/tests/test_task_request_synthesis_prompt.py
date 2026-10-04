@@ -7,9 +7,21 @@ import json
 import pytest
 
 from backend.graph.synthesis.contracts import ClaimValidationResult, EvidenceNormalizationResult, NormalizedEvidence
-from backend.graph.synthesis.research_synthesis import _validate_explanation, synthesize_task_results
+from backend.graph.synthesis.research_synthesis import _task_reference_payload, _validate_explanation, synthesize_task_results
 from backend.graph.synthesis.task_outcomes import build_task_descriptors, finalize_task_outcomes
 from backend.services.llm_retry import LLMCallContext
+
+
+def test_repeated_tool_body_is_sent_once_without_losing_distinct_financial_content():
+    data = {"content": "经营现金流为120美元。", "period_end": "2026-06-30", "source_url": "https://example.invalid/filing"}
+    evidence = NormalizedEvidence(source_id="source", task_ids=["task"], kind="filing_context", usage="fact",
+        text=data["content"], structured_data={**data, "structured_data": dict(data)})
+    original = evidence.model_dump()
+    payload, _, _ = _task_reference_payload([], [evidence])
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert serialized.count(data["content"]) == 1
+    assert data["period_end"] in serialized and data["source_url"] in serialized
+    assert evidence.model_dump() == original
 
 
 def _inputs():

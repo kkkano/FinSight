@@ -24,6 +24,8 @@ def _valuation_compare_light_tool_floor(required_evidence: list[str], *, market:
     """Light profile 可裁增强项，但不能裁契约声明的最低证据工具。"""
     market_norm = str(market or "US").strip().upper() or "US"
     minimum_tools_by_evidence = {
+        "price_window": ("get_price_window_metrics",),
+        "capital_allocation": ("get_sec_capital_allocation",) if market_norm == "US" else (),
         "price_snapshot": ("get_stock_price",),
         "company_profile": ("get_company_info",),
         "earnings_estimates": ("get_earnings_estimates",),

@@ -15,6 +15,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -153,6 +154,15 @@ def _build_agent(agent_name: str, fixture: dict[str, Any]) -> Any:
 
 async def _run_case(case: dict[str, Any]) -> Any:
     agent = _build_agent(str(case.get("agent") or ""), case.get("fixture") if isinstance(case.get("fixture"), dict) else {})
+    if str(case.get("agent") or "").strip().lower() == "news" and case.get("as_of"):
+        observed_at = datetime.fromisoformat(str(case["as_of"]).replace("Z", "+00:00"))
+        if observed_at.tzinfo is None:
+            raise ValueError("eval case as_of must include a timezone")
+        # 离线样本的时效按冻结观察时刻核验，退出上下文后恢复真实生产时钟。
+        with patch("backend.research.news_event_quality.utc_now", return_value=observed_at), patch(
+            "backend.agents.news_agent.utc_now", return_value=observed_at,
+        ):
+            return await agent.research(query=str(case.get("query") or ""), ticker=str(case.get("ticker") or ""))
     return await agent.research(
         query=str(case.get("query") or ""),
         ticker=str(case.get("ticker") or ""),

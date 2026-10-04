@@ -142,16 +142,16 @@ def test_hong_kong_research_plans_quote_and_profile_without_us_sec():
     assert 'get_sec_company_facts_quarterly' not in names
 
 
-def test_comparison_support_tasks_prepare_facts_without_duplicate_analysis():
+def test_comparison_collects_per_subject_facts_under_one_analysis_contract():
     from backend.graph.synthesis.analysis_requirements import analysis_task_modes
     state=compile_request('Visa（V）和 Mastercard（MA）谁的估值更贵、自由现金流质量更好？用可比较财期，并解释差异。')
     parent=next(t for t in state['tasks'] if t['operation']['name']=='compare')
-    supports=[t for t in state['tasks'] if t.get('evidence_support_for')==parent['id']]
-    assert {t['tickers'][0] for t in supports}=={'V','MA'}
-    assert all(not r['requires_analysis'] for t in supports for r in t['answer_requirements'])
+    assert len(state['tasks']) == 1
+    assert set(parent['tickers']) == {'V', 'MA'}
+    assert {step['inputs']['ticker'] for step in state['plan_ir']['steps'] if step['name'] == 'get_company_info'} == {'V', 'MA'}
+    assert all(step.get('task_ids') == [parent['id']] for step in state['plan_ir']['steps'])
     modes=analysis_task_modes(state)
     assert modes[parent['id']]=='research'
-    assert all(modes[t['id']]=='deterministic' for t in supports)
 
 
 def test_conditional_macro_chain_preserves_cause_and_each_requested_effect():
@@ -160,7 +160,7 @@ def test_conditional_macro_chain_preserves_cause_and_each_requested_effect():
     assert len(state['tasks'])==1
     task=state['tasks'][0]
     assert task['request_text']==query
-    requirements={r['requirement_id'].split(':')[-1]:r for r in task['answer_requirements']}
+    requirements={(r.get('components') or ['price_context'])[0]:r for r in task['answer_requirements']}
     assert {'inflation','rates','sector','price_context'} <= set(requirements)
     assert all(requirements[key]['requires_explicit_binding'] for key in ('inflation','rates','sector'))
     assert state['trace']['coverage_validator']['status']=='ok'

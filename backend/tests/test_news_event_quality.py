@@ -26,6 +26,34 @@ def article(**fields):
             "published_at": "2026-10-03T10:00:00Z", **fields}
 
 
+def test_separately_listed_companies_cannot_share_a_short_brand_match():
+    assert quality.news_subject_match("GE", "GE Vernova announces a new turbine order") == "none"
+    assert quality.news_subject_match("GE", "GE HealthCare reports quarterly earnings") == "none"
+    assert quality.news_subject_match("GEV", "GE Vernova announces a new turbine order") == "headline"
+    assert quality.news_subject_match("GE", "GE Aerospace announces an engine order") == "headline"
+    assert quality.news_subject_match("GE", "GE Vernova and GE Aerospace announce a partnership") == "headline"
+    assert quality.news_source_tier("https://www.geaerospace.com/news/order", "GE") == "primary"
+
+
+def test_query_ticker_in_url_or_summary_does_not_upgrade_another_issuers_headline():
+    from backend.graph.synthesis.research_synthesis import _news_bound_to_subject
+    assert not _news_bound_to_subject({"title": "GE Vernova wins an energy contract",
+        "snippet": "Search results for GE", "url": "https://example.invalid/search?q=GE"}, "GE", {})
+    assert not _news_bound_to_subject({"title": "Unrelated earnings announcement",
+        "snippet": "AAPL query matches", "url": "https://example.invalid/?ticker=AAPL"}, "AAPL", {})
+
+
+def test_verified_issuer_names_stay_phrases_and_sec_name_can_bind_its_own_news():
+    from backend.graph.synthesis.research_synthesis import _news_bound_to_subject, _subject_names
+    steps = [{"id": "company", "name": "get_company_info", "inputs": {"ticker": "IBM"}},
+             {"id": "filing", "name": "get_sec_company_facts_quarterly", "inputs": {"ticker": "ORCL"}}]
+    names = _subject_names(steps, {"company": {"name": "International Business Machines Corp."},
+        "filing": '{"ticker":"ORCL","company_name":"ORACLE CORP"}'})
+    assert "Business" not in names["IBM"] and "International" not in names["IBM"]
+    assert not _news_bound_to_subject({"title": "International business confidence improves"}, "IBM", names)
+    assert _news_bound_to_subject({"title": "Oracle announces a new customer contract"}, "ORCL", names)
+
+
 def test_three_clocks_are_not_interchangeable():
     row = quality.prepare_news_items([article(published_at=None, as_of=NOW.isoformat())], ticker="AAPL")[0]
     meta = row["event_quality"]

@@ -12,14 +12,18 @@
 
 ## 2. 请求路由
 
-`route_request` 用确定性规则理解问题、绑定主体，再由 `request_compiler.finalize_request_contract` 统一产出：
+`route_request` 先绑定当前主体和历史上下文。明确社交、单一即时报价和无需取数的概念走已有快速路径；复杂研究使用 `semantic_requirements.extract_semantic_requirements` 调用当前选定模型提取原始要求，再由 `request_compiler.compile_semantic_contract` 校验、规范和投影。旧规则入口只服务明确的兼容路径，不能覆盖已经确认的语义合同。统一产出：
 
 - `understanding.route`：`direct`、`research` 或 `clarify`；
 - `request_frames`、逐 frame 的 `intent_contracts` 与兼容 operation 投影；
 - ready/blocked tasks；
 - 固定的 `request_frame_id`、`render_group_id`、`render_kind`、priority 和 order。
 - 每个 task 的主体、分句 `request_text`、显式 `required_evidence` 与可解释的 blocked 原因。
-- `request_constraints.py` 保留排除维度及明确的小时/天窗口；`render_contract.answer_requirements` 与 `task.answer_requirements` 冻结逐项回答义务，不因取数失败删除。
+- `understanding.semantic_contract` 保存原始逐项要求和任务快照；`render_contract.answer_requirements` 与 `task.answer_requirements` 是其执行与展示投影，不因取数失败删除。时间区分交易日、日历窗口、完整季度和完整财年；金额、净股数、收益口径及否定约束分别保留。
+
+抽取对象保留原文片段、主体引用、指标、时间和输入依赖；能力、规范维度和证据类别由代码映射。模型猜测的工具类别不能把已有能力降为未支持，也不能扩大工具许可。相对时间占位符不会直接传给行情/SEC API；明确日期必须有效。未知指标仍保留在分母，缺少真实输入时追问对应资料。
+
+`trace.request_requirements` 记录实际模型、用量、完成原因和结构纠正过程。结构错误最多使用同一调用上下文纠正一次，不切换模型或缩减原始要求。最终失败时记录 `request_contract_unconfirmed` 并回退到规则任务（`requirements_status=deterministic_fallback`），结果质量追加 `REQUEST_REQUIREMENTS_UNCONFIRMED`：聊天最多 partial，报告不可归档，不将粗略规则结果标为完整研究。
 
 封闭金融术语可以走 `direct`。需要实时数据、比较、分析或报告的请求进入 `research`；缺少必要标的或范围时进入 `clarify`。frame ID 与真实 task ID 是明确关联，不靠后续字符串相似度匹配；下游消费合同，不能各自重新解析 query 改写主体或维度。原 INTC 多维研究、催化追问及 `AAPL price, MSFT news, NVDA fundamentals` 是回归样本。
 
@@ -53,6 +57,14 @@ Price、Technical、Fundamental、News、Macro、Risk 和 Deep Search collector 
 金融适配层先核验主体、指标定义、单位和实际财期，再生成证据：SEC 单季按 start/end duration 区分累计/年度；财务行用明确别名；同比与环比按真实日期对齐；本地公告验证发行人，新闻格式头与 CPI 单位均不能冒充有效事实。
 
 业务/竞争任务会请求 `get_sec_filings(include_content=True)` 读取最新年报和季报的相关正文。`content_read` 与非空 `content_sections` 才表示已读材料；目录 URL 或请求参数本身不能冒充正文。报价若源于日线 K 线，保留 `market_session=regular_close`、日期精度和币种，并明确不是盘后价格或精确成交时刻。
+
+`price_window` 由 `get_price_window_metrics` 提供：按交易所日历核对已完成时段，N 日收益需要 N+1 个收盘点，N 日最大回撤使用窗口内运行最高收盘价；缺失交易日不能用更旧数据补齐。显式采用拆股调整、排除现金分红的 Close，正文展示起终价格、日期、币种和公式。
+
+`capital_allocation` 由 `get_sec_capital_allocation` 提供：四项现金分配只有同期间、同单位才计算盈缺；季度累计差分保留输入申报来源，净股数使用可比实际期末普通股，不能用加权平均股数代替。债务余额明确覆盖的定义和未覆盖的短期融资、租赁及金融子公司范围。已支付股息不是派息宣告；派息请求显式读取有限范围的 8-K 与同发行人官方附件，并保留非穷尽检索范围。
+
+电话会材料仅在实际正文、发行人和财期核验通过后作为事实；错误公司、验证码和注册页拒绝，未实读摘要保持检索线索状态。
+
+就业请求可以选择 `get_fred_data(indicators=["nonfarm_payroll_change", "unemployment"])`，避免取无关的默认宏观集合。新增非农由 PAYEMS 相邻两个月的经季节调整存量差计算并从千人转为人数，失业率保持百分比；两项观测月份不同则不能拼成一份报告。FRED 更新时间、报告月份及已实读 BLS 正文的发布时刻分别保留，未知发布时间保持空。
 
 新闻经 `news_event_quality` 标记时间、主体、来源和报道角色，网关与执行层保留该合同及原始行。当前归因报道仍为 `headline_only`；旧闻、观点、传闻和搜索摘要为 raw，明确错误主体的材料排除。日历搜索只进入 `discovery_candidates`。按 URL、事件身份和发布时间去重，保留同话题后续；报道覆盖和来源计数不表示独立核实。搜索宏观数值也不能冒充 FRED 官方读数，失败文本仅进入来源诊断。
 

@@ -28,6 +28,7 @@ def _append_document_task_steps(ctx, task: dict, *, group: str) -> None:
             optional=False,
             parallel_group=group,
             task_ids=[_task_id(ctx, task)],
+            evidence_kind="document_context",
         )
     if urls:
         return
@@ -39,4 +40,5 @@ def _append_document_task_steps(ctx, task: dict, *, group: str) -> None:
         optional=True,
         parallel_group=group,
         task_ids=[_task_id(ctx, task)],
+        evidence_kind="document_context",
     )

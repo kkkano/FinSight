@@ -140,6 +140,7 @@ class _PriceTools:
             "change": 3.2,
             "change_percent": 2.3,
             "source": "fixture_quote",
+            "as_of": "2026-05-31T00:00:00Z",
         }
 
     @staticmethod

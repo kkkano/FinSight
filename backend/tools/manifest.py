@@ -21,6 +21,22 @@ class ToolManifestEntry:
 
 TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
+        name="get_fred_data", group="macro", markets=("US", "CN", "HK"),
+        operations=("qa", "analyze_impact", "generate_report"), depths=("quick", "report", "deep_research"),
+        risk_level="low", timeout_ms=30000, cache_ttl_s=3600, requires_env=("FRED_API_KEY",),
+    ),
+    ToolManifestEntry(
+        name="get_price_window_metrics", group="market", markets=("US", "CN", "HK"),
+        operations=("price", "technical", "compare", "qa", "generate_report"),
+        depths=("quick", "report", "deep_research"), risk_level="low", timeout_ms=25000, cache_ttl_s=60,
+    ),
+    ToolManifestEntry(
+        name="get_sec_capital_allocation", group="regulatory", markets=("US",),
+        operations=("qa", "compare", "generate_report", "analyze_impact"),
+        depths=("quick", "report", "deep_research"), risk_level="low", timeout_ms=30000,
+        cache_ttl_s=1800, requires_env=("SEC_USER_AGENT",),
+    ),
+    ToolManifestEntry(
         name="get_stock_price",
         group="market",
         markets=("US", "CN", "HK"),
@@ -364,6 +380,7 @@ def select_tools(
         ]
     elif subject == "macro":
         candidate_names = [
+            "get_fred_data",
             "get_official_macro_releases",
             "get_authoritative_media_news",
             "search",
@@ -432,6 +449,10 @@ def select_tools(
         candidate_names = ["fetch_url_content", "search", "get_current_datetime"]
 
     selected: list[str] = []
+    if subject in {"company", "index", "commodity"}:
+        candidate_names.append("get_price_window_metrics")
+        if subject == "company" and operation not in {"price", "technical"}:
+            candidate_names.append("get_sec_capital_allocation")
     for name in candidate_names:
         entry = _MANIFEST_BY_NAME.get(name)
         if not entry:

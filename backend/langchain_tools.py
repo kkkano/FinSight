@@ -8,11 +8,15 @@ so the tools can be bound to LangGraph/LCEL pipelines without extra glue code.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 import json
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+
+from backend.tools.price_window import get_price_window_metrics as _get_price_window_metrics
+from backend.tools.capital_allocation import get_sec_capital_allocation as _get_sec_capital_allocation
+from backend.tools.macro import get_fred_data as _get_fred_data
 
 # Prefer backend.tools; fall back to a sibling tools.py for compatibility.
 try:  # pragma: no cover - import guard
@@ -196,6 +200,13 @@ class MacroOfficialInput(BaseModel):
 
     query: str = Field(default="", description="Optional macro topic query, e.g. 'US CPI payrolls'")
     max_results: int = Field(default=10, ge=1, le=30, description="Maximum official release rows")
+    include_content: bool = Field(default=False, description="就业查询实读最多一份已发现的 BLS Employment Situation 正文")
+
+
+class FredDataInput(BaseModel):
+    series_id: Optional[str] = None
+    indicators: Optional[list[Literal["cpi", "fed_rate", "gdp_growth", "unemployment", "treasury_10y", "yield_spread", "nonfarm_payroll_change"]]] = None
+    as_of: Optional[str] = Field(default=None, description="冻结 UTC 时刻（含时区）或日期，按 FRED vintage 核对")
 
 
 class LocalFilingsInput(BaseModel):
@@ -214,7 +225,7 @@ class SecFilingsInput(BaseModel):
         description="Comma-separated SEC form types, e.g. '10-K,8-K'",
     )
     limit: int = Field(default=12, ge=1, le=50, description="Maximum filing rows to return")
-    include_content: bool = Field(default=False, description="读取最新年报/季报的业务和竞争正文")
+    include_content: bool = Field(default=False, description="读取最新年报/季报业务正文或最多6份8-K及每份2份官方附件")
 
 
 class SecMaterialEventsInput(BaseModel):
@@ -222,6 +233,7 @@ class SecMaterialEventsInput(BaseModel):
 
     ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
     limit: int = Field(default=10, ge=1, le=50, description="Maximum event rows to return")
+    include_content: bool = Field(default=False, description="实读最多6份8-K及各2份官方附件，核对已宣布派息等事件")
 
 
 class SecCompanyFactsInput(BaseModel):
@@ -229,6 +241,21 @@ class SecCompanyFactsInput(BaseModel):
 
     ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
     limit: int = Field(default=8, ge=1, le=12, description="Maximum quarterly periods to return")
+
+
+class PriceWindowInput(BaseModel):
+    ticker: str
+    sessions: int = Field(default=20, ge=1, le=252)
+    metrics: Optional[list[Literal["cumulative_return", "max_drawdown", "volume_breakout"]]] = None
+    as_of: Optional[str] = Field(default=None, description="冻结 UTC 时刻（含时区）或日期（UTC 当日结束）")
+    price_basis: Literal["close"] = "close"
+
+
+class CapitalAllocationInput(BaseModel):
+    ticker: str
+    frequency: Literal["quarterly", "annual"] = "quarterly"
+    as_of: Optional[str] = Field(default=None, description="冻结 UTC 时刻（含时区）或日期（UTC 当日结束）")
+    limit: int = Field(default=2, ge=1, le=8)
 
 
 class InstitutionalHoldingsInput(BaseModel):
@@ -372,16 +399,23 @@ def get_economic_events() -> str:
 
 
 @tool("get_official_macro_releases", args_schema=MacroOfficialInput, return_direct=False)
-def get_official_macro_releases(query: str = "", max_results: int = 10) -> str:
+def get_official_macro_releases(query: str = "", max_results: int = 10, include_content: bool = False) -> str:
     """Get official macro release links from BLS/BEA/FED feeds."""
 
     if not callable(_get_official_macro_releases):
         return "get_official_macro_releases unavailable: backend.tools function not found"
     try:
-        payload = _get_official_macro_releases(query=query, max_results=max_results)
+        kwargs = {"include_content": True} if include_content else {}
+        payload = _get_official_macro_releases(query=query, max_results=max_results, **kwargs)
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_official_macro_releases failed: {exc}"
+
+
+@tool("get_fred_data", args_schema=FredDataInput, return_direct=False)
+def get_fred_data(series_id: Optional[str] = None, indicators: Optional[list[str]] = None, as_of: Optional[str] = None) -> str:
+    """获取有明确期间、单位和来源的官方宏观指标；新增非农是 PAYEMS 月差人数，非存量。"""
+    return json.dumps(_get_fred_data(series_id=series_id, indicators=indicators, as_of=as_of), ensure_ascii=False)
 
 
 @tool("get_performance_comparison", args_schema=TickerComparisonInput, return_direct=False)
@@ -416,6 +450,10 @@ def get_technical_snapshot(ticker: str) -> str:
         data = _get_stock_historical_data(ticker, period="6mo", interval="1d")
         if not isinstance(data, dict):
             return json.dumps({"ticker": ticker, "error": "invalid_kline_payload"}, ensure_ascii=False)
+        if data.get("error"):
+            return json.dumps({"ticker": ticker, "error": data["error"], "source": data.get("source")}, ensure_ascii=False)
+        if data.get("interval") not in (None, "1d"):
+            return json.dumps({"ticker": ticker, "error": "daily_interval_required"}, ensure_ascii=False)
 
         kline = data.get("kline_data") or []
         if not isinstance(kline, list) or not kline:
@@ -423,16 +461,18 @@ def get_technical_snapshot(ticker: str) -> str:
                 {"ticker": ticker, "error": "no_kline_data", "source": data.get("source")}, ensure_ascii=False
             )
 
+        from backend.tools.financial_facts import fact_number, normalize_currency
+        from backend.tools.technical import _calc_ma, _calc_rsi, _calc_macd
+
         closes = []
+        rows = []
         last_time = None
         for item in kline:
-            if not isinstance(item, dict):
-                continue
-            close = item.get("close")
-            if close is None:
-                continue
-            closes.append(float(close))
-            last_time = item.get("time") or item.get("datetime") or item.get("ts") or last_time
+            if not isinstance(item, dict) or (close := fact_number(item.get("close"))) is None or close <= 0:
+                return json.dumps({"ticker": ticker, "error": "invalid_close_data", "source": data.get("source")}, ensure_ascii=False)
+            closes.append(close)
+            rows.append(item)
+            last_time = item.get("time") or item.get("datetime") or item.get("ts")
 
         if len(closes) < 30:
             return json.dumps(
@@ -450,40 +490,24 @@ def get_technical_snapshot(ticker: str) -> str:
         series = pd.Series(closes)
         close = float(series.iloc[-1])
 
-        def _ma(window: int) -> float | None:
-            if len(series) < window:
-                return None
-            return float(series.rolling(window=window).mean().iloc[-1])
-
-        def _rsi(window: int = 14) -> float | None:
-            if len(series) < window + 1:
-                return None
-            delta = series.diff()
-            gains = delta.where(delta > 0, 0.0)
-            losses = -delta.where(delta < 0, 0.0)
-            avg_gain = gains.rolling(window=window, min_periods=window).mean()
-            avg_loss = losses.rolling(window=window, min_periods=window).mean()
-            last_gain = float(avg_gain.iloc[-1]) if not pd.isna(avg_gain.iloc[-1]) else 0.0
-            last_loss = float(avg_loss.iloc[-1]) if not pd.isna(avg_loss.iloc[-1]) else 0.0
-            if last_loss == 0:
-                return 100.0
-            rs = last_gain / last_loss
-            return 100.0 - (100.0 / (1.0 + rs))
-
-        def _macd() -> tuple[float | None, float | None]:
-            if len(series) < 26:
-                return None, None
-            ema12 = series.ewm(span=12, adjust=False).mean()
-            ema26 = series.ewm(span=26, adjust=False).mean()
-            macd_series = ema12 - ema26
-            signal_series = macd_series.ewm(span=9, adjust=False).mean()
-            return float(macd_series.iloc[-1]), float(signal_series.iloc[-1])
-
-        ma20 = _ma(20)
-        ma50 = _ma(50)
-        ma200 = _ma(200)
-        rsi14 = _rsi(14)
-        macd, signal = _macd()
+        ma20 = _calc_ma(series, 20)
+        ma50 = _calc_ma(series, 50)
+        ma200 = _calc_ma(series, 200)
+        rsi14 = _calc_rsi(series, 14)
+        macd, signal, histogram = _calc_macd(series)
+        recent = rows[-20:]
+        lows = [fact_number(item.get("low")) for item in recent]
+        highs = [fact_number(item.get("high")) for item in recent]
+        opens = [fact_number(item.get("open")) for item in recent]
+        complete_hlc = all(low is not None and high is not None and opening is not None
+            and 0 < low <= min(opening, float(item["close"])) <= max(opening, float(item["close"])) <= high
+            for item, low, high, opening in zip(recent, lows, highs, opens))
+        support = min(lows) if complete_hlc else None
+        resistance = max(highs) if complete_hlc else None
+        currency = normalize_currency(data.get("currency"))
+        source_time = data.get("source_timestamp") or last_time
+        missing = [key for key, value in {"support": support, "resistance": resistance,
+            "currency": currency, "source_time": source_time}.items() if value is None]
 
         trend = "sideways"
         if ma20 is not None and ma50 is not None:
@@ -505,8 +529,30 @@ def get_technical_snapshot(ticker: str) -> str:
 
         payload = {
             "ticker": str(ticker).upper(),
+            "subject": str(ticker).upper(),
+            "kind": "technical_snapshot",
+            "frequency": "daily",
+            "interval": "1d",
+            "points": len(closes),
             "as_of": last_time,
+            "source_timestamp": source_time,
+            "source_time_precision": data.get("source_time_precision") or ("date" if source_time else "unknown"),
+            "source_time_status": "provided" if source_time else "unknown",
+            "source_timezone": data.get("source_timezone"),
             "source": data.get("source"),
+            "source_url": data.get("source_url"),
+            "currency": currency,
+            "unit": currency,
+            "support": support,
+            "resistance": resistance,
+            "support_resistance_window": 20,
+            "support_resistance_definition": "min_low_max_high_over_last_20_available_daily_bars",
+            "support_resistance_period_start": recent[0].get("time"),
+            "support_resistance_period_end": recent[-1].get("time"),
+            "indicator_parameters": {"ma": {"windows": [20, 50, 200], "method": "simple_moving_average"},
+                "rsi": {"window": 14, "smoothing": "simple_rolling_mean", "unit": "index", "range": [0, 100]},
+                "macd": {"fast": 12, "slow": 26, "signal": 9, "adjust": False}},
+            "missing_metrics": missing,
             "close": close,
             "ma20": ma20,
             "ma50": ma50,
@@ -515,12 +561,14 @@ def get_technical_snapshot(ticker: str) -> str:
             "rsi_state": rsi_state,
             "macd": macd,
             "macd_signal": signal,
+            "macd_hist": histogram,
             "momentum": momentum,
             "trend": trend,
         }
+        payload["structured_data"] = dict(payload)
         return json.dumps(payload, ensure_ascii=False)
     except Exception as exc:  # pragma: no cover - runtime data issues
-        return f"get_technical_snapshot failed: {exc}"
+        return json.dumps({"ticker": ticker, "error": "technical_snapshot_unavailable", "error_type": exc.__class__.__name__}, ensure_ascii=False)
 
 
 @tool("get_current_datetime", args_schema=EmptyInput, return_direct=False)
@@ -669,13 +717,13 @@ def get_sec_filings(ticker: str, forms: str = "10-K,10-Q,8-K", limit: int = 12, 
 
 
 @tool("get_sec_material_events", args_schema=SecMaterialEventsInput, return_direct=False)
-def get_sec_material_events(ticker: str, limit: int = 10) -> str:
+def get_sec_material_events(ticker: str, limit: int = 10, include_content: bool = False) -> str:
     """Get SEC 8-K material event filings for a US ticker."""
 
     if not callable(_get_sec_material_events):
         return "get_sec_material_events unavailable: backend.tools function not found"
     try:
-        payload = _get_sec_material_events(ticker=ticker, limit=limit)
+        payload = _get_sec_material_events(ticker=ticker, limit=limit, include_content=include_content)
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_sec_material_events failed: {exc}"
@@ -692,6 +740,19 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> str:
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_sec_company_facts_quarterly failed: {exc}"
+
+
+@tool("get_price_window_metrics", args_schema=PriceWindowInput, return_direct=False)
+def get_price_window_metrics(ticker: str, sessions: int = 20, metrics: Optional[list[str]] = None,
+    as_of: Optional[str] = None, price_basis: str = "close") -> str:
+    """按完成交易日计算可复核的收益、最大收盘回撤或量价突破，不含股息。"""
+    return json.dumps(_get_price_window_metrics(ticker, sessions, metrics, as_of, price_basis), ensure_ascii=False)
+
+
+@tool("get_sec_capital_allocation", args_schema=CapitalAllocationInput, return_direct=False)
+def get_sec_capital_allocation(ticker: str, frequency: str = "quarterly", as_of: Optional[str] = None, limit: int = 2) -> str:
+    """核对同季度或完整财年资本分配的现金支付及期末普通股净变化。"""
+    return json.dumps(_get_sec_capital_allocation(ticker, frequency, as_of, limit), ensure_ascii=False)
 
 
 @tool("get_sec_risk_factors", args_schema=StockTickerInput, return_direct=False)
@@ -793,6 +854,9 @@ def run_python_compute(
 # ============================================
 
 FINANCIAL_TOOLS = [
+    get_fred_data,
+    get_price_window_metrics,
+    get_sec_capital_allocation,
     get_current_datetime,
     get_stock_price,
     get_technical_snapshot,
@@ -851,6 +915,9 @@ def get_tool_by_name(name: str) -> Optional[Any]:
 
 
 __all__ = [
+    "get_fred_data",
+    "get_price_window_metrics",
+    "get_sec_capital_allocation",
     "FINANCIAL_TOOLS",
     "get_tool_names",
     "get_tools_description",

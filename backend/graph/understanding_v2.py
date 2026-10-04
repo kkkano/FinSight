@@ -471,7 +471,11 @@ def project_v2_tasks_to_legacy(understanding_v2: dict[str, Any] | None) -> list[
                 "priority": int(task.get("priority") or 50),
                 "status": str(task.get("status") or "ready"),
                 "reason": "understanding_v2_projection",
-                "constraints": [],
+                "constraints": list(task.get("constraints") or []),
+                "answer_requirements": list(task.get("answer_requirements") or []),
+                "required_evidence": list(task.get("required_evidence") or []),
+                "request_frame_id": str(task.get("request_frame_id") or ""),
+                "requirements_status": str(task.get("requirements_status") or ""),
                 "params": task.get("params") or {},
             }
         )
@@ -493,6 +497,11 @@ def _task_to_v2(task: dict[str, Any]) -> dict[str, Any]:
         "priority": task.get("priority"),
         "legacy_operation": operation,
         "params": task.get("params") or {},
+        "answer_requirements": list(task.get("answer_requirements") or []),
+        "required_evidence": list(task.get("required_evidence") or []),
+        "request_frame_id": str(task.get("request_frame_id") or ""),
+        "constraints": list(task.get("constraints") or []),
+        "requirements_status": str(task.get("requirements_status") or ""),
     }
     evidence_profile = str(params.get("evidence_profile") or params.get("comparison_data_profile") or "").strip()
     if evidence_profile:

@@ -8,8 +8,10 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from .http import _http_get
+from .web import fetch_url_document
 
 logger = logging.getLogger(__name__)
 
@@ -255,14 +257,75 @@ def search_official_macro_releases(query: str, *, max_results: int = 10) -> list
     return rows
 
 
-def get_official_macro_releases(query: str = "", max_results: int = 10) -> dict[str, Any]:
+def _read_bls_employment_release(row: dict[str, Any]) -> dict[str, Any]:
+    updated = {**row, "content_read": False, "employment_report": None}
+    url = str(row.get("url") or "")
+    document = fetch_url_document(url, max_length=16000)
+    if not document or _normalize_domain(str(document.get("final_url") or url)) != "bls.gov":
+        return updated
+    body = str(document.get("content") or "")
+    if re.search(r"captcha|access denied|just a moment|security verification", body, re.I):
+        return updated
+    month = re.search(r"THE\s+EMPLOYMENT\s+SITUATION\s*[-:–—]*\s*([A-Za-z]+)\s+(20\d{2})", body, re.I)
+    if not month or len(body) < 300:
+        return updated
+    try:
+        report_month = datetime.strptime(f"{month.group(1)} {month.group(2)}", "%B %Y").strftime("%Y-%m")
+    except ValueError:
+        return updated
+    release = re.search(r"embargoed until\s+(\d{1,2}):(\d{2})\s*([ap])\.?m\.?\s*\((?:ET|EDT|EST)\)"
+        r"\s*(?:[A-Za-z]+,?\s+)?([A-Za-z]+\s+\d{1,2},\s+20\d{2})", " ".join(body[:1800].split()), re.I)
+    published_at = None
+    if release:
+        try:
+            point = datetime.strptime(release.group(4), "%B %d, %Y")
+            hour = int(release.group(1)) % 12 + (12 if release.group(3).lower() == "p" else 0)
+            published_at = point.replace(hour=hour, minute=int(release.group(2)), tzinfo=ZoneInfo("America/New_York")).astimezone(timezone.utc).isoformat()
+        except ValueError:
+            pass
+    payroll = re.search(r"total\s+nonfarm\s+payroll\s+employment\s+(increased|rose|grew|declined|fell|decreased)\s+by\s+([\d,]+)", body, re.I)
+    unemployment = re.search(r"unemployment\s+rate\b[^.;]{0,90}?\b(?:at|to|was)\s+(\d+(?:\.\d+)?)\s*(?:percent|%)", body, re.I)
+    change = (int(payroll.group(2).replace(",", "")) * (-1 if payroll.group(1).lower() in {"declined", "fell", "decreased"} else 1)) if payroll else None
+    report = {"report_month": report_month, "published_at": published_at,
+        "nonfarm_payroll_change": change, "unemployment": float(unemployment.group(1)) if unemployment else None,
+        "source": "BLS", "source_url": document.get("final_url") or url,
+        "nonfarm_unit": "persons", "unemployment_unit": "percent", "content_read": True,
+        "missing_metrics": [key for key, value in {"published_at": published_at, "nonfarm_payroll_change": change,
+            "unemployment": float(unemployment.group(1)) if unemployment else None}.items() if value is None]}
+    updated.update(content_read=True, body=body[:16000], snippet=body[:16000], body_truncated=len(body) > 16000,
+        feed_published_at=row.get("published_date"), published_date=published_at,
+        published_at=published_at, employment_report=report, source_url=report["source_url"],
+        verification="official_body_read", structured_data={"body": body[:16000], "employment_report": report})
+    return updated
+
+
+def official_macro_query(query: str, indicators: list[str] | None = None) -> str:
+    """合同指标补充官方检索主题，重复构造保持相同缓存键。"""
+    text = str(query or "").strip()
+    employment = bool({"nonfarm_payroll_change", "unemployment"}.intersection(indicators or []))
+    if employment and "employment situation" not in text.lower():
+        return f"{text} employment situation".strip()
+    return text
+
+
+def get_official_macro_releases(query: str = "", max_results: int = 10, include_content: bool = False) -> dict[str, Any]:
     """Structured wrapper for macro official source collection. Never raises."""
     query_text = str(query or "").strip()
     limit = max(1, min(int(max_results or 10), 30))
     try:
-        rows = search_official_macro_releases(query_text, max_results=limit)
+        employment = include_content and bool(re.search(r"employment|payroll|nonfarm|就业|非农|劳动力", query_text, re.I))
+        rows = search_official_macro_releases("employment situation empsit" if employment else query_text, max_results=limit)
         if not rows:
             rows = _fallback_rows_for_query(query_text, limit=limit)
+        if employment:
+            rows = sorted(rows, key=lambda item: str(item.get("published_date") or ""), reverse=True)
+            read = False
+            for index, row in enumerate(rows):
+                row["content_read"] = False
+                url = str(row.get("url") or "")
+                if not read and _normalize_domain(url) == "bls.gov" and re.search(r"/news\.release/(?:archives/)?empsit", url, re.I):
+                    rows[index] = _read_bls_employment_release(row)
+                    read = True
         sources = sorted({str(row.get("source") or "").strip() for row in rows if row.get("source")})
         return {
             "query": query_text,
@@ -284,4 +347,4 @@ def get_official_macro_releases(query: str = "", max_results: int = 10) -> dict[
         }
 
 
-__all__ = ["search_official_macro_releases", "get_official_macro_releases"]
+__all__ = ["search_official_macro_releases", "get_official_macro_releases", "official_macro_query"]

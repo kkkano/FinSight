@@ -42,6 +42,7 @@ def test_route_request_outputs_valuation_facets():
         )
     )
 
-    assert (result.get("operation") or {}).get("name") == "valuation_sanity"
+    assert (result.get("operation") or {}).get("name") == "investment_opinion"
+    assert {row['metric'] for row in result['understanding']['semantic_contract']['requirements']} == {'valuation_reasonableness', 'fundamental_quality'}
     assert (result.get("facets") or {}).get("primary_task") == "valuation_analysis"
     assert (result.get("facets") or {}).get("target_metric") == "valuation"

@@ -26,10 +26,10 @@ class GoldenQueryCase:
 GOLDEN_QUERY_CASES = [
     GoldenQueryCase(
         query="NVDA and AMD which valuation is more reasonable",
-        expected_frame_count=3,
+        expected_frame_count=1,
         expected_relation="rank",
         expected_tickers=["NVDA", "AMD"],
-        expected_evidence=["price_snapshot", "company_profile", "earnings_estimates"],
+        expected_evidence=["price_snapshot", "company_profile", "earnings_estimates", "filing_context"],
         expected_render_shape="compare",
         must_include_steps={"get_stock_price", "get_company_info", "get_earnings_estimates"},
         must_exclude_steps={"get_performance_comparison"},
@@ -125,7 +125,7 @@ GOLDEN_QUERY_CASES = [
     ),
     GoldenQueryCase(
         query="Compare AAPL and MSFT risk",
-        expected_frame_count=3,
+        expected_frame_count=1,
         expected_relation="compare",
         expected_tickers=["AAPL", "MSFT"],
         expected_evidence=["price_snapshot", "risk_profile"],
@@ -171,7 +171,7 @@ def test_request_frame_golden_query_contracts(case: GoldenQueryCase, monkeypatch
     if case.expected_tickers is not None:
         assert (primary_frame.get("subject") or {}).get("tickers") == case.expected_tickers
     if case.expected_evidence is not None:
-        assert primary_frame.get("evidence_obligations") == case.expected_evidence
+        assert set(primary_frame.get("evidence_obligations")) == set(case.expected_evidence)
     if case.expected_frame_evidence is not None:
         assert [frame.get("evidence_obligations") for frame in frames] == case.expected_frame_evidence
     if case.expected_render_shape is not None:

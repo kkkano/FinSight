@@ -3,10 +3,14 @@ from __future__ import annotations
 import logging
 import os
 import re
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlparse
 
 from .search import search
+from .web import fetch_url_document
+from .jina_reader import fetch_via_jina
+from backend.security.ssrf import is_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -221,28 +225,91 @@ def _has_url_transcript_hint(url: str) -> bool:
     return any(token in text for token in _URL_TRANSCRIPT_HINTS)
 
 
-def _maybe_enrich_snippet(url: str, snippet: str) -> str:
-    use_jina = str(os.getenv("TRANSCRIPT_USE_JINA", "true")).strip().lower() in {"1", "true", "yes", "on"}
-    if not use_jina:
-        return snippet
-    if not str(url or "").startswith(("http://", "https://")):
-        return snippet
-    text = str(snippet or "").strip()
-    if len(text) >= 120:
-        return text
+def _fetch_transcript_document(url: str) -> dict[str, Any] | None:
+    if not is_safe_url(url):
+        return None
+    document = fetch_url_document(url, max_length=16000)
+    if document and document.get("content"):
+        return {**document, "retrieval_method": "http_document"}
+    if str(os.getenv("TRANSCRIPT_USE_JINA", "true")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return None
+    body = fetch_via_jina(url, timeout=6)
+    return {"content": body, "final_url": url, "retrieval_method": "jina_reader"} if body else None
 
-    try:
-        from .jina_reader import fetch_via_jina
-    except Exception:
-        return text
 
-    try:
-        enriched = fetch_via_jina(url)
-    except Exception:
-        return text
-    if enriched and len(enriched) > len(text):
-        return str(enriched)[:800]
-    return text
+def _transcript_period(text: str) -> dict[str, Any] | None:
+    pattern = r"(?:fiscal\s*)?Q([1-4])\s*(?:FY\s*)?(20\d{2})|(?:FY\s*)?(20\d{2})\s*Q([1-4])"
+    match = re.search(pattern, text, re.IGNORECASE)
+    if not match:
+        return None
+    return {"fiscal_year": int(match.group(2) or match.group(3)),
+        "fiscal_quarter": int(match.group(1) or match.group(4)), "label": match.group(), "calendar_aligned": False}
+
+
+def _transcript_date(text: str) -> str | None:
+    matches = re.findall(r"(?:Published\s*(?:Date|Time)?\s*[:：]?\s*|\b)(20\d{2}-\d{2}-\d{2})\b", text)
+    if matches:
+        try:
+            return date.fromisoformat(matches[0]).isoformat()
+        except ValueError:
+            return None
+    match = re.search(r"\b([A-Za-z]{3,9}\s+\d{1,2},?\s+20\d{2})\b", text)
+    if match:
+        for format_string in ("%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y"):
+            try:
+                return datetime.strptime(match.group(1), format_string).date().isoformat()
+            except ValueError:
+                continue
+    return None
+
+
+def _transcript_sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+    text = f"{item.get('title', '')} {item.get('snippet', '')[:1000]}"
+    period = _transcript_period(text) or {}
+    return (period.get("fiscal_year", 0), period.get("fiscal_quarter", 0), _transcript_date(text) or "")
+
+
+def _has_transcript_body(body: str) -> bool:
+    return len(body) >= 500 and bool(re.search(
+        r"(?:^|\n)\s*(?:\*\*)?(?:operator|prepared remarks|questions?\s*(?:and|&)\s*answers?|"
+        r"[A-Z][a-z]+ [A-Z][a-z]+[^\n]{0,50}(?:CEO|CFO|chief|president)|主持人|管理层|董事长|问答)",
+        body, re.IGNORECASE))
+
+
+def _issuer_matches(ticker: str, title: str, snippet: str, url: str) -> bool:
+    from backend.config.ticker_mapping import CN_TO_TICKER, COMPANY_MAP
+
+    text = " ".join((title, snippet, url))
+    core = ticker.split(".", 1)[0]
+    aliases = {name for name, code in {**COMPANY_MAP, **CN_TO_TICKER}.items() if code == ticker}
+    if COMPANY_MAP.get(ticker):
+        aliases.add(COMPANY_MAP[ticker])
+    for name in list(aliases):
+        short = name.replace("港股", "")
+        aliases.add(short)
+        related = CN_TO_TICKER.get(short)
+        if related and COMPANY_MAP.get(related):
+            aliases.add(COMPANY_MAP[related])
+    # 数字代码必须完整匹配，3690 不接受 3696/3697；单字母代码需交易所或括号限定。
+    if core.isdigit():
+        matches = re.findall(r"(?:HKG\s*[:：]\s*|/hkg/|/stocks/)(\d{3,6})", text, re.IGNORECASE)
+        if any(code.lstrip("0") != core.lstrip("0") for code in matches):
+            return False
+        ticker_match = bool(re.search(r"(?<!\d)0*" + re.escape(core.lstrip("0")) + r"(?!\d)", text))
+    else:
+        listed_codes = re.findall(r"\b(?:NYSE|NASDAQ)\s*[:：]\s*([A-Z]{1,5})\b", text, re.IGNORECASE)
+        if listed_codes and core not in {code.upper() for code in listed_codes}:
+            return False
+        ticker_match = bool(re.search(r"(?:\b(?:NYSE|NASDAQ)\s*[:：]\s*|\(|\$)" + re.escape(core) + r"\b", text, re.IGNORECASE))
+        if len(core) > 1:
+            ticker_match = ticker_match or bool(re.search(r"(?<![\w])" + re.escape(core) + r"(?![\w])", text, re.IGNORECASE))
+    return ticker_match or any(re.search(r"(?<![A-Za-z])" + re.escape(alias) + r"(?![A-Za-z])", text, re.IGNORECASE) for alias in aliases if alias)
+
+
+def _blocked_transcript(text: str) -> bool:
+    return bool(re.search(r"captcha|performing security verification|verify.{0,25}(?:human|not a bot)|"
+        r"just a moment|please register to access|guest registration|sign in to (?:read|continue)|"
+        r"subscribe to (?:read|continue)|subscription required|enable javascript and cookies|验证码|订阅后阅读", text, re.IGNORECASE))
 
 
 def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]:
@@ -261,6 +328,7 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
         }
 
     rows: list[dict[str, Any]] = []
+    rejected: list[dict[str, str]] = []
     seen_urls: set[str] = set()
     queries = _build_market_queries(ticker_norm, market)
 
@@ -287,7 +355,13 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
                 continue
 
             seen_urls.add(url)
-            snippet = _maybe_enrich_snippet(url, snippet or title)
+            if not _issuer_matches(ticker_norm, title, snippet, url):
+                rejected.append({"url": url, "reason": "issuer_not_verified"})
+                continue
+            snippet = snippet or title
+            if _blocked_transcript(snippet):
+                rejected.append({"url": url, "reason": "blocked_content"})
+                continue
             rows.append(
                 {
                     "title": title or f"{ticker_norm} earnings call transcript",
@@ -299,20 +373,62 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
                     "type": "transcript",
                     "market": market,
                     "confidence": 0.78,
+                    "subject": ticker_norm,
+                    "content_read": False,
+                    "verification": "issuer_verified_discovery",
+                    "meta": {"subject": ticker_norm, "content_read": False, "verification": "issuer_verified_discovery"},
                 }
             )
-            if len(rows) >= capped_limit:
+            if len(rows) >= min(capped_limit * 3, 18):
                 break
-        if len(rows) >= capped_limit:
+        if len(rows) >= min(capped_limit * 3, 18):
             break
+
+    rows.sort(key=_transcript_sort_key, reverse=True)
+    selected = rows[:capped_limit]
+    kept = []
+    for index, row in enumerate(selected):
+        row["fiscal_period"] = _transcript_period(row["title"])
+        if index < min(capped_limit, 2):
+            document = _fetch_transcript_document(row["url"])
+            if document:
+                body = str(document.get("content") or "")
+                if _blocked_transcript(body):
+                    rejected.append({"url": row["url"], "reason": "blocked_content"})
+                    continue
+                header = f"{document.get('title', '')}\n{body[:1500]}"
+                if not _issuer_matches(ticker_norm, "", body[:1500], ""):
+                    rejected.append({"url": row["url"], "reason": "body_issuer_not_verified"})
+                    continue
+                if _has_transcript_body(body):
+                    body_period = _transcript_period(body[:1500])
+                    expected_period = row["fiscal_period"]
+                    if body_period and expected_period and (body_period["fiscal_year"], body_period["fiscal_quarter"]) != (expected_period["fiscal_year"], expected_period["fiscal_quarter"]):
+                        rejected.append({"url": row["url"], "reason": "fiscal_period_mismatch"})
+                        continue
+                    explicit_published = re.search(r"Published\s*(?:Date|Time)?\s*[:：]\s*([^\n]+)", header, re.IGNORECASE)
+                    published = _transcript_date(explicit_published.group(1)) if explicit_published else None
+                    row.update(content_read=True, verification="issuer_and_body_verified", body=body[:16000],
+                        snippet=body[:16000], source_url=document.get("final_url") or row["url"],
+                        retrieval_method=document.get("retrieval_method"), body_truncated=len(body) >= 16000,
+                        fiscal_period=body_period or row["fiscal_period"],
+                        published_date=published, source_date_hint=_transcript_date(header),
+                        date_precision="date" if published else "unknown")
+        row["meta"] = {"subject": ticker_norm, "content_read": row["content_read"],
+            "verification": row["verification"], "fiscal_period": row.get("fiscal_period"),
+            "source_url": row.get("source_url") or row["url"], "retrieval_method": row.get("retrieval_method")}
+        if row["content_read"]:
+            row["structured_data"] = {key: value for key, value in row.items() if key != "structured_data"}
+        kept.append(row)
 
     return {
         "ticker": ticker_norm,
         "market": market,
         "source": "earnings_transcripts_free",
-        "transcripts": rows,
-        "count": len(rows),
+        "transcripts": kept,
+        "count": len(kept),
         "searched_queries": queries,
+        "rejected_candidates": rejected,
         "error": None,
     }
 

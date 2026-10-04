@@ -1297,10 +1297,14 @@ def _build_structured_report_payload(
     if any(reason in conclusion_reasons for reason in ("unverified_task_claim_sources", "invalid_research_synthesis")):
         blocked = True
 
+    rendered_preview = None
+
     def unavailable_markdown() -> str:
+        nonlocal rendered_preview
         if verified_draft is not None:
             try:
-                return render_research_report(verified_draft, allow_overall_conclusion=False).markdown
+                rendered_preview = render_research_report(verified_draft, allow_overall_conclusion=False)
+                return rendered_preview.markdown
             except (KeyError, ValueError):
                 pass
         return "## 总判断\n\n无法判断：结构化研究结果尚未通过质量校验。\n"
@@ -1309,6 +1313,8 @@ def _build_structured_report_payload(
         overall = ""
         markdown = unavailable_markdown()
         synthesis = {**synthesis, "overall_conclusion": None}
+    elif verified_draft is not None:
+        rendered_preview = render_research_report(verified_draft.model_copy(deep=True))
     directions = {
         item.get("proposed_direction") for item in task_results
         if item.get("proposed_direction") in {"bull", "bear", "neutral"}
@@ -1316,18 +1322,34 @@ def _build_structured_report_payload(
         and all(claim_index.get(claim_id, {}).get("stance") == item.get("proposed_direction") for claim_id in item["direction_supporting_claim_ids"])
     }
     sentiment = {"bull": "bullish", "bear": "bearish", "neutral": "neutral"}.get(next(iter(directions)), "unknown") if len(directions) == 1 and supported_conclusion and not blocked else "unknown"
-    citations = [] if blocked else [
+    # 整体未通过时仍保留正文实际使用且主体已核实的来源；原始候选不能借预览晋升。
+    preview_ids = rendered_preview.citation_ids if rendered_preview is not None else []
+    preview_numbers = rendered_preview.citation_numbers if rendered_preview is not None else {}
+    qualified_ids = {
+        source_id for task in (verified_draft.task_results if verified_draft is not None else [])
+        for source_id in task.fact_ids
+        if source_id in verified_draft.evidence_index
+        and (source := verified_draft.evidence_index[source_id]).usage == "fact"
+        and task.task_id in source.task_ids
+        and source.metadata.get("subject_binding") != "unverified"
+        and (not source.subject or not task.requested_subjects or source.subject in task.requested_subjects
+             or source.kind == "macro_context" or source.metadata.get("entity_scope") in {"global", "macro"})
+    }
+    citations_by_number = {
+        preview_numbers[source_id]:
         {
-            "source_id": source_id,
+            "source_id": preview_numbers[source_id],
             "title": str((evidence_index.get(source_id) or {}).get("title") or (evidence_index.get(source_id) or {}).get("source_name") or source_id),
             "url": str((evidence_index.get(source_id) or {}).get("url") or "#"),
             "snippet": str((evidence_index.get(source_id) or {}).get("text") or ""),
             "published_date": str((evidence_index.get(source_id) or {}).get("as_of") or ""),
             "confidence": None,
         }
-        for source_id in citation_ids
-        if isinstance(source_id, str) and isinstance(evidence_index.get(source_id), dict)
-    ]
+        for source_id in preview_ids
+        if source_id in qualified_ids and source_id in preview_numbers
+        and str((evidence_index.get(source_id) or {}).get("url") or "").startswith(("https://", "http://"))
+    }
+    citations = list(citations_by_number.values())
     public_synthesis = None if blocked else synthesis
     report_quality = {
         "state": "block" if blocked else normalize_quality_state(gate.get("state")),

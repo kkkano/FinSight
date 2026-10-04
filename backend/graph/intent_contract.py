@@ -22,6 +22,8 @@ from backend.graph.request_task_contract import wants_no_news_or_links
 
 
 EvidenceKind = Literal[
+    "price_window",
+    "capital_allocation",
     "price_snapshot",
     "company_profile",
     "earnings_estimates",
@@ -84,6 +86,9 @@ class IntentContract(TypedDict, total=False):
 
 
 _CONTRACT_VERSION = "intent_contract.v1"
+MACRO_INDICATOR_KEYS = (
+    "fed_rate", "cpi", "unemployment", "gdp_growth", "treasury_10y", "yield_spread", "nonfarm_payroll_change",
+)
 EXTERNAL_IMPACT_LIGHT_PROFILE = "external_entity_impact_light"
 _HIGH_ORDER_FACETS = {"valuation", "fundamental", "business", "competition", "catalyst", "risk", "trend", "earnings", "investment_opinion", "technical", "external_entity_impact"}
 _COMPARISON_RELATION_RE = re.compile(r"\b(?:compare|versus|vs|which|who|better|stronger|relative)\b", re.IGNORECASE)
@@ -149,6 +154,14 @@ _EXTERNAL_THEME_TOKENS = (
 )
 
 _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
+    "price_window": EvidenceDefinition(
+        "price_window", scope="per_ticker", producer="tool_only",
+        tools=("get_price_window_metrics",), markets=("US", "CN", "HK"),
+    ),
+    "capital_allocation": EvidenceDefinition(
+        "capital_allocation", scope="per_ticker", producer="tool_only",
+        tools=("get_sec_capital_allocation",), markets=("US",),
+    ),
     "price_snapshot": EvidenceDefinition(
         "price_snapshot",
         scope="per_ticker",
@@ -203,7 +216,7 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
         "macro_context",
         scope="per_topic",
         producer="tool_then_agent",
-        tools=("get_official_macro_releases", "get_authoritative_media_news", "search"),
+        tools=("get_fred_data", "get_official_macro_releases", "get_authoritative_media_news", "search"),
         agents=("macro_agent",),
     ),
     "filing_context": EvidenceDefinition(
@@ -275,6 +288,7 @@ _EVIDENCE_ALIASES: dict[str, EvidenceKind] = {
     "transcript": "transcript_context",
 }
 _SEC_ONLY_TOOLS = {
+    "get_sec_capital_allocation",
     "get_sec_filings",
     "get_sec_material_events",
     "get_sec_company_facts_quarterly",
@@ -1001,6 +1015,7 @@ def synthesis_compare_operation(contract: dict[str, Any] | None) -> dict[str, An
 
 
 __all__ = [
+    "MACRO_INDICATOR_KEYS",
     "EvidenceDefinition",
     "EvidenceKind",
     "EvidencePlanItem",

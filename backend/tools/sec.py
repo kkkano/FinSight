@@ -6,12 +6,14 @@ import logging
 import os
 import re
 import time
+import posixpath
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Dict
+from urllib.parse import unquote, urljoin, urlparse
 
 from .financial_facts import FinancialFact, duration_frequency, fact_date, fact_number
-from .http import _http_get
+from .http import _http_get, _http_get_no_retry
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +278,7 @@ def _extract_companyfacts_facts(
     metric: str = "",
     instant: bool = False,
     source_url: str | None = None,
+    frequency: str = "quarterly",
 ) -> dict[str, FinancialFact]:
     facts = payload.get("facts") if isinstance(payload.get("facts"), dict) else {}
     gaap = facts.get("us-gaap") if isinstance(facts.get("us-gaap"), dict) else {}
@@ -305,12 +308,12 @@ def _extract_companyfacts_facts(
                 period = _parse_companyfacts_period(entry)
                 if not period or fact_number(entry.get("val")) is None:
                     continue
-                if not instant and unit == "USD" and metric in {"operating_cash_flow", "capital_expenditures"}:
+                if not instant and frequency == "quarterly" and unit == "USD" and metric in {"operating_cash_flow", "capital_expenditures", "capital_expenditure", "dividends_paid", "repurchases_paid"}:
                     eligible_cash_flows.append(entry)
                 if instant:
                     if entry.get("start"):
                         continue
-                elif not _is_quarterly_companyfacts_entry(entry):
+                elif duration_frequency(entry.get("start"), entry.get("end")) != frequency:
                     continue
                 valid.setdefault(period, []).append(entry)
             cash_flow_series.append((concept, eligible_cash_flows))
@@ -330,7 +333,7 @@ def _extract_companyfacts_facts(
                     subject=subject, metric=metric, value=float(entry["val"]), unit=unit,
                     source="sec_companyfacts", period_end=period,
                     period_start=None if instant else fact_date(entry.get("start")),
-                    frequency="instant" if instant else "quarterly",
+                    frequency="instant" if instant else frequency,
                     filed=fact_date(entry.get("filed")), accession=entry.get("accn"),
                     concept=concept, form=str(entry.get("form") or ""),
                     source_url=source_url,
@@ -460,6 +463,122 @@ def _extract_research_sections(raw: str) -> dict[str, str]:
     return sections
 
 
+def _material_document(url: str, headers: dict[str, str]) -> tuple[str, str]:
+    response = _http_get_no_retry(url, headers=headers, timeout=8, allow_redirects=False)
+    if response.status_code != 200:
+        raise ValueError(f"material_document_http_{response.status_code}")
+    raw = str(response.text or "")
+    body = _strip_html(raw)
+    if re.search(r"captcha|just a moment|security verification|please register|subscribe to read", body, re.I):
+        raise ValueError("material_document_blocked")
+    if len(body) < 100:
+        raise ValueError("material_document_body_unavailable")
+    return raw, body
+
+
+def _material_exhibit_urls(raw: str, filing: dict[str, Any], cik: str) -> list[str]:
+    from bs4 import BeautifulSoup
+
+    base = filing["filing_url"]
+    directory = f"/Archives/edgar/data/{int(cik)}/{filing['accession_number'].replace('-', '')}/"
+    urls = []
+    for anchor in BeautifulSoup(raw, "html.parser").find_all("a", href=True):
+        href = str(anchor["href"])
+        row = anchor.find_parent("tr")
+        description = f"{href} {row.get_text(' ', strip=True) if row else anchor.get_text(' ', strip=True)}"
+        if not re.search(r"ex(?:hibit)?[-_. ]?99(?:[-_. ]?[12])?|\b99\.[12]\b", description, re.I):
+            continue
+        url = urljoin(base, href)
+        parsed = urlparse(url)
+        normalized_path = posixpath.normpath(unquote(parsed.path))
+        if parsed.scheme != "https" or parsed.netloc != "www.sec.gov" or not normalized_path.startswith(directory) or parsed.query:
+            continue
+        if not parsed.path.lower().endswith((".htm", ".html", ".txt")) or parsed.path == urlparse(base).path:
+            continue
+        if url not in urls:
+            urls.append(url)
+        if len(urls) == 2:
+            break
+    return urls
+
+
+def _announcement_date(text: str) -> str | None:
+    iso = re.search(r"\b20\d{2}-\d{2}-\d{2}\b", text)
+    if iso:
+        return fact_date(iso.group())
+    match = re.search(r"\b([A-Za-z]{3,9}\s+\d{1,2},?\s+20\d{2})\b", text)
+    if match:
+        for pattern in ("%B %d, %Y", "%b %d, %Y", "%B %d %Y", "%b %d %Y"):
+            try:
+                return datetime.strptime(match.group(1), pattern).date().isoformat()
+            except ValueError:
+                continue
+    return None
+
+
+def _dividend_announcement(body: str, *, subject: str, url: str, filing: dict[str, Any]) -> dict[str, Any] | None:
+    declaration = re.search(
+        r"\bdeclar(?:ed|es)\b[^.;]{0,160}?\b(?:cash\s+)?dividend\b[^.;]{0,80}?"
+        r"(?P<currency>US\$|U\.S\.\s*\$|USD\s*|\$)(?P<amount>\d+(?:\.\d+)?)"
+        r"\s*(?:per|for each)\s+(?:common\s+)?share\b", body, re.I)
+    if not declaration:
+        return None
+    excerpt = body[max(0, declaration.start() - 150):declaration.end() + 900]
+    context = body[max(0, declaration.start() - 100):declaration.end()]
+    if re.search(r"(?:expects?\s+to|intends?\s+to|may|could|will)\s+declar(?:e|ed)|not\s+declar(?:e|ed)", context, re.I):
+        return None
+    currency = "USD" if re.sub(r"\s", "", declaration.group("currency")).upper() in {"US$", "U.S.$", "USD"} else None
+    def following_date(marker: str) -> str | None:
+        match = re.search(marker + r"(?P<suffix>.{0,100})", excerpt, re.I)
+        return _announcement_date(match.group("suffix")) if match else None
+    frequency_match = re.search(r"\b(quarterly|annual|monthly|special)\b", declaration.group(), re.I)
+    announced = re.search(r"\bon\s+(.{0,50}?)\s*,?\s*(?:the\s+)?(?:board[^.]{0,90}?\s+)?declar(?:ed|es)\b", excerpt, re.I)
+    announced_at = _announcement_date(announced.group(1)) if announced else None
+    inline_date = re.search(r"\bdeclar(?:ed|es)\s+on\s+(.{0,50})", declaration.group(), re.I)
+    if not announced_at and inline_date:
+        announced_at = _announcement_date(inline_date.group(1))
+    payable_date = following_date(r"\bpayable\b")
+    record_date = following_date(r"\b(?:stock|share)holders?\s+of\s+record\b")
+    frequency = frequency_match.group(1).lower() if frequency_match else None
+    missing = [key for key, value in {"currency": currency, "announced_at": announced_at,
+        "payable_date": payable_date, "record_date": record_date, "frequency": frequency}.items() if value is None]
+    return {"subject": subject, "metric": "announced_dividend", "amount_per_share": float(declaration.group("amount")),
+        "currency": currency, "currency_symbol": declaration.group("currency").strip(),
+        "unit": f"{currency or '$'}/share", "frequency": frequency,
+        "announced_at": announced_at, "announced_time_precision": "date" if announced_at else "unknown",
+        "payable_date": payable_date, "record_date": record_date,
+        "source": "sec_edgar", "source_url": url, "content_read": True, "verification": "official_filing_body",
+        "filing_date": filing.get("filing_date"), "filing_accepted_at": filing.get("acceptance_datetime"),
+        "accession_number": filing.get("accession_number"), "cik": filing.get("cik"), "declaration_excerpt": excerpt,
+        "missing_metrics": missing}
+
+
+def _read_material_filing(filing: dict[str, Any], *, ticker: str, cik: str, headers: dict[str, str]) -> None:
+    filing.update(subject=ticker, cik=cik, source="sec_edgar", source_url=filing["filing_url"], content_read=False,
+        announced_at=None, exhibits=[], dividend_announcements=[])
+    raw, body = _material_document(filing["filing_url"], headers)
+    filing.update(content_read=True, body=body[:16000], content_excerpt=body[:16000],
+        content_sections={"material_event": body[:16000]}, verification="official_filing_body", body_truncated=len(body) > 16000)
+    documents = [(filing["filing_url"], body)]
+    for url in _material_exhibit_urls(raw, filing, cik):
+        exhibit = {"subject": ticker, "url": url, "source_url": url, "source": "sec_edgar", "content_read": False,
+            "parent_filing_url": filing["filing_url"], "accession_number": filing["accession_number"]}
+        try:
+            _, exhibit_body = _material_document(url, headers)
+            exhibit.update(content_read=True, body=exhibit_body[:16000], verification="official_filing_exhibit",
+                body_truncated=len(exhibit_body) > 16000)
+            documents.append((url, exhibit_body))
+        except Exception as exc:
+            exhibit["content_error"] = str(exc) if isinstance(exc, ValueError) else "exhibit_fetch_failed"
+        filing["exhibits"].append(exhibit)
+    for url, content in documents:
+        announcement = _dividend_announcement(content, subject=ticker, url=url, filing=filing)
+        if announcement:
+            filing["dividend_announcements"].append(announcement)
+    if not filing["dividend_announcements"]:
+        filing["missing_metrics"] = ["announced_dividend"]
+
+
 def get_sec_filings(
     ticker: str,
     forms: str | list[str] | tuple[str, ...] | None = None,
@@ -516,8 +635,18 @@ def get_sec_filings(
         )
         if include_content:
             read_forms: set[str] = set()
+            material_read_count = 0
             for filing in rows:
                 form = str(filing.get("form") or "")
+                if form == "8-K":
+                    if material_read_count >= 6:
+                        continue
+                    material_read_count += 1
+                    try:
+                        _read_material_filing(filing, ticker=normalized_ticker, cik=cik, headers=headers)
+                    except Exception as exc:
+                        filing.update(content_read=False, content_error=str(exc) if isinstance(exc, ValueError) else "material_filing_fetch_failed")
+                    continue
                 if form not in {"10-K", "10-Q"} or form in read_forms:
                     continue
                 read_forms.add(form)
@@ -555,13 +684,20 @@ def get_sec_filings(
         )
 
 
-def get_sec_material_events(ticker: str, limit: int = 10) -> Dict[str, Any]:
-    payload = get_sec_filings(ticker=ticker, forms=["8-K"], limit=limit)
+def get_sec_material_events(ticker: str, limit: int = 10, include_content: bool = False) -> Dict[str, Any]:
+    payload = get_sec_filings(ticker=ticker, forms=["8-K"], limit=min(limit, 6) if include_content else limit, include_content=include_content)
     events = payload.get("filings") if isinstance(payload.get("filings"), list) else []
+    announcements = [announcement for event in events for announcement in event.get("dividend_announcements", [])]
+    filings_read = sum(event.get("content_read") is True for event in events)
     return {
         **payload,
         "events": events,
         "event_count": len(events),
+        "dividend_announcements": announcements,
+        "announcement_search_state": "parsed_declarations_found" if announcements else "no_verified_declaration_in_read_documents" if filings_read else "content_unavailable",
+        "coverage": {"scope": "recent_sec_8k_and_attached_exhibits", "exhaustive": False,
+            "filings_returned": len(events), "filings_read": filings_read,
+            "exhibits_read": sum(exhibit.get("content_read") is True for event in events for exhibit in event.get("exhibits", []))},
     }
 
 

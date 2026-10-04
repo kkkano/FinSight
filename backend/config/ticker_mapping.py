@@ -25,6 +25,9 @@ COMPANY_MAP: Dict[str, str] = {
     'V': 'Visa', 'visa': 'V',
     'MA': 'Mastercard', 'mastercard': 'MA',
     'COST': 'Costco', 'costco': 'COST',
+    'GE': 'GE Aerospace', 'ge aerospace': 'GE', 'general electric': 'GE',
+    'GEV': 'GE Vernova', 'ge vernova': 'GEV',
+    'GEHC': 'GE HealthCare', 'ge healthcare': 'GEHC', 'ge health care': 'GEHC',
     # Chinese ADRs
     'BABA': 'Alibaba', 'alibaba': 'BABA',
     'JD': 'JD.com', 'jd': 'JD',

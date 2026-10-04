@@ -378,10 +378,15 @@ def policy_gate(state: GraphState) -> dict:
                     union_tools.append(tool_name)
             allowed_tools = union_tools
 
-    if market != "US":
+    requested_markets = {inferred for task in ready_tasks for ticker in task.get("tickers", [])
+                         if ticker and (inferred := _infer_market_from_ticker(str(ticker))) is not None}
+    if not requested_markets:
+        requested_markets = {market}
+    if "US" not in requested_markets:
         allowed_tools = _without_holdings_tools(list(allowed_tools))
 
-    evidence_tools = evidence_tools_for_kinds(required_evidence, market=market)
+    evidence_tools = list(dict.fromkeys(tool for requested_market in sorted(requested_markets)
+                                        for tool in evidence_tools_for_kinds(required_evidence, market=requested_market)))
     if evidence_tools:
         allowed_tools = _append_missing(list(allowed_tools), tuple(evidence_tools + ["get_current_datetime", "search"]))
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(evidence_tools) + len(ready_tasks) + 2))
@@ -430,7 +435,9 @@ def policy_gate(state: GraphState) -> dict:
         mode_cap = _env_int(mode_env, global_cap, min_value=1, max_value=40)
         budget["max_tools"] = min(int(budget.get("max_tools", mode_cap)), mode_cap)
 
-    allowed_tools = _filter_tools_for_market(list(allowed_tools), market=market)
+    eligible_tools = {tool for requested_market in requested_markets
+                      for tool in _filter_tools_for_market(list(allowed_tools), market=requested_market)}
+    allowed_tools = [tool for tool in allowed_tools if tool in eligible_tools]
 
     # Agent whitelist:
     # Priority: agents_override (explicit) > evidence contract > v2 shadow profile

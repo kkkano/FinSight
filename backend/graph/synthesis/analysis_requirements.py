@@ -17,10 +17,25 @@ _ANALYTICAL_DIMENSIONS = {
 
 def compiled_tasks(state: dict[str, Any]) -> list[dict[str, Any]]:
     understanding = state.get("understanding") or {}
+    semantic = understanding.get("semantic_contract") if isinstance(understanding, dict) else None
+    if isinstance(semantic, dict) and semantic.get("status") == "confirmed":
+        return [dict(task) for task in semantic.get("tasks", []) if isinstance(task, dict)]
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
         tasks = understanding.get("tasks", []) if isinstance(understanding, dict) else []
     return [task for task in tasks if isinstance(task, dict)]
+
+
+def requested_task_partition(state: dict[str, Any]) -> tuple[list[dict], list[dict]]:
+    """请求分母来自已确认的原始合同，不能跟随下游丢项而缩小。"""
+    understanding = state.get("understanding") or {}
+    semantic = understanding.get("semantic_contract") if isinstance(understanding, dict) else None
+    if isinstance(semantic, dict) and semantic.get("status") == "confirmed":
+        tasks = compiled_tasks(state)
+        return ([task for task in tasks if task.get("status") != "blocked"],
+                [task for task in tasks if task.get("status") == "blocked"])
+    blocked = state.get("blocked_tasks", understanding.get("blocked_tasks", []))
+    return compiled_tasks(state), [task for task in (blocked or []) if isinstance(task, dict)]
 
 
 def answer_requirements_by_task(state: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -71,4 +86,4 @@ def analysis_task_modes(state: dict[str, Any]) -> dict[str, str]:
     }
 
 
-__all__ = ["analysis_task_modes", "answer_requirements_by_task", "compiled_tasks", "task_needs_analysis"]
+__all__ = ["analysis_task_modes", "answer_requirements_by_task", "compiled_tasks", "requested_task_partition", "task_needs_analysis"]

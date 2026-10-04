@@ -37,6 +37,18 @@ def _append_company_task_steps(ctx, task: dict, *, group: str) -> None:
     params = _task_operation_params(ctx, task)
     tickers_for_task = _task_tickers(ctx, task)
     task_ids = [_task_id(ctx, task)]
+    required_evidence = _task_required_evidence(ctx, task)
+    if required_evidence:
+        if "performance_comparison" in required_evidence and len(tickers_for_task) >= 2:
+            _append_tool_step(ctx, "get_performance_comparison", {"tickers": {ticker: ticker for ticker in tickers_for_task}},
+                why="比较任务：采集合同明确要求的跨主体历史表现。", optional=False,
+                parallel_group=group, task_ids=task_ids, subject_tickers=tickers_for_task,
+                evidence_kind="performance_comparison")
+        for ticker in tickers_for_task:
+            _append_evidence_steps_for_ticker(ctx, ticker,
+                [kind for kind in required_evidence if kind != "performance_comparison"], group=group,
+                task_ids=task_ids, evidence_profile=str(params.get("evidence_profile") or params.get("budget_profile") or ""))
+        return
     if op_name == "compare" and len(tickers_for_task) >= 2:
         if _should_use_performance_compare(ctx, task):
             mapping = {ticker: ticker for ticker in tickers_for_task[:6]}

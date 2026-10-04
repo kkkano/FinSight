@@ -9,13 +9,15 @@ import json
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.coverage_validator import validate_plan_coverage_for_frames
-from backend.graph.intent_contract import EXTERNAL_IMPACT_LIGHT_PROFILE, canonical_evidence_kinds
+from backend.graph.intent_contract import EXTERNAL_IMPACT_LIGHT_PROFILE, MACRO_INDICATOR_KEYS, canonical_evidence_kinds
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, project_v2_tasks_to_legacy
 from backend.graph.planning.builders.evidence import _append_evidence_steps_for_ticker
 from backend.graph.planning.steps import _append_tool_step, _append_agent_step
+from backend.graph.planning.builders.url_docs import _append_document_task_steps
+from backend.tools.macro_official import official_macro_query
 
 
 def _frame_id(ctx, frame: dict, index: int) -> str:
@@ -87,6 +89,23 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[st
     frame_subject = _frame_subject(ctx, frame)
     label = str(frame_subject.get("label") or frame.get("subject_label") or "").strip()
     macro_query = str(frame.get("query_text") or label or ctx.query)
+    requirements = [row for task_id in task_ids for row in ctx.ready_tasks_by_id.get(task_id, {}).get("answer_requirements", [])
+                    if row.get("capability_status", "supported") == "supported"]
+    selectors: dict[str | None, list[str]] = {}
+    for requirement in requirements:
+        indices = [key for key in [requirement.get("metric"), *requirement.get("components", [])] if key in MACRO_INDICATOR_KEYS]
+        if indices:
+            as_of = (requirement.get("time_scope") or {}).get("as_of")
+            selected = selectors.setdefault(as_of, [])
+            selected.extend(key for key in indices if key not in selected)
+    all_indicators = list(dict.fromkeys(key for selected in selectors.values() for key in selected))
+    employment_requested = bool({"nonfarm_payroll_change", "unemployment"}.intersection(all_indicators))
+    research_query = macro_query
+    macro_query = official_macro_query(research_query, all_indicators)
+    for as_of, indicators in selectors.items():
+        _append_tool_step(ctx, "get_fred_data", {"indicators": indicators, "as_of": as_of},
+            why="按已确认的宏观数值指标采集同频官方序列，并保留指标口径与观测期。", optional=False,
+            parallel_group=group, task_ids=task_ids, evidence_kind="macro_context")
     _append_tool_step(ctx, 
         "get_current_datetime",
         {},
@@ -97,7 +116,7 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[st
     )
     _append_tool_step(ctx, 
         "get_official_macro_releases",
-        {"query": macro_query, "max_results": 8},
+        {"query": macro_query, "max_results": 8, **({"include_content": True} if employment_requested else {})},
         why="Request frame macro evidence: official macro releases.",
         evidence_kind="macro_context",
         optional=False,
@@ -122,9 +141,11 @@ def _append_macro_frame_steps(ctx, frame: dict, *, group: str, task_ids: list[st
         parallel_group=group,
         task_ids=task_ids,
     )
-    _append_agent_step(ctx, "macro_agent", {"query": macro_query, "ticker": "MACRO"},
-        why="结合带观测期和单位的官方宏观指标解释政策影响。", optional=True,
-        parallel_group=f"{group}_macro", task_ids=task_ids, evidence_kind="macro_context")
+    if not requirements or any(row.get("requires_analysis") for row in requirements):
+        _append_agent_step(ctx, "macro_agent", {"query": research_query, "ticker": "MACRO",
+            **({"indicators": all_indicators, "as_of": next(iter(selectors)) if len(selectors) == 1 else None} if all_indicators else {})},
+            why="结合带观测期和单位的官方宏观指标解释政策影响。", optional=True,
+            parallel_group=f"{group}_macro", task_ids=task_ids, evidence_kind="macro_context")
 
 
 def _append_performance_comparison_frame_step(ctx, frame: dict, *, group: str, task_ids: list[str]) -> bool:
@@ -171,6 +192,14 @@ def _append_request_frame_steps(ctx) -> bool:
         if not required_evidence:
             continue
 
+        if _frame_subject_type(ctx, frame) in {"filing", "research_doc", "news_item", "news_set"}:
+            for task_id in task_ids:
+                task = ctx.ready_tasks_by_id.get(task_id)
+                if task:
+                    _append_document_task_steps(ctx, task, group=group)
+                    appended = True
+            continue
+
         if "macro_context" in required_evidence or _frame_subject_type(ctx, frame) == "macro":
             _append_macro_frame_steps(ctx, frame, group=group, task_ids=task_ids)
             appended = True
@@ -197,7 +226,8 @@ def _append_request_frame_steps(ctx) -> bool:
                 evidence_profile=_frame_evidence_profile(ctx, frame),
             )
             appended = True
-    return appended
+    # 已确认但未支持的要求仍保留在分母；空计划不能触发旧 query 关键词补全。
+    return appended or all(frame.get("source") == "confirmed_semantic_requirements" for frame in ctx.request_frames)
 
 
 def _request_frames_authoritatively_need_no_plan_steps(ctx) -> bool:

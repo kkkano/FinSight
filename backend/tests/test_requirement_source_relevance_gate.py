@@ -96,6 +96,26 @@ def test_report_builder_keeps_blocked_overall_unknown_and_preserves_local_explan
     assert report["quality_blocked"] is True and report["publishable"] is False
     assert "低估值与高不确定性并存" not in report["draft_markdown"]
     assert "公司披露其定位为 CRM 技术全球领导者" in report["draft_markdown"]
+    assert report["citations"], "整体结论受阻不能清空预览中可靠段落的来源"
+    for citation in report["citations"]:
+        assert citation["source_id"].isdigit()
+        assert f"[{citation['source_id']}]" in report["draft_markdown"]
+        assert citation["url"].startswith(("https://", "http://"))
+    assert report["sections"][0]["contents"][0]["citation_refs"] == [item["source_id"] for item in report["citations"]]
+
+
+def test_blocked_preview_does_not_promote_unverified_discovery_to_citation_metadata():
+    draft = _h12()
+    candidate = NormalizedEvidence(source_id="unverified", task_ids=["task_1"],
+        kind="document_context", usage="raw", subject="CRM", text="未经核实的搜索线索。",
+        url="https://example.invalid/unverified", metadata={"verification": "discovery_only"})
+    draft.evidence_index[candidate.source_id] = candidate
+    draft.citation_ids.append(candidate.source_id)
+    artifacts = {"research_synthesis": draft.model_dump(), "research_synthesis_gate": {"state": "block", "reasons": ["answer_requirements_incomplete"]}, "draft_markdown": "待核验报告"}
+    report = _build_structured_report_payload(state={"output_mode": "investment_report", "subject": {"tickers": ["CRM"]}, "artifacts": artifacts}, thread_id="fixture", artifacts=artifacts)
+    assert report["quality_blocked"] is True and report["publishable"] is False
+    assert report["citations"]
+    assert all(item["url"] != candidate.url for item in report["citations"])
 
 
 @pytest.mark.asyncio

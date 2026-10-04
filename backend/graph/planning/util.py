@@ -70,7 +70,9 @@ def _task_operation_params(ctx, task: dict) -> dict:
 
 def _task_required_evidence(ctx, task: dict) -> list[str]:
     params = _task_operation_params(ctx, task)
-    required = params.get("required_evidence")
+    required = task.get("required_evidence")
+    if not isinstance(required, list):
+        required = params.get("required_evidence")
     if not isinstance(required, list):
         task_params = task.get("params")
         required = task_params.get("required_evidence") if isinstance(task_params, dict) else []

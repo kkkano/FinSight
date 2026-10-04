@@ -39,6 +39,13 @@ def _text(value: Any) -> str:
     return str(value).strip() if value is not None else ""
 
 
+def _facts_sufficient(raw: dict[str, Any]) -> bool:
+    if raw.get("requirements_status") != "confirmed":
+        return False
+    rows = [row for row in raw.get("answer_requirements") or [] if isinstance(row, dict) and row.get("kind") != "constraint"]
+    return bool(rows) and not any(row.get("requires_analysis") for row in rows)
+
+
 def _strings(value: Any) -> list[str]:
     if not isinstance(value, list):
         value = [value] if value is not None else []
@@ -68,6 +75,8 @@ class TaskDescriptor(StrictContract):
     required_step_ids: list[NonEmptyStr]
     required_evidence: list[EvidenceKind]
     error_codes: list[NonEmptyStr]
+    # 已确认的原始要求全部是按标准定义取数/计算时，已校验事实本身就是完整回答，不需要模型论据。
+    facts_sufficient: bool = False
 
 
 class TaskDescriptorBuildResult(StrictContract):
@@ -212,6 +221,7 @@ def build_task_descriptors(
             required_step_ids=required_steps,
             required_evidence=required,
             error_codes=errors,
+            facts_sufficient=_facts_sufficient(raw),
         ))
 
     return TaskDescriptorBuildResult(
@@ -271,7 +281,7 @@ def finalize_task_outcomes(
         if missing_steps:
             error_codes.append("required_step_unavailable")
         has_supported_conclusion = bool(claims) or (
-            descriptor.operation in _DETERMINISTIC_TOOL_OPERATIONS
+            (descriptor.operation in _DETERMINISTIC_TOOL_OPERATIONS or descriptor.facts_sufficient)
             and bool(successful)
             and bool(evidence)
         )

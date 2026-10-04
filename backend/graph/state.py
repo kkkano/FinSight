@@ -17,6 +17,8 @@ from backend.graph.intent_contract import IntentContract
 from backend.graph.request_task_contract import ReplyContract
 
 SubjectType = Literal[
+    "crypto",
+    "fund",
     "news_item",
     "news_set",
     "company",
@@ -34,6 +36,7 @@ OutputMode = Literal["chat", "brief", "investment_report"]
 UnderstandingRoute = Literal["direct", "research", "clarify"]
 UnderstandingTaskStatus = Literal["ready", "blocked"]
 TimeScopeKind = Literal[
+    "fiscal_quarter", "fiscal_year", "trading_sessions", "calendar_window", "latest_quote", "none",
     "today",
     "yesterday",
     "this_week",
@@ -67,6 +70,17 @@ class TimeScope(TypedDict, total=False):
     start: str
     end: str
     days_ahead: int
+    selection: str
+    count: int | None
+    completed_only: bool
+    source_text: str
+    direction: str
+    unit: str | None
+    as_of: str | None
+    period_start: str | None
+    period_end: str | None
+    hours_back: int | float
+    max_age_hours: int | float
 
 
 class ContextRef(TypedDict, total=False):
@@ -93,8 +107,13 @@ class UnderstandingTask(TypedDict, total=False):
     render_group_id: str
     status: UnderstandingTaskStatus
     reason: str
-    constraints: list[str]
+    constraints: list[str | dict[str, Any]]
     params: dict[str, Any]
+    answer_requirements: list[dict[str, Any]]
+    required_evidence: list[str]
+    requirements_status: str
+    request_text: str
+    evidence_support_for: str
 
 
 class BlockedTask(TypedDict, total=False):
@@ -114,6 +133,11 @@ class BlockedTask(TypedDict, total=False):
     render_kind: Literal["single", "compare"]
     render_group_id: str
     error_code: str
+    answer_requirements: list[dict[str, Any]]
+    required_evidence: list[str]
+    requirements_status: str
+    time_scope: TimeScope
+    constraints: list[dict[str, Any]]
 
 
 class Understanding(TypedDict, total=False):
@@ -128,6 +152,9 @@ class Understanding(TypedDict, total=False):
     blocked_tasks: list[BlockedTask]
     context_refs: list[ContextRef]
     fallback_assumptions: list[str]
+    requirements_status: str
+    semantic_contract: dict[str, Any]
+    request_frames: list[dict[str, Any]]
 
 
 class Clarify(TypedDict):

@@ -184,6 +184,12 @@ def _profile(payload: dict, evidence, *, compact: bool = False) -> str:
 
 def _technical(payload: dict, evidence) -> str:
     lines = []
+    frequency = payload.get("frequency") or evidence.frequency
+    if frequency:
+        label = {"daily": "日线", "weekly": "周线", "monthly": "月线"}.get(frequency, str(frequency))
+        lines.append(f"{label}指标，截至 {payload.get('source_timestamp') or evidence.as_of or '源时间未提供'}")
+    if payload.get("currency") or evidence.currency:
+        lines.append(f"价格类指标单位 {payload.get('currency') or evidence.currency}")
     specs = (("close", "收盘价", 2), ("ma20", "MA20", 2), ("ma50", "MA50", 2), ("ma200", "MA200", 2), ("rsi14", "RSI(14)", 2), ("macd", "MACD", 4), ("macd_signal", "MACD 信号线", 4), ("support", "支撑", 2), ("resistance", "阻力", 2), ("volume", "成交量", 0), ("volume_avg20", "20 日均量", 0))
     for key, label, digits in specs:
         if payload.get(key) is not None:
@@ -275,9 +281,9 @@ def _calendar(payload: dict, evidence, *, limit: int | None = None) -> str:
 
 
 def _macro(payload: dict, evidence) -> str:
-    meta = evidence.metadata
-    indicator = meta.get("indicator_key")
-    labels = {"fed_rate": "联邦基金利率（历史观测）", "cpi": "CPI 通胀同比", "unemployment": "失业率", "gdp_growth": "GDP 增速", "treasury_10y": "10 年期美债收益率", "yield_spread": "10Y-2Y 利差"}
+    meta = {**evidence.metadata, **payload}
+    indicator = meta.get("indicator_key") or evidence.metric
+    labels = {"fed_rate": "联邦基金利率（历史观测）", "cpi": "CPI 通胀同比", "unemployment": "失业率", "nonfarm_payroll_change": "新增非农就业", "gdp_growth": "GDP 增速", "treasury_10y": "10 年期美债收益率", "yield_spread": "10Y-2Y 利差"}
     if indicator not in labels:
         return ""
     value = meta.get("value")
@@ -289,16 +295,76 @@ def _macro(payload: dict, evidence) -> str:
     if value is None:
         return ""
     unit = "个百分点" if indicator == "yield_spread" else str(meta.get("unit") or evidence.unit or "[单位未提供]")
-    period = evidence.period_end or meta.get("period_end") or evidence.as_of or "观察期未提供"
+    unit = {"persons": "人", "percent": "%"}.get(unit, unit)
+    period = meta.get("report_month") or evidence.period_end or meta.get("period_end") or evidence.as_of or "观察期未提供"
     text = f"{period} {labels[indicator]} {number(value)}{unit}"
+    if indicator == "nonfarm_payroll_change":
+        text += "；按相邻两月经季节调整的非农就业存量之差计算，已将千人转换为人数。"
+    if indicator in {"nonfarm_payroll_change", "unemployment"}:
+        if meta.get("published_at"):
+            text += f"；已核实的 BLS 发布时间：{meta['published_at']}。"
+        else:
+            text += "；BLS 原始发布时间尚未核实，报告月份不代表发布日。"
+        if meta.get("source_updated_at"):
+            text += f" FRED 序列更新时间：{meta['source_updated_at']}；当前修订口径可能不同于初次发布。"
     if indicator == "fed_rate":
         text += "；该序列观测不等同于最近一次 FOMC 决议确认。"
     return text
 
 
+def _price_window(payload: dict, evidence) -> str:
+    metrics = payload.get("metrics") or {}
+    currency = payload.get("currency") or evidence.currency or "[币种未提供]"
+    lines = [f"{evidence.subject or payload.get('ticker') or '标的'} 最近 {payload.get('sessions', '未提供')} 个已完成交易日；截止 {payload.get('period_end') or evidence.period_end or '时间未提供'}。"]
+    result = metrics.get("cumulative_return")
+    if isinstance(result, dict) and result.get("value") is not None:
+        lines.append(f"累计价格收益 {number(result['value'], percent=True)}；起点 {result.get('base_date')} 收盘 {number(result.get('base_close'), 4)} {currency}，终点 {result.get('end_date')} 收盘 {number(result.get('end_close'), 4)} {currency}；计算为终点收盘价 ÷ 起点收盘价 − 1，共 {result.get('intervals')} 个交易日间隔。")
+    result = metrics.get("max_drawdown")
+    if isinstance(result, dict) and result.get("value") is not None:
+        lines.append(f"窗口内最大收盘回撤 {number(result['value'], percent=True)}；运行高点 {result.get('peak_date')} 收盘 {number(result.get('peak_close'), 4)} {currency}，低点 {result.get('trough_date')} 收盘 {number(result.get('trough_close'), 4)} {currency}。按窗口内逐日收盘价相对此前最高收盘价计算，不等同区间累计涨跌。")
+    result = metrics.get("volume_breakout")
+    if isinstance(result, dict) and result.get("breakout") is not None:
+        lines.append(f"最新收盘 {number(result.get('close'))} {currency}，此前区间 {number(result.get('range_low'))}–{number(result.get('range_high'))} {currency}（{result.get('range_start')} 至 {result.get('range_end')}）；相对前期平均成交量 {number(result.get('relative_volume'))} 倍。{'已突破' if result['breakout'] else '未突破'}区间高点；按 {number(result.get('confirmation_threshold'))} 倍成交量阈值，{'得到' if result.get('volume_confirmed') else '尚未得到'}量能确认。若突破后收盘跌回 {number(result.get('invalidation_close_below'))} {currency} 下方，则该突破失效。")
+    if payload.get("price_basis") == "split_adjusted_close" and payload.get("dividends_included") is False:
+        lines.append("口径：拆股调整后的日线收盘价，不计现金分红；来源时间精确到交易日，非抓取时刻的即时成交价。")
+    return "\n".join(lines)
+
+
+def _capital_allocation(payload: dict, evidence) -> str:
+    facts = payload.get("facts") or {}
+    period_label = "完整财年" if payload.get("frequency") == "annual" else "单季度"
+    currency = payload.get("currency") or evidence.currency
+    lines = [f"{evidence.subject or payload.get('ticker') or '公司'} {period_label} {payload.get('period_start') or '起日未提供'} 至 {payload.get('period_end') or '期末未提供'}。"]
+    labels = {"operating_cash_flow": "经营现金流", "capital_expenditure": "资本开支现金支付", "dividends_paid": "股息现金支付", "repurchases_paid": "股票回购现金支付", "cash_and_equivalents": "期末现金及等价物", "debt_current": "流动债务（按来源定义）", "debt_noncurrent": "非流动长期债务"}
+    for key, label in labels.items():
+        record = facts.get(key)
+        if isinstance(record, dict) and record.get("value") is not None:
+            lines.append(f"{label}：{money(record['value'], record.get('unit') or currency)}。")
+    if payload.get("capital_allocation_surplus") is not None:
+        lines.append(f"经营现金流 − 资本开支 − 股息 − 回购 = {money(payload['capital_allocation_surplus'], currency)}；四项采用相同会计期间的实际现金支付，正值为剩余、负值为资金缺口。")
+    if payload.get("dividend_coverage") is not None:
+        lines.append(f"自由现金流对股息现金支付的覆盖为 {number(payload['dividend_coverage'])} 倍；自由现金流按经营现金流减资本开支计算。")
+    if isinstance(payload.get("debt_burden"), dict):
+        lines.append("债务口径为当期到期的长期债务与非流动长期债务，现金列示于同一资产负债表时点；不冒充包含所有短期融资、租赁或金融子公司的全口径净债务。")
+    shares = payload.get("share_count_change")
+    if isinstance(shares, dict):
+        start, end = shares.get("start") or {}, shares.get("end") or {}
+        lines.append(f"期末普通股由 {start.get('period_end')} 的 {number(start.get('value'), 0)} 股变为 {end.get('period_end')} 的 {number(end.get('value'), 0)} 股；净变化 {number(shares.get('net_change'), 0)} 股（期末减期初），净减少 {number(shares.get('net_reduction'), 0)} 股。采用实际期末股数，不使用加权平均股数；净变化不等于回购股数。")
+    elif isinstance(facts.get("shares_outstanding"), dict):
+        lines.append(f"期末普通股 {number(facts['shares_outstanding'].get('value'), 0)} 股；缺少可比期初股数时不能计算净变化。")
+    for key in ("operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid"):
+        if facts.get(key) is None:
+            lines.append(f"[数据缺失] 同期{labels[key]}尚未取得，不能用累计数或其它财期代替。")
+    return "\n".join(lines)
+
+
 def format_fact(evidence, *, profile: str = "full") -> str:
     compact = profile in {"chat", "brief", "comparison"}
     payload = payload_for(evidence)
+    if evidence.kind == "price_window":
+        return _price_window(payload, evidence)
+    if evidence.kind == "capital_allocation":
+        return _capital_allocation(payload, evidence)
     raw = str(payload.get("text") or evidence.text)
     quote = parse_quote_payload(payload) or (parse_quote_payload(raw) if "Current Price:" in raw else None)
     if evidence.kind == "price_snapshot" or quote and evidence.kind in {"technical_snapshot", "risk_profile"}:

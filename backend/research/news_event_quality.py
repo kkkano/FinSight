@@ -22,6 +22,7 @@ _MEDIA_DOMAINS = (
 )
 _OFFICIAL_DOMAINS = ("sec.gov", "hkexnews.hk", "sse.com.cn", "szse.cn", "cninfo.com.cn")
 _COMPANY_DOMAINS = {
+    "GE": ("geaerospace.com",), "GEV": ("gevernova.com",), "GEHC": ("gehealthcare.com",),
     "AAPL": ("apple.com",), "NVDA": ("nvidia.com",),
     "MSFT": ("microsoft.com",), "INTC": ("intel.com",),
     "AMD": ("amd.com",), "AMZN": ("aboutamazon.com", "amazon.com"),
@@ -134,22 +135,30 @@ def news_subject_terms(ticker: str) -> list[str]:
 
 
 def _mentions(text: str, terms: Iterable[str], ticker: str) -> bool:
+    # 拆分上市公司的长名称优先，短品牌/代码不能冒领另一发行人的标题。
+    symbols = {key for key in COMPANY_MAP if key == key.upper()}
+    competing = [match.span() for alias, target in COMPANY_MAP.items()
+                 if str(target).upper() in symbols and str(target).upper() != ticker.upper() and " " in alias
+                 for match in re.finditer(rf"(?<![A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])", text, re.I)]
     for term in terms:
         if re.search(r"[\u4e00-\u9fff]", term):
             if term in text:
                 return True
         elif term.upper() == ticker.upper() and len(term) <= 2:
-            if re.search(rf"(?<!\w)\$?{re.escape(term.upper())}(?!\w)", text):
+            matches = re.finditer(rf"(?<!\w)\$?{re.escape(term.upper())}(?!\w)", text)
+            if any(not any(start <= match.start() and match.end() <= end for start, end in competing) for match in matches):
                 return True
-        elif re.search(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", text, re.I):
-            return True
+        else:
+            matches = re.finditer(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", text, re.I)
+            if any(not any(start <= match.start() and match.end() <= end for start, end in competing) for match in matches):
+                return True
     return False
 
 
-def news_subject_match(ticker: str, title: str, snippet: str = "") -> str:
+def news_subject_match(ticker: str, title: str, snippet: str = "", *, company_names: Iterable[str] = ()) -> str:
     if not ticker or ticker.startswith("^"):
         return "market"
-    terms = news_subject_terms(ticker)
+    terms = [*news_subject_terms(ticker), *company_names]
     if _mentions(title, terms, ticker):
         return "headline"
     # 搜索页经常在无关摘要里带查询词，不把它投射成公司事件。

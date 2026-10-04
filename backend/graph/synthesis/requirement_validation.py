@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from backend.graph.synthesis.contracts import Claim, NormalizedEvidence, ReportSynthesisDraft, TaskSynthesisResult, stable_unique
 from backend.research.filing_evidence import disclosure_sections
+from backend.graph.synthesis.requirement_support import attached_source_policy_reasons, control_support_reasons, exact_support_reasons, metric_supports
 
 
 def _present(value: Any) -> bool:
@@ -35,7 +37,9 @@ def claim_has_reliable_sources(claim: Claim, task: TaskSynthesisResult, evidence
 def overall_conclusion_block_reasons(draft: ReportSynthesisDraft) -> list[str]:
     """只有完整任务与全部可靠的已选论据才能作为成立的总判断输入。"""
     reasons = []
-    if draft.status != "answered" or any(task.status != "answered" or task.missing_evidence or task.missing_requirements or any(check.get("status") != "answered" for check in task.requirement_results) for task in draft.task_results):
+    if draft.status != "answered" or any(task.status != "answered" or task.missing_evidence or task.missing_requirements or any(check.get("status") != "answered" for check in task.requirement_results)
+        or {item.get("requirement_id") for item in task.answer_requirements} != {item.get("requirement_id") for item in task.requirement_results}
+        for task in draft.task_results):
         reasons.append("answer_requirements_incomplete")
     if not any(task.conclusion and task.claim_ids for task in draft.task_results):
         reasons.append("missing_supported_task_conclusion")
@@ -137,12 +141,40 @@ def _financial_component_supported(component: str, claims: list[Claim], evidence
 def _attribute_present(evidence: NormalizedEvidence, attribute: str) -> bool:
     payload = _payload(evidence)
     if attribute == "currency":
-        return _present(evidence.currency) or _present(payload.get("currency"))
+        return _present(evidence.currency) or _present(payload.get("currency")) or any(isinstance(row, dict) and _present(row.get("currency")) for row in payload.get("dividend_announcements") or [])
     if attribute == "source_timestamp":
         return payload.get("source_time_status") != "unknown" and (_present(evidence.as_of) or any(_present(payload.get(key)) for key in ("source_timestamp", "source_time", "as_of", "timestamp")))
     if attribute == "market_session":
         return any(_present(payload.get(key)) for key in ("market_session", "marketSession", "market_state", "marketState", "session", "is_after_hours", "is_extended_hours"))
+    if attribute == "end_close":
+        if _present(payload.get("end_close")):
+            return True
+        return evidence.kind == "price_snapshot" and evidence.market_price is not None and payload.get("market_session") in {"regular_close", "continuous_close"}
+    if attribute in {"amount_per_share", "announced_at", "payable_date", "record_date", "frequency"}:
+        announcements = payload.get("dividend_announcements") or []
+        if announcements:
+            return any(isinstance(row, dict) and _present(row.get(attribute)) for row in announcements)
     return _present(payload.get(attribute))
+
+
+def _comparable_financial_periods(periods: list[set[tuple[str, str, str]]], scope: dict) -> bool:
+    if periods and set.intersection(*periods):
+        return True
+    if scope.get("kind") != "fiscal_year" or not periods or any(not rows for rows in periods):
+        return False
+    # 52/53周财年可落在不同日期；仍要求全年长度、同币种及相近年末。
+    annual = []
+    for rows in periods:
+        parsed = []
+        for start, end, unit in rows:
+            try:
+                first, last = date.fromisoformat(start), date.fromisoformat(end)
+            except ValueError:
+                continue
+            if 350 <= (last - first).days + 1 <= 380:
+                parsed.append((last, unit))
+        annual.append(parsed)
+    return bool(annual[0]) and any(all(any(unit == other_unit and abs((last - other_end).days) <= 35 for other_end, other_unit in rows) for rows in annual[1:]) for last, unit in annual[0])
 
 
 def _window_coverage(evidence: NormalizedEvidence, window: dict[str, Any]) -> dict[str, Any] | None:
@@ -195,6 +227,7 @@ def evaluate_answer_requirements(
                  and _reliable_task_evidence(evidence_index[source_id], result, scope)
                  and (not kinds or evidence_index[source_id].kind in kinds)
                  and (not subject or evidence_index[source_id].subject == subject)
+                 and metric_supports(evidence_index[source_id], str(requirement.get("metric") or ""))
                  and _supports_dimension(evidence_index[source_id], dimension)]
         facts = [evidence for evidence in available_facts if evidence.source_id in shown_ids]
         supported_ids = {fact.source_id for fact in facts}
@@ -205,17 +238,24 @@ def evaluate_answer_requirements(
                   and (not requirement.get("requires_analysis") or claim.agent_name == "research_analyst" or claim.assertion_type in {"opinion", "risk"})
                   and bool(set(claim.evidence_ids) & supported_ids)
                   and claim_has_reliable_sources(claim, result, evidence_index, subjects=scope)]
-        reasons = []
-        if not facts:
+        control_reasons = control_support_reasons(requirement, result, facts)
+        reasons = exact_support_reasons(requirement, facts) if control_reasons is None else list(control_reasons)
+        reasons.extend(attached_source_policy_reasons(requirement, result, facts))
+        if not facts and control_reasons is None:
             reasons.append("requirement_evidence_not_presented" if available_facts else "requirement_evidence_missing")
         for attribute in requirement.get("attributes") or []:
             if not any(_attribute_present(fact, str(attribute)) for fact in facts):
                 reasons.append(f"missing_attribute:{attribute}")
-        if requirement.get("requires_analysis") and not claims:
+        if requirement.get("requires_analysis") and not claims and control_reasons is None:
             reasons.append("requirement_explanation_missing")
+        if requirement.get("kind") == "constraint" and control_reasons is None and not claims:
+            reasons.append("requirement_constraint_unverified")
         components = requirement.get("components") if isinstance(requirement.get("components"), list) else []
-        missing_components = [component for component in components if not _financial_component_supported(str(component), claims, evidence_index)]
-        reasons.extend(f"requirement_component_missing:{component}" for component in missing_components)
+        if requirement.get("source_text"):
+            missing_components = [component for component in components if f"requirement_component_missing:{component}" in reasons]
+        else:
+            missing_components = [component for component in components if not _financial_component_supported(str(component), claims, evidence_index)]
+            reasons.extend(f"requirement_component_missing:{component}" for component in missing_components)
         if requirement.get("kind") == "conclusion" and not result.conclusion:
             reasons.append("requirement_conclusion_missing")
         if requirement.get("kind") == "comparison" or result.render_kind == "compare":
@@ -226,7 +266,7 @@ def evaluate_answer_requirements(
                 reasons.append("comparison_explanation_missing")
             if dimension in {"cash_flow_quality", "fundamental_quality", "financial_performance", "earnings_quality"} and len(subjects) > 1:
                 periods = [set().union(*[_financial_periods(fact) for fact in facts if fact.subject == ticker]) for ticker in subjects]
-                if not set.intersection(*periods):
+                if not _comparable_financial_periods(periods, requirement.get("time_scope") or {}):
                     reasons.append("comparison_period_or_currency_unverified")
         window = requirement.get("time_window")
         window_coverage = None
@@ -241,6 +281,7 @@ def evaluate_answer_requirements(
                 result.limitations = stable_unique([*result.limitations, "时间范围仅覆盖本轮取得的供应商资料，不能据此断言窗口内没有其它事件；预期日历日期仍需公司或官方确认。"])
         if isinstance(window, dict) and window.get("direction") == "future" and requirement.get("requires_analysis") and not any(re.search(r"观察|若|如果|一旦|关注|验证(?:是否|能否)|触发|跟踪|\b(?:if|watch|monitor)\b", claim.text, re.IGNORECASE) for claim in claims):
             reasons.append("requirement_observation_conditions_missing")
+        reasons = stable_unique(reasons)
         check = {
             "requirement_id": requirement_id, "task_id": result.task_id,
             "dimension": dimension, "description": requirement.get("description") or dimension,

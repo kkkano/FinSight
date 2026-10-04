@@ -8,10 +8,13 @@ from typing import Any
 from backend.config.ticker_mapping import extract_tickers, normalize_ticker
 from backend.graph.request_constraints import concept_without_retrieval
 from backend.graph.investment_intent import query_requests_investment_opinion
-from backend.graph.intent.deterministic_engine import route_request_deterministic
+from backend.graph.intent.deterministic_engine import _emit_understanding_trace, route_request_deterministic
+from backend.graph.event_bus import emit_event
 from backend.graph.intent.frame import intent_frame_from_legacy
 from backend.graph.intent.predicates import _history_tickers_from_messages
 from backend.graph.state import GraphState
+from backend.graph.semantic_requirements import extract_semantic_requirements, requires_semantic_extraction
+from backend.graph.request_compiler import compile_semantic_contract, deterministic_fallback_contract
 
 
 def _bind_task_render_identity(result: dict[str, Any]) -> dict[str, Any]:
@@ -40,7 +43,7 @@ def _bind_task_render_identity(result: dict[str, Any]) -> dict[str, Any]:
     return finalize_request_contract(result)
 
 async def route_request(state: GraphState) -> dict[str, Any]:
-    """规则优先地生成请求、任务与渲染身份，全程不调用 LLM。"""
+    """规则绑定主体；复杂请求由当前模型确认原始要求，再做唯一合同投影。"""
     resolver_enabled = str(os.getenv("FINSIGHT_FINANCIAL_TERM_RESOLVER", "on")).strip().lower() != "off"
     if resolver_enabled:
         from backend.graph.intent.financial_terms import (
@@ -75,10 +78,26 @@ async def route_request(state: GraphState) -> dict[str, Any]:
         result["artifacts"]["direct_answer_request"] = {"query": query, "instructions": "直接解释用户的概念问题；需要例子时标明数字为虚构并保证计算自洽。不查询行情，不编造当前公司事实。"}
         result["chat_responded"] = False
     else:
-        result = _bind_task_render_identity(await route_request_deterministic(state))
+        semantic_required = requires_semantic_extraction(query, output_mode=str(state.get("output_mode") or "chat"))
+        result = await route_request_deterministic(state, emit_understanding=not semantic_required)
+        if semantic_required:
+            await emit_event({"type": "trace", "visibility": "user", "stage": "understanding", "status": "start",
+                              "title": "正在确认研究范围", "summary": "正在核对原始要求、时间范围与所需输入。"})
+            semantic, diagnostics = await extract_semantic_requirements(state, result)
+            if semantic is not None:
+                try:
+                    result = compile_semantic_contract(result, semantic, diagnostics, input_context=state)
+                except (ValueError, TypeError, KeyError) as exc:
+                    diagnostics.update(status="unconfirmed", error_code="request_contract_unconfirmed", validation_code=str(exc), raw_semantic=semantic)
+                    semantic = None
+            if semantic is None:
+                result = deterministic_fallback_contract(_bind_task_render_identity(result), diagnostics)
+            await _emit_understanding_trace(result["understanding"])
+        else:
+            result = _bind_task_render_identity(result)
     understanding = result.get("understanding") if isinstance(result.get("understanding"), dict) else {}
     frame = intent_frame_from_legacy(understanding)
-    frame.source = "deterministic_rules"
+    frame.source = "selected_model_semantic_extraction" if understanding.get("requirements_status") == "confirmed" else "deterministic_rules"
     understanding["intent_frame"] = frame.model_dump()
     return result
 

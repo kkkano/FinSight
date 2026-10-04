@@ -337,8 +337,13 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
             try:
                 # 每个任务独立 Agent 实例，缓存与工具视图仅共享本轮不可变数据。
                 instance = _agent(None, cache, shared_tools)
+                research_kwargs = {}
+                if _name == "macro_agent" and isinstance(inputs, dict):
+                    for key in ("indicators", "as_of"):
+                        if key in inputs:
+                            research_kwargs[key] = inputs[key]
                 result = await asyncio.wait_for(
-                    instance.research(query=query or "N/A", ticker=ticker),
+                    instance.research(query=query or "N/A", ticker=ticker, **research_kwargs),
                     timeout=timeout_seconds,
                 )
                 normalized = _normalize_agent_output(

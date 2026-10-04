@@ -8,11 +8,14 @@
 
 | 角色 | 输入 | 输出 | 调用预算 |
 |---|---|---|---|
+| `request_compiler` | 当前原文、已绑定主体、当前线程历史和真实输入引用 | 保留全部原始要求的语义合同；工具能力由代码投影 | 复杂请求一个逻辑调用，结构错误最多同上下文纠正一次，保留实际 usage |
 | `PredictionAnalyst` | trusted Kline、服务端指标、新闻摘要、已有 Prediction | 严格 Prediction JSON | 一个逻辑任务，最多一次纠错 |
 | `ResearchAnalyst` | 规范化 evidence、Claim、任务与缺口 | 唯一 `research_result`、报告 draft | 按任务、草稿、核验及允许重试记录实际 usage，不能按角色数推断调用数 |
 | `direct_answer` | 明确不需实时资料的概念问题 | 概念解释及标注为虚构的示例 | 不采集外部行情，使用同一模型配置及预算；已有固定正文无需调用 |
 
 PredictionAnalyst 的 anchor 由服务端覆盖，方向、概率、止损、目标和 RR 由服务端校验。ResearchAnalyst 不直接取数，也不能引用 evidence pool 外的确定性数字。
+
+请求编译只做语义提取，不负责研究判断或选择外部工具。原始要求保存在 `understanding.semantic_contract`，下游不能以能力不足或计划裁剪删除分母。明确社交和简单即时报价不额外调用请求模型。
 
 ## 2. 内部 Collector
 

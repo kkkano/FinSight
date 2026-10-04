@@ -59,6 +59,7 @@ _KIND_DIMENSION: dict[str, EvidenceDimension] = {
     "transcript_context": "earnings", "event_calendar": "catalyst",
     "risk_profile": "risk", "options_derivatives": "risk",
     "macro_context": "macro", "news_context": "news", "document_context": "unknown",
+    "price_window": "technical", "capital_allocation": "fundamental",
 }
 _AGENT_DIMENSION: dict[str, EvidenceDimension] = {
     "price_agent": "market", "technical_agent": "technical",
@@ -77,7 +78,7 @@ class _TaskSynthesisSelection(StrictContract):
     fact_ids: list[NonEmptyStr] = Field(default_factory=list)
     explanation: NonEmptyStr | None = None
     explanation_evidence_ids: list[NonEmptyStr] = Field(default_factory=list)
-    explanations: list[dict[str, Any]] = Field(default_factory=list, description="每段包含 text、dimension、requirement_ids，以及 evidence_ids（本任务 E 编号列表）或 claim_ids（本任务 C 编号列表）；C 编号会映射到已验证来源。没有引用依据时省略该段。")
+    explanations: list[dict[str, Any]] = Field(default_factory=list, description="每段包含 text、dimension、requirement_ids，以及 evidence_ids（本任务 E 编号列表）或 claim_ids（本任务 C 编号列表）；C 编号会映射到已验证来源。text 使用自然语言，不回显 E/C 别名和内部字段名，引用仅放引用字段。没有引用依据时省略该段。")
 
 
 class _ReportSynthesisSelection(StrictContract):
@@ -244,19 +245,29 @@ def _agent_output_entries(
 
 def _subject_names(plan_steps: list[dict[str, Any]], outputs: dict[str, Any]) -> dict[str, list[str]]:
     names = {}
+    identity_tools = {"get_company_info", "get_sec_company_facts_quarterly", "get_sec_capital_allocation", "get_sec_filings", "get_local_market_filings"}
     for step in plan_steps:
-        if step.get("name") != "get_company_info":
+        if step.get("name") not in identity_tools:
             continue
         subject = str((step.get("inputs") or {}).get("ticker") or "")
         output = outputs.get(_text(step.get("id")))
+        if isinstance(output, str) and output.lstrip().startswith("{"):
+            try:
+                output = json.loads(output)
+            except ValueError:
+                pass
         if isinstance(output, str):
             match = re.search(r"(?m)^\s*-?\s*Name:\s*([^\n]+)", output, re.IGNORECASE)
             name = match.group(1) if match else ""
         else:
-            name = _text((output or {}).get("name") or (output or {}).get("longName")) if isinstance(output, dict) else ""
-        words = [word for word in re.findall(r"[A-Za-z]{3,}", name) if word.lower() not in {"corporation", "inc", "company", "limited", "holdings", "corp", "ltd", "technology", "technologies"}]
-        if subject:
-            names[subject.upper()] = words
+            if isinstance(output, dict) and output.get("ticker") and str(output["ticker"]).upper() != subject.upper():
+                continue
+            name = _text((output or {}).get("name") or (output or {}).get("longName") or (output or {}).get("company_name")) if isinstance(output, dict) else ""
+        clean = " ".join(name.split()).strip(" ,.")
+        short = re.sub(r"(?:[,\s]+(?:incorporated|corporation|corp|inc|company|limited|ltd|plc|co)\.?)+$", "", clean, flags=re.I).strip(" ,.")
+        if subject and clean:
+            # 公司词组保留整体；Business、International 等普通单词不能独自证明发行人。
+            names[subject.upper()] = stable_unique([*names.get(subject.upper(), []), clean, short])
     return names
 
 
@@ -265,11 +276,7 @@ def _news_bound_to_subject(raw: dict[str, Any], subject: str | None, names: dict
         return False
     from backend.research.news_event_quality import news_subject_match
 
-    if news_subject_match(subject, _text(raw.get("title"))) == "headline":
-        return True
-    haystack = " ".join(_text(raw.get(key)) for key in ("title", "text", "snippet", "url"))
-    aliases = [subject, *names.get(subject.upper(), [])]
-    return any(re.search(rf"(?<![A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])", haystack, re.IGNORECASE) for alias in aliases)
+    return news_subject_match(subject, _text(raw.get("title")), company_names=names.get(subject.upper(), [])) == "headline"
 
 
 def normalize_evidence(
@@ -410,6 +417,9 @@ def normalize_evidence(
             if event_quality.get("evidence_role") != "reported_news":
                 usage = "raw"
                 meta["verification"] = "discovery_only"
+        if kind == "transcript_context" and payload.get("content_read") is not True:
+            usage = "raw"
+            meta = {**meta, "verification": "discovery_only"}
         flow_arrays = [payload[key] for key in ("revenue", "gross_profit", "net_income", "eps", "operating_cash_flow") if isinstance(payload.get(key), list)]
         if flow_arrays and not any(value is not None for values in flow_arrays for value in values):
             usage = "raw"
@@ -782,12 +792,37 @@ def _failure_code(exc: Exception) -> str:
     return classify_llm_error(exc).code
 
 
+def _reference_content(item: NormalizedEvidence) -> tuple[str, dict[str, Any]]:
+    """模型上下文只保留同一正文的一份表示，完整原始产物仍留在证据索引。"""
+    data = {key: value for key, value in item.structured_data.items() if key not in {
+        "id", "source_id", "task_ids", "claim_ids", "evidence_ids", "raw", "raw_data",
+        "raw_response", "evidence", "claims", "metadata", "meta", "query_coverage",
+    }}
+    nested = data.get("structured_data")
+    if isinstance(nested, dict) and all(key in data and data[key] == value for key, value in nested.items()):
+        data.pop("structured_data")
+    text = item.text
+    if any(isinstance(value, str) and value == text for value in data.values()):
+        text = ""
+    elif text.lstrip().startswith(("{", "[")):
+        try:
+            if json.loads(text) == item.structured_data:
+                text = ""
+        except (ValueError, TypeError):
+            pass
+    sections = disclosure_sections(data)
+    if sections and text == "\n\n".join(f"{name}: {body}" for name, body in sections.items()):
+        text = ""
+    return text, data
+
+
 def _task_reference_payload(claims: list[Claim], materials: list[NormalizedEvidence]) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
     """短编号只在当前任务内有效，持久化仍使用原始稳定 ID。"""
     evidence_aliases = {f"E{index}": item.source_id for index, item in enumerate(sorted(materials, key=lambda item: item.source_id), 1)}
     claim_aliases = {f"C{index}": item.claim_id for index, item in enumerate(sorted(claims, key=lambda item: item.claim_id), 1)}
     evidence_refs = {source_id: alias for alias, source_id in evidence_aliases.items()}
     claim_refs = {claim_id: alias for alias, claim_id in claim_aliases.items()}
+    contents = {item.source_id: _reference_content(item) for item in materials}
     payload = {
         "claims": [{
             "id": claim_refs[item.claim_id], "text": item.text, "stance": item.stance,
@@ -796,15 +831,12 @@ def _task_reference_payload(claims: list[Claim], materials: list[NormalizedEvide
         } for item in claims],
         "evidence": [{
             "id": evidence_refs[item.source_id], "kind": item.kind, "usage": item.usage,
-            "text": item.text, "subject": item.subject, "metric": item.metric,
+            "text": contents[item.source_id][0], "subject": item.subject, "metric": item.metric,
             "source": item.source_name, "url": item.url, "as_of": item.as_of,
             "period_start": item.period_start, "period_end": item.period_end,
             "frequency": item.frequency, "unit": item.unit, "currency": item.currency,
             "coverage_window": item.structured_data.get("coverage_window") or item.metadata.get("coverage_window"),
-            "data": {key: value for key, value in item.structured_data.items() if key not in {
-                "id", "source_id", "task_ids", "claim_ids", "evidence_ids", "raw", "raw_data",
-                "raw_response", "evidence", "claims", "metadata", "meta", "query_coverage",
-            }},
+            "data": contents[item.source_id][1],
         } for item in materials],
     }
     return payload, claim_aliases, evidence_aliases
@@ -1310,7 +1342,9 @@ def evaluate_synthesis_quality(
     degraded: list[str] = []
     if any(item.status != "answered" for item in draft.task_results):
         degraded.append("task_not_answered")
-    if any(item.missing_requirements or any(check.get("status") != "answered" for check in item.requirement_results) for item in draft.task_results):
+    if any(item.missing_requirements or any(check.get("status") != "answered" for check in item.requirement_results)
+           or {row.get("requirement_id") for row in item.answer_requirements} != {row.get("requirement_id") for row in item.requirement_results}
+           for item in draft.task_results):
         degraded.append("answer_requirements_incomplete")
     if draft.fallback_used or any(item.fallback_used for item in draft.task_results):
         degraded.append("fallback_used")

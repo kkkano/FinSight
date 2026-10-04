@@ -1,6 +1,7 @@
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime, timezone
+from calendar import monthrange
 from typing import Dict, Any
 
 import requests
@@ -8,6 +9,7 @@ import requests
 from .env import FRED_API_KEY
 from .http import _http_get
 from .search import search
+from .financial_facts import fact_number
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +73,91 @@ def get_economic_events() -> str:
     return search(query)
 
 
-def get_fred_data(series_id: str = None) -> Dict[str, Any]:
+def _fred_as_of_parameters(as_of: str | None) -> dict[str, str]:
+    if not as_of:
+        return {}
+    if len(as_of) == 10:
+        cutoff = date.fromisoformat(as_of)
+    else:
+        point = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+        if point.tzinfo is None:
+            raise ValueError("fred_as_of_requires_timezone")
+        cutoff = point.astimezone(timezone.utc).date()
+    return {"realtime_start": cutoff.isoformat(), "realtime_end": cutoff.isoformat()}
+
+
+def _fred_employment_indicators(indicators: list[str], api_key: str, as_of: str | None) -> dict[str, Any]:
+    output: dict[str, Any] = {"indicator_metadata": {}, "metric_gaps": {}, "employment_report": {"published_at": None}}
+    months = []
+    for key in indicators:
+        sid = "PAYEMS" if key == "nonfarm_payroll_change" else "UNRATE"
+        output[key] = None
+        try:
+            params = {"series_id": sid, "api_key": api_key, "file_type": "json"}
+            params.update(_fred_as_of_parameters(as_of))
+            response = _http_get("https://api.stlouisfed.org/fred/series", params=params, timeout=10)
+            series = response.json().get("seriess", []) if response.status_code == 200 else []
+            metadata = next((item for item in series if item.get("id") == sid), None)
+            if not metadata or metadata.get("frequency") != "Monthly" or metadata.get("units") != ("Thousands of Persons" if sid == "PAYEMS" else "Percent") or metadata.get("seasonal_adjustment") != "Seasonally Adjusted":
+                raise ValueError("employment_series_definition_not_verified")
+            observation_params = {**params, "sort_order": "desc", "limit": 2 if sid == "PAYEMS" else 1}
+            response = _http_get("https://api.stlouisfed.org/fred/series/observations", params=observation_params, timeout=10)
+            observations = response.json().get("observations", []) if response.status_code == 200 else []
+            if len(observations) < (2 if sid == "PAYEMS" else 1):
+                raise ValueError("employment_observations_missing")
+            rows = sorted(observations, key=lambda row: row.get("date", ""), reverse=True)
+            latest = rows[0]
+            point = date.fromisoformat(latest["date"])
+            current = fact_number(latest.get("value"))
+            if current is None:
+                raise ValueError("latest_employment_value_missing")
+            source_url = f"https://fred.stlouisfed.org/series/{sid}"
+            lineage = [{"series_id": sid, "value": current, "observation_date": latest["date"],
+                "unit": "thousands_of_persons" if sid == "PAYEMS" else "percent", "source_url": source_url,
+                "realtime_start": latest.get("realtime_start"), "realtime_end": latest.get("realtime_end")}]
+            value = current
+            if sid == "PAYEMS":
+                previous = rows[1]
+                prior = date.fromisoformat(previous["date"])
+                prior_value = fact_number(previous.get("value"))
+                if prior_value is None or (point.year * 12 + point.month) - (prior.year * 12 + prior.month) != 1:
+                    raise ValueError("adjacent_payroll_month_missing")
+                value = (current - prior_value) * 1000
+                lineage.append({"series_id": sid, "value": prior_value, "observation_date": previous["date"],
+                    "unit": "thousands_of_persons", "source_url": source_url,
+                    "realtime_start": previous.get("realtime_start"), "realtime_end": previous.get("realtime_end")})
+            updated = None
+            if metadata.get("last_updated"):
+                parsed = datetime.fromisoformat(metadata["last_updated"].replace("Z", "+00:00"))
+                if parsed.tzinfo is not None:
+                    updated = parsed.astimezone(timezone.utc).isoformat()
+            report_month = point.strftime("%Y-%m")
+            output[key] = value
+            output["indicator_metadata"][key] = {
+                "subject": "US", "metric": key, "value": value, "series_id": sid, "source": "FRED", "source_url": source_url,
+                "unit": "persons" if sid == "PAYEMS" else "percent", "frequency": "monthly", "report_month": report_month,
+                "observation_date": latest["date"], "period_start": point.replace(day=1).isoformat(),
+                "period_end": point.replace(day=monthrange(point.year, point.month)[1]).isoformat(),
+                "definition": "monthly_nonfarm_payroll_net_change" if sid == "PAYEMS" else "household_survey_unemployment_rate",
+                "seasonal_adjustment": "seasonally_adjusted", "transformation": "difference" if sid == "PAYEMS" else "lin",
+                "formula": "(current_PAYEMS_thousands - previous_PAYEMS_thousands) * 1000" if sid == "PAYEMS" else None,
+                "derivation_inputs": lineage, "source_updated_at": updated, "published_at": None,
+                "timestamp_semantics": "source_update", "source_time_status": "provided" if updated else "unknown",
+                "limitations": ["FRED 当前修订口径；报告月及序列更新时间不是 BLS 原始发布时刻。",
+                    "新增非农为机构调查净变动，失业率为家庭调查，不能混成同一人数口径。"],
+            }
+            months.append(report_month)
+        except Exception as exc:
+            output["metric_gaps"][key] = str(exc) if isinstance(exc, ValueError) else "fred_employment_unavailable"
+    output["employment_report"].update(report_month=months[0] if len(set(months)) == 1 and len(months) == len(indicators) else None,
+        periods_match=len(set(months)) == 1 and len(months) == len(indicators),
+        missing_metrics=list(output["metric_gaps"]) + ["published_at"])
+    if len(set(months)) > 1:
+        output["employment_report"]["missing_metrics"].append("report_month_alignment")
+    return output
+
+
+def get_fred_data(series_id: str = None, indicators: list[str] | None = None, as_of: str | None = None) -> Dict[str, Any]:
     """
     从 FRED (Federal Reserve Economic Data) 获取宏观经济数据
 
@@ -109,6 +195,21 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
         "treasury_10y": "DGS10",
         "yield_spread": "T10Y2Y"
     }
+    if indicators is not None:
+        selected = list(dict.fromkeys(indicators))
+        unknown = set(selected) - set(series_map) - {"nonfarm_payroll_change"}
+        if unknown or series_id or not selected:
+            return {**result, "status": "data_unavailable", "unavailable_reason": "invalid_indicator_selector"}
+        employment = [key for key in selected if key in {"nonfarm_payroll_change", "unemployment"}]
+        if employment and api_key:
+            employment_payload = _fred_employment_indicators(employment, api_key, as_of)
+            result.update({key: value for key, value in employment_payload.items() if key != "indicator_metadata"})
+            result["indicator_metadata"].update(employment_payload["indicator_metadata"])
+        elif employment:
+            result.update(status="data_unavailable", unavailable_reason="FRED_API_KEY not configured")
+            result["metric_gaps"] = {key: "fred_api_key_missing" for key in employment}
+            result["nonfarm_payroll_change"] = None
+        series_map = {key: value for key, value in series_map.items() if key in selected and key not in employment}
 
     # 如果指定了单个 series_id，只获取该数据
     if series_id:
@@ -125,6 +226,7 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
             }
             if key == "cpi":
                 params["units"] = "pc1"
+            params.update(_fred_as_of_parameters(as_of))
 
             if api_key:
                 response = _http_get(base_url, params=params, timeout=10)
@@ -148,7 +250,7 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
                 break
 
         except Exception as e:
-            logger.info(f"[FRED] Failed to fetch {sid}: {e}")
+            logger.info("[FRED] Failed to fetch %s: %s", sid, e.__class__.__name__)
             continue
 
     # 格式化输出
@@ -167,5 +269,11 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
         # 收益率曲线倒挂警告
         if result["yield_spread"] < 0:
             result["recession_warning"] = True
+    if result.get("nonfarm_payroll_change") is not None:
+        result["nonfarm_payroll_change_formatted"] = f"{result['nonfarm_payroll_change']:+,.0f} 人（月度净变动）"
+    if indicators is not None:
+        result.update(kind="macro_context", metric="macro_data", source_url="https://fred.stlouisfed.org/",
+            subject="US", requested_indicators=list(indicators))
+        result["structured_data"] = dict(result)
 
     return result

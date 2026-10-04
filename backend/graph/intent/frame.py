@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 SUBJECT_TYPES = {
     "company", "macro", "theme", "portfolio", "news_item", "news_set",
-    "research_doc", "filing", "index", "crypto", "fund", "unknown",
+    "research_doc", "filing", "index", "crypto", "fund", "commodity", "unknown",
 }
 
 
@@ -33,6 +33,12 @@ class IntentTask(BaseModel):
     render_kind: str = "single"
     render_group_id: str = ""
     reason: str = ""
+    answer_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    time_scope: dict[str, Any] = Field(default_factory=dict)
+    constraints: list[dict[str, Any]] = Field(default_factory=list)
+    requirements_status: str = ""
+    evidence_support_for: str = ""
+    request_text: str = ""
 
 
 class BlockedIntent(BaseModel):
@@ -52,6 +58,11 @@ class BlockedIntent(BaseModel):
     render_kind: str = "single"
     render_group_id: str = ""
     error_code: str = "task_blocked"
+    answer_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    required_evidence: list[str] = Field(default_factory=list)
+    time_scope: dict[str, Any] = Field(default_factory=dict)
+    constraints: list[dict[str, Any]] = Field(default_factory=list)
+    requirements_status: str = ""
 
 
 class IntentFrame(BaseModel):
@@ -67,6 +78,9 @@ class IntentFrame(BaseModel):
     reply_plan: dict[str, Any] = Field(default_factory=dict)
     confidence: float = 0.5
     source: str = "rules_fallback"              # llm_router | rules_fallback | mixed
+    requirements_status: str = ""
+    semantic_contract: dict[str, Any] = Field(default_factory=dict)
+    request_frames: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _task_from_legacy(raw: dict[str, Any]) -> IntentTask:
@@ -87,6 +101,10 @@ def _task_from_legacy(raw: dict[str, Any]) -> IntentTask:
         render_kind=str(raw.get("render_kind") or "single"),
         render_group_id=str(raw.get("render_group_id") or ""),
         reason=str(raw.get("reason") or ""),
+        answer_requirements=list(raw.get("answer_requirements") or []),
+        time_scope=dict(raw.get("time_scope") or {}), constraints=list(raw.get("constraints") or []),
+        requirements_status=str(raw.get("requirements_status") or ""),
+        evidence_support_for=str(raw.get("evidence_support_for") or ""), request_text=str(raw.get("request_text") or ""),
     )
 
 
@@ -108,6 +126,9 @@ def _blocked_from_legacy(raw: dict[str, Any]) -> BlockedIntent:
         render_kind=str(raw.get("render_kind") or "single"),
         render_group_id=str(raw.get("render_group_id") or ""),
         error_code=str(raw.get("error_code") or "task_blocked"),
+        answer_requirements=list(raw.get("answer_requirements") or []), required_evidence=list(raw.get("required_evidence") or []),
+        time_scope=dict(raw.get("time_scope") or {}), constraints=list(raw.get("constraints") or []),
+        requirements_status=str(raw.get("requirements_status") or ""),
     )
 
 
@@ -155,6 +176,9 @@ def intent_frame_from_legacy(
         fallback_assumptions=[str(a) for a in (understanding.get("fallback_assumptions") or [])],
         reply_plan=dict(reply_contract) if isinstance(reply_contract, dict) else {},
         confidence=confidence,
+        requirements_status=str(understanding.get("requirements_status") or ""),
+        semantic_contract=dict(understanding.get("semantic_contract") or {}),
+        request_frames=list(understanding.get("request_frames") or []),
     )
 
 
@@ -186,6 +210,9 @@ def legacy_understanding_from_frame(frame: IntentFrame) -> dict[str, Any]:
             "render_kind": t.render_kind,
             "render_group_id": t.render_group_id,
             "reason": t.reason,
+            "answer_requirements": list(t.answer_requirements), "time_scope": dict(t.time_scope),
+            "constraints": list(t.constraints), "requirements_status": t.requirements_status,
+            "evidence_support_for": t.evidence_support_for, "request_text": t.request_text,
         }
         for t in frame.tasks
     ]
@@ -207,6 +234,8 @@ def legacy_understanding_from_frame(frame: IntentFrame) -> dict[str, Any]:
             "question": b.question,
             "suggestions": list(b.suggestions),
             "fallback_allowed": b.fallback_allowed,
+            "answer_requirements": list(b.answer_requirements), "required_evidence": list(b.required_evidence),
+            "time_scope": dict(b.time_scope), "constraints": list(b.constraints), "requirements_status": b.requirements_status,
         }
         for b in frame.blocked
     ]
@@ -222,6 +251,8 @@ def legacy_understanding_from_frame(frame: IntentFrame) -> dict[str, Any]:
         "context_refs": list(frame.context_refs),
         "fallback_assumptions": list(frame.fallback_assumptions),
         "intent_frame": frame.model_dump(),
+        "requirements_status": frame.requirements_status, "semantic_contract": dict(frame.semantic_contract),
+        "request_frames": list(frame.request_frames),
     }
 
 

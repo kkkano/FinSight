@@ -405,3 +405,21 @@ def test_contract_models_reject_index_identity_mismatch():
         evidence_ids=["e1"], limitations=[],
     )
     assert evidence.source_id == "e1" and claim.claim_id == "c1"
+
+
+@pytest.mark.parametrize("requires_analysis,expected", [(False, "answered"), (True, "partial")])
+def test_confirmed_fact_only_task_is_answered_by_verified_facts_without_model_claims(requires_analysis, expected):
+    base = {"id": "t1", "order_index": 0, "title": "股数", "subject_label": "AAPL", "operation": {"name": "investment_opinion"},
+            "request_frame_id": "f1", "render_kind": "single", "render_group_id": "f1", "required_evidence": ["price_snapshot"],
+            "requirements_status": "confirmed", "answer_requirements": [
+                {"kind": "calculation", "metric": "net_share_change", "requires_analysis": requires_analysis},
+                {"kind": "constraint", "metric": "unknown", "requires_analysis": True}]}
+    descriptor = build_task_descriptors(understanding_tasks=[base], blocked_tasks=[], plan_tasks=[{"id": "t1"}],
+                                        plan_steps=[{"id": "step-t1", "task_ids": ["t1"], "optional": False, "inputs": {}}]).descriptors[0]
+    assert descriptor.facts_sufficient is (not requires_analysis)
+    evidence = normalize_evidence(task_descriptors=[descriptor], plan_steps=[], agent_outputs={}, raw_evidence_by_task={"t1": [{
+        "source_id": "e-t1", "task_ids": ["t1"], "kind": "price_snapshot", "text": "price", "as_of": "2026-07-14", "market_price": 100}]})
+    claims = validate_claims(run_id="run-1", task_descriptors=[descriptor], plan_steps=[], agent_outputs={}, evidence_normalization=evidence)
+    outcome = finalize_task_outcomes(descriptors=[descriptor], plan_steps=[], task_results={"step-t1": {"output": {"ok": True}}},
+                                     evidence_normalization=evidence, claim_validation=claims).outcomes[0]
+    assert outcome.status == expected

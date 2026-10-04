@@ -8,7 +8,7 @@ from typing import Any
 from backend.graph.failure import build_runtime
 from backend.graph.state import GraphState
 from backend.graph.synthesis.contracts import TaskSynthesisResult, stable_unique
-from backend.graph.synthesis.analysis_requirements import analysis_task_modes, answer_requirements_by_task
+from backend.graph.synthesis.analysis_requirements import analysis_task_modes, answer_requirements_by_task, requested_task_partition
 from backend.graph.synthesis.requirement_validation import evaluate_answer_requirements
 from backend.graph.synthesis.opinion_readiness import build_opinion_readiness
 from backend.graph.synthesis.research_synthesis import (
@@ -64,13 +64,7 @@ def prepare_chat_task_contract(
     trace: dict[str, Any],
 ) -> tuple[GraphState, ChatTaskContract | None]:
     artifacts = dict(state.get("artifacts") or {})
-    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
-    ready = state.get("tasks") if isinstance(state.get("tasks"), list) else understanding.get("tasks")
-    blocked = (
-        state.get("blocked_tasks")
-        if isinstance(state.get("blocked_tasks"), list)
-        else understanding.get("blocked_tasks")
-    )
+    ready, blocked = requested_task_partition(state)
     ready = [item for item in (ready or []) if isinstance(item, dict)]
     blocked = [item for item in (blocked or []) if isinstance(item, dict)]
     if not ready and not blocked:
@@ -188,13 +182,7 @@ async def synthesize_structured_report(
     env_mode: str,
 ) -> tuple[GraphState, dict[str, Any] | None]:
     artifacts = dict(state.get("artifacts") or {})
-    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
-    ready = state.get("tasks") if isinstance(state.get("tasks"), list) else understanding.get("tasks")
-    blocked = (
-        state.get("blocked_tasks")
-        if isinstance(state.get("blocked_tasks"), list)
-        else understanding.get("blocked_tasks")
-    )
+    ready, blocked = requested_task_partition(state)
     plan = state.get("plan_ir") if isinstance(state.get("plan_ir"), dict) else {}
     plan_tasks = plan.get("tasks") if isinstance(plan.get("tasks"), list) else []
     plan_steps = plan.get("steps") if isinstance(plan.get("steps"), list) else []

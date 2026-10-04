@@ -49,3 +49,19 @@ def _force_langgraph_deterministic_defaults(monkeypatch):
     clear_settings_caches()
     yield
     clear_settings_caches()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_request_semantic_model(monkeypatch):
+    """请求模型使用明确输入 fixture；未知测试不能悄悄调用真实付费服务。"""
+    from importlib import import_module
+    from backend.tests.semantic_request_fixtures import fixture_for_query
+
+    module = import_module("backend.graph.nodes.route_request")
+
+    async def fixture_extraction(state, seed):
+        return fixture_for_query(str(state.get("query") or ""), state=state, seed=seed), {
+            "status": "confirmed", "source": "explicit_test_fixture", "actual_model": "fixture-model",
+        }
+
+    monkeypatch.setattr(module, "extract_semantic_requirements", fixture_extraction)

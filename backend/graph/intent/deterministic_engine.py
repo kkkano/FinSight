@@ -163,7 +163,7 @@ async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
         }
     )
 
-async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
+async def route_request_deterministic(state: GraphState, *, emit_understanding: bool = True) -> dict[str, Any]:
     query = (state.get("query") or "").strip()
     ui_context = dict(state.get("ui_context") or {}) if isinstance(state.get("ui_context"), dict) else {}
     output_mode = (decide_output_mode(state).get("output_mode") or "chat")
@@ -258,7 +258,8 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
             memory_context=memory_context,
             request_frame=request_frame,
         )
-        await _emit_understanding_trace(result["understanding"])
+        if emit_understanding:
+            await _emit_understanding_trace(result["understanding"])
         return result
 
     if (
@@ -717,7 +718,8 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
             memory_context=memory_context,
             request_frame=request_frame,
         )
-        await _emit_understanding_trace(result["understanding"])
+        if emit_understanding:
+            await _emit_understanding_trace(result["understanding"])
         return result
 
     if (
@@ -749,7 +751,8 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
             memory_context=memory_context,
             request_frame=request_frame,
         )
-        await _emit_understanding_trace(result["understanding"])
+        if emit_understanding:
+            await _emit_understanding_trace(result["understanding"])
         return result
 
     if not tasks and blocked_tasks:
@@ -899,7 +902,8 @@ async def route_request_deterministic(state: GraphState) -> dict[str, Any]:
         understanding["request_frame"] = request_frame
         trace["request_frame"] = request_frame
     trace["reply_contract"] = reply_contract
-    await _emit_understanding_trace(understanding)
+    if emit_understanding:
+        await _emit_understanding_trace(understanding)
 
     result = {
         "understanding": understanding,

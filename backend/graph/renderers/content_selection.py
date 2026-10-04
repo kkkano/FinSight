@@ -6,17 +6,17 @@ from backend.graph.renderers.fact_formatters import payload_for
 
 
 DIMENSION_KINDS = {
-    "fundamental_quality": {"fundamental_snapshot", "filing_context"},
+    "fundamental_quality": {"fundamental_snapshot", "filing_context", "capital_allocation"},
     "valuation_reasonableness": {"company_profile", "earnings_estimates"},
     "business_model": {"company_profile", "filing_context", "document_context"},
     "competition": {"company_profile", "news_context", "document_context"},
-    "risk_level": {"risk_profile", "options_derivatives"},
+    "risk_level": {"risk_profile", "options_derivatives", "price_window", "capital_allocation"},
     "earnings_impact": {"filing_context", "fundamental_snapshot", "earnings_estimates"},
-    "trend_quality": {"technical_snapshot", "price_snapshot"},
-    "technical_quality": {"technical_snapshot"},
+    "trend_quality": {"technical_snapshot", "price_snapshot", "price_window"},
+    "technical_quality": {"technical_snapshot", "price_window"},
     "news_catalysts": {"event_calendar", "news_context"},
     "external_impact": {"macro_context", "news_context"},
-    "performance": {"performance_comparison", "price_snapshot"},
+    "performance": {"performance_comparison", "price_snapshot", "price_window"},
 }
 
 

@@ -23,7 +23,7 @@ def _ops_by_ticker(result: dict) -> set[tuple[tuple[str, ...], str]]:
     return rows
 
 
-def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatch):
+def test_multiticker_valuation_rank_uses_one_contract_with_per_ticker_evidence(monkeypatch):
     from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
     from backend.graph.nodes.route_request import route_request
@@ -36,9 +36,9 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
     v2 = understanding.get("understanding_v2") or {}
     assert v2.get("schema_version") == "understanding.v2"
     facet_names = {facet.get("name") for facet in v2.get("facets") or []}
-    assert facet_names >= {"valuation", "fundamental"}
+    assert facet_names == {"valuation"}
     assert "risk" not in facet_names
-    assert (v2.get("evidence_requirements") or [])[0].get("profile") == "valuation_compare_light"
+    assert (v2.get("evidence_requirements") or [])[0].get("profile") == "semantic_requirements"
     assert any(
         relation.get("type") in {"compare", "rank"}
         and set(relation.get("subject_ids") or []) >= {"subj_nvda", "subj_amd"}
@@ -48,23 +48,15 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
 
     ops = _ops_by_ticker(understanding)
     assert (("NVDA", "AMD"), "compare") in ops
-    assert (("NVDA",), "investment_opinion") in ops
-    assert (("AMD",), "investment_opinion") in ops
+    assert len(ops) == 1
     compare_tasks = [
         task for task in understanding.get("tasks") or []
         if (task.get("operation") or {}).get("name") == "compare"
     ]
-    evidence_tasks = [
-        task for task in understanding.get("tasks") or []
-        if (task.get("operation") or {}).get("name") == "investment_opinion"
-    ]
     compare_params = ((compare_tasks[0].get("operation") or {}).get("params") or {})
     assert compare_params.get("synthesis_only") is True
-    assert compare_params.get("comparison_data_profile") == "valuation_compare_light"
-    assert all(
-        ((task.get("operation") or {}).get("params") or {}).get("evidence_focus") == "valuation"
-        for task in evidence_tasks
-    )
+    assert compare_params.get("data_profile") == "research_synthesis"
+    assert v2['tasks'][0]['answer_requirements'] == understanding['tasks'][0]['answer_requirements']
 
     policy_out = policy_gate({**state, **understanding})
     gated = {**state, **understanding, **policy_out}
@@ -79,9 +71,10 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
     assert "get_company_news" not in step_names
     assert "risk_agent" not in step_names
     assert agent_steps == []
+    assert {step['inputs']['ticker'] for step in plan['steps'] if step['name'] == 'get_company_info'} == {'NVDA', 'AMD'}
 
 
-def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypatch):
+def test_multiticker_technical_rank_keeps_original_contract_in_v2(monkeypatch):
     from backend.graph.nodes.route_request import route_request
 
     _enable_v2_shadow(monkeypatch)
@@ -97,13 +90,13 @@ def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypat
     )
 
     v2 = result.get("understanding_v2") or {}
-    assert {facet.get("name") for facet in v2.get("facets") or []} >= {"technical", "price"}
+    assert {facet.get("name") for facet in v2.get("facets") or []} == {"technical"}
     assert any((relation.get("type") or "") == "rank" for relation in v2.get("relations") or [])
 
     ops = _ops_by_ticker(result)
     assert (("GOOGL", "MSFT"), "compare") in ops
-    assert (("GOOGL",), "technical") in ops
-    assert (("MSFT",), "technical") in ops
+    assert len(ops) == 1
+    assert v2['tasks'][0]['answer_requirements'] == result['tasks'][0]['answer_requirements']
 
 
 def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch):
@@ -139,7 +132,7 @@ def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch
     assert "risk_agent" not in step_names
 
 
-def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
+def test_execution_ticker_limit_cannot_remove_requested_subjects_from_denominator(monkeypatch):
     from backend.graph.nodes.route_request import route_request
 
     _enable_v2_shadow(monkeypatch)
@@ -156,8 +149,9 @@ def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
     )
 
     v2 = result.get("understanding_v2") or {}
-    assert (v2.get("scope") or {}).get("primary_tickers") == ["NVDA", "AMD"]
-    assert (v2.get("scope") or {}).get("omitted_tickers") == ["TSM", "MSFT"]
+    assert (v2.get("scope") or {}).get("primary_tickers") == ["NVDA", "AMD", "TSM", "MSFT"]
+    assert (v2.get("scope") or {}).get("omitted_tickers") == []
+    assert (v2.get("scope") or {}).get('max_chat_research_tickers') == 2
 
     compare_tasks = [
         task for task in result.get("tasks") or []
@@ -167,11 +161,11 @@ def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
         task for task in result.get("tasks") or []
         if (task.get("operation") or {}).get("name") == "investment_opinion"
     ]
-    assert [task.get("tickers") for task in compare_tasks] == [["NVDA", "AMD"]]
-    assert [task.get("tickers") for task in evidence_tasks] == [["NVDA"], ["AMD"]]
+    assert [task.get("tickers") for task in compare_tasks] == [["NVDA", "AMD", "TSM", "MSFT"]]
+    assert evidence_tasks == []
     params = ((compare_tasks[0].get("operation") or {}).get("params") or {})
-    assert params.get("research_ticker_limit") == 2
-    assert params.get("omitted_tickers") == ["TSM", "MSFT"]
+    assert params.get("budget_profile") == 'semantic_requirements'
+    assert result['understanding']['semantic_contract']['tasks'][0]['tickers'] == ["NVDA", "AMD", "TSM", "MSFT"]
 
 
 def test_understanding_v2_can_be_disabled(monkeypatch):

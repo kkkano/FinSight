@@ -281,6 +281,8 @@ class ReportSynthesisResult(ReportSynthesisDraft):
 class ResearchReportRenderResult(StrictContract):
     markdown: NonEmptyStr
     rendered_task_ids: list[NonEmptyStr] = Field(min_length=1)
+    citation_ids: list[NonEmptyStr] = Field(default_factory=list)
+    citation_numbers: dict[str, str] = Field(default_factory=dict)
 
 
 class SynthesisQualityGateResult(StrictContract):

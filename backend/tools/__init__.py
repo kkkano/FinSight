@@ -96,11 +96,15 @@ from .authoritative_feeds import (
     get_authoritative_media_news,
 )
 from .earnings_transcripts import get_earnings_call_transcripts
+from .price_window import get_price_window_metrics
+from .capital_allocation import get_sec_capital_allocation
 from .local_disclosure import get_local_market_filings
 from .wayback import resolve_wayback_snapshot, fetch_via_wayback
 from .python_compute import run_python_compute
 
 __all__ = [
+    "get_price_window_metrics",
+    "get_sec_capital_allocation",
     "ALPHA_VANTAGE_API_KEY",
     "FINNHUB_API_KEY",
     "MASSIVE_API_KEY",

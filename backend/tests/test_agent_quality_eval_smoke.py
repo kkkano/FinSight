@@ -33,6 +33,25 @@ def test_agent_quality_eval_runs_deterministic_agent_cases():
     assert all(row["metrics"]["self_check_status"] == "pass" for row in result["cases"])
 
 
+def test_agent_quality_eval_frozen_case_is_independent_of_wall_clock_and_restores_it(monkeypatch):
+    from datetime import datetime, timezone
+    from scripts.agent_quality_eval import evaluate_cases, load_cases
+    import backend.agents.news_agent as news_module
+    import backend.research.news_event_quality as quality_module
+
+    future = datetime(2031, 10, 4, tzinfo=timezone.utc)
+    monkeypatch.setattr(news_module, "utc_now", lambda: future)
+    monkeypatch.setattr(quality_module, "utc_now", lambda: future)
+    cases = [case for case in load_cases(Path("tests/eval/agent_quality_cases.json")) if case["agent"] == "news"]
+    result = evaluate_cases(cases, run_id="frozen-clock")
+
+    assert result["summary"]["fail_count"] == 0
+    assert result["cases"][0]["metrics"]["self_check_status"] == "pass"
+    assert result["summary"]["agent_averages"]["self_check_pass_rate"] == 1.0
+    assert news_module.utc_now() == future
+    assert quality_module.utc_now() == future
+
+
 def test_agent_quality_eval_fails_when_quality_hard_gates_are_missed():
     from scripts.agent_quality_eval import _grade_case
 

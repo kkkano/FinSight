@@ -31,6 +31,10 @@ def _public_text(value: str) -> str:
         r'(?:coverage_window\.)?exhaustive\s*[=:]\s*true': '来源声明已完整覆盖',
         r'status\s*[=:]\s*scheduled': '已排期',
         r'verification\s*[=:]\s*provider_reported': '由供应商提供，尚未获官方确认',
+        r'(?:根据|依据)\s*E\d+(?![A-Za-z0-9_])': '根据已核实来源',
+        r'E\d+(?=明确(?:标注|说明)|提供|给出)': '来源',
+        r'dividends_included\s*(?:为|[=:])\s*false': '未计入现金分红',
+        r'dividends_included\s*(?:为|[=:])\s*true': '已计入现金分红',
     }
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.I)
@@ -42,6 +46,28 @@ def _line(value: str) -> str:
     return re.sub(r"(?<![\w:])(-?\d+\.\d{5,})(?!\w)", lambda match: number(match.group(1), 4), compact)
 
 
+def _requirement_gap_text(missing: dict[str, Any]) -> str:
+    reasons = str(missing.get("reason") or "").split(",")
+    labels = {
+        "requirement_unsupported": "当前尚无对应的数据或计算能力",
+        "requirement_input_missing": "需要补充输入资料",
+        "requirement_period_unverified": "现有证据的期间与请求不匹配",
+        "requirement_explanation_missing": "解释尚未通过对应来源校验",
+        "requirement_evidence_missing": "尚未取得符合要求的证据",
+        "requirement_evidence_not_presented": "相关证据尚未完整展示",
+        "capital_allocation_period_mismatch": "现金项目未对齐同一期间和币种",
+        "requirement_official_declaration_missing": "尚未核实官方宣告正文",
+        "requirement_declaration_currency_unverified": "原始宣告未明确币种",
+        "requirement_time_window_unverified": "尚未核实所要求的时间窗口",
+        "requirement_primary_source_missing": "尚未取得对应原始官方来源",
+        "requirement_traceable_source_missing": "来源或数据时点不足以追溯",
+        "requirement_employment_period_mismatch": "就业指标没有对齐同一报告月份",
+    }
+    notes = list(dict.fromkeys(labels[reason] for reason in reasons if reason in labels))
+    description = _line(str(missing["description"]))
+    return description + (f"（{'；'.join(notes)}）" if notes else "")
+
+
 _KIND_LABELS = {
     "price_snapshot": "价格", "company_profile": "公司与估值",
     "earnings_estimates": "盈利预期", "fundamental_snapshot": "基本面",
@@ -51,6 +77,7 @@ _KIND_LABELS = {
     "holdings_ownership": "持仓与股权", "options_derivatives": "期权",
     "event_calendar": "事件日历", "transcript_context": "管理层指引",
     "document_context": "文档事实", "unknown": "证据",
+    "price_window": "区间价格与计算", "capital_allocation": "现金分配与股数",
 }
 
 _DIMENSION_LABELS = {
@@ -156,7 +183,9 @@ def render_research_report(
         if evidence.metadata.get("verification") == "discovery_only"
     )]))
     for source_id in reference_ids:
-        evidence = draft.evidence_index[source_id]
+        evidence = draft.evidence_index.get(source_id)
+        if evidence is None:
+            continue
         identity = (_source_label(evidence), evidence.url)
         if identity not in reference_identities:
             reference_identities[identity] = str(len(reference_identities) + 1)
@@ -295,7 +324,7 @@ def render_research_report(
             lines.append(f"- [数据缺失] {_KIND_LABELS.get(kind, '必要证据')}尚未满足。")
         for missing in task.missing_requirements:
             if missing.get("description"):
-                lines.append(f"- [未完成] {_line(str(missing['description']))}。")
+                lines.append(f"- [未完成] {_requirement_gap_text(missing)}。")
                 continue
             label = _KIND_LABELS.get(missing.get("evidence_kind"), "必要证据")
             subject = str(missing.get("subject") or task.subject or "对应对象")
@@ -337,7 +366,7 @@ def render_research_report(
         lines.extend(["## 来源", ""])
     shown_reference_labels = set()
     for source_id in reference_ids:
-        if source_id not in shown_sources:
+        if source_id not in shown_sources or source_id not in reference_numbers:
             continue
         evidence = draft.evidence_index[source_id]
         label = _source_label(evidence)
@@ -354,6 +383,8 @@ def render_research_report(
     return ResearchReportRenderResult(
         markdown="\n".join(lines).strip() + "\n",
         rendered_task_ids=rendered_task_ids,
+        citation_ids=[source_id for source_id in reference_ids if source_id in shown_sources and source_id in reference_numbers],
+        citation_numbers={source_id: reference_numbers[source_id] for source_id in reference_ids if source_id in shown_sources and source_id in reference_numbers},
     )
 
 

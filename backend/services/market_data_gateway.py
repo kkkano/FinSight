@@ -236,7 +236,8 @@ def _fetch_yfinance(symbol: str, period: str, interval: str) -> Mapping[str, Any
     from backend.tools.yfinance_client import create_ticker
 
     normalized_symbol = _normalize_symbol_for_yahoo(symbol)
-    frame = create_ticker(normalized_symbol, session=None).history(
+    stock = create_ticker(normalized_symbol, session=None)
+    frame = stock.history(
         period=period,
         interval=interval,
         timeout=20,
@@ -263,11 +264,25 @@ def _fetch_yfinance(symbol: str, period: str, interval: str) -> Mapping[str, Any
                 "volume": row.get("Volume", 0),
             }
         )
+    metadata: Mapping[str, Any] = {}
+    try:
+        read_metadata = getattr(stock, "get_history_metadata", None)
+        candidate = read_metadata() if callable(read_metadata) else None
+        if isinstance(candidate, Mapping):
+            metadata = candidate
+    except Exception as exc:
+        logger.debug("行情已有效，来源元数据暂不可用：%s", type(exc).__name__)
     return {
         "kline_data": rows,
         "period": period,
         "interval": interval,
         "source": "yfinance",
+        "currency": metadata.get("currency"),
+        "source_timezone": metadata.get("exchangeTimezoneName"),
+        "source_timestamp": rows[-1]["time"] if include_time else rows[-1]["time"][:10],
+        "source_time_precision": "second" if include_time else "date",
+        "source_time_status": "provided",
+        "source_url": f"https://finance.yahoo.com/quote/{normalized_symbol}/history/",
     }
 
 
@@ -622,13 +637,22 @@ class MarketDataGateway:
         }
 
     def get_kline(self, symbol: str, *, period: str = "1y", interval: str = "1d") -> dict[str, Any]:
+        source_metadata: dict[str, Any] = {}
         def normalize(raw: Any) -> tuple[list[dict[str, Any]], datetime]:
+            source_metadata.clear()
             if not isinstance(raw, Mapping):
                 raise MarketDataValidationError("供应商没有返回 K 线")
             returned_interval = str(raw.get("interval") or interval)
             if returned_interval != interval:
                 raise MarketDataValidationError("供应商返回周期与请求不一致")
             bars = validate_kline_bars(raw.get("kline_data"))
+            from backend.tools.financial_facts import normalize_currency
+            currency = normalize_currency(raw.get("currency"))
+            if currency:
+                source_metadata["currency"] = currency
+            for key in ("source_timestamp", "source_time_precision", "source_time_status", "source_timezone", "source_url"):
+                if raw.get(key) is not None:
+                    source_metadata[key] = raw[key]
             return bars, _as_of_from_payload(raw, bars)
 
         return self._request(
@@ -637,7 +661,7 @@ class MarketDataGateway:
             cache_parts=(period, interval),
             invoke=lambda provider: provider(str(symbol or "").strip().upper(), period, interval),
             normalize=normalize,
-            success_aliases=lambda bars: {"kline_data": bars, "period": period, "interval": interval},
+            success_aliases=lambda bars: {"kline_data": bars, "period": period, "interval": interval, **source_metadata},
             error_aliases={"data": [], "kline_data": [], "period": period, "interval": interval},
         )
 

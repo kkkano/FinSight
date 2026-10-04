@@ -34,7 +34,56 @@ def _append_evidence_steps_for_ticker(ctx,
     read_disclosures = any((req.get("dimension") in {"business_model", "competition"})
                            for task in tasks for req in task.get("answer_requirements", []))
     for kind in required_evidence:
-        if kind == "price_snapshot":
+        if kind == "price_window":
+            windows: dict[str, dict] = {}
+            for task in tasks:
+                for requirement in task.get("answer_requirements", []):
+                    if requirement.get("capability_status", "supported") != "supported":
+                        continue
+                    if "price_window" not in requirement.get("evidence_kinds", []):
+                        continue
+                    if requirement.get("subject") and requirement["subject"] != ticker:
+                        continue
+                    scope = requirement.get("time_scope") or {}
+                    if scope.get("kind") != "trading_sessions" or not scope.get("count"):
+                        continue
+                    inputs = {"ticker": ticker, "sessions": int(scope["count"]),
+                              "as_of": scope.get("as_of"), "price_basis": "close"}
+                    key = json.dumps(inputs, sort_keys=True)
+                    window = windows.setdefault(key, {**inputs, "metrics": []})
+                    metric = requirement.get("metric")
+                    if metric in {"cumulative_return", "max_drawdown", "volume_breakout"} and metric not in window["metrics"]:
+                        window["metrics"].append(metric)
+            for inputs in windows.values():
+                if not inputs["metrics"]:
+                    continue
+                inputs["metrics"] = [metric for metric in ("cumulative_return", "max_drawdown", "volume_breakout") if metric in inputs["metrics"]]
+                _append_tool_step(ctx, "get_price_window_metrics", inputs,
+                    why=f"{ticker}：按用户要求的交易日窗口计算收益、回撤与量价突破。", optional=False,
+                    parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
+        elif kind == "capital_allocation":
+            if ticker.endswith((".HK", ".SS", ".SZ", ".BJ")):
+                continue
+            periods: dict[str, dict] = {}
+            for task in tasks:
+                for requirement in task.get("answer_requirements", []):
+                    if requirement.get("capability_status", "supported") != "supported":
+                        continue
+                    if "capital_allocation" not in requirement.get("evidence_kinds", []):
+                        continue
+                    if requirement.get("subject") and requirement["subject"] != ticker:
+                        continue
+                    scope = requirement.get("time_scope") or {}
+                    if scope.get("kind") not in {"fiscal_quarter", "fiscal_year", "none", None}:
+                        continue
+                    inputs = {"ticker": ticker, "frequency": "annual" if scope.get("kind") == "fiscal_year" else "quarterly",
+                              "as_of": scope.get("as_of"), "limit": max(2, int(scope.get("count") or 1))}
+                    periods[json.dumps(inputs, sort_keys=True)] = inputs
+            for inputs in periods.values():
+                _append_tool_step(ctx, "get_sec_capital_allocation", inputs,
+                    why=f"{ticker}：核对同一完整财期的经营现金流、资本开支与股东回报。", optional=False,
+                    parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
+        elif kind == "price_snapshot":
             _append_tool_step(ctx, 
                 "get_stock_price",
                 {"ticker": ticker},
@@ -175,7 +224,11 @@ def _append_evidence_steps_for_ticker(ctx,
                 evidence_kind=kind,
                 )
         elif kind == "filing_context":
-            if ctx.market == "US":
+            if not ticker.endswith((".HK", ".SS", ".SZ", ".BJ")):
+                if any(req.get("metric") == "dividend_announcement" for task in tasks for req in task.get("answer_requirements", [])):
+                    _append_tool_step(ctx, "get_sec_material_events", {"ticker": ticker, "limit": 6, "include_content": True},
+                        why=f"{ticker}：读取发行人派息声明与官方公告附件，区分公告金额和实际已付现金。", optional=False,
+                        parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
                 _append_tool_step(ctx, 
                     "get_sec_company_facts_quarterly",
                     {"ticker": ticker},

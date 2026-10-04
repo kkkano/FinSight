@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from backend.graph.json_utils import json_dumps_safe
@@ -130,6 +131,32 @@ def _append_tool_evidence(
         except Exception:
             pass
     if output_is_error_like(output):
+        return
+
+    if tool_name == "get_fred_data" and isinstance(output, dict):
+        # 每个序列独立携带定义、单位和观测期，不能用整个字典或抓取时刻冒充事实。
+        metadata = output.get("indicator_metadata") or {}
+        for metric, details in metadata.items():
+            if not isinstance(details, dict):
+                continue
+            value = output.get(metric, details.get("value"))
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+                continue
+            record = {**details, "value": value, "metric": metric,
+                      "employment_report": output.get("employment_report") or {}}
+            source_url = record.get("source_url")
+            observed = record.get("source_updated_at") or record.get("published_at")
+            evidence_pool.append({
+                **_contract_fields(record), "kind": "macro_context", "metric": metric,
+                "title": f"FRED {record.get('series_id') or metric}", "url": source_url,
+                "snippet": f"{metric}: {value} {record.get('unit') or ''}; report_month={record.get('report_month') or record.get('period_end') or ''}",
+                "source": "FRED", "source_name": "FRED", "subject": "US",
+                "as_of": observed, "published_date": record.get("published_at"),
+                "usage": "fact", "structured_data": record,
+                "meta": {**record, "indicator_key": metric, "entity_scope": "macro",
+                         "source_time_status": "provided" if observed else "unknown"},
+                "type": "tool", "id": f"{tool_name}:{step_id}:{metric}",
+            })
         return
 
     # Special-case: make technical snapshot readable in evidence list.

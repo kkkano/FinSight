@@ -346,6 +346,10 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     for code in structural if isinstance(structural, list) else []:
         reason(str(code), "block", "任务或引用结构不一致。")
     report_mode = str(state.get("output_mode") or "") == "investment_report"
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    if understanding.get("requirements_status") == "deterministic_fallback":
+        reason("REQUEST_REQUIREMENTS_UNCONFIRMED", "block" if report_mode else "warn",
+               "模型未能确认完整的原始要求，本轮按规则识别的任务作答，可能遗漏部分要求。")
     trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
     coverage = trace.get("coverage_validator") if isinstance(trace.get("coverage_validator"), dict) else {}
     missing_requirements = list(coverage.get("missing_requirements") or [])
