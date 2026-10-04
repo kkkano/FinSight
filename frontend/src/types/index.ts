@@ -180,7 +180,7 @@ export interface ChatResponse {
 }
 
 // Phase 2: Report IR Types - Updated
-export type Sentiment = 'bullish' | 'bearish' | 'neutral';
+export type Sentiment = 'bullish' | 'bearish' | 'neutral' | 'unknown';
 
 export interface ReportContent {
   type: 'text' | 'chart' | 'table' | 'image';
@@ -193,7 +193,7 @@ export interface ReportSection {
   title: string;
   order: number;
   contents: ReportContent[];
-  confidence?: number;
+  confidence?: number | null;
   agent_name?: string;
   data_sources?: string[];
   subsections?: ReportSection[];
@@ -207,7 +207,7 @@ export interface Citation {
   url: string;
   snippet: string;
   published_date?: string;
-  confidence?: number;        // 来源可信度 (0.0 - 1.0)
+  confidence?: number | null; // 内部来源评分，不能解释为已校准概率
   freshness_hours?: number;   // 新鲜度（小时）
 }
 
@@ -216,7 +216,7 @@ export interface CoreViewpoint {
   title: string;
   headline: string;
   detail: string;
-  confidence: number;
+  confidence: number | null;
   data_sources: string[];
   evidence_count: number;
   status: string;
@@ -240,6 +240,12 @@ export interface ReportQuality {
   details?: Record<string, unknown>;
   inputs?: Record<string, unknown>;
   evaluated_at?: string;
+  answer_status?: 'answered' | 'partial' | 'unavailable' | 'blocked';
+  has_supported_content?: boolean;
+  publishable?: boolean;
+  conclusion_status?: 'supported' | 'unavailable';
+  confidence_status?: 'uncalibrated';
+  missing_requirements?: Array<string | Record<string, unknown>>;
 }
 
 export interface ReportIR {
@@ -249,7 +255,7 @@ export interface ReportIR {
   title: string;
   summary: string;
   sentiment: Sentiment;
-  confidence_score: number;
+  confidence_score: number | null;
   generated_at: string;
   // Forum 整合的完整报告文本（≥2000字）
   synthesis_report?: string;

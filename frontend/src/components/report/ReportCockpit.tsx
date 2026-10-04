@@ -6,6 +6,8 @@ import type { ReportIR, Sentiment, CoreViewpoint, Citation } from '../../types/i
 import type { BadgeInfo } from './ReportUtils';
 import { normalizeMarkdown } from '../../utils/markdown';
 import { SynthesisReportBlock } from './ReportCharts';
+import { getReportPresentation } from './ReportPresentation';
+import { QualityBadge } from './QualityBadge';
 
 /**
  * ReportCockpit — 方案A「紧凑指挥台」布局。
@@ -17,18 +19,7 @@ import { SynthesisReportBlock } from './ReportCharts';
 
 /* ---------- helpers ---------- */
 
-const pct = (v: number | undefined | null): number => {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return 0;
-  return Math.round(v <= 1 ? v * 100 : v);
-};
-
-const SENTIMENT_CN: Record<Sentiment, string> = {
-  bullish: '看多',
-  bearish: '看空',
-  neutral: '中性',
-};
-
-const SENTIMENT_TONE: Record<Sentiment, string> = {
+const SENTIMENT_TONE: Record<Exclude<Sentiment, 'unknown'>, string> = {
   bullish: 'text-fin-success',
   bearish: 'text-fin-danger',
   neutral: 'text-fin-text-secondary',
@@ -55,18 +46,11 @@ const agentLabel = (key: string): string =>
   AGENT_CN[key] || key.replace(/_agent$/i, '').replace(/_/g, ' ');
 
 /** 派生 agent 视觉状态（成功/降级/未跑/失败 → 颜色 + 文字） */
-const agentVisual = (status: any): { ok: boolean; conf: number; tone: string; bar: string; label: string } => {
-  const ok = status?.status === 'success' || status?.status === 'fallback';
-  const conf = pct(status?.confidence);
-  if (!ok) {
-    if (status?.status === 'not_run') {
-      return { ok: false, conf: 0, tone: 'text-fin-muted', bar: 'bg-fin-muted', label: '未执行' };
-    }
-    return { ok: false, conf: 100, tone: 'text-fin-danger', bar: 'bg-fin-danger', label: '失败' };
-  }
-  const tone = conf >= 90 ? 'text-fin-success' : 'text-fin-primary';
-  const bar = conf >= 90 ? 'bg-fin-success' : 'bg-fin-primary';
-  return { ok: true, conf, tone, bar, label: `${conf}%` };
+const agentVisual = (status: NonNullable<ReportIR['agent_status']>[string]) => {
+  if (status?.status === 'success') return { tone: 'text-fin-success', label: '已完成' };
+  if (status?.status === 'fallback') return { tone: 'text-fin-primary', label: '已降级' };
+  if (status?.status === 'not_run') return { tone: 'text-fin-muted', label: '未执行' };
+  return { tone: 'text-fin-danger', label: '失败' };
 };
 
 const VIEWPOINT_TONE: Record<string, string> = {
@@ -79,40 +63,6 @@ const VIEWPOINT_TONE: Record<string, string> = {
 };
 const viewpointTone = (key: string): string => VIEWPOINT_TONE[key] || 'rgb(var(--fin-primary))';
 
-/* ---------- ring ---------- */
-
-const Ring: React.FC<{ value: number; size?: number; stroke?: number }> = ({ value, size = 56, stroke = 5 }) => {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const off = c * (1 - Math.max(0, Math.min(100, value)) / 100);
-  const tone = value >= 80 ? 'var(--fin-success)' : value >= 60 ? 'rgb(var(--fin-primary))' : 'var(--fin-warning)';
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--fin-border)" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={tone}
-          strokeWidth={stroke}
-          strokeDasharray={c}
-          strokeDashoffset={off}
-          strokeLinecap="round"
-          className="transition-[stroke-dashoffset] duration-700"
-        />
-      </svg>
-      <div
-        className="absolute inset-0 grid place-items-center font-bold tabular-nums"
-        style={{ fontSize: size * 0.28, color: tone, fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-};
-
 /* ---------- core viewpoint (fin-* 内联) ---------- */
 
 const ViewpointRow: React.FC<{ vp: CoreViewpoint }> = ({ vp }) => {
@@ -121,13 +71,13 @@ const ViewpointRow: React.FC<{ vp: CoreViewpoint }> = ({ vp }) => {
   const hasDetail = Boolean(vp.detail && vp.detail.trim().length > vp.headline.length + 30);
   return (
     <div className="rounded-xl bg-fin-bg-secondary px-4 py-3" style={{ borderLeft: `3px solid ${tone}` }}>
-      {/* 头部：agent 标签 + 置信度 */}
+      {/* 头部：观点标签与来源数量。 */}
       <div className="flex items-center justify-between gap-3 mb-1.5">
         <span className="text-xs font-bold tracking-wide" style={{ color: tone }}>
           {vp.title}
         </span>
         <span className="shrink-0 text-[10.5px] text-fin-muted tabular-nums">
-          {pct(vp.confidence)}%{vp.evidence_count > 0 && ` · ${vp.evidence_count} 源`}
+          {vp.evidence_count > 0 && `${vp.evidence_count} 条来源`}
         </span>
       </div>
 
@@ -197,11 +147,11 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
 }) => {
   const [synthExpanded, setSynthExpanded] = useState(false);
 
-  const confidence = pct(report.confidence_score);
-  const sentiment = (report.sentiment || 'neutral') as Sentiment;
-  const rating = (report.recommendation || '').trim().toUpperCase();
+  const presentation = getReportPresentation(report);
+  const sentiment = presentation.sentiment;
+  const rating = sentiment ? (report.recommendation || '').trim().toUpperCase() : '';
   const agentEntries = useMemo(
-    () => Object.entries((report.agent_status as Record<string, any>) || {}),
+    () => Object.entries(report.agent_status || {}),
     [report.agent_status],
   );
   const successCount = useMemo(
@@ -215,10 +165,10 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
 
   /* stat 带：均为确定存在的字段 */
   const stats = [
-    { kind: 'ring' as const, k: 'AI 置信度', value: confidence },
+    { kind: 'text' as const, k: '回答状态', value: presentation.answerLabel },
     { kind: 'rating' as const, k: '投资评级', value: rating || '—' },
-    { kind: 'text' as const, k: '证据质量', value: evidenceBadges.quality.label.replace(/EVIDENCE\s*/i, '') },
-    { kind: 'text' as const, k: '分析师参与', value: `${successCount}/${agentEntries.length || '—'}` },
+    { kind: 'text' as const, k: '引用来源', value: evidenceBadges.quality.label },
+    { kind: 'text' as const, k: '分析执行', value: `${successCount}/${agentEntries.length || '—'}` },
   ];
 
   return (
@@ -240,10 +190,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 ml-auto">
-          <span className={`text-[11.5px] font-semibold ${SENTIMENT_TONE[sentiment]}`}>{SENTIMENT_CN[sentiment]}</span>
-          <span className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-fin-bg-secondary text-fin-text-secondary border border-fin-border">
-            {confidence}% confidence
-          </span>
+          <span className={`text-[11.5px] font-semibold ${sentiment ? SENTIMENT_TONE[sentiment] : 'text-fin-muted'}`}>{presentation.judgmentLabel}</span>
           <span className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-fin-primary/10 text-fin-primary border border-fin-primary/25">
             {evidenceBadges.quality.label}
           </span>
@@ -253,11 +200,15 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
         </div>
       </div>
 
+      <div className="space-y-2">
+        <p className="text-sm leading-relaxed text-fin-text">总体结论：{presentation.summary}</p>
+        <QualityBadge quality={presentation.quality} />
+      </div>
+
       {/* ===== 横向 stat 带 ===== */}
       <div className="grid grid-cols-2 sm:grid-cols-4 rounded-2xl border border-fin-border bg-fin-card overflow-hidden">
         {stats.map((s, i) => (
           <div key={s.k} className={`flex items-center gap-3 px-4 py-3.5 ${i < stats.length - 1 ? 'sm:border-r border-fin-border' : ''} ${i % 2 === 0 ? 'border-r sm:border-r' : ''} border-fin-border`}>
-            {s.kind === 'ring' && <Ring value={s.value as number} />}
             <div className="min-w-0">
               <div className="text-[11px] text-fin-muted font-medium">{s.k}</div>
               <div
@@ -268,7 +219,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
                 }`}
                 style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}
               >
-                {s.kind === 'ring' ? `${s.value}%` : s.value}
+                {s.value}
               </div>
             </div>
           </div>
@@ -277,7 +228,9 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
 
       {/* ===== agent 横卡 ===== */}
       {agentEntries.length > 0 && (
-        <div className="grid grid-cols-2 gap-2.5">
+        <details className="rounded-xl border border-fin-border p-3">
+          <summary className="cursor-pointer text-xs font-medium text-fin-muted">执行详情 · {successCount}/{agentEntries.length} 已完成</summary>
+          <div className="mt-3 grid grid-cols-2 gap-2.5">
           {agentEntries.map(([key, status]) => {
             const v = agentVisual(status);
             const eq = status?.evidence_quality?.overall_score;
@@ -287,20 +240,18 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
                 <div className="flex items-center justify-between text-xs font-bold mb-1.5">
                   <span className={v.tone}>{agentLabel(key)}</span>
                   <span className={`tabular-nums ${v.tone}`} style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-                    {v.ok ? `${v.conf}%` : v.label}
+                    {v.label}
                   </span>
                 </div>
-                <div className="h-1 rounded-full bg-fin-border overflow-hidden">
-                  <div className={`h-full rounded-full ${v.bar} transition-[width] duration-500`} style={{ width: `${v.conf}%` }} />
-                </div>
                 <div className="mt-1.5 flex items-center justify-between text-[10px] text-fin-muted tabular-nums">
-                  <span>EQ {typeof eq === 'number' ? `${pct(eq)}%` : 'N/A'}</span>
+                  <span>内部证据评分 {typeof eq === 'number' ? eq.toFixed(2) : '未评分'}</span>
                   <span>{dur !== null ? (dur >= 1000 ? `${(dur / 1000).toFixed(1)}s` : `${dur}ms`) : '—'}</span>
                 </div>
               </div>
             );
           })}
-        </div>
+          </div>
+        </details>
       )}
 
       {/* ===== 综合研究报告（全宽主体，避免被侧栏挤成窄长条） ===== */}
@@ -372,22 +323,14 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
                 证据池 · {citations.length}
               </div>
               <div className="space-y-2.5">
-                {citations.slice(0, 6).map((c) => {
-                  const cf = typeof c.confidence === 'number' ? pct(c.confidence) : null;
-                  return (
+                {citations.slice(0, 6).map((c) => (
                     <div key={c.source_id} className="flex items-center gap-2 text-[11.5px]">
                       <Diamond size={9} className="text-fin-muted shrink-0" />
                       <span className="flex-1 truncate text-fin-text-secondary" title={c.title}>
                         {c.title}
                       </span>
-                      {cf !== null && (
-                        <span className="text-fin-primary font-semibold tabular-nums shrink-0" style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-                          {cf}%
-                        </span>
-                      )}
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             </div>
           )}

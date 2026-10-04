@@ -49,6 +49,10 @@ flowchart LR
 
 中间层必须保留 `event_quality/supporting_reports/retrieval_kind/published_at_precision`；同 URL 的跨日新闻、不同主体或不同财务期间不能互相覆盖。Agent 来源 ID 纳入主体、事件与期间身份，同时保留“相同 ID 内容冲突”的阻断检查。
 
+用户明确的 72 小时或 90 天范围从请求合同传到工具参数与证据。`request_window` 仅表示请求，不能证明已采集；实际 `coverage_window` 区分 bounded/complete。返回文章或供应商日历的有限覆盖不能支持“整个窗口没有其它事件”的断言，供应商排程也不冒充官方确认。
+
+业务和竞争必须读取实际披露正文。`include_content=True` 不代表读取成功，必须有 `content_read=True` 和非空 `content_sections`。SEC 公告索引只能证明存在披露文件，不能凭文件名生成商业模式结论。
+
 ## 必须降级的情况
 
 - 实时价格、财务数字或事件没有有效来源；

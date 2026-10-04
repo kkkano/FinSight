@@ -9,6 +9,7 @@ from backend.config.settings import executor_settings
 from backend.graph.execution.evidence_tools import append_tool_evidence, evidence_contract_metadata, evidence_is_global
 from backend.graph.request_task_contract import build_tool_diagnostic, output_is_error_like
 from backend.graph.state import GraphState
+from backend.research.filing_evidence import filing_identity, is_filing_evidence, merge_filing_evidence
 
 
 def normalize_execution_evidence(
@@ -319,6 +320,11 @@ def normalize_execution_evidence(
         return values
 
     def _dedupe_key(item: dict[str, Any]) -> str:
+        if is_filing_evidence(item):
+            identity = filing_identity(item)
+            if identity is not None:
+                return "filing:" + json.dumps(identity, ensure_ascii=False)
+            return "filing-unbound:" + str(item.get("source_id") or item.get("id") or json.dumps(item, sort_keys=True, ensure_ascii=False, default=str))
         url = str(item.get("url") or "").strip()
         if url:
             meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
@@ -368,9 +374,23 @@ def normalize_execution_evidence(
         if not isinstance(raw_evidence, dict):
             continue
         e = dict(raw_evidence)
+        if is_filing_evidence(e) and not e.get("subject"):
+            step = step_index.get(e.get("step_id")) or {}
+            inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+            subjects = step.get("subject_tickers") if isinstance(step.get("subject_tickers"), list) else []
+            meta = e.get("meta") if isinstance(e.get("meta"), dict) else {}
+            payload = e.get("structured_data") if isinstance(e.get("structured_data"), dict) else {}
+            subject = meta.get("subject") or meta.get("ticker") or payload.get("ticker") or inputs.get("ticker") or (subjects[0] if len(subjects) == 1 else None)
+            if subject:
+                e["subject"] = str(subject).strip().upper()
         key = _dedupe_key(e)
         existing = seen.get(key)
         if existing is not None:
+            if key.startswith("filing:"):
+                merged = merge_filing_evidence(existing, e)
+                existing.clear()
+                existing.update(merged)
+                continue
             for plural, singular in (("task_ids", "task_id"), ("step_ids", "step_id")):
                 merged = _provenance_values(existing, plural, singular)
                 for value in _provenance_values(e, plural, singular):

@@ -18,6 +18,7 @@ from backend.utils.env import env_int as _env_int
 
 import asyncio
 import logging
+import math
 import random
 import re
 import uuid
@@ -84,6 +85,8 @@ class LLMCallContext:
     layer: str
     budget: LLMAttemptBudget = field(compare=False)
     on_attempt: Callable[[Mapping[str, Any]], None] | None = field(default=None, compare=False)
+    call_parameters: dict[str, Any] = field(default_factory=dict, compare=False)
+    failure_diagnostics: list[dict[str, Any]] = field(default_factory=list, compare=False)
 
     @classmethod
     def create(
@@ -126,6 +129,62 @@ def _exception_chain(exc: BaseException, *, max_depth: int = 4) -> list[BaseExce
         result.append(current)
         current = current.__cause__ or current.__context__
     return result
+
+
+_DIAGNOSTIC_PROVIDER_CODES = frozenset({
+    "authentication_error", "invalid_api_key", "invalid_request_error", "model_not_found",
+    "context_length_exceeded", "rate_limit_exceeded", "rate_limit_error", "insufficient_quota",
+    "billing_hard_limit", "billing_hard_limit_reached", "billing_not_active", "credit_balance_exhausted",
+    "request_timeout", "timeout", "server_error", "internal_server_error", "overloaded_error",
+    "service_unavailable", "content_policy_violation", "content_filter",
+})
+
+
+def _diagnostic_number(value: Any) -> int | float | None:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
+
+
+def _diagnostic_timeout(value: Any) -> Any:
+    numeric = _diagnostic_number(value)
+    if numeric is not None or value is None:
+        return numeric
+    # httpx.Timeout只读取四个数值，不序列化对象repr或其它属性。
+    components = {key: _diagnostic_number(value.get(key) if isinstance(value, dict) else getattr(value, key, None)) for key in ("connect", "read", "write", "pool")}
+    return components if any(item is not None for item in components.values()) else None
+
+
+def record_failure_diagnostic(context: LLMCallContext, exc: BaseException, *, duration_ms: int) -> dict[str, Any]:
+    """故障归档采用封闭字段集；不读取异常消息、请求体、header或URL。"""
+    chain = _exception_chain(exc)
+    status = None
+    provider_code = None
+    for error in chain:
+        response = getattr(error, "response", None)
+        for value in (getattr(error, "status_code", None), getattr(error, "status", None), getattr(response, "status_code", None)):
+            if isinstance(value, int) and not isinstance(value, bool) and 100 <= value <= 599:
+                status = status if status is not None else value
+        codes = [getattr(error, key, None) for key in ("code", "error_code", "type")]
+        body = getattr(error, "body", None)
+        if isinstance(body, dict):
+            codes.extend(body.get(key) for key in ("code", "type"))
+            nested = body.get("error")
+            if isinstance(nested, dict):
+                codes.extend(nested.get(key) for key in ("code", "type"))
+        for code in codes:
+            if isinstance(code, str) and code.strip().lower() in _DIAGNOSTIC_PROVIDER_CODES and provider_code is None:
+                provider_code = code.strip().lower()
+    diagnostic = {
+        "exception_type": type(exc).__name__,
+        "cause_types": [type(error).__name__ for error in chain[1:]],
+        "http_status": status,
+        "provider_error_code": provider_code,
+        "duration_ms": max(0, int(duration_ms)),
+        "request_timeout": _diagnostic_timeout(context.call_parameters.get("request_timeout")),
+        "max_tokens": _diagnostic_number(context.call_parameters.get("max_tokens")),
+        "max_retries": _diagnostic_number(context.call_parameters.get("max_retries")),
+    }
+    context.failure_diagnostics.append(diagnostic)
+    return diagnostic
 
 
 def classify_llm_error(exc: BaseException) -> LLMErrorClassification:
@@ -242,6 +301,7 @@ async def ainvoke_llm(
     client_factory: Callable[[EndpointConfig], Any],
     invoke: Callable[[Any, Any], Awaitable[Any]],
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    retry_provider_errors: bool = True,
 ) -> Any:
     """Single provider-attempt state machine for one logical LLM call."""
     attempted: set[str] = set()
@@ -266,7 +326,12 @@ async def ainvoke_llm(
                 "error_code": exc.code, "retry_after_seconds": exc.retry_after_seconds,
             })
             raise
-        client = client_factory(endpoint)
+        construction_started = perf_counter()
+        try:
+            client = client_factory(endpoint)
+        except Exception as exc:
+            record_failure_diagnostic(context, exc, duration_ms=int((perf_counter() - construction_started) * 1000))
+            raise
         attempt = context.budget.reserve_provider_attempt()
         started = perf_counter()
         try:
@@ -289,6 +354,7 @@ async def ainvoke_llm(
             _observe_attempt(context, attempt_payload)
             return result
         except Exception as exc:
+            diagnostic = record_failure_diagnostic(context, exc, duration_ms=int((perf_counter() - started) * 1000))
             classification = classify_llm_error(exc)
             failed_completion = getattr(exc, "completion", None)
             prompt_tokens, completion_tokens = _usage_or_none(failed_completion)
@@ -306,10 +372,11 @@ async def ainvoke_llm(
                 "usage_state": "reported" if prompt_tokens is not None else "unavailable_due_to_failure",
                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
                 "completion": completion_metadata(failed_completion) if failed_completion is not None else {},
+                "failure_diagnostic": diagnostic,
             }
             _emit("llm.attempt", attempt_payload)
             _observe_attempt(context, attempt_payload)
-            if not classification.retryable or context.budget.remaining <= 0 or (single_endpoint and attempt >= 2):
+            if not retry_provider_errors or not classification.retryable or context.budget.remaining <= 0 or (single_endpoint and attempt >= 2):
                 if classification.endpoint_failure:
                     endpoint_manager.report_failure(
                         endpoint.name,
@@ -347,6 +414,7 @@ async def ainvoke_configured_llm(
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> Any:
     """Invoke the configured provider through the single endpoint state machine."""
+    context.call_parameters.update(request_timeout=request_timeout, max_tokens=max_tokens, max_retries=0)
     check_token_budget()
     if acquire_token and not context.budget.rate_limit_token_acquired:
         from backend.services.rate_limiter import acquire_llm_token
@@ -370,8 +438,7 @@ async def ainvoke_configured_llm(
     enabled_count = len([endpoint for endpoint in manager.endpoints if endpoint.cfg.enabled])
     allowed_attempts = min(3, max(2, enabled_count))
     context.budget.max_provider_attempts = min(context.budget.max_provider_attempts, allowed_attempts)
-    if chosen is not None:
-        context.budget.max_provider_attempts = 1
+    # 选定模型的服务商错误仍立即返回；成功响应后的结构纠正复用剩余逻辑预算。
 
     def _factory(endpoint: EndpointConfig) -> Any:
         client = create_llm_for_endpoint(
@@ -380,6 +447,16 @@ async def ainvoke_configured_llm(
             max_tokens=max_tokens,
             request_timeout=request_timeout,
         )
+        metadata = getattr(client, "_finsight_call_metadata", None)
+        configured = metadata.get("request_parameters") if isinstance(metadata, dict) else {}
+        configured = configured if isinstance(configured, dict) else {}
+        root_client = getattr(client, "root_async_client", None)
+        effective_timeout = getattr(root_client, "timeout", getattr(client, "request_timeout", configured.get("request_timeout", request_timeout)))
+        context.call_parameters.update({
+            "request_timeout": _diagnostic_timeout(effective_timeout),
+            "max_tokens": _diagnostic_number(configured.get("max_tokens", getattr(client, "max_tokens", max_tokens))),
+            "max_retries": _diagnostic_number(getattr(root_client, "max_retries", configured.get("max_retries", getattr(client, "max_retries", 0)))),
+        })
         return client_transform(client) if client_transform is not None else client
 
     return await ainvoke_llm(
@@ -389,6 +466,7 @@ async def ainvoke_configured_llm(
         client_factory=_factory,
         invoke=lambda client, payload: client.ainvoke(payload),
         sleeper=sleeper,
+        retry_provider_errors=chosen is None,
     )
 
 
@@ -670,6 +748,7 @@ __all__ = [
     "ainvoke_configured_llm",
     "ainvoke_with_rate_limit_retry",
     "classify_llm_error",
+    "record_failure_diagnostic",
     "is_rate_limit_error",
     "is_endpoint_retryable_error",
 ]

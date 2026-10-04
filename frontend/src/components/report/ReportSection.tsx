@@ -96,7 +96,6 @@ export const ReportSection: React.FC<ReportSectionProps> = ({
   const chartTheme = useChartTheme();
   const sectionId = `${anchorPrefix}-section-${section.order}`;
   const agentName = (section as any).agent_name;
-  const confidence = (section as any).confidence;
   const dataSources: string[] = (section as any).data_sources || [];
   const hasError = (section as any).error;
   const status = (section as any).status;
@@ -126,11 +125,6 @@ export const ReportSection: React.FC<ReportSectionProps> = ({
                 {status === 'not_run' && (
                   <span className="text-2xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
                     未运行
-                  </span>
-                )}
-                {confidence !== undefined && confidence > 0 && (
-                  <span className="text-2xs text-slate-400">
-                    {Math.round(confidence * 100)}% 置信度
                   </span>
                 )}
                 {dataSources.length > 0 && (

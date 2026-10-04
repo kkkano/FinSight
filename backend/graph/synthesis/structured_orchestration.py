@@ -8,6 +8,8 @@ from typing import Any
 from backend.graph.failure import build_runtime
 from backend.graph.state import GraphState
 from backend.graph.synthesis.contracts import TaskSynthesisResult, stable_unique
+from backend.graph.synthesis.analysis_requirements import analysis_task_modes, answer_requirements_by_task
+from backend.graph.synthesis.requirement_validation import evaluate_answer_requirements
 from backend.graph.synthesis.opinion_readiness import build_opinion_readiness
 from backend.graph.synthesis.research_synthesis import (
     build_agent_findings,
@@ -28,8 +30,16 @@ from backend.services.llm_retry import LLMCallContext
 ChatTaskContract = tuple[Any, Any, Any, Any, list[dict[str, Any]], dict[str, Any]]
 
 
+def _failure_diagnostics_by_stage(draft) -> dict[str, Any]:
+    return {
+        "tasks": {task.task_id: task.synthesis_validation["failure_diagnostics"] for task in draft.task_results if task.synthesis_validation.get("failure_diagnostics")},
+        "report": draft.synthesis_validation.get("failure_diagnostics") or [],
+    }
+
+
 def _requested_dimensions_by_task(state: GraphState, results) -> dict[str, list[str]]:
     dimensions = {}
+    requirements = answer_requirements_by_task(state)
     frames = state.get("request_frames") if isinstance(state.get("request_frames"), list) else []
     frame = state.get("request_frame")
     if isinstance(frame, dict) and frame not in frames:
@@ -39,7 +49,7 @@ def _requested_dimensions_by_task(state: GraphState, results) -> dict[str, list[
         contract = bound.get("intent_contract") if isinstance(bound, dict) and isinstance(bound.get("intent_contract"), dict) else state.get("intent_contract") if len(results) == 1 else {}
         contract = contract if isinstance(contract, dict) else {}
         render = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else bound.get("render_contract") if isinstance(bound, dict) and isinstance(bound.get("render_contract"), dict) else {}
-        dimensions[result.task_id] = stable_unique([str(value) for value in render.get("dimensions", []) if isinstance(value, str) and value.strip()])
+        dimensions[result.task_id] = stable_unique([str(value) for value in render.get("dimensions", []) if isinstance(value, str) and value.strip()] + [str(item["dimension"]) for item in requirements.get(result.task_id, []) if item.get("dimension")])
     return dimensions
 
 
@@ -252,6 +262,7 @@ async def synthesize_structured_report(
     )
     task_synthesis = await synthesize_task_results(
         requested_dimensions_by_task=_requested_dimensions_by_task(state, outcome_build.outcomes),
+        answer_requirements_by_task=answer_requirements_by_task(state),
         task_outcomes=outcome_build.outcomes,
         findings=findings,
         claim_validation=claim_validation,
@@ -260,7 +271,7 @@ async def synthesize_structured_report(
             lambda task: LLMCallContext.create(
                 stage="report_task_synthesize", agent=f"task_synthesis:{task.task_id}", layer="synthesis",
             )
-            if structured_synthesis_mode == "on" and env_mode in {"llm", "narrative"}
+            if structured_synthesis_mode == "on" and env_mode in {"llm", "narrative"} and analysis_task_modes(state).get(task.task_id, "research") == "research"
             else None
         ),
     )
@@ -297,6 +308,7 @@ async def synthesize_structured_report(
     }
     artifacts.update(structured_artifacts)
     trace.update({
+        "llm_failure_diagnostics": _failure_diagnostics_by_stage(report_draft),
         "synthesize_runtime": build_runtime(
             mode="research_structured", fallback=report_draft.fallback_used or any(task.fallback_used for task in task_synthesis),
             reason=next(iter(report_draft.error_codes + [code for task in task_synthesis if task.fallback_used for code in task.error_codes if code.startswith(("llm_", "task_synthesis_", "explanation_"))]), None),
@@ -356,6 +368,7 @@ async def prepare_opinion_synthesis(
             TaskSynthesisResult(
                 task_id=item.task_id,
                 title=item.title,
+                request_text=item.request_text,
                 priority=item.priority,
                 order_index=item.order_index,
                 request_frame_id=item.request_frame_id,
@@ -377,12 +390,15 @@ async def prepare_opinion_synthesis(
                 error_codes=[*item.error_codes, "synthesis_quality_blocked"],
                 fact_ids=[evidence.source_id for evidence in evidence_normalization.evidence_by_task.get(item.task_id, []) if evidence.usage == "fact"],
                 missing_evidence=item.missing_evidence, subject=item.subject_label, operation=item.operation,
+                requested_subjects=item.tickers,
             )
             for item in research_outcomes
         ]
     else:
+        task_modes = analysis_task_modes(state)
         task_synthesis = await synthesize_task_results(
             requested_dimensions_by_task=_requested_dimensions_by_task(state, research_outcomes),
+            answer_requirements_by_task=answer_requirements_by_task(state),
             task_outcomes=research_outcomes,
             findings=findings,
             claim_validation=claim_validation,
@@ -391,10 +407,18 @@ async def prepare_opinion_synthesis(
                 lambda task: LLMCallContext.create(
                     stage="synthesize", agent=f"task_synthesis:{task.task_id}", layer="synthesis",
                 )
-                if structured_synthesis_mode == "on" and env_mode == "llm" and (state.get("trace") or {}).get("analysis", {}).get("mode") != "deterministic"
+                if structured_synthesis_mode == "on" and env_mode == "llm" and task_modes.get(task.task_id, (state.get("trace") or {}).get("analysis", {}).get("mode", "research")) != "deterministic"
                 else None
             ),
         )
+    if quality_blocked:
+        requirements = answer_requirements_by_task(state)
+        for result in task_synthesis:
+            evaluate_answer_requirements(
+                result=result, requirements=requirements.get(result.task_id, []),
+                evidence_index=evidence_normalization.evidence_index, claim_index=claim_validation.valid_claims,
+                subjects=next(outcome.tickers for outcome in research_outcomes if outcome.task_id == result.task_id),
+            )
     results_by_task = {item.task_id: item for item in task_synthesis}
     _attach_requested_dimensions(state, task_synthesis)
     research_result = await synthesize_report_draft(
@@ -436,7 +460,9 @@ async def prepare_opinion_synthesis(
         },
         "readiness_by_task": readiness_by_task,
     }
-    return {**state, "artifacts": artifacts}
+    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
+    trace["llm_failure_diagnostics"] = _failure_diagnostics_by_stage(research_result)
+    return {**state, "artifacts": artifacts, "trace": trace}
 
 
 __all__ = [

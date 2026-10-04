@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from backend.graph.intent_contract import canonical_evidence_kinds, evidence_plan_for_kinds
+from backend.graph.intent_contract import canonical_evidence_kinds, evidence_plan_for_kinds, evidence_registry
 from backend.graph.evidence_dependencies import step_evidence_kinds, step_subjects, step_task_ids
 from backend.config.ticker_mapping import normalize_ticker
 
@@ -71,7 +71,7 @@ def validate_plan_coverage(
                     if step.get("name") in producers
                     and kind in step_evidence_kinds(step)
                     and (task_id is None or task_id in step_task_ids(step))
-                    and (ticker is None or ticker in step_subjects(step))]
+                    and (ticker is None or evidence_registry()[kind].scope == 'per_topic' or ticker in step_subjects(step))]
                 if not candidates:
                     missing_requirements.append({"task_id": task_id, "subject": ticker,
                         "evidence_kind": kind, "frame_id": frame.get("frame_id"),

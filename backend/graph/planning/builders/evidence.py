@@ -27,6 +27,12 @@ def _append_evidence_steps_for_ticker(ctx,
     evidence_profile: str = "",
 ) -> None:
     lightweight_external_impact = evidence_profile == EXTERNAL_IMPACT_LIGHT_PROFILE
+    tasks = [ctx.ready_tasks_by_id.get(task_id, {}) for task_id in task_ids]
+    scoped_query = "；".join(dict.fromkeys(str(task.get("request_text") or ctx.query) for task in tasks)) or ctx.query
+    hours = [int((task.get("time_scope") or {}).get("hours_back", 0)) for task in tasks]
+    news_window = {"max_age_hours": max(hours)} if any(hours) else {}
+    read_disclosures = any((req.get("dimension") in {"business_model", "competition"})
+                           for task in tasks for req in task.get("answer_requirements", []))
     for kind in required_evidence:
         if kind == "price_snapshot":
             _append_tool_step(ctx, 
@@ -74,7 +80,7 @@ def _append_evidence_steps_for_ticker(ctx,
         elif kind == "fundamental_snapshot":
             _append_agent_step(ctx, 
                 "fundamental_agent",
-                {"query": ctx.query, "ticker": ticker},
+                {"query": scoped_query, "ticker": ticker},
                 why=f"{ticker} evidence contract: fundamental snapshot.",
                 optional=False,
                 parallel_group=f"{group}_fundamental_agents" if group else "fundamental_agents",
@@ -95,7 +101,7 @@ def _append_evidence_steps_for_ticker(ctx,
             )
             _append_agent_step(ctx, 
                 "technical_agent",
-                {"query": ctx.query, "ticker": ticker},
+                {"query": scoped_query, "ticker": ticker},
                 why=f"{ticker} evidence contract: technical agent synthesis.",
                 optional=True,
                 parallel_group=f"{group}_technical_agents" if group else "technical_agents",
@@ -106,7 +112,7 @@ def _append_evidence_steps_for_ticker(ctx,
         elif kind == "news_context":
             _append_tool_step(ctx, 
                 "get_company_news",
-                {"ticker": ticker},
+                {"ticker": ticker, **news_window},
                 why=f"{ticker} evidence contract: company news context.",
                 optional=True,
                 parallel_group=group,
@@ -116,7 +122,7 @@ def _append_evidence_steps_for_ticker(ctx,
             )
             _append_tool_step(ctx, 
                 "get_authoritative_media_news",
-                {"query": f"{ticker} {ctx.query}".strip(), "max_results": 6, "authoritative_only": False},
+                {"query": f"{ticker} {scoped_query}".strip(), "max_results": 6, "authoritative_only": False, **news_window},
                 why=f"{ticker} evidence contract: authoritative media context.",
                 optional=True,
                 parallel_group=group,
@@ -127,7 +133,7 @@ def _append_evidence_steps_for_ticker(ctx,
             if not lightweight_external_impact:
                 _append_agent_step(ctx, 
                     "news_agent",
-                    {"query": ctx.query, "ticker": ticker},
+                    {"query": scoped_query, "ticker": ticker},
                     why=f"{ticker} evidence contract: news agent synthesis.",
                     optional=True,
                     parallel_group=f"{group}_news_agents" if group else "news_agents",
@@ -182,7 +188,7 @@ def _append_evidence_steps_for_ticker(ctx,
                 )
                 _append_tool_step(ctx, 
                     "get_sec_filings",
-                    {"ticker": ticker, "forms": "10-K,10-Q", "limit": 4},
+                    {"ticker": ticker, "forms": "10-K,10-Q", "limit": 4, **({"include_content": True} if read_disclosures else {})},
                     why=f"{ticker} evidence contract: SEC filings.",
                     optional=True,
                     parallel_group=group,

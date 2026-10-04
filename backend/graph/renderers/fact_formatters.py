@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from backend.graph.synthesis.research_synthesis import clean_research_text
+from backend.graph.synthesis.requirement_validation import disclosure_sections
 from backend.tools.financial_facts import parse_profile_market_cap
 from backend.utils.quote import parse_quote_payload
 
@@ -264,8 +265,11 @@ def _calendar(payload: dict, evidence, *, limit: int | None = None) -> str:
     if lines:
         if limit is not None:
             lines = lines[:limit]
-        if payload.get("days_ahead") is not None:
-            lines.append(f"本来源覆盖未来 {number(payload['days_ahead'], 0)} 天；快照时间 {_time(payload, evidence)}。")
+        coverage = payload.get("coverage_window") or evidence.metadata.get("coverage_window")
+        if isinstance(coverage, dict) and coverage.get("as_of") and coverage.get("scope") == "provider_calendar":
+            days = coverage.get("days_ahead") or (coverage.get("value") if coverage.get("unit") == "days" else None)
+            if days is not None:
+                lines.append(f"本轮供应商日历查询窗口为未来 {number(days, 0)} 天，不代表已取得全部事件；快照时间 {coverage['as_of']}。")
         return "\n".join(lines)
     return "[数据缺失] 该日历来源未返回可核验的事件日期。"
 
@@ -303,7 +307,11 @@ def format_fact(evidence, *, profile: str = "full") -> str:
             currency = evidence.currency or payload.get("currency") or (quote or {}).get("currency") or "[币种未提供]"
             as_of = (quote or {}).get("as_of") or evidence.as_of or "未提供"
             label = "风险校准报价" if evidence.kind == "risk_profile" else "最新可用报价"
-            return f"{evidence.subject or '标的'} {label} {number(price)} {currency}；源数据时间：{as_of}。"
+            session = (quote or {}).get("market_session") or payload.get("market_session") or evidence.metadata.get("market_session")
+            session_label = {"regular_close":"常规交易时段的日线收盘价，非盘后价格", "regular":"常规交易时段", "post":"盘后交易", "postmarket":"盘后交易", "after_hours":"盘后交易", "pre":"盘前交易", "premarket":"盘前交易", "continuous_close":"24 小时市场的日线收盘价"}.get(str(session or '').lower())
+            precision = (quote or {}).get("source_time_precision") or evidence.metadata.get("source_time_precision")
+            timing = f"源日期：{as_of}（来源仅提供交易日，不代表精确成交时刻）" if precision == 'date' else f"源数据时间：{as_of}"
+            return f"{evidence.subject or '标的'} {label} {number(price)} {currency}；{timing}；{session_label or '[数据缺失] 来源未提供常规/盘前/盘后属性'}。"
     formatter = {"earnings_estimates": lambda data, item: _earnings(data, item, compact=compact, summary=profile in {"comparison", "brief"}), "company_profile": lambda data, item: _profile(data, item, compact=compact), "technical_snapshot": _technical, "risk_profile": lambda data, item: _risk(data, item, compact=compact, brief=profile == "brief"), "options_derivatives": _options, "event_calendar": lambda data, item: _calendar(data, item, limit=1 if profile == "brief" else 3 if compact else None)}.get(evidence.kind)
     text = formatter(payload, evidence) if formatter else ""
     if not text and evidence.kind == "macro_context":
@@ -317,6 +325,14 @@ def format_fact(evidence, *, profile: str = "full") -> str:
             text = f"{period} {labels.get(metric, metric)} {money(payload['value'], evidence.unit or evidence.currency)}"
         if not text and metric and evidence.unit and re.search(r"[-+]?\$?[-+]?\d+(?:\.\d+)?[KMBT]", raw):
             text = f"{evidence.period_end or '期间未提供'} {raw}；单位 {evidence.unit}；来源口径 {evidence.frequency or '未提供'}。"
+        sections = disclosure_sections(payload)
+        if not text and sections:
+            labels = {"business": "业务正文摘录", "competition": "竞争正文摘录", "management_discussion": "管理层讨论摘录"}
+            limit = 600 if compact else 1400
+            text = "\n".join([
+                f"{evidence.as_of or '披露时间未提供'} {evidence.title or '公司公告'}；已读取披露正文。",
+                *[f"{labels.get(name, '披露正文摘录')}：{' '.join(body.split())[:limit]}" for name, body in sections.items()],
+            ])
         if not text and evidence.kind == "filing_context" and evidence.url:
             text = f"{evidence.as_of or '披露时间未提供'} {evidence.title or '公司公告'}；该来源为公告索引，财务结论需核对文件正文。"
     if not text and evidence.kind == "news_context" and isinstance(payload.get("snapshot"), dict):

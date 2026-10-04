@@ -28,6 +28,8 @@ def select_fact_ids(draft, task, profile: str) -> list[str]:
     wanted = set()
     for dimension in task.requested_dimensions:
         wanted.update(DIMENSION_KINDS.get(dimension, set()))
+    for requirement in task.answer_requirements:
+        wanted.update(requirement.get("evidence_kinds") or [])
     if not wanted:
         wanted = {item.kind for item in facts}
     if task.operation in {"price", "investment_opinion", "technical"}:

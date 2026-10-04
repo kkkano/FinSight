@@ -1,35 +1,56 @@
 # -*- coding: utf-8 -*-
-"""证据分析边界：事实查询确定性渲染，研究请求最多一次分析模型。"""
+"""证据分析边界：按逐任务合同区分事实查询和研究解释。"""
 from __future__ import annotations
 
 from typing import Any
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from backend.graph.event_bus import emit_event
 from backend.graph.nodes.synthesize import synthesize
 from backend.graph.state import GraphState
+from backend.graph.synthesis.analysis_requirements import analysis_task_modes, task_needs_analysis
 from backend.services.llm_usage import LLMAttribution, get_token_accumulator, reset_llm_attribution, set_llm_attribution
-
-
-_RESEARCH_ANALYST_OPERATIONS = frozenset({
-    "analysis",
-    "earnings_impact",
-    "investment_opinion",
-    "news_impact",
-    "qa",
-})
+from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, classify_llm_error
+from backend.services.llm_response import final_completion_text
+from backend.utils.env import env_int
 
 
 def _needs_research_analyst(state: GraphState) -> bool:
-    if str(state.get("output_mode") or "").strip().lower() == "investment_report":
-        return True
-    operation = state.get("operation") if isinstance(state.get("operation"), dict) else {}
-    if str(operation.get("name") or "") in {"compare", "macro_brief"}:
-        tasks = state.get("tasks") if isinstance(state.get("tasks"), list) else []
-        for task in tasks:
-            required = task.get("required_evidence") or [] if isinstance(task, dict) else []
-            if set(required) & {"fundamental_snapshot", "risk_profile", "news_context", "filing_context"}:
-                return True
-    return str(operation.get("name") or "").strip().lower() in _RESEARCH_ANALYST_OPERATIONS
+    modes = analysis_task_modes(state)
+    if modes:
+        return "research" in modes.values()
+    return task_needs_analysis(state, report=str(state.get("output_mode") or "").lower() == "investment_report")
+
+
+async def _answer_direct_request(state: GraphState, trace: dict[str, Any]) -> dict[str, Any]:
+    artifacts = dict(state.get("artifacts") or {})
+    request = artifacts["direct_answer_request"]
+    context = LLMCallContext.create(stage="direct_answer", agent="direct_answer", layer="analysis")
+    attribution = set_llm_attribution(LLMAttribution(agent="direct_answer", layer="analysis"))
+    try:
+        response = await ainvoke_configured_llm(
+            [SystemMessage(content="直接用简体中文回答用户的金融概念问题。遵守用户的范围与否定约束；虚构示例必须标明虚构。不调用工具、不声称查询过行情或实时资料。"),
+             HumanMessage(content=str(request.get("query") or state.get("query") or ""))],
+            context=context, temperature=0.1, acquire_token=True,
+            max_tokens=env_int("LANGGRAPH_SYNTHESIZE_MAX_TOKENS", 65536),
+            request_timeout=env_int("LANGGRAPH_SYNTHESIZE_TIMEOUT_SEC", 1200),
+            acquire_timeout_seconds=env_int("LANGGRAPH_SYNTHESIZE_ACQUIRE_TIMEOUT_SEC", 120),
+        )
+        markdown = final_completion_text(response).strip()
+        artifacts.update({"draft_markdown": markdown, "chat_responded": True})
+        trace["analysis"] = {"status": "done", "role": "direct_answer", "business_llm_calls": context.budget.provider_attempts_used}
+    except Exception as exc:
+        code = classify_llm_error(exc).code
+        artifacts.update({
+            "draft_markdown": "本轮概念解释暂未生成成功，请稍后重试。", "chat_responded": True,
+            "result_quality": {"state": "block", "answer_status": "unavailable", "publishable": False, "reasons": [{"code": code, "severity": "block"}]},
+            "quality_blocked": True, "publishable": False,
+        })
+        trace["analysis"] = {"status": "failed", "role": "direct_answer", "error_code": code, "business_llm_calls": context.budget.provider_attempts_used}
+    finally:
+        reset_llm_attribution(attribution)
+    return {"artifacts": artifacts, "trace": trace}
 
 
 async def analyze(state: GraphState) -> dict[str, Any]:
@@ -37,11 +58,15 @@ async def analyze(state: GraphState) -> dict[str, Any]:
     route = str(understanding.get("route") or "clarify").strip().lower()
     trace = dict(state.get("trace") or {})
     if route != "research":
+        artifacts = state.get("artifacts") or {}
+        if route == "direct" and isinstance(artifacts.get("direct_answer_request"), dict) and not str(artifacts.get("draft_markdown") or "").strip():
+            return await _answer_direct_request(state, trace)
         trace["analysis"] = {"status": "skipped", "llm_calls": 0, "reason": f"route:{route}"}
         return {"artifacts": dict(state.get("artifacts") or {}), "trace": trace}
 
     analyst = _needs_research_analyst(state)
-    trace["analysis"] = {"mode": "research" if analyst else "deterministic"}
+    task_modes = analysis_task_modes(state)
+    trace["analysis"] = {"mode": "research" if analyst else "deterministic", "task_modes": task_modes}
     state = {**state, "trace": trace}
     accumulator = get_token_accumulator()
     before = accumulator.summary() if accumulator is not None else None
@@ -59,6 +84,7 @@ async def analyze(state: GraphState) -> dict[str, Any]:
     result_trace["analysis"] = {
         "status": "done",
         "role": "research_analyst" if analyst else "deterministic_renderer",
+        "task_modes": task_modes,
         "verifier_allowed": str(state.get("output_mode") or "") == "investment_report",
     }
     if not analyst:

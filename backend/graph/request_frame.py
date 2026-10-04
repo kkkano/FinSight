@@ -11,6 +11,7 @@ import re
 from typing import Any, Literal, NotRequired, TypedDict
 
 from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
+from backend.graph.request_constraints import affirmative_query, build_answer_requirements, concept_without_retrieval, parse_time_scope
 from backend.graph.intent_contract import (
     canonical_evidence_kinds,
     derive_intent_contract,
@@ -73,6 +74,10 @@ def _domain_intent_for_fragment(fragment: str, *, subject_type: str) -> str:
 
 def _fragment_subject_type(fragment: str, fragment_tickers: list[str]) -> str:
     if fragment_tickers:
+        if all(ticker.endswith('-USD') for ticker in fragment_tickers):
+            return "crypto"
+        if all(ticker.endswith('=F') for ticker in fragment_tickers):
+            return "commodity"
         return "company"
     if _MACRO_HINT_RE.search(fragment):
         return "macro"
@@ -123,10 +128,21 @@ def compile_request_frame(
         frame_id=frame_id,
     )
     required = canonical_evidence_kinds(contract.get("required_evidence") if isinstance(contract.get("required_evidence"), list) else [])
+    if subject in {"crypto", "commodity", "index"} and not re.search(r"期权|\boptions?\b", query, re.I):
+        required = [kind for kind in required if kind != "options_derivatives"]
+        contract["required_evidence"] = required
+        contract["evidence_plan"] = [item for item in contract["evidence_plan"] if item.get("kind") in required]
     render = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else {}
     mode = str(output_mode or "").strip().lower()
-    horizon = 90 if re.search(r"(?:未来|未來|接下来|接下來).{0,5}(?:一个|一個|1|三个月|三個月|3个月|3個月)?季度|未来三个月|\b(?:next\s+quarter|next\s+three\s+months)\b", query, re.IGNORECASE) else None
-    time_scope = {"kind": "forward", "label": "未来一个季度", "days_ahead": horizon} if horizon else {}
+    time_scope = parse_time_scope(query)
+    _, excluded = affirmative_query(query)
+    if domain_intent != 'macro' and concept_without_retrieval(query, normalized) and mode != "investment_report":
+        required = []
+        contract["required_evidence"] = []
+        contract["evidence_plan"] = []
+        render = {"shape": "answer", "dimensions": []}
+    render = {**render, "answer_requirements": build_answer_requirements(query, frame_id, render, required, time_scope)}
+    contract["render_intent"] = render
     lane: RequestLane
     if mode == "investment_report":
         lane = "report"
@@ -139,6 +155,7 @@ def compile_request_frame(
         "frame_id": frame_id,
         "query_text": str(query or "").strip(),
         "time_scope": time_scope,
+        "excluded_facets": excluded,
         "lane": lane,
         "relation": _relation_for_contract(contract),
         "subject": _subject(subject, list(contract.get("primary_tickers") or normalized)),
@@ -166,7 +183,9 @@ def compile_request_frames(
     raw_query = str(query or "").strip()
     if not raw_query:
         return []
-    fragments = [part.strip() for part in _FRAME_SPLIT_RE.split(raw_query) if part.strip()]
+    # 点号只在句末分句，不能拆开 9988.HK / BRK.B。
+    fragments = [part.strip() for part in _FRAME_SPLIT_RE.split(re.sub(r"(?<=[A-Za-z0-9])\.(?=[A-Za-z])", "\u2024", raw_query)) if part.strip()]
+    fragments = [part.replace("\u2024", ".") for part in fragments]
     if len(fragments) < 2:
         return []
 

@@ -12,7 +12,8 @@ def test_report_validator_minimal_payload():
     assert result["company_name"] == "AAPL"
     assert result["summary"] == "Sample summary"
     assert result["sections"]
-    assert result["sentiment"] == "neutral"
+    assert result["sentiment"] == "unknown"
+    assert result["confidence_score"] is None
 
 
 def test_report_validator_sentiment_and_confidence():
@@ -24,7 +25,7 @@ def test_report_validator_sentiment_and_confidence():
     }
     result = ReportValidator.validate_and_fix(data, as_dict=True)
 
-    assert result["sentiment"] == "neutral"
+    assert result["sentiment"] == "unknown"
     assert result["confidence_score"] == 1.0
 
 
@@ -108,7 +109,7 @@ def test_report_validator_citations_fields():
     citation = result["citations"][0]
     assert "confidence" in citation
     assert "freshness_hours" in citation
-    assert 0.0 <= citation["confidence"] <= 1.0
+    assert citation["confidence"] is None
     assert citation["freshness_hours"] >= 0.0
 
 

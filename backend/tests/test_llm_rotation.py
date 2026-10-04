@@ -164,6 +164,7 @@ def test_recovery_after_cooldown(monkeypatch):
 
 def test_get_llm_config_raises_when_all_sources_empty(monkeypatch):
     llm_config = _reload_llm_config()
+    monkeypatch.delenv("STEPFUN_API_KEY", raising=False)
     monkeypatch.setattr(llm_config, '_parse_env_endpoints', lambda provider, model: [])
 
     with pytest.raises(RuntimeError) as exc:

@@ -1,0 +1,288 @@
+[
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "orcl_followup",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h01_orcl_earnings",
+    "query": "甲骨文 ORCL 最近一个已公布季度赚得怎么样？请区分收入、净利润和现金流，并说明这份财报对股价的影响。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "ORCL"
+    ],
+    "required_answer_dimensions": [
+      "真实最新单季财务",
+      "财报对股价影响"
+    ],
+    "evidence_checks": [
+      "实际财期、单季收入/净利润/经营或自由现金流、明确币种；不得用累计替代",
+      "影响绑定业绩、指引或预期差与价格证据，观察与推测分开"
+    ],
+    "full_answer": "两维有相关核验事实、来源和解释；现金流及财报影响口径明确。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "orcl_followup",
+    "history_dependency": "h01_orcl_earnings",
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h02_orcl_events",
+    "query": "沿用刚才这家公司，未来90天哪些已确认事件值得跟踪？把确定日期与仅供观察的可能催化分开。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "ORCL"
+    ],
+    "required_answer_dimensions": [
+      "未来90天已确认事件",
+      "观察催化与确认事件区分"
+    ],
+    "evidence_checks": [
+      "继承ORCL，窗口按请求UTC时间确定",
+      "确认日期有来源且在窗口内，观察项有触发条件，不凭季度推算确认日期"
+    ],
+    "full_answer": "确认事件与观察条件分开；可靠窗口检索未发现确认事件也可覆盖。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h03_adbe_quote",
+    "history_dependency": null,
+    "needs_llm": false,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h03_adbe_quote",
+    "query": "ADBE 最近一次可用报价是多少？告诉我币种、报价时间和是否为盘后价格，别把它说成实时价。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "ADBE"
+    ],
+    "required_answer_dimensions": [
+      "最近报价及报价属性"
+    ],
+    "evidence_checks": [
+      "价格、USD、来源、源时间及时区",
+      "明确常规/盘前/盘后，不把抓取时刻当行情时刻；周末可用最近交易时段"
+    ],
+    "full_answer": "价格、币种、时间、交易时段属性均可追溯。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h04_avgo_technical",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h04_avgo_technical",
+    "query": "只看 AVGO 的技术面：日线趋势、RSI、MACD、支撑和阻力，不需要新闻或基本面。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "AVGO"
+    ],
+    "required_answer_dimensions": [
+      "日线趋势",
+      "RSI",
+      "MACD",
+      "支撑阻力"
+    ],
+    "evidence_checks": [
+      "可识别as-of的真实日线及指标数值/参数",
+      "支撑阻力有价格单位和历史依据；不执行不必要新闻/基本面"
+    ],
+    "full_answer": "四维均有指标或价位依据及解释，不保证未来走势。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h05_baba_hk",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h05_baba_hk",
+    "query": "请研究阿里巴巴港股 9988.HK 的最新财务、估值和风险；只分析这个上市代码，金额标清币种。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "9988.HK"
+    ],
+    "required_answer_dimensions": [
+      "最新财务",
+      "港股估值",
+      "主要风险"
+    ],
+    "evidence_checks": [
+      "BABA不得另作主标的，发行人和财期核验，财务CNY与报价HKD区分",
+      "估值口径及股本/币种兼容或明确可核验换算",
+      "公司相关风险证据"
+    ],
+    "full_answer": "三维有主体正确证据，财期币种明确、估值可解释。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h06_v_ma_compare",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h06_v_ma_compare",
+    "query": "Visa（V）和 Mastercard（MA）谁的估值更贵、自由现金流质量更好？用可比较财期，并解释差异。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "V",
+      "MA"
+    ],
+    "required_answer_dimensions": [
+      "双方估值横向比较",
+      "双方自由现金流质量比较"
+    ],
+    "evidence_checks": [
+      "双方同口径估值及实际财期差异",
+      "FCF使用CFO和capex，不用净利润代替，解释利润转换或趋势",
+      "明确横向差异，不能只是两份孤立资料"
+    ],
+    "full_answer": "双方两维四个单元有可比依据，给比较解释和财期限制。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h07_multi_task",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h07_multi_task",
+    "query": "XOM 看近期新闻，COST 看经营基本面，BTC-USD 看价格趋势；请分别回答，不要把三种任务混在一起。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "XOM",
+      "COST",
+      "BTC-USD"
+    ],
+    "required_answer_dimensions": [
+      "XOM近期新闻",
+      "COST经营基本面",
+      "BTC-USD价格趋势"
+    ],
+    "evidence_checks": [
+      "XOM新闻的主体日期出处",
+      "COST真实财期和经营指标",
+      "BTC-USD实际USD历史区间/as-of，三项不交叉冒领不漏末项"
+    ],
+    "full_answer": "三个主体×任务均有相关证据及分别回答。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h08_oil_macro",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h08_oil_macro",
+    "query": "如果最近原油价格走高，会怎样传导到美国通胀、利率预期与航空股？区分已发生的数据和假设推演。",
+    "expected_route": "research",
+    "expected_tickers": [],
+    "required_answer_dimensions": [
+      "近期原油事实与条件",
+      "美国通胀传导",
+      "利率预期传导",
+      "航空股传导"
+    ],
+    "evidence_checks": [
+      "原油品种单位期间明确，未上涨应纠正",
+      "通胀真实指标时点频率单位，不把指数值当同比",
+      "利率/行业影响区分推演与事实；不擅自指定航空个股"
+    ],
+    "full_answer": "近期原油背景与三条传导都有解释，事实与假设清楚。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h09_nflx_news",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h09_nflx_news",
+    "query": "汇总 NFLX 最近72小时值得关注的新闻，合并同一事件的重复报道；过期报道和未证实传闻单独标出。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "NFLX"
+    ],
+    "required_answer_dimensions": [
+      "72小时主体相关新闻",
+      "事件去重及核验状态"
+    ],
+    "evidence_checks": [
+      "请求UTC冻结窗口，保留真实报道发布时间",
+      "主体/标题/时间/URL可核验",
+      "重复事件合并保留来源；旧闻/传闻不冒充当前事实；无新闻须有检索证据"
+    ],
+    "full_answer": "窗口内相关事件有时间来源及去重，旧闻/传闻正确区分；有检索证据的未发现可接受。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h10_missing_subject",
+    "history_dependency": null,
+    "needs_llm": false,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h10_missing_subject",
+    "query": "现在还值得买它吗？",
+    "expected_route": "clarify",
+    "expected_tickers": [],
+    "required_answer_dimensions": [
+      "澄清缺失投资标的"
+    ],
+    "evidence_checks": [
+      "独立空history，不借用其他case标的，不启动无主语研究"
+    ],
+    "full_answer": "简洁询问所指资产，可附投资期限，不擅自给买卖建议。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "chat",
+    "thread": "h11_cashflow_concept",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h11_cashflow_concept",
+    "query": "自由现金流和净利润为什么会差很多？用虚构数字举例即可，不要查询股票行情。",
+    "expected_route": "direct",
+    "expected_tickers": [],
+    "required_answer_dimensions": [
+      "净利润与FCF定义差异",
+      "明确虚构数值例子"
+    ],
+    "evidence_checks": [
+      "说明非现金项/营运资本/capex，FCF通常CFO减capex",
+      "虚构示例明确且算术自洽，不调用外部行情"
+    ],
+    "full_answer": "解释差异并给出自洽虚构例子，直接回答、不要求选股票。"
+  },
+  {
+    "origin": "holdout_curated",
+    "mode": "investment_report",
+    "thread": "h12_crm_report",
+    "history_dependency": null,
+    "needs_llm": true,
+    "acceptable_partial": "明确证据缺口并保留有效内容可记 honest_partial，但不计完整回答。",
+    "id": "h12_crm_report",
+    "query": "给我一份 Salesforce（CRM）的正式投资研究报告，覆盖业务、竞争、最新财务、估值、未来90天催化和风险，关键事实附可追溯来源。",
+    "expected_route": "research",
+    "expected_tickers": [
+      "CRM"
+    ],
+    "required_answer_dimensions": [
+      "业务",
+      "竞争",
+      "最新财务",
+      "估值",
+      "未来90天催化",
+      "风险"
+    ],
+    "evidence_checks": [
+      "六维来源、真实财期币种估值口径，竞争非泛用套话",
+      "90天催化区分确认日期/观察条件，解释不越过证据",
+      "正式报告实际可打开，刷新重开正文质量一致；blocked不伪装发布"
+    ],
+    "full_answer": "六维内容依据完整，正式报告可打开并归档恢复，不是模板预览或目录。"
+  }
+]

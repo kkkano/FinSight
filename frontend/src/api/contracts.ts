@@ -42,7 +42,7 @@ export interface ReportIndexItem {
   title?: string;
   summary?: string;
   generated_at?: string;
-  confidence_score?: number;
+  confidence_score?: number | null;
   tags?: string[];
   source_type?: string;
   quality_state?: 'pass' | 'warn' | 'block';

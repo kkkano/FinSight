@@ -51,7 +51,7 @@ def test_calendar_deduplicates_dates_and_separates_unconfirmed_macro_discovery()
     text = format_fact(_evidence("event_calendar", payload))
     assert text.count("2026-10-22") == 1
     assert "搜索日历线索，仍需官方确认" in text
-    assert "覆盖未来 30 天" in text
+    assert "覆盖未来 30 天" not in text  # 请求参数不证明已经完成时间窗口采集。
     assert "Calendar Header" not in text
 
 

@@ -6,7 +6,8 @@ import logging
 import os
 import re
 import time
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from typing import Any, Dict
 
 from .financial_facts import FinancialFact, duration_frequency, fact_date, fact_number
@@ -186,6 +187,86 @@ def _extract_companyfacts_metric(
     }
 
 
+@dataclass(frozen=True)
+class _DerivedQuarterlyFact(FinancialFact):
+    derivation_inputs: tuple[dict[str, Any], ...] = ()
+
+    def metadata(self) -> dict[str, Any]:
+        metadata = super().metadata()
+        metadata.update(derivation="ytd_difference", derivation_inputs=list(metadata["derivation_inputs"]))
+        return metadata
+
+
+def _cumulative_quarter_count(start: str, end: str) -> int:
+    days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+    for quarter, lower, upper in ((1, 70, 110), (2, 150, 210), (3, 240, 300), (4, 330, 380)):
+        if lower <= days <= upper:
+            return quarter
+    return 0
+
+
+def _derive_ytd_cash_flow_quarters(
+    entries: list[dict[str, Any]], *, subject: str, metric: str, concept: str,
+    source_url: str | None,
+) -> dict[str, FinancialFact]:
+    """同主体、同标签、同 USD、同财年起点的相邻累计差额；更正版本不得跨申报拼接。"""
+    versions: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for entry in entries:
+        start, end = fact_date(entry.get("start")), fact_date(entry.get("end"))
+        if not start or not end or not fact_date(entry.get("filed")) or not entry.get("accn"):
+            continue
+        if _cumulative_quarter_count(start, end):
+            versions.setdefault((start, end), []).append(entry)
+
+    latest: dict[tuple[str, str], tuple[dict[str, Any], bool]] = {}
+    for period, candidates in versions.items():
+        filed = max(str(row["filed"]) for row in candidates)
+        chosen = [row for row in candidates if str(row["filed"]) == filed]
+        if len({fact_number(row["val"]) for row in chosen}) != 1:
+            continue
+        entry = min(chosen, key=lambda row: str(row["accn"]))
+        corrected = len({fact_number(row["val"]) for row in candidates}) > 1 or any(
+            str(row.get("form") or "").upper().endswith("/A") for row in chosen
+        )
+        latest[period] = (entry, corrected)
+
+    derived: dict[str, FinancialFact] = {}
+    for (start, end), (current, current_corrected) in latest.items():
+        quarter = _cumulative_quarter_count(start, end)
+        if quarter < 2:
+            continue
+        predecessors = [
+            (previous_end, row, corrected)
+            for (previous_start, previous_end), (row, corrected) in latest.items()
+            if previous_start == start and _cumulative_quarter_count(start, previous_end) == quarter - 1
+            and 70 <= (date.fromisoformat(end) - date.fromisoformat(previous_end)).days <= 110
+        ]
+        if len(predecessors) != 1:
+            continue
+        previous_end, previous, previous_corrected = predecessors[0]
+        if str(previous["filed"]) > str(current["filed"]):
+            continue
+        if (current_corrected or previous_corrected) and (
+            current["accn"] != previous["accn"] or current["filed"] != previous["filed"]
+        ):
+            continue
+
+        lineage = tuple({
+            "subject": subject, "metric": metric, "concept": concept, "unit": "USD",
+            "value": float(row["val"]), "period_start": start, "period_end": fact_date(row["end"]),
+            "filed": fact_date(row["filed"]), "accession": row["accn"], "form": row["form"],
+            "source": "sec_companyfacts", "source_url": source_url,
+        } for row in (current, previous))
+        derived[end] = _DerivedQuarterlyFact(
+            subject=subject, metric=metric, value=float(current["val"]) - float(previous["val"]),
+            unit="USD", source="sec_companyfacts", period_end=end,
+            period_start=(date.fromisoformat(previous_end) + timedelta(days=1)).isoformat(),
+            frequency="quarterly", filed=fact_date(current["filed"]), accession=current["accn"],
+            concept=concept, form=current["form"], source_url=source_url, derivation_inputs=lineage,
+        )
+    return derived
+
+
 def _extract_companyfacts_facts(
     payload: dict[str, Any],
     *,
@@ -199,6 +280,8 @@ def _extract_companyfacts_facts(
     facts = payload.get("facts") if isinstance(payload.get("facts"), dict) else {}
     gaap = facts.get("us-gaap") if isinstance(facts.get("us-gaap"), dict) else {}
     rows_by_period: dict[str, FinancialFact] = {}
+    cash_flow_series: list[tuple[str, list[dict[str, Any]]]] = []
+    direct_periods: set[str] = set()
 
     for concept in concepts:
         fact_obj = gaap.get(concept)
@@ -212,6 +295,7 @@ def _extract_companyfacts_facts(
             if not isinstance(entries, list):
                 continue
             valid: dict[str, list[dict[str, Any]]] = {}
+            eligible_cash_flows: list[dict[str, Any]] = []
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
@@ -221,12 +305,16 @@ def _extract_companyfacts_facts(
                 period = _parse_companyfacts_period(entry)
                 if not period or fact_number(entry.get("val")) is None:
                     continue
+                if not instant and unit == "USD" and metric in {"operating_cash_flow", "capital_expenditures"}:
+                    eligible_cash_flows.append(entry)
                 if instant:
                     if entry.get("start"):
                         continue
                 elif not _is_quarterly_companyfacts_entry(entry):
                     continue
                 valid.setdefault(period, []).append(entry)
+            cash_flow_series.append((concept, eligible_cash_flows))
+            direct_periods.update(valid)
             for period, candidates in valid.items():
                 if period in rows_by_period:
                     continue
@@ -247,6 +335,13 @@ def _extract_companyfacts_facts(
                     concept=concept, form=str(entry.get("form") or ""),
                     source_url=source_url,
                 )
+    # 先收齐所有标签的直接单季值；冲突的直接单季也不能借差分绕过校验。
+    for concept, entries in cash_flow_series:
+        for period, fact in _derive_ytd_cash_flow_quarters(
+            entries, subject=subject, metric=metric, concept=concept, source_url=source_url,
+        ).items():
+            if period not in direct_periods:
+                rows_by_period.setdefault(period, fact)
     return rows_by_period
 
 
@@ -344,10 +439,32 @@ def _extract_risk_excerpt(raw_text: str, *, max_chars: int = 2200) -> str:
     return ""
 
 
+def _extract_research_sections(raw: str) -> dict[str, str]:
+    """从实际申报正文提取业务和竞争段落；短目录命中不作为正文。"""
+    text = _strip_html(raw)
+    sections: dict[str, str] = {}
+    patterns = {
+        "business": r"\bitem\s+1[.\s:]+business\b(.*?)(?=\bitem\s+1[ab][.\s:]|\bitem\s+2[.\s:]|$)",
+        "management_discussion": r"\bitem\s+(?:2|7)[.\s:]+management.{0,80}?discussion(.*?)(?=\bitem\s+(?:3|7a|8)[.\s:]|$)",
+    }
+    for name, pattern in patterns.items():
+        matches = [m.group(0) for m in re.finditer(pattern, text, re.I | re.S) if len(m.group(0)) >= 300]
+        if matches:
+            sections[name] = max(matches, key=len)[:6500]
+    # 竞争通常是业务章节中的小节；保留原句及其相邻上下文，不能从目录标题推演。
+    business_matches = [m.group(0) for m in re.finditer(patterns['business'], text, re.I | re.S) if len(m.group(0)) >= 300]
+    search_text = max(business_matches, key=len) if business_matches else text
+    competition = re.search(r"\b(?:competition|competitive\s+(?:environment|landscape|strengths))\b", search_text, re.I)
+    if competition and sections:
+        sections['competition'] = search_text[max(0, competition.start()-200):competition.start()+4000]
+    return sections
+
+
 def get_sec_filings(
     ticker: str,
     forms: str | list[str] | tuple[str, ...] | None = None,
     limit: int = 12,
+    include_content: bool = False,
 ) -> Dict[str, Any]:
     normalized_ticker = str(ticker or "").strip().upper()
     if not normalized_ticker:
@@ -397,6 +514,27 @@ def get_sec_filings(
             limit=limit,
             cik=cik,
         )
+        if include_content:
+            read_forms: set[str] = set()
+            for filing in rows:
+                form = str(filing.get("form") or "")
+                if form not in {"10-K", "10-Q"} or form in read_forms:
+                    continue
+                read_forms.add(form)
+                filing["content_read"] = False
+                try:
+                    response = _http_get(filing["filing_url"], headers=headers, timeout=25)
+                    if response.status_code != 200:
+                        filing["content_error"] = f"filing_http_{response.status_code}"
+                        continue
+                    sections = _extract_research_sections(response.text)
+                    filing["content_sections"] = sections
+                    filing["content_excerpt"] = "\n\n".join(f"{name}: {text}" for name, text in sections.items())
+                    filing["content_read"] = bool(sections)
+                    if not sections:
+                        filing["content_error"] = "research_section_not_found"
+                except Exception as exc:
+                    filing["content_error"] = f"filing_fetch_failed:{type(exc).__name__}"
         return {
             "ticker": normalized_ticker,
             "market": market,
@@ -566,6 +704,12 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
         if payload.get("cik") is not None and str(payload["cik"]).lstrip("0") != str(cik).lstrip("0"):
             return _error_payload(normalized_ticker, error="issuer_mismatch", message="SEC response issuer does not match requested CIK.", market=market)
 
+        source_latest_filed = max((
+            filed for taxonomy in (payload.get("facts") or {}).values()
+            for fact in taxonomy.values() for entries in (fact.get("units") or {}).values()
+            for entry in entries if (filed := fact_date(entry.get("filed")))
+        ), default=None)
+
         metric_maps: dict[str, dict[str, float]] = {}
         metric_facts: dict[str, dict[str, FinancialFact]] = {}
         for field, (concepts, units) in _COMPANYFACTS_METRIC_MAP.items():
@@ -603,6 +747,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
             "source": "sec_companyfacts",
             "company_name": company.get("title"),
             "cik": cik,
+            "source_latest_filed": source_latest_filed,
             "periods": period_labels,
             "period_ends": period_labels,
             "frequency": "quarterly",
@@ -615,7 +760,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
                 field: [period for period in period_labels if period not in values]
                 for field, values in metric_maps.items() if any(period not in values for period in period_labels)
             },
-            "warnings": ["季度流量仅接受可核验的单季起止区间；累计值与未知期间不补作季度。"],
+            "warnings": ["季度流量优先采用已披露的单季区间；现金流仅允许同标签、同财年起点的相邻累计差分，并保留两项申报来源。"],
             "revenue": [metric_maps["revenue"].get(period) for period in period_labels],
             "gross_profit": [metric_maps["gross_profit"].get(period) for period in period_labels],
             "operating_income": [metric_maps["operating_income"].get(period) for period in period_labels],
@@ -638,8 +783,14 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
                 fcf = ocf + capex if capex < 0 else ocf - capex
             result["free_cash_flow"].append(fcf)
             result["fact_metadata"].setdefault("free_cash_flow", []).append(
-                {**ocf_fact.metadata(), "metric": "free_cash_flow", "value": fcf, "derived_from": ["operating_cash_flow", "capital_expenditures"]}
-                if fcf is not None and ocf_fact else None
+                {
+                    **ocf_fact.metadata(), "metric": "free_cash_flow", "value": fcf,
+                    "derived_from": ["operating_cash_flow", "capital_expenditures"],
+                    "derivation": "operating_cash_flow_minus_capital_expenditures",
+                    "derivation_inputs": [ocf_fact.metadata(), capex_fact.metadata()],
+                    "capital_expenditures_concept": capex_fact.concept,
+                }
+                if fcf is not None and ocf_fact and capex_fact else None
             )
 
         has_any = any(

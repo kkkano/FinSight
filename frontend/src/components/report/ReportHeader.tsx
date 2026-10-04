@@ -6,26 +6,27 @@ import type { ReportIR, Sentiment, CoreViewpoint } from '../../types/index';
 import { TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 import type { BadgeInfo, ReportHints } from './ReportUtils';
 import { SourceTrustBadge } from '../source/SourceTrustBadge';
+import { getReportPresentation } from './ReportPresentation';
+import { QualityBadge } from './QualityBadge';
 
 /* ------------------------------------------------------------------ */
 /*  Small badge sub-components                                         */
 /* ------------------------------------------------------------------ */
 
-const SentimentBadge: React.FC<{ sentiment: Sentiment; confidence: number }> = ({ sentiment, confidence }) => {
-  const colors: Record<Sentiment, string> = {
+const SentimentBadge: React.FC<{ report: ReportIR }> = ({ report }) => {
+  const colors: Record<Exclude<Sentiment, 'unknown'>, string> = {
     bullish: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200',
     bearish: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200',
     neutral: 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
   };
 
-  const confidencePercent = Math.round(confidence * 100);
+  const { sentiment, judgmentLabel } = getReportPresentation(report);
 
   return (
     <div className="flex items-center space-x-2">
-      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${colors[sentiment]}`}>
-        {sentiment}
+      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${sentiment ? colors[sentiment] : colors.neutral}`}>
+        {judgmentLabel}
       </span>
-      <span className="text-[11px] text-gray-500 dark:text-gray-400">{confidencePercent}% confidence</span>
     </div>
   );
 };
@@ -75,20 +76,18 @@ const CoreViewpointCard: React.FC<{ viewpoint: CoreViewpoint }> = ({ viewpoint }
   const [expanded, setExpanded] = useState(false);
   const colors = AGENT_COLORS[viewpoint.agent_name] ?? DEFAULT_AGENT_COLOR;
   const hasDetail = viewpoint.detail.length > viewpoint.headline.length + 50;
-  const confidencePercent = Math.round(viewpoint.confidence * 100);
 
   return (
     <div className={`rounded-lg border ${colors.border} ${colors.bg} p-3 transition-all`}>
-      {/* Header row: agent badge + confidence */}
+      {/* 观点标签与可检查的来源数量。 */}
       <div className="flex items-center justify-between mb-1.5">
         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors.text} ${colors.bg} border ${colors.border}`}>
           {viewpoint.title}
         </span>
         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-          {confidencePercent}%
           {viewpoint.evidence_count > 0 && (
             <span className="ml-1.5 text-slate-400 dark:text-slate-500">
-              · {viewpoint.evidence_count} sources
+              {viewpoint.evidence_count} 条来源
             </span>
           )}
         </span>
@@ -222,6 +221,8 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
   warningNode,
   fullscreen = false,
 }) => {
+  const presentation = getReportPresentation(report);
+  const recommendation = presentation.sentiment ? report.recommendation : undefined;
   if (fullscreen) {
     return (
       <div className="border-b border-slate-200/80 dark:border-slate-700/70 pb-6">
@@ -234,8 +235,8 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         </div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{report.title}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <SentimentBadge sentiment={report.sentiment} confidence={report.confidence_score} />
-          {report.recommendation && <RecommendationBadge recommendation={report.recommendation} />}
+          <SentimentBadge report={report} />
+          {recommendation && <RecommendationBadge recommendation={recommendation} />}
           <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.quality.tone}`}>
             {evidenceBadges.quality.label}
           </span>
@@ -244,9 +245,11 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
           </span>
           <SourceTrustBadge sourceType="report" />
         </div>
+        <div className="mt-3"><QualityBadge quality={presentation.quality} /></div>
         <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+          {report.core_viewpoints?.length ? <p className="mb-3 text-sm text-slate-700 dark:text-slate-200">总体结论：{presentation.summary}</p> : null}
           <CoreViewpointsSection
-            report={report}
+            report={{ ...report, summary: presentation.summary }}
             sourceSummary={sourceSummary}
             sourceItemClassName="px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 text-slate-500 dark:text-slate-300"
           />
@@ -274,8 +277,8 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <SentimentBadge sentiment={report.sentiment} confidence={report.confidence_score} />
-        {report.recommendation && <RecommendationBadge recommendation={report.recommendation} />}
+        <SentimentBadge report={report} />
+        {recommendation && <RecommendationBadge recommendation={recommendation} />}
         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.quality.tone}`}>
           {evidenceBadges.quality.label}
         </span>
@@ -284,11 +287,13 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         </span>
         <SourceTrustBadge sourceType="report" />
       </div>
+      <QualityBadge quality={presentation.quality} />
 
       {/* Summary box */}
       <div className="mt-4 rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 p-4">
+        {report.core_viewpoints?.length ? <p className="mb-3 text-sm text-slate-700 dark:text-slate-200">总体结论：{presentation.summary}</p> : null}
         <CoreViewpointsSection
-          report={report}
+          report={{ ...report, summary: presentation.summary }}
           sourceSummary={sourceSummary}
           sourceItemClassName="px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 dark:text-slate-300"
         />

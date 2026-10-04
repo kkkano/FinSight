@@ -188,7 +188,7 @@ def _history_tickers_from_messages(state: GraphState, current_query: str) -> lis
     if not isinstance(messages, list):
         return []
     current = str(current_query or "").strip()
-    tickers: list[str] = []
+    history: list[tuple[str, str]] = []
     for msg in reversed(messages[-8:]):
         content = getattr(msg, "content", None)
         if content is None and isinstance(msg, dict):
@@ -196,8 +196,24 @@ def _history_tickers_from_messages(state: GraphState, current_query: str) -> lis
         text = str(content or "").strip()
         if not text or text == current:
             continue
-        tickers.extend(_extract_tickers_from_text(text))
-    return dedup_tickers(tickers)
+        role = str(getattr(msg, 'type', '') or (msg.get('role') if isinstance(msg, dict) else '') or '')
+        history.append((role, text))
+    # 最近用户明确选择的主体优先，不能把回答中的竞品、交易所和来源文字变成新任务。
+    for role, text in history:
+        if role in {'human','user'}:
+            tickers = _extract_tickers_from_text(_strip_urls(text))
+            if tickers:
+                return dedup_tickers(tickers)
+    focus = current_thread_focus(state.get('memory_context') or {})
+    if isinstance(focus, dict) and focus.get('ticker'):
+        return [normalize_ticker(str(focus['ticker']))]
+    for role, text in history:
+        if role in {'ai','assistant'}:
+            content = re.split(r'\n#{1,4}\s*(?:来源|Sources|References)', text, maxsplit=1, flags=re.I)[0]
+            tickers = _extract_tickers_from_text(_strip_urls(content))
+            if tickers:
+                return dedup_tickers(tickers)
+    return []
 
 def _can_use_active_symbol_fallback(ui_context: dict[str, Any], memory_context: dict[str, Any]) -> bool:
     if not isinstance(ui_context.get("active_symbol"), str) or not ui_context["active_symbol"].strip():
@@ -241,6 +257,8 @@ def _subject_type_for_ticker(ticker: str) -> str:
         return "unknown"
     if symbol.endswith("=F"):
         return "commodity"
+    if symbol.endswith("-USD"):
+        return "crypto"
     if symbol.startswith("^") or symbol in _INDEX_TICKERS:
         return "index"
     return "company"

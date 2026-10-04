@@ -34,6 +34,10 @@ def parse_quote_payload(payload: Any) -> dict[str, Any] | None:
             "source": ("source", "provider"),
             "currency": ("currency", "financialCurrency"),
             "quality": ("quality",),
+            "market_session": ("market_session", "market_state", "marketState"),
+            "source_timestamp": ("source_timestamp",),
+            "source_time_precision": ("source_time_precision",),
+            "source_time_status": ("source_time_status",),
         }.items():
             value = next((payload[key] for key in aliases if payload.get(key) is not None), None)
             if value is not None:
@@ -76,6 +80,7 @@ def parse_quote_payload(payload: Any) -> dict[str, Any] | None:
     }
     for field, label in {
         "source": "(?:Provider|Source)", "as_of": "As of", "currency": "Currency", "quality": "Quality",
+        "market_session": "Session", "source_timestamp": "Source time", "source_time_precision": "Time precision", "source_time_status": "Time status",
     }.items():
         match = re.search(rf"\b{label}:\s*([^|\r\n]+)", text, re.IGNORECASE)
         if match and match.group(1).strip().lower() not in {"none", "null", "unknown"}:

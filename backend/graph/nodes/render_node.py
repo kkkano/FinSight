@@ -457,13 +457,20 @@ def render_node(state: GraphState) -> dict:
     for stub / empty drafts.
     """
     artifacts = state.get("artifacts") or {}
+    understanding = state.get("understanding") or {}
+    clarify = state.get("clarify") or {}
+    if understanding.get("route") == "clarify" and str(clarify.get("question") or "").strip():
+        # 澄清是本轮最终答复，不能被研究证据模板覆盖；混合研究仍走逐任务渲染。
+        result_artifacts = {**artifacts, "draft_markdown": str(clarify["question"]).strip()}
+        return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}
     research_result = artifacts.get("research_result") if isinstance(artifacts, dict) else None
     if isinstance(research_result, dict):
         draft = ReportSynthesisDraft.model_validate(research_result)
         coverage = (state.get("trace") or {}).get("coverage_validator") or {}
         missing_requirements = coverage.get("missing_requirements") or []
         for task in draft.task_results:
-            task.missing_requirements = [item for item in missing_requirements if isinstance(item, dict) and item.get("task_id") == task.task_id]
+            combined = list(task.missing_requirements) + [item for item in missing_requirements if isinstance(item, dict) and item.get("task_id") == task.task_id]
+            task.missing_requirements = [item for index, item in enumerate(combined) if item not in combined[:index]]
             if task.missing_requirements and task.status == "answered":
                 task.status = "partial"
         report_mode = state.get("output_mode") == "investment_report"

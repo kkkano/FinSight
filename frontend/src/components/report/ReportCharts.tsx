@@ -498,18 +498,9 @@ export const EvidencePool: React.FC<EvidencePoolProps> = ({
         {citations.map((cit) => {
           const citationId = `${anchorPrefix}-citation-${cit.source_id}`;
           const isActive = activeCitation === cit.source_id;
-          const confidencePercent = typeof cit.confidence === 'number' ? Math.round(cit.confidence * 100) : null;
           const freshnessHours = typeof cit.freshness_hours === 'number' ? Math.round(cit.freshness_hours) : null;
           // 只有 http/https 才是真实可跳转的 URL（过滤 internal:// 等占位地址）
           const externalUrl = cit.url && /^https?:\/\//i.test(cit.url) ? cit.url : null;
-          const confidenceTone =
-            confidencePercent === null
-              ? ''
-              : confidencePercent >= 80
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
-                : confidencePercent >= 60
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
           return (
             <div
               key={cit.source_id}
@@ -563,18 +554,11 @@ export const EvidencePool: React.FC<EvidencePoolProps> = ({
                       {externalUrl}
                     </div>
                   )}
-                  {(confidencePercent !== null || freshnessHours !== null) && (
+                  {freshnessHours !== null && (
                     <div className="mt-1 flex flex-wrap gap-1.5 text-2xs">
-                      {confidencePercent !== null && (
-                        <span className={`px-1.5 py-0.5 rounded-full ${confidenceTone}`}>
-                          Confidence {confidencePercent}%
-                        </span>
-                      )}
-                      {freshnessHours !== null && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-200">
-                          Freshness {freshnessHours}h
-                        </span>
-                      )}
+                      <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-200">
+                        Freshness {freshnessHours}h
+                      </span>
                     </div>
                   )}
                 </div>

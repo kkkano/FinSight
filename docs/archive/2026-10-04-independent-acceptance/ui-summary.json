@@ -1,0 +1,161 @@
+{
+  "verified_at": "2026-10-04T07:15:13.528091+00:00",
+  "site": "https://finsight-ai.chat",
+  "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+  "real_login": true,
+  "test_identity": "用户在浏览器完成真实登录；数据库运行归属 authenticated UUID，未记录账号标识。",
+  "case_count": 2,
+  "chat_query": "PEP 最近一次可用报价是多少？请给出币种和来源时间。",
+  "report_query": "生成一份 IBM 投资研究报告，重点覆盖业务、财务、估值和风险，附可追溯来源。",
+  "chat_first_feedback_ms": 13,
+  "chat_first_body_ms": 2795,
+  "chat_terminal_ms": 3351,
+  "report_request_utc": "2026-10-04T06:59:36.709Z",
+  "report_first_body_ms": 210232,
+  "report_terminal_ms": 226440,
+  "report_first_feedback_note": "提交时即进入生成态；监控起点包含自动化点击等待，不将该间隔当作产品首反馈耗时。",
+  "report_final_recovery_get_ms": 14970.1,
+  "timing_note": "浏览器耗时使用同一客户端时钟。服务器保存耗时单列，不跨时钟相减。首轮网络过滤遗漏 /api/execute，随后通过 Performance 记录、正确过滤的恢复监测及数据库同 run 数量补证。",
+  "chat_dom_hashes": {
+    "chat-initial": "ed60e1951f9bbc821f211b4d6c658b67c081300d2e09deb1c5750eabc25eeb53",
+    "chat-refreshed": "ed60e1951f9bbc821f211b4d6c658b67c081300d2e09deb1c5750eabc25eeb53",
+    "chat-history-reopened": "ed60e1951f9bbc821f211b4d6c658b67c081300d2e09deb1c5750eabc25eeb53",
+    "chat-recovery-confirmed": "ed60e1951f9bbc821f211b4d6c658b67c081300d2e09deb1c5750eabc25eeb53"
+  },
+  "report_dom_hashes": {
+    "report-initial": "7c1ecfd2f0e3e18a1c7f5f5ff198d1297279ff8998733a7f4e272a3f4f0dfb4f",
+    "report-refreshed": "7c1ecfd2f0e3e18a1c7f5f5ff198d1297279ff8998733a7f4e272a3f4f0dfb4f",
+    "report-history-reopened": "7c1ecfd2f0e3e18a1c7f5f5ff198d1297279ff8998733a7f4e272a3f4f0dfb4f",
+    "report-archive-opened": "7c1ecfd2f0e3e18a1c7f5f5ff198d1297279ff8998733a7f4e272a3f4f0dfb4f",
+    "report-archive-refreshed": "7c1ecfd2f0e3e18a1c7f5f5ff198d1297279ff8998733a7f4e272a3f4f0dfb4f"
+  },
+  "zero_generation_posts_during_confirmed_recovery": true,
+  "canonical_records": [
+    {
+      "query": "PEP 最近一次可用报价是多少？请给出币种和来源时间。",
+      "run_count": 1,
+      "owner_kind": "authenticated_uuid",
+      "status": "completed",
+      "persistence_status": "saved",
+      "body_characters": 136,
+      "body_sha256": "03bb4f3c210a7e5338d4545336ae782a6264c6e84f7f793abefd22e816171033",
+      "quality": {
+        "state": "pass",
+        "reasons": [],
+        "publishable": true,
+        "answer_status": "answered",
+        "schema_version": "report.quality.v1",
+        "missing_requirements": [],
+        "has_supported_content": true
+      },
+      "reports": [],
+      "llm_token_calls": 0,
+      "total_tokens": 0,
+      "total_prompt_tokens": 0,
+      "total_completion_tokens": 0,
+      "tokens_by_model": {},
+      "usage_state": "not_reported",
+      "failed_llm_calls": 0,
+      "canonical_message_count": 2
+    },
+    {
+      "query": "生成一份 IBM 投资研究报告，重点覆盖业务、财务、估值和风险，附可追溯来源。",
+      "run_count": 1,
+      "owner_kind": "authenticated_uuid",
+      "status": "completed",
+      "persistence_status": "saved",
+      "body_characters": 13506,
+      "body_sha256": "e54f2ee084ab095241c409a3bd9bb8c8939f5de619ae1fe2ea6475f824478111",
+      "quality": {
+        "state": "warn",
+        "details": {
+          "invalid_refs": [],
+          "meets_coverage": true,
+          "meets_min_sources": true,
+          "key_section_issues": [],
+          "key_section_issue_details": [],
+          "key_section_warn_issue_details": [],
+          "key_section_block_issue_details": []
+        },
+        "metrics": {
+          "coverage": 1.0,
+          "total_blocks": 1,
+          "covered_blocks": 1,
+          "unique_sources": 52,
+          "invalid_refs_count": 0,
+          "key_section_issues_count": 0,
+          "key_section_worst_sources": 0,
+          "key_section_warn_issues_count": 0,
+          "key_section_block_issues_count": 0,
+          "key_section_internal_only_worst_sources": 0
+        },
+        "reasons": [
+          {
+            "code": "fallback_used",
+            "actual": null,
+            "metric": "",
+            "message": "fallback_used",
+            "severity": "warn",
+            "threshold": null
+          },
+          {
+            "code": "missing_overall_conclusion",
+            "actual": null,
+            "metric": "",
+            "message": "missing_overall_conclusion",
+            "severity": "warn",
+            "threshold": null
+          },
+          {
+            "code": "missing_supported_task_conclusion",
+            "actual": null,
+            "metric": "",
+            "message": "missing_supported_task_conclusion",
+            "severity": "warn",
+            "threshold": null
+          }
+        ],
+        "thresholds": {
+          "min_sources": 2,
+          "min_coverage": 0.8,
+          "min_key_section_sources": 2
+        },
+        "publishable": true,
+        "evaluated_at": "2026-10-04T07:03:08.128109+00:00",
+        "answer_status": "partial",
+        "schema_version": "report.quality.v1",
+        "missing_requirements": [],
+        "has_supported_content": true
+      },
+      "reports": [
+        {
+          "report_id": "lg_a82835ba2b",
+          "ticker": "IBM",
+          "quality_state": "warn",
+          "publishable": true
+        }
+      ],
+      "llm_token_calls": 1,
+      "total_tokens": 73818,
+      "total_prompt_tokens": 64152,
+      "total_completion_tokens": 9666,
+      "tokens_by_model": {
+        "step-5-preview": {
+          "calls": 1,
+          "prompt": 64152,
+          "completion": 9666
+        }
+      },
+      "usage_state": "reported",
+      "failed_llm_calls": 0,
+      "canonical_message_count": 2
+    }
+  ],
+  "ui_observations": [
+    "聊天及报告均可见正文，结束生成，刷新和重开恢复；报告可展开、全屏及通过历史归档打开。",
+    "IBM 报告为部分完成；没有总判断仍显示 NEUTRAL / 45% confidence / Evidence Medium (70%)，不能把这些标签当命中率。",
+    "报告 SSE 正文与最终保存正文存在格式变化，以最终 canonical 正文为恢复对照；最终 DOM 11298 字符和服务器 Markdown 13506 字符分别稳定，二者格式不同，不直接比 hash。",
+    "部分截图工具超时，归档页以已保存 DOM 和正文 hash 核验；没有因此重新生成。"
+  ],
+  "scope_limit": "仅一条报价聊天和一份研究报告；报价路径不调用 LLM，IBM 实际调用一次 step-5-preview。该验收不证明所有复杂聊天或跨用户隔离场景都已通过。"
+}

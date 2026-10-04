@@ -9,7 +9,7 @@ const renderText = (node: React.ReactElement) =>
   renderToStaticMarkup(node).replace(/\s+/g, ' ');
 
 describe('EvidenceLedgerPanel', () => {
-  it('renders source title, source domain, as_of, confidence, and layer badge', () => {
+  it('保留来源、时间与论据，收起长列表且不把未校准评分展示为置信度', () => {
     const ledger: EvidenceLedger = {
       ledger_id: 'ledger:aapl:test',
       query: 'AAPL margin outlook',
@@ -51,7 +51,10 @@ describe('EvidenceLedgerPanel', () => {
     expect(text).toContain('Apple quarterly report');
     expect(text).toContain('sec.gov');
     expect(text).toContain('2026-05-02T09:30:00');
-    expect(text).toContain('92%');
+    expect(text).toContain('Apple margin improved year over year.');
+    expect(text).not.toContain('92%');
+    expect(text).not.toContain('81%');
+    expect(text).not.toContain('open=""');
     expect(text).toContain('kb');
     expect(text).toContain('agent-backed');
   });

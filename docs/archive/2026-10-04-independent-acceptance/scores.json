@@ -1,0 +1,1821 @@
+{
+  "manifest": {
+    "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+    "dataset_sha256": "a49a6fc0e9b4e93f4aae03f0d4ba12a2bac6e99c1f617cf6e382a3480e62edb2",
+    "started_at": "2026-10-04T06:46:02.594311+00:00",
+    "model": "step-5-preview",
+    "runtime": "local_graph_production_data_credentials",
+    "real_authentication": false,
+    "persistence_test": false,
+    "rag": "isolated_lexical_only",
+    "production_corpus_available": false,
+    "sequential": true,
+    "cases": [
+      "h01_orcl_earnings",
+      "h02_orcl_events",
+      "h03_adbe_quote",
+      "h04_avgo_technical",
+      "h05_baba_hk",
+      "h06_v_ma_compare",
+      "h07_multi_task",
+      "h08_oil_macro",
+      "h09_nflx_news",
+      "h10_missing_subject",
+      "h11_cashflow_concept",
+      "h12_crm_report"
+    ],
+    "nonsecret_config": {
+      "LANGGRAPH_SYNTHESIZE_REPORT_MAX_TOKENS": "65536",
+      "LLM_MAX_TOKENS": "65536",
+      "MARKET_KLINE_TRUSTED_PROVIDERS": "twelve_data",
+      "MARKET_KLINE_CACHE_TTL_SECONDS": "60",
+      "LANGGRAPH_SYNTHESIZE_MAX_ATTEMPTS": "2",
+      "MARKET_KLINE_PRIMARY_PROVIDER": "twelve_data",
+      "MARKET_KLINE_SECONDARY_PROVIDER": "stooq",
+      "MARKET_FINANCIAL_TRUSTED_PROVIDERS": "sec_companyfacts",
+      "MARKET_FINANCIAL_CACHE_TTL_SECONDS": "3600",
+      "MARKET_QUOTE_PRIMARY_PROVIDER": "twelve_data",
+      "MARKET_NEWS_CACHE_TTL_SECONDS": "300",
+      "LANGGRAPH_SYNTHESIZE_TIMEOUT_SEC": "1200",
+      "LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC": "1200",
+      "MARKET_NEWS_TRUSTED_PROVIDERS": "finnhub",
+      "LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS": "1",
+      "LANGGRAPH_STRUCTURED_SYNTHESIS_MAX_TOKENS": "65536",
+      "MARKET_QUOTE_TRUSTED_PROVIDERS": "twelve_data",
+      "MARKET_NEWS_SECONDARY_PROVIDER": "yfinance",
+      "MARKET_FINANCIAL_PRIMARY_PROVIDER": "yfinance",
+      "MARKET_QUOTE_CACHE_TTL_SECONDS": "30",
+      "LANGGRAPH_STRUCTURED_SYNTHESIS_REQUEST_TIMEOUT_SECONDS": "1200",
+      "MARKET_FINANCIAL_SECONDARY_PROVIDER": "sec_companyfacts",
+      "MARKET_QUOTE_SECONDARY_PROVIDER": "stooq",
+      "MARKET_NEWS_PRIMARY_PROVIDER": "finnhub",
+      "LLM_FOREGROUND_MAX_TOKENS": "65536",
+      "LLM_REQUEST_TIMEOUT_SECONDS": "1200",
+      "LANGGRAPH_SYNTHESIZE_MAX_TOKENS": "65536"
+    },
+    "effort": "medium",
+    "completed_at": "2026-10-04T07:01:31.165362+00:00"
+  },
+  "review_policy": "按调用前冻结口径人工复核；意图要求路线、主体、任务维度、否定、时间和历史约束全部正确。证据得分独立于最终回答和系统自评。",
+  "metrics": {
+    "intent": {
+      "passed": 2,
+      "total": 12
+    },
+    "evidence": {
+      "covered": 10,
+      "total": 29
+    },
+    "full_answer": {
+      "passed": 0,
+      "total": 12
+    },
+    "answer_classes": {
+      "honest_partial": 5,
+      "incorrect": 7
+    },
+    "nonempty_answer_count": 12,
+    "chat_seconds": {
+      "n": 11,
+      "median": 30.047,
+      "maximum": 190.656,
+      "p90_nearest_rank": 184.89
+    },
+    "report_seconds": {
+      "n": 1,
+      "values": [
+        183.781
+      ]
+    },
+    "sequential_graph_seconds": 923.044,
+    "llm_calls": 7,
+    "failed_llm_calls": 0,
+    "total_tokens": 250980
+  },
+  "cases": [
+    {
+      "id": "h01_orcl_earnings",
+      "query": "甲骨文 ORCL 最近一个已公布季度赚得怎么样？请区分收入、净利润和现金流，并说明这份财报对股价的影响。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:46:07.620346+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 173.187,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "ORCL"
+      ],
+      "actual_tickers": [
+        "ORCL"
+      ],
+      "intent_score": 1,
+      "intent_reason": "ORCL、单季财务与财报影响两个研究维度识别正确。",
+      "evidence_dimensions": [
+        {
+          "dimension": "真实最新单季财务",
+          "score": 1,
+          "reason": "SEC CompanyFacts 明确 2026-06-01 至 2026-08-31 单季，收入、净利润和经营现金流均有 USD、披露日与来源。",
+          "refs": [
+            "get_sec_company_facts_quarterly:s5"
+          ]
+        },
+        {
+          "dimension": "财报对股价影响",
+          "score": 0,
+          "reason": "近期日涨跌不能替代财报发布窗口的价格反应，未建立业绩/预期差与事件收益的证据绑定。"
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 2,
+      "answer_class": "honest_partial",
+      "full_answer": 0,
+      "answer_reason": "保留财务事实，但没有完成财报对股价影响的解释；模型选择了无效 evidence ID 后回退。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": false,
+        "business_llm_calls": 1,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "reason": "task_synthesis_unknown_evidence_id"
+      },
+      "usage": {
+        "total_prompt_tokens": 37860,
+        "total_completion_tokens": 8354,
+        "total_tokens": 46214,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 37860,
+            "completion": 8354,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "research_analyst",
+            "layer": "analysis",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 37860,
+            "completion": 8354,
+            "calls": 1,
+            "failed_calls": 0,
+            "duration_ms": 118895
+          }
+        ]
+      },
+      "raw_sha256": "eecf9c589dc3598b0811eee3b0b1ddae79c789ae00eb5415d44c10db451a9dcb",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h02_orcl_events",
+      "query": "沿用刚才这家公司，未来90天哪些已确认事件值得跟踪？把确定日期与仅供观察的可能催化分开。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:49:00.838811+00:00",
+      "history_dependency": "h01_orcl_earnings",
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 57.734,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "ORCL"
+      ],
+      "actual_tickers": [
+        "ORCL"
+      ],
+      "intent_score": 0,
+      "intent_reason": "正确继承 ORCL，但未来 90 天未进入 time_scope，实际 get_event_calendar 仅覆盖 30 天。",
+      "evidence_dimensions": [
+        {
+          "dimension": "未来90天已确认事件",
+          "score": 0,
+          "reason": "仅有 30 天供应商分红日历，不能覆盖请求的 90 天确认事件。"
+        },
+        {
+          "dimension": "观察催化与确认事件区分",
+          "score": 0,
+          "reason": "没有形成观察催化及触发条件的独立清单；检索线索不能替代。"
+        }
+      ],
+      "evidence_score": 0,
+      "evidence_total": 2,
+      "answer_class": "honest_partial",
+      "full_answer": 0,
+      "answer_reason": "明确来源覆盖 30 天并保留限制，但未答完 90 天事件与观察条件。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "warn",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          },
+          {
+            "code": "task_not_answered",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "task_not_answered"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": false,
+        "business_llm_calls": 1,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "reason": "task_synthesis_unknown_evidence_id"
+      },
+      "usage": {
+        "total_prompt_tokens": 6940,
+        "total_completion_tokens": 3644,
+        "total_tokens": 10584,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 6940,
+            "completion": 3644,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "research_analyst",
+            "layer": "analysis",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 6940,
+            "completion": 3644,
+            "calls": 1,
+            "failed_calls": 0,
+            "duration_ms": 49536
+          }
+        ]
+      },
+      "raw_sha256": "3062a9b6020d604015b6ee26388fc6b906101cda5ea336e655c91877085b7492",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h03_adbe_quote",
+      "query": "ADBE 最近一次可用报价是多少？告诉我币种、报价时间和是否为盘后价格，别把它说成实时价。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:49:58.590845+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 0.281,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "ADBE"
+      ],
+      "actual_tickers": [
+        "ADBE"
+      ],
+      "intent_score": 1,
+      "intent_reason": "ADBE 报价路线和主体正确，未冒称实时；盘后属性缺失定位为证据/渲染合同不完整。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最近报价及报价属性",
+          "score": 0,
+          "reason": "有 237.69 USD、twelve_data 与源日期，但没有可追溯的常规/盘后属性；日期补成 00:00:00Z 也没有交代源精度。",
+          "refs": [
+            "get_stock_price:s1"
+          ]
+        }
+      ],
+      "evidence_score": 0,
+      "evidence_total": 1,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "遗漏用户明确要求的交易时段属性，仍标为已回答且未披露这项缺口；本分类表示漏答/状态不实，不等同认定报价数值伪造。",
+      "app_quality": {
+        "state": "pass",
+        "reasons": [],
+        "schema_version": "report.quality.v1",
+        "answer_status": "answered",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "deterministic_renderer",
+        "verifier_allowed": false,
+        "llm_calls": 0,
+        "business_llm_calls": 0,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": false,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {},
+        "usage_by_attribution": []
+      },
+      "raw_sha256": "9b7a8313a175ce7dfc509c1db771438fc9c8831ce0f14589afb2a357734e3240",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h04_avgo_technical",
+      "query": "只看 AVGO 的技术面：日线趋势、RSI、MACD、支撑和阻力，不需要新闻或基本面。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:49:58.863673+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 184.89,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "AVGO"
+      ],
+      "actual_tickers": [
+        "AVGO"
+      ],
+      "intent_score": 0,
+      "intent_reason": "将不需要新闻或基本面中的否定对象当作正向任务，执行了 fundamental_agent、news_agent 和 SEC 等工具。",
+      "evidence_dimensions": [
+        {
+          "dimension": "日线趋势",
+          "score": 1,
+          "reason": "有 2026-10-02 日线收盘、MA20/MA50 及横盘指标。",
+          "refs": [
+            "get_technical_snapshot:s8"
+          ]
+        },
+        {
+          "dimension": "RSI",
+          "score": 1,
+          "reason": "真实日线 RSI(14)=56.59，有日期和来源。",
+          "refs": [
+            "get_technical_snapshot:s8"
+          ]
+        },
+        {
+          "dimension": "MACD",
+          "score": 1,
+          "reason": "MACD=-5.5183、信号线=-6.4512，有日期和来源。",
+          "refs": [
+            "get_technical_snapshot:s8"
+          ]
+        },
+        {
+          "dimension": "支撑阻力",
+          "score": 1,
+          "reason": "支撑 335.81、阻力 372.70、成交量和 USD 报价形成可追溯技术快照。",
+          "refs": [
+            "agent_source:381e46f3f3e49e9c",
+            "get_stock_price:s7"
+          ]
+        }
+      ],
+      "evidence_score": 4,
+      "evidence_total": 4,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "技术证据四维存在，但回答和执行均违反仅技术面约束；完整率不因材料多而加分。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": false,
+        "business_llm_calls": 1,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "reason": "task_synthesis_unknown_evidence_id"
+      },
+      "usage": {
+        "total_prompt_tokens": 37083,
+        "total_completion_tokens": 10554,
+        "total_tokens": 47637,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 37083,
+            "completion": 10554,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "research_analyst",
+            "layer": "analysis",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 37083,
+            "completion": 10554,
+            "calls": 1,
+            "failed_calls": 0,
+            "duration_ms": 122671
+          }
+        ]
+      },
+      "raw_sha256": "3915e0ce9c96481b7f51fa96ad2c248c4a0cc39f9bf79e977dbcfb8f5d702486",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h05_baba_hk",
+      "query": "请研究阿里巴巴港股 9988.HK 的最新财务、估值和风险；只分析这个上市代码，金额标清币种。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:53:03.793456+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 190.656,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "9988.HK"
+      ],
+      "actual_tickers": [
+        "9988.HK",
+        "BABA"
+      ],
+      "intent_score": 0,
+      "intent_reason": "显式仅 9988.HK 被中文公司别名额外扩成 BABA 主任务，财务未成为明确独立展示维度。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最新财务",
+          "score": 1,
+          "reason": "9988.HK 的 2026-06-30 季度收入、净利润、经营现金流有 CNY 和 yfinance 财务来源；未用 BABA 的资料冒领该分。",
+          "refs": [
+            "agent_source:925c31b8b9b4080b",
+            "agent_source:05045a7dd3d9b166",
+            "agent_source:0a639759adbacf05"
+          ]
+        },
+        {
+          "dimension": "港股估值",
+          "score": 0,
+          "reason": "缺港股价格及公司估值，无法验证 HKD 估值口径。"
+        },
+        {
+          "dimension": "主要风险",
+          "score": 1,
+          "reason": "该上市代码自身的利润同比下降、负债增长与 EPS 负向修正，能够支持具体盈利及杠杆风险；不要求必须来自 risk_agent。",
+          "refs": [
+            "agent_source:05045a7dd3d9b166",
+            "agent_source:376fce179736a105",
+            "agent_source:a32b2591aa355947"
+          ]
+        }
+      ],
+      "evidence_score": 2,
+      "evidence_total": 3,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "越过单一上市代码限制并增加 BABA 全节，且未给可用估值。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_1",
+              "subject": "9988.HK",
+              "evidence_kind": "company_profile",
+              "frame_id": "request_task_1",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_1",
+              "subject": "9988.HK",
+              "evidence_kind": "earnings_estimates",
+              "frame_id": "request_task_1",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_1",
+              "subject": "9988.HK",
+              "evidence_kind": "price_snapshot",
+              "frame_id": "request_task_1",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_1",
+              "subject": "9988.HK",
+              "evidence_kind": "risk_profile",
+              "frame_id": "request_task_1",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_2",
+              "subject": "BABA",
+              "evidence_kind": "company_profile",
+              "frame_id": "request_task_2",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_2",
+              "subject": "BABA",
+              "evidence_kind": "earnings_estimates",
+              "frame_id": "request_task_2",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_2",
+              "subject": "BABA",
+              "evidence_kind": "price_snapshot",
+              "frame_id": "request_task_2",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_2",
+              "subject": "BABA",
+              "evidence_kind": "risk_profile",
+              "frame_id": "request_task_2",
+              "reason": "producer_unavailable"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "warn",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          },
+          {
+            "code": "task_not_answered",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "task_not_answered"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": [
+          {
+            "task_id": "task_1",
+            "subject": "9988.HK",
+            "evidence_kind": "price_snapshot",
+            "frame_id": "request_task_1",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_1",
+            "subject": "9988.HK",
+            "evidence_kind": "company_profile",
+            "frame_id": "request_task_1",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_1",
+            "subject": "9988.HK",
+            "evidence_kind": "earnings_estimates",
+            "frame_id": "request_task_1",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_1",
+            "subject": "9988.HK",
+            "evidence_kind": "risk_profile",
+            "frame_id": "request_task_1",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_2",
+            "subject": "BABA",
+            "evidence_kind": "price_snapshot",
+            "frame_id": "request_task_2",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_2",
+            "subject": "BABA",
+            "evidence_kind": "company_profile",
+            "frame_id": "request_task_2",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_2",
+            "subject": "BABA",
+            "evidence_kind": "earnings_estimates",
+            "frame_id": "request_task_2",
+            "reason": "producer_unavailable"
+          },
+          {
+            "task_id": "task_2",
+            "subject": "BABA",
+            "evidence_kind": "risk_profile",
+            "frame_id": "request_task_2",
+            "reason": "producer_unavailable"
+          }
+        ]
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": false,
+        "business_llm_calls": 2,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 9304,
+        "total_completion_tokens": 9716,
+        "total_tokens": 19020,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 9304,
+            "completion": 9716,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "research_analyst",
+            "layer": "analysis",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 9304,
+            "completion": 9716,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 126011
+          }
+        ]
+      },
+      "raw_sha256": "2d2d9ede36b7fe941305bed4cee3e3ef667c11aca0b2863ef487b3df379d8f23",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h06_v_ma_compare",
+      "query": "Visa（V）和 Mastercard（MA）谁的估值更贵、自由现金流质量更好？用可比较财期，并解释差异。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:56:14.469017+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 14.453,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "V",
+        "MA"
+      ],
+      "actual_tickers": [
+        "MA"
+      ],
+      "intent_score": 0,
+      "intent_reason": "V 单字母代码漏识别，只有 MA，横向比较被降为单公司 valuation_sanity。",
+      "evidence_dimensions": [
+        {
+          "dimension": "双方估值横向比较",
+          "score": 0,
+          "reason": "只有 MA 估值，缺 V，双方比较单元不完整。"
+        },
+        {
+          "dimension": "双方自由现金流质量比较",
+          "score": 0,
+          "reason": "没有两家可比财期的 CFO、capex 与 FCF 比较。"
+        }
+      ],
+      "evidence_score": 0,
+      "evidence_total": 2,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "只答 MA，未说明遗漏 V；没有回答谁更贵及谁的 FCF 更好。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "deterministic_renderer",
+        "verifier_allowed": false,
+        "llm_calls": 0,
+        "business_llm_calls": 0,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {},
+        "usage_by_attribution": []
+      },
+      "raw_sha256": "d748dde19b34d39c66dfe76633aeb0923ac2a1bb6ecdacae8505191395509a56",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h07_multi_task",
+      "query": "XOM 看近期新闻，COST 看经营基本面，BTC-USD 看价格趋势；请分别回答，不要把三种任务混在一起。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:56:28.938354+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 54.297,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "XOM",
+        "COST",
+        "BTC-USD"
+      ],
+      "actual_tickers": [
+        "XOM",
+        "BTC-USD",
+        "BITCOIN"
+      ],
+      "intent_score": 0,
+      "intent_reason": "COST 被普通英文词过滤；BTC-USD 额外扩成 BITCOIN，且被赋予公司财务/新闻任务，主体与任务绑定失败。",
+      "evidence_dimensions": [
+        {
+          "dimension": "XOM近期新闻",
+          "score": 0,
+          "reason": "XOM 为情绪样本不足和未核实检索线索，没有足以支撑近期新闻总结的核验事件。"
+        },
+        {
+          "dimension": "COST经营基本面",
+          "score": 0,
+          "reason": "COST 主体丢失，没有经营证据。"
+        },
+        {
+          "dimension": "BTC-USD价格趋势",
+          "score": 0,
+          "reason": "BTC-USD 未返回可用价格趋势；BITCOIN 媒体报道不能替代 BTC-USD 的历史价格。"
+        }
+      ],
+      "evidence_score": 0,
+      "evidence_total": 3,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "漏 COST，错增 BITCOIN，且把 XOM 检索线索混入 BITCOIN 部分；正文暴露 TODO。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "warn",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          },
+          {
+            "code": "task_not_answered",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "task_not_answered"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "deterministic_renderer",
+        "verifier_allowed": false,
+        "llm_calls": 0,
+        "business_llm_calls": 0,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {},
+        "usage_by_attribution": []
+      },
+      "raw_sha256": "5c06c8681567f0140d053d0b2a57c57e2c6546208f826e53aa07e7e693b7bb5a",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h08_oil_macro",
+      "query": "如果最近原油价格走高，会怎样传导到美国通胀、利率预期与航空股？区分已发生的数据和假设推演。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:57:23.288030+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 15.718,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [],
+      "actual_tickers": [
+        "CL=F"
+      ],
+      "intent_score": 0,
+      "intent_reason": "识别到原油和宏观，但编译为 performance 快照，丢掉通胀/利率预期/航空股的条件传导任务；未擅自指定航空个股。",
+      "evidence_dimensions": [
+        {
+          "dimension": "近期原油事实与条件",
+          "score": 0,
+          "reason": "没有近期原油品种、价格和期间的可用事实。"
+        },
+        {
+          "dimension": "美国通胀传导",
+          "score": 0,
+          "reason": "有 CPI 同比快照，但没有油价到通胀的证据或条件解释，快照本身不构成传导维度。"
+        },
+        {
+          "dimension": "利率预期传导",
+          "score": 0,
+          "reason": "有历史利率和国债收益率，未给利率预期传导或区分已发生变化与假设。"
+        },
+        {
+          "dimension": "航空股传导",
+          "score": 0,
+          "reason": "没有航空行业燃油成本或利润敏感性相关事实/条件解释。"
+        }
+      ],
+      "evidence_score": 0,
+      "evidence_total": 4,
+      "answer_class": "honest_partial",
+      "full_answer": 0,
+      "answer_reason": "如实保留 FRED 快照并标部分完成，但没有回答三条传导机制。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "warn",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "task_1",
+              "subject": "CL=F",
+              "evidence_kind": "macro_context",
+              "frame_id": "request_task_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "warn",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          },
+          {
+            "code": "task_not_answered",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "task_not_answered"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": [
+          {
+            "task_id": "task_1",
+            "subject": "CL=F",
+            "evidence_kind": "macro_context",
+            "frame_id": "request_task_1",
+            "reason": "producer_not_planned"
+          }
+        ]
+      },
+      "analysis": {
+        "status": "done",
+        "role": "deterministic_renderer",
+        "verifier_allowed": false,
+        "llm_calls": 0,
+        "business_llm_calls": 0,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {},
+        "usage_by_attribution": []
+      },
+      "raw_sha256": "bd0cc0a41cc210c520b10d24ac3ddc5b6cf4b6712cb696cc66dadb8c3322025c",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h09_nflx_news",
+      "query": "汇总 NFLX 最近72小时值得关注的新闻，合并同一事件的重复报道；过期报道和未证实传闻单独标出。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:57:39.033589+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 30.047,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "NFLX"
+      ],
+      "actual_tickers": [
+        "NFLX"
+      ],
+      "intent_score": 0,
+      "intent_reason": "新闻及主体正确，但 72 小时未进入 time_scope，事件质量仍使用默认 168 小时，未执行完整窗口约束。",
+      "evidence_dimensions": [
+        {
+          "dimension": "72小时主体相关新闻",
+          "score": 1,
+          "reason": "至少一条主体匹配、发布时间落在请求前 72 小时内的媒体归因报道，标题与 URL 可追溯；不把其余 raw 线索计入。",
+          "refs": [
+            "get_authoritative_media_news:s2:1"
+          ]
+        },
+        {
+          "dimension": "事件去重及核验状态",
+          "score": 0,
+          "reason": "同一联合 CEO 增长表态的不同标题仍分列，没有形成事件级合并；已有观点/线索标签只是该维度的部分实现。"
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 2,
+      "answer_class": "honest_partial",
+      "full_answer": 0,
+      "answer_reason": "有近期报道并披露核验限制，但不是完成去重、窗口和核验状态的新闻汇总。",
+      "app_quality": {
+        "state": "warn",
+        "reasons": [
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "warn",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "fallback_used",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "fallback_used"
+          },
+          {
+            "code": "task_not_answered",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "task_not_answered"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "partial",
+        "has_supported_content": true,
+        "publishable": true,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "deterministic_renderer",
+        "verifier_allowed": false,
+        "llm_calls": 0,
+        "business_llm_calls": 0,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {},
+        "usage_by_attribution": []
+      },
+      "raw_sha256": "b0a57d619638ac210797b07f917fddd97f07763581df0c25db92b91d39d58fda",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h10_missing_subject",
+      "query": "现在还值得买它吗？",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:58:09.111956+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 0.015,
+      "expected_route": "clarify",
+      "actual_route": "research",
+      "expected_tickers": [],
+      "actual_tickers": [],
+      "intent_score": 0,
+      "intent_reason": "空历史的它没有触发 clarify 路线，route 仍为 research，生成 blocked 研究任务。",
+      "evidence_dimensions": [],
+      "evidence_score": 0,
+      "evidence_total": 0,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "返回六项数据缺失清单，没有简洁询问投资标的；没有伪造买卖意见，但不满足澄清合同。",
+      "app_quality": {
+        "state": "block",
+        "reasons": [
+          {
+            "code": "NO_SUPPORTED_CONTENT",
+            "severity": "block",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "本轮没有可展示的已验证事实或论据。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "blocked_1",
+              "subject": null,
+              "evidence_kind": "company_profile",
+              "frame_id": "request_blocked_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "blocked_1",
+              "subject": null,
+              "evidence_kind": "fundamental_snapshot",
+              "frame_id": "request_blocked_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "blocked_1",
+              "subject": null,
+              "evidence_kind": "news_context",
+              "frame_id": "request_blocked_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "blocked_1",
+              "subject": null,
+              "evidence_kind": "price_snapshot",
+              "frame_id": "request_blocked_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "blocked_1",
+              "subject": null,
+              "evidence_kind": "risk_profile",
+              "frame_id": "request_blocked_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": "blocked_1",
+              "subject": null,
+              "evidence_kind": "technical_snapshot",
+              "frame_id": "request_blocked_1",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "RESULT_QUALITY_BLOCKED",
+            "severity": "block",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "研究结果未通过质量检查。"
+          },
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "block",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "task_not_answered",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "task_not_answered"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "blocked",
+        "has_supported_content": false,
+        "publishable": false,
+        "missing_requirements": [
+          {
+            "task_id": "blocked_1",
+            "subject": null,
+            "evidence_kind": "price_snapshot",
+            "frame_id": "request_blocked_1",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": "blocked_1",
+            "subject": null,
+            "evidence_kind": "technical_snapshot",
+            "frame_id": "request_blocked_1",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": "blocked_1",
+            "subject": null,
+            "evidence_kind": "news_context",
+            "frame_id": "request_blocked_1",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": "blocked_1",
+            "subject": null,
+            "evidence_kind": "company_profile",
+            "frame_id": "request_blocked_1",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": "blocked_1",
+            "subject": null,
+            "evidence_kind": "fundamental_snapshot",
+            "frame_id": "request_blocked_1",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": "blocked_1",
+            "subject": null,
+            "evidence_kind": "risk_profile",
+            "frame_id": "request_blocked_1",
+            "reason": "producer_not_planned"
+          }
+        ]
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": false,
+        "business_llm_calls": 0,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_result",
+        "fallback": false,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1"
+      },
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {},
+        "usage_by_attribution": []
+      },
+      "raw_sha256": "1a7912bb5ac8b008a2e9101da3a5bdd1a403614d7723f24873ee06e169b9c55b",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h11_cashflow_concept",
+      "query": "自由现金流和净利润为什么会差很多？用虚构数字举例即可，不要查询股票行情。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T06:58:09.138132+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 17.985,
+      "expected_route": "direct",
+      "actual_route": "research",
+      "expected_tickers": [],
+      "actual_tickers": [],
+      "intent_score": 0,
+      "intent_reason": "应直接解释的概念题被当作公司基本面研究，没有识别无需行情、虚构示例的 direct 任务。",
+      "evidence_dimensions": [],
+      "evidence_score": 0,
+      "evidence_total": 0,
+      "answer_class": "incorrect",
+      "full_answer": 0,
+      "answer_reason": "只返回结构化证据尚未就绪，未解释 FCF/净利润，也没有数值示例。",
+      "app_quality": {
+        "state": "block",
+        "reasons": [
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": null,
+              "subject": null,
+              "evidence_kind": "company_profile",
+              "frame_id": "primary_request",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": null,
+              "subject": null,
+              "evidence_kind": "earnings_estimates",
+              "frame_id": "primary_request",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": null,
+              "subject": null,
+              "evidence_kind": "filing_context",
+              "frame_id": "primary_request",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          },
+          {
+            "code": "REQUIRED_EVIDENCE_MISSING",
+            "severity": "block",
+            "metric": "task_evidence",
+            "actual": {
+              "task_id": null,
+              "subject": null,
+              "evidence_kind": "fundamental_snapshot",
+              "frame_id": "primary_request",
+              "reason": "producer_not_planned"
+            },
+            "threshold": "verified_evidence",
+            "message": "请求中的主体或证据维度尚未满足。"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "blocked",
+        "has_supported_content": false,
+        "publishable": false,
+        "missing_requirements": [
+          {
+            "task_id": null,
+            "subject": null,
+            "evidence_kind": "company_profile",
+            "frame_id": "primary_request",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": null,
+            "subject": null,
+            "evidence_kind": "earnings_estimates",
+            "frame_id": "primary_request",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": null,
+            "subject": null,
+            "evidence_kind": "fundamental_snapshot",
+            "frame_id": "primary_request",
+            "reason": "producer_not_planned"
+          },
+          {
+            "task_id": null,
+            "subject": null,
+            "evidence_kind": "filing_context",
+            "frame_id": "primary_request",
+            "reason": "producer_not_planned"
+          }
+        ]
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": false,
+        "business_llm_calls": 1,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "llm",
+        "fallback": false,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "keys": [
+          "analysis",
+          "catalysts",
+          "company_overview",
+          "comparison_conclusion",
+          "comparison_metrics",
+          "conclusion",
+          "conflict_disclosure",
+          "highlights",
+          "impact_analysis",
+          "investment_summary",
+          "investment_thesis",
+          "news_summary",
+          "next_watch",
+          "price_snapshot",
+          "risks",
+          "summary",
+          "technical_snapshot",
+          "valuation"
+        ],
+        "llm_limits": {
+          "request_timeout": 1200,
+          "max_tokens": 65536,
+          "max_attempts": 2,
+          "acquire_timeout": 120
+        },
+        "completion": {
+          "finish_reason": "stop",
+          "actual_model": "step-5-preview",
+          "prompt_tokens": 1883,
+          "completion_tokens": 1029,
+          "reasoning_tokens": 0,
+          "response_characters": 737
+        },
+        "verifier_enabled": false,
+        "verifier_checked": false,
+        "verifier_unsupported_count": 0,
+        "verifier_unresolved_unsupported_count": 0
+      },
+      "usage": {
+        "total_prompt_tokens": 1883,
+        "total_completion_tokens": 1029,
+        "total_tokens": 2912,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 1883,
+            "completion": 1029,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "research_analyst",
+            "layer": "analysis",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 1883,
+            "completion": 1029,
+            "calls": 1,
+            "failed_calls": 0,
+            "duration_ms": 17543
+          }
+        ]
+      },
+      "raw_sha256": "e46e4809aaa4edf0aaaab04846188473fc133efd02370a07bec6c388e728ad40",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    },
+    {
+      "id": "h12_crm_report",
+      "query": "给我一份 Salesforce（CRM）的正式投资研究报告，覆盖业务、竞争、最新财务、估值、未来90天催化和风险，关键事实附可追溯来源。",
+      "mode": "investment_report",
+      "request_utc": "2026-10-04T06:58:27.118366+00:00",
+      "history_dependency": null,
+      "code_sha": "ec3a47dbc2086830e2999d0998fbe76001e15e5a",
+      "model": "step-5-preview",
+      "effort": "medium",
+      "elapsed_seconds": 183.781,
+      "expected_route": "research",
+      "actual_route": "research",
+      "expected_tickers": [
+        "CRM"
+      ],
+      "actual_tickers": [
+        "CRM"
+      ],
+      "intent_score": 0,
+      "intent_reason": "CRM 和报告模式正确，但最新财务未列独立 requested_dimension，未来 90 天仍只有 30 天日历。",
+      "evidence_dimensions": [
+        {
+          "dimension": "业务",
+          "score": 0,
+          "reason": "业务部分是公告索引、财务数据与行业大类；未读取可支撑商业模式的披露正文，raw 搜索研报不计。"
+        },
+        {
+          "dimension": "竞争",
+          "score": 0,
+          "reason": "竞争部分只有市值和聚合舆情，没有核验的竞品/竞争结构证据。"
+        },
+        {
+          "dimension": "最新财务",
+          "score": 1,
+          "reason": "SEC CompanyFacts 有 2026-05-01 至 2026-07-31 收入、利润、CFO/FCF、USD 和披露日。"
+        },
+        {
+          "dimension": "估值",
+          "score": 0,
+          "reason": "只有价格与市值，没有可用估值倍数或统一口径估值计算；raw 第三方旧研报不计。"
+        },
+        {
+          "dimension": "未来90天催化",
+          "score": 0,
+          "reason": "只查 30 天日历，无法覆盖未来 90 天催化。"
+        },
+        {
+          "dimension": "风险",
+          "score": 1,
+          "reason": "有明确历史窗口的回撤、波动率与财务杠杆等公司风险事实；不把它们当预测。"
+        }
+      ],
+      "evidence_score": 2,
+      "evidence_total": 6,
+      "answer_class": "honest_partial",
+      "full_answer": 0,
+      "answer_reason": "13989 字主要是事实与重复索引，引用合同失败后没有支持的研究结论，正式报告门禁 blocked；未将此题的图级输出冒充 UI 归档。",
+      "app_quality": {
+        "state": "block",
+        "reasons": [
+          {
+            "code": "TASK_PARTIALLY_ANSWERED",
+            "severity": "warn",
+            "metric": "answer",
+            "actual": false,
+            "threshold": true,
+            "message": "部分请求维度仍缺少证据。"
+          },
+          {
+            "code": "no_supported_report_claims",
+            "severity": "warn",
+            "metric": "",
+            "actual": null,
+            "threshold": null,
+            "message": "no_supported_report_claims"
+          }
+        ],
+        "schema_version": "report.quality.v1",
+        "answer_status": "blocked",
+        "has_supported_content": true,
+        "publishable": false,
+        "missing_requirements": []
+      },
+      "analysis": {
+        "status": "done",
+        "role": "research_analyst",
+        "verifier_allowed": true,
+        "business_llm_calls": 1,
+        "failed_llm_calls": 0
+      },
+      "synthesis_runtime": {
+        "mode": "research_structured",
+        "fallback": true,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "reason": "task_synthesis_explanation_missing_evidence"
+      },
+      "usage": {
+        "total_prompt_tokens": 114685,
+        "total_completion_tokens": 9928,
+        "total_tokens": 124613,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 114685,
+            "completion": 9928,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "research_analyst",
+            "layer": "analysis",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 114685,
+            "completion": 9928,
+            "calls": 1,
+            "failed_calls": 0,
+            "duration_ms": 126099
+          }
+        ]
+      },
+      "raw_sha256": "6c81905e31c4cfb7465e59d0de7ce816148f6b6b4e00ec45750eda6da94eace6",
+      "reviewed_at": "2026-10-04T07:15:13.528091+00:00"
+    }
+  ]
+}

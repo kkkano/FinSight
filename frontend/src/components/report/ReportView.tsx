@@ -21,7 +21,6 @@ import { SynthesisReportBlock } from './ReportCharts';
 import { EvidenceLedgerPanel } from './EvidenceLedgerPanel';
 import { ReportCockpit } from './ReportCockpit';
 import { FactCheckCard } from './FactCheckCard';
-import { QualityBadge } from './QualityBadge';
 import { useToast } from '../ui';
 
 export interface ReportViewProps {
@@ -224,6 +223,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     setActiveCitation(ref);
     const target = document.getElementById(`${anchorPrefix}-citation-${ref}`);
     if (target) {
+      target.closest('details')?.setAttribute('open', '');
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
@@ -316,9 +316,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
               fullscreen
             />
 
-            {/* 全屏模式沿用同一质量徽章。 */}
-            {report.report_quality && <QualityBadge quality={report.report_quality} />}
-
             {queryCoverageWarningNode}
 
             <div className="space-y-4">
@@ -378,14 +375,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
           evidenceBadges={evidenceBadges}
           metricItems={metricItems}
         />
-
-        {/* P2-12 质量徽章：报告顶部一眼可见的质量门控状态 */}
-        {report.report_quality && (
-          <div className="mt-3">
-            <QualityBadge quality={report.report_quality} />
-          </div>
-        )}
-
 
         {queryCoverageWarningNode && <div className="mt-4">{queryCoverageWarningNode}</div>}
         {warningNode && <div className="mt-4">{warningNode}</div>}

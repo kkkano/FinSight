@@ -125,6 +125,7 @@ class Claim(StrictContract):
     horizon: NonEmptyStr | None = None
     scenario: NonEmptyStr | None = None
     directional: bool = False
+    requirement_ids: list[NonEmptyStr] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -199,6 +200,7 @@ class AgentFinding(StrictContract):
 class TaskSynthesisResult(StrictContract):
     task_id: NonEmptyStr
     title: NonEmptyStr
+    request_text: NonEmptyStr | None = None
     priority: int = Field(ge=0)
     order_index: int = Field(ge=0)
     request_frame_id: NonEmptyStr
@@ -223,8 +225,12 @@ class TaskSynthesisResult(StrictContract):
     missing_evidence: list[NonEmptyStr] = Field(default_factory=list)
     subject: NonEmptyStr | None = None
     operation: NonEmptyStr | None = None
+    requested_subjects: list[NonEmptyStr] = Field(default_factory=list)
     missing_requirements: list[dict[str, Any]] = Field(default_factory=list)
     requested_dimensions: list[NonEmptyStr] = Field(default_factory=list)
+    answer_requirements: list[dict[str, Any]] = Field(default_factory=list)
+    requirement_results: list[dict[str, Any]] = Field(default_factory=list)
+    synthesis_validation: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_direction_refs(self) -> "TaskSynthesisResult":
@@ -252,6 +258,7 @@ class ReportSynthesisDraft(StrictContract):
     limitations: list[NonEmptyStr]
     fallback_used: bool
     error_codes: list[NonEmptyStr] = Field(default_factory=list)
+    synthesis_validation: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_indexes_and_direction(self) -> "ReportSynthesisDraft":

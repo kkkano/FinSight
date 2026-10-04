@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import type { ReportQuality, ReportQualityReason } from '../../types/index';
+import { formatMissingRequirement, getQualityAnswerStatus } from './ReportPresentation';
 
 /**
  * P2-12 报告质量徽章（轻量版）。
  *
- * 报告的质量数据（grounding rate / 置信度 / 质量门控状态）已在 report.report_quality 里，
- * FactCheckCard 也展示了详细事实核查。本组件补齐最后一块：报告标题区「一眼可见」的质量徽章。
+ * 回答完整度与质量门控分别展示；引用覆盖达标不能替代逐项回答。
  *
  * - pass → 绿色「✓ 质量验证通过」
  * - warn → 琥珀「⚠ 质量提示 N 项」（点击展开 reasons 列表）
@@ -66,12 +66,18 @@ const buildStyle = (state: QualityState, reasonCount: number): BadgeStyle => {
 export const QualityBadge: React.FC<QualityBadgeProps> = ({ quality }) => {
   const [expanded, setExpanded] = useState(false);
 
-  const state = normalizeState(quality?.state);
+  const answerStatus = getQualityAnswerStatus(quality);
+  const rawState = normalizeState(quality?.state);
+  const state = rawState === 'pass' && (answerStatus === 'partial' || answerStatus === 'unavailable') ? 'warn' : rawState;
   // 无质量数据 → 不渲染
   if (!quality || !state) return null;
 
   const reasons: ReportQualityReason[] = Array.isArray(quality.reasons) ? quality.reasons : [];
-  const { label, icon, tone } = buildStyle(state, reasons.length);
+  const { label: stateLabel, icon, tone } = buildStyle(state, reasons.length);
+  const label = answerStatus === 'unavailable' ? '无法回答'
+    : answerStatus === 'partial' && state !== 'block' ? '部分完成'
+      : stateLabel;
+  const missingRequirements = [...new Set((quality.missing_requirements || []).map(formatMissingRequirement))];
   const expandable = reasons.length > 0 && state !== 'pass';
 
   return (
@@ -88,6 +94,15 @@ export const QualityBadge: React.FC<QualityBadgeProps> = ({ quality }) => {
         {icon}
         <span>{label}</span>
       </button>
+
+      {missingRequirements.length > 0 && (
+        <div className="text-xs leading-relaxed text-fin-text-secondary">
+          <div className="font-medium">尚未完成</div>
+          <ul className="mt-1 list-disc pl-4 space-y-1">
+            {missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}
+          </ul>
+        </div>
+      )}
 
       {expandable && expanded && (
         <ul className="mt-0.5 max-w-md space-y-1 rounded-lg border border-fin-border bg-fin-card px-3 py-2 text-2xs leading-relaxed text-fin-text-secondary">

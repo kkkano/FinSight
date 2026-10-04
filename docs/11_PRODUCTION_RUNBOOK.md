@@ -1,6 +1,6 @@
 # FinSight 生产发布 Runbook
 
-更新时间：2026-10-03
+更新时间：2026-10-04
 
 本文是 FinSight 当前唯一生产发布流程。生产目录为 `/home/ubuntu/FinSight`，Compose 服务为
 `postgres`、`backend`、`rag-inference`、`frontend`，公开账本另使用 `predictions` profile 下的 `prediction-watchdog`。发布必须使用同一个 Git commit SHA 构建应用镜像，worker 复用 backend 镜像；禁止用
@@ -24,7 +24,7 @@ flowchart TB
 - 生产必须启用 Supabase 认证；Prediction、Chat、History、Watchlist、Monitor 均不得匿名写入。
 - 常规研究链中的 Price、Technical、Fundamental、News、Macro、Risk 和 Deep Search 只采集证据，不独立调用 LLM，
   不运行 reflection、补充搜索循环或动态委托。
-- 业务 LLM 角色为 `PredictionAnalyst` 与 `ResearchAnalyst`；研究任务、报告草稿、核验及重试按实际 usage 记录，不能按角色数声称只有一次调用。
+- LLM 用途为 `PredictionAnalyst`、`ResearchAnalyst` 及无需取数的概念 `direct_answer`；研究任务、报告草稿、核验及重试按实际 usage 记录，不能按角色数声称只有一次调用。
 - 固定公开 US20 评估另设 Technical/Risk forecast 模式，采集预算与用户业务分开；其 SQLite 账本和 watchdog 状态位于 backend_data 持久卷，不恢复旧业务存储。
 - Prediction 只接受可信 provider 的真实 K 线；provider/LLM 失败必须返回稳定错误码，不生成替代行情或方向性假结论。
 - 常规发布不读取、备份或恢复旧 SQLite/JSON。`scripts/migrate_legacy_storage.py` 只用于经批准的一次性离线导入。

@@ -1046,7 +1046,7 @@ def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, A
     return items
 
 
-def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Dict[str, Any]]:
+def get_company_news(ticker: str, limit: int = 5, fast: bool = False, max_age_hours: int = 168) -> List[Dict[str, Any]]:
     """通过统一网关获取公司新闻；`fast` 仅为旧调用签名兼容，不生成搜索占位条目。"""
     del fast
     from backend.services.market_data_gateway import get_market_data_gateway
@@ -1069,7 +1069,7 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Di
             }
         )
         output.append(item)
-    return prepare_news_items(output, ticker=ticker)
+    return prepare_news_items(output, ticker=ticker, max_age_hours=max(1, int(max_age_hours)))
 
 
 
@@ -1215,6 +1215,8 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
         stock = create_ticker(ticker)
         calendar_payload = getattr(stock, "calendar", None)
         if isinstance(calendar_payload, dict):
+            result["coverage_window"] = {"direction": "future", "value": days, "unit": "days", "days_ahead": days,
+                                         "scope": "provider_calendar", "exhaustive": False, "as_of": result["as_of"]}
             for key, raw_value in calendar_payload.items():
                 values = raw_value if isinstance(raw_value, list) else [raw_value]
                 for item in values:
@@ -1237,6 +1239,8 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
 
         earnings_dates = getattr(stock, "earnings_dates", None)
         if earnings_dates is not None and not getattr(earnings_dates, "empty", True):
+            result["coverage_window"] = {"direction": "future", "value": days, "unit": "days", "days_ahead": days,
+                                         "scope": "provider_calendar", "exhaustive": False, "as_of": result["as_of"]}
             for idx, _row in earnings_dates.head(8).iterrows():
                 candidate = _to_date_candidate(idx)
                 if not _within_window(candidate, today, end_date):

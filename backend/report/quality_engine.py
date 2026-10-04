@@ -348,7 +348,11 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     report_mode = str(state.get("output_mode") or "") == "investment_report"
     trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
     coverage = trace.get("coverage_validator") if isinstance(trace.get("coverage_validator"), dict) else {}
-    missing_requirements = coverage.get("missing_requirements") if isinstance(coverage.get("missing_requirements"), list) else []
+    missing_requirements = list(coverage.get("missing_requirements") or [])
+    for task in tasks:
+        for missing in task.get("missing_requirements") or []:
+            if isinstance(missing, dict) and missing not in missing_requirements:
+                missing_requirements.append(missing)
     for missing in missing_requirements:
         if isinstance(missing, dict):
             reasons.append(_quality_reason(

@@ -1,6 +1,6 @@
 # FinSight 当前架构
 
-更新时间：2026-10-03
+更新时间：2026-10-04
 
 ## 1. 产品边界
 
@@ -88,10 +88,11 @@ flowchart TD
 
 ## 4. AI 角色
 
-用户可感知的业务 LLM 角色只有两个：
+LLM 按调用用途区分，均继承请求中选定的模型配置：
 
 1. `PredictionAnalyst`：消费可信 K 线、服务端指标和新闻摘要，输出受校验的 Prediction JSON；独立异步执行，最多一次纠错。
 2. `ResearchAnalyst`：消费规范化证据和论据，生成任务分析及报告草稿；按任务、草稿、核验和重试阶段记录实际调用，不把一个角色等同于一次模型调用。
+3. `direct_answer`：回答无需实时资料的通用概念与虚构示例；不采集行情，已有固定回复或澄清问题时无需模型。
 
 Price、Technical、Fundamental、News、Macro、Risk、Deep Search 只作为内部 evidence collector/profile。Technical 指标由代码计算。任何 collector 都不得自行调用 LLM、reflection 或补充搜索循环。
 

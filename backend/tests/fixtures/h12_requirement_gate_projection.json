@@ -1,0 +1,944 @@
+{
+  "provenance": {
+    "source": "h12-diagnostic-v4/h12_crm_report.json",
+    "sha256": "2420ec34886010e0c58ae768bcac087994f32efafacab6e79b4193439164c175",
+    "request_utc": "2026-10-04T09:29:05.364004+00:00",
+    "fixture_scope": "Selected requirement/overall-gate projection; original claim text and source identity retained; evidence excerpts only; original completion scores omitted; no model replay"
+  },
+  "draft": {
+    "schema_version": "2026-07-14.research-synthesis.v1",
+    "status": "partial",
+    "overall_conclusion": "Salesforce（CRM）当前呈“低估值与高不确定性并存”特征。基本面最新季度营收 113.45 亿美元（同比 +10.8%）、净利润 35.26 亿美元（同比 +86.9%），但经营现金流环比大幅回落至 12.69 亿美元，且总负债/总资产升至 65%，杠杆压力显著。估值处于历史低位（Trailing P/E 21.5x、Forward P/E 14.7x、EV/EBITDA 17.4x），EPS 修正整体偏正但下一财年预测低于当前财年，增长动能边际减弱。业务上，公司正从传统 CRM 向“数据 + AI 代理”平台转型，Informatica 等收购与 Agentforce 构成长期看点，但货币化前景与 AI 原生竞争带来不确定性。未来 90 天可确认催化有限，供应商日历显示 10 月 7 日股息与 12 月 2 日财报（均未经官方确认），舆情样本不足；技术面 RSI 超卖、缩量下跌，历史最大回撤大。综合看，估值提供一定安全边际，但现金流质量、杠杆与 AI 转型执行是核心风险，短期缺乏明确方向性催化。",
+    "fallback_used": false,
+    "error_codes": [],
+    "synthesis_validation": {
+      "failure_diagnostics": []
+    },
+    "risks": [
+      "杠杆率偏高（负债/资产 = 65% > 60%），偿债压力较大。",
+      "旧闻、未知发布时间、观点及检索线索不计入当前新闻催化，需结合原始披露核实。",
+      "新闻来源可靠度偏低，请结合一手披露文件核实关键结论。",
+      "本批次中检测到多个低可靠度来源。",
+      "RSI 进入超卖区间，波动性风险较高。",
+      "价格变动缺少量能确认，成交量约为20日均量 0.65x",
+      "当前较阶段高点回撤 -19.39%，趋势修复仍需确认",
+      "历史区间最大回撤 -48.44%，下行尾部风险不可忽视",
+      "Policy transmission lag risk",
+      "Macro data revision risk"
+    ],
+    "limitations": [
+      "该研究维度暂未提供通过引用校验的原生论据，已保留对应事实。",
+      "财务报表快照，最终投资决策前请核对原始申报文件。",
+      "现金流质量结论仅基于可用报表行项目。",
+      "杠杆率偏高（负债/资产 = 65% > 60%），偿债压力较大。",
+      "聚合情绪的完整度受限于可用的新闻情绪数据源与标题。",
+      "催化事件聚合识别的是时点/关注度驱动因素，本身并不证明价格方向。",
+      "情绪传导基于近期可用价格数据，可能缺失盘中或盘后波动。",
+      "次要市场媒体信号，请勿将其作为独立投资证据。",
+      "publication_time_unknown",
+      "content_discovery",
+      "source_unclassified",
+      "解释基于列出的材料，不替代原始公告或数据核验。",
+      "部分模型解释未通过事实绑定校验，已移除对应段落；其它已验证事实与论据仍保留。",
+      "时间范围仅覆盖本轮取得的供应商资料，不能据此断言窗口内没有其它事件；预期日历日期仍需公司或官方确认。"
+    ],
+    "disagreements": [],
+    "conflicts": [],
+    "task_results": [
+      {
+        "task_id": "task_1",
+        "title": "CRM",
+        "request_text": "给我一份 Salesforce（CRM）的正式投资研究报告，覆盖业务、竞争、最新财务、估值、未来90天催化和风险，关键事实附可追溯来源。",
+        "priority": 25,
+        "order_index": 0,
+        "request_frame_id": "request_task_1",
+        "render_kind": "single",
+        "render_group_id": "request_task_1",
+        "status": "partial",
+        "conclusion": "当前估值处于历史与同业低位区间。Trailing P/E 约 21.5x，Forward P/E 约 14.7x，EV/EBITDA 约 17.4x，均低于 5 年中位数。EPS 预测修正整体为 positive，但下一财年（+1y）平均预测低于当前财年（0y），暗示增长动能可能边际减弱。市场分歧的核心在于 Agentforce 的渗透率：若 AI 货币化加速，当前估值提供修复空间；若席位压缩与有机增长放缓成为主导，则估值仍面临压缩风险。需注意，部分盈利预测下修与战略投资收益波动有关，评估时应区分核心经营与一次性损益。\n风险集中于杠杆、现金流与商业模式转型。负债/资产比 65.0% 已突破通常认为的 60% 警戒线，$25B 债务融资 ASR 使净债务大幅攀升，自由现金流增速指引减半，信用评级遭下调。AI 转型导致商业模式“变重”：算力成本与用量近乎等比例走高，可能压缩毛利率，而席位压缩风险持续存在。技术面显示 RSI 28.44 进入超卖，ATM IV 40.37% 处于高位，最新成交量仅为 20 日均量 0.65x，价格变动缺乏量能确认。历史最大回撤 -70.50% 与当前 -43.33% 的最大回撤提示尾部风险显著。此外，Agentforce 与 Data 360 的货币化策略尚新，若客户使用率低于预期，可能影响收入预测与股价。\n公司披露其定位为 CRM 技术全球领导者，通过统一平台连接销售、服务、营销、商务与 IT，并以订阅为主、直销与伙伴渠道并行。Agentforce 被定义为可自主推理、决策与执行任务的 AI 代理层，平台同时覆盖 Slack、Headless 360 等界面。近年的 Informatica、Regrello、Qualified 收购被用于加速代理式 AI 路线图；公司也持续通过重组、裁员与办公/数据中心优化来改善运营利润率。商业模式的核心变化是从传统应用订阅向数据与 AI 代理能力延伸，但 10-Q 同时提示，AI 驱动消费定价可能使定价、流失与收入预测更复杂。\n竞争差异需按对象类型区分。本任务可用事实未提供 CrowdStrike、Palantir 等可比公司的财务数据，因此不能进行量化同业比较。依据 CRM 自身 10-K，其竞争范围包括打包业务软件、云应用服务商、AI 原生公司、免费或捆绑产品厂商、细分行业软件、生产力与统一通信厂商，以及平台开发/云平台厂商。相对这些对象，CRM 的差异化来自单一客户数据源、跨系统集成、企业级安全治理与跨云工作流；但 10-K 也明确提示 AI 原生公司可能绕过传统业务流程或取代既有用户界面，10-Q 进一步提示 Agentforce 与 Data 360 的变现策略仍新且不确定。因此竞争风险不只是功能替代，而是客户在座席许可、消费补足与数据接入价值之间的重构。\n未来 90 天窗口：供应商日历显示股息日 2026-10-07、财报日 2026-12-02，状态为 scheduled/provider_reported，但并非官方确认。同一来源的宏观检索线索提示 10 月 7 日 FOMC 会议纪要、10 月 14 日 CPI、10 月 28 日 FOMC 决议，但验证状态为 discovery_only，事件日期未经核实，不能作为已确认催化。当前舆情快照显示样本量 0、催化事件 0、情绪 neutral，无法判断偏多或偏空。已披露文件方面，2026-08-27 的 10-Q 与 2026-03-02 的 10-K 可作为基本面依据；8-9 月另有多份 8-K，但本任务事实仅包含 filing 日期，具体内容需原始披露核实。次要新闻信号在本轮事实化舆情中未形成可核验催化。",
+        "claim_ids": [
+          "synthesis:task_1:explanation:2",
+          "synthesis:task_1:explanation:4",
+          "synthesis:task_1:explanation:5",
+          "synthesis:task_1:explanation:6",
+          "synthesis:task_1:explanation:7"
+        ],
+        "evidence_ids": [
+          "agent_source:94932345b91a39df",
+          "agent_source:19c683d215feddbc",
+          "agent_source:59a79df8f2690177",
+          "agent_source:d417f13b990d096f",
+          "agent_source:2b79268382fa0336",
+          "get_company_info:s2",
+          "get_sec_filings:s7:3",
+          "get_sec_filings:s7:1",
+          "search:s11",
+          "get_eps_revisions:s4",
+          "agent_source:0e6723f77a843865",
+          "get_event_calendar:s12",
+          "get_sec_material_events:s17:1",
+          "get_sec_material_events:s17:2",
+          "get_sec_material_events:s17:3",
+          "get_sec_material_events:s17:4",
+          "get_sec_material_events:s17:5",
+          "get_factor_exposure:s14",
+          "analyze_historical_drawdowns:s13",
+          "agent_source:4f0da2c1c34dbdfb",
+          "agent_source:da6f8e8e32fe9cc7",
+          "agent_source:88dd4486d62d4808"
+        ],
+        "proposed_direction": null,
+        "direction_supporting_claim_ids": [],
+        "agent_names": [
+          "fundamental_agent",
+          "news_agent",
+          "technical_agent",
+          "price_agent",
+          "macro_agent"
+        ],
+        "agreements": [],
+        "disagreements": [],
+        "conflicts": [],
+        "risks": [
+          "杠杆率偏高（负债/资产 = 65% > 60%），偿债压力较大。",
+          "旧闻、未知发布时间、观点及检索线索不计入当前新闻催化，需结合原始披露核实。",
+          "新闻来源可靠度偏低，请结合一手披露文件核实关键结论。",
+          "本批次中检测到多个低可靠度来源。",
+          "RSI 进入超卖区间，波动性风险较高。",
+          "价格变动缺少量能确认，成交量约为20日均量 0.65x",
+          "当前较阶段高点回撤 -19.39%，趋势修复仍需确认",
+          "历史区间最大回撤 -48.44%，下行尾部风险不可忽视",
+          "Policy transmission lag risk",
+          "Macro data revision risk"
+        ],
+        "limitations": [
+          "该研究维度暂未提供通过引用校验的原生论据，已保留对应事实。",
+          "财务报表快照，最终投资决策前请核对原始申报文件。",
+          "现金流质量结论仅基于可用报表行项目。",
+          "杠杆率偏高（负债/资产 = 65% > 60%），偿债压力较大。",
+          "聚合情绪的完整度受限于可用的新闻情绪数据源与标题。",
+          "催化事件聚合识别的是时点/关注度驱动因素，本身并不证明价格方向。",
+          "情绪传导基于近期可用价格数据，可能缺失盘中或盘后波动。",
+          "次要市场媒体信号，请勿将其作为独立投资证据。",
+          "publication_time_unknown",
+          "content_discovery",
+          "source_unclassified",
+          "解释基于列出的材料，不替代原始公告或数据核验。",
+          "部分模型解释未通过事实绑定校验，已移除对应段落；其它已验证事实与论据仍保留。",
+          "时间范围仅覆盖本轮取得的供应商资料，不能据此断言窗口内没有其它事件；预期日历日期仍需公司或官方确认。"
+        ],
+        "fallback_used": true,
+        "error_codes": [
+          "explanation_contains_unbound_number",
+          "structured_selection_invalid"
+        ],
+        "fact_ids": [
+          "get_sec_material_events:s17:1",
+          "get_sec_material_events:s17:2",
+          "get_sec_material_events:s17:3",
+          "get_sec_material_events:s17:4",
+          "get_sec_material_events:s17:5",
+          "get_eps_revisions:s4",
+          "get_sec_filings:s7:1",
+          "get_sec_filings:s7:3",
+          "analyze_historical_drawdowns:s13",
+          "get_factor_exposure:s14",
+          "agent_source:88dd4486d62d4808",
+          "agent_source:0e6723f77a843865",
+          "get_company_info:s2",
+          "get_event_calendar:s12",
+          "agent_source:2b79268382fa0336",
+          "agent_source:94932345b91a39df",
+          "agent_source:19c683d215feddbc",
+          "agent_source:59a79df8f2690177",
+          "agent_source:d417f13b990d096f",
+          "agent_source:da6f8e8e32fe9cc7",
+          "agent_source:4f0da2c1c34dbdfb"
+        ],
+        "selected_fact_ids": [
+          "get_company_info:s2",
+          "get_sec_filings:s7:3",
+          "get_sec_filings:s7:1",
+          "agent_source:94932345b91a39df",
+          "agent_source:19c683d215feddbc",
+          "agent_source:59a79df8f2690177",
+          "agent_source:d417f13b990d096f",
+          "get_eps_revisions:s4",
+          "agent_source:0e6723f77a843865",
+          "get_event_calendar:s12",
+          "get_sec_material_events:s17:1",
+          "get_sec_material_events:s17:2",
+          "get_sec_material_events:s17:3",
+          "get_sec_material_events:s17:4",
+          "get_sec_material_events:s17:5",
+          "get_factor_exposure:s14",
+          "analyze_historical_drawdowns:s13",
+          "agent_source:4f0da2c1c34dbdfb",
+          "agent_source:da6f8e8e32fe9cc7",
+          "agent_source:88dd4486d62d4808",
+          "agent_source:2b79268382fa0336"
+        ],
+        "missing_evidence": [],
+        "subject": "CRM",
+        "operation": "investment_opinion",
+        "requested_subjects": [
+          "CRM"
+        ],
+        "missing_requirements": [],
+        "requested_dimensions": [
+          "valuation_reasonableness",
+          "business_model",
+          "competition",
+          "news_catalysts",
+          "risk_level"
+        ],
+        "answer_requirements": [
+          {
+            "requirement_id": "request_task_1:dimension:valuation_reasonableness",
+            "kind": "explanation",
+            "dimension": "valuation_reasonableness",
+            "description": "估值口径与依据",
+            "evidence_kinds": [
+              "company_profile",
+              "earnings_estimates",
+              "fundamental_snapshot",
+              "price_snapshot"
+            ],
+            "requires_analysis": true
+          },
+          {
+            "requirement_id": "request_task_1:dimension:business_model",
+            "kind": "explanation",
+            "dimension": "business_model",
+            "description": "业务与商业模式",
+            "evidence_kinds": [
+              "company_profile",
+              "filing_context",
+              "document_context"
+            ],
+            "requires_analysis": true
+          },
+          {
+            "requirement_id": "request_task_1:dimension:competition",
+            "kind": "explanation",
+            "dimension": "competition",
+            "description": "竞争格局",
+            "evidence_kinds": [
+              "document_context",
+              "filing_context",
+              "company_profile"
+            ],
+            "requires_analysis": true
+          },
+          {
+            "requirement_id": "request_task_1:dimension:news_catalysts",
+            "kind": "explanation",
+            "dimension": "news_catalysts",
+            "description": "新闻、事件及催化",
+            "evidence_kinds": [
+              "news_context",
+              "event_calendar"
+            ],
+            "requires_analysis": true
+          },
+          {
+            "requirement_id": "request_task_1:dimension:risk_level",
+            "kind": "explanation",
+            "dimension": "risk_level",
+            "description": "主要风险及依据",
+            "evidence_kinds": [
+              "risk_profile",
+              "fundamental_snapshot"
+            ],
+            "requires_analysis": true
+          },
+          {
+            "requirement_id": "request_task_1:time_window",
+            "kind": "event_window",
+            "dimension": "news_catalysts",
+            "description": "按未来90天覆盖事件；确认事实与观察条件分开",
+            "evidence_kinds": [
+              "event_calendar"
+            ],
+            "requires_analysis": true,
+            "time_window": {
+              "direction": "future",
+              "value": 90.0,
+              "unit": "days"
+            }
+          }
+        ],
+        "requirement_results": [],
+        "synthesis_validation": {
+          "initial_errors": [
+            {
+              "field": "fact_ids",
+              "code": "task_synthesis_unknown_evidence_id",
+              "reference": "E54"
+            },
+            {
+              "field": "fact_ids",
+              "code": "task_synthesis_unknown_evidence_id",
+              "reference": "E30"
+            },
+            {
+              "field": "fact_ids",
+              "code": "task_synthesis_unknown_evidence_id",
+              "reference": "E31"
+            },
+            {
+              "field": "fact_ids",
+              "code": "task_synthesis_unknown_evidence_id",
+              "reference": "E32"
+            },
+            {
+              "field": "explanations[0]",
+              "code": "explanation_contains_diagnostics"
+            },
+            {
+              "field": "explanations[3]",
+              "code": "explanation_contains_unbound_number"
+            }
+          ],
+          "repair_attempts": 1,
+          "remaining_errors": [
+            {
+              "field": "explanations[0]",
+              "code": "explanation_contains_unbound_number"
+            },
+            {
+              "field": "explanations[3]",
+              "code": "explanation_contains_unbound_number"
+            },
+            {
+              "field": "explanations[4]",
+              "code": "explanation_contains_unbound_number"
+            },
+            {
+              "field": "explanations[6]",
+              "code": "explanation_contains_unbound_number"
+            }
+          ],
+          "failure_diagnostics": [],
+          "provider_attempts_used": 2,
+          "max_provider_attempts": 2,
+          "repair_skipped_reason": null
+        }
+      }
+    ],
+    "claim_index": {
+      "synthesis:task_1:explanation:2": {
+        "claim_id": "synthesis:task_1:explanation:2",
+        "task_id": "task_1",
+        "agent_name": "research_analyst",
+        "text": "当前估值处于历史与同业低位区间。Trailing P/E 约 21.5x，Forward P/E 约 14.7x，EV/EBITDA 约 17.4x，均低于 5 年中位数。EPS 预测修正整体为 positive，但下一财年（+1y）平均预测低于当前财年（0y），暗示增长动能可能边际减弱。市场分歧的核心在于 Agentforce 的渗透率：若 AI 货币化加速，当前估值提供修复空间；若席位压缩与有机增长放缓成为主导，则估值仍面临压缩风险。需注意，部分盈利预测下修与战略投资收益波动有关，评估时应区分核心经营与一次性损益。",
+        "stance": "unknown",
+        "dimension": "unknown",
+        "confidence": 0.35,
+        "evidence_ids": [
+          "get_company_info:s2",
+          "get_eps_revisions:s4",
+          "search:s11",
+          "agent_source:0e6723f77a843865"
+        ],
+        "limitations": [
+          "解释基于列出的材料，不替代原始公告或数据核验。"
+        ],
+        "assertion_type": "opinion",
+        "subject": "CRM",
+        "metric": "valuation_reasonableness",
+        "horizon": null,
+        "scenario": null,
+        "directional": false,
+        "requirement_ids": [
+          "request_task_1:dimension:valuation_reasonableness"
+        ]
+      },
+      "synthesis:task_1:explanation:4": {
+        "claim_id": "synthesis:task_1:explanation:4",
+        "task_id": "task_1",
+        "agent_name": "research_analyst",
+        "text": "风险集中于杠杆、现金流与商业模式转型。负债/资产比 65.0% 已突破通常认为的 60% 警戒线，$25B 债务融资 ASR 使净债务大幅攀升，自由现金流增速指引减半，信用评级遭下调。AI 转型导致商业模式“变重”：算力成本与用量近乎等比例走高，可能压缩毛利率，而席位压缩风险持续存在。技术面显示 RSI 28.44 进入超卖，ATM IV 40.37% 处于高位，最新成交量仅为 20 日均量 0.65x，价格变动缺乏量能确认。历史最大回撤 -70.50% 与当前 -43.33% 的最大回撤提示尾部风险显著。此外，Agentforce 与 Data 360 的货币化策略尚新，若客户使用率低于预期，可能影响收入预测与股价。",
+        "stance": "unknown",
+        "dimension": "unknown",
+        "confidence": 0.35,
+        "evidence_ids": [
+          "get_factor_exposure:s14",
+          "analyze_historical_drawdowns:s13",
+          "agent_source:4f0da2c1c34dbdfb",
+          "agent_source:da6f8e8e32fe9cc7",
+          "agent_source:88dd4486d62d4808",
+          "search:s11",
+          "get_sec_filings:s7:1",
+          "agent_source:59a79df8f2690177",
+          "agent_source:d417f13b990d096f",
+          "agent_source:19c683d215feddbc",
+          "agent_source:94932345b91a39df"
+        ],
+        "limitations": [
+          "解释基于列出的材料，不替代原始公告或数据核验。"
+        ],
+        "assertion_type": "opinion",
+        "subject": "CRM",
+        "metric": "risk_level",
+        "horizon": null,
+        "scenario": null,
+        "directional": false,
+        "requirement_ids": [
+          "request_task_1:dimension:risk_level"
+        ]
+      },
+      "synthesis:task_1:explanation:5": {
+        "claim_id": "synthesis:task_1:explanation:5",
+        "task_id": "task_1",
+        "agent_name": "research_analyst",
+        "text": "公司披露其定位为 CRM 技术全球领导者，通过统一平台连接销售、服务、营销、商务与 IT，并以订阅为主、直销与伙伴渠道并行。Agentforce 被定义为可自主推理、决策与执行任务的 AI 代理层，平台同时覆盖 Slack、Headless 360 等界面。近年的 Informatica、Regrello、Qualified 收购被用于加速代理式 AI 路线图；公司也持续通过重组、裁员与办公/数据中心优化来改善运营利润率。商业模式的核心变化是从传统应用订阅向数据与 AI 代理能力延伸，但 10-Q 同时提示，AI 驱动消费定价可能使定价、流失与收入预测更复杂。",
+        "stance": "unknown",
+        "dimension": "fundamental",
+        "confidence": 0.35,
+        "evidence_ids": [
+          "get_company_info:s2",
+          "get_sec_filings:s7:3",
+          "get_sec_filings:s7:1"
+        ],
+        "limitations": [],
+        "assertion_type": "opinion",
+        "subject": "CRM",
+        "metric": "business_model",
+        "horizon": null,
+        "scenario": null,
+        "directional": false,
+        "requirement_ids": [
+          "request_task_1:dimension:business_model"
+        ]
+      },
+      "synthesis:task_1:explanation:6": {
+        "claim_id": "synthesis:task_1:explanation:6",
+        "task_id": "task_1",
+        "agent_name": "research_analyst",
+        "text": "竞争差异需按对象类型区分。本任务可用事实未提供 CrowdStrike、Palantir 等可比公司的财务数据，因此不能进行量化同业比较。依据 CRM 自身 10-K，其竞争范围包括打包业务软件、云应用服务商、AI 原生公司、免费或捆绑产品厂商、细分行业软件、生产力与统一通信厂商，以及平台开发/云平台厂商。相对这些对象，CRM 的差异化来自单一客户数据源、跨系统集成、企业级安全治理与跨云工作流；但 10-K 也明确提示 AI 原生公司可能绕过传统业务流程或取代既有用户界面，10-Q 进一步提示 Agentforce 与 Data 360 的变现策略仍新且不确定。因此竞争风险不只是功能替代，而是客户在座席许可、消费补足与数据接入价值之间的重构。",
+        "stance": "unknown",
+        "dimension": "fundamental",
+        "confidence": 0.35,
+        "evidence_ids": [
+          "get_sec_filings:s7:3",
+          "get_sec_filings:s7:1"
+        ],
+        "limitations": [],
+        "assertion_type": "opinion",
+        "subject": "CRM",
+        "metric": "competition",
+        "horizon": null,
+        "scenario": null,
+        "directional": false,
+        "requirement_ids": [
+          "request_task_1:dimension:competition"
+        ]
+      },
+      "synthesis:task_1:explanation:7": {
+        "claim_id": "synthesis:task_1:explanation:7",
+        "task_id": "task_1",
+        "agent_name": "research_analyst",
+        "text": "未来 90 天窗口：供应商日历显示股息日 2026-10-07、财报日 2026-12-02，状态为 scheduled/provider_reported，但并非官方确认。同一来源的宏观检索线索提示 10 月 7 日 FOMC 会议纪要、10 月 14 日 CPI、10 月 28 日 FOMC 决议，但验证状态为 discovery_only，事件日期未经核实，不能作为已确认催化。当前舆情快照显示样本量 0、催化事件 0、情绪 neutral，无法判断偏多或偏空。已披露文件方面，2026-08-27 的 10-Q 与 2026-03-02 的 10-K 可作为基本面依据；8-9 月另有多份 8-K，但本任务事实仅包含 filing 日期，具体内容需原始披露核实。次要新闻信号在本轮事实化舆情中未形成可核验催化。",
+        "stance": "unknown",
+        "dimension": "unknown",
+        "confidence": 0.35,
+        "evidence_ids": [
+          "agent_source:2b79268382fa0336",
+          "get_event_calendar:s12",
+          "get_sec_filings:s7:1",
+          "get_sec_filings:s7:3",
+          "get_sec_material_events:s17:1",
+          "get_sec_material_events:s17:2",
+          "get_sec_material_events:s17:3",
+          "get_sec_material_events:s17:4",
+          "get_sec_material_events:s17:5"
+        ],
+        "limitations": [],
+        "assertion_type": "opinion",
+        "subject": "CRM",
+        "metric": "news_catalysts",
+        "horizon": null,
+        "scenario": null,
+        "directional": false,
+        "requirement_ids": [
+          "request_task_1:dimension:news_catalysts",
+          "request_task_1:time_window"
+        ]
+      }
+    },
+    "evidence_index": {
+      "agent_source:19c683d215feddbc": {
+        "source_id": "agent_source:19c683d215feddbc",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "fundamental_snapshot",
+        "text": "经营现金流: $1.27B",
+        "title": "fundamental_agent evidence 4",
+        "url": "https://finance.yahoo.com/quote/CRM/financials/",
+        "as_of": "2026-07-31",
+        "usage": "fact",
+        "subject": "CRM",
+        "metric": "operating_cash_flow",
+        "currency": "USD",
+        "metadata": {},
+        "structured_data": {
+          "currency": "USD"
+        }
+      },
+      "get_sec_material_events:s17:5": {
+        "source_id": "get_sec_material_events:s17:5",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "SEC EDGAR 8-K filing. Filed: 2026-06-02. 8-K",
+        "title": "Salesforce, Inc. 8-K (2026-06-02)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000138/crm-20260527.htm",
+        "as_of": "2026-06-02",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "8-K",
+          "filing_date": "2026-06-02",
+          "report_date": "2026-05-27"
+        }
+      },
+      "get_sec_filings:s7:1": {
+        "source_id": "get_sec_filings:s7:1",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "competition: Table of Contents factors, including customer dissatisfaction, customers’ spending levels, mix of customer base, decreases in the number of users at our customers, customer mergers and acquisitions, competition, pricing increas",
+        "title": "Salesforce, Inc. 10-Q (2026-08-27)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000190/crm-20260731.htm",
+        "as_of": "2026-08-27",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "10-Q",
+          "filing_date": "2026-08-27",
+          "report_date": "2026-07-31",
+          "content_read": true,
+          "content_sections": {
+            "competition": "Table of Contents factors, including customer dissatisfaction, customers’ spending levels, mix of customer base, decreases in the number of users at our customers, customer mergers",
+            "management_discussion": "ITEM 2. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS This Quarterly Report on Form 10-Q contains forward-looking statements within the mean"
+          }
+        }
+      },
+      "get_factor_exposure:s14": {
+        "source_id": "get_factor_exposure:s14",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "risk_profile",
+        "text": "{\"source\": \"yfinance_factor_model\", \"as_of\": \"2026-10-04T02:29:05.639228\", \"lookback_days\": 252, \"positions\": [{\"ticker\": \"CRM\", \"weight\": 1.0, \"quantity\": null}], \"factor_beta\": {\"market\": 0.462, \"growth\": 0.1516, \"small_cap\": 0.094, \"rate",
+        "title": "get_factor_exposure output",
+        "as_of": "2026-10-04T02:29:05.639228",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "as_of": "2026-10-04T02:29:05.639228"
+        }
+      },
+      "agent_source:da6f8e8e32fe9cc7": {
+        "source_id": "agent_source:da6f8e8e32fe9cc7",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "technical_snapshot",
+        "text": "RSI(14) 28.44 | MACD 1.8531 | 信号线 4.8005",
+        "title": "technical_agent evidence 2",
+        "url": "https://finance.yahoo.com/quote/CRM/history/",
+        "as_of": "2026-10-02",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {}
+      },
+      "agent_source:94932345b91a39df": {
+        "source_id": "agent_source:94932345b91a39df",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "fundamental_snapshot",
+        "text": "净利润: $3.53B",
+        "title": "fundamental_agent evidence 2",
+        "url": "https://finance.yahoo.com/quote/CRM/financials/",
+        "as_of": "2026-07-31",
+        "usage": "fact",
+        "subject": "CRM",
+        "metric": "net_income",
+        "currency": "USD",
+        "metadata": {},
+        "structured_data": {
+          "currency": "USD"
+        }
+      },
+      "search:s11": {
+        "source_id": "search:s11",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "document_context",
+        "text": "{\"text\": \"🔍 综合搜索结果 (来自 Exa):\\n============================================================\\n\\nSearch Results (Exa):\\n\\n1. Salesforce（CRM）深度投研 · 链研社投研报告\\n   规、安全、多租户架构，是 AI 原生竞争者短期内难以匹配的工程壁垒。Slack MCP 上线 6 周突破 100 万活跃用户。 Q6 · 是否形成物理垄断或局部垄断？ ",
+        "title": "search output",
+        "usage": "raw",
+        "subject": "CRM",
+        "metadata": {
+          "verification": "discovery_only"
+        },
+        "structured_data": {}
+      },
+      "get_sec_material_events:s17:3": {
+        "source_id": "get_sec_material_events:s17:3",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "SEC EDGAR 8-K filing. Filed: 2026-08-26. 8-K",
+        "title": "Salesforce, Inc. 8-K (2026-08-26)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000187/crm-20260826.htm",
+        "as_of": "2026-08-26",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "8-K",
+          "filing_date": "2026-08-26",
+          "report_date": "2026-08-26"
+        }
+      },
+      "agent_source:2b79268382fa0336": {
+        "source_id": "agent_source:2b79268382fa0336",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "news_context",
+        "text": "CRM 整体舆情: neutral (平均分 N/A, 正/负/中占比 0%/0%/0%); 趋势: unknown; 热度: thin (新闻 0 条, 事件 0 个); 催化事件: 0 个; 价格传导: neutral。",
+        "title": "news_agent evidence 6",
+        "as_of": "2026-10-04T02:29:12.244908",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {}
+      },
+      "agent_source:88dd4486d62d4808": {
+        "source_id": "agent_source:88dd4486d62d4808",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "technical_snapshot",
+        "text": "Option metrics: ATM IV 40.37%, PCR 0.85, Skew +3.86%",
+        "title": "technical_agent evidence 4",
+        "as_of": "2026-10-04T02:29:06.594468",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {}
+      },
+      "get_sec_material_events:s17:4": {
+        "source_id": "get_sec_material_events:s17:4",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "SEC EDGAR 8-K filing. Filed: 2026-08-05. 8-K",
+        "title": "Salesforce, Inc. 8-K (2026-08-05)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000160/crm-20260805.htm",
+        "as_of": "2026-08-05",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "8-K",
+          "filing_date": "2026-08-05",
+          "report_date": "2026-08-05"
+        }
+      },
+      "analyze_historical_drawdowns:s13": {
+        "source_id": "analyze_historical_drawdowns:s13",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "risk_profile",
+        "text": "{\"text\": \"Top 3 Historical Drawdowns for CRM (coverage 2004-06-23 to 2026-10-02 (~22.3y)):\\n\\n- Drawdown: -70.50% (from 2008-06-23 to 2008-11-19)\\n  Duration to trough: 149 days. Recovery time: 405 days.\"}",
+        "title": "analyze_historical_drawdowns output",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "text": "Top 3 Historical Drawdowns for CRM (coverage 2004-06-23 to 2026-10-02 (~22.3y)):\n\n- Drawdown: -70.50% (from 2008-06-23 to 2008-11-19)\n  Duration to trough: 149 days. Recovery time: 405 days."
+        }
+      },
+      "agent_source:59a79df8f2690177": {
+        "source_id": "agent_source:59a79df8f2690177",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "fundamental_snapshot",
+        "text": "总资产: $109.62B",
+        "title": "fundamental_agent evidence 5",
+        "url": "https://finance.yahoo.com/quote/CRM/financials/",
+        "as_of": "2026-07-31",
+        "usage": "fact",
+        "subject": "CRM",
+        "metric": "total_assets",
+        "currency": "USD",
+        "metadata": {},
+        "structured_data": {
+          "currency": "USD"
+        }
+      },
+      "agent_source:0e6723f77a843865": {
+        "source_id": "agent_source:0e6723f77a843865",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "price_snapshot",
+        "text": "Current quote: USD 234.69, intraday -0.84%",
+        "title": "price_agent evidence 2",
+        "as_of": "2026-10-02",
+        "usage": "fact",
+        "subject": "CRM",
+        "metric": "price_quote",
+        "currency": "USD",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "as_of": "2026-10-02",
+          "currency": "USD"
+        }
+      },
+      "get_event_calendar:s12": {
+        "source_id": "get_event_calendar:s12",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "event_calendar",
+        "text": "{\"ticker\": \"CRM\", \"source\": \"yfinance+search\", \"as_of\": \"2026-10-04T09:29:05.636204+00:00\", \"days_ahead\": 90, \"earnings_events\": [{\"date\": \"2026-12-02\", \"title\": \"Earnings Date\", \"source\": \"yfinance_calendar\", \"status\": \"scheduled\", \"verifi",
+        "title": "get_event_calendar output",
+        "as_of": "2026-10-04T09:29:05.636204+00:00",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {
+          "coverage_window": {
+            "direction": "future",
+            "value": 90,
+            "unit": "days",
+            "days_ahead": 90,
+            "scope": "provider_calendar",
+            "exhaustive": false,
+            "as_of": "2026-10-04T09:29:05.636204+00:00"
+          }
+        },
+        "structured_data": {
+          "ticker": "CRM",
+          "as_of": "2026-10-04T09:29:05.636204+00:00",
+          "earnings_events": [
+            {
+              "date": "2026-12-02",
+              "title": "Earnings Date",
+              "source": "yfinance_calendar",
+              "status": "scheduled",
+              "verification": "provider_reported",
+              "occurred_at": null
+            },
+            {
+              "date": "2026-12-02",
+              "title": "Earnings Date",
+              "source": "yfinance_earnings_dates",
+              "status": "scheduled",
+              "verification": "provider_reported",
+              "occurred_at": null
+            }
+          ],
+          "dividend_events": [
+            {
+              "date": "2026-10-07",
+              "title": "Dividend Date",
+              "source": "yfinance_calendar",
+              "status": "scheduled",
+              "verification": "provider_reported",
+              "occurred_at": null
+            }
+          ],
+          "coverage_window": {
+            "direction": "future",
+            "value": 90,
+            "unit": "days",
+            "days_ahead": 90,
+            "scope": "provider_calendar",
+            "exhaustive": false,
+            "as_of": "2026-10-04T09:29:05.636204+00:00"
+          }
+        }
+      },
+      "agent_source:4f0da2c1c34dbdfb": {
+        "source_id": "agent_source:4f0da2c1c34dbdfb",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "technical_snapshot",
+        "text": "支撑 221.18 | 阻力 263.60 | 最新成交量 7901800 | 20日均量 12083870 | 量能 0.65x",
+        "title": "technical_agent evidence 3",
+        "url": "https://finance.yahoo.com/quote/CRM/history/",
+        "as_of": "2026-10-02",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {}
+      },
+      "get_company_info:s2": {
+        "source_id": "get_company_info:s2",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "company_profile",
+        "text": "{\"text\": \"Company Profile (CRM):\\n- Name: Salesforce, Inc.\\n- Sector: Technology\\n- Industry: Software - Application\\n- Market Cap: USD 193,149,878,272\\n- Currency: USD\\n- Trailing P/E: 21.51\\n- Forward P/E: 14.66\\n- Price/Book: 5.03\\n- Price/Sales: 4.40\\n- EV/EBITDA: 17.38\\n- Website: https://www.salesforce.com\\n- Description: Salesforce, Inc. provides customer relationship management technology services that connect companies and customers together in the United States, Europe, and the Asia Pacific. The company offers Agen...\"}",
+        "title": "get_company_info output",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "text": "Company Profile (CRM):\n- Name: Salesforce, Inc.\n- Sector: Technology\n- Industry: Software - Application\n- Market Cap: USD 193,149,878,272\n- Currency: USD\n- Trailing P/E: 21.51\n- Forward P/E: 14.66\n- Price/Book: 5.03\n- Price/Sales: 4.40\n- EV/EBITDA: 17.38\n- Website: https://www.salesforce.com\n- Description: Salesforce, Inc. provides customer relationship management technology services that connect companies and customers together in the United States, Europe, and the Asia Pacific. The company offers Agen..."
+        }
+      },
+      "agent_source:d417f13b990d096f": {
+        "source_id": "agent_source:d417f13b990d096f",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "fundamental_snapshot",
+        "text": "总负债: $71.24B",
+        "title": "fundamental_agent evidence 6",
+        "url": "https://finance.yahoo.com/quote/CRM/financials/",
+        "as_of": "2026-07-31",
+        "usage": "fact",
+        "subject": "CRM",
+        "metric": "total_liabilities",
+        "currency": "USD",
+        "metadata": {},
+        "structured_data": {
+          "currency": "USD"
+        }
+      },
+      "get_eps_revisions:s4": {
+        "source_id": "get_eps_revisions:s4",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "earnings_estimates",
+        "text": "{\"ticker\": \"CRM\", \"source\": \"yfinance\", \"as_of\": \"2026-10-04T02:29:05.624768\", \"eps_revisions\": [{\"period\": \"0q\", \"upLast7days\": 1.0, \"upLast30days\": 34.0, \"downLast30days\": 4.0, \"downLast7Days\": 0.0}, {\"period\": \"+1q\", \"upLast7days\": 2.0, ",
+        "title": "get_eps_revisions output",
+        "as_of": "2026-10-04T02:29:05.624768",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "as_of": "2026-10-04T02:29:05.624768"
+        }
+      },
+      "get_sec_material_events:s17:2": {
+        "source_id": "get_sec_material_events:s17:2",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "SEC EDGAR 8-K filing. Filed: 2026-09-04. 8-K",
+        "title": "Salesforce, Inc. 8-K (2026-09-04)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000197/crm-20260902.htm",
+        "as_of": "2026-09-04",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "8-K",
+          "filing_date": "2026-09-04",
+          "report_date": "2026-09-02"
+        }
+      },
+      "get_sec_material_events:s17:1": {
+        "source_id": "get_sec_material_events:s17:1",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "SEC EDGAR 8-K filing. Filed: 2026-09-17. 8-K",
+        "title": "Salesforce, Inc. 8-K (2026-09-17)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000210/crm-20260916.htm",
+        "as_of": "2026-09-17",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "8-K",
+          "filing_date": "2026-09-17",
+          "report_date": "2026-09-16"
+        }
+      },
+      "get_sec_filings:s7:3": {
+        "source_id": "get_sec_filings:s7:3",
+        "task_ids": [
+          "task_1"
+        ],
+        "kind": "filing_context",
+        "text": "business: ITEM 1. BUSINESS Overview Salesforce, Inc. (“Salesforce,” the “Company,” “we” or “our”) is a global leader in customer relationship management (“CRM”) technology, helping organizations of any size become agentic enterprises. Found",
+        "title": "Salesforce, Inc. 10-K (2026-03-02)",
+        "url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000060/crm-20260131.htm",
+        "as_of": "2026-03-02",
+        "usage": "fact",
+        "subject": "CRM",
+        "metadata": {},
+        "structured_data": {
+          "ticker": "CRM",
+          "form": "10-K",
+          "filing_date": "2026-03-02",
+          "report_date": "2026-01-31",
+          "content_read": true,
+          "content_sections": {
+            "business": "ITEM 1. BUSINESS Overview Salesforce, Inc. (“Salesforce,” the “Company,” “we” or “our”) is a global leader in customer relationship management (“CRM”) technology, helping organizat",
+            "competition": "m acquisitions. Performance, functional depth, security, usability, ease of integration and configuration and sustainability of our solutions influence our technology decisions and",
+            "management_discussion": "ITEM 7. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS The following discussion contains forward-looking statements, including, without limit"
+          }
+        }
+      }
+    },
+    "citation_ids": [
+      "get_company_info:s2",
+      "get_eps_revisions:s4",
+      "search:s11",
+      "agent_source:0e6723f77a843865",
+      "get_factor_exposure:s14",
+      "analyze_historical_drawdowns:s13",
+      "agent_source:4f0da2c1c34dbdfb",
+      "agent_source:da6f8e8e32fe9cc7",
+      "agent_source:88dd4486d62d4808",
+      "get_sec_filings:s7:1",
+      "agent_source:59a79df8f2690177",
+      "agent_source:d417f13b990d096f",
+      "agent_source:19c683d215feddbc",
+      "agent_source:94932345b91a39df",
+      "get_sec_filings:s7:3",
+      "agent_source:2b79268382fa0336",
+      "get_event_calendar:s12",
+      "get_sec_material_events:s17:1",
+      "get_sec_material_events:s17:2",
+      "get_sec_material_events:s17:3",
+      "get_sec_material_events:s17:4",
+      "get_sec_material_events:s17:5"
+    ]
+  }
+}

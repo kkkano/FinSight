@@ -55,6 +55,7 @@ def _operation(raw: dict[str, Any]) -> str:
 class TaskDescriptor(StrictContract):
     task_id: NonEmptyStr
     title: NonEmptyStr
+    request_text: NonEmptyStr | None = None
     priority: int = Field(ge=0)
     order_index: int = Field(ge=0)
     operation: NonEmptyStr
@@ -198,6 +199,7 @@ def build_task_descriptors(
         descriptors.append(TaskDescriptor(
             task_id=task_id,
             title=title,
+            request_text=_text(raw.get("request_text") or plan_task.get("request_text")) or None,
             priority=max(0, int(raw.get("priority"))) if isinstance(raw.get("priority"), int) else 50,
             order_index=int(raw["order_index"]),
             operation=_operation(raw),

@@ -1,10 +1,12 @@
 """请求理解的唯一出口：由已绑定的任务生成执行与展示共用的合同。"""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from backend.config.ticker_mapping import normalize_ticker
 from backend.graph.request_frame import compile_request_frame, compile_request_frames
+from backend.graph.request_constraints import conditional_impact
 
 
 def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
@@ -14,6 +16,14 @@ def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
     if not ready and not blocked:
         return result
     query = str(understanding.get("original_query") or result.get("query") or "")
+    # 同一条件传导链不能拆成失去前提的两次宏观分析；独立公司任务保持各自边界。
+    chain = [task for task in ready if task.get('subject_type') in {'macro','commodity','index'}]
+    if len(chain) > 1 and conditional_impact(query) and not re.search(r'另外|另一个问题|\bseparately\b', query, re.I):
+        lead = chain[0]
+        lead['request_text'] = query
+        lead['conditional_impact'] = True
+        lead['tickers'] = list(dict.fromkeys(ticker for task in chain for ticker in task.get('tickers', [])))
+        ready = [task for task in ready if task is lead or task not in chain]
     mode = str(result.get("output_mode") or "chat")
     all_tickers = list(dict.fromkeys(
         normalize_ticker(str(ticker)) for task in ready for ticker in task.get("tickers", [])
@@ -40,12 +50,14 @@ def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
             candidates = matching or candidates
             if candidates:
                 scoped_query = "；".join(str(frame["query_text"]) for frame in candidates)
-        elif subject_type == "macro":
+        elif subject_type == "macro" and not task.get('conditional_impact'):
             candidates = [frame for frame in fragments if frame.get("subject", {}).get("type") == "macro"]
             if candidates:
                 scoped_query = "；".join(str(frame["query_text"]) for frame in candidates)
         frame_id = f"request_{task_id}"
         domain = {"price": "quote", "fetch": "news", "technical": "technical", "macro_brief": "macro"}.get(name, "")
+        if subject_type == "macro":
+            domain = "macro"
         frame = compile_request_frame(query=scoped_query, tickers=tickers, output_mode=mode,
             comparison_requested=name == "compare", domain_intent=domain,
             subject_type=subject_type, frame_id=frame_id)
@@ -59,6 +71,12 @@ def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
                 for key in ("required_evidence", "facets", "budget_profile", "evidence_plan"):
                     contract[key] = parent["intent_contract"][key]
                 frame["evidence_obligations"] = list(contract["required_evidence"])
+                # 比较的逐标的任务仅准备事实；双方解释由父任务一次完成。
+                task["evidence_support_for"] = parent["task_ids"][0]
+                frame["evidence_support_for"] = parent["task_ids"][0]
+                for requirement in frame["render_contract"].get("answer_requirements") or []:
+                    requirement["requires_analysis"] = False
+                    requirement["kind"] = "fact_attribute"
         projection = dict(frame["legacy_operation"])
         # 文档/持仓及估值计算是显式工作流变体，其证据仍由同一 frame 管理。
         if name in {"holdings", "valuation_sanity"} or subject_type in {"filing", "research_doc", "news_item", "news_set", "portfolio"}:
@@ -75,6 +93,7 @@ def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
             title=str(task.get("title") or frame["subject"]["label"]),
             subject_label=frame["subject"]["label"], order_index=order, request_frame_id=frame_id,
             render_kind=render_kind, render_group_id=frame_id,
+            answer_requirements=list(frame["render_contract"].get("answer_requirements") or []),
             required_evidence=list(frame["evidence_obligations"]))
         if frame.get("time_scope"):
             task["time_scope"] = dict(frame["time_scope"])

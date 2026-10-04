@@ -85,9 +85,10 @@ def evidence_contract_metadata(
         quote = parse_quote_payload(quote_payload)
         if quote:
             result["market_price"] = quote["price"]
-            for key in ("as_of", "currency", "quality"):
+            for key in ("as_of", "currency", "quality", "market_session", "source_timestamp", "source_time_precision", "source_time_status"):
                 if quote.get(key) is not None:
                     result[key] = quote[key]
+            result["meta"] = {**meta, **{key: quote[key] for key in ("market_session", "source_timestamp", "source_time_precision", "source_time_status") if quote.get(key) is not None}}
             if quote.get("source"):
                 result["source_name"] = quote["source"]
     return result
@@ -102,6 +103,7 @@ def _contract_fields(raw: Any) -> dict[str, Any]:
             "price", "current_price", "close", "timestamp",
             "event_quality", "supporting_reports", "retrieval_kind", "published_at", "published_at_precision",
             "subject", "metric", "period_start", "period_end", "frequency", "unit", "currency", "usage", "structured_data",
+            "coverage_window", "request_window", "content_read", "content_sections", "market_session", "source_time_status",
         ) if key in raw
     }
     if raw.get("url") or raw.get("filing_url") or raw.get("source_url"):
@@ -192,7 +194,7 @@ def _append_tool_evidence(
                     **_contract_fields(filing),
                     "title": f"{company_name} {form_type} ({filing_date or 'N/A'})".strip(),
                     "url": filing_url or None,
-                    "snippet": f"SEC EDGAR {form_type} filing. Filed: {filing_date or 'N/A'}. {description}",
+                    "snippet": str(filing.get("content_excerpt") or f"SEC EDGAR {form_type} filing. Filed: {filing_date or 'N/A'}. {description}"),
                     "source": "sec_edgar",
                     "published_date": filing_date,
                     "confidence": 0.85,

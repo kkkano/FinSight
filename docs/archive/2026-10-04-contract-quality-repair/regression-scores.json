@@ -1,0 +1,415 @@
+{
+  "reviewed_at": "2026-10-04T10:05:39.228904+00:00",
+  "composition": "regression-v2 全12 + regression-v3-targeted h01/h02/h12；表中按此明确组成，非同一源码全量重跑。h12诊断v4不替换失败成绩。",
+  "policy": "沿用原冻结口径；人工阅读回答、计划及结构化证据；app质量标签不等于通过。图级本地测试不证明真实登录交付。",
+  "metrics": {
+    "intent": {
+      "passed": 12,
+      "total": 12
+    },
+    "evidence": {
+      "covered": 17,
+      "total": 29
+    },
+    "full_answer": {
+      "passed": 3,
+      "total": 12
+    },
+    "answer_classes": {
+      "honest_partial": 5,
+      "incorrect": 4,
+      "full": 3
+    },
+    "chat_seconds": {
+      "n": 11,
+      "median": 147.25,
+      "maximum": 313.312,
+      "p90_nearest_rank": 288.031
+    },
+    "report_seconds": [
+      623.219
+    ],
+    "llm_calls": 16,
+    "failed_llm_calls": 1
+  },
+  "cases": [
+    {
+      "id": "h01_orcl_earnings",
+      "query": "甲骨文 ORCL 最近一个已公布季度赚得怎么样？请区分收入、净利润和现金流，并说明这份财报对股价的影响。",
+      "mode": "chat",
+      "source_run": "regression-v3-targeted",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:ff04bb7df5e4c5c7957183c825e0feea38a55ee00e8b8acc7e30cf0a3f845b94",
+      "request_utc": "2026-10-04T08:49:05.690440+00:00",
+      "raw_sha256": "977d9f56605d3dca9b25f144d07255d37ec17558c913adc8b827d4639534011a",
+      "seconds": 288.031,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "真实最新单季财务",
+          "score": 1
+        },
+        {
+          "dimension": "财报对股价影响",
+          "score": 0
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 2,
+      "full_answer": 0,
+      "answer_class": "honest_partial",
+      "reason": "收入、净利润、CFO 的 SEC 单季期间和 USD 可追溯；缺财报发布窗口的价格反应，近期涨跌不能替代。",
+      "app_status": "partial",
+      "llm_calls": 2,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h02_orcl_events",
+      "query": "沿用刚才这家公司，未来90天哪些已确认事件值得跟踪？把确定日期与仅供观察的可能催化分开。",
+      "mode": "chat",
+      "source_run": "regression-v3-targeted",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:ff04bb7df5e4c5c7957183c825e0feea38a55ee00e8b8acc7e30cf0a3f845b94",
+      "request_utc": "2026-10-04T08:53:53.773622+00:00",
+      "raw_sha256": "15e0d3bc5c6fc9e952282002d4b1f85d44f0635341a029a578ddd201a8872e95",
+      "seconds": 171.906,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "未来90天已确认事件",
+          "score": 0
+        },
+        {
+          "dimension": "观察催化与确认事件区分",
+          "score": 0
+        }
+      ],
+      "evidence_score": 0,
+      "evidence_total": 2,
+      "full_answer": 0,
+      "answer_class": "incorrect",
+      "reason": "继承 ORCL 和 90 天已修复；只有非穷尽供应商日历，无官方确认或观察触发条件，正文仍称确定日期。",
+      "app_status": "partial",
+      "llm_calls": 2,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h03_adbe_quote",
+      "query": "ADBE 最近一次可用报价是多少？告诉我币种、报价时间和是否为盘后价格，别把它说成实时价。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:34:40.565884+00:00",
+      "raw_sha256": "2a69bdbdb8cbd2df669935d848d046da9ce9305677936944f52b039b6e45bb77",
+      "seconds": 0.266,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最近报价及报价属性",
+          "score": 1
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 1,
+      "full_answer": 1,
+      "answer_class": "full",
+      "reason": "价格、USD、源交易日、日线收盘精度和非盘后属性齐全；没有伪造精确成交时刻。",
+      "app_status": "answered",
+      "llm_calls": 0,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h04_avgo_technical",
+      "query": "只看 AVGO 的技术面：日线趋势、RSI、MACD、支撑和阻力，不需要新闻或基本面。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:34:40.839668+00:00",
+      "raw_sha256": "07609efd47e25fe28ef04dffb5f94d75e0ce7d288970b51f6c7833b7cb872138",
+      "seconds": 8.187,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "日线趋势",
+          "score": 1
+        },
+        {
+          "dimension": "RSI",
+          "score": 1
+        },
+        {
+          "dimension": "MACD",
+          "score": 1
+        },
+        {
+          "dimension": "支撑阻力",
+          "score": 1
+        }
+      ],
+      "evidence_score": 4,
+      "evidence_total": 4,
+      "full_answer": 1,
+      "answer_class": "full",
+      "reason": "真实日线日期、MA20/50、RSI14、MACD/信号线、支撑阻力及量能可追溯，未执行被排除的新闻/基本面。",
+      "app_status": "answered",
+      "llm_calls": 0,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h05_baba_hk",
+      "query": "请研究阿里巴巴港股 9988.HK 的最新财务、估值和风险；只分析这个上市代码，金额标清币种。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:34:49.030962+00:00",
+      "raw_sha256": "566f217d97f66536eff3669251d8bc2b9cae15b8299763c7d96aca511720cf8c",
+      "seconds": 95.062,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最新财务",
+          "score": 1
+        },
+        {
+          "dimension": "港股估值",
+          "score": 0
+        },
+        {
+          "dimension": "主要风险",
+          "score": 1
+        }
+      ],
+      "evidence_score": 2,
+      "evidence_total": 3,
+      "full_answer": 0,
+      "answer_class": "honest_partial",
+      "reason": "仅9988.HK；CNY单季财务与公司风险有据，HKD市值/P/E已返回，但股份/盈利币种兼容与估值解释口径尚未完整。",
+      "app_status": "partial",
+      "llm_calls": 1,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h06_v_ma_compare",
+      "query": "Visa（V）和 Mastercard（MA）谁的估值更贵、自由现金流质量更好？用可比较财期，并解释差异。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:36:24.122369+00:00",
+      "raw_sha256": "595b1f074a505af13793cfa9c1621e7ce62ad9e30b7f11e7d62242deba494955",
+      "seconds": 313.312,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "双方估值横向比较",
+          "score": 1
+        },
+        {
+          "dimension": "双方自由现金流质量比较",
+          "score": 0
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 2,
+      "full_answer": 0,
+      "answer_class": "honest_partial",
+      "reason": "V与MA双方同类估值倍数已有；MA CFO减PPE capex可重算，V缺可比capex，不能完成双方FCF比较。",
+      "app_status": "partial",
+      "llm_calls": 2,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h07_multi_task",
+      "query": "XOM 看近期新闻，COST 看经营基本面，BTC-USD 看价格趋势；请分别回答，不要把三种任务混在一起。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:41:37.526014+00:00",
+      "raw_sha256": "804017384e4fd85d1328c2fb4cfbbb6ea370663f146d669da1304009a31231ee",
+      "seconds": 275.094,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "XOM近期新闻",
+          "score": 0
+        },
+        {
+          "dimension": "COST经营基本面",
+          "score": 1
+        },
+        {
+          "dimension": "BTC-USD价格趋势",
+          "score": 0
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 3,
+      "full_answer": 0,
+      "answer_class": "incorrect",
+      "reason": "三项主体正确；COST SEC有真实财期和USD经营数据，XOM仅待核实线索，BTC趋势缺失；正文COST另一来源财期冲突、资本开支解释OCF不严谨。",
+      "app_status": "partial",
+      "llm_calls": 4,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h08_oil_macro",
+      "query": "如果最近原油价格走高，会怎样传导到美国通胀、利率预期与航空股？区分已发生的数据和假设推演。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:46:12.659158+00:00",
+      "raw_sha256": "562fbea25dc4615bd19ab8fc682fb4f3ab207dfbaec06e2227c24655b6270af8",
+      "seconds": 147.25,
+      "intent_score": 1,
+      "intent_reason": "宏观原油条件链和三个传导要求保留；CL=F为原油行情代表，不是擅自增加航空个股。",
+      "evidence_dimensions": [
+        {
+          "dimension": "近期原油事实与条件",
+          "score": 0
+        },
+        {
+          "dimension": "美国通胀传导",
+          "score": 1
+        },
+        {
+          "dimension": "利率预期传导",
+          "score": 0
+        },
+        {
+          "dimension": "航空股传导",
+          "score": 0
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 4,
+      "full_answer": 0,
+      "answer_class": "honest_partial",
+      "reason": "原油代表合约CL=F没有扩大到航空个股，四项请求保留；CPI同比与条件通胀传导成立，原油背景/利率/航空传导未完成。",
+      "app_status": "partial",
+      "llm_calls": 1,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h09_nflx_news",
+      "query": "汇总 NFLX 最近72小时值得关注的新闻，合并同一事件的重复报道；过期报道和未证实传闻单独标出。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:48:39.936268+00:00",
+      "raw_sha256": "18493214a760716548da729821f87cc5e18c45a71896e3a1b90592582c0d834f",
+      "seconds": 252.594,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "72小时主体相关新闻",
+          "score": 1
+        },
+        {
+          "dimension": "事件去重及核验状态",
+          "score": 0
+        }
+      ],
+      "evidence_score": 1,
+      "evidence_total": 2,
+      "full_answer": 0,
+      "answer_class": "incorrect",
+      "reason": "72小时入合同且有时窗内媒体归因报道；部分同事件合并，但混入未来供应商财报日并称已确认，核验状态维度不通过。",
+      "app_status": "partial",
+      "llm_calls": 2,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h10_missing_subject",
+      "query": "现在还值得买它吗？",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:52:52.556159+00:00",
+      "raw_sha256": "92be38c59c58a9ab571d8e846c053fddb9c0640e2519a9660e99a224ead4a6ba",
+      "seconds": 0.016,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [],
+      "evidence_score": 0,
+      "evidence_total": 0,
+      "full_answer": 0,
+      "answer_class": "incorrect",
+      "reason": "route=clarify且未取数，但最后渲染把澄清问题改成证据不足。此后基于旧题单独修复，未回写本成绩。",
+      "app_status": "answered",
+      "llm_calls": 0,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h11_cashflow_concept",
+      "query": "自由现金流和净利润为什么会差很多？用虚构数字举例即可，不要查询股票行情。",
+      "mode": "chat",
+      "source_run": "regression-v2",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:8325617ff54f3ac57176d2179d5821f2776adecbd6ab3b88cdc1af0dc8beb959",
+      "request_utc": "2026-10-04T08:52:52.578644+00:00",
+      "raw_sha256": "70fd3d12bef6873215a67206fe05d4eaae929fe64f724982949c5cead84c96db",
+      "seconds": 12.265,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [],
+      "evidence_score": 0,
+      "evidence_total": 0,
+      "full_answer": 1,
+      "answer_class": "full",
+      "reason": "直接解释净利润/非现金项/营运资本/capex，并给虚构且算术自洽的-700万元例子；未取行情。",
+      "app_status": "answered",
+      "llm_calls": 1,
+      "failed_llm_calls": 0
+    },
+    {
+      "id": "h12_crm_report",
+      "query": "给我一份 Salesforce（CRM）的正式投资研究报告，覆盖业务、竞争、最新财务、估值、未来90天催化和风险，关键事实附可追溯来源。",
+      "mode": "investment_report",
+      "source_run": "regression-v3-targeted",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:ff04bb7df5e4c5c7957183c825e0feea38a55ee00e8b8acc7e30cf0a3f845b94",
+      "request_utc": "2026-10-04T08:56:45.700179+00:00",
+      "raw_sha256": "169c0c8ca94e566038b6b50105eca59963d2b5265ce98dc4c77567d0c66787aa",
+      "seconds": 623.219,
+      "intent_score": 1,
+      "intent_reason": "路线、主体及请求合同已覆盖原题约束；渲染/来源失败单独评分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "业务",
+          "score": 1
+        },
+        {
+          "dimension": "竞争",
+          "score": 1
+        },
+        {
+          "dimension": "最新财务",
+          "score": 1
+        },
+        {
+          "dimension": "估值",
+          "score": 1
+        },
+        {
+          "dimension": "未来90天催化",
+          "score": 0
+        },
+        {
+          "dimension": "风险",
+          "score": 1
+        }
+      ],
+      "evidence_score": 5,
+      "evidence_total": 6,
+      "full_answer": 0,
+      "answer_class": "honest_partial",
+      "reason": "真实10-K/10-Q业务与竞争正文、SEC财务、估值和历史风险已入证据；90天仍仅非穷尽供应商日历。模型600775ms后未知异常，正式报告blocked，UI归档未验收。",
+      "app_status": "blocked",
+      "llm_calls": 1,
+      "failed_llm_calls": 1
+    }
+  ]
+}

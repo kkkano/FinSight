@@ -165,7 +165,7 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
                     <div className="text-left">
                       <div className="text-sm font-semibold text-fin-text">{section.title}</div>
                       <div className="text-2xs text-fin-text-secondary mt-0.5">
-                        {section.agent_name || 'agent'} · confidence {Math.round((section.confidence || 0) * 100)}%
+                        {section.agent_name || 'agent'}
                       </div>
                     </div>
                   </div>
@@ -271,7 +271,6 @@ export const ReportEvidencePoolSection: React.FC<ReportEvidencePoolProps> = ({
   return (
     <details
       className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden"
-      open
     >
       <summary className="px-5 py-3 cursor-pointer hover:bg-fin-hover transition-colors flex items-center gap-2">
         <ChevronDown size={16} className="text-fin-muted group-open:rotate-180 transition-transform" />

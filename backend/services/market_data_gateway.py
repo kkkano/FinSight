@@ -141,6 +141,9 @@ def validate_quote_payload(raw: Any) -> tuple[dict[str, float | None], datetime]
             else _signed_finite_number(change_percent, field="change_percent")
         ),
     }
+    for key in ("currency", "market_session", "source_timestamp", "source_time_precision", "source_time_status"):
+        if parsed.get(key) is not None:
+            normalized[key] = parsed[key]
     payload = raw if isinstance(raw, Mapping) else {}
     as_of_value = payload.get("as_of") or payload.get("timestamp")
     as_of = _parse_event_time(as_of_value) if as_of_value else datetime.now(UTC)
@@ -301,6 +304,11 @@ def _quote_from_kline_provider(provider: KlineProvider) -> QuoteProvider:
                 "price": latest["close"],
                 "change": change,
                 "change_percent": change_percent,
+                "currency": raw.get("currency") or ("HKD" if symbol.upper().endswith('.HK') else "CNY" if symbol.upper().endswith(('.SS','.SZ','.BJ')) else "USD"),
+                "market_session": "continuous_close" if symbol.upper().endswith('-USD') else "regular_close",
+                "source_timestamp": str(latest["time"])[:10],
+                "source_time_precision": "date",
+                "source_time_status": "provided",
             },
             "as_of": latest["time"],
         }

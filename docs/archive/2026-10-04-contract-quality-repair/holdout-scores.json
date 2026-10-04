@@ -1,0 +1,586 @@
+{
+  "reviewer": "fresh_acceptance_cases（独立人工评审，主代理持久化）",
+  "reviewed_at": "2026-10-04T10:14:27.879759+00:00",
+  "dataset_sha256": "cd9360badac84d5dedbc91f1a7ab78b132ae0ddf2690f5bc2a532002a7b2b4af",
+  "manifest": {
+    "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+    "dataset_sha256": "cd9360badac84d5dedbc91f1a7ab78b132ae0ddf2690f5bc2a532002a7b2b4af",
+    "started_at": "2026-10-04T09:31:29.276796+00:00",
+    "model": "step-5-preview",
+    "runtime": "independent_holdout_v2_first_pass_real_api_local_isolation",
+    "real_authentication": false,
+    "persistence_test": false,
+    "rag": "isolated_lexical_only",
+    "production_corpus_available": false,
+    "sequential": true,
+    "cases": [
+      "v2_01_msft_capital",
+      "v2_02_msft_share_count",
+      "v2_03_spy_five_sessions",
+      "v2_04_dell_breakout",
+      "v2_05_meituan_operations",
+      "v2_06_ko_pep_dividend",
+      "v2_07_watchlist_tasks",
+      "v2_08_labor_transmission",
+      "v2_09_ge_confirmed_events",
+      "v2_10_missing_report_context",
+      "v2_11_duration_concept",
+      "v2_12_cat_cycle_report"
+    ],
+    "nonsecret_config": {
+      "LANGGRAPH_SYNTHESIZE_REPORT_MAX_TOKENS": "65536",
+      "LLM_MAX_TOKENS": "65536",
+      "MARKET_KLINE_TRUSTED_PROVIDERS": "twelve_data",
+      "MARKET_KLINE_CACHE_TTL_SECONDS": "60",
+      "LANGGRAPH_SYNTHESIZE_MAX_ATTEMPTS": "2",
+      "MARKET_KLINE_PRIMARY_PROVIDER": "twelve_data",
+      "MARKET_KLINE_SECONDARY_PROVIDER": "stooq",
+      "MARKET_FINANCIAL_TRUSTED_PROVIDERS": "sec_companyfacts",
+      "MARKET_FINANCIAL_CACHE_TTL_SECONDS": "3600",
+      "MARKET_QUOTE_PRIMARY_PROVIDER": "twelve_data",
+      "MARKET_NEWS_CACHE_TTL_SECONDS": "300",
+      "LANGGRAPH_SYNTHESIZE_TIMEOUT_SEC": "1200",
+      "LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC": "1200",
+      "MARKET_NEWS_TRUSTED_PROVIDERS": "finnhub",
+      "LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS": "1",
+      "LANGGRAPH_STRUCTURED_SYNTHESIS_MAX_TOKENS": "65536",
+      "MARKET_QUOTE_TRUSTED_PROVIDERS": "twelve_data",
+      "MARKET_NEWS_SECONDARY_PROVIDER": "yfinance",
+      "MARKET_FINANCIAL_PRIMARY_PROVIDER": "yfinance",
+      "MARKET_QUOTE_CACHE_TTL_SECONDS": "30",
+      "LANGGRAPH_STRUCTURED_SYNTHESIS_REQUEST_TIMEOUT_SECONDS": "1200",
+      "MARKET_FINANCIAL_SECONDARY_PROVIDER": "sec_companyfacts",
+      "MARKET_QUOTE_SECONDARY_PROVIDER": "stooq",
+      "MARKET_NEWS_PRIMARY_PROVIDER": "finnhub",
+      "LLM_FOREGROUND_MAX_TOKENS": "65536",
+      "LLM_REQUEST_TIMEOUT_SECONDS": "1200",
+      "LANGGRAPH_SYNTHESIZE_MAX_TOKENS": "65536"
+    },
+    "effort": "medium",
+    "completed_at": "2026-10-04T10:07:22.469858+00:00"
+  },
+  "scope": "本机隔离图级真实供应商首轮，词法RAG；未验证真实账号UI交付、保存恢复或正式报告归档。最终发布有5个旧题末轮修复文件不同，见release-vs-holdout.json。",
+  "metrics": {
+    "coarse_route_subject": {
+      "passed": 12,
+      "total": 12
+    },
+    "strict_intent": {
+      "passed": 1,
+      "total": 12
+    },
+    "evidence": {
+      "covered": 6,
+      "total": 28
+    },
+    "graph_content_full": {
+      "passed": 1,
+      "total": 12
+    },
+    "research_full": {
+      "passed": 0,
+      "total": 10
+    },
+    "answer_classes": {
+      "honest_partial": 2,
+      "incorrect": 7,
+      "incomplete_clarification": 1,
+      "full_graph_content": 1,
+      "blocked_partial": 1
+    },
+    "chat_seconds": {
+      "count": 11,
+      "median": 78.438,
+      "p90_nearest_rank": 427.594,
+      "max": 849.516
+    },
+    "report_seconds": 311.187,
+    "all_graph_seconds_sum": 2150.702,
+    "llm_calls": 17,
+    "failed_llm_calls": 1,
+    "total_tokens": 940651
+  },
+  "cases": [
+    {
+      "id": "v2_01_msft_capital",
+      "query": "微软最近公布的完整季度里，经营现金流够不够支付资本开支、股息和回购？请按同一个季度核对，并解释资金缺口或剩余。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:31:31.221516+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "1af0609d31f5aad430498769477d1f81ccf5b819ae948aeae4364506eacde253",
+      "elapsed_seconds": 78.438,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "MSFT主体正确，合同只声明cash_flow，未保留同季度资本开支、股息、回购及整体覆盖义务；模型解释已理解股东回报缺口，但端到端合同不完整。",
+      "evidence_dimensions": [
+        {
+          "dimension": "真实单季经营现金流与资本开支",
+          "pass": true,
+          "reason": "SEC同2026-04-01至06-30单季CFO55.441B USD、capex35.802B USD，YTD差分输入保留；正文对应。"
+        },
+        {
+          "dimension": "单季股息和回购",
+          "pass": false,
+          "reason": "无实际股息及回购支付金额，正文明确缺失。"
+        },
+        {
+          "dimension": "资本分配覆盖与缺口解释",
+          "pass": false,
+          "reason": "只计算CFO-capex余19.639B，不能完成含股东回报的资金余缺核对。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "honest_partial",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "total_tokens": 45657
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_02_msft_share_count",
+      "query": "回到刚才说的回购：这家公司上一个已披露完整财年到底减少了多少流通股？区分回购金额与净股数变化，先不要谈未来股价。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:32:49.691114+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "6804fe46984873b14182142634ecf78b79e0c297fa3037577e95d2e5fe7706cf",
+      "elapsed_seconds": 5.531,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "继承MSFT正确，但财年回购/净股数追问被编译成performance和报价。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最新完整财年回购金额",
+          "pass": false,
+          "reason": "只有517.53 USD报价，无最新完整财年回购金额。"
+        },
+        {
+          "dimension": "净流通股变化及解释",
+          "pass": false,
+          "reason": "无可比期末股数、净变化或新发股/股权激励区分。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "total_tokens": 0
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_03_spy_five_sessions",
+      "query": "我想知道 SPY 最近五个已经结束的交易日累计涨跌多少，同时列出终点收盘价和美元单位；今天没开市就用最近收盘，说明你是否计入分红。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:32:55.235597+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "c66b8b5ff83eb8b9b54d89b14e591a94e96ab7b8cbcbd007fb90693898aa12f6",
+      "elapsed_seconds": 2.609,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "SPY正确，但只规划price_snapshot，未保留五交易日历史收益和分红口径。",
+      "evidence_dimensions": [
+        {
+          "dimension": "五个完成交易日累计回报",
+          "pass": false,
+          "reason": "仅2026-10-02终点769.64 USD，没有起点、交易日路径或累计收益。"
+        },
+        {
+          "dimension": "终点价格时间与收益口径",
+          "pass": false,
+          "reason": "终点日期/币种有，但没有分红、Close/Adj Close口径；整个冻结维度不完整。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "answered",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "total_tokens": 0
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_04_dell_breakout",
+      "query": "DELL 近期有没有放量突破的迹象？用最近20个交易日的价格和成交量判断；只讨论量价确认和跌回区间的失效条件，不展开基本面。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:32:57.847334+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "63a73a0790699c33b74b3dd5c7bac5cd49f8ad3a64a664e79f1a18721859193f",
+      "elapsed_seconds": 210.156,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "DELL正确；excluded_facets为空，实际执行和正文大量财务、估值、新闻，违反只看量价的约束。",
+      "evidence_dimensions": [
+        {
+          "dimension": "20日区间量价突破判断",
+          "pass": true,
+          "reason": "2026-10-02 close562.52、阻力595.51、量5495400、20日均量8539980/0.64x可追溯，解释未放量突破。"
+        },
+        {
+          "dimension": "技术失效条件",
+          "pass": true,
+          "reason": "MA20=548.15、支撑506.25与短期结构转弱条件有依据；失守后又称跌回区间的措辞不严谨。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "total_tokens": 73310
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_05_meituan_operations",
+      "query": "美团 3690.HK 的最新已披露业绩，能否说明主营经营已经转好？请把收入增长、经营利润与一次性收益拆开，别扩展到美国场外股票。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:36:28.059414+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "740c2bae15f8aa46af1daad4a5fc4043178f309cbb15cd26ec324b436034c84c",
+      "elapsed_seconds": 126.703,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "3690.HK单标的正确，但只保留收入/基本面及用户未问的earnings_impact，遗漏经营利润和一次性拆分。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最新财期收入及主营经营利润",
+          "pass": false,
+          "reason": "只有2020年度公告索引与盈利预测，没有最新已披露经营数字。"
+        },
+        {
+          "dimension": "一次性因素与改善可持续性",
+          "pass": false,
+          "reason": "无实际经营/一次性数据；管理层指引还混入SHIFT3697、InSilico3696、ROK及CAPTCHA/注册页面。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "total_tokens": 21363
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_06_ko_pep_dividend",
+      "query": "我偏向收股息：KO 与 PEP 的股息哪一个更有支撑？请比较最新完整财年的现金流覆盖、债务负担和已公告派息，不要拿股息率高低直接当安全性。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:38:34.766768+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "dcaf013dff462d5a49bfa0cc29dfd7fc78617178f98f0db613966714a9c41b38",
+      "elapsed_seconds": 849.516,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "KO/PEP正确，但通用cash_flow合同漏年度股息覆盖、债务和已公告派息，并额外拆出宏观任务。",
+      "evidence_dimensions": [
+        {
+          "dimension": "双方年度股息现金流覆盖",
+          "pass": false,
+          "reason": "只有不匹配财期的单季材料，正文明确PEP FY2025资本开支/年度现金流缺失，无双方全年股息覆盖。"
+        },
+        {
+          "dimension": "双方债务负担",
+          "pass": false,
+          "reason": "仅未标主体的总负债/资产64%和80%泛风险，无双方债务、现金或利息的可比分析。"
+        },
+        {
+          "dimension": "已公告股息及支撑比较",
+          "pass": false,
+          "reason": "未给双方已公告每股股息、频次和来源，无法判断哪家更有支撑。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "honest_partial",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 4,
+        "failed_llm_calls": 1,
+        "total_tokens": 302169
+      },
+      "failure_diagnostics": {
+        "tasks": {
+          "task_1": [
+            {
+              "exception_type": "LengthFinishReasonError",
+              "cause_types": [],
+              "http_status": 200,
+              "provider_error_code": null,
+              "duration_ms": 588702,
+              "request_timeout": 1200.0,
+              "max_tokens": 65536,
+              "max_retries": 0
+            }
+          ]
+        },
+        "report": []
+      }
+    },
+    {
+      "id": "v2_07_watchlist_tasks",
+      "query": "帮我做三项观察清单，不要排谁更值得买：TSLA 下一次财报是否已有确认日期；GLD 最近20个交易日最大收盘回撤；ETH-USD 最近可用报价及时间。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:52:44.365705+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "cf12725614540dde86ef0a50ef9247a6c81fa2a0b1e49061112f591451287bdc",
+      "elapsed_seconds": 5.265,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "三个ticker正确，却形成唯一performance_comparison任务；三项不同事项被压成YTD/一年收益比较，未遵守不排名要求。",
+      "evidence_dimensions": [
+        {
+          "dimension": "TSLA下次财报确认状态",
+          "pass": false,
+          "reason": "无TSLA下一次财报日期与确认状态。"
+        },
+        {
+          "dimension": "GLD二十交易日收盘回撤",
+          "pass": false,
+          "reason": "无GLD20交易日收盘路径最大回撤，只给长周期收益。"
+        },
+        {
+          "dimension": "ETH-USD报价时间",
+          "pass": false,
+          "reason": "裸ETH价格2702.09没有实际报价时间、来源和币种说明。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "total_tokens": 0
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_08_labor_transmission",
+      "query": "最近一份已发布的美国就业报告有没有显示劳动力市场降温？核对新增就业和失业率，再解释对美国国债价格与银行盈利的可能影响，实际数据和情景推演分开。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:52:49.638809+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "28e6c924f2012bcba4b54ff9059eec921165b42a222854b1923eadb284085884",
+      "elapsed_seconds": 104.797,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "宏观路线正确，但只有macro_impact合同，没有就业两指标与银行盈利子要求。",
+      "evidence_dimensions": [
+        {
+          "dimension": "最新就业事实及降温判断",
+          "pass": false,
+          "reason": "未核对最新报告月/发布时刻、新增非农和失业率；候选材料不是已核实就业发布。"
+        },
+        {
+          "dimension": "美国国债价格传导",
+          "pass": false,
+          "reason": "价升机制虽正确，却把raw搜索中2Y约10bp/10Y约6bp反应写成已发生事实，没有核验发布及反应来源。"
+        },
+        {
+          "dimension": "银行盈利传导",
+          "pass": false,
+          "reason": "银行净息差、信贷需求和信用损失完全未回答。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "total_tokens": 29417
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_09_ge_confirmed_events",
+      "query": "GE Aerospace（GE）过去七天有没有已正式宣布的订单或业务进展？只收公司公告或能指向原始公告的报道，合并重复消息，把传闻留在候选区。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T09:54:34.446944+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "81de2976df0edb06425a06da2bdf08858debe6b689f8b9ae9013f079d5f8bf0d",
+      "elapsed_seconds": 427.594,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "GE正确，但time_scope为空，七天官方事件合同缺失，额外增加宏观与业务任务。",
+      "evidence_dimensions": [
+        {
+          "dimension": "七天窗口官方业务事件",
+          "pass": false,
+          "reason": "raw搜索存在2026-09-28 GE官网WZL-1公告，正文却没给日期/原始URL，引用只是宏观search；有无业务公告的两段结论矛盾。"
+        },
+        {
+          "dimension": "事件去重与传闻分界",
+          "pass": false,
+          "reason": "重复新闻/宏观章节未形成统一事件与候选区，去重要求标未完成。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "incorrect",
+      "app_status": "partial",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 4,
+        "failed_llm_calls": 0,
+        "total_tokens": 121540
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    },
+    {
+      "id": "v2_10_missing_report_context",
+      "query": "给我把这家公司的报告更新到最近一期，旧版里的结论也检查一下。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T10:01:42.088470+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "04789f88504b85e956171d28641516084e007b589d207ccb4852e283fc1434ce",
+      "elapsed_seconds": 0.031,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "clarify且不取数正确；只询问公司/ticker，未询问更新旧结论所需的旧报告内容或来源。",
+      "evidence_dimensions": [],
+      "full_answer_pass": false,
+      "classification": "incomplete_clarification",
+      "app_status": "answered",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 0,
+        "failed_llm_calls": 0,
+        "total_tokens": 0
+      },
+      "failure_diagnostics": null
+    },
+    {
+      "id": "v2_11_duration_concept",
+      "query": "为什么同样跌1个百分点利率，长久期债券通常比短久期涨得多？用两个虚构久期举例，说明这种近似忽略了什么，不要查真实债券。",
+      "mode": "chat",
+      "request_utc": "2026-10-04T10:01:42.112338+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "19757a7791e4f0c4079f7a160ce01643a6fe7d38ed3c0aebcc25d5b46fafa369",
+      "elapsed_seconds": 28.875,
+      "coarse_route_subject_pass": true,
+      "intent_pass": true,
+      "intent_reason": "direct、无ticker、无行情；虚构修正久期2/10与收益率降1个百分点对应涨2%/10%，算术、凸性/平行移动/期权/信用利差局限正确。",
+      "evidence_dimensions": [],
+      "full_answer_pass": true,
+      "classification": "full_graph_content",
+      "app_status": "answered",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 1,
+        "failed_llm_calls": 0,
+        "total_tokens": 1728
+      },
+      "failure_diagnostics": null
+    },
+    {
+      "id": "v2_12_cat_cycle_report",
+      "query": "为 Caterpillar（CAT）做一份正式研究报告：重点是业务分部、周期位置、最新财务、估值、债务与现金流风险，以及未来一个季度可核实的观察节点。不要把设备需求必然复苏作为前提。",
+      "mode": "investment_report",
+      "request_utc": "2026-10-04T10:02:10.987080+00:00",
+      "code_sha": "7e13ffe1cd6f2d4a0d2a89ce5e308b8068ce455e+snapshot:743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+      "raw_sha256": "8ed73f29d1e3b373c73fd8ac962f83e4125a3eb4aec066b81b68da55f5920dea",
+      "elapsed_seconds": 311.187,
+      "coarse_route_subject_pass": true,
+      "intent_pass": false,
+      "intent_reason": "CAT/报告/未来90天正确，但仅四个通用维度，遗漏周期位置与未来节点，债务现金流缺分部口径。",
+      "evidence_dimensions": [
+        {
+          "dimension": "业务分部",
+          "pass": true,
+          "reason": "真实2025年10-K及2026Q2 10-Q，Construction/Resource/Power & Energy和Financial Products职能可追溯。"
+        },
+        {
+          "dimension": "周期位置",
+          "pass": false,
+          "reason": "三分部销售增长不能替代订单、backlog、库存支撑的周期定位；需求复苏仅作为假设。"
+        },
+        {
+          "dimension": "最新财务",
+          "pass": true,
+          "reason": "2026-04-01至06-30 USD收入20.543B、经营利润4.295B、净利3.593B、CFO4.371B、FCF3.784B及期末资产负债有SEC来源。"
+        },
+        {
+          "dimension": "估值",
+          "pass": true,
+          "reason": "2026-10-02价格845.42 USD、trailing P/E36.36、forward26.11、P/S5.20与预期EPS差异有解释，并区分预期和事实。"
+        },
+        {
+          "dimension": "债务与现金流风险",
+          "pass": false,
+          "reason": "只有合并总负债/资产81%泛风险，没有区分金融子公司与工业经营的有息债务和偿债现金流。"
+        },
+        {
+          "dimension": "未来季度观察节点",
+          "pass": false,
+          "reason": "仅供应商10月29日计划财报日期和增长兑现条件，无官方确认链及完整可核验节点清单。"
+        }
+      ],
+      "full_answer_pass": false,
+      "classification": "blocked_partial",
+      "app_status": "blocked",
+      "ui_delivery": "unknown",
+      "history_persistence": "unknown",
+      "usage": {
+        "llm_token_calls": 3,
+        "failed_llm_calls": 0,
+        "total_tokens": 345467
+      },
+      "failure_diagnostics": {
+        "tasks": {},
+        "report": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "holdout_source_sha256": "743551fd6143cb4640ab84a90921ff9ee3562737ddba27e562c34a9a8245f322",
+  "runtime_changes_after_freeze": [
+    {
+      "file": "backend/graph/nodes/render_node.py",
+      "frozen_sha256": "6abc0d1dc5ba07fbb0e3a866e41b289e39ab801f05a7547de884bf60dec4cc64",
+      "release_sha256": "4442316ebb4c076e7a812f6a9332e836c7daca4a5d9efd6cc89e401281692336"
+    },
+    {
+      "file": "backend/graph/renderers/research_report.py",
+      "frozen_sha256": "753316b147d64ccf6cdba83e7fab7d2565ecf8ae3504c58c0290d5052b647724",
+      "release_sha256": "85e45054b5c697d8484a3d4b27eca7a82d05eaaf42f8dd3368ce459e6d028a3e"
+    },
+    {
+      "file": "backend/graph/report_builder.py",
+      "frozen_sha256": "38f67adbf2f15b1f817de52ff3d5d6fed887010251648c3586aa75ab7dce702f",
+      "release_sha256": "0b6cd68090786ace31ffd5c300e35f1d060b3a68f40ddd7a92ad964d31592dbc"
+    },
+    {
+      "file": "backend/graph/synthesis/requirement_validation.py",
+      "frozen_sha256": "04955ef5498e4124cdeba21ba4b97d5388b34cfa98698f2e2dc4b9327f0b51f5",
+      "release_sha256": "d14d1133d098244dfc994c88c543a11e46323872fc563ce1081a97307bf459ff"
+    },
+    {
+      "file": "backend/graph/synthesis/research_synthesis.py",
+      "frozen_sha256": "a19263f5d8e38708b734aaa6d72be5a6bbbd49e81c698f697af55a2ee8a23c99",
+      "release_sha256": "4eab65f2e68480c23d0e869e68ee564b7aabcb3e5bc523e9f4da83ff5551a298"
+    }
+  ],
+  "reason": "全部来自旧h10澄清渲染与旧h12引用/总论门禁复核；未用新题调参。"
+}

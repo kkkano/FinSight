@@ -1,6 +1,6 @@
 # Report 与 Chart 合同
 
-更新时间：2026-10-03　前端基线：ECharts 6
+更新时间：2026-10-04　前端基线：ECharts 6
 
 FinSight 支持两类图表：报告 `ReportIR` 中的结构化 chart，以及对话 Markdown 中的 `<chart>` / `<chart_ref>`。优先使用真实数据引用，避免 LLM 重写数值。
 
@@ -11,6 +11,10 @@ FinSight 支持两类图表：报告 `ReportIR` 中的结构化 chart，以及�
 质量由 `evaluate_result_quality` 统一合并为 `pass/warn/block`，已有阻断不可被报告构建覆盖。完整报告必须有规范化受支持论据并满足必需维度；facts-only 或缺口结果可以返回 `blocked_report` 预览，但不能进入报告索引、分享或最终缓存。内部 conflict ID 留在诊断数据，正文说明实际冲突的指标和期限。
 
 `done`、`publishable`、`archived`、`persistence_status` 各有独立含义。正文生成后须保存服务器终态与助手消息，报告归档失败或会话保存失败均保留预览并明确提示。刷新恢复按 run/message ID 读取权威内容，不能依赖浏览器最后一次快照。
+
+缺总体判断时 `report_quality.conclusion_status=unavailable`、`sentiment=unknown`、`confidence_score=null`。不把未知写成中性，重验和历史回放不补默认 0.5/0.7。没有校准依据的方向、证据、来源置信度不显示百分比；前端展示可追溯来源数量和实际缺项。有依据的 neutral 仍可显示为中性，partial 保留有效正文与证据。
+
+卡片、全屏与历史只读页共用 `ReportPresentation`；未完成项在正文前说明，来源及执行详情默认收起。纯展示派生不改写服务器 canonical 正文。
 
 ## ReportIR chart
 

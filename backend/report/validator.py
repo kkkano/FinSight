@@ -80,18 +80,18 @@ class ReportValidator:
             generated_at = str(data.get("generated_at", datetime.now().isoformat()))
 
             # 2. 枚举校验
-            sentiment_str = str(data.get("sentiment", "neutral")).lower()
+            sentiment_str = str(data.get("sentiment") or "unknown").lower()
             try:
                 sentiment = Sentiment(sentiment_str)
             except ValueError:
-                sentiment = Sentiment.NEUTRAL
+                sentiment = Sentiment.UNKNOWN
 
             # 3. 数值校验
             try:
-                confidence_score = float(data.get("confidence_score", 0.5))
-                confidence_score = max(0.0, min(1.0, confidence_score))
+                supplied_confidence = data.get("confidence_score")
+                confidence_score = max(0.0, min(1.0, float(supplied_confidence))) if supplied_confidence is not None else None
             except (ValueError, TypeError):
-                confidence_score = 0.5
+                confidence_score = None
 
             # 4. 引用校验 (Citations)
             raw_citations = data.get("citations", [])
@@ -100,12 +100,11 @@ class ReportValidator:
                 for idx, c in enumerate(raw_citations):
                     if isinstance(c, dict):
                         published_date = str(c.get("published_date", ""))
-                        confidence = c.get("confidence", 0.7)
+                        confidence = c.get("confidence")
                         try:
-                            confidence = float(confidence)
+                            confidence = max(0.0, min(1.0, float(confidence))) if confidence is not None else None
                         except (TypeError, ValueError):
-                            confidence = 0.7
-                        confidence = max(0.0, min(1.0, confidence))
+                            confidence = None
 
                         freshness_hours = c.get("freshness_hours")
                         if freshness_hours is None:
@@ -186,8 +185,8 @@ class ReportValidator:
                 company_name="Error",
                 title="Report Generation Failed",
                 summary=f"Data validation failed: {str(e)}",
-                sentiment=Sentiment.NEUTRAL,
-                confidence_score=0.0,
+                sentiment=Sentiment.UNKNOWN,
+                confidence_score=None,
                 sections=[],
                 citations=[],
                 risks=[],

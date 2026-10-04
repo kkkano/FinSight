@@ -127,6 +127,7 @@ class NewsTickerInput(BaseModel):
     ticker: str = Field(description="Ticker or index symbol, e.g. 'AAPL', 'TSLA', '^GSPC'")
     limit: int = Field(default=5, ge=1, le=10, description="Maximum number of headlines")
     fast: bool = Field(default=False, description="Use fast linked fallback for latency-sensitive brief answers")
+    max_age_hours: int = Field(default=168, ge=1, le=8760, description="新闻时间窗口（小时）")
 
 
 class SearchQueryInput(BaseModel):
@@ -180,6 +181,7 @@ class AuthoritativeMediaInput(BaseModel):
     query: str = Field(description="Query for authoritative media coverage")
     max_results: int = Field(default=8, ge=1, le=20, description="Maximum article rows")
     authoritative_only: bool = Field(default=True, description="Keep only trusted media domains")
+    max_age_hours: int = Field(default=168, ge=1, le=8760, description="新闻时间窗口（小时）")
 
 
 class EarningsTranscriptInput(BaseModel):
@@ -212,6 +214,7 @@ class SecFilingsInput(BaseModel):
         description="Comma-separated SEC form types, e.g. '10-K,8-K'",
     )
     limit: int = Field(default=12, ge=1, le=50, description="Maximum filing rows to return")
+    include_content: bool = Field(default=False, description="读取最新年报/季报的业务和竞争正文")
 
 
 class SecMaterialEventsInput(BaseModel):
@@ -303,11 +306,11 @@ def get_stock_price(ticker: str) -> str:
 
 
 @tool("get_company_news", args_schema=NewsTickerInput, return_direct=False)
-def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> str:
+def get_company_news(ticker: str, limit: int = 5, fast: bool = False, max_age_hours: int = 168) -> str:
     """Retrieve the latest company or index headlines, ordered by recency."""
 
     try:
-        news = _get_company_news(ticker, limit=limit, fast=fast)
+        news = _get_company_news(ticker, limit=limit, fast=fast, max_age_hours=max_age_hours)
         if isinstance(news, list):
             return json.dumps(news, ensure_ascii=False)
         return str(news)
@@ -609,7 +612,7 @@ def score_news_source_reliability(source: str = "", url: str = "") -> str:
 
 
 @tool("get_authoritative_media_news", args_schema=AuthoritativeMediaInput, return_direct=False)
-def get_authoritative_media_news(query: str, max_results: int = 8, authoritative_only: bool = True) -> str:
+def get_authoritative_media_news(query: str, max_results: int = 8, authoritative_only: bool = True, max_age_hours: int = 168) -> str:
     """Get authoritative media links from free publisher feeds."""
 
     if not callable(_get_authoritative_media_news):
@@ -619,6 +622,7 @@ def get_authoritative_media_news(query: str, max_results: int = 8, authoritative
             query=query,
             max_results=max_results,
             authoritative_only=authoritative_only,
+            max_age_hours=max_age_hours,
         )
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
@@ -652,13 +656,13 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> str:
 
 
 @tool("get_sec_filings", args_schema=SecFilingsInput, return_direct=False)
-def get_sec_filings(ticker: str, forms: str = "10-K,10-Q,8-K", limit: int = 12) -> str:
+def get_sec_filings(ticker: str, forms: str = "10-K,10-Q,8-K", limit: int = 12, include_content: bool = False) -> str:
     """Get recent SEC filings for a US ticker from EDGAR submissions."""
 
     if not callable(_get_sec_filings):
         return "get_sec_filings unavailable: backend.tools function not found"
     try:
-        payload = _get_sec_filings(ticker=ticker, forms=forms, limit=limit)
+        payload = _get_sec_filings(ticker=ticker, forms=forms, limit=limit, include_content=include_content)
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_sec_filings failed: {exc}"

@@ -1,6 +1,6 @@
 # LangGraph Pipeline 深入说明
 
-更新时间：2026-10-03
+更新时间：2026-10-04
 
 本文补充 [`LANGGRAPH_FLOW.md`](LANGGRAPH_FLOW.md)。节点和边仍以 `backend/graph/runner.py` 为准。
 
@@ -19,10 +19,13 @@
 - ready/blocked tasks；
 - 固定的 `request_frame_id`、`render_group_id`、`render_kind`、priority 和 order。
 - 每个 task 的主体、分句 `request_text`、显式 `required_evidence` 与可解释的 blocked 原因。
+- `request_constraints.py` 保留排除维度及明确的小时/天窗口；`render_contract.answer_requirements` 与 `task.answer_requirements` 冻结逐项回答义务，不因取数失败删除。
 
 封闭金融术语可以走 `direct`。需要实时数据、比较、分析或报告的请求进入 `research`；缺少必要标的或范围时进入 `clarify`。frame ID 与真实 task ID 是明确关联，不靠后续字符串相似度匹配；下游消费合同，不能各自重新解析 query 改写主体或维度。原 INTC 多维研究、催化追问及 `AAPL price, MSFT news, NVDA fundamentals` 是回归样本。
 
 “公司名（明确交易代码）”按用户给出的上市地绑定，例如腾讯控股（0700.HK）只产生港股任务，名称默认的 TCEHY 不会被额外加入。用户明确要求比较两种代码时仍保留双方；上海证券 `.SH` 输入统一为供应商使用的 `.SS`。
+
+明确的单字母代码、大写 COST 等证券代码不被普通英文词表丢弃；公司名称后直接给出的代码同样绑定上市地，中文别名按最长不重叠匹配。加密交易对归一为 BTC-USD 等标准代码，作为 crypto 主体，不附加公司财务或默认股票期权任务。已有公司历史的省略追问仍绑定历史，用户明确要求虚构示例或不查实时资料时可直接解释。
 
 ## 3. 策略、计划与采集
 
@@ -49,6 +52,8 @@ Price、Technical、Fundamental、News、Macro、Risk 和 Deep Search collector 
 
 金融适配层先核验主体、指标定义、单位和实际财期，再生成证据：SEC 单季按 start/end duration 区分累计/年度；财务行用明确别名；同比与环比按真实日期对齐；本地公告验证发行人，新闻格式头与 CPI 单位均不能冒充有效事实。
 
+业务/竞争任务会请求 `get_sec_filings(include_content=True)` 读取最新年报和季报的相关正文。`content_read` 与非空 `content_sections` 才表示已读材料；目录 URL 或请求参数本身不能冒充正文。报价若源于日线 K 线，保留 `market_session=regular_close`、日期精度和币种，并明确不是盘后价格或精确成交时刻。
+
 新闻经 `news_event_quality` 标记时间、主体、来源和报道角色，网关与执行层保留该合同及原始行。当前归因报道仍为 `headline_only`；旧闻、观点、传闻和搜索摘要为 raw，明确错误主体的材料排除。日历搜索只进入 `discovery_candidates`。按 URL、事件身份和发布时间去重，保留同话题后续；报道覆盖和来源计数不表示独立核实。搜索宏观数值也不能冒充 FRED 官方读数，失败文本仅进入来源诊断。
 
 ## 4. 分析
@@ -60,6 +65,10 @@ Price、Technical、Fundamental、News、Macro、Risk 和 Deep Search collector 
 - `investment_report`：产生受证据约束的结构化 draft，Markdown 所有权属于 renderer；配置允许时可运行报告核验。
 
 `research_result` 汇总 `task_results`、evidence/claim 索引、引用、限制和缺口。模型调用可能包含多个任务、草稿、核验及允许的重试，实际数量记录在 `analysis.business_llm_calls` 和 usage attribution；角色数和节点数都不能代表调用数。
+
+是否需要解释按每个 task 的 `answer_requirements.requires_analysis` 判定，不再只看顶层或第一个 operation。模型收到任务内 E/C 编号，服务端映射回真实 evidence/claim ID；无效引用局部隔离，可在原有预算内做一次带错误原因的修正，不放宽事实校验。每项 `requirement_results` 保留 answered/partial/missing、引用及缺口原因，非空文本或高引用数量不能代替完整性。
+
+通用概念题通过 `direct_answer_request` 进入同一全局选定模型的直接回答模式，要求示例明确虚构且算术自洽，不执行行情或研究工具。问候、固定术语和澄清已有确定性正文时无需模型；direct lane 的“零外部取数”不表示所有直接回复都零模型调用。
 
 chat/brief 使用 `content_selection` 按请求维度选择当前财期、关键指标、事件和解释；完整证据仍保存在同一 `research_result`。比较先给横向摘要，单股明细展示一次；业务、竞争与风险解释按维度归属，renderer 不修改研究产物。
 

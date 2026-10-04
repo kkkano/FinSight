@@ -1,6 +1,6 @@
 # FinSight LangGraph 当前流程
 
-更新时间：2026-10-03
+更新时间：2026-10-04
 
 `backend/graph/runner.py` 是图结构唯一事实源。生产图固定为六个节点，不注册旧兼容节点、confirmation loop、alert action 或 research debate。
 
@@ -27,7 +27,7 @@ flowchart TD
 ## 路由原则
 
 - 用户本轮显式 ticker/URL/selection 优先于历史。
-- 普通金融概念与问候可直接回答，不进入工具执行。
+- 普通金融概念与问候可直接回答，不进入工具执行；通用概念使用同一选定模型，固定术语和问候可零模型调用。澄清正文由最终渲染保留，不覆盖成研究证据缺失提示。
 - 当前价格、新闻、财务、技术指标、SEC/FRED 或来源请求进入 evidence 采集。
 - Dashboard handoff 只传 active symbol 和来源标签；不存在 Portfolio UI context 或 MiniChat 专用协议。
 - 用户明确写出的多 ticker/持仓问题可作为研究主题，但系统不读取已删除的组合工作台状态。

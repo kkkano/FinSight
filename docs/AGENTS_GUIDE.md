@@ -1,15 +1,16 @@
 # FinSight AI 角色与 Collector 指南
 
-更新时间：2026-10-03
+更新时间：2026-10-04
 
 ## 1. 用户可感知角色
 
-系统只有两个业务 LLM 角色：
+业务 LLM 调用按用途区分，均使用请求中全局选定的模型：
 
 | 角色 | 输入 | 输出 | 调用预算 |
 |---|---|---|---|
 | `PredictionAnalyst` | trusted Kline、服务端指标、新闻摘要、已有 Prediction | 严格 Prediction JSON | 一个逻辑任务，最多一次纠错 |
 | `ResearchAnalyst` | 规范化 evidence、Claim、任务与缺口 | 唯一 `research_result`、报告 draft | 按任务、草稿、核验及允许重试记录实际 usage，不能按角色数推断调用数 |
+| `direct_answer` | 明确不需实时资料的概念问题 | 概念解释及标注为虚构的示例 | 不采集外部行情，使用同一模型配置及预算；已有固定正文无需调用 |
 
 PredictionAnalyst 的 anchor 由服务端覆盖，方向、概率、止损、目标和 RR 由服务端校验。ResearchAnalyst 不直接取数，也不能引用 evidence pool 外的确定性数字。
 
@@ -34,6 +35,8 @@ collector 不执行 LLM analysis、reflection、debate 或隐式 Prediction。
 
 - 工具失败进入 diagnostics，不生成假 evidence。
 - 每条 Claim 必须引用 evidence id。
+- 模型使用任务内 E/C 引用编号，服务端映射真实 ID；错误引用局部隔离，合法解释保留，允许在原预算内纠错一次。
+- 用户回答义务保存在 `answer_requirements`；逐项输出 `requirement_results`，不能仅凭引用块 coverage 或模型有返回就宣称完整。
 - provider、`as_of`、freshness、quality 必须跨层保留。
 - 财务事实先验证主体、会计定义、实际期间、频率、单位和来源。SEC 累计值不冒充单季，财务行不做 `revenue`/`Cost Of Revenue` 这类子串匹配；对应期间缺失时不把环比写成同比。
 - 本地公告核验发行人；新闻标题头、搜索分隔线和不明单位的宏观数值不作为已验证事实。
@@ -59,4 +62,4 @@ collector 不执行 LLM analysis、reflection、debate 或隐式 Prediction。
 4. 定向单测和至少一个跨层执行测试；
 5. 本指南及受影响的观测字段。
 
-只有当输出合同、失败语义和调用预算与两个现有角色都根本不同，才讨论新增业务 LLM 角色。这属于架构变更，必须同步 usage 归因、评测、预算和生产门禁。
+只有当输出合同、失败语义和调用预算无法由现有用途表达时，才讨论新增业务 LLM 角色。此类变更必须同步 usage 归因、评测、预算和生产门禁；概念直答不增加 Collector 或后台取数。

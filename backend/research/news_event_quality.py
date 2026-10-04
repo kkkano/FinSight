@@ -265,6 +265,11 @@ def prepare_news_items(items: Iterable[Any], *, ticker: str = "", now: datetime 
         if not isinstance(item, Mapping) or not (item.get("title") or item.get("headline")):
             continue
         row = annotate_news_item(item, ticker=ticker, now=observed, max_age_hours=max_age_hours)
+        # 这是实际应用的时间过滤窗口，不宣称供应商完整覆盖了窗口内所有事件。
+        window = {"direction": "past", "value": max_age_hours, "unit": "hours", "max_age_hours": max_age_hours,
+                  "as_of": observed.isoformat(), "scope": "returned_articles", "exhaustive": False}
+        row["meta"] = {**dict(row.get("meta") or {}), "coverage_window": window}
+        row["coverage_window"] = window
         article_key = (canonical_news_url(row["url"]), str(row.get("published_at") or "unknown"))
         group_id = article_groups.get(article_key) if row["url"] else None
         group_id = group_id or row["event_quality"]["event_id"]

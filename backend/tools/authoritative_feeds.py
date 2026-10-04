@@ -213,6 +213,7 @@ def get_authoritative_media_news(
     *,
     max_results: int = 8,
     authoritative_only: bool = True,
+    max_age_hours: int = 168,
 ) -> dict[str, Any]:
     """
     Structured wrapper for planner/tool pipeline.
@@ -262,7 +263,7 @@ def get_authoritative_media_news(
             row["subject_matches"] = matches
             row["ticker"] = bound[0] if len(bound) == 1 else ""
             prepared.append(row)
-        articles = prepare_news_items(prepared)
+        articles = prepare_news_items(prepared, max_age_hours=max(1, int(max_age_hours)))
         return {
             "query": query_text,
             "source": "authoritative_feeds",

@@ -154,21 +154,21 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
         scope="per_ticker",
         producer="tool_only",
         tools=("get_stock_price",),
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
     ),
     "company_profile": EvidenceDefinition(
         "company_profile",
         scope="per_ticker",
         producer="tool_only",
         tools=("get_company_info",),
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
     ),
     "earnings_estimates": EvidenceDefinition(
         "earnings_estimates",
         scope="per_ticker",
         producer="tool_only",
         tools=("get_earnings_estimates", "get_eps_revisions"),
-        markets=("US",),
+        markets=("US", "HK"),
     ),
     "fundamental_snapshot": EvidenceDefinition(
         "fundamental_snapshot",
@@ -182,7 +182,7 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
         producer="tool_then_agent",
         tools=("get_stock_price", "get_technical_snapshot"),
         agents=("technical_agent",),
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
     ),
     "news_context": EvidenceDefinition(
         "news_context",
@@ -197,7 +197,7 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
         producer="tool_then_agent",
         tools=("analyze_historical_drawdowns", "get_factor_exposure"),
         agents=("risk_agent",),
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
     ),
     "macro_context": EvidenceDefinition(
         "macro_context",
@@ -337,13 +337,15 @@ def _has_risk_facet(query: str) -> bool:
 
 def _has_fundamental_facet(query: str) -> bool:
     text = str(query or "").lower()
-    return bool(any(word in text for word in ("基本面", "增长", "成长", "盈利能力", "现金流"))
-                or re.search(r"\b(?:fundamentals?|growth|profitability|cash\s+flow)\b", text))
+    return bool(any(word in text for word in ("基本面", "财务", "增长", "成长", "盈利能力", "现金流"))
+                or re.search(r"\b(?:fundamentals?|financials?|growth|profitability|cash\s+flow)\b", text))
 
 
 def _has_catalyst_facet(query: str) -> bool:
     text = str(query or "").lower()
-    return bool("催化" in text or re.search(r"\bcatalysts?\b", text))
+    from backend.graph.request_constraints import parse_time_scope
+    forward_events = parse_time_scope(query).get('kind') == 'forward' and re.search(r"事件|日程|日历|\b(?:events?|calendar)\b", text)
+    return bool("催化" in text or re.search(r"\bcatalysts?\b", text) or forward_events)
 
 
 def _has_trend_facet(query: str) -> bool:
@@ -606,6 +608,14 @@ def _has_external_entity_impact_facet(query: str, tickers: list[str] | tuple[str
 
 
 def _derive_facets(query: str, *, domain_intent: str = "", tickers: list[str] | tuple[str, ...] | None = None) -> list[str]:
+    from backend.graph.request_constraints import affirmative_query, concept_without_retrieval
+
+    original_query = query
+    query, excluded = affirmative_query(query)
+    if domain_intent != 'macro' and concept_without_retrieval(original_query, list(tickers or [])):
+        return []
+    if domain_intent in excluded:
+        domain_intent = ""
     facets: list[str] = []
     macro_mechanism_explanation = _is_macro_mechanism_explanation(query, tickers, domain_intent=domain_intent)
     live_market_mechanism_explanation = _is_mechanism_explanation_without_live_data(query, tickers)
@@ -714,6 +724,8 @@ def _comparison_dimensions(facets: list[str]) -> list[str]:
             dims.append("external_impact")
         elif facet == "price_performance":
             dims.append("performance")
+        elif facet == "macro":
+            dims.append("macro_impact")
     return _dedupe(dims) or ["performance"]
 
 

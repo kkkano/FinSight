@@ -1268,7 +1268,7 @@ def _build_structured_report_payload(
     if not isinstance(synthesis, dict) or not isinstance(gate, dict) or not isinstance(markdown, str):
         return None
 
-    blocked = gate.get("state") == "block"
+    blocked = gate.get("state") == "block" or bool(artifacts.get("quality_blocked"))
     subject = state.get("subject") if isinstance(state.get("subject"), dict) else {}
     tickers = [
         str(item).strip().upper()
@@ -1280,6 +1280,42 @@ def _build_structured_report_payload(
     evidence_index = synthesis.get("evidence_index") if isinstance(synthesis.get("evidence_index"), dict) else {}
     claim_index = synthesis.get("claim_index") if isinstance(synthesis.get("claim_index"), dict) else {}
     citation_ids = synthesis.get("citation_ids") if isinstance(synthesis.get("citation_ids"), list) else []
+    task_results = [item for item in synthesis.get("task_results", []) if isinstance(item, dict)]
+    from backend.graph.synthesis.contracts import ReportSynthesisDraft
+    from backend.graph.synthesis.requirement_validation import overall_conclusion_block_reasons
+    from backend.graph.renderers.research_report import render_research_report
+
+    verified_draft = None
+    conclusion_reasons = []
+    try:
+        verified_draft = ReportSynthesisDraft.model_validate({key: value for key, value in synthesis.items() if key != "degraded"})
+        conclusion_reasons = overall_conclusion_block_reasons(verified_draft)
+        supported_conclusion = bool(overall and not conclusion_reasons)
+    except ValueError:
+        conclusion_reasons = ["invalid_research_synthesis"]
+        supported_conclusion = False
+    if any(reason in conclusion_reasons for reason in ("unverified_task_claim_sources", "invalid_research_synthesis")):
+        blocked = True
+
+    def unavailable_markdown() -> str:
+        if verified_draft is not None:
+            try:
+                return render_research_report(verified_draft, allow_overall_conclusion=False).markdown
+            except (KeyError, ValueError):
+                pass
+        return "## 总判断\n\n无法判断：结构化研究结果尚未通过质量校验。\n"
+
+    if blocked or not supported_conclusion:
+        overall = ""
+        markdown = unavailable_markdown()
+        synthesis = {**synthesis, "overall_conclusion": None}
+    directions = {
+        item.get("proposed_direction") for item in task_results
+        if item.get("proposed_direction") in {"bull", "bear", "neutral"}
+        and item.get("direction_supporting_claim_ids")
+        and all(claim_index.get(claim_id, {}).get("stance") == item.get("proposed_direction") for claim_id in item["direction_supporting_claim_ids"])
+    }
+    sentiment = {"bull": "bullish", "bear": "bearish", "neutral": "neutral"}.get(next(iter(directions)), "unknown") if len(directions) == 1 and supported_conclusion and not blocked else "unknown"
     citations = [] if blocked else [
         {
             "source_id": source_id,
@@ -1287,31 +1323,34 @@ def _build_structured_report_payload(
             "url": str((evidence_index.get(source_id) or {}).get("url") or "#"),
             "snippet": str((evidence_index.get(source_id) or {}).get("text") or ""),
             "published_date": str((evidence_index.get(source_id) or {}).get("as_of") or ""),
-            "confidence": 0.7,
+            "confidence": None,
         }
         for source_id in citation_ids
         if isinstance(source_id, str) and isinstance(evidence_index.get(source_id), dict)
     ]
     public_synthesis = None if blocked else synthesis
     report_quality = {
-        "state": normalize_quality_state(gate.get("state")),
+        "state": "block" if blocked else normalize_quality_state(gate.get("state")),
         "reasons": list(gate.get("reasons") or []),
         "synthesis_gate": gate,
+        "conclusion_status": "supported" if supported_conclusion and not blocked else "unavailable",
+        "confidence_status": "uncalibrated",
+        "overall_block_reasons": conclusion_reasons,
     }
     base = {
         "report_id": f"lg_{uuid.uuid4().hex[:10]}",
         "ticker": ticker_label,
         "company_name": ticker_label,
         "title": "报告暂不可用" if blocked else f"{ticker_label} 分析报告",
-        "summary": "本轮结果未通过内部一致性校验。" if blocked else (overall or "证据不足，无法形成总判断。"),
-        "sentiment": "neutral",
-        "confidence_score": 0.0 if blocked else (0.45 if normalize_quality_state(gate.get("state")) == "warn" else 0.8),
+        "summary": overall or "无法判断：本轮尚未形成证据支持的完整总体结论。",
+        "sentiment": sentiment,
+        "confidence_score": None,
         "generated_at": _now_iso(),
         "sections": [{
             "title": "研究报告",
             "order": 1,
             "agent_name": "research_synthesis",
-            "confidence": 0.0 if blocked else 0.7,
+            "confidence": None,
             "data_sources": [item["source_id"] for item in citations],
             "contents": [{"type": "text", "content": markdown, "citation_refs": [item["source_id"] for item in citations]}],
         }],
@@ -1331,6 +1370,17 @@ def _build_structured_report_payload(
     payload = validated if isinstance(validated, dict) else base
     report_quality = evaluate_result_quality(state=state, report=payload)
     blocked = report_quality["state"] == "block"
+    report_quality.update({
+        "conclusion_status": "supported" if supported_conclusion and not blocked else "unavailable",
+        "confidence_status": "uncalibrated",
+    })
+    if blocked:
+        payload["sentiment"] = "unknown"
+        payload["summary"] = "无法判断：本轮尚未形成证据支持的完整总体结论。"
+        markdown = unavailable_markdown()
+        for section in payload.get("sections") or []:
+            if section.get("agent_name") == "research_synthesis":
+                section["contents"] = [{"type": "text", "content": markdown, "citation_refs": [item["source_id"] for item in citations]}]
     payload.update({
         "synthesis_report": markdown,
         "draft_markdown": markdown,

@@ -8,18 +8,6 @@ export interface EvidenceLedgerPanelProps {
   ledger?: EvidenceLedger | null;
 }
 
-const formatPercent = (value: number | null | undefined): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 'N/A';
-  const normalized = value > 1 ? value : value * 100;
-  return `${Math.round(Math.max(0, Math.min(100, normalized)))}%`;
-};
-
-const sourceConfidence = (source: SourceRef): number | null => {
-  if (typeof source.reliability === 'number') return source.reliability;
-  if (typeof source.confidence === 'number') return source.confidence;
-  return null;
-};
-
 const sourceDomain = (source: SourceRef): string => {
   if (source.url) {
     try {
@@ -51,7 +39,7 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
   const sourcesById = new Map(sources.map((source) => [source.source_id, source]));
 
   return (
-    <details className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden" open>
+    <details className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden">
       <summary className="px-4 py-3 cursor-pointer hover:bg-fin-hover transition-colors flex items-center gap-2">
         <ChevronDown size={16} className="text-fin-muted group-open:rotate-180 transition-transform" />
         <FileSearch size={15} className="text-fin-primary" />
@@ -71,10 +59,9 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
         <div className="px-4 pb-4 space-y-3">
           {sources.length > 0 && (
             <div className="overflow-hidden rounded-lg border border-fin-border bg-fin-bg">
-              <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_64px] gap-2 border-b border-fin-border bg-fin-bg-secondary px-3 py-2 text-2xs font-medium uppercase tracking-wide text-fin-muted">
+              <div className="grid grid-cols-[minmax(0,1fr)_96px_64px] gap-2 border-b border-fin-border bg-fin-bg-secondary px-3 py-2 text-2xs font-medium uppercase tracking-wide text-fin-muted">
                 <span>Source</span>
                 <span>As of</span>
-                <span>Confidence</span>
                 <span>Layer</span>
               </div>
               <div className="divide-y divide-fin-border/70">
@@ -83,7 +70,7 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
                   return (
                     <div
                       key={source.source_id}
-                      className="grid grid-cols-[minmax(0,1fr)_96px_96px_64px] gap-2 px-3 py-2 text-xs text-fin-text"
+                      className="grid grid-cols-[minmax(0,1fr)_96px_64px] gap-2 px-3 py-2 text-xs text-fin-text"
                     >
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-1.5">
@@ -114,9 +101,6 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
                       <span className="truncate text-2xs text-fin-text-secondary" title={source.as_of || undefined}>
                         {source.as_of || source.published_date || 'N/A'}
                       </span>
-                      <span className="tabular-nums text-2xs text-fin-text-secondary">
-                        {formatPercent(sourceConfidence(source))}
-                      </span>
                       <span className="h-fit w-fit rounded border border-fin-border bg-fin-card px-1.5 py-0.5 text-2xs font-medium text-fin-text-secondary">
                         {source.layer || 'n/a'}
                       </span>
@@ -135,9 +119,6 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded border px-1.5 py-0.5 text-2xs font-medium ${stanceTone(claim.stance)}`}>
                       {claim.stance || 'unknown'}
-                    </span>
-                    <span className="text-2xs tabular-nums text-fin-muted">
-                      confidence {formatPercent(claim.confidence)}
                     </span>
                     {claim.agent_name && (
                       <span className="text-2xs text-fin-muted">{claim.agent_name}</span>

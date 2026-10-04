@@ -22,6 +22,9 @@ COMPANY_MAP: Dict[str, str] = {
     'INTC': 'Intel', 'intel': 'INTC',
     'NFLX': 'Netflix', 'netflix': 'NFLX',
     'CRM': 'Salesforce', 'salesforce': 'CRM',
+    'V': 'Visa', 'visa': 'V',
+    'MA': 'Mastercard', 'mastercard': 'MA',
+    'COST': 'Costco', 'costco': 'COST',
     # Chinese ADRs
     'BABA': 'Alibaba', 'alibaba': 'BABA',
     'JD': 'JD.com', 'jd': 'JD',
@@ -206,6 +209,7 @@ KNOWN_TICKERS = {
     # P1 additions
     'TSM', 'TCEHY', 'NTES', 'MPNGY', 'XIACY',
     'BTC-USD', 'ETH-USD', 'SOL-USD', 'DOGE-USD',
+    'V', 'MA', 'COST',
 }
 
 # Common words to filter out (not tickers)
@@ -386,6 +390,8 @@ def is_probably_ticker(ticker: str) -> bool:
         return False
     if _is_structured_market_ticker(ticker):
         return True
+    if ticker in KNOWN_TICKERS:
+        return True
     if ticker in COMMON_WORDS:
         return False
     if ticker.startswith("^"):
@@ -435,7 +441,7 @@ def normalize_ticker(raw: str) -> str:
     lower = stripped.lower()
     mapped = COMPANY_MAP.get(lower)
     # COMPANY_MAP 中 value 为大写 ticker 的项是「别名 → ticker」映射
-    if mapped and mapped == mapped.upper() and len(mapped) <= 6:
+    if mapped and mapped == mapped.upper() and is_probably_ticker(mapped):
         return mapped
 
     return stripped.upper()
@@ -473,7 +479,8 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     aliases = set(CN_TO_TICKER) | {name for name in COMPANY_MAP if name != name.upper()}
     named_symbol = re.compile(
         r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(name) for name in sorted(aliases, key=len, reverse=True))
-        + r")\s*[（(]\s*([A-Za-z0-9^][A-Za-z0-9.^-]{0,14})\s*[)）]", re.IGNORECASE,
+        + r")(?:\s*[（(]\s*|\s+)([A-Za-z^][A-Za-z0-9.^-]{0,14}|\d{4,6}\.(?:HK|SS|SH|SZ|BJ))(?![A-Za-z0-9])\s*[)）]?",
+        re.IGNORECASE,
     )
     query = named_symbol.sub(
         lambda match: " " + match[1] + " " if is_probably_ticker(match[1].upper()) else match[0], query,
@@ -489,8 +496,9 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     # 1. Match market indices (longest match first)
     sorted_aliases = sorted(INDEX_ALIASES.keys(), key=len, reverse=True)
     for alias in sorted_aliases:
-        pattern = re.compile(re.escape(alias), re.IGNORECASE)
-        if pattern.search(query_original):
+        # 交易所前缀 NYSE:ORCL / NASDAQ:MSFT 是上市信息；down/drawdown 不是 Dow 指数。
+        venue = re.search(rf'{re.escape(alias)}\s*[:：]\s*\$?[A-Za-z]|{re.escape(alias)}(?:交易所)?上市', query_original, re.I)
+        if _alias_appears_in_text(query_original, alias) and not venue:
             ticker = INDEX_ALIASES[alias]
             if ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)
@@ -498,8 +506,8 @@ def extract_tickers(query: str) -> Dict[str, Any]:
 
     # 2. Match English tickers
     # Keep original case to distinguish user-typed TICKER from ordinary words
-    raw_matches = re.findall(r'(?<![A-Za-z0-9.])([A-Za-z]{2,5})(?![A-Za-z0-9])', query)
-    originally_upper = {m for m in raw_matches if m == m.upper() and len(m) >= 2}
+    raw_matches = re.findall(r'(?<![A-Za-z0-9.^-])([A-Za-z]{1,5})(?![A-Za-z0-9]|[.-][A-Za-z])', query)
+    originally_upper = {m for m in raw_matches if m == m.upper()}
     index_tickers = re.findall(r'(\^[A-Za-z]{3,})', query)
     raw_matches.extend(index_tickers)
     dotted_tickers = re.findall(r'(?<![A-Za-z])([A-Za-z]{1,5}[.-][A-Za-z]{1,4})(?![A-Za-z])', query)
@@ -509,6 +517,11 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     potential_tickers = [t.upper() for t in raw_matches]
 
     for ticker in potential_tickers:
+        if ticker.casefold() in {alias.casefold() for alias in INDEX_ALIASES}:
+            continue
+        # 普通英文 cost 不识别为 COST；用户明确的大写证券代码优先于词表。
+        if ticker in COMMON_WORDS and ticker not in originally_upper:
+            continue
         if not is_probably_ticker(ticker):
             continue
         if ticker in KNOWN_TICKERS or ticker.startswith('^'):
@@ -528,16 +541,19 @@ def extract_tickers(query: str) -> Dict[str, Any]:
 
     # 3. Match Chinese company names
     sorted_cn_names = sorted(CN_TO_TICKER.keys(), key=len, reverse=True)
+    unmatched_query = query_original
     for cn_name in sorted_cn_names:
-        if _alias_appears_in_text(query_original, cn_name):
+        if _alias_appears_in_text(unmatched_query, cn_name):
             ticker = CN_TO_TICKER[cn_name]
             if ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)
                 metadata['company_names'].append(cn_name)
+            unmatched_query = unmatched_query.replace(cn_name, " " * len(cn_name))
 
     # 4. Match English company names (full names)
     for name, ticker in COMPANY_MAP.items():
-        if len(name) > 4 and name.lower() in query_lower:
+        # COMPANY_MAP 同时含代码->展示名；只有名称->标准代码能参与实体识别。
+        if name != name.upper() and _alias_appears_in_text(query_original, name):
             if ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)
                 metadata['company_names'].append(name)

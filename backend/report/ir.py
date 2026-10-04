@@ -13,6 +13,7 @@ class Sentiment(str, Enum):
     BULLISH = "bullish"   # 看涨
     BEARISH = "bearish"   # 看跌
     NEUTRAL = "neutral"   # 中性
+    UNKNOWN = "unknown"   # 无法判断
 
 class ContentType(str, Enum):
     TEXT = "text"
@@ -28,7 +29,7 @@ class Citation:
     url: str                # 链接
     snippet: str            # 摘录片段
     published_date: str     # 发布日期
-    confidence: float = 0.7       # 来源可信度 (0.0 - 1.0)
+    confidence: Optional[float] = None  # 有来源依据时才提供可信度
     freshness_hours: float = 24.0  # hours since published
 
 @dataclass
@@ -61,7 +62,7 @@ class ReportIR:
     title: str
     summary: str            # 核心观点摘要
     sentiment: Sentiment    # 整体情绪
-    confidence_score: float # AI置信度 (0.0 - 1.0)
+    confidence_score: Optional[float] # 有校准依据时才提供置信度
 
     sections: List[ReportSection]
     citations: List[Citation]

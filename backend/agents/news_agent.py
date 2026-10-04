@@ -97,7 +97,9 @@ class NewsAgent(BaseFinancialAgent):
 
     def _prepare_news_items(self, items: List[Dict[str, Any]], ticker: str) -> List[Dict[str, Any]]:
         """确定无关的个股新闻仅留诊断，不以“待核实”名义占据正文。"""
-        rows = prepare_news_items(items, ticker=ticker)
+        from backend.graph.request_constraints import parse_time_scope
+        scope = parse_time_scope(str(self._current_query or ""))
+        rows = prepare_news_items(items, ticker=ticker, max_age_hours=int(scope.get("hours_back", 168)))
         retained = []
         for row in rows:
             quality = row["event_quality"]
@@ -248,7 +250,9 @@ class NewsAgent(BaseFinancialAgent):
         if not event_fn:
             return {}
         try:
-            payload = event_fn(ticker=ticker, days_ahead=30)
+            from backend.graph.request_constraints import parse_time_scope
+            scope = parse_time_scope(str(self._current_query or ""))
+            payload = event_fn(ticker=ticker, days_ahead=int(scope.get("days_ahead", 30)))
             if isinstance(payload, dict):
                 return payload
         except Exception:

@@ -84,7 +84,7 @@ export const buildEvidenceBadges = (
   if (!Array.isArray(citations) || citations.length === 0) {
     return {
       quality: {
-        label: 'Evidence N/A',
+        label: '暂无可追溯来源',
         tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
       },
       freshness: {
@@ -94,37 +94,25 @@ export const buildEvidenceBadges = (
     };
   }
 
-  const confidenceValues = citations
-    .map((item) => (typeof item.confidence === 'number' ? item.confidence : null))
-    .filter((item): item is number => item !== null);
-  const avgConfidence = confidenceValues.length > 0
-    ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
-    : null;
+  // 来源默认评分未做概率校准，不能汇总成报告可信度或请求覆盖率。
+  const traceableSources = new Set(citations.flatMap((citation) => {
+    try {
+      const url = new URL(citation.url);
+      return ['http:', 'https:'].includes(url.protocol) ? [url.href] : [];
+    } catch {
+      return [];
+    }
+  }));
 
   const freshnessValues = citations
     .map((item) => (typeof item.freshness_hours === 'number' ? item.freshness_hours : null))
     .filter((item): item is number => item !== null);
   const freshestHours = freshnessValues.length > 0 ? Math.min(...freshnessValues) : null;
 
-  const quality: BadgeInfo = avgConfidence === null
-    ? {
-      label: 'Evidence Unscored',
-      tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
-    }
-    : avgConfidence >= 0.8
-      ? {
-        label: `Evidence High (${Math.round(avgConfidence * 100)}%)`,
-        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
-      }
-      : avgConfidence >= 0.65
-        ? {
-          label: `Evidence Medium (${Math.round(avgConfidence * 100)}%)`,
-          tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
-        }
-        : {
-          label: `Evidence Low (${Math.round(avgConfidence * 100)}%)`,
-          tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
-        };
+  const quality: BadgeInfo = {
+    label: traceableSources.size > 0 ? `可追溯来源 ${traceableSources.size} 条` : '暂无可追溯来源',
+    tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
+  };
 
   const freshness: BadgeInfo = freshestHours === null
     ? {

@@ -634,8 +634,10 @@ def get_stock_price(ticker: str) -> str:
     if change is not None and change_percent is not None:
         text += f" | Change: {float(change):+.2f} ({float(change_percent):+.2f}%)"
     return (
-        f"{text} | Provider: {provider} | As of: {result.get('as_of')} "
-        f"| Currency: {quote.get('currency') or 'USD'} | Quality: {result.get('quality')}"
+        f"{text} | Provider: {provider} | As of: {quote.get('source_timestamp') or result.get('as_of')} "
+        f"| Currency: {quote.get('currency') or 'unknown'} | Quality: {result.get('quality')}"
+        f" | Session: {quote.get('market_session') or 'unknown'} | Time precision: {quote.get('source_time_precision') or 'unknown'}"
+        f" | Time status: {quote.get('source_time_status') or 'unknown'}"
     )
 
 # ============================================

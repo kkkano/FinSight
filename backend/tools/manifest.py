@@ -23,7 +23,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="get_stock_price",
         group="market",
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
         operations=("price", "technical", "qa", "generate_report"),
         depths=("quick", "report", "deep_research"),
         risk_level="low",
@@ -33,7 +33,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="get_technical_snapshot",
         group="technical",
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
         operations=("technical", "qa", "generate_report"),
         depths=("quick", "report", "deep_research"),
         risk_level="low",
@@ -166,7 +166,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="get_company_info",
         group="fundamental",
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
         operations=("qa", "generate_report", "compare"),
         depths=("quick", "report", "deep_research"),
         risk_level="low",
@@ -236,7 +236,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="get_earnings_estimates",
         group="fundamental",
-        markets=("US",),
+        markets=("US", "HK"),
         operations=("qa", "generate_report"),
         depths=("report", "deep_research"),
         risk_level="low",
@@ -246,7 +246,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="get_eps_revisions",
         group="fundamental",
-        markets=("US",),
+        markets=("US", "HK"),
         operations=("qa", "generate_report"),
         depths=("report", "deep_research"),
         risk_level="low",
@@ -256,7 +256,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="analyze_historical_drawdowns",
         group="risk",
-        markets=("US", "CN"),
+        markets=("US", "CN", "HK"),
         operations=("qa", "generate_report"),
         depths=("report", "deep_research"),
         risk_level="low",
@@ -266,7 +266,7 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
     ToolManifestEntry(
         name="get_factor_exposure",
         group="risk",
-        markets=("US",),
+        markets=("US", "HK"),
         operations=("qa", "generate_report"),
         depths=("report", "deep_research"),
         risk_level="medium",
