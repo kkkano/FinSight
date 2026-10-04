@@ -311,6 +311,18 @@ def test_key_value_attributes_keep_only_registered_keys():
     assert 'data_frequency' not in compiled['attributes'] and compiled['data_frequency'] == 'daily'
 
 
+def test_quote_attribute_like_components_and_empty_attributes_are_normalized():
+    raw = {'subjects': [{'id': 'ko', 'type': 'company', 'label': 'KO', 'tickers': ['KO']}], 'requirements': [
+        {'source_text': '现金分红', 'description': '报价', 'kind': 'fact_attribute', 'metric': 'quote', 'measurement': 'price',
+         'price_role': 'current', 'data_frequency': 'daily', 'subject': 'KO', 'subject_refs': ['ko'],
+         'attributes': ['', 'is_after_hours'], 'components': ['currency', 'quote_timestamp', 'after_hours_flag', 'price'],
+         'time_scope': {'kind': 'latest_quote', 'selection': 'latest'}}]}
+    compiled = compile_fixture(raw)['tasks'][0]['answer_requirements'][0]
+    assert compiled['components'] == []
+    assert set(compiled['attributes']) == {'currency', 'source_timestamp', 'market_session'}
+    assert compiled['data_frequency'] == 'unspecified'
+
+
 @pytest.mark.parametrize('kind,expected', [('fact_attribute', False), ('calculation', False), ('explanation', True), ('comparison', True)])
 def test_calculated_numeric_fact_does_not_inherit_model_analysis_flag(kind, expected):
     raw = semantic_fixture()

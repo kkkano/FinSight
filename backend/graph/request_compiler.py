@@ -79,6 +79,12 @@ _METRIC_ATTRIBUTES = {
 }
 for _price_metric in ("quote", "cumulative_return", "max_drawdown", "volume_breakout"):
     _METRIC_ATTRIBUTES[_price_metric] |= _COMMON_SOURCE_ATTRIBUTES
+# 报价、区间和技术指标由工具按标准定义计算；模型列出的价量原料不是独立采集项。
+_TOOL_COMPUTED_MEASUREMENTS = {"quote", "cumulative_return", "max_drawdown", "volume_breakout"} | _TECHNICAL_MEASUREMENTS
+# 模型偶尔把币种、时间等属性写进 components，这里归回属性。
+_COMPONENT_ATTRIBUTES = {"currency": "currency", "quote_timestamp": "source_timestamp", "timestamp": "source_timestamp",
+                         "source_timestamp": "source_timestamp", "after_hours_flag": "market_session",
+                         "is_after_hours": "market_session", "market_session": "market_session"}
 _REGISTERED_ATTRIBUTES = set().union(*_METRIC_ATTRIBUTES.values()) | {"data_frequency", "confirmation_status", "amount_per_share", "announced_at", "payable_date", "record_date"}
 
 
@@ -378,10 +384,21 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 normalized_attribute = key.strip()
                 if normalized_attribute == "data_frequency" and value.strip() in frequency_aliases:
                     requirement["data_frequency"] = frequency_aliases[value.strip()]
-            if normalized_attribute == "data_frequency":
+            if not normalized_attribute or normalized_attribute == "data_frequency":
                 continue
             attributes.append(normalized_attribute if normalized_attribute in _REGISTERED_ATTRIBUTES else raw_attribute)
+        components = []
+        for component in requirement.get("components") or []:
+            name = str(component).strip()
+            if name in _COMPONENT_ATTRIBUTES:
+                attributes.append(_COMPONENT_ATTRIBUTES[name])
+            elif name and metric not in _TOOL_COMPUTED_MEASUREMENTS:
+                components.append(name)
+        requirement["components"] = components
         requirement["attributes"] = attributes
+        if metric == "quote":
+            # 即时/收盘报价没有采样频率可言，日线措辞不应变成需要核对的频率要求。
+            requirement["data_frequency"] = "unspecified"
         if metric in _TECHNICAL_MEASUREMENTS or is_constraint and scope.get("kind") == "trading_sessions" and scope.get("count") is None:
             frequency = requirement.get("data_frequency", "unspecified")
             if frequency == "unspecified" and scope.get("unit") in {"trading_day", "trading_days", "daily", "1d"}:
@@ -406,7 +423,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 or "capital_allocation" in evidence and (scope.get("count") or 1) > 8):
             requirement.update(capability_status="unsupported", unsupported_reason="scope_exceeds_capability")
         attribute_aliases = {"currency_unit": "currency", "timestamp": "source_timestamp", "quote_timestamp": "source_timestamp",
-                             "closing_price": "end_close", "close_price": "end_close", "dividend_included": "dividends_included"}
+                             "closing_price": "end_close", "close_price": "end_close", "dividend_included": "dividends_included",
+                             "is_after_hours": "market_session", "after_hours": "market_session"}
         requirement["attributes"] = list(dict.fromkeys(attribute_aliases.get(str(attribute), str(attribute)) for attribute in requirement.get("attributes", [])))
         if metric == "quote":
             requirement["attributes"] = list(dict.fromkeys([*requirement["attributes"], "currency", "source_timestamp"]))
