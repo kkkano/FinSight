@@ -24,7 +24,7 @@
 - 微软同季度现金覆盖题首次达到“已回答”；v1 的 ADBE/AVGO 由“已回答”变为 partial，是门禁开始核对币种、报价时间等原始属性所致。
 - 36 题中 3 题走了规则回退（h08 与新题 02、06）。
 - 最终轮基于 `fb6eebfe`；`b20f851b` 只增加属性规范化，已由单测覆盖，未重跑真实回归。
-- 运行时把报价/K 线备用源改为 Yahoo（见下方遗留 1）。生产配置仍是 Twelve Data + Stooq。
+- 运行时把报价/K 线备用源改为 Yahoo，与之后的生产配置一致（见遗留 1）。
 
 ## 真实账号验收
 
@@ -32,7 +32,7 @@
 
 ## 遗留
 
-1. Stooq 已加 JS 验证，程序无法取数；线上报价实际只剩 Twelve Data。本日测试中其调用持续失败，疑似额度耗尽。建议把 `MARKET_QUOTE_SECONDARY_PROVIDER` 和 `MARKET_KLINE_SECONDARY_PROVIDER` 改为 `yfinance`，经已有代理访问（需确认后修改生产环境变量）。
+1. ~~Stooq 已失效~~ **已处理（2026-10-04）**：生产 `MARKET_QUOTE_SECONDARY_PROVIDER`、`MARKET_KLINE_SECONDARY_PROVIDER` 由 `stooq` 改为 `yfinance`（原配置已备份）。重启后实测 ADBE、AVGO 报价均在 Twelve Data 失败后由 yfinance 返回。
 2. 每个非简单请求都会先调用一次语义抽取模型，通常 60–120 秒。最长一次推理在 65536 token 处截断，耗时 686 秒。
 3. 新题仍有 2 题无数据：港股/ADR 双上市、NVDA 单题。新题中有 2 道聊天题被阻断，未针对冻结新题调参。
 4. 正文中的币种 “USD” 被前端当作股票代码链接到 `/dashboard/USD`（前端既有问题）。
