@@ -91,7 +91,7 @@ CONCURRENCY_LIMIT_ENABLED=false
 部署公开账本时必须同时列出独立监控服务：
 
 ```bash
-IMAGE_TAG="$release_sha" docker compose --env-file .env.server --profile predictions up -d --build backend rag-inference frontend prediction-watchdog
+IMAGE_TAG="$release_sha" FRONTEND_IMAGE_TAG="$release_sha" docker compose --env-file .env.server --profile predictions up -d --build backend rag-inference frontend prediction-watchdog
 ```
 
 镜像回滚前关闭采集并保留 `prediction_ledger.db` 和 `prediction_watchdog.json`；恢复采集会补记漏日 missed，不补写历史预测。常规业务数据库仍执行本 Runbook 的 PostgreSQL 回滚流程。
@@ -229,6 +229,7 @@ docker compose --env-file .env.server exec -e RESTORE_DB="$restore_db" -T postgr
 ```bash
 sha="$(git rev-parse HEAD)"
 export IMAGE_TAG="$sha"
+export FRONTEND_IMAGE_TAG="$sha"
 docker compose --env-file .env.server build backend
 
 drill_db="finsight_test_migration_$(date -u +%Y%m%d%H%M%S)"
@@ -259,6 +260,7 @@ test "$(git rev-parse HEAD)" = "$target_sha"
 test -z "$(git status --porcelain)"
 
 export IMAGE_TAG="$target_sha"
+export FRONTEND_IMAGE_TAG="$target_sha"
 docker compose --env-file .env.server build backend frontend
 backend_image_id="$(docker image inspect "finsight-backend:$target_sha" --format '{{.Id}}')"
 frontend_image_id="$(docker image inspect "finsight-frontend:$target_sha" --format '{{.Id}}')"
@@ -448,6 +450,7 @@ docker system df
 
 ```bash
 export IMAGE_TAG="$rollback_compatible_tag"
+export FRONTEND_IMAGE_TAG="$rollback_compatible_tag"
 docker compose --env-file .env.server up -d --no-deps backend
 curl -fsS http://127.0.0.1:8000/readyz >/dev/null
 docker compose --env-file .env.server up -d --no-deps frontend
@@ -462,6 +465,8 @@ curl -fsS http://127.0.0.1:5173/readyz >/dev/null
 ## 10. 完成证据
 
 前端可独立通过 `FRONTEND_IMAGE_TAG` 发布，未设置时沿用 `IMAGE_TAG`。发布后核对 `/app-version.json` 的 `build_id` 和实际 frontend image；后端未变更时无需重启正在运行的研究任务。版本文件及 Service Worker 禁止缓存；页面导航使用 NetworkFirst，避免 F5 仍从旧 app shell 启动旧客户端。打开的页面发现新版本时提示刷新，生成中或有未发送输入时不会自动重载。
+
+全栈发布或回滚必须同时设置 `IMAGE_TAG` 与 `FRONTEND_IMAGE_TAG`。若生产环境曾做前端独立热修复，仅更新前者会保留旧前端；容器健康不能替代版本一致性检查。
 
 旧 Service Worker 仍控制导航时，可打开 `/api/client-recovery`，由用户点击修复。该静态只读入口在旧版 `/api/` NetworkOnly 范围内，不依赖 React 或登录；仅注销本站 `/sw.js` 并删除 `workbox-precache-*`、`finsight-*` 页面缓存，不读取或清空 localStorage、Cookie、模型设置或用户会话，不调用生成接口。`/chat` 和 SPA HTML 路由本身也必须返回 `Cache-Control: no-store`。
 

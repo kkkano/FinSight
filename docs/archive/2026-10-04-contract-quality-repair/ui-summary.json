@@ -1,0 +1,67 @@
+{
+  "release_sha": "cf700d2de5417b0427e33e9d738b1e2b49b7d288",
+  "real_authenticated_browser": true,
+  "browser": "用户已登录Edge",
+  "cases": [
+    {
+      "build": "cf700d2de5417b0427e33e9d738b1e2b49b7d288",
+      "query": "AMD 最近一次可用报价是多少？请注明币种、源日期和常规收盘或盘后属性。",
+      "canonical_sha256": "efe7f77812e168baa5f75c6ec42130c40c9853c2bb554727c3c36b219c5b7e88",
+      "canonical_characters": 153,
+      "body_stable": true,
+      "extra_generation_on_restore": 0,
+      "busy_after_restore": false,
+      "mode": "chat",
+      "timing": {
+        "first_busy_ms": 1998,
+        "first_visible_body_ms": 12974,
+        "visible_terminal_ms": 14091
+      },
+      "server_restoration_verified": true,
+      "server_get_statuses": [
+        200,
+        200
+      ],
+      "scope": "真实账号网页提问；普通刷新、重开及仅本次本地消息缓存清空后的服务器恢复，均不重新生成。"
+    },
+    {
+      "build": "cf700d2de5417b0427e33e9d738b1e2b49b7d288",
+      "query": "生成一份 TXN 投资研究报告，覆盖已披露业务、最近一个已公布季度财务、估值和主要风险，附来源；没有足够证据的项目请明确说无法判断。",
+      "canonical_sha256": "0a791ac4544b7476951905d3246e420000215a435e0e5fe28b49a4d106d2d952",
+      "canonical_characters": 19158,
+      "body_stable": true,
+      "extra_generation_on_restore": 0,
+      "busy_after_restore": false,
+      "mode": "report",
+      "timing": {
+        "first_busy_ms": 2018,
+        "first_visible_body_ms": 409812,
+        "visible_terminal_ms": 410826
+      },
+      "quality_blocked": true,
+      "persistence_status": "saved",
+      "answer_status": "blocked",
+      "archived": false,
+      "sentiment": "unknown",
+      "confidence_score": null,
+      "preview_opened": true,
+      "official_history_verified": false,
+      "usage": {
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 226299,
+            "completion": 23164,
+            "calls": 2
+          }
+        },
+        "total_tokens": 249463
+      },
+      "visible_unknown": true,
+      "scope": "正文和blocked预览可见、刷新/重开一致；正式报告未归档，不能算正式报告全流程成功。",
+      "remaining_display_issue": "预览正文含来源，但报告头显示暂无可追溯来源；后续需对齐局部可靠引用索引与预览元数据。"
+    }
+  ],
+  "privacy": "不公开账号身份、run/session/message ID、认证存储、Cookie、完整网络流或包含其它会话的截图。"
+}

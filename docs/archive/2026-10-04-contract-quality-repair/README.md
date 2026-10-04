@@ -8,6 +8,7 @@
 - [组合回归回答原文](regression-answers.md)
 - [第二批独立题首轮评分](holdout-scores.json)与[回答](holdout-answers.md)
 - [最终发布与新题冻结快照差异](release-vs-holdout.json)
+- [发布与真实账号交付](RELEASE.md)
 - 原始首次基线保存在 [独立验收归档](../2026-10-04-independent-acceptance/README.md)。
 
 基线、修复后的回归、新问题首次验收必须分别解读。相同旧题不能再次算独立泛化成绩，模型调用成功也不能替代内容正确。
