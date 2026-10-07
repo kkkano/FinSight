@@ -142,19 +142,20 @@ def _extract_date(text: str) -> str | None:
     return None
 
 
-def _build_queries(ticker: str, market: str) -> list[str]:
+def _build_queries(ticker: str, market: str, company_name: str = "", query: str = "") -> list[str]:
     ticker_norm = str(ticker or "").strip().upper()
+    identity = f"{company_name} {ticker_norm.split('.')[0]}".strip()
+    scope = str(query or "").strip() or "annual report"
     if market == "CN":
         return [
-            f"site:cninfo.com.cn {ticker_norm} 年报 公告",
-            f"site:sse.com.cn {ticker_norm} 公告",
-            f"site:szse.cn {ticker_norm} 公告",
+            f"site:cninfo.com.cn {identity} {scope}",
+            f"site:sse.com.cn {identity} {scope}",
+            f"site:szse.cn {identity} {scope}",
         ]
     if market == "HK":
         return [
-            f"site:hkexnews.hk {ticker_norm} annual report",
-            f"site:hkexnews.hk {ticker_norm} interim report",
-            f"site:hkex.com.hk {ticker_norm} announcement",
+            f"site:hkexnews.hk {identity} {scope}",
+            f"site:hkex.com.hk {identity} {scope}",
         ]
     return []
 
@@ -162,7 +163,7 @@ def _build_queries(ticker: str, market: str) -> list[str]:
 def _issuer_identity(text: str, ticker: str) -> str | None:
     front = str(text or "")[:5000]
     requested_code = str(ticker).split(".")[0].lstrip("0")
-    codes = re.findall(r"(?:证券代码|股票代码|股份代號|股份代号|stock\s*code)\s*[:：]?\s*(\d{1,6})", front, re.IGNORECASE)
+    codes = re.findall(r"(?:证券代码|股票代码|公司代码|股份代號|股份代号|stock\s*code)\s*[:：]?\s*(\d{1,6})", front, re.IGNORECASE)
     if codes:
         return "document_stock_code" if requested_code in {code.lstrip("0") for code in codes} else None
     aliases = [name for name, symbol in CN_TO_TICKER.items() if symbol.upper() == ticker.upper() and len(name) >= 4]
@@ -212,7 +213,8 @@ def _fetch_disclosure_text(url: str, *, full_document: bool = False) -> str:
         return ""
 
 
-def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False) -> dict[str, Any]:
+def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False,
+                             company_name: str = "", query: str = "") -> dict[str, Any]:
     """Fetch CN/HK local disclosure links via free search sources."""
     ticker_norm = str(ticker or "").strip().upper()
     capped_limit = max(1, min(int(limit or 8), 20))
@@ -245,7 +247,7 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
     verification_attempts = 0
     extraction_attempted = False
 
-    for query in _build_queries(ticker_norm, market):
+    for query in _build_queries(ticker_norm, market, company_name, query):
         try:
             raw = search(query)
         except Exception as exc:

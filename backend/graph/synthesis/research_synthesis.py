@@ -1099,13 +1099,16 @@ async def synthesize_task_results(
                         repaired_raw, claims=claims, materials=materials,
                         claim_aliases=claim_aliases, evidence_aliases=evidence_aliases,
                     )
+                    repaired_requirements = {value for row in repaired.explanations for value in _strings(row.get("requirement_ids"))}
+                    retained_explanations = [row for row in selection.explanations
+                                             if not repaired_requirements.intersection(_strings(row.get("requirement_ids")))]
                     selection = _TaskSynthesisSelection(
                         claim_ids=stable_unique(selection.claim_ids + repaired.claim_ids),
                         conclusion_claim_id=selection.conclusion_claim_id or repaired.conclusion_claim_id,
                         proposed_direction=selection.proposed_direction or repaired.proposed_direction,
                         direction_supporting_claim_ids=selection.direction_supporting_claim_ids if selection.proposed_direction else repaired.direction_supporting_claim_ids,
                         fact_ids=stable_unique(selection.fact_ids + repaired.fact_ids),
-                        explanations=_deduplicate_explanations(selection.explanations + repaired.explanations),
+                        explanations=_deduplicate_explanations(retained_explanations + repaired.explanations),
                     )
                 except Exception as exc:
                     validation_errors.append({"field": "repair", "code": _failure_code(exc)})

@@ -28,6 +28,14 @@ def test_financial_fact_preserves_original_unit_period_and_source_page():
     assert fact["page"] == 85 and fact["period_end"] == "2025-12-31"
 
 
+def test_disclosure_queries_keep_semantic_identity_and_requested_period():
+    queries = local_disclosure._build_queries("600519.SS", "CN", "贵州茅台", "2025 财年经营现金流")
+    assert all("贵州茅台 600519" in query and "2025 财年经营现金流" in query for query in queries)
+    assert all(".SS" not in query for query in queries)
+    assert local_disclosure._issuer_identity("公司代码：600519\n贵州茅台股份有限公司", "600519.SS") == "document_stock_code"
+    assert local_disclosure._issuer_identity("公司代码：600016", "600519.SS") is None
+
+
 @pytest.mark.parametrize("changes", [
     {"amount_text": "12,345"}, {"page": 2}, {"scale": 1}, {"currency": "USD"},
     {"period_start": "2026-01-01", "period_end": "2026-12-31"},
