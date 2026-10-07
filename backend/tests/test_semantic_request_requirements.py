@@ -537,6 +537,7 @@ def test_named_company_without_ticker_is_researched_by_name_instead_of_clarified
     search = next(step for step in state["plan_ir"]["steps"] if step["name"] == "search")
     assert "游族网络" in search["inputs"]["query"]
     assert not search["subject_tickers"]
+    assert any(step["name"] == "deep_search_agent" for step in state["plan_ir"]["steps"])
     assert state["trace"]["planner"]["validated"] is True
 
 
