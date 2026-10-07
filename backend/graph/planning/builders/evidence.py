@@ -262,7 +262,10 @@ def _append_evidence_steps_for_ticker(ctx,
                     "get_local_market_filings",
                     {"ticker": ticker, "limit": 5, "query": scoped_query,
                      "company_name": next((task.get("subject_label") for task in tasks if ticker in task.get("tickers", [])), "") or "",
-                     **({"include_financial_facts": True} if extract_financial else {})},
+                     **({"include_financial_facts": True,
+                         "financial_metrics": list(dict.fromkeys(metric for task in tasks for req in task.get("answer_requirements", [])
+                                                                  for metric in [req.get("metric"), *req.get("components", [])] if metric))}
+                        if extract_financial else {})},
                     why=f"{ticker} evidence contract: local-market filings.",
                     optional=False,
                     parallel_group=group,

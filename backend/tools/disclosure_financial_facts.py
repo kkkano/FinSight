@@ -124,13 +124,16 @@ def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url
     return facts
 
 
-def extract_financial_facts(text: str, ticker: str, source_url: str) -> list[dict[str, Any]]:
+def extract_financial_facts(text: str, ticker: str, source_url: str, metrics: list[str] | None = None) -> list[dict[str, Any]]:
     from backend.llm_config import create_llm, report_llm_failure, report_llm_success
     from backend.services.llm_response import final_completion_text
     from backend.utils.llm_json import _extract_json
     from langchain_core.messages import HumanMessage, SystemMessage
 
     client = None
+    definitions = {key: value for key, value in _METRICS.items() if metrics is None or key in metrics}
+    if not definitions:
+        return []
     try:
         client = create_llm(temperature=0.0, max_tokens=8192, request_timeout=60)
         response = client.invoke([
@@ -144,7 +147,7 @@ def extract_financial_facts(text: str, ticker: str, source_url: str) -> list[dic
                 "page 是 [Page N] 标记的原始页码。日期 ISO 格式，年报日历年度可规范化为该年01-01到12-31，"
                 "其他会计年度必须从原文核实起止。禁止将归母数替代合并净利润，将含利息的现金支出替代分红。"
                 "取不到满足条件的指标就省略，每指标每财期一条，最多24条。指标定义："
-                + json.dumps(_METRICS, ensure_ascii=False)
+                + json.dumps(definitions, ensure_ascii=False)
             )),
             HumanMessage(content=json.dumps({"ticker": ticker, "source_url": source_url, "document": _table_context(text)}, ensure_ascii=False)),
         ])

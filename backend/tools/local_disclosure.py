@@ -214,7 +214,7 @@ def _fetch_disclosure_text(url: str, *, full_document: bool = False) -> str:
 
 
 def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False,
-                             company_name: str = "", query: str = "") -> dict[str, Any]:
+                             company_name: str = "", query: str = "", financial_metrics: list[str] | None = None) -> dict[str, Any]:
     """Fetch CN/HK local disclosure links via free search sources."""
     ticker_norm = str(ticker or "").strip().upper()
     capped_limit = max(1, min(int(limit or 8), 20))
@@ -309,7 +309,7 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
                 from .disclosure_financial_facts import extract_financial_facts
 
                 extraction_attempted = True
-                rows[-1]["financial_facts"] = extract_financial_facts(content, ticker_norm, url)
+                rows[-1]["financial_facts"] = extract_financial_facts(content, ticker_norm, url, financial_metrics)
             if len(rows) >= capped_limit:
                 break
         if len(rows) >= capped_limit:
