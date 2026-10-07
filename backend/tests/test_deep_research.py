@@ -213,11 +213,10 @@ async def test_macro_agent_keeps_fred_and_treats_search_disagreement_as_unverifi
     assert search_evidence.meta["usage"] == "raw"
     assert search_evidence.meta["verification"] == "discovery_only"
 
-def test_deep_search_queries_dynamic():
+def test_deep_search_queries_keep_original_scope():
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())
     queries = agent._build_queries("valuation risk", "AAPL")
-    assert any("risk factors" in q for q in queries)
-    assert any("valuation model" in q for q in queries)
+    assert queries == ["AAPL valuation risk"]
 
 
 def test_deep_search_filter_results_finance_mode_blocks_untrusted_domains(monkeypatch):
@@ -456,6 +455,20 @@ def test_build_queries_default_does_not_force_pdf_bias(monkeypatch):
 
     assert queries
     assert all("filetype:pdf" not in q.lower() for q in queries)
+
+
+@pytest.mark.parametrize("ticker", ["N/A", "UNKNOWN", ""])
+def test_named_company_query_without_security_code_never_becomes_global_finance(ticker):
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    query = "游族网络 请给我一份游族网络的投研分析报告"
+    assert agent._build_queries(query, ticker) == [query]
+
+
+@pytest.mark.parametrize("ticker", ["002174.SZ", "0700.HK", "INTC"])
+def test_open_research_keeps_company_and_original_scope_across_markets(ticker):
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    query = "准备完整研究材料，保留财期和来源，不查新闻"
+    assert agent._build_queries(query, ticker) == [f"{ticker} {query}"]
 
 
 def test_search_web_supplements_authoritative_feeds_when_trusted_results_insufficient(monkeypatch):

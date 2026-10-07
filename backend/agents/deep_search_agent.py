@@ -545,87 +545,10 @@ class DeepSearchAgent(BaseFinancialAgent):
 
     def _build_queries(self, query: str, ticker: str) -> List[str]:
         base = query.strip()
-        if ticker and ticker not in base:
+        if ticker and ticker.upper() not in {"N/A", "UNKNOWN"} and ticker.casefold() not in base.casefold():
             base = f"{ticker} {base}".strip()
-
-        query_lower = query.lower()
-        if self._is_finance_research_intent(query):
-            topic_terms: List[str] = []
-            if any(k in query_lower for k in ["arrow lake", "product roadmap", "roadmap", "产品", "路线图"]):
-                topic_terms.append("Arrow Lake product roadmap")
-            if any(k in query_lower for k in ["analyst", "rating", "price target", "分析师", "评级", "目标价"]):
-                topic_terms.append("analyst rating price target")
-            if any(k in query_lower for k in ["competition", "competitor", "competitive", "竞争", "对手"]):
-                peer_text = " ".join(self._extract_peer_tickers_from_query(query, ticker))
-                topic_terms.append(f"{peer_text} competitive landscape".strip())
-            if any(k in query_lower for k in ["valuation", "估值", "multiple", "dcf", "pe"]):
-                topic_terms.append("valuation multiples")
-            if any(k in query_lower for k in ["risk", "opportunity", "风险", "机会"]):
-                topic_terms.append("6-12 month risks opportunities")
-
-            context_terms = " ".join(dict.fromkeys(term for term in topic_terms if term).keys())
-            filing_queries = [
-                f"site:sec.gov {ticker} 10-K 10-Q annual quarterly report latest filing",
-                f"{ticker} latest earnings call transcript revenue margin guidance",
-            ]
-            if context_terms:
-                filing_queries.append(f"{ticker} {context_terms} Reuters Bloomberg CNBC Yahoo Finance")
-            else:
-                filing_queries.append(f"{ticker} {base} Reuters Bloomberg CNBC Yahoo Finance")
-            return [q.strip() for q in filing_queries if q.strip()][:4]
-
-        enable_pdf_bias = os.getenv("DEEPSEARCH_ENABLE_PDF_QUERY_BIAS", "0").strip().lower() in (
-            "1", "true", "yes", "on"
-        )
-        topics: List[str] = []
-        if any(k in query_lower for k in ["risk", "downside", "bear", "风险", "利空"]):
-            topics.append("risk factors")
-        if any(k in query_lower for k in ["valuation", "估值", "multiple", "dcf", "pe"]):
-            topics.append("valuation model")
-        if any(k in query_lower for k in ["competition", "competitor", "竞争", "对手"]):
-            topics.append("competitive landscape")
-        if any(k in query_lower for k in ["earnings", "财报", "业绩", "guidance", "指引"]):
-            topics.append("earnings transcript")
-        if any(k in query_lower for k in ["industry", "sector", "产业", "行业"]):
-            topics.append("industry report")
-
-        if not topics:
-            # 混合策略：1 条 HTML 倾向 + 1 条中性 + 1 条 PDF 倾向（如果 pypdf 可用）
-            topics = [
-                "latest analysis report",
-                "earnings analysis outlook",
-            ]
-            if PdfReader is not None and enable_pdf_bias:
-                topics.append("investment thesis filetype:pdf")
-            else:
-                topics.append("investment thesis")
-        else:
-            if "latest analysis report" not in topics:
-                topics.append("latest analysis report")
-
-        seen: set[str] = set()
-        queries: List[str] = []
-        for topic in topics:
-            if topic in seen:
-                continue
-            seen.add(topic)
-            queries.append(f"{base} {topic}".strip())
-        return queries[:3]
-
-    def _extract_peer_tickers_from_query(self, query: str, ticker: str) -> List[str]:
-        ticker_upper = str(ticker or "").strip().upper()
-        aliases = {
-            "NVIDIA": "NVDA",
-            "TSMC": "TSM",
-            "INTEL": "INTC",
-        }
-        peers: List[str] = []
-        upper_query = str(query or "").upper()
-        for token in re.findall(r"(?<![A-Z])[A-Z]{2,6}(?![A-Z])", upper_query):
-            symbol = aliases.get(token.upper(), token.upper())
-            if symbol != ticker_upper and symbol not in {"SEC", "ETF", "USD", "GPU", "CPU", "AI"}:
-                peers.append(symbol)
-        return list(dict.fromkeys(peers))
+        # 开放检索保留已绑定主体与原始范围；市场专用取数由执行合同安排。
+        return [base] if base else []
 
     def _search_web(self, query: str) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
