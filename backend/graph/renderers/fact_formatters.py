@@ -358,6 +358,33 @@ def _capital_allocation(payload: dict, evidence) -> str:
     return "\n".join(lines)
 
 
+def _document_summary(payload: dict, evidence, sections: dict | None = None) -> str:
+    """正文留在证据合同中，报告展示来源概况和供应商摘要。"""
+    title = str(payload.get("title") or evidence.title or "原始文档")
+    date = str(payload.get("published_date") or evidence.as_of or evidence.period_end or "")
+    labels = {"business": "业务", "competition": "竞争", "management_discussion": "管理层讨论"}
+    read_note = "已取得文档材料"
+    if sections:
+        read_note = "已读取" + "、".join(labels.get(name, name) for name in sections) + "正文"
+    elif payload.get("content_read") is True or evidence.metadata.get("content_read") is True or payload.get("content") or payload.get("body"):
+        read_note = "已读取正文"
+    header = " ".join(value for value in (date, title) if value) + f"；{read_note}。"
+    summary = payload.get("summary") or payload.get("snippet")
+    if not isinstance(summary, str) or not summary.strip():
+        return header
+    summary = " ".join(clean_research_text(summary).split())
+    if len(summary) > 480:
+        # 只保留预算内的完整句子，避免截断数值、否定或限定条件。
+        sentences = re.findall(r".+?(?:[。！？](?:[\"'”’])?|[.!?](?:\s|$))", summary)
+        complete = []
+        for sentence in sentences:
+            if len(" ".join([*complete, sentence])) > 480:
+                break
+            complete.append(sentence.strip())
+        summary = " ".join(complete)
+    return header + (f"\n来源摘要：{summary}" if summary else "")
+
+
 def format_fact(evidence, *, profile: str = "full") -> str:
     compact = profile in {"chat", "brief", "comparison"}
     payload = payload_for(evidence)
@@ -393,12 +420,9 @@ def format_fact(evidence, *, profile: str = "full") -> str:
             text = f"{evidence.period_end or '期间未提供'} {raw}；单位 {evidence.unit}；来源口径 {evidence.frequency or '未提供'}。"
         sections = disclosure_sections(payload)
         if not text and sections:
-            labels = {"business": "业务正文摘录", "competition": "竞争正文摘录", "management_discussion": "管理层讨论摘录"}
-            limit = 600 if compact else 1400
-            text = "\n".join([
-                f"{evidence.as_of or '披露时间未提供'} {evidence.title or '公司公告'}；已读取披露正文。",
-                *[f"{labels.get(name, '披露正文摘录')}：{' '.join(body.split())[:limit]}" for name, body in sections.items()],
-            ])
+            text = _document_summary(payload, evidence, sections)
+        if not text and evidence.kind == "filing_context" and (payload.get("content_read") is True or evidence.metadata.get("content_read") is True):
+            text = _document_summary(payload, evidence)
         if not text and evidence.kind == "filing_context" and evidence.url:
             text = f"{evidence.as_of or '披露时间未提供'} {evidence.title or '公司公告'}；该来源为公告索引，财务结论需核对文件正文。"
     if not text and evidence.kind == "news_context" and isinstance(payload.get("snapshot"), dict):
@@ -413,7 +437,9 @@ def format_fact(evidence, *, profile: str = "full") -> str:
         transmission = snapshot.get("price_transmission") or {}
         if transmission.get("analysis"):
             text += "\n" + str(transmission["analysis"])
-    if not text and evidence.kind in {"news_context", "macro_context", "document_context", "transcript_context"}:
+    if not text and evidence.kind in {"document_context", "transcript_context"}:
+        text = _document_summary(payload, evidence)
+    if not text and evidence.kind in {"news_context", "macro_context"}:
         description = payload.get("snippet") or payload.get("summary") or payload.get("content") or ""
         if isinstance(description, str) and description.strip():
             title = str(payload.get("title") or evidence.title or "")

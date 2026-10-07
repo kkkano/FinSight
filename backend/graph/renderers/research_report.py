@@ -200,6 +200,7 @@ def render_research_report(
     overall_has_direction = bool(re.search(r"偏多|偏空|\b(?:bullish|bearish|buy|sell|hold)\b|(?:方向|建议|评级).{0,12}(?:中性|买入|卖出|持有)", draft.overall_conclusion or "", re.IGNORECASE))
     rendered_task_ids: list[str] = []
     shown_sources: set[str] = set()
+    shown_materials: set[tuple[str | None, str, str | None]] = set()
     for task in draft.task_results:
         rendered_task_ids.append(task.task_id)
         readiness = (direction_readiness or {}).get(task.task_id)
@@ -264,8 +265,6 @@ def render_research_report(
                 else:
                     lines.append("对应解释已纳入上方研究判断。")
             elif materials:
-                lines.extend(f"- {_fact_text(evidence, profile)} {refs([evidence.source_id])}" for evidence in materials)
-                shown_sources.update(evidence.source_id for evidence in materials)
                 lines.append("[数据缺失] 已取得相关材料，但本轮尚未形成通过引用校验的对应解释。")
             else:
                 lines.append(f"[数据缺失] 未取得可验证的{label}材料，不能补造结论。")
@@ -275,12 +274,16 @@ def render_research_report(
             evidence = draft.evidence_index.get(source_id)
             if evidence is not None and evidence.usage == "fact" and task.task_id in evidence.task_ids:
                 facts_by_kind.setdefault(evidence.kind, []).append(evidence)
+        displayed_rows = set()
         for kind, items in facts_by_kind.items():
-            lines.extend([f"**{_KIND_LABELS.get(kind, '已验证事实')}**", ""])
+            fact_lines = []
             displayed_facts = set()
-            displayed_rows = set()
             for evidence in items:
                 text = _fact_text(evidence, profile)
+                material_identity = (evidence.subject, text, evidence.url)
+                if evidence.kind in {"filing_context", "document_context", "transcript_context"} and material_identity in shown_materials:
+                    shown_sources.add(evidence.source_id)
+                    continue
                 if text and (evidence.subject, text) not in displayed_facts:
                     displayed_facts.add((evidence.subject, text))
                     prefix = f"{evidence.subject}：" if task.render_kind == "compare" and evidence.subject and not text.startswith(evidence.subject) else ""
@@ -288,10 +291,12 @@ def render_research_report(
                     if not rows:
                         continue
                     displayed_rows.update((evidence.subject, row) for row in rows)
-                    lines.append(f"- {prefix}{rows[0]} {refs([evidence.source_id])}".rstrip())
-                    lines.extend(f"  - {row}" for row in rows[1:])
+                    fact_lines.append(f"- {prefix}{rows[0]} {refs([evidence.source_id])}".rstrip())
+                    fact_lines.extend(f"  - {row}" for row in rows[1:])
                     shown_sources.add(evidence.source_id)
-            lines.append("")
+                    shown_materials.add(material_identity)
+            if fact_lines:
+                lines.extend([f"**{_KIND_LABELS.get(kind, '已验证事实')}**", "", *fact_lines, ""])
         selected_claims = [claim for claim in display_claims if claim.claim_id not in shown_task_claims]
         if selected_claims:
             lines.extend(["**研究判断与风险**", ""])
@@ -303,7 +308,7 @@ def render_research_report(
             lines.append("[数据缺失] 本轮没有取得可验证的对应事实或论据。")
         for dimension in task.requested_dimensions:
             kinds = DIMENSION_KINDS.get(dimension)
-            if kinds and not any(draft.evidence_index[source_id].kind in kinds for source_id in display_fact_ids if source_id in draft.evidence_index):
+            if kinds and not any(claim.metric == dimension for claim in display_claims) and not any(draft.evidence_index[source_id].kind in kinds for source_id in display_fact_ids if source_id in draft.evidence_index):
                 label = _DIMENSION_LABELS.get(dimension, "请求维度")
                 if task.operation == "macro_brief" and dimension == "performance":
                     continue

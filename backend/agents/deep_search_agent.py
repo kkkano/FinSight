@@ -307,6 +307,9 @@ class DeepSearchAgent(BaseFinancialAgent):
                         "is_pdf": item.get("is_pdf", False),
                         "degraded": degraded,
                         "degrade_reason": item.get("degrade_reason"),
+                        "usage": "raw" if degraded else "fact",
+                        "content_read": not degraded and bool(item.get("content")),
+                        "document_body": item.get("content", "") if not degraded else "",
                         "doc_quality": doc_quality,
                         "evidence_quality": {
                             "overall_score": float(evidence_quality.get("overall_score", 0.0)),
@@ -348,6 +351,9 @@ class DeepSearchAgent(BaseFinancialAgent):
             trace=trace or [],
             chart_specs=chart_specs,
         )
+        from backend.research.agent_quality_contract import assign_evidence_source_ids
+
+        assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
         self._attach_evidence_ledger(output, query=query or summary, ticker=ticker)
         return output
 

@@ -1036,6 +1036,10 @@ async def synthesize_task_results(
         task_evidence = evidence_normalization.evidence_by_task.get(outcome.task_id, [])
         materials = [item for item in task_evidence if item.usage == "fact" or item.usage == "raw" and (item.url or item.metadata.get("producer") == "search") and clean_research_text(item.text)]
         materials = [item for item in materials if item.metadata.get("subject_binding") != "unverified"]
+        verified_materials = [item for item in materials if item.usage == "fact" and not evidence_is_document_index(item)]
+        if verified_materials:
+            materials = verified_materials
+            claims = [claim for claim in claims if set(claim.evidence_ids).issubset({item.source_id for item in materials})]
         context = llm_call_context_factory(outcome) if claims or materials else None
         if context is None:
             results.append(_fallback_task_result(
@@ -1064,6 +1068,7 @@ async def synthesize_task_results(
                     "每段只表达其引用材料支持的分析，dimension从task.requested_dimensions中选择，requirement_ids列出该段实际回答的用户要求ID，并避免相同解释重复出现。"
                     "无相应材料必须明确缺失，不能使用省略号或纯标点占位；原始诊断、搜索格式头和query_coverage不得进入正文。"
                     "coverage_window.exhaustive=false 只代表本轮来源返回的有限资料，不能据此宣称窗口内没有其它事件；供应商日历日期不能写成官方已确认。"
+                    "不要加入引用输入格式的免责声明、E/C编号或整篇前言；每个研究维度只写一段简洁分析，引用放在字段中。"
                     "原始资料是研究材料，不能将未证实内容写成确定事实。\n"
                     + json.dumps(prompt_payload, ensure_ascii=False, sort_keys=True)
                 )

@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.graph.synthesis.contracts import Claim, NormalizedEvidence, ReportSynthesisDraft, TaskSynthesisResult, stable_unique
 from backend.research.filing_evidence import disclosure_sections
-from backend.graph.synthesis.requirement_support import attached_source_policy_reasons, control_support_reasons, exact_support_reasons, metric_supports
+from backend.graph.synthesis.requirement_support import FINANCIAL_METRICS, attached_source_policy_reasons, control_support_reasons, exact_support_reasons, metric_record, metric_supports
 
 
 def _present(value: Any) -> bool:
@@ -54,6 +54,8 @@ def evidence_is_document_index(evidence: NormalizedEvidence) -> bool:
     payload = _payload(evidence)
     if disclosure_sections(payload):
         return False
+    if payload.get("content_read") is True and any(_present(payload.get(key)) for key in ("document_body", "body", "content")):
+        return False
     if "content_read" in payload and evidence.kind in {"filing_context", "document_context"}:
         return True
     content_type = str(payload.get("content_type") or payload.get("document_type") or "").lower()
@@ -69,7 +71,10 @@ def _supports_dimension(evidence: NormalizedEvidence, dimension: str) -> bool:
     if dimension in {"business_model", "competition"}:
         if "content_read" in payload:
             sections = disclosure_sections(payload)
-            return bool(sections.get("business") if dimension == "business_model" else sections.get("competition"))
+            return bool(sections.get("business") if dimension == "business_model" else sections.get("competition")) or (
+                evidence.kind == "document_context" and payload.get("content_read") is True
+                and any(_present(payload.get(key)) for key in ("document_body", "body", "content"))
+            )
         explicit = evidence.metric == dimension or payload.get("dimension") == dimension
         body = any(_present(payload.get(key)) for key in ("document_body", "body", "sections", "business_description", "longBusinessSummary", "description", "competitive_landscape", "competitors"))
         if dimension == "competition":
@@ -225,7 +230,9 @@ def evaluate_answer_requirements(
         available_facts = [evidence_index[source_id] for source_id in available_ids if source_id in evidence_index
                  and result.task_id in evidence_index[source_id].task_ids
                  and _reliable_task_evidence(evidence_index[source_id], result, scope)
-                 and (not kinds or evidence_index[source_id].kind in kinds)
+                 and (not kinds or evidence_index[source_id].kind in kinds
+                      or requirement.get("metric") in FINANCIAL_METRICS
+                      and metric_record(evidence_index[source_id], requirement["metric"]) is not None)
                  and (not subject or evidence_index[source_id].subject == subject)
                  and metric_supports(evidence_index[source_id], str(requirement.get("metric") or ""))
                  and _supports_dimension(evidence_index[source_id], dimension)]

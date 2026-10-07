@@ -74,8 +74,9 @@ async def test_real_index_and_body_outputs_reach_analysis_and_render_identically
         assert len(quarterly["metadata"]["source_ids"]) == 2
         assert all(check["status"] == "answered" for check in research["task_results"][0]["requirement_results"])
         markdown = rendered["artifacts"]["draft_markdown"]
-        assert "业务正文摘录" in markdown and "竞争正文摘录" in markdown
+        assert "已读取业务、竞争、管理层讨论正文" in markdown
         assert "公司以企业客户订阅及支持服务为业务基础" in markdown
+        assert "竞争格局尚无可展示" not in markdown
         assert "该来源为公告索引" not in markdown
         final_indexes.append(rows)
         rendered_texts.append(markdown)

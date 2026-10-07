@@ -79,7 +79,8 @@ async def test_sec_disclosure_body_is_required_and_retained_through_answer_rende
         assert evidence["structured_data"]["content_sections"]["competition"] == competition
         assert business in observed[0]["prompt"] and competition in observed[0]["prompt"]
         assert [item["status"] for item in task["requirement_results"]] == ["answered", "answered"]
-        assert "业务正文摘录" in markdown and "竞争正文摘录" in markdown
+        assert "已读取业务、竞争正文" in markdown
+        assert business not in markdown and competition not in markdown
         assert "该来源为公告索引" not in markdown
     else:
         assert all(item["status"] == "missing" for item in task["requirement_results"])

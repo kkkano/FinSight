@@ -72,3 +72,34 @@ def test_fiscal_period_end_and_metric_units_are_displayed_without_calendar_conve
     assert "2026-08-01 营收 50 USD" in markdown
     assert "2026-05-03 至 2026-08-01" in markdown
     assert "2026-06-30" not in markdown and "2026Q2" not in markdown
+
+
+def test_document_body_is_preserved_as_evidence_and_not_repeated_across_dimensions():
+    body = "公司通过订阅提供软件，续约需要持续投入服务。" * 1000
+    evidence = NormalizedEvidence(source_id="document", task_ids=["task"], subject="NVDA", kind="document_context", usage="fact", text=body,
+                                  title="公司年度报告", url="https://example.com/report", structured_data={"content": body})
+    draft = _draft(evidence)
+    draft.task_results[0].requested_dimensions = ["business_model", "competition"]
+    markdown = render_research_report(draft).markdown
+    assert body not in markdown
+    assert markdown.count("公司年度报告；已读取正文") == 1
+    assert draft.evidence_index["document"].structured_data["content"] == body
+    assert "对应解释" in markdown
+    assert "## 来源" in markdown
+
+
+def test_document_source_can_support_distinct_analyses_without_repeating_body():
+    evidence = NormalizedEvidence(source_id="document", task_ids=["task"], subject="NVDA", kind="document_context", usage="fact", text="经核实的公司披露正文。",
+                                  title="公司年度报告", url="https://example.com/report", structured_data={"content": "原始正文。" * 3000})
+    claims = {
+        dimension: Claim(claim_id=dimension, task_id="task", agent_name="research_analyst", text=text, stance="neutral", dimension="fundamental", metric=dimension,
+                         confidence=0.8, evidence_ids=["document"], limitations=[])
+        for dimension, text in (("business_model", "订阅收入依赖客户持续采用。"), ("competition", "竞争需要兼顾产品与服务能力。"))
+    }
+    draft = _draft(evidence, claims=claims)
+    draft.task_results[0].requested_dimensions = list(claims)
+    markdown = render_research_report(draft).markdown
+    assert markdown.count("订阅收入依赖客户持续采用") == 1
+    assert markdown.count("竞争需要兼顾产品与服务能力") == 1
+    assert "原始正文" not in markdown
+    assert "[1]" in markdown

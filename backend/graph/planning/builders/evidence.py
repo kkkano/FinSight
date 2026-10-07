@@ -33,6 +33,14 @@ def _append_evidence_steps_for_ticker(ctx,
     news_window = {"max_age_hours": max(hours)} if any(hours) else {}
     read_disclosures = any((req.get("dimension") in {"business_model", "competition"})
                            for task in tasks for req in task.get("answer_requirements", []))
+    extract_financial = any(
+        req.get("measurement") in {"cash_flow", "cash", "financial", "monetary"}
+        or "capital_allocation" in req.get("evidence_kinds", [])
+        or req.get("metric") in {"revenue", "net_income", "operating_income", "free_cash_flow", "debt_burden",
+                                 "operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid",
+                                 "capital_allocation_surplus", "dividend_coverage"}
+        for task in tasks for req in task.get("answer_requirements", [])
+    )
     for kind in required_evidence:
         if kind == "price_window":
             windows: dict[str, dict] = {}
@@ -252,7 +260,7 @@ def _append_evidence_steps_for_ticker(ctx,
             else:
                 _append_tool_step(ctx, 
                     "get_local_market_filings",
-                    {"ticker": ticker, "limit": 5},
+                    {"ticker": ticker, "limit": 5, **({"include_financial_facts": True} if extract_financial else {})},
                     why=f"{ticker} evidence contract: local-market filings.",
                     optional=False,
                     parallel_group=group,

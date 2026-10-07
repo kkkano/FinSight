@@ -214,6 +214,7 @@ class LocalFilingsInput(BaseModel):
 
     ticker: str = Field(description="Ticker symbol, e.g. '600519.SS' or '0700.HK'")
     limit: int = Field(default=8, ge=1, le=20, description="Maximum filing rows")
+    include_financial_facts: bool = Field(default=False, description="从已核验公告正文抽取带财期、币种和原文定位的财务数值")
 
 
 class SecFilingsInput(BaseModel):
@@ -691,13 +692,13 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> str:
 
 
 @tool("get_local_market_filings", args_schema=LocalFilingsInput, return_direct=False)
-def get_local_market_filings(ticker: str, limit: int = 8) -> str:
+def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False) -> str:
     """Find CN/HK exchange disclosures via free local filing sources."""
 
     if not callable(_get_local_market_filings):
         return "get_local_market_filings unavailable: backend.tools function not found"
     try:
-        payload = _get_local_market_filings(ticker=ticker, limit=limit)
+        payload = _get_local_market_filings(ticker=ticker, limit=limit, include_financial_facts=include_financial_facts)
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_local_market_filings failed: {exc}"

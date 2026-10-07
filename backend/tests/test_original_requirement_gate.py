@@ -18,6 +18,33 @@ def task():
         requested_subjects=["SPY"], requested_dimensions=["performance"])
 
 
+@pytest.mark.parametrize("dimension", ["business_model", "competition"])
+def test_read_document_supports_explicit_analysis_without_named_section(dimension):
+    evidence = NormalizedEvidence(source_id="doc", task_ids=["task"], usage="fact", kind="document_context",
+        subject="SPY", text="原始公司资料", metadata={"content_read": True, "document_body": "公司采用订阅模式，面临同业产品竞争。"})
+    claim = Claim(claim_id="analysis", task_id="task", agent_name="research_analyst", text="订阅模式依赖产品竞争力和续约。",
+        stance="unknown", dimension="fundamental", metric=dimension, confidence=.7, evidence_ids=["doc"],
+        requirement_ids=["research"], limitations=[])
+    req = requirement(requirement_id="research", kind="explanation", dimension=dimension, metric=dimension,
+        evidence_kinds=["document_context"], time_scope={"kind": "none"}, requires_analysis=True)
+    result = evaluate(req, {"doc": evidence}, {"analysis": claim})
+    assert result.requirement_results[0]["status"] == "answered"
+    unread = evidence.model_copy(update={"metadata": {"content_read": False, "document_body": "搜索摘要"}})
+    assert evaluate(req, {"doc": unread}, {"analysis": claim}).requirement_results[0]["status"] != "answered"
+
+
+def test_exact_financial_fact_from_disclosure_satisfies_retrieval_requirement():
+    fact = {"value": 1200000, "currency": "CNY", "unit": "CNY", "period_start": "2025-01-01",
+            "period_end": "2025-12-31", "frequency": "annual", "content_read": True}
+    evidence = NormalizedEvidence(source_id="cash", task_ids=["task"], kind="capital_allocation", usage="fact",
+        subject="SPY", metric="operating_cash_flow", text="经营活动产生的现金流量净额1,200,000元。",
+        frequency="annual", currency="CNY", structured_data={"metrics": {"operating_cash_flow": fact}})
+    req = requirement(metric="operating_cash_flow", dimension="fundamental_quality", kind="fact_attribute",
+        capability_status="retrieval_required", evidence_kinds=["filing_context", "document_context"],
+        time_scope={"kind": "fiscal_year"})
+    assert evaluate(req, {"cash": evidence}).requirement_results[0]["status"] == "answered"
+
+
 def requirement(**overrides):
     return {"requirement_id": "return", "kind": "calculation", "dimension": "performance",
         "metric": "cumulative_return", "source_text": "最近五个交易日累计收益", "description": "五日累计收益",

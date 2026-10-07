@@ -76,6 +76,23 @@ def test_unknown_structured_payload_is_an_explicit_gap_and_never_a_json_dump():
     assert "[数据缺失]" in text and "unsupported_field" not in text
 
 
+def test_long_source_summary_ends_at_sentence_boundary_and_preserves_full_payload():
+    summary = "已核实的完整句子。" + "尚未结束的限定条件" * 100
+    evidence = _evidence("document_context", {"content": "完整文档" * 3000, "summary": summary})
+    text = format_fact(evidence)
+    assert "来源摘要：已核实的完整句子。" in text
+    assert "尚未结束" not in text and "完整文档" not in text
+    assert evidence.structured_data["summary"] == summary
+
+
+def test_read_filing_body_without_named_sections_is_not_presented_as_an_index():
+    evidence = _evidence("filing_context", {"content_read": True, "content_excerpt": "公司公告原文。" * 1000})
+    evidence.url = "https://example.com/filing"
+    text = format_fact(evidence)
+    assert "已读取正文" in text and "公告索引" not in text
+    assert "公司公告原文" not in text
+
+
 @pytest.mark.parametrize("text", ["共识 EPS 约为 0.39。", "营收约 161.3 亿 USD。", "同比增长约 25.4%。", "1) 财报兑现仍需观察。\n2) 未来一季度跟踪现金流。"])
 def test_explanation_accepts_arithmetic_unit_conversion_rounding_and_enumeration(text):
     evidence = _evidence("fundamental_snapshot", {"revenue": 16_128_000_000.0, "eps": 0.39065, "yoy": 0.2542188350571584})

@@ -275,6 +275,23 @@ def _append_tool_evidence(
                     "id": f"{tool_name}:{step_id}:{i+1}",
                 }
             )
+            if filing.get("issuer_verified") is not True or filing.get("issuer_ticker") != ticker:
+                continue
+            for fact_index, fact in enumerate(filing.get("financial_facts") or []):
+                if not isinstance(fact, dict) or fact.get("verification") != "official_filing_body":
+                    continue
+                metric = fact.get("metric")
+                cash_metric = metric in {"operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid"}
+                evidence_pool.append({
+                    **_contract_fields(fact), "subject": ticker,
+                    "kind": "capital_allocation" if cash_metric else "fundamental_snapshot",
+                    "title": f"{ticker} {metric} ({fact.get('period_end')})",
+                    "url": filing_url or None, "source": filing.get("source") or "local_disclosure",
+                    "published_date": filing_date, "confidence": 0.95,
+                    "snippet": str(fact.get("quote") or ""), "type": "filing",
+                    "structured_data": {**fact, "metrics": {metric: fact}, "issuer_verified": True},
+                    "id": f"{tool_name}:{step_id}:{i+1}:fact:{fact_index+1}",
+                })
         return
 
     if tool_name == "get_authoritative_media_news" and isinstance(output, dict):

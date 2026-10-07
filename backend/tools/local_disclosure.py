@@ -174,7 +174,7 @@ def _issuer_identity(text: str, ticker: str) -> str | None:
     return "document_company_name" if declared_name else None
 
 
-def _fetch_disclosure_text(url: str) -> str:
+def _fetch_disclosure_text(url: str, *, full_document: bool = False) -> str:
     """只读取已核验交易所域名的原文；搜索摘要不能替代发行人身份。"""
     try:
         response = _http_get_no_retry(url, timeout=8, allow_redirects=False, stream=True)
@@ -185,7 +185,7 @@ def _fetch_disclosure_text(url: str) -> str:
             size = 0
             for chunk in response.iter_content(chunk_size=65536):
                 size += len(chunk)
-                if size > 3_000_000:
+                if size > (15_000_000 if full_document else 3_000_000):
                     return ""
                 chunks.append(chunk)
             content = b"".join(chunks)
@@ -195,7 +195,16 @@ def _fetch_disclosure_text(url: str) -> str:
             from pypdf import PdfReader
 
             reader = PdfReader(BytesIO(content))
-            return "\n".join(page.extract_text() or "" for page in reader.pages[:3])
+            page_limit = 400 if full_document else 3
+            pages = []
+            text_size = 0
+            for number, page in enumerate(reader.pages[:page_limit], 1):
+                body = page.extract_text() or ""
+                text_size += len(body)
+                if text_size > 600_000:
+                    break
+                pages.append(f"[Page {number}]\n{body}")
+            return "\n".join(pages)
         from bs4 import BeautifulSoup
 
         return BeautifulSoup(content, "html.parser").get_text("\n", strip=True)
@@ -203,7 +212,7 @@ def _fetch_disclosure_text(url: str) -> str:
         return ""
 
 
-def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
+def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False) -> dict[str, Any]:
     """Fetch CN/HK local disclosure links via free search sources."""
     ticker_norm = str(ticker or "").strip().upper()
     capped_limit = max(1, min(int(limit or 8), 20))
@@ -234,6 +243,7 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
     discoveries: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     verification_attempts = 0
+    extraction_attempted = False
 
     for query in _build_queries(ticker_norm, market):
         try:
@@ -271,7 +281,7 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
             content = ""
             if verification_attempts < min(capped_limit, 3):
                 verification_attempts += 1
-                content = _fetch_disclosure_text(url)
+                content = _fetch_disclosure_text(url, full_document=True) if include_financial_facts else _fetch_disclosure_text(url)
                 issuer_method = _issuer_identity(content, ticker_norm)
             if not issuer_method:
                 discoveries.append({"title": title, "url": url, "snippet": snippet, "issuer_verified": False, "reason": "issuer_not_verified"})
@@ -293,6 +303,11 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
                     "content_read": True,
                 }
             )
+            if include_financial_facts and not extraction_attempted:
+                from .disclosure_financial_facts import extract_financial_facts
+
+                extraction_attempted = True
+                rows[-1]["financial_facts"] = extract_financial_facts(content, ticker_norm, url)
             if len(rows) >= capped_limit:
                 break
         if len(rows) >= capped_limit:

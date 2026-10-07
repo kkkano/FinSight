@@ -471,6 +471,18 @@ def test_open_research_keeps_company_and_original_scope_across_markets(ticker):
     assert agent._build_queries(query, ticker) == [f"{ticker} {query}"]
 
 
+def test_document_claims_share_final_source_identity_and_read_provenance():
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    output = agent._format_output("公司采用订阅模式。", [{"title": "公司年报", "url": "https://example.com/report",
+        "content": "公司通过订阅服务获取收入，持续续约形成稳定业务。", "snippet": "公司订阅业务", "degraded": False}],
+        query="公司业务分析", ticker="N/A")
+    ids = {item.meta["source_id"] for item in output.evidence}
+    assert ids
+    assert all(set(claim["evidence_ids"]) <= ids for claim in output.claims)
+    assert output.evidence[0].meta["content_read"] is True
+    assert output.evidence[0].meta["document_body"]
+
+
 def test_search_web_supplements_authoritative_feeds_when_trusted_results_insufficient(monkeypatch):
     mock_tools = MagicMock()
     mock_tools.TAVILY_API_KEY = ""
