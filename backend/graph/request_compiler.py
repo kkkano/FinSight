@@ -363,6 +363,11 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 requirement["capability_status"] = "retrieval_required"
                 requirement["capability_reason"] = "structured_source_unavailable_for_market"
                 evidence = ["filing_context", "document_context"]
+            if (not ticker and not any(subject_map[ref].get("tickers") for ref in refs)
+                    and any(subject_map[ref].get("type") == "company" and subject_map[ref].get("label") for ref in refs)):
+                requirement["capability_status"] = "retrieval_required"
+                requirement["capability_reason"] = "security_identifier_pending"
+                evidence = ["document_context"]
         elif not is_constraint:
             requirement.update(metric_text=str(requirement.get("metric_text") or metric), metric="unknown", capability_status="unsupported")
         if unknown_evidence:
@@ -483,6 +488,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         tickers = list(dict.fromkeys(ticker for item in group_subjects for ticker in item.get("tickers", [])))
         subject_type = str((group_subjects[0] if group_subjects else {}).get("type") or "unknown")
         label = "、".join(str(item.get("label") or "") for item in group_subjects) or "研究要求"
+        named_company = subject_type == "company" and any(str(item.get("label") or "").strip() for item in group_subjects)
         task_constraints = _scoped_constraints(constraints, list(refs))
         exclusions = {str(item.get("dimension")) for item in task_constraints if item.get("constraint_type") == "exclude_dimension"}
         task_id, frame_id = f"task_{index}", f"request_task_{index}"
@@ -499,6 +505,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             if not seeded_evidence and subject_type == "company":
                 discovery.extend(["company_profile", "filing_context"])
             evidence = list(dict.fromkeys([*evidence, *(kind for kind in discovery if kind not in excluded_kinds)]))
+        if named_company and not tickers:
+            evidence = ["document_context"]
         facets = list(dict.fromkeys(_METRIC_CONTRACTS[row["metric"]][2] for row in rows if row.get("metric") in _METRIC_CONTRACTS and row.get("kind") != "constraint"))
         if any(row.get("metric") == "news_catalysts" and "event_calendar" in row.get("evidence_kinds", []) for row in rows):
             facets = ["catalyst" if facet == "news" else facet for facet in facets]
@@ -538,7 +546,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                     task[key] = deepcopy(bound[key])
             if subject_type in {"filing", "research_doc", "news_item", "news_set"}:
                 operation["name"] = str(seed_operation.get("name") or "qa")
-        missing_subject = not group_subjects or subject_type in {"company", "index", "fund", "crypto", "commodity", "unknown"} and not tickers
+        missing_subject = not group_subjects or (subject_type in {"company", "index", "fund", "crypto", "commodity", "unknown"}
+                                                and not tickers and not named_company)
         missing_input = bool(rows) and all(row.get("input_dependencies") or row.get("kind") == "constraint" for row in rows)
         if missing_subject or missing_input:
             reason = "task_missing_subject" if missing_subject else "task_missing_input"

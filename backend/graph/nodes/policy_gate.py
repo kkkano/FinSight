@@ -242,7 +242,8 @@ def policy_gate(state: GraphState) -> dict:
     opinion_missing_subject = bool(
         (op_name == "investment_opinion" or _has_ready_operation(ready_tasks, "investment_opinion"))
         and not any(
-            isinstance(task.get("tickers"), list) and any(str(item or "").strip() for item in task["tickers"])
+            (isinstance(task.get("tickers"), list) and any(str(item or "").strip() for item in task["tickers"]))
+            or (task.get("subject_type") == "company" and str(task.get("subject_label") or "").strip())
             for task in ready_tasks
         )
     )

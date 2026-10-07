@@ -521,6 +521,25 @@ def test_empty_research_plan_is_not_coverage_success():
     assert result["missing_requirements"][0]["reason"] == "research_evidence_not_planned"
 
 
+def test_named_company_without_ticker_is_researched_by_name_instead_of_clarified():
+    query = "请给我一份游族网络的投研分析报告"
+    semantic = {"output_mode": "investment_report",
+                "subjects": [{"id": "company", "type": "company", "label": "游族网络", "tickers": []}],
+                "requirements": [{"source_text": query, "description": "默认报告范围：业务", "kind": "explanation",
+                                  "metric": "business_model", "subject": None, "subject_refs": ["company"]}]}
+    state = {"query": query, "output_mode": "chat", "understanding": {"original_query": query}}
+    state.update(compile_semantic_contract(state, semantic, {}))
+    assert state["understanding"]["route"] == "research"
+    assert not state["blocked_tasks"]
+    assert state["tasks"][0]["required_evidence"] == ["document_context"]
+    state.update(policy_gate(state))
+    state.update(rule_based_planner(state))
+    search = next(step for step in state["plan_ir"]["steps"] if step["name"] == "search")
+    assert "游族网络" in search["inputs"]["query"]
+    assert not search["subject_tickers"]
+    assert state["trace"]["planner"]["validated"] is True
+
+
 def test_missing_coverage_keeps_other_executable_steps_without_claiming_validation():
     state = {"query": QUERY, "output_mode": "chat", **compile_fixture()}
     state.update(policy_gate(state))

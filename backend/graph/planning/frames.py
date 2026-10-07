@@ -213,6 +213,14 @@ def _append_request_frame_steps(ctx) -> bool:
         if not per_ticker_evidence:
             continue
         frame_tickers = _frame_tickers(ctx, frame)
+        if not frame_tickers and _frame_subject_type(ctx, frame) == "company":
+            query = f"{_frame_subject(ctx, frame).get('label') or ''} {frame.get('query_text') or ctx.query}".strip()
+            _append_tool_step(ctx, "search", {"query": query}, why="公司名已明确，先检索原始要求及证券身份。",
+                              optional=False, parallel_group=group, task_ids=task_ids, evidence_kind="document_context")
+            _append_agent_step(ctx, "deep_search_agent", {"query": query}, why="读取发现的来源并核对公司研究依据。",
+                               optional=True, parallel_group=f"{group}_research_agents", task_ids=task_ids,
+                               evidence_kind="document_context")
+            continue
         if not frame_tickers and ctx.primary_ticker and _frame_subject_type(ctx, frame) in {"company", "index", "commodity"}:
             frame_tickers = [ctx.primary_ticker]
         for ticker in frame_tickers[:12]:
