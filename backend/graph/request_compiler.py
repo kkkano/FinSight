@@ -84,7 +84,8 @@ _TOOL_COMPUTED_MEASUREMENTS = {"quote", "cumulative_return", "max_drawdown", "vo
 # 模型偶尔把币种、时间等属性写进 components，这里归回属性。
 _COMPONENT_ATTRIBUTES = {"currency": "currency", "quote_timestamp": "source_timestamp", "timestamp": "source_timestamp",
                          "source_timestamp": "source_timestamp", "after_hours_flag": "market_session",
-                         "is_after_hours": "market_session", "market_session": "market_session"}
+                         "is_after_hours": "market_session", "market_session": "market_session",
+                         "source": "source_url", "fiscal_period": "period_end"}
 _REGISTERED_ATTRIBUTES = set().union(*_METRIC_ATTRIBUTES.values()) | {"data_frequency", "confirmation_status", "amount_per_share", "announced_at", "payable_date", "record_date"}
 
 
@@ -435,6 +436,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 or "capital_allocation" in evidence and (scope.get("count") or 1) > 8):
             requirement.update(capability_status="unsupported", unsupported_reason="scope_exceeds_capability")
         attribute_aliases = {"currency_unit": "currency", "timestamp": "source_timestamp", "quote_timestamp": "source_timestamp",
+                             "source": "source_url", "fiscal_period": "period_end",
                              "closing_price": "end_close", "close_price": "end_close", "dividend_included": "dividends_included",
                              "is_after_hours": "market_session", "after_hours": "market_session"}
         requirement["attributes"] = list(dict.fromkeys(attribute_aliases.get(str(attribute), str(attribute)) for attribute in requirement.get("attributes", [])))

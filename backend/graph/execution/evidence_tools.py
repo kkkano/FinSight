@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any
 
 from backend.graph.json_utils import json_dumps_safe
@@ -131,6 +132,20 @@ def _append_tool_evidence(
         except Exception:
             pass
     if output_is_error_like(output):
+        return
+
+    if tool_name == "get_company_info" and isinstance(output, str) and output.startswith("Company Profile ("):
+        fields = dict(re.findall(r"(?m)^- ([^:\n]+):\s*([^\n]*)", output))
+        description = fields.get("Description", "")
+        profile = {"description": description if description != "No description available" else "",
+                   "name": fields.get("Name"), "source": fields.get("Source"),
+                   "source_url": fields.get("Source URL"), "as_of": fields.get("Retrieved At"), "text": output}
+        evidence_pool.append({
+            "id": f"{tool_name}:{step_id}", "type": "tool", "kind": "company_profile",
+            "title": fields.get("Name") or "公司概况", "snippet": output, "usage": "fact",
+            "url": profile["source_url"], "source": profile["source"] or tool_name,
+            "published_date": profile["as_of"], "as_of": profile["as_of"], "structured_data": profile,
+        })
         return
 
     if tool_name == "get_fred_data" and isinstance(output, dict):

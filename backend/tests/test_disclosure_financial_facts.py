@@ -28,6 +28,13 @@ def test_financial_fact_preserves_original_unit_period_and_source_page():
     assert fact["page"] == 85 and fact["period_end"] == "2025-12-31"
 
 
+def test_pdf_adjacent_numeric_columns_keep_complete_first_amount():
+    body = BODY.replace("12,345.67", "12,345.6745,678.90")
+    row = {**ROW, "quote": ROW["quote"].replace("12,345.67", "12,345.6745,678.90")}
+    assert validate_financial_facts({"facts": [row]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+    assert not validate_financial_facts({"facts": [{**row, "amount_text": "12,345"}]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+
+
 def test_disclosure_queries_keep_semantic_identity_and_requested_period():
     queries = local_disclosure._build_queries("600519.SS", "CN", "贵州茅台", "2025 财年经营现金流")
     assert all("贵州茅台 600519" in query and "2025 财年经营现金流" in query for query in queries)

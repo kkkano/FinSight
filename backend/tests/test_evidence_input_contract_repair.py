@@ -6,6 +6,16 @@ import importlib
 
 import pytest
 
+
+def test_company_profile_business_description_and_provenance_survive_tool_normalization():
+    from backend.graph.execution.evidence_tools import append_tool_evidence
+    pool = []
+    text = "Company Profile (MSFT):\n- Name: Microsoft\n- Description: 提供企业软件与云服务。\n- Source: yfinance\n- Source URL: https://finance.yahoo.com/quote/MSFT/profile/\n- Retrieved At: 2026-10-08T00:00:00Z"
+    append_tool_evidence(pool, "get_company_info", "s1", text)
+    assert pool[0]["structured_data"]["description"] == "提供企业软件与云服务。"
+    assert pool[0]["url"] == "https://finance.yahoo.com/quote/MSFT/profile/"
+    assert pool[0]["as_of"] == "2026-10-08T00:00:00Z"
+
 from backend.graph.execution.evidence_pipeline import normalize_execution_evidence
 from backend.graph.nodes.analyze import analyze
 from backend.graph.nodes.render_node import render_node

@@ -362,6 +362,9 @@ def get_company_info(ticker: str) -> str:
 {_company_market_cap_lines(info.get('marketCap'), info.get('currency'))}
 {valuation_lines}
 - Website: {info.get('website', 'N/A')}
+- Source: yfinance
+- Source URL: https://finance.yahoo.com/quote/{quote(ticker, safe='')}/profile/
+- Retrieved At: {datetime.utcnow().isoformat()}Z
 - Description: {description}"""
     except Exception as e:
         logger.info(f"yfinance info fetch for '{ticker}' failed: {e}")

@@ -97,11 +97,10 @@ def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url
         start, end = fact_date(row.get("period_start")), fact_date(row.get("period_end"))
         if amount is None or scale not in {1.0, 1e3, 1e4, 1e6, 1e8, 1e9} or not currency or not start or not end:
             continue
-        source_numbers = {
-            fact_number(token.replace(",", "").replace("，", ""))
-            for token in re.findall(r"-?\d[\d,，]*(?:\.\d+)?", quote)
-        }
-        if abs(amount) not in {abs(value) for value in source_numbers if value is not None} or not _source_unit_matches(unit_quote, currency, scale):
+        # PDF 表格可将两列金额连成 61,522.3592,463.43；只允许完整金额与下一列分组金额相邻。
+        next_column = r"\d{1,3}(?:[,，]\d{3})+\.\d{2}(?![\d.])"
+        amount_pattern = r"(?<![\d,，.])" + re.escape(amount_text) + r"(?:(?![\d,，.])|(?=" + next_column + r"))"
+        if not re.search(amount_pattern, quote) or not _source_unit_matches(unit_quote, currency, scale):
             continue
         frequency = duration_frequency(start, end)
         if frequency == "unknown" or start[:4] not in period_quote or end[:4] not in period_quote:
