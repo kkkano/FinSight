@@ -288,7 +288,8 @@ def rule_based_planner(state: GraphState) -> dict:
                 {
                     "planner": {
                         "type": "stub",
-                        "validated": True,
+                        "validated": bool(plan.steps) and (coverage_validation is None or coverage_validation["status"] == "ok"),
+                        "executable": bool(plan.steps) or not ctx.ready_tasks,
                         "steps": len(plan.steps),
                         "operation": operation,
                         "understanding_task_count": len(ctx.ready_tasks),
@@ -833,7 +834,8 @@ def rule_based_planner(state: GraphState) -> dict:
             {
                 "planner": {
                     "type": "stub",
-                    "validated": True,
+                    "validated": bool(plan.steps) and (coverage_validation is None or coverage_validation["status"] == "ok"),
+                    "executable": bool(plan.steps) or not ctx.ready_tasks,
                     "steps": len(plan.steps),
                     "operation": operation,
                 }

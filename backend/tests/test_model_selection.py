@@ -350,7 +350,7 @@ async def test_create_llm_uses_selected_model_and_official_effort(monkeypatch):
 
 
 @pytest.mark.parametrize("frozen,expected_tokens,expected_timeout", [
-    (False, 65536, 1200), (True, 4096, 60),
+    (False, 65536, 60), (True, 4096, 60),
 ])
 def test_background_step_budget_preserves_only_explicit_frozen_calls(monkeypatch, frozen, expected_tokens, expected_timeout):
     import langchain_openai
@@ -368,6 +368,30 @@ def test_background_step_budget_preserves_only_explicit_frozen_calls(monkeypatch
     assert captured["max_tokens"] == expected_tokens
     assert captured["request_timeout"] == expected_timeout
     assert captured["max_retries"] == 0
+
+
+@pytest.mark.parametrize("model,timeout,expected_tokens,expected_timeout", [
+    (selection.STEP_MODEL, 45, 65536, 45),
+    (selection.STEP_MODEL, 600, 65536, 600),
+    (selection.STEP_MODEL, None, 65536, 1200),
+    ("gpt-4o", 45, 4096, 45),
+    ("gpt-4o", None, 4096, 600),
+])
+def test_client_timeout_is_independent_of_output_budget(monkeypatch, model, timeout, expected_tokens, expected_timeout):
+    import langchain_openai
+    from backend.llm_config import EndpointConfig, create_llm_for_endpoint
+
+    captured = {}
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", lambda **kwargs: captured.update(kwargs) or object())
+    monkeypatch.setenv("LLM_FOREGROUND_MAX_TOKENS", "65536")
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT_SECONDS", "1200")
+    with selection.server_model_scope():
+        create_llm_for_endpoint(
+            EndpointConfig("fixture", "openai", "https://api.example.com/v1", "fixture-key", model),
+            max_tokens=4096, request_timeout=timeout,
+        )
+    assert captured["max_tokens"] == expected_tokens
+    assert captured["request_timeout"] == expected_timeout
 
 
 def test_public_forecast_explicitly_freezes_its_budget(monkeypatch):

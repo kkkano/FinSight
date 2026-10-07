@@ -268,9 +268,11 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
 
             seen_urls.add(url)
             issuer_method = None
+            content = ""
             if verification_attempts < min(capped_limit, 3):
                 verification_attempts += 1
-                issuer_method = _issuer_identity(_fetch_disclosure_text(url), ticker_norm)
+                content = _fetch_disclosure_text(url)
+                issuer_method = _issuer_identity(content, ticker_norm)
             if not issuer_method:
                 discoveries.append({"title": title, "url": url, "snippet": snippet, "issuer_verified": False, "reason": "issuer_not_verified"})
                 continue
@@ -287,6 +289,8 @@ def get_local_market_filings(ticker: str, limit: int = 8) -> dict[str, Any]:
                     "issuer_verified": True,
                     "issuer_ticker": ticker_norm,
                     "identity_method": issuer_method,
+                    "content": content[:24000],
+                    "content_read": True,
                 }
             )
             if len(rows) >= capped_limit:

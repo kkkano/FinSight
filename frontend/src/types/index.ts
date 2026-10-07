@@ -1,5 +1,7 @@
 ﻿export type Role = 'user' | 'assistant' | 'system';
 
+import type { ChatContext } from '../api/contracts';
+
 export type Intent = 'chat' | 'report' | 'alert' | 'followup' | 'clarify' | 'any';
 export type TraceViewMode = 'user' | 'expert' | 'dev';
 
@@ -135,9 +137,17 @@ export interface QueryCoverage {
   [key: string]: unknown;
 }
 
+export interface ChatRequestSnapshot {
+  query: string;
+  outputMode: 'chat' | 'investment_report';
+  context?: ChatContext;
+  history: Array<{ role: string; content: string }>;
+}
+
 export interface Message {
   runId?: string;
   replyTo?: string;
+  requestSnapshot?: ChatRequestSnapshot;
   id: string;
   role: Role;
   content: string;

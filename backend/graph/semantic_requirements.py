@@ -60,7 +60,7 @@ class SemanticRequirement(BaseModel):
     evidence_kinds: list[str] = Field(default_factory=list)
     requires_analysis: bool = False
     requires_explicit_binding: bool = True
-    capability_status: Literal["supported", "unsupported", "input_missing"] = "supported"
+    capability_status: Literal["supported", "retrieval_required", "unsupported", "input_missing"] = "supported"
     input_dependencies: list[str] = Field(default_factory=list)
     constraints: list[SemanticConstraint] = Field(default_factory=list)
 
@@ -76,6 +76,7 @@ class SemanticSubject(BaseModel):
 class SemanticRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     subjects: list[SemanticSubject]
+    output_mode: Literal["chat", "investment_report"] | None = None
     relation: Literal["single", "compare", "rank", "impact", "continuation", "none"] = "single"
     requirements: list[SemanticRequirement]
     constraints: list[SemanticConstraint] = Field(default_factory=list)
@@ -112,6 +113,9 @@ class ExtractedRequirement(BaseModel):
 class ExtractedRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     subjects: list[SemanticSubject]
+    output_mode: Literal["chat", "investment_report"] | None = Field(
+        default=None, description="按交付意图判断：完整研究报告为investment_report，普通问答为chat；与指标和公司代码无关。"
+    )
     relation: Literal["single", "compare", "rank", "impact", "continuation", "none"] = "single"
     requirements: list[ExtractedRequirement]
     constraints: list[SemanticConstraint] = Field(default_factory=list)
@@ -132,6 +136,8 @@ def requires_semantic_extraction(query: str, *, output_mode: str = "chat") -> bo
 
 
 _SYSTEM_PROMPT = """你负责提取用户原始请求，不负责回答或选择工具。返回符合 schema 的对象。
+output_mode 单独表达用户的交付意图：要求一份完整研究材料或报告时为investment_report，普通问答为chat，明确拒绝报告时为chat。按语义判断，不依赖固定词语。报告是交付形式，不是待测指标，不能把整个报告建成unknown或自造report指标。
+用户要求报告但未列研究维度时，将报告展开为常规的业务、财务、估值、竞争与风险研究要求，description标明这是默认报告范围，source_text引用原始报告请求。用户明确列出的范围与排除项优先，不额外扩充。
 requirements 是所有原始要求的唯一事实源。逐项保存每个肯定要求、计算、解释、属性、时间窗口、输入依赖和明确约束；不要合并掉不同指标或不同财期，不得根据已有工具能力删减要求。
 source_text 必须是当前用户原文中连续的非空片段。subject_refs 引用 subjects.id；subject 是确切 ticker 或 null。沿用解析主体和历史绑定，但比较上下文里的竞品不是新增主研究对象。
 每个明确指标单独一项；components 仅保存该指标的必要子项。最新已完成季度与最新完整财年是不同时间范围；20交易日不是20自然日。时间限制必须逐项保留到 time_scope；calendar_window 的 count/unit/direction 保留原单位。
@@ -148,7 +154,7 @@ measurement 表示测量对象，price_role表示价格身份：quote统一涵�
 解释、判断、因果、比较设置 requires_analysis=true。约束独立保存 constraint 项并在 constraints 标记类型（exclude_dimension/exclude_comparison/source_policy/scenario_separation/other）。不查新闻等否定要求不是肯定新闻要求。
 source_policy的source_requirement：仅公司/官方原始声明用primary，媒体归因材料用attributed，可追溯链接用traceable，未限制用unspecified；不能把媒体转述当成用户要求的官方原始声明。
 约束subject_refs引用真实subjects.id；空为全局，非空只应用这些主体。独立constraint要求继承约束主体范围，不得把一个主体的排除维度应用到其他主体。
-kind=constraint 时不产生数据采集义务。业务质量/估值判断应保留所需口径，而不是仅保存一个泛化报告维度。不得填充默认研究维度替代明确要求。
+kind=constraint 时不产生数据采集义务。业务质量/估值判断应保留所需口径，不得用默认报告范围替代用户明确要求。
 """
 
 
@@ -196,7 +202,7 @@ async def extract_semantic_requirements(state: dict[str, Any], seed: dict[str, A
                 if isinstance(parsed, BaseModel):
                     parsed = parsed.model_dump()
                 if isinstance(parsed, dict):
-                    diagnostics["raw_semantic"] = {key: deepcopy(parsed[key]) for key in ("subjects", "relation", "requirements", "constraints") if key in parsed}
+                    diagnostics["raw_semantic"] = {key: deepcopy(parsed[key]) for key in ("subjects", "output_mode", "relation", "requirements", "constraints") if key in parsed}
                     diagnostics.setdefault("semantic_attempts", []).append(deepcopy(diagnostics["raw_semantic"]))
                 request = ExtractedRequest.model_validate(parsed)
                 raw = request.model_dump()

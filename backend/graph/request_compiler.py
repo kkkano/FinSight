@@ -283,6 +283,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
     understanding = dict(result.get("understanding") or {})
     diagnostics = {**diagnostics, "raw_semantic": deepcopy(semantic)}
     query = str(understanding.get("original_query") or result.get("query") or "")
+    mode = str(semantic.get("output_mode") or result.get("output_mode") or "chat")
+    result["output_mode"] = mode
     subjects = [dict(item) for item in semantic.get("subjects", []) if isinstance(item, dict)]
     subject_map = {str(item.get("id")): item for item in subjects}
     if len(subject_map) != len(subjects) or any(not key or key == "None" for key in subject_map):
@@ -356,6 +358,11 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             requirement["dimension"] = definition[0]
             requirement["raw_capability_status"] = requirement.get("capability_status")
             requirement["capability_status"] = "supported"
+            market = "HK" if ticker and ticker.endswith(".HK") else "CN" if ticker and ticker.endswith((".SS", ".SZ", ".BJ")) else "US"
+            if not evidence_plan_for_kinds(evidence, market=market):
+                requirement["capability_status"] = "retrieval_required"
+                requirement["capability_reason"] = "structured_source_unavailable_for_market"
+                evidence = ["filing_context", "document_context"]
         elif not is_constraint:
             requirement.update(metric_text=str(requirement.get("metric_text") or metric), metric="unknown", capability_status="unsupported")
         if unknown_evidence:
@@ -469,7 +476,6 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         groups[next(iter(groups))].extend(global_rows)
     ready, blocked, frames = [], [], []
     bound_tasks = [task for task in result.get("tasks", []) if isinstance(task, dict)]
-    mode = str(result.get("output_mode") or "chat")
     relation = str(semantic.get("relation") or "single")
     seed_tasks: list[dict[str, Any]] | None = None
     for index, (refs, rows) in enumerate(groups.items(), 1):
@@ -480,16 +486,19 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         task_constraints = _scoped_constraints(constraints, list(refs))
         exclusions = {str(item.get("dimension")) for item in task_constraints if item.get("constraint_type") == "exclude_dimension"}
         task_id, frame_id = f"task_{index}", f"request_task_{index}"
-        evidence = list(dict.fromkeys(kind for row in rows if row.get("capability_status") == "supported"
+        evidence = list(dict.fromkeys(kind for row in rows if row.get("capability_status") in {"supported", "retrieval_required"}
                                      for kind in row.get("evidence_kinds", [])))
         if any(row.get("capability_status") == "unsupported" and row.get("kind") != "constraint" for row in rows):
-            # 未能映射的原始要求不能让取数面比规则计划更窄：沿用同主体规则任务的证据，用户否定的维度除外。
-            if seed_tasks is None:
-                seed_tasks = [task for task in finalize_request_contract(deepcopy(result)).get("tasks", []) if isinstance(task, dict)]
+            # 以已确认的主体和原文检索，不再依赖旧规则能否认识该公司。
             excluded_kinds = {kind for definition in _METRIC_CONTRACTS.values() if definition[0] in exclusions for kind in definition[1]}
-            for seed in seed_tasks:
-                if set(seed.get("tickers") or []) == set(tickers):
-                    evidence = list(dict.fromkeys([*evidence, *(kind for kind in seed.get("required_evidence") or [] if kind not in excluded_kinds)]))
+            if seed_tasks is None:
+                seed_tasks = finalize_request_contract(deepcopy(result)).get("tasks", [])
+            seeded_evidence = [kind for seed in seed_tasks if set(seed.get("tickers") or []) == set(tickers)
+                               for kind in seed.get("required_evidence") or []]
+            discovery = ["document_context", *seeded_evidence]
+            if not seeded_evidence and subject_type == "company":
+                discovery.extend(["company_profile", "filing_context"])
+            evidence = list(dict.fromkeys([*evidence, *(kind for kind in discovery if kind not in excluded_kinds)]))
         facets = list(dict.fromkeys(_METRIC_CONTRACTS[row["metric"]][2] for row in rows if row.get("metric") in _METRIC_CONTRACTS and row.get("kind") != "constraint"))
         if any(row.get("metric") == "news_catalysts" and "event_calendar" in row.get("evidence_kinds", []) for row in rows):
             facets = ["catalyst" if facet == "news" else facet for facet in facets]
@@ -546,7 +555,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                        "relation": relation, "time_scope": time_scope, "excluded_facets": sorted(exclusions),
                        "evidence_obligations": evidence, "render_contract": render, "intent_contract": contract,
                        "legacy_operation": operation, "source": "confirmed_semantic_requirements"})
-    snapshot = {"version": "semantic_requirements.v1", "status": "confirmed", "query": query, "subjects": subjects,
+    snapshot = {"version": "semantic_requirements.v1", "status": "confirmed", "query": query, "subjects": subjects, "output_mode": mode,
                 "relation": relation, "requirements": deepcopy(requirements), "constraints": deepcopy(constraints),
                 "tasks": deepcopy([*ready, *blocked])}
     understanding.update(route="research" if ready else "clarify", tasks=ready, blocked_tasks=blocked,

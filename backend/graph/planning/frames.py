@@ -183,7 +183,7 @@ def _append_request_frame_steps(ctx) -> bool:
     # Frame 是执行分组，任务 ID 才是结果合同的身份；缺绑定时交回任务规划器。
     if any(not _frame_task_ids(ctx, _frame_id(ctx, frame, index)) for index, frame in enumerate(ctx.request_frames[:16], 1)):
         return False
-    appended = False
+    initial_step_count = len(ctx.steps)
     for index, frame in enumerate(ctx.request_frames[:16], 1):
         frame_id = _frame_id(ctx, frame, index)
         task_ids = _frame_task_ids(ctx, frame_id)
@@ -197,15 +197,13 @@ def _append_request_frame_steps(ctx) -> bool:
                 task = ctx.ready_tasks_by_id.get(task_id)
                 if task:
                     _append_document_task_steps(ctx, task, group=group)
-                    appended = True
             continue
 
         if "macro_context" in required_evidence or _frame_subject_type(ctx, frame) == "macro":
             _append_macro_frame_steps(ctx, frame, group=group, task_ids=task_ids)
-            appended = True
 
         if "performance_comparison" in required_evidence:
-            appended = _append_performance_comparison_frame_step(ctx, frame, group=group, task_ids=task_ids) or appended
+            _append_performance_comparison_frame_step(ctx, frame, group=group, task_ids=task_ids)
 
         per_ticker_evidence = [
             kind
@@ -225,9 +223,7 @@ def _append_request_frame_steps(ctx) -> bool:
                 task_ids=task_ids,
                 evidence_profile=_frame_evidence_profile(ctx, frame),
             )
-            appended = True
-    # 已确认但未支持的要求仍保留在分母；空计划不能触发旧 query 关键词补全。
-    return appended or all(frame.get("source") == "confirmed_semantic_requirements" for frame in ctx.request_frames)
+    return len(ctx.steps) > initial_step_count
 
 
 def _request_frames_authoritatively_need_no_plan_steps(ctx) -> bool:

@@ -62,6 +62,11 @@ def validate_plan_coverage(
     fulfilled_evidence: list[str] = []
     missing_evidence: list[str] = []
     missing_requirements: list[dict[str, Any]] = []
+    requirements = (frame.get("render_contract") or {}).get("answer_requirements") or []
+    if (frame.get("lane") in {"research", "report"} and not required_evidence
+            and any(row.get("kind") not in {"constraint", "input_dependency"} for row in requirements)):
+        missing_evidence.append("research_evidence")
+        missing_requirements.append({"frame_id": frame.get("frame_id"), "reason": "research_evidence_not_planned"})
     for kind in required_evidence:
         for task_id in task_ids or [None]:
             for ticker in tickers or [None]:

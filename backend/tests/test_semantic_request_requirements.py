@@ -462,3 +462,72 @@ def test_complex_price_requests_cannot_enter_quote_fastpath(query):
 @pytest.mark.parametrize("query", ["你好", "谢谢", "KO 当前股价是多少？", "what is the current price of KO?"])
 def test_unambiguous_simple_turns_keep_fastpath(query):
     assert not requires_semantic_extraction(query)
+
+
+@pytest.mark.parametrize("query", ["请给我一份游族网络的投研分析报告", "请生成一份游族网络的投研分析报告"])
+def test_unmapped_research_uses_semantic_subject_for_discovery(query):
+    semantic = {"subjects": [{"id": "company", "type": "company", "label": "游族网络", "tickers": ["002174.SZ"]}],
+                "requirements": [{"source_text": query, "description": query, "kind": "explanation",
+                                  "metric": "unknown", "subject": "002174.SZ", "subject_refs": ["company"]}]}
+    state = {"query": query, "output_mode": "chat", "understanding": {"original_query": query}}
+    state.update(compile_semantic_contract(state, semantic, {}))
+    state.update(policy_gate(state))
+    state.update(rule_based_planner(state))
+    steps = state["plan_ir"]["steps"]
+    assert {"search", "get_local_market_filings"} <= {step["name"] for step in steps}
+    assert next(step for step in steps if step["name"] == "search")["inputs"]["query"] == f"002174.SZ {query}"
+    assert state["tasks"][0]["answer_requirements"][0]["capability_status"] == "unsupported"
+
+
+@pytest.mark.parametrize("ticker", ["600519.SS", "0700.HK"])
+def test_financial_requirements_without_market_producer_read_disclosures(ticker):
+    query = f"{ticker} 最新完整财年的经营现金流是多少？"
+    semantic = {"subjects": [{"id": "company", "type": "company", "label": ticker, "tickers": [ticker]}],
+                "requirements": [{"source_text": "经营现金流", "description": "经营现金流", "kind": "fact_attribute",
+                                  "metric": "operating_cash_flow", "subject": ticker, "subject_refs": ["company"],
+                                  "time_scope": {"kind": "fiscal_year", "count": 1, "source_text": "最新完整财年"}}]}
+    state = {"query": query, "output_mode": "chat", "understanding": {"original_query": query}}
+    state.update(compile_semantic_contract(state, semantic, {}))
+    state.update(policy_gate(state))
+    state.update(rule_based_planner(state))
+    assert state["tasks"][0]["answer_requirements"][0]["capability_status"] == "retrieval_required"
+    names = {step["name"] for step in state["plan_ir"]["steps"]}
+    assert {"get_local_market_filings", "search"} <= names
+    assert "get_sec_capital_allocation" not in names
+    assert state["trace"]["coverage_validator"]["status"] == "ok"
+
+
+def test_semantic_report_intent_overrides_default_chat_without_keyword_matching():
+    query = "为 INTC 准备一份供投资委员会审议的完整研究材料"
+    semantic = {"output_mode": "investment_report",
+                "subjects": [{"id": "company", "type": "company", "label": "英特尔", "tickers": ["INTC"]}],
+                "requirements": [{"source_text": query, "description": "默认报告范围：业务", "kind": "explanation",
+                                  "metric": "business_model", "subject": "INTC", "subject_refs": ["company"]}]}
+    state = {"query": query, "output_mode": "chat", "understanding": {"original_query": query}}
+    state.update(compile_semantic_contract(state, semantic, {}))
+    assert state["output_mode"] == "investment_report"
+    assert state["request_frames"][0]["lane"] == "report"
+    assert state["reply_contract"]["lane"] == "report_generation"
+
+
+def test_empty_research_plan_is_not_coverage_success():
+    from backend.graph.coverage_validator import validate_plan_coverage
+    result = validate_plan_coverage(
+        request_frame={"frame_id": "f", "lane": "research", "task_ids": ["task_1"], "evidence_obligations": [],
+                       "render_contract": {"answer_requirements": [{"kind": "explanation", "metric": "unknown"}]}},
+        plan_ir={"steps": []},
+    )
+    assert result["status"] == "missing"
+    assert result["missing_requirements"][0]["reason"] == "research_evidence_not_planned"
+
+
+def test_missing_coverage_keeps_other_executable_steps_without_claiming_validation():
+    state = {"query": QUERY, "output_mode": "chat", **compile_fixture()}
+    state.update(policy_gate(state))
+    state["policy"]["allowed_tools"] = ["search"]
+    state["policy"]["allowed_agents"] = []
+    state.update(rule_based_planner(state))
+    assert state["plan_ir"]["steps"]
+    assert state["trace"]["planner"]["validated"] is False
+    assert state["trace"]["planner"]["executable"] is True
+    assert state["trace"]["coverage_validator"]["status"] == "missing"

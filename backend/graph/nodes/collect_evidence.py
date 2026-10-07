@@ -24,7 +24,8 @@ async def collect_evidence(state: GraphState) -> dict[str, Any]:
     plan_result = rule_based_planner(working)  # type: ignore[arg-type]
     working.update(plan_result)
 
-    if (working.get("trace", {}).get("planner") or {}).get("validated") is False:
+    planner_status = working.get("trace", {}).get("planner") or {}
+    if planner_status.get("executable", planner_status.get("validated")) is False:
         blocked_trace = dict(working.get("trace") or {})
         blocked_trace["collect_evidence"] = {"status": "blocked", "reason": "invalid_execution_plan"}
         artifacts = dict(state.get("artifacts") or {})
