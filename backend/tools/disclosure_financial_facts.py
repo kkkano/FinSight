@@ -153,7 +153,8 @@ def extract_financial_facts(text: str, ticker: str, source_url: str, metrics: li
         ])
         payload = _extract_json(final_completion_text(response))
         report_llm_success(client)
-        return validate_financial_facts(payload, text=text, ticker=ticker, source_url=source_url)
+        return [fact for fact in validate_financial_facts(payload, text=text, ticker=ticker, source_url=source_url)
+                if fact["metric"] in definitions]
     except Exception as exc:
         if client is not None:
             report_llm_failure(client, exc)

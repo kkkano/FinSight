@@ -15,6 +15,17 @@ from backend.graph.synthesis.research_synthesis import _validate_explanation
 from backend.graph.synthesis.structured_orchestration import prepare_chat_task_contract, prepare_opinion_synthesis
 
 
+def test_individual_disclosure_cash_fact_displays_value_without_unrequested_missing_items():
+    fact = NormalizedEvidence(source_id="cash", task_ids=["task"], kind="capital_allocation", usage="fact",
+        subject="600519.SS", metric="operating_cash_flow", currency="CNY", text="公告原文现金流数据",
+        structured_data={"value": 61522204989.35, "currency": "CNY", "frequency": "annual",
+                         "period_start": "2025-01-01", "period_end": "2025-12-31", "page": 65})
+    rendered = format_fact(fact)
+    assert "经营现金流：615.22 亿 CNY" in rendered
+    assert "2025-01-01 至 2025-12-31" in rendered and "第 65 页" in rendered
+    assert "[数据缺失]" not in rendered and "资本开支" not in rendered
+
+
 def _evidence(kind, payload, *, text="结构化源事实。"):
     return NormalizedEvidence(source_id="fixture-source", task_ids=["task"], subject="INTC", kind=kind, usage="fact", text=text, structured_data=payload)
 

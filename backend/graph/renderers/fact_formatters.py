@@ -336,6 +336,11 @@ def _capital_allocation(payload: dict, evidence) -> str:
     currency = payload.get("currency") or evidence.currency
     lines = [f"{evidence.subject or payload.get('ticker') or '公司'} {period_label} {payload.get('period_start') or '起日未提供'} 至 {payload.get('period_end') or '期末未提供'}。"]
     labels = {"operating_cash_flow": "经营现金流", "capital_expenditure": "资本开支现金支付", "dividends_paid": "股息现金支付", "repurchases_paid": "股票回购现金支付", "cash_and_equivalents": "期末现金及等价物", "debt_current": "流动债务（按来源定义）", "debt_noncurrent": "非流动长期债务"}
+    if evidence.metric in labels and payload.get("value") is not None:
+        lines.append(f"{labels[evidence.metric]}：{money(payload['value'], payload.get('unit') or currency)}。")
+        if payload.get("page"):
+            lines.append(f"原文位置：第 {payload['page']} 页。")
+        return "\n".join(lines)
     for key, label in labels.items():
         record = facts.get(key)
         if isinstance(record, dict) and record.get("value") is not None:
