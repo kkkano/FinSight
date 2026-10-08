@@ -7,7 +7,7 @@
  * Gracefully degrades to "--" when data is null or missing.
  */
 import type { ValuationData, SnapshotData } from '../../types/dashboard';
-import { formatMoney, formatMarketCapForMarket } from '../../utils/format';
+import { formatMoney, formatMarketCapForMarket, formatDividendYield } from '../../utils/format';
 import { Stat } from '../ui';
 
 // --- Props ---
@@ -25,15 +25,6 @@ interface MetricsBarProps {
 const fmtRatio = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '--';
   return v.toFixed(1);
-};
-
-/** Format a dividend yield that may arrive as ratio (0.0036) or percent points (0.36). */
-// eslint-disable-next-line react-refresh/only-export-components
-export const formatDividendYield = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  if (!Number.isFinite(v)) return '--';
-  const normalized = Math.abs(v) >= 0.2 ? v : v * 100;
-  return `${normalized.toFixed(2)}%`;
 };
 
 /** Format a price (52-week range) */

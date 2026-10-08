@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from typing import Any, Optional
 
 from backend.utils.quote import safe_float
-from backend.tools.financial_facts import normalize_currency
+from backend.tools.financial_facts import normalize_currency, yahoo_forward_dividend_yield
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +268,7 @@ def _fetch_single_peer_metrics(sym: str) -> dict[str, Any]:
             "net_margin": safe_float(info.get("profitMargins")),
             "roe": safe_float(info.get("returnOnEquity")),
             "revenue_growth": safe_float(info.get("revenueGrowth")),
-            "dividend_yield": safe_float(info.get("dividendYield")),
+            "dividend_yield": yahoo_forward_dividend_yield(info),
             "market_cap": safe_float(info.get("marketCap")),
         }
         if _has_peer_metrics(yfinance_result):

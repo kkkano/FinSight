@@ -25,6 +25,16 @@ def fact_number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def yahoo_forward_dividend_yield(info: dict[str, Any]) -> float | None:
+    """Yahoo 合并响应的 dividendYield 单位不一致，使用同证券年度股息与价格计算比例。"""
+    rate = fact_number(info.get("dividendRate"))
+    price = next((value for key in ("currentPrice", "regularMarketPrice")
+                  if (value := fact_number(info.get(key))) is not None and value > 0), None)
+    if rate is None or rate < 0 or price is None:
+        return None
+    return rate / price
+
+
 def normalize_currency(value: Any) -> str | None:
     raw = str(value or "").strip()
     if not re.fullmatch(r"[A-Za-z]{3}", raw):

@@ -264,6 +264,7 @@ export interface ValuationData {
   price_to_book?: number | null;
   price_to_sales?: number | null;
   ev_to_ebitda?: number | null;
+  /** 前瞻年度股息率比例，1% = 0.01。 */
   dividend_yield?: number | null;
   beta?: number | null;
   week52_high?: number | null;

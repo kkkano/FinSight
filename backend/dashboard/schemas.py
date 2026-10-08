@@ -140,7 +140,7 @@ class ValuationData(BaseModel):
     price_to_book: Optional[float] = None
     price_to_sales: Optional[float] = None
     ev_to_ebitda: Optional[float] = None
-    dividend_yield: Optional[float] = None
+    dividend_yield: Optional[float] = None  # 前瞻年度股息率比例：1% = 0.01。
     beta: Optional[float] = None
     week52_high: Optional[float] = None
     week52_low: Optional[float] = None

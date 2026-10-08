@@ -6,6 +6,7 @@
  */
 import type { ValuationData } from '../../../../types/dashboard';
 import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { formatDividendYield } from '../../../../utils/format';
 
 // --- Props ---
 
@@ -18,11 +19,6 @@ interface ValuationGridProps {
 const fmtRatio = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '--';
   return v.toFixed(2);
-};
-
-const fmtPct = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  return `${(v * 100).toFixed(2)}%`;
 };
 
 // --- Types ---
@@ -40,7 +36,7 @@ function buildMetrics(valuation: ValuationData | null | undefined): MetricDef[] 
     { label: 'P/B', value: fmtRatio(v.price_to_book) },
     { label: 'EV/EBITDA', value: fmtRatio(v.ev_to_ebitda) },
     { label: 'P/S', value: fmtRatio(v.price_to_sales) },
-    { label: '股息率', value: fmtPct(v.dividend_yield) },
+    { label: '股息率', value: formatDividendYield(v.dividend_yield) },
   ];
 }
 

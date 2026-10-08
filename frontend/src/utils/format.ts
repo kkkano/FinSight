@@ -57,6 +57,12 @@ export function formatSourceDateTime(value: string | null | undefined): string {
   }).format(date);
 }
 
+/** 股息率接口统一提供比例，显示时转为百分数。 */
+export function formatDividendYield(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '--';
+  return `${(value * 100).toFixed(2)}%`;
+}
+
 // --- 市场感知格式化（P2-10 A股体验补齐） ---
 
 /**

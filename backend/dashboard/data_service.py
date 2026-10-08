@@ -16,7 +16,7 @@ import pandas as pd
 
 from backend.dashboard.cache import dashboard_cache
 from backend.utils.quote import safe_float
-from backend.tools.financial_facts import fact_date, fact_number, monetary_amount, normalize_currency, statement_frequency
+from backend.tools.financial_facts import fact_date, fact_number, monetary_amount, normalize_currency, statement_frequency, yahoo_forward_dividend_yield
 
 logger = logging.getLogger(__name__)
 
@@ -950,7 +950,7 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
             "price_to_book": safe_float(info.get("priceToBook")),
             "price_to_sales": safe_float(info.get("priceToSalesTrailing12Months")),
             "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda")),
-            "dividend_yield": safe_float(info.get("dividendYield")),
+            "dividend_yield": yahoo_forward_dividend_yield(info),
             "beta": safe_float(info.get("beta")),
             "week52_high": safe_float(info.get("fiftyTwoWeekHigh")),
             "week52_low": safe_float(info.get("fiftyTwoWeekLow")),

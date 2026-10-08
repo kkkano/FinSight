@@ -10,6 +10,30 @@ from backend.services.market_data_gateway import MarketDataGateway, _quote_from_
 from backend.services.data_contract import DataResult
 
 
+@pytest.mark.parametrize("merged_yield", [0.32, 0.0032])
+def test_yahoo_dividend_yield_units_cannot_change_dashboard_or_peer_ratio(monkeypatch, merged_yield):
+    from types import SimpleNamespace
+    from backend.dashboard import peer_service
+
+    info = {"dividendYield": merged_yield, "dividendRate": 1.08, "currentPrice": 341.005,
+            "marketCap": 1000000, "currency": "USD"}
+    monkeypatch.setattr(data_service, "_create_ticker", lambda _: SimpleNamespace(info=info))
+    monkeypatch.setattr(peer_service, "_create_ticker", lambda _: SimpleNamespace(info=info))
+    assert data_service.fetch_valuation("EXM")["dividend_yield"] == pytest.approx(1.08 / 341.005)
+    assert peer_service._fetch_single_peer_metrics("EXM")["dividend_yield"] == pytest.approx(1.08 / 341.005)
+
+
+@pytest.mark.parametrize("info,expected", [
+    ({"dividendYield": .32, "currentPrice": 100}, None),
+    ({"dividendRate": 1, "currentPrice": 0}, None),
+    ({"dividendRate": 0, "currentPrice": 100}, 0),
+    ({"dividendRate": 1, "regularMarketPrice": 100}, .01),
+])
+def test_dividend_yield_keeps_missing_inputs_instead_of_guessing_units(info, expected):
+    from backend.tools.financial_facts import yahoo_forward_dividend_yield
+    assert yahoo_forward_dividend_yield(info) == expected
+
+
 @pytest.mark.parametrize("status", ["ok", "empty", "missing", "error", "degraded"])
 def test_declared_data_status_survives_result_projection(status):
     assert DataResult.from_payload({"status": status, "data": []}).status == status
