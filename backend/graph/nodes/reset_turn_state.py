@@ -50,6 +50,8 @@ _TRACE_RUNTIME_SUBKEYS = frozenset({
     "intent_contracts",
     "intent_contract_shadow",
     "intent_contracts_shadow",
+    "conversation_degraded", "conversation_router", "request_requirements", "semantic_contract",
+    "request_compiler", "analysis", "validation", "task_coverage", "llm_failure_diagnostics", "rendered_task_ids",
 })
 
 

@@ -69,6 +69,8 @@ export interface DashboardState {
 
 // === 快照数据 ===
 export interface SnapshotData {
+  currency?: string | null;
+  financial_currency?: string | null;
   revenue?: number | null;
   eps?: number | null;
   gross_margin?: number | null;
@@ -79,6 +81,9 @@ export interface SnapshotData {
 
 // === 图表数据点 ===
 export interface ChartPoint {
+  currency?: string | null;
+  frequency?: string;
+  period_end?: string;
   time?: number;
   period?: string;
   name?: string;
@@ -156,6 +161,11 @@ export interface NewsRankingMeta {
 }
 
 export interface DataSourceMeta {
+  status?: 'ok' | 'empty' | 'missing' | 'error' | 'degraded';
+  observed_at?: string;
+  frequency?: string | null;
+  error_code?: string | null;
+  cached?: boolean;
   provider: string;
   source_type: string;
   as_of: string;
@@ -265,7 +275,20 @@ export interface FinancialStatement {
   periods: string[];
   period_ends?: string[];
   currency?: string | null;
+  frequency?: string;
+  metric_frequencies?: Record<string, string>;
+  metric_currencies?: Record<string, string | null>;
   fact_metadata?: Record<string, unknown>;
+  yoy?: Record<string, (number | null)[]>;
+  gross_margin?: (number | null)[];
+  net_margin?: (number | null)[];
+  balance_summary?: {
+    period?: string | null;
+    total_assets?: number | null;
+    total_liabilities?: number | null;
+    equity?: number | null;
+    de_ratio?: number | null;
+  } | null;
   revenue: (number | null)[];
   gross_profit: (number | null)[];
   operating_income: (number | null)[];
@@ -310,6 +333,7 @@ export interface TechnicalData {
 
 // === v2 Peer Comparison ===
 export interface PeerMetrics {
+  currency?: string | null;
   symbol: string;
   name: string;
   trailing_pe?: number | null;
@@ -332,6 +356,7 @@ export interface PeerComparisonData {
 // === Phase G2: New data types ===
 
 export interface EarningsHistoryEntry {
+  currency?: string | null;
   quarter: string;
   eps_estimate?: number | null;
   eps_actual?: number | null;
@@ -339,6 +364,7 @@ export interface EarningsHistoryEntry {
 }
 
 export interface AnalystTargets {
+  currency?: string | null;
   low?: number | null;
   current?: number | null;
   mean?: number | null;

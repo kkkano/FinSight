@@ -1,6 +1,6 @@
 # FinSight LangGraph 当前流程
 
-更新时间：2026-10-04
+更新时间：2026-10-08
 
 `backend/graph/runner.py` 是图结构唯一事实源。生产图固定为六个节点，不注册旧兼容节点、confirmation loop、alert action 或 research debate。
 
@@ -36,6 +36,10 @@ flowchart TD
 - 多标的请求逐项检查 `(task_id, subject, evidence_kind)`，只取得 AAPL 报价不能满足 MSFT 的技术或基本面义务。
 - 复杂请求的原始分母保存在 `understanding.semantic_contract`，包括指标、交易日/日历/财期、否定约束及输入依赖。后续计划丢项不能缩小完整性检查范围；未知能力保留为未支持，缺公司或旧报告时明确澄清。
 - 模型只抽取语义，注册能力、证据类别和工具参数由代码确定。结构校验失败最多在同一模型、同一预算上下文中纠正一次；仍失败则在 `trace.request_requirements` 记录 `request_contract_unconfirmed`，沿用规则任务继续作答，同时把 `requirements_status` 标为 `deterministic_fallback`：聊天结果质量追加 `REQUEST_REQUIREMENTS_UNCONFIRMED` 警告，最多为 partial；正式报告直接阻断归档。不会让用户空等后只看到“稍后重试”，也不会把规则结果宣称为完整回答。
+
+`request_spec.py` 定义版本化请求与限定条件；`research_capabilities.py` 是指标、属性、实际生产者与验证域的共享注册。未知限定条件保留原文并标记未映射，不能作为自由 payload 键查找。报告意图由入口语义决定，编译后不再以全局 query 或旧 operation 重写任务范围。
+
+执行阶段保存 `task_evidence_normalization`，文档内容、任务引用及抓取观测分开；合成直接引用这一份规范化结果。`validate` 冻结任务状态和发布结果，`render` 只读。同一内容状态经 SSE、恢复、历史读取保持一致；旧告警和来源质量与内容完成度分别呈现。
 
 ## 采集与回答边界
 

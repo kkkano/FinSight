@@ -15,7 +15,6 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from backend.services import market_hours
 from backend.services.market_hours import get_market_session
 
 _NY = ZoneInfo("America/New_York")
@@ -146,6 +145,25 @@ def test_new_year_is_closed():
     assert get_market_session(_ny(2026, 1, 1, 11, 0)) == "closed"
 
 
-def test_holiday_set_contains_all_2026():
-    assert len(market_hours.NYSE_HOLIDAYS_2026) == 10
-    assert "2026-11-26" in market_hours.NYSE_HOLIDAYS_2026  # 感恩节
+def test_next_year_holiday_does_not_require_a_new_table():
+    assert get_market_session(_ny(2027, 1, 1, 12, 0)) == "closed"
+
+
+def test_mixed_markets_use_their_own_session():
+    now = datetime(2026, 10, 12, 2, 0, tzinfo=timezone.utc)
+    assert get_market_session(now, symbol="600519.SS") == "regular"
+    assert get_market_session(now, symbol="0700.HK") == "regular"
+    assert get_market_session(now, symbol="AAPL") == "closed"
+
+
+@pytest.mark.parametrize("symbol", ["600519.SS", "0700.HK"])
+def test_asian_lunch_break_is_closed(symbol):
+    assert get_market_session(datetime(2026, 10, 12, 4, 15, tzinfo=timezone.utc), symbol=symbol) == "closed"
+
+
+def test_nyse_early_close_uses_calendar_schedule():
+    assert get_market_session(_ny(2026, 11, 27, 13, 0)) == "after_hours"
+
+
+def test_crypto_does_not_use_nyse_holidays():
+    assert get_market_session(_ny(2026, 12, 25, 12, 0), symbol="BTC-USD") == "regular"

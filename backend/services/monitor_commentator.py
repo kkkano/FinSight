@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Literal, TypedDict
+from typing import Any, Awaitable, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,17 +13,13 @@ from backend.agents.prediction_contract import AgentPrediction
 from backend.metrics import increment_monitor_comment
 from backend.services.monitor_comment_store import get_monitor_comment_store
 from backend.services.monitor_signals import MarketSnapshot, MonitorTrigger
+from backend.services.run_context import RunContext, run_context_scope
 
 
 class CommentDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
     level: Literal["info", "warn", "alert"]
     text: str = Field(min_length=1, max_length=500)
-
-
-class _State(TypedDict, total=False):
-    prompt: str
-    raw: str
 
 
 def _extract_json(raw: str) -> dict[str, Any]:
@@ -36,27 +32,16 @@ def _extract_json(raw: str) -> dict[str, Any]:
 
 async def _default_generate(prompt: str) -> dict[str, Any]:
     from langchain_core.messages import HumanMessage
-    from langgraph.graph import END, START, StateGraph
     from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
+    from backend.services.llm_response import final_completion_text
 
-    async def call_model(state: _State) -> _State:
-        response = await ainvoke_configured_llm(
-            [HumanMessage(content=state["prompt"])],
-            context=LLMCallContext.create(
-                stage="monitor_comment", agent="monitor_commentator", layer="analysis", max_provider_attempts=2,
-            ),
-            temperature=0.1,
-            max_tokens=300,
-            request_timeout=12,
-        )
-        return {"raw": response.content if hasattr(response, "content") else str(response)}
-
-    graph = StateGraph(_State)
-    graph.add_node("comment", call_model)
-    graph.add_edge(START, "comment")
-    graph.add_edge("comment", END)
-    result = await asyncio.wait_for(graph.compile().ainvoke({"prompt": prompt}), timeout=15)
-    return _extract_json(result.get("raw", ""))
+    response = await ainvoke_configured_llm(
+        [HumanMessage(content=prompt)],
+        context=LLMCallContext.create(
+            stage="monitor_comment", agent="monitor_commentator", layer="analysis", max_provider_attempts=2,
+        ), temperature=0.1, max_tokens=300, request_timeout=12,
+    )
+    return _extract_json(final_completion_text(response))
 
 
 def _prompt(target, snapshot: MarketSnapshot, trigger: MonitorTrigger, prediction: AgentPrediction | None) -> str:
@@ -84,6 +69,24 @@ async def produce_monitor_comments(
     *, prediction_escalated: bool = False,
     generator: Callable[[str], Awaitable[dict[str, Any]]] | None = None, store=None,
 ) -> int:
+    context = RunContext.create(owner=target.user_id, entry="monitor")
+    with run_context_scope(context):
+        try:
+            result = await _produce_monitor_comments(target, snapshot, triggers, prediction,
+                prediction_escalated=prediction_escalated, generator=generator, store=store)
+            context.finish("completed")
+            return result
+        except asyncio.CancelledError:
+            context.finish("cancelled")
+            raise
+        finally:
+            await asyncio.wait_for(context.archive_usage(), timeout=5.0)
+
+
+async def _produce_monitor_comments(
+    target, snapshot: MarketSnapshot, triggers: list[MonitorTrigger], prediction: AgentPrediction | None,
+    *, prediction_escalated: bool, generator: Callable[[str], Awaitable[dict[str, Any]]] | None, store,
+) -> int:
     comment_store = store or get_monitor_comment_store()
     generate = generator or _default_generate
     written = 0
@@ -98,14 +101,15 @@ async def produce_monitor_comments(
                 prediction_id=str(getattr(prediction, "id", "") or "").strip() or None,
             ))
             try:
-                raw = await generate(_prompt(target, snapshot, trigger, prediction))
+                raw = ({"level": "info", "text": trigger.detail} if trigger.kind == "heartbeat"
+                       else await generate(_prompt(target, snapshot, trigger, prediction)))
             finally:
                 reset_llm_attribution(attribution_token)
             draft = CommentDraft.model_validate(raw)
             if trigger.kind == "heartbeat" and draft.level != "info":
                 raise ValueError("heartbeat comment must be info")
             prediction_id = prediction.id if prediction is not None else None
-            source, level, text_value = "agent", draft.level, draft.text
+            source, level, text_value = "system" if trigger.kind == "heartbeat" else "agent", draft.level, draft.text
         except Exception as exc:
             prediction_id = prediction.id if prediction is not None and escalated else None
             source, level = "system", "error"

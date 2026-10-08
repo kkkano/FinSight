@@ -23,6 +23,7 @@ class MarketSnapshot:
     symbol: str
     observed_at: str
     price: float | None
+    data_kind: str = "intraday_snapshot"
     volume: float | None = None
     average_volume20: float | None = None
     macd_hist: float | None = None
@@ -32,6 +33,30 @@ class MarketSnapshot:
     previous_day_low: float | None = None
     levels: Mapping[str, float] = field(default_factory=dict)
     zones: Mapping[str, tuple[float, float]] = field(default_factory=dict)
+
+
+def available_trigger_kinds(snapshot: MarketSnapshot, prediction: AgentPrediction | None = None) -> list[str]:
+    """触发能力来自实际输入；没有盘中数据时不宣布实时异动可用。"""
+    if snapshot.data_kind != "intraday_snapshot" or _finite_number(snapshot.price) is None:
+        return []
+    kinds = []
+    if _prediction_levels(prediction):
+        kinds.append("prediction_level_break")
+    if _named_zones(snapshot, snapshot, prediction) and prediction is not None and prediction.direction == "neutral":
+        kinds.append("prediction_range_break")
+    requirements = {
+        "macd_cross": (snapshot.macd_hist,),
+        "flow_flip": (snapshot.flow_value,),
+        "volume_spike": (snapshot.volume, snapshot.average_volume20),
+    }
+    kinds.extend(kind for kind, values in requirements.items() if all(_finite_number(value) is not None for value in values))
+    if any(_finite_number(value) is not None for value in (snapshot.previous_day_high, snapshot.previous_day_low)):
+        kinds.append("day_level_break")
+    if snapshot.levels:
+        kinds.append("level_break")
+    if snapshot.zones:
+        kinds.append("zone_break")
+    return kinds
 
 
 def heartbeat_due(
@@ -113,6 +138,8 @@ def detect_triggers(
     current: MarketSnapshot,
     prediction: AgentPrediction | None,
 ) -> list[MonitorTrigger]:
+    if previous.data_kind != "intraday_snapshot" or current.data_kind != "intraday_snapshot":
+        return []
     previous_symbol = str(previous.symbol or "").strip().upper()
     current_symbol = str(current.symbol or "").strip().upper()
     prediction_symbol = str(prediction.symbol or "").strip().upper() if prediction is not None else current_symbol

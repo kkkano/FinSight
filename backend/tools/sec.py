@@ -338,6 +338,7 @@ def _extract_companyfacts_facts(
                     filed=fact_date(entry.get("filed")), accession=entry.get("accn"),
                     concept=concept, form=str(entry.get("form") or ""),
                     source_url=source_url,
+                    reporting_basis="consolidated", basis_context="sec_companyfacts_entity_wide_context",
                 )
     # 先收齐所有标签的直接单季值；冲突的直接单季也不能借差分绕过校验。
     for concept, entries in cash_flow_series:

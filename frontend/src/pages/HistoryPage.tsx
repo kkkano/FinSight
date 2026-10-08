@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
@@ -11,13 +11,12 @@ import {
   Target,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 
-import { apiClient, type ReportIndexItem } from '../api/client';
 import type { PredictionHistoryItem, PredictionStatBucket } from '../api/domains/predictions';
 import { ReportView } from '../components/report';
 import { usePredictionHistory, usePredictionRun } from '../hooks/usePredictionHistory';
-import { useStore } from '../store/useStore';
-import type { ReportIR } from '../types';
+import { useReportDetail, useReportHistory } from '../hooks/useReportHistory';
 import { formatPercentagePoints, formatRatioPercent } from './historyFormatting';
 import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
 
@@ -267,69 +266,46 @@ function PredictionHistoryPanel() {
 
 function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | null }) {
   const navigate = useNavigate();
-  const sessionId = useStore((state) => state.sessionId);
-  const [items, setItems] = useState<ReportIndexItem[]>([]);
+  const { query: listQuery, items: accountItems } = useReportHistory();
   const [selectedId, setSelectedId] = useState<string | null>(initialReportId);
-  const [report, setReport] = useState<ReportIR | null>(null);
-  const [loadingList, setLoadingList] = useState(true);
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [requestKey, setRequestKey] = useState(0);
-  const refresh = useCallback(() => setRequestKey((value) => value + 1), []);
+  const [sessionFilter, setSessionFilter] = useState('');
+  const sessions = [...new Set(accountItems.map((item) => item.session_id))];
+  const effectiveFilter = sessions.includes(sessionFilter) ? sessionFilter : '';
+  const items = effectiveFilter ? accountItems.filter((item) => item.session_id === effectiveFilter) : accountItems;
+  const effectiveId = items.some((item) => item.report_id === selectedId) ? selectedId : items[0]?.report_id ?? null;
+  const detailQuery = useReportDetail(effectiveId);
+  const report = detailQuery.data?.report ?? null;
+  const error = listQuery.error ?? detailQuery.error;
+  const errorMessage = isAxiosError(error)
+    ? typeof error.response?.data?.detail === 'string' ? error.response.data.detail : '报告读取失败，请稍后重试。'
+    : error instanceof Error ? error.message : '报告读取失败';
+  const loadingList = listQuery.isLoading;
+  const loadingReport = detailQuery.isLoading;
+  const refresh = () => {
+    if (listQuery.isError) void listQuery.refetch();
+    else void detailQuery.refetch();
+  };
+  const selectedIndex = items.find((item) => item.report_id === effectiveId) ?? null;
 
   useEffect(() => {
-    let cancelled = false;
-    setLoadingList(true);
-    setError(null);
-    void apiClient.listReportIndex({ sessionId, limit: 100 })
-      .then((payload) => {
-        if (cancelled) return;
-        const next = Array.isArray(payload.items) ? payload.items : [];
-        setItems(next);
-        setSelectedId((current) => current && next.some((item) => item.report_id === current) ? current : next[0]?.report_id ?? null);
-      })
-      .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : '报告历史读取失败');
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingList(false);
-      });
-    return () => { cancelled = true; };
-  }, [requestKey, sessionId]);
-
-  useEffect(() => {
-    if (!selectedId) {
-      setReport(null);
-      return undefined;
-    }
-    let cancelled = false;
-    setLoadingReport(true);
-    setError(null);
-    void apiClient.getReportReplay({ sessionId, reportId: selectedId })
-      .then((payload) => {
-        if (!cancelled) setReport(payload.report as ReportIR);
-      })
-      .catch((reason) => {
-        if (!cancelled) {
-          setReport(null);
-          setError(reason instanceof Error ? reason.message : '报告详情读取失败');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingReport(false);
-      });
-    return () => { cancelled = true; };
-  }, [selectedId, sessionId]);
-
-  const selectedIndex = items.find((item) => item.report_id === selectedId) ?? null;
+    if (initialReportId) setSelectedId(initialReportId);
+  }, [initialReportId]);
 
   return (
     <div className="flex shrink-0 flex-col gap-5 lg:min-h-0 lg:flex-1">
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-t-down/10 px-4 py-3 text-sm text-t-down" role="alert">
-          <span className="min-w-0 break-words">{error}</span>
+          <span className="min-w-0 break-words">{errorMessage}</span>
           <button type="button" onClick={refresh} className="inline-flex min-h-9 shrink-0 items-center gap-2"><RefreshCw size={15} />重试</button>
         </div>
+      ) : null}
+
+      {sessions.length > 1 ? (
+        <select aria-label="报告会话筛选" value={effectiveFilter} onChange={(event) => setSessionFilter(event.target.value)}
+          className="w-fit max-w-full rounded border border-t-border bg-t-surface px-3 py-2 text-sm text-t-text2">
+          <option value="">全部会话</option>
+          {sessions.map((session, index) => <option key={session} value={session}>会话 {index + 1}</option>)}
+        </select>
       ) : null}
 
       <div className="grid bg-t-surface lg:min-h-0 lg:flex-1 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)]">
@@ -346,8 +322,8 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
               key={item.report_id}
               type="button"
               onClick={() => setSelectedId(item.report_id)}
-              aria-pressed={item.report_id === selectedId}
-              className={`w-full border-l-[3px] px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-t-accent ${item.report_id === selectedId ? 'border-l-t-accent bg-t-accent/[0.07]' : 'border-l-transparent hover:bg-t-hover'}`}
+              aria-pressed={item.report_id === effectiveId}
+              className={`w-full border-l-[3px] px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-t-accent ${item.report_id === effectiveId ? 'border-l-t-accent bg-t-accent/[0.07]' : 'border-l-transparent hover:bg-t-hover'}`}
               data-testid="report-history-item"
             >
               <div className="line-clamp-2 text-[15px] font-medium leading-6 text-t-text">{item.title || item.ticker || '未命名报告'}</div>
@@ -360,7 +336,7 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
           ))}
         </div>
 
-        <div key={selectedId ?? 'empty'} className="min-w-0 lg:min-h-0 lg:overflow-y-auto">
+        <div key={effectiveId ?? 'empty'} className="min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {loadingReport ? (
             <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取报告...</div>
           ) : report ? (

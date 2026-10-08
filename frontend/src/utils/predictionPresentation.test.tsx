@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 
 import { getPredictionDirectionPresentation, isTerminalPredictionStatus } from './predictionPresentation';
 import { TechnicalSummaryCard } from '../components/dashboard/tabs/technical/TechnicalSummaryCard';
+
+const render = (node: ReactNode) => renderToStaticMarkup(
+  <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>,
+);
 
 describe('判断与技术状态口径', () => {
   it('回落假设写明条件，不把当前趋势直接称为看空', () => {
@@ -24,7 +30,7 @@ describe('判断与技术状态口径', () => {
   });
 
   it('趋势多数偏多且RSI超买时同时说明当前结构与回落风险', () => {
-    const html = renderToStaticMarkup(<TechnicalSummaryCard technicals={{ close: 333, ma5: 330, ma10: 320, ma20: 310, ma50: 300,
+    const html = render(<TechnicalSummaryCard technicals={{ close: 333, ma5: 330, ma10: 320, ma20: 310, ma50: 300,
       ma100: 290, ma200: 280, ema12: 325, ema26: 315, rsi: 89.86, macd_hist: -1, stoch_k: 50, cci: 0, trend: 'bullish', momentum: 'bearish', support_levels: [], resistance_levels: [] }} />);
     expect(html).toContain('当前技术状态');
     expect(html).toContain('指标多数偏多');
@@ -35,6 +41,6 @@ describe('判断与技术状态口径', () => {
   });
 
   it('没有指标时展示数据不足，不伪造中性结论', () => {
-    expect(renderToStaticMarkup(<TechnicalSummaryCard />)).toContain('数据不足');
+    expect(render(<TechnicalSummaryCard />)).toContain('数据不足');
   });
 });

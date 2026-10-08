@@ -98,6 +98,13 @@ def _append_evidence_steps_for_ticker(ctx,
                     parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
         elif kind == "capital_allocation":
             if ticker.endswith((".HK", ".SS", ".SZ", ".BJ")):
+                for request in financial_requests.values():
+                    _append_tool_step(ctx, "get_local_market_filings", {
+                        "ticker": ticker, "limit": 5, "query": scoped_query, "company_name": company_name,
+                        "time_scope": request["time_scope"], "include_financial_facts": True,
+                        "financial_metrics": request["financial_metrics"],
+                    }, why=f"{ticker}：从当地公告核对现金流及计算输入。", optional=False,
+                        parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
                 continue
             periods: dict[str, dict] = {}
             for task in tasks:

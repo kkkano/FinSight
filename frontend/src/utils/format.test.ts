@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatMoney,
   currencySymbolForTicker,
   formatMarketCapForMarket,
   formatPriceForMarket,
   isAShareTicker,
 } from './format';
+
+describe('formatMoney', () => {
+  it('uses the source currency independently of the listing market', () => {
+    expect(formatMoney(100, 'CNY')).not.toContain('$');
+    expect(formatMoney(100, 'HKD')).toContain('HK$');
+    expect(formatMoney(100, 'USD')).toContain('$');
+  });
+
+  it('does not invent currency or turn missing amounts into zero', () => {
+    expect(formatMoney(100, null)).toContain('币种未提供');
+    expect(formatMoney(100, null)).not.toContain('$');
+    expect(formatMoney(null, 'CNY')).toBe('--');
+  });
+});
 
 describe('currencySymbolForTicker', () => {
   it('maps A-share suffixes to ¥', () => {

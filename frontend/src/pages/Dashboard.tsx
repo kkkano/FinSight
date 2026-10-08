@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, RefreshCw, Sun, Moon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useWatchlist } from '../hooks/useWatchlist';
 import { useDashboardStore } from '../store/dashboardStore';
 import { Watchlist } from '../components/dashboard/Watchlist';
 import { StockHeader } from '../components/dashboard/StockHeader';
@@ -22,7 +23,6 @@ import { useToast } from '../components/ui';
 import { useMarketQuotes } from '../hooks/useMarketQuotes';
 import { getPredictionIdFromSearch } from '../components/chatChartIntent';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
-import { useMonitorLease } from '../hooks/useMonitorLease';
 import { usePredictionOverlay } from '../hooks/usePredictionOverlay';
 import { useChatHandoff } from '../hooks/useChatHandoff';
 import { usePredictionGeneration } from '../hooks/usePredictionGeneration';
@@ -43,7 +43,8 @@ const formatClock = (): string =>
   });
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: DashboardProps) {
-  const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
+  const { activeAsset, setActiveAsset } = useDashboardStore();
+  const { watchlist } = useWatchlist();
   const { theme, setTheme, authIdentity, sessionId } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
@@ -57,7 +58,6 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
     () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
   const [predictionRefreshKey, setPredictionRefreshKey] = useState(0);
-  useMonitorLease(currentSymbol);
   const authenticated = Boolean(authIdentity?.userId);
   const prediction = usePredictionOverlay(
     currentSymbol,
@@ -84,7 +84,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
     }
   }, [activeAsset, currentSymbol, initialSymbol, setActiveAsset]);
 
-  const { refetch } = useDashboardData(currentSymbol);
+  const { refetch, dashboardData, isLoading, error } = useDashboardData(currentSymbol);
 
   useEffect(() => {
     if (!error) {
@@ -113,7 +113,9 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   };
 
   const handleRefresh = () => {
-    refetch(currentSymbol);
+    void refetch(currentSymbol);
+    predictionEligibility.refresh();
+    void predictionGeneration.resume();
     setPredictionRefreshKey((value) => value + 1);
   };
 

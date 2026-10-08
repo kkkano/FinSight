@@ -92,6 +92,8 @@ class SnapshotData(BaseModel):
     - crypto: index_level
     """
     revenue: Optional[float] = None
+    currency: Optional[str] = None
+    financial_currency: Optional[str] = None
     eps: Optional[float] = None
     gross_margin: Optional[float] = None
     fcf: Optional[float] = None
@@ -144,12 +146,27 @@ class ValuationData(BaseModel):
     week52_low: Optional[float] = None
 
 
+class BalanceSummary(BaseModel):
+    period: Optional[str] = None
+    total_assets: Optional[float] = None
+    total_liabilities: Optional[float] = None
+    equity: Optional[float] = None
+    de_ratio: Optional[float] = None
+
+
 class FinancialStatement(BaseModel):
     """财务报表结构化 (v2 新增)"""
     periods: List[str] = Field(default_factory=list, description="实际财务期末日期，兼容历史显示标签")
     period_ends: List[str] = Field(default_factory=list)
     currency: Optional[str] = None
+    frequency: str = "unknown"
+    metric_frequencies: Dict[str, str] = Field(default_factory=dict)
+    metric_currencies: Dict[str, Optional[str]] = Field(default_factory=dict)
     fact_metadata: Dict[str, Any] = Field(default_factory=dict)
+    yoy: Dict[str, List[Optional[float]]] = Field(default_factory=dict)
+    gross_margin: List[Optional[float]] = Field(default_factory=list)
+    net_margin: List[Optional[float]] = Field(default_factory=list)
+    balance_summary: Optional[BalanceSummary] = None
     revenue: List[Optional[float]] = Field(default_factory=list)
     gross_profit: List[Optional[float]] = Field(default_factory=list)
     operating_income: List[Optional[float]] = Field(default_factory=list)
@@ -227,6 +244,7 @@ class IndicatorSeries(BaseModel):
 class EarningsHistoryEntry(BaseModel):
     """单季度 EPS 历史记录"""
     quarter: str = Field("", description="e.g. '2024Q4'")
+    currency: Optional[str] = None
     eps_estimate: Optional[float] = None
     eps_actual: Optional[float] = None
     surprise_pct: Optional[float] = None
@@ -235,6 +253,7 @@ class EarningsHistoryEntry(BaseModel):
 class AnalystTargets(BaseModel):
     """分析师目标价"""
     low: Optional[float] = None
+    currency: Optional[str] = None
     current: Optional[float] = None
     mean: Optional[float] = None
     median: Optional[float] = None
@@ -253,6 +272,7 @@ class RecommendationsSummary(BaseModel):
 class PeerMetrics(BaseModel):
     """同行单项指标"""
     symbol: str
+    currency: Optional[str] = None
     name: str = ""
     trailing_pe: Optional[float] = None
     forward_pe: Optional[float] = None

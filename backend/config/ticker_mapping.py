@@ -436,6 +436,9 @@ def normalize_ticker(raw: str) -> str:
         return stripped
     if re.fullmatch(r"\d{6}\.SH", stripped, flags=re.IGNORECASE):
         return stripped[:-3] + ".SS"
+    if re.fullmatch(r"(?:[03468]\d{5}|92\d{4})", stripped):
+        market = "SS" if stripped.startswith("6") else "SZ" if stripped.startswith(("0", "3")) else "BJ"
+        return stripped + "." + market
 
     # 中文名 → ticker
     if stripped in CN_TO_TICKER:
@@ -517,6 +520,8 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     raw_matches.extend(dotted_tickers)
     cn_dotted_tickers = re.findall(r'(?<![A-Za-z0-9])((?:\d{5,6}\.(?:SS|SH|SZ|BJ)|\d{4,5}\.HK))(?![A-Za-z0-9])', query, flags=re.IGNORECASE)
     raw_matches.extend(cn_dotted_tickers)
+    raw_matches.extend(normalize_ticker(value) for value in re.findall(
+        r'(?<![A-Za-z0-9.])((?:[03468]\d{5}|92\d{4}))(?![A-Za-z0-9.]|\s*[%元万亿])', query))
     potential_tickers = [t.upper() for t in raw_matches]
 
     for ticker in potential_tickers:

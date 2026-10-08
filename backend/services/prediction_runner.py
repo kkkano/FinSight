@@ -36,10 +36,24 @@ async def forecast_once(agent_name: str, context: dict, snapshot: dict) -> dict:
     from backend.agents.technical_agent import TechnicalAgent
     from backend.agents.risk_agent import RiskAgent
     from backend.research.prediction_contract import ForecastContext
-    llm = create_forecast_llm()
-    cls = TechnicalAgent if agent_name == "technical" else RiskAgent
-    result = await cls(llm, None, None).forecast(ForecastContext(**context), snapshot)
-    return result.model_dump(mode="json")
+    from backend.services.model_selection import server_model_scope, model_client_scope
+    from backend.services.run_context import RunContext, run_context_scope
+    run = RunContext.create(owner="system:us20", entry="us20_forecast", budget_seconds=60)
+    # US20 的每日次数已由 reserve_attempt 限定，不使用个人账户额度。
+    run.quota_checker = lambda _owner: None
+    with run_context_scope(run), server_model_scope():
+        async with model_client_scope():
+            try:
+                llm = create_forecast_llm()
+                cls = TechnicalAgent if agent_name == "technical" else RiskAgent
+                result = await cls(llm, None, None).forecast(ForecastContext(**context), snapshot)
+                run.finish("completed" if result.status == "predicted" else "failed")
+                return result.model_dump(mode="json")
+            except asyncio.CancelledError:
+                run.finish("cancelled")
+                raise
+            finally:
+                await asyncio.wait_for(run.archive_usage(), timeout=5.0)
 
 
 def register_missing_batches(store, now: datetime) -> None:

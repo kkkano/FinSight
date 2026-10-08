@@ -6,7 +6,7 @@ import type {
 } from '../../types/index';
 import { AlertTriangle, Link2Off, Maximize2, Share2, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import { useDashboardStore } from '../../store/dashboardStore';
+import { useWatchlist } from '../../hooks/useWatchlist';
 import {
   normalizeAnchor,
   buildSourceSummary,
@@ -69,10 +69,7 @@ const formatCoverageTarget = (target: string | Record<string, unknown>): string 
 };
 
 export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false }) => {
-  const watchlist = useDashboardStore((state) => state.watchlist);
-  const initWatchlist = useDashboardStore((state) => state.initWatchlist);
-  const addWatchItemApi = useDashboardStore((state) => state.addWatchItemApi);
-  const removeWatchItemApi = useDashboardStore((state) => state.removeWatchItemApi);
+  const { watchlist, addWatchItemApi, removeWatchItemApi } = useWatchlist({ enabled: !readOnly });
   const { toast } = useToast();
 
   /* ---------------------------------------------------------------- */
@@ -206,8 +203,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
     if (readOnly) return undefined;
 
     setActiveCitation(null);
-    void initWatchlist();
-  }, [initWatchlist, readOnly, report.report_id]);
+  }, [readOnly, report.report_id]);
 
   useEffect(() => {
     if (isFullscreen) {

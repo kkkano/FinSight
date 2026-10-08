@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { apiClient } from '../api/client';
 
@@ -16,8 +16,10 @@ const IDLE: PredictionEligibility = {
   reason: null,
 };
 
-export function usePredictionEligibility(symbol: string): PredictionEligibility {
+export function usePredictionEligibility(symbol: string): PredictionEligibility & { refresh: () => void } {
   const [state, setState] = useState<PredictionEligibility>(IDLE);
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
     const normalized = symbol.trim().toUpperCase();
@@ -68,7 +70,7 @@ export function usePredictionEligibility(symbol: string): PredictionEligibility 
       });
 
     return () => controller.abort();
-  }, [symbol]);
+  }, [symbol, revision]);
 
-  return state;
+  return { ...state, refresh };
 }

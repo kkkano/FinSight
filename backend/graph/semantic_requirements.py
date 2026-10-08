@@ -14,11 +14,21 @@ from backend.services.llm_response import LLMCompletionError
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, classify_llm_error
 from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
 from backend.utils.env import env_int
+from backend.graph.research_capabilities import _REGISTERED_ATTRIBUTES
 
 
 MetricComponent = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
 PresentationField = Literal["itemized", "include_date", "include_link", "include_inputs", "include_formula", "include_provenance"]
 PRESENTATION_FIELDS = frozenset(get_args(PresentationField))
+FactAttribute = Literal[tuple(sorted(_REGISTERED_ATTRIBUTES))]
+
+
+class RequirementQualifier(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: Literal["reporting_basis", "unknown"]
+    value: str | None = None
+    source_text: str
+    description: str = ""
 
 
 class SemanticTimeScope(BaseModel):
@@ -70,6 +80,7 @@ class SemanticRequirement(BaseModel):
     calculation: SemanticCalculation | None = None
     presentation: list[PresentationField] = Field(default_factory=list)
     attributes: list[str] = Field(default_factory=list)
+    qualifiers: list[RequirementQualifier] = Field(default_factory=list)
     evidence_kinds: list[str] = Field(default_factory=list)
     requires_analysis: bool = False
     requires_explicit_binding: bool = True
@@ -82,13 +93,15 @@ class SemanticSubject(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str
     type: str = "company"
-    label: str
+    label: str = Field(description="优先保留当前请求的实际主体原名；指代词不是身份。已由同会话历史或具体看板绑定时可使用证券代码。")
     tickers: list[str] = Field(default_factory=list)
 
 
 class SemanticRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     subjects: list[SemanticSubject]
+    route: Literal["research", "direct", "clarify"] = "research"
+    clarification_question: str | None = None
     output_mode: Literal["chat", "investment_report"] | None = None
     relation: Literal["single", "compare", "rank", "impact", "continuation", "none"] = "single"
     requirements: list[SemanticRequirement]
@@ -119,7 +132,8 @@ class ExtractedRequirement(BaseModel):
     components: list[MetricComponent] = Field(default_factory=list, description="需要实际取数的规范指标列表；例如现金覆盖的组成量或宏观指标，不包含定性因果对象、币种、时间或口径属性。")
     calculation: SemanticCalculation | None = Field(default=None, description="同一指标两期计算：同比为growth_rate/year_ago，环比为growth_rate/previous_period。metric仍保留原指标，不能用return替代营收或净利。")
     presentation: list[PresentationField] = Field(default_factory=list, description="计算输入依据、两期数值、公式和来源分别以include_inputs/include_formula/include_provenance附在对应计算要求；不是独立未知指标。")
-    attributes: list[str] = Field(default_factory=list)
+    attributes: list[FactAttribute] = Field(default_factory=list)
+    qualifiers: list[RequirementQualifier] = Field(default_factory=list, description="事实限定条件。reporting_basis的value为consolidated/parent/unspecified，附原文；未映射条件用unknown并保留description，不造payload字段。")
     requires_analysis: bool = False
     input_dependencies: list[RequiredInput] = Field(default_factory=list)
     constraints: list[SemanticConstraint] = Field(default_factory=list)
@@ -127,6 +141,10 @@ class ExtractedRequirement(BaseModel):
 
 class ExtractedRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
+    route: Literal["research", "direct", "clarify"] = Field(
+        description="research需要实际主体资料、行情或时效证据；direct只回答一般概念或明确的虚构例子；clarify表示当前主体或必要输入不明确。不得因为公司不在别名表或代码没识别就选direct。"
+    )
+    clarification_question: str | None = Field(default=None, description="仅route=clarify时询问缺失主体或资料，不写研究结论。")
     subjects: list[SemanticSubject]
     output_mode: Literal["chat", "investment_report"] | None = Field(
         default=None, description="按交付意图判断：完整研究报告为investment_report，普通问答为chat；与指标和公司代码无关。"
@@ -139,18 +157,23 @@ class ExtractedRequest(BaseModel):
 def requires_semantic_extraction(query: str, *, output_mode: str = "chat") -> bool:
     """只有明确的社交和单一即时报价可绕过开放要求抽取。"""
     text = str(query or "").strip()
+    if not text:
+        return False
     if output_mode == "investment_report":
         return True
     if re.fullmatch(r"(?:你好|您好|谢谢|謝謝|多谢|嗨|hello|hi|thanks|thank you)[！!。.?？\s]*", text, re.I):
         return False
-    if re.fullmatch(r"(?:[A-Za-z0-9.^=\-]+|[\u4e00-\u9fff]{1,8})\s*(?:现在|当前|最新)?(?:股价|价格|报价)(?:是多少|多少|如何)?[？?。\s]*", text):
-        return False
-    if re.fullmatch(r"(?:what(?:'s| is)\s+)?(?:the\s+)?(?:current\s+)?(?:price|quote)(?:\s+(?:of|for))?\s+[A-Za-z0-9.^=\-]+[？?。\s]*", text, re.I):
-        return False
+    quote_only = bool(re.fullmatch(r"(?:[A-Za-z0-9.^=\-]+|[\u4e00-\u9fff]{1,8})\s*(?:现在|当前|最新)?(?:股价|价格|报价)(?:是多少|多少|如何)?[？?。\s]*", text)
+        or re.fullmatch(r"(?:what(?:'s| is)\s+)?(?:the\s+)?(?:current\s+)?(?:price|quote)(?:\s+(?:of|for))?\s+[A-Za-z0-9.^=\-]+[？?。\s]*", text, re.I))
+    if quote_only:
+        from backend.config.ticker_mapping import extract_tickers
+        return not bool(extract_tickers(text).get("tickers"))
     return True
 
 
 _SYSTEM_PROMPT = """你负责提取用户原始请求，不负责回答或选择工具。返回符合 schema 的对象。
+先判断route：真实公司、市场、事件或时效事实需要research；一般概念与明确虚构的算例可direct；必要主体或资料不明时clarify。陌生公司名称或裸证券代码仍是待研究主体，不能因规则没有别名而转概念答复。direct不得承诺查到公司当前事实。route=research必须完整保留研究要求，route=direct可仅保存概念解释要求，route=clarify询问缺失输入。
+当前请求中的明确主体、用户选择的材料与同会话已确认主题优先于workspace。workspace_scope.binding_allowed=false时，active_symbol和由它形成的规则种子只是弱提示，不能作为已确认主体；只有指代而没有可靠绑定时使用clarify。具体看板内binding_allowed=true可绑定当前标的。
 同一指标的两期增减使用calculation={operation:growth_rate/difference/ratio,baseline:year_ago/previous_period}，metric仍为原始指标。营收同比是revenue + growth_rate + year_ago，不是unknown或累计价格收益。数值比较与优劣解释分开保存；同比值需要kind=calculation，而解释增长原因仍单列explanation。仅在需要两期计算时填写calculation，工具已有标准定义的收益/回撤不填。
 标准窗口收益、回撤、技术指标或报价使用metric自身的规范定义，不兼容财务两期calculation运算；这类错配会触发request_calculation_domain_conflict结构修复。若用户明确要求再比较两个窗口各自已计算的收益率，保留两项窗口事实与独立再计算要求；不要将后者降成单个窗口收益。独立再计算无法映射时保留metric=unknown与原始metric_text，不能删除真实要求。
 计算依据属于计算的可追溯展示：原始输入或两期依据使用presentation=include_inputs，计算公式使用include_formula，输入出处与来源使用include_provenance，直接附在对应calculation要求。统一展示指令应用到每个相关计算要求，不另列metric=unknown的事实要求，也不因为要求依据就产生投资判断、新闻或增长原因解释。真正要求因果分析才requires_analysis=true；未知实际指标仍保留unknown。
@@ -196,7 +219,11 @@ async def extract_semantic_requirements(state: dict[str, Any], seed: dict[str, A
                "resolved_subject": seed.get("subject"), "bound_tasks": [
                    {key: task.get(key) for key in ("subject_type", "subject_label", "tickers", "request_text", "selection_ids", "selection_types")}
                    for task in seed.get("tasks", [])], "recent_history": history_rows,
+               "bound_context_refs": seed.get("context_refs") or [],
                "available_input_refs": {"memory_context": state.get("memory_context") or {}, "selections": ui.get("selections") or []}}
+    from backend.graph.intent.predicates import _is_scoped_active_symbol_context
+    payload["workspace_scope"] = {"active_symbol": ui.get("active_symbol"), "view": ui.get("view"),
+                                  "binding_allowed": _is_scoped_active_symbol_context(ui)}
     diagnostics: dict[str, Any] = {"status": "unconfirmed", "source": "selected_model_semantic_extraction"}
     try:
         messages = [SystemMessage(content=_SYSTEM_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))]
@@ -225,19 +252,19 @@ async def extract_semantic_requirements(state: dict[str, Any], seed: dict[str, A
                 if isinstance(parsed, BaseModel):
                     parsed = parsed.model_dump()
                 if isinstance(parsed, dict):
-                    diagnostics["raw_semantic"] = {key: deepcopy(parsed[key]) for key in ("subjects", "output_mode", "relation", "requirements", "constraints") if key in parsed}
+                    diagnostics["raw_semantic"] = {key: deepcopy(parsed[key]) for key in ("route", "subjects", "output_mode", "relation", "requirements", "constraints") if key in parsed}
                     diagnostics.setdefault("semantic_attempts", []).append(deepcopy(diagnostics["raw_semantic"]))
                 request = ExtractedRequest.model_validate(parsed)
                 raw = request.model_dump()
                 diagnostics["raw_semantic"] = raw
-                if not request.requirements:
+                if request.route == "research" and not request.requirements:
                     raise ValueError("request_requirements_empty")
                 if any(row.kind in {"fact_attribute", "calculation"} and row.metric == "unknown"
                        and row.time_scope.kind == "latest_quote" and row.measurement != "price"
                        and not row.input_dependencies for row in request.requirements):
                     raise ValueError("request_quote_measurement_inconsistent")
                 from backend.graph.request_compiler import compile_semantic_contract
-                compile_semantic_contract({**deepcopy(seed), "query": payload["query"]}, raw, {}, input_context=state)
+                compile_semantic_contract({**deepcopy(seed), "query": payload["query"]}, raw, {}, input_context=state, apply_run_context=False)
                 diagnostics["status"] = "confirmed"
                 diagnostics["schema_correction_attempts"] = attempt
                 return raw, diagnostics
@@ -248,7 +275,7 @@ async def extract_semantic_requirements(state: dict[str, Any], seed: dict[str, A
                 diagnostics.setdefault("validation_attempts", []).append(diagnostics["validation_code"])
                 if attempt or context.budget.remaining <= 0:
                     raise
-                messages.append(HumanMessage(content="上一对象未通过结构校验：" + diagnostics["validation_code"] + "。按原始请求完整重写一次，修正主体引用、输入依赖和时间字段；不要删掉原始要求。"))
+                messages.append(HumanMessage(content="上一对象未通过结构校验：" + diagnostics["validation_code"] + "。按原始请求完整重写一次，修正route、主体引用、指标限定、输入依赖和时间字段；主体与输入明确且需要查事实时使用research，缺必要绑定时使用clarify，不要删掉原始要求。"))
     except Exception as exc:
         diagnostics.update(error_code="request_contract_unconfirmed", cause_code=classify_llm_error(exc).code,
                            exception_type=type(exc).__name__)

@@ -10,6 +10,7 @@
 import { useMemo } from 'react';
 
 import { useDashboardStore } from '../../../store/dashboardStore';
+import { useDashboardSnapshot } from '../../../hooks/useDashboardData';
 import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import type { NewsItem, SelectionItem, NewsTagGroup } from '../../../types/dashboard';
 import { NEWS_TAG_GROUP_MAP } from '../../../types/dashboard';
@@ -66,7 +67,7 @@ function filterByTagGroup(items: NewsItem[], group: NewsTagGroup): NewsItem[] {
 export function NewsTab() {
   // --- Store ---
   const activeAsset = useDashboardStore((s) => s.activeAsset);
-  const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const dashboardData = useDashboardSnapshot();
   const newsSubTab = useDashboardStore((s) => s.newsSubTab);
   const newsTagFilter = useDashboardStore((s) => s.newsTagFilter);
   const newsTimeRange = useDashboardStore((s) => s.newsTimeRange);

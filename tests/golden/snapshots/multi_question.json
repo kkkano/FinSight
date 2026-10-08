@@ -3,45 +3,38 @@
   "output_mode": "chat",
   "plan_steps": [
     {
-      "group": "primary_company",
-      "kind": "tool",
-      "name": "get_current_datetime"
-    },
-    {
-      "group": "primary_company",
-      "kind": "tool",
-      "name": "search"
-    },
-    {
-      "group": "primary_company",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "get_stock_price"
     },
     {
-      "group": "primary_company",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "get_company_info"
     },
     {
-      "group": "primary_company",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "get_earnings_estimates"
     },
     {
-      "group": "primary_company",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "get_stock_price"
     },
     {
-      "group": "primary_company",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "get_company_info"
     },
     {
-      "group": "primary_company",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "get_earnings_estimates"
-    }
+    },
+    {"group": "request_task_4", "kind": "tool", "name": "get_current_datetime"},
+    {"group": "request_task_4", "kind": "tool", "name": "search"},
+    {"group": "request_task_4_macro", "kind": "agent", "name": "macro_agent"}
   ],
   "route": "research",
   "tasks": [
@@ -71,7 +64,7 @@
       ]
     },
     {
-      "operation": "analyze_impact",
+      "operation": "macro_brief",
       "reason": "macro_hint",
       "subject_type": "macro",
       "tickers": []

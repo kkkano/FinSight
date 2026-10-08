@@ -27,6 +27,24 @@ export function formatCurrency(value: number | null | undefined): string {
   return `${sign}$${abs.toFixed(2)}`;
 }
 
+/** 使用来源明确提供的币种，缺失时保留数值而不补美元。 */
+export function formatMoney(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+  compact = false,
+): string {
+  if (value == null || !Number.isFinite(value)) return '--';
+  const numberOptions: Intl.NumberFormatOptions = {
+    minimumFractionDigits: compact ? 0 : 2,
+    maximumFractionDigits: 2,
+    notation: compact ? 'compact' : 'standard',
+  };
+  if (!currency) {
+    return `${new Intl.NumberFormat('en-US', numberOptions).format(value)}（币种未提供）`;
+  }
+  return new Intl.NumberFormat('zh-CN', { ...numberOptions, style: 'currency', currency }).format(value);
+}
+
 // --- 市场感知格式化（P2-10 A股体验补齐） ---
 
 /**

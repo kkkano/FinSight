@@ -43,6 +43,16 @@ _EARNINGS_IMPACT = {"metric": "earnings_impact", "evidence_kinds": [*_EARNINGS["
 def fixture_for_query(query, *, state=None, seed=None):
     state, seed = state or {}, seed or {}
     ui = state.get("ui_context") or {}
+    if query in {"自由现金流和净利润为什么会差很多？用虚构数字举例即可，不要查询股票行情。", "what is backtesting?",
+                 "Do not look up news. Just tell me why semiconductors can sell off together."}:
+        return {"route": "direct", "subjects": [], "relation": "none", "requirements": [{
+            "source_text": query, "description": query, "kind": "explanation", "metric": "unknown", "metric_text": "概念与虚构算例"}]}
+    if query == "这只股票最新股价":
+        assert str(ui.get("active_symbol") or "").upper() == "AAPL"
+        if ui.get("view") == "dashboard":
+            return _request(query, [(["AAPL"], ["quote"])])
+        return {"route": "clarify", "subjects": [], "relation": "none", "requirements": [],
+                "clarification_question": "请明确股票代码，或从该股票看板发起提问。"}
     if query in {"分析影响", "总结要点", "股价分析", "分析一下"}:
         selections = ui.get("selections") or []
         if selections:

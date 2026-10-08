@@ -17,6 +17,7 @@ def normalize_execution_evidence(
     state: GraphState,
     plan_ir: dict[str, Any],
     artifacts: dict[str, Any],
+    enrich_snippets: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], int]:
     # Phase 4: build a unified evidence_pool from selection (ephemeral, request-scoped).
     subject = state.get("subject") or {}
@@ -167,7 +168,7 @@ def normalize_execution_evidence(
     jina_enrich_enabled = executor_settings().jina_enrich_evidence
 
     def _maybe_enrich_snippet_from_jina(url: str | None, snippet: Any) -> Any:
-        if not jina_enrich_enabled:
+        if not jina_enrich_enabled or not enrich_snippets:
             return snippet
         target = str(url or "").strip()
         snippet_text = str(snippet or "").strip()
@@ -249,6 +250,9 @@ def normalize_execution_evidence(
             url = item.get("url")
             snippet = _maybe_enrich_snippet_from_jina(url, snippet)
             source = item.get("source") or agent_name
+            source_time = next((item.get(key) or (item.get("meta") or {}).get(key)
+                                for key in ("as_of", "timestamp", "published_at", "published_date")
+                                if item.get(key) or (item.get("meta") or {}).get(key)), None)
             evidence_pool.append(
                 {
                     **item,
@@ -257,6 +261,8 @@ def normalize_execution_evidence(
                     "snippet": str(snippet).strip()[:800],
                     "text": item.get("text") or item.get("snippet") or item.get("summary"),
                     "source": source,
+                    "as_of": source_time,
+                    "observed_at": as_of,
                     "published_date": item.get("published_at") or item.get("published_date") or item.get("timestamp"),
                     "confidence": item.get("confidence", confidence_base if isinstance(confidence_base, (int, float)) else 0.6),
                     "type": "agent",
@@ -384,6 +390,10 @@ def normalize_execution_evidence(
             if subject:
                 e["subject"] = str(subject).strip().upper()
         key = _dedupe_key(e)
+        # 相同 ID 的不同内容必须保留给冲突校验，不能先在展示池中吞掉。
+        body = e.get("text") or e.get("snippet") or e.get("summary") or e.get("structured_data")
+        if not key.startswith("filing:"):
+            key += ":" + json.dumps(body, ensure_ascii=False, sort_keys=True, default=str)
         existing = seen.get(key)
         if existing is not None:
             if key.startswith("filing:"):
@@ -445,5 +455,22 @@ def normalize_execution_evidence(
             agent_diagnostics[str(agent_name)] = diag
     if agent_diagnostics:
         artifacts["agent_diagnostics"] = agent_diagnostics
+
+    from backend.graph.synthesis.analysis_requirements import requested_task_partition
+    from backend.graph.synthesis.research_synthesis import normalize_evidence
+    from backend.graph.synthesis.task_outcomes import build_task_descriptors
+
+    ready, blocked = requested_task_partition(state)
+    descriptors = build_task_descriptors(
+        understanding_tasks=ready or [], blocked_tasks=blocked or [],
+        plan_tasks=plan_ir.get("tasks") or [], plan_steps=steps or [],
+    ).descriptors
+    if descriptors:
+        outputs = {key: item["output"] for key, item in (step_results or {}).items()
+                   if isinstance(item, dict) and item.get("output") is not None}
+        artifacts["task_evidence_normalization"] = normalize_evidence(
+            task_descriptors=descriptors, plan_steps=steps or [], agent_outputs=outputs,
+            raw_evidence_by_task=evidence_by_task,
+        ).model_dump()
 
     return deduped, step_index, len(evidence_pool)

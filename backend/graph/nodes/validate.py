@@ -6,6 +6,9 @@ from typing import Any
 
 from backend.graph.state import GraphState
 from backend.report.quality_engine import evaluate_result_quality
+from backend.graph.synthesis.contracts import ReportSynthesisDraft, aggregate_task_status
+from backend.graph.synthesis.research_synthesis import evaluate_synthesis_quality, finalize_report_synthesis
+from backend.graph.synthesis.requirement_validation import overall_conclusion_block_reasons
 
 
 def _mapping_size(value: Any) -> int:
@@ -15,6 +18,30 @@ def _mapping_size(value: Any) -> int:
 def validate(state: GraphState) -> dict[str, Any]:
     artifacts = dict(state.get("artifacts") or {})
     trace = dict(state.get("trace") or {})
+    raw = artifacts.get("research_result") or artifacts.get("research_synthesis_draft")
+    if isinstance(raw, dict):
+        draft = ReportSynthesisDraft.model_validate(raw)
+        missing = (trace.get("coverage_validator") or {}).get("missing_requirements") or []
+        for task in draft.task_results:
+            combined = [*task.missing_requirements, *(item for item in missing if isinstance(item, dict) and item.get("task_id") == task.task_id)]
+            task.missing_requirements = [item for index, item in enumerate(combined) if item not in combined[:index]]
+            if task.missing_requirements and task.status == "answered":
+                task.status = "partial"
+        draft.status = aggregate_task_status([task.status for task in draft.task_results])
+        overall_reasons = overall_conclusion_block_reasons(draft)
+        if overall_reasons:
+            draft.overall_conclusion = None
+        draft.synthesis_validation = {**draft.synthesis_validation, "overall_block_reasons": overall_reasons}
+        gate = evaluate_synthesis_quality(
+            draft=draft, requested_task_ids=artifacts.get("research_requested_task_ids") or [task.task_id for task in draft.task_results],
+            evidence_index=draft.evidence_index,
+            structural_block_reasons=artifacts.get("research_structural_block_reasons") or [],
+            require_claims=state.get("output_mode") == "investment_report",
+        )
+        artifacts.update(research_result=draft.model_dump(), research_result_quality=gate.model_dump())
+        if state.get("output_mode") == "investment_report":
+            artifacts.update(research_synthesis=finalize_report_synthesis(draft=draft, final_gate=gate).model_dump(),
+                             research_synthesis_gate=gate.model_dump())
     ledger = artifacts.get("evidence_ledger") if isinstance(artifacts.get("evidence_ledger"), dict) else {}
     claim_validation = artifacts.get("task_claim_validation")
     if not isinstance(claim_validation, dict):
@@ -26,7 +53,7 @@ def validate(state: GraphState) -> dict[str, Any]:
         1 for item in evidence_pool
         if isinstance(item, dict) and str(item.get("url") or item.get("source_url") or "").strip()
     )
-    quality = evaluate_result_quality(state=state)
+    quality = evaluate_result_quality(state={**state, "artifacts": artifacts})
     artifacts["result_quality"] = quality
     artifacts["quality_blocked"] = quality["state"] == "block"
     artifacts["publishable"] = quality["publishable"]

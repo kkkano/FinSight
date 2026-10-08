@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextvars
 import json
 import os
+from threading import RLock
 from dataclasses import dataclass
 from typing import Any
 from backend.services.llm_response import raw_completion
@@ -36,10 +37,11 @@ class LLMAttribution:
 
 
 class TokenUsageAccumulator:
-    """单次 run 的 token 累加器（线程内顺序累加，无需锁）。"""
+    """单次 run 的 token 累加器；同步抽取线程共享相同账户和快照。"""
 
     def __init__(self, *, user_id: str = "public") -> None:
         self.user_id = str(user_id or "public").strip() or "public"
+        self._lock = RLock()
         self.prompt_tokens: int = 0
         self.completion_tokens: int = 0
         self.call_count: int = 0
@@ -122,6 +124,10 @@ class TokenUsageAccumulator:
         return self.prompt_tokens + self.completion_tokens
 
     def summary(self) -> dict[str, Any]:
+        with self._lock:
+            return self._summary()
+
+    def _summary(self) -> dict[str, Any]:
         cost = estimate_cost(self.by_model)
         if self.reported_usage_calls == 0:
             usage_state = "not_reported"
@@ -140,8 +146,8 @@ class TokenUsageAccumulator:
             "unreported_usage_calls": self.unreported_usage_calls,
             "usage_state": usage_state,
             "total_cost_usd": round(cost, 6) if cost else 0.0,
-            "tokens_by_model": self.by_model,
-            "usage_by_attribution": list(self.by_attribution.values()),
+            "tokens_by_model": {key: dict(value) for key, value in self.by_model.items()},
+            "usage_by_attribution": [dict(value) for value in self.by_attribution.values()],
         }
 
 
@@ -186,7 +192,8 @@ def get_llm_attribution() -> LLMAttribution | None:
 def bind_current_llm_usage_prediction(*, agent: str, prediction_id: str) -> None:
     acc = get_token_accumulator()
     if acc is not None:
-        acc.bind_prediction(agent=agent, prediction_id=prediction_id)
+        with acc._lock:
+            acc.bind_prediction(agent=agent, prediction_id=prediction_id)
 
 
 # ---------------------------------------------------------------------------
@@ -250,11 +257,12 @@ def record_llm_usage(response: Any, model: str | None = None, *, count_call: boo
         return
     try:
         prompt, completion = extract_token_usage(response)
-        if prompt or completion:
-            acc.add(model, prompt, completion)
-            if not count_call:
-                acc.call_count -= 1
-                acc.by_model[model or "unknown"]["calls"] -= 1
+        with acc._lock:
+            if prompt or completion:
+                acc.add(model, prompt, completion)
+                if not count_call:
+                    acc.call_count -= 1
+                    acc.by_model[model or "unknown"]["calls"] -= 1
     except Exception:
         return
 
@@ -271,24 +279,26 @@ def record_llm_attempt(
     if acc is None:
         return
     prompt, completion = extract_token_usage(response) if response is not None else (0, 0)
-    acc.call_count += 1
-    model_entry = acc.by_model.setdefault(model or "unknown", {"prompt": 0, "completion": 0, "calls": 0})
-    model_entry["calls"] += 1
-    acc.add_attributed_attempt(
-        model=model,
-        status=status,
-        duration_ms=duration_ms,
-        prompt=prompt,
-        completion=completion,
-        attribution=get_llm_attribution(),
-        usage_reported=has_reported_token_usage(response) if response is not None else False,
-    )
+    with acc._lock:
+        acc.call_count += 1
+        model_entry = acc.by_model.setdefault(model or "unknown", {"prompt": 0, "completion": 0, "calls": 0})
+        model_entry["calls"] += 1
+        acc.add_attributed_attempt(
+            model=model,
+            status=status,
+            duration_ms=duration_ms,
+            prompt=prompt,
+            completion=completion,
+            attribution=get_llm_attribution(),
+            usage_reported=has_reported_token_usage(response) if response is not None else False,
+        )
 
 
 def record_llm_selection_failure() -> None:
     acc = get_token_accumulator()
     if acc is not None:
-        acc.selection_failed_call_count += 1
+        with acc._lock:
+            acc.selection_failed_call_count += 1
 
 
 # ---------------------------------------------------------------------------

@@ -210,3 +210,26 @@ def test_prediction_level_break_queues_once_then_obeys_cooldown(monkeypatch):
     ) == 1
     assert len(queued) == 1
     assert calls[-1] == ("prediction_level_break", False)
+
+
+def test_mixed_markets_schedule_each_target_independently(monkeypatch):
+    _configure_stores(monkeypatch, [_lease("AAPL"), _lease("0700.HK")])
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda _now, *, symbol: "closed" if symbol == "AAPL" else "regular")
+    fetched = []
+
+    def fetcher(target, now):
+        fetched.append(target.symbol)
+        return MarketSnapshot(target.symbol, now.isoformat(), 100)
+
+    monitor_engine.run_realtime_monitor_cycle(snapshot_fetcher=fetcher, trigger_consumer=lambda *_args: True)
+    assert fetched == ["0700.HK"]
+
+
+def test_daily_close_is_not_a_realtime_snapshot(monkeypatch):
+    import pytest
+    monkeypatch.setattr(monitor_engine, "get_market_data_gateway", lambda: SimpleNamespace(
+        get_quote=lambda _symbol: {"quality": "trusted", "data_kind": "daily_close", "quote": {"price": 100}}
+    ))
+    target = monitor_engine.RealtimeMonitorTarget("alice", "s1", "AAPL")
+    with pytest.raises(monitor_engine.RealtimeMarketDataUnavailable, match="intraday_snapshot_required"):
+        monitor_engine._fetch_realtime_snapshot(target, datetime.now(timezone.utc))

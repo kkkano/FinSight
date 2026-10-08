@@ -90,7 +90,7 @@ def _component_ready(
     if status not in {"ok", "disabled", "initializing", "degraded", "error"}:
         status = "error"
     normalized: dict[str, Any] = {"status": status}
-    for key in ("error_code", "reason", "backend", "backend_requested", "embedding", "reranker", "semantic_ready", "lexical_ready"):
+    for key in ("error_code", "reason", "backend", "backend_requested", "embedding", "reranker", "semantic_ready", "lexical_ready", "full_ready", "index"):
         value = component.get(key)
         if value not in (None, ""):
             if key == "reason":
@@ -256,6 +256,26 @@ def _readiness_components(deps: SystemRouterDeps) -> tuple[dict[str, dict[str, A
 def create_system_router(deps: SystemRouterDeps) -> APIRouter:
     """运行健康与 Prometheus 指标；交互式运维诊断不属于公共 API。"""
     router = APIRouter(tags=["System"])
+
+    @router.get("/api/capabilities")
+    def service_capabilities():
+        components, failures = _readiness_components(deps)
+        rag = components.get("rag", {})
+        semantic = rag.get("semantic_ready") is True
+        lexical = rag.get("lexical_ready") is True
+        full = rag.get("full_ready") is True
+        return {
+            "status": "ready" if not failures else "not_ready", "ready": not failures,
+            "components": components,
+            "features": {
+                "user_prediction": {"enabled": _env_truthy("PREDICTION_GENERATION_ENABLED", True)},
+                "us20": {"enabled": _env_truthy("PREDICTION_ENABLED", False)},
+                "monitor": {"enabled": _env_truthy("MONITOR_REALTIME_ENABLED", False)},
+                "retrieval": {"mode": "hybrid" if full else "semantic" if semantic else "lexical" if lexical else "unavailable",
+                              "full_ready": full},
+            },
+            "timestamp": _now(),
+        }
 
     @router.get("/livez")
     def liveness_check():

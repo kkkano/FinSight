@@ -1,20 +1,15 @@
 import { BarChart3, Newspaper, Scale } from 'lucide-react';
 
 import { useDashboardStore } from '../../../store/dashboardStore';
+import { useDashboardSnapshot } from '../../../hooks/useDashboardData';
 import { DashboardSourceBadge } from '../DashboardSourceBadge';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { ValuationGrid } from './financial/ValuationGrid';
 import { TechnicalSummaryCard } from './technical/TechnicalSummaryCard';
-
-function formatMarketCap(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return '--';
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  return `$${(value / 1e6).toFixed(0)}M`;
-}
+import { formatMoney } from '../../../utils/format';
 
 export function OverviewTab() {
-  const dashboardData = useDashboardStore((state) => state.dashboardData);
+  const dashboardData = useDashboardSnapshot();
   const activeAsset = useDashboardStore((state) => state.activeAsset);
 
   if (!dashboardData) {
@@ -107,7 +102,7 @@ export function OverviewTab() {
                       <td className="py-2 text-right tabular-nums">
                         {peer.revenue_growth == null ? '--' : `${(peer.revenue_growth * 100).toFixed(1)}%`}
                       </td>
-                      <td className="py-2 text-right tabular-nums">{formatMarketCap(peer.market_cap)}</td>
+                      <td className="py-2 text-right tabular-nums">{formatMoney(peer.market_cap, peer.currency, true)}</td>
                     </tr>
                   ))}
                 </tbody>

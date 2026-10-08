@@ -250,7 +250,9 @@ export interface ReportQuality {
   details?: Record<string, unknown>;
   inputs?: Record<string, unknown>;
   evaluated_at?: string;
-  answer_status?: 'answered' | 'partial' | 'unavailable' | 'blocked';
+  answer_status?: 'answered' | 'partial' | 'unavailable' | 'blocked' | 'clarification_required';
+  content_status?: 'answered' | 'partial' | 'unavailable' | 'blocked' | 'clarification_required';
+  content_contract_version?: string;
   has_supported_content?: boolean;
   publishable?: boolean;
   conclusion_status?: 'supported' | 'unavailable';
@@ -341,6 +343,10 @@ export interface ReportIR {
 export type MarketDataQuality = 'trusted' | 'degraded';
 
 export interface MarketDataEnvelope<T> {
+  status?: 'ok' | 'empty' | 'missing' | 'error' | 'degraded';
+  observed_at?: string;
+  currency?: string | null;
+  data_kind?: 'daily_close' | 'intraday_snapshot' | 'unknown';
   data: T;
   capability: 'quote' | 'kline' | 'news' | 'financial';
   provider: string | null;
@@ -364,6 +370,9 @@ export interface MarketDataResponse<T> {
 }
 
 export interface QuoteData {
+  currency?: string | null;
+  data_kind?: 'daily_close' | 'intraday_snapshot' | 'unknown';
+  source_timestamp?: string | null;
   price: number;
   change: number | null;
   change_percent: number | null;

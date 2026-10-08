@@ -25,10 +25,10 @@ def timestamp(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-@lru_cache(maxsize=1)
-def calendar():
+@lru_cache(maxsize=8)
+def calendar(name: str = "NYSE"):
     import pandas_market_calendars as mcal
-    return mcal.get_calendar("NYSE")
+    return mcal.get_calendar(name)
 
 
 @dataclass(frozen=True)

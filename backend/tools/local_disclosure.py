@@ -330,8 +330,8 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
                     "content_read": True,
                 }
             )
-            from .disclosure_financial_facts import _METRICS
-            wanted = set(financial_metrics or _METRICS).intersection(_METRICS)
+            from .disclosure_financial_facts import _METRICS, financial_metric_inputs
+            wanted = set(financial_metric_inputs(financial_metrics or _METRICS)).intersection(_METRICS)
             requested_form = "annual_report" if (time_scope or {}).get("kind") == "fiscal_year" else None
             matching_form = not requested_form or rows[-1]["form"] == requested_form
             if include_financial_facts and matching_form and extraction_attempts < 2 and (not extracted_metrics or wanted - extracted_metrics):
@@ -341,6 +341,8 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
                 diagnostics: dict = {}
                 rows[-1]["financial_facts"] = extract_financial_facts(content, ticker_norm, url, financial_metrics,
                     time_scope=time_scope, diagnostics=diagnostics)
+                from .financial_facts import derive_cash_flow_facts
+                rows[-1]["financial_facts"].extend(derive_cash_flow_facts(rows[-1]["financial_facts"], financial_metrics or []))
                 rows[-1]["financial_extraction"] = diagnostics
                 for fact in rows[-1]["financial_facts"]:
                     fact["filed"] = rows[-1]["filing_date"]

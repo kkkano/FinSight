@@ -1,7 +1,13 @@
 {
   "blocked_reasons": [],
   "output_mode": "chat",
-  "plan_steps": [],
+  "plan_steps": [
+    {"group": "request_task_1", "kind": "tool", "name": "get_stock_price"},
+    {"group": "request_task_1", "kind": "tool", "name": "get_technical_snapshot"},
+    {"group": "request_task_1_technical_agents", "kind": "agent", "name": "technical_agent"}
+  ],
   "route": "research",
-  "tasks": []
+  "tasks": [
+    {"operation": "technical", "reason": "ticker_or_alias", "subject_type": "company", "tickers": ["600036.SS"]}
+  ]
 }

@@ -73,7 +73,12 @@ def test_incomplete_h12_hides_overall_and_raw_dependent_claims_but_keeps_qualifi
     draft = _h12()
     original_overall = draft.overall_conclusion
     _check(draft)
+    from backend.graph.nodes.validate import validate
+    state = {"output_mode": "investment_report", "artifacts": {"research_result": draft.model_dump()}}
+    draft = ReportSynthesisDraft.model_validate(validate(state)["artifacts"]["research_result"])
+    original = draft.model_dump()
     markdown = render_research_report(draft).markdown
+    assert draft.model_dump() == original
     assert draft.overall_conclusion is None
     assert "无法判断" in markdown and original_overall not in markdown
     assert "公司披露其定位为 CRM 技术全球领导者" in markdown

@@ -50,6 +50,7 @@ from backend.dashboard.schemas import (
     WatchItem,
 )
 from backend.dashboard.widget_selector import select_capabilities
+from backend.services.data_contract import DataResult
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ def _make_failure_marker(reason: str) -> dict[str, object]:
     return {
         _DASHBOARD_FAILURE_MARKER: True,
         _DASHBOARD_FAILURE_REASON_KEY: reason,
-        "as_of": _utc_now_iso(),
+        "observed_at": _utc_now_iso(),
     }
 
 
@@ -182,18 +183,26 @@ def _build_meta(
     calc_window: str = "",
 ) -> dict[str, object]:
     latency_ms = int((time.perf_counter() - started_at) * 1000)
-    fallback_used = bool(fallback_reason)
-    confidence = 0.35 if fallback_used else 0.85
-    as_of = _extract_as_of(payload) or _utc_now_iso()
+    result = DataResult.from_payload(payload)
+    details = payload if isinstance(payload, dict) else next((item for item in reversed(payload) if isinstance(item, dict)), {}) if isinstance(payload, list) else {}
+    fallback_reason = fallback_reason or result.error_code
+    fallback_used = bool(fallback_reason) or result.status == "degraded"
+    status = "error" if fallback_reason else result.status
+    as_of = _extract_as_of(payload)
+    confidence = 0.0 if status in {"error", "empty", "missing"} else 0.35 if fallback_used else 0.85 if details.get("quality") == "trusted" else 0.5
     return {
-        "provider": provider,
+        "provider": details.get("provider") or details.get("source") or provider,
         "source_type": source_type,
         "as_of": as_of,
+        "observed_at": result.observed_at,
+        "status": status,
+        "error_code": result.error_code or fallback_reason,
         "latency_ms": latency_ms,
         "fallback_used": fallback_used,
         "confidence": confidence,
-        "currency": currency,
-        "calc_window": calc_window,
+        "currency": result.currency or details.get("currency") or currency,
+        "frequency": result.frequency or details.get("frequency"),
+        "calc_window": details.get("frequency") or calc_window,
         "fallback_reason": fallback_reason,
     }
 
@@ -255,6 +264,15 @@ async def get_dashboard(
     fallback_reasons: list[str] = []
     meta_map: dict[str, dict[str, object]] = {}
 
+    def _cache_location(key: str) -> tuple[str, str]:
+        if key == "macro_snapshot":
+            return "__GLOBAL__", key
+        if key in {"news_market", "news_impact"}:
+            return symbol, "news"
+        if key in {"market_chart", "revenue_trend", "segment_mix", "sector_weights", "top_constituents", "holdings"}:
+            return symbol, "charts"
+        return symbol, key
+
     def _set_meta(
         key: str,
         *,
@@ -266,6 +284,15 @@ async def get_dashboard(
         currency: str = "",
         calc_window: str = "",
     ) -> None:
+        cache_symbol, cache_key = _cache_location(key)
+        cached_result = dashboard_cache.get_result(cache_symbol, cache_key)
+        if source_type in {"cache", "failure_cache"} and cached_result is not None and key in cached_result.meta:
+            meta_map[key] = dict(cached_result.meta[key])
+            meta_map[key]["cached"] = True
+            reason = meta_map[key].get("fallback_reason")
+            if reason and reason not in fallback_reasons:
+                fallback_reasons.append(str(reason))
+            return
         meta_map[key] = _build_meta(
             provider=provider,
             source_type=source_type,
@@ -275,6 +302,9 @@ async def get_dashboard(
             currency=currency,
             calc_window=calc_window,
         )
+        if cached_result is not None:
+            meta_map[key]["observed_at"] = cached_result.observed_at
+        meta_map[key]["cached"] = source_type in {"cache", "failure_cache"}
 
     snapshot_started = time.perf_counter()
     snapshot = dashboard_cache.get(symbol, "snapshot")
@@ -297,7 +327,7 @@ async def get_dashboard(
         payload=snapshot,
         started_at=snapshot_started,
         fallback_reason=snapshot_fallback_reason,
-        currency="USD",
+        currency="",
     )
 
     charts_started = time.perf_counter()
@@ -358,7 +388,7 @@ async def get_dashboard(
                 payload=charts[key],
                 started_at=chart_started_map.get(key, charts_started),
                 fallback_reason=fallback_reason,
-                currency="USD",
+                currency="",
                 calc_window=calc_window,
             )
 
@@ -381,7 +411,7 @@ async def get_dashboard(
                 source_type="cache",
                 payload=payload,
                 started_at=charts_started,
-                currency="USD",
+                currency="",
                 calc_window=calc_window,
             )
 
@@ -584,7 +614,7 @@ async def get_dashboard(
                 payload=payload if isinstance(payload, (dict, list)) else {},
                 started_at=v2_started_map.get(key, charts_started),
                 fallback_reason=fallback_reason,
-                currency="USD",
+                currency="",
                 calc_window=calc_window,
             )
 
@@ -690,7 +720,7 @@ async def get_dashboard(
                 payload=payload if isinstance(payload, (dict, list)) else {},
                 started_at=g2_started_map[key],
                 fallback_reason=fallback_reason,
-                currency="USD",
+                currency="",
                 calc_window=calc_window,
             )
 
@@ -765,6 +795,10 @@ async def get_dashboard(
         fallback_reason=macro_fallback_reason,
         calc_window="near_real_time",
     )
+    macro_fallback_reason = meta_map["macro_snapshot"].get("fallback_reason")
+    for key, meta in meta_map.items():
+        cache_symbol, cache_key = _cache_location(key)
+        dashboard_cache.update_meta(cache_symbol, cache_key, key, meta)
 
     raw_data = {
         "snapshot": snapshot or {},

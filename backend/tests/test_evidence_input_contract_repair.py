@@ -96,7 +96,8 @@ async def test_sec_disclosure_body_is_required_and_retained_through_answer_rende
         assert all(item["status"] == "missing" for item in task["requirement_results"])
         assert "explanation_requires_document_body" in task["error_codes"]
         assert "订阅业务需要维持" not in markdown
-        assert "该来源为公告索引" in markdown
+        assert evidence["usage"] == "raw"
+        assert "部分材料仅为检索线索" in markdown
 
 
 @pytest.mark.asyncio

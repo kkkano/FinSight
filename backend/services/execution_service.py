@@ -9,17 +9,13 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable
 from uuid import uuid4
 
 from backend.report.quality_engine import evaluate_result_quality, record_quality_metrics
-from backend.services.llm_usage import (
-    TokenUsageAccumulator,
-    set_token_accumulator,
-)
+from backend.services.run_context import RunContext, run_budget_seconds, run_context_scope
 
 logger = logging.getLogger("execution_service")
 
@@ -190,6 +186,9 @@ def _apply_quality_gate(
     source: str,
 ) -> tuple[dict[str, Any], bool]:
     quality = evaluate_result_quality(state=state, report=report)
+    content = (state.get("artifacts") or {}).get("result_quality") or {}
+    if content.get("content_contract_version") == "research_content.v2":
+        quality.update(content_status=content["content_status"], answer_status=content["content_status"])
     blocked = quality.get("state") == "block"
     if isinstance(report, dict):
         report["report_quality"] = quality
@@ -282,26 +281,7 @@ async def _replay_cached_report(
 
 
 def _execution_timeout_seconds(output_mode: str | None = None) -> float:
-    """
-    Resolve execution timeout with mode-aware defaults.
-
-    - brief/chat/default: LANGGRAPH_EXECUTION_TIMEOUT_SECONDS (default 3600s)
-    - investment_report: LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS (default 7200s)
-      fallback to LANGGRAPH_EXECUTION_TIMEOUT_SECONDS when report-specific key is absent.
-    """
-    mode = (output_mode or "").strip().lower()
-    default_base = "3600"
-    default_report = "7200"
-    raw = (
-        os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS", default_report)
-        if mode == "investment_report"
-        else os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_SECONDS", default_base)
-    )
-    try:
-        default_timeout = max(60.0, float(raw))
-    except Exception:
-        default_timeout = 7200.0 if mode == "investment_report" else 3600.0
-    return default_timeout
+    return run_budget_seconds("investment_report" if output_mode == "investment_report" else "chat")
 
 
 def _cancelled_trace_payload() -> dict[str, Any]:
@@ -362,6 +342,7 @@ async def run_graph_pipeline(
     user_id: str = "public",
     trace_raw_enabled: bool = False,
     markdown_chunk_size: int = 60,
+    run_context: RunContext | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Yield SSE-compatible event dicts for a full graph run.
 
@@ -402,9 +383,11 @@ async def run_graph_pipeline(
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
     cancel_event = asyncio.Event()
-    run_id_value = _normalize_run_id(run_id)
+    run_id_value = _normalize_run_id(run_id or (run_context.run_id if run_context is not None else None))
     request_started_at = _utc_iso_now()
-    token_acc = TokenUsageAccumulator(user_id=user_id)
+    context = run_context or RunContext.create(owner=user_id, entry=output_mode or "chat", run_id=run_id_value,
+                                               budget_seconds=_execution_timeout_seconds(output_mode))
+    token_acc = context.usage
     streamed_preview: list[str] = []
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
@@ -441,11 +424,19 @@ async def run_graph_pipeline(
         if outgoing.get("type") == "token" and isinstance(outgoing.get("content"), str):
             streamed_preview.append(outgoing["content"])
         if outgoing.get("type") in {"done", "error", "cancelled"}:
+            if context.status == "running":
+                context.finish({"done": "completed", "error": "failed", "cancelled": "cancelled"}[outgoing["type"]])
             if outgoing.get("type") != "done" and not outgoing.get("response") and streamed_preview:
                 outgoing["response"] = "".join(streamed_preview)
             if deps.persist_run_event is not None:
                 # 唯一完成边界：事务提交后才允许客户端收到终态。
-                outgoing = await deps.persist_run_event(outgoing)
+                if context.status == "timed_out":
+                    try:
+                        outgoing = await asyncio.wait_for(deps.persist_run_event(outgoing), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        outgoing.update(persistence_status="failed", persistence_error="terminal_save_timeout")
+                else:
+                    outgoing = await deps.persist_run_event(outgoing)
             else:
                 outgoing.setdefault("persistence_status", "ephemeral")
             if outgoing.get("type") == "done":
@@ -492,8 +483,6 @@ async def run_graph_pipeline(
     async def _producer() -> None:
         token = set_event_emitter(_emit)
         cancel_token = set_cancel_event(cancel_event)
-        # 每个 run 独立的 token 累加器（create_task 复制 context，天然隔离，无需 reset）
-        set_token_accumulator(token_acc)
         trace_emitter = get_trace_emitter()
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
@@ -516,35 +505,48 @@ async def run_graph_pipeline(
             runner = await deps.get_graph_runner()
 
             from backend.graph.runner import run_graph_traced
-            timeout_seconds = _execution_timeout_seconds(output_mode)
+            timeout_seconds = context.remaining_seconds
             try:
-                state = await asyncio.wait_for(
-                    run_graph_traced(
+                async with asyncio.timeout(timeout_seconds) as deadline_timer:
+                    context.deadline_timer = deadline_timer
+                    state = await run_graph_traced(
                         runner,
                         thread_id=thread_id,
                         query=query,
                         ui_context=graph_ui_context,
                         output_mode=output_mode,
                         strict_selection=strict_selection,
-                    ),
-                    timeout=timeout_seconds,
-                )
+                    )
             except asyncio.TimeoutError:
                 cancel_event.set()
+                context.finish("timed_out")
                 logger.error(
                     "[execution_service] graph timeout thread_id=%s timeout=%ss query=%s",
                     thread_id,
                     timeout_seconds,
                     (query or "")[:120],
                 )
+                from backend.graph.execution.partial_delivery import build_partial_delivery
+                try:
+                    partial = await asyncio.wait_for(build_partial_delivery(context), timeout=3.0)
+                except Exception:
+                    logger.exception("时间预算耗尽后的部分结果投影失败 run_id=%s", context.run_id)
+                    partial = {"answer_status": "unavailable"}
                 await _queue_event(
                     {
+                        **partial,
                         "schema_version": deps.sse_event_schema_version,
                         "type": "error",
-                        "message": f"Execution timed out after {int(timeout_seconds)}s; please retry with brief mode or fewer agents.",
+                        "message": "本轮时间预算已用尽，已停止继续调用模型，可重试或查看保留的内容。",
+                        "error_code": "run_deadline_exceeded",
+                        "publishable": False,
+                        "answer_status": partial.get("answer_status", "partial" if streamed_preview else "unavailable"),
+                        "metrics": token_acc.summary(),
                     }
                 )
                 return
+            finally:
+                context.deadline_timer = None
 
             markdown, state = _ensure_deliverable_markdown(state)
 
@@ -589,7 +591,7 @@ async def run_graph_pipeline(
             if not str(response_markdown or "").strip():
                 query_preview = str(query or "这个问题").strip()
                 response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
-            persisted_report = None if (quality_blocked or execution_failed) else report
+            persisted_report = None if (quality_blocked or execution_failed or report_quality.get("publishable") is False) else report
 
             if report_build_failed and is_report_mode:
                 # P1-4: 报告模式下构建崩溃 = 执行失败，必须显式告知用户，
@@ -764,7 +766,7 @@ async def run_graph_pipeline(
                     "answer_status": report_quality.get("answer_status"),
                     "has_supported_content": report_quality.get("has_supported_content"),
                     "quality_blocked": quality_blocked,
-                    "publishable": not quality_blocked and not execution_failed and not persistence_failed,
+                    "publishable": report_quality.get("publishable") is not False and not quality_blocked and not execution_failed and not persistence_failed,
                     "archived": report_archived,
                     "error_code": (
                         "report_build_failed"
@@ -802,24 +804,9 @@ async def run_graph_pipeline(
                 }
             )
 
-            try:
-                from backend.services.agent_run_archive import get_agent_run_archive
-
-                get_agent_run_archive().archive_usage_summary(
-                    run_id=str(run_id_value or thread_id),
-                    user_id=token_acc.user_id,
-                    summary=token_acc.summary(),
-                    status="completed",
-                )
-            except Exception as archive_exc:  # noqa: BLE001 — PostgreSQL 归档为旁路
-                logger.warning(
-                    "[execution_service] agent run archive failed thread_id=%s: %s",
-                    thread_id,
-                    archive_exc,
-                )
-
         except asyncio.CancelledError:
             cancel_event.set()
+            context.finish("cancelled")
             await _queue_event(_cancelled_trace_payload(), record_metric=False)
             await _queue_event(_cancelled_pipeline_payload(), record_metric=False)
             await _queue_event({"type": "cancelled", "message": "已停止生成，可重新生成。", "publishable": False}, record_metric=False)
@@ -839,11 +826,20 @@ async def run_graph_pipeline(
             trace_emitter.remove_listener(_enqueue_trace_event)
             reset_cancel_event(cancel_token)
             reset_event_emitter(token)
-            await queue.put(_END)
 
     # -- launch & yield ----------------------------------------------------
 
-    producer_task = asyncio.create_task(_producer())
+    async def _producer_with_context() -> None:
+        with run_context_scope(context):
+            try:
+                await _producer()
+            finally:
+                try:
+                    await asyncio.wait_for(context.archive_usage(), timeout=5.0)
+                finally:
+                    await queue.put(_END)
+
+    producer_task = asyncio.create_task(_producer_with_context())
 
     try:
         while True:
@@ -860,6 +856,7 @@ async def run_graph_pipeline(
     finally:
         if not producer_task.done():
             cancel_event.set()
+            context.finish("cancelled")
             producer_task.cancel()
             try:
                 await producer_task

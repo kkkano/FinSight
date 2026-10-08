@@ -100,7 +100,7 @@ def _derive_analysis_depth(
 def _derive_quality_fields(report: dict[str, Any]) -> tuple[str, int, str]:
     quality, blocked = apply_quality_to_report(report)
     state = str(quality.get("state") or "pass").strip().lower() or "pass"
-    publishable = 0 if blocked else 1
+    publishable = 0 if blocked or quality.get("publishable") is False else 1
     reasons_json = json.dumps(quality.get("reasons") or [], ensure_ascii=False)
     return state, publishable, reasons_json
 
@@ -168,7 +168,7 @@ class ReportIndexStore:
             raise ValueError("report.report_id is required")
         quality_state, publishable_raw, quality_reasons = _derive_quality_fields(report)
         publishable = bool(publishable_raw)
-        if quality_state == "block" and not include_blocked:
+        if not publishable and not include_blocked:
             return {
                 "report_id": report_id,
                 "session_id": session_id,
@@ -259,7 +259,7 @@ class ReportIndexStore:
     def list_reports(
         self,
         *,
-        session_id: str,
+        session_id: str | None = None,
         ticker: str | None = None,
         query: str | None = None,
         source_type: str | None = None,
@@ -267,8 +267,12 @@ class ReportIndexStore:
         limit: int = 50,
         user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        owner = _report_owner(session_id, user_id)
-        where = ["user_id=:user_id", "session_id=:session_id"]
+        owner = _report_owner(session_id, user_id) if session_id else str(user_id or "").strip()
+        if not owner or owner == "public":
+            raise ReportIndexStoreUnavailable("report lookup requires authenticated user")
+        where = ["user_id=:user_id"]
+        if session_id:
+            where.append("session_id=:session_id")
         params: dict[str, Any] = {"user_id": owner, "session_id": session_id}
         if ticker:
             where.append("ticker=:ticker")
@@ -323,18 +327,21 @@ class ReportIndexStore:
     def get_report_replay(
         self,
         *,
-        session_id: str,
+        session_id: str | None = None,
         report_id: str,
         include_blocked: bool = False,
         user_id: str | None = None,
     ) -> dict[str, Any] | None:
-        owner = _report_owner(session_id, user_id)
+        owner = _report_owner(session_id, user_id) if session_id else str(user_id or "").strip()
+        if not owner or owner == "public":
+            raise ReportIndexStoreUnavailable("report lookup requires authenticated user")
+        session_filter = " AND session_id=:session_id" if session_id else ""
         publishable = "" if include_blocked else " AND publishable=true"
         with self._engine.connect() as conn:
             row = conn.execute(
                 text(
-                    "SELECT report,trace_digest FROM reports WHERE user_id=:user_id "
-                    "AND session_id=:session_id AND report_id=:report_id" + publishable
+                    "SELECT report,trace_digest,session_id FROM reports WHERE user_id=:user_id "
+                    "AND report_id=:report_id" + session_filter + publishable
                 ),
                 {"user_id": owner, "session_id": session_id, "report_id": report_id},
             ).mappings().first()
@@ -343,7 +350,7 @@ class ReportIndexStore:
             citations = conn.execute(
                 text(
                     "SELECT citation FROM report_citations WHERE user_id=:user_id "
-                    "AND session_id=:session_id AND report_id=:report_id ORDER BY id"
+                    "AND report_id=:report_id" + session_filter + " ORDER BY id"
                 ),
                 {"user_id": owner, "session_id": session_id, "report_id": report_id},
             ).scalars().all()
@@ -351,6 +358,7 @@ class ReportIndexStore:
         citation_items = [_json_value(item, {}) for item in citations]
         report_payload["citations"] = citation_items
         return {
+            "session_id": row["session_id"],
             "report": report_payload,
             "trace_digest": _json_value(row["trace_digest"], {}),
             "citations": citation_items,

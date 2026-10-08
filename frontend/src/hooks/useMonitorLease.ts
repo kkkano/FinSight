@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { buildAuthHeaders } from '../api/http';
 import { buildApiUrl } from '../config/runtime';
 import { useStore } from '../store/useStore';
@@ -29,6 +29,7 @@ export const isAuthenticatedMonitorSession = (userId: string | null | undefined)
   Boolean(String(userId || '').trim());
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
+export type MonitorLeaseStatus = 'stopped' | 'starting' | 'active' | 'error';
 
 export function createMonitorLeaseController(
   transport: MonitorLeaseTransport,
@@ -38,6 +39,7 @@ export function createMonitorLeaseController(
     setTimeout: globalThis.setTimeout.bind(globalThis),
     clearTimeout: globalThis.clearTimeout.bind(globalThis),
   },
+  onStatus: (status: MonitorLeaseStatus) => void = () => undefined,
 ) {
   let generation = 0;
   let lease: MonitorLease | null = null;
@@ -62,6 +64,7 @@ export function createMonitorLeaseController(
     generation += 1;
     clearTimers();
     releaseCurrent();
+    onStatus('stopped');
   };
 
   const start = (target: MonitorLeaseTarget | null) => {
@@ -69,6 +72,7 @@ export function createMonitorLeaseController(
     const sessionId = String(target?.sessionId || '').trim();
     const symbol = String(target?.symbol || '').trim().toUpperCase();
     if (!sessionId || !symbol) return;
+    onStatus('starting');
 
     const currentGeneration = generation;
     const normalizedTarget = { sessionId, symbol };
@@ -81,14 +85,21 @@ export function createMonitorLeaseController(
           return;
         }
         lease = acquired;
+        onStatus('active');
         renewFailures = 0;
         renewTimer = timers.setInterval(() => {
           const current = lease;
           if (!current || generation !== currentGeneration) return;
           void transport.renew(current).then(
-            () => { renewFailures = 0; },
             () => {
+              if (generation !== currentGeneration) return;
+              renewFailures = 0;
+              onStatus('active');
+            },
+            () => {
+              if (generation !== currentGeneration) return;
               renewFailures += 1;
+              onStatus('error');
               if (renewFailures > MAX_ACQUIRE_RETRIES) {
                 clearTimers();
                 lease = null; // 服务端 TTL 会回收，避免网络故障时无限重试。
@@ -97,7 +108,9 @@ export function createMonitorLeaseController(
           );
         }, RENEW_INTERVAL_MS);
       } catch {
-        if (generation !== currentGeneration || attempt >= MAX_ACQUIRE_RETRIES) return;
+        if (generation !== currentGeneration) return;
+        onStatus('error');
+        if (attempt >= MAX_ACQUIRE_RETRIES) return;
         retryTimer = timers.setTimeout(() => {
           void acquire(attempt + 1);
         }, 1_000 * (attempt + 1));
@@ -144,13 +157,14 @@ const httpTransport: MonitorLeaseTransport = {
   },
 };
 
-export function useMonitorLease(symbol: string): void {
+export function useMonitorLease(symbol: string): MonitorLeaseStatus {
   const sessionId = useStore((state) => state.sessionId);
   const userId = useStore((state) => state.authIdentity?.userId);
+  const [status, setStatus] = useState<MonitorLeaseStatus>('stopped');
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
-    const controller = createMonitorLeaseController(httpTransport);
+    const controller = createMonitorLeaseController(httpTransport, undefined, setStatus);
     const sync = () => {
       controller.start(
         document.visibilityState === 'visible' && isAuthenticatedMonitorSession(userId)
@@ -165,4 +179,5 @@ export function useMonitorLease(symbol: string): void {
       controller.dispose();
     };
   }, [sessionId, symbol, userId]);
+  return status;
 }

@@ -1,9 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import type { NewsItem } from '../../../../types/dashboard';
 import { NewsCard } from './NewsCard';
 import { computeOverviewStats } from './NewsSentimentOverview';
 import { SentimentStatsBar } from './SentimentStatsBar';
+
+const render = (node: ReactNode) => renderToStaticMarkup(
+  <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>,
+);
 
 const article: NewsItem = { title: 'INTC earnings beat', url: 'https://www.reuters.com/intc', source: 'Reuters',
   ts: '2026-10-03T10:00:00Z', impact_score: 0.9, source_reliability: 0.9,
@@ -17,13 +23,13 @@ describe('news presentation quality', () => {
   afterEach(() => vi.useRealTimers());
 
   it('shows a concise original-verification label on qualified reports', () => {
-    const html = renderToStaticMarkup(<NewsCard news={article} />);
+    const html = render(<NewsCard news={article} />);
     expect(html).toContain('报道待核原文');
     expect(html).toContain('高影响');
   });
 
   it('shows opinion and unknown publication labels without promoting impact or authority', () => {
-    const html = renderToStaticMarkup(<NewsCard news={{ ...article, event_quality: {
+    const html = render(<NewsCard news={{ ...article, event_quality: {
       freshness: 'unknown', published_at: null, content_kind: 'opinion', source_tier: 'opinion_or_community',
     } }} />);
     expect(html).toContain('观点');
@@ -52,7 +58,7 @@ describe('news presentation quality', () => {
     expect(stats.heatScore).toBe(0);
     expect(stats.biasLabel).toBe('样本不足');
     expect(stats.catalysts).toEqual([]);
-    const html = renderToStaticMarkup(<SentimentStatsBar news={[{ ...article, event_quality: undefined }]} />);
+    const html = render(<SentimentStatsBar news={[{ ...article, event_quality: undefined }]} />);
     expect(html).toContain('--');
     expect(html).not.toContain('100%');
   });

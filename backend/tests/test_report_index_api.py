@@ -48,7 +48,7 @@ class FakeReportStore:
         items: list[dict[str, Any]] = []
         for report_id, row in self.reports.items():
             report = row["report"]
-            if row["user_id"] != user_id or row["session_id"] != session_id:
+            if row["user_id"] != user_id or session_id and row["session_id"] != session_id:
                 continue
             if not include_blocked and not row["publishable"]:
                 continue
@@ -60,7 +60,7 @@ class FakeReportStore:
                 continue
             items.append({
                 "report_id": report_id,
-                "session_id": session_id,
+                "session_id": row["session_id"],
                 "ticker": report.get("ticker"),
                 "title": report.get("title"),
                 "summary": report.get("summary"),
@@ -78,7 +78,7 @@ class FakeReportStore:
         include_blocked: bool = False,
     ) -> dict[str, Any] | None:
         row = self.reports.get(report_id)
-        if not row or row["user_id"] != user_id or row["session_id"] != session_id:
+        if not row or row["user_id"] != user_id or session_id and row["session_id"] != session_id:
             return None
         if not include_blocked and not row["publishable"]:
             return None
@@ -161,6 +161,17 @@ def test_report_history_and_replay_are_tenant_scoped() -> None:
     assert build_client(store, user_id="public").get(
         "/api/reports/index", params={"session_id": "web:alice:thread-1"}
     ).status_code == 401
+
+
+def test_account_report_directory_includes_two_sessions_and_preserves_owner_boundary():
+    store = FakeReportStore()
+    for owner, session, report_id in [("alice", "first", "rpt-first"), ("alice", "second", "rpt-second"), ("bob", "other", "rpt-other")]:
+        store.add(user_id=owner, session_id=f"web:{owner}:{session}", report={"report_id": report_id, "title": report_id})
+    client = build_client(store, user_id="alice")
+    assert {item["report_id"] for item in client.get("/api/reports/index").json()["items"]} == {"rpt-first", "rpt-second"}
+    assert client.get("/api/reports/replay/rpt-second").status_code == 200
+    assert client.get("/api/reports/replay/rpt-other").status_code == 404
+    assert build_client(store, user_id="public").get("/api/reports/index").status_code == 401
 
 
 def test_blocked_report_requires_explicit_internal_replay_flag() -> None:

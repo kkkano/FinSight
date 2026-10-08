@@ -9,7 +9,7 @@
  * Row 4: RSI + MACD sub-charts (G2 new)
  * Row 5: BollingerVolumeCard
  */
-import { useDashboardStore } from '../../../store/dashboardStore';
+import { useDashboardSnapshot } from '../../../hooks/useDashboardData';
 import { TechnicalSummaryCard } from './technical/TechnicalSummaryCard';
 import { MovingAverageTable } from './technical/MovingAverageTable';
 import { OscillatorTable } from './technical/OscillatorTable';
@@ -25,7 +25,7 @@ interface TechnicalTabProps {
 }
 
 export function TechnicalTab({ predictionOverlay }: TechnicalTabProps) {
-  const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const dashboardData = useDashboardSnapshot();
 
   const technicals = dashboardData?.technicals;
   const technicalsFallbackReason = dashboardData?.technicals_fallback_reason;

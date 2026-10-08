@@ -75,12 +75,12 @@ def today_cost_usd(user_id: str) -> float:
     return get_llm_usage_store().today_cost_usd(user_id)
 
 
-def check_user_quota(user_id: str) -> None:
+def check_user_quota(user_id: str, *, pending_cost_usd: float = 0.0) -> None:
     normalized_user = str(user_id or "public").strip() or "public"
     limit = env_float("USER_DAILY_COST_LIMIT_USD", 1.0)
-    if limit <= 0 or normalized_user == "admin":
+    if limit <= 0 or normalized_user in {"public", "admin"}:
         return
-    used = today_cost_usd(normalized_user)
+    used = today_cost_usd(normalized_user) + max(0.0, pending_cost_usd)
     if used >= limit:
         raise UserDailyCostLimitExceeded(
             user_id=normalized_user,

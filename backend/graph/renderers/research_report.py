@@ -7,8 +7,8 @@ import re
 from urllib.parse import urlsplit
 from typing import Any
 
-from backend.graph.synthesis.contracts import ReportSynthesisDraft, ResearchReportRenderResult, aggregate_task_status
-from backend.graph.synthesis.requirement_validation import claim_has_reliable_sources, evaluate_answer_requirements, overall_conclusion_block_reasons
+from backend.graph.synthesis.contracts import ReportSynthesisDraft, ResearchReportRenderResult
+from backend.graph.synthesis.requirement_validation import claim_has_reliable_sources, overall_conclusion_block_reasons
 from backend.graph.synthesis.research_synthesis import clean_research_text
 from backend.graph.renderers.fact_formatters import format_fact, number
 from backend.graph.renderers.content_selection import DIMENSION_KINDS, select_claims, select_fact_ids
@@ -225,14 +225,6 @@ def render_research_report(
                     display_claims.append(claim)
         display_claims = [claim for claim in display_claims if claim_has_reliable_sources(claim, task, draft.evidence_index)]
         comparison, comparison_sources = _comparison_lines(draft, task, refs) if comparison_task else ([], set())
-        if task.answer_requirements:
-            subjects = task.requested_subjects or list(dict.fromkeys(draft.evidence_index[source_id].subject for source_id in task.fact_ids if source_id in draft.evidence_index and draft.evidence_index[source_id].subject))
-            evaluate_answer_requirements(
-                result=task, requirements=task.answer_requirements, evidence_index=draft.evidence_index,
-                claim_index=draft.claim_index, subjects=subjects,
-                displayed_evidence_ids=list(comparison_sources) if comparison_task else display_fact_ids,
-                displayed_claim_ids=[claim.claim_id for claim in display_claims],
-            )
         display_status = "partial" if task.status == "answered" and (task.missing_evidence or task.missing_requirements) else task.status
         lines.extend([f"## {task.title} · {_STATUS_LABEL[display_status]}", ""])
         if direction_requested and isinstance(readiness, dict) and not direction_allowed:
@@ -347,19 +339,13 @@ def render_research_report(
             if limitation not in draft.limitations:
                 lines.append(f"- {_line(limitation)}")
         lines.append("")
-    draft.status = aggregate_task_status([task.status for task in draft.task_results])
     overall_reasons = overall_conclusion_block_reasons(draft)
     if not allow_overall_conclusion:
         overall_reasons.append("report_quality_blocked")
     if blocked_direction and overall_has_direction:
         overall_reasons.append("investment_direction_unavailable")
-    removed_overall = bool(overall_reasons and draft.overall_conclusion)
-    if removed_overall:
-        draft.overall_conclusion = None
-    if removed_overall or "overall_block_reasons" in draft.synthesis_validation:
-        draft.synthesis_validation = {**draft.synthesis_validation, "overall_block_reasons": list(dict.fromkeys(overall_reasons))}
     if profile == "full":
-        overall_text = _public_text(draft.overall_conclusion) if draft.overall_conclusion else "无法判断：本轮尚未形成证据支持的完整总体结论。"
+        overall_text = _public_text(draft.overall_conclusion) if draft.overall_conclusion and not overall_reasons else "无法判断：本轮尚未形成证据支持的完整总体结论。"
         lines = ["## 总判断", "", overall_text, "", *lines]
     disclosures = list(draft.risks) if profile == "full" else list(dict.fromkeys(draft.risks))[:2 if profile == "brief" else 3]
     for conflict in draft.conflicts:
@@ -393,7 +379,6 @@ def render_research_report(
             lines.append(f"- [{number}] [{_line(label)}]({evidence.url})")
         else:
             lines.append(f"- [{number}] {_line(label)}")
-    draft.status = aggregate_task_status([task.status for task in draft.task_results])
     return ResearchReportRenderResult(
         markdown="\n".join(lines).strip() + "\n",
         rendered_task_ids=rendered_task_ids,

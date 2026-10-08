@@ -261,19 +261,18 @@ async def test_sdk_budget_and_retries_validated_before_request(context, snapshot
 @pytest.mark.asyncio
 async def test_outer_helper_explicitly_has_one_attempt(context, snapshot, monkeypatch):
     import backend.services.llm_retry as helper
-    original = helper.ainvoke_with_rate_limit_retry
+    original = helper.ainvoke_frozen_llm
     settings = []
 
     async def inspect(*args, **kwargs):
         settings.append(kwargs)
         return await original(*args, **kwargs)
 
-    monkeypatch.setattr(helper, "ainvoke_with_rate_limit_retry", inspect)
+    monkeypatch.setattr(helper, "ainvoke_frozen_llm", inspect)
     llm = FakeLLM(direction_payload())
     result = await TechnicalAgent(llm, None, None).forecast(context, snapshot)
     assert result.status == "predicted" and len(llm.calls) == 1
-    assert settings[0]["max_attempts"] == 1 and settings[0]["llm_factory"] is None
-    assert settings[0]["acquire_token"] is False
+    assert settings[0]["context"].budget.max_provider_attempts == 1
 
 
 @pytest.mark.asyncio

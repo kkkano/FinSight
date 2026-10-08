@@ -347,6 +347,11 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         reason(str(code), "block", "任务或引用结构不一致。")
     report_mode = str(state.get("output_mode") or "") == "investment_report"
     understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    if understanding.get("route") == "clarify" or (state.get("clarify") or {}).get("needed"):
+        quality.update(answer_status="clarification_required", has_supported_content=False,
+                       publishable=False, missing_requirements=[], content_status="clarification_required",
+                       content_contract_version="research_content.v2")
+        return quality
     if understanding.get("requirements_status") == "deterministic_fallback":
         reason("REQUEST_REQUIREMENTS_UNCONFIRMED", "block" if report_mode else "warn",
                "模型未能确认完整的原始要求，本轮按规则识别的任务作答，可能遗漏部分要求。")
@@ -364,7 +369,7 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
                 metric="task_evidence", actual=missing, threshold="verified_evidence",
                 message="请求中的主体或证据维度尚未满足。",
             ))
-    if tasks and not supported:
+    if (tasks or understanding.get("route") == "research") and not supported:
         reason("NO_SUPPORTED_CONTENT", "block", "本轮没有可展示的已验证事实或论据。")
     if any(task.get("status") != "answered" or task.get("missing_evidence") for task in tasks):
         missing_required = any(task.get("missing_evidence") for task in tasks)
@@ -377,11 +382,19 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         reason("PRICE_TIME_MISSING", "warn", "报价缺少源数据时间，不能确认其时效。")
     quality = merge_report_quality_payload(existing_quality=quality, reason_groups=[reasons])
     blocked = quality["state"] == "block"
-    answer_status = "blocked" if blocked else "partial" if quality["state"] == "warn" else "answered"
-    if tasks and not supported and not any(task.get("status") == "blocked" for task in tasks):
+    incomplete = bool(understanding.get("requirements_status") == "deterministic_fallback" or missing_requirements or any(
+        task.get("status") != "answered" or task.get("missing_evidence")
+        or (task.get("synthesis_validation") or {}).get("remaining_errors")
+        or any(row.get("status") != "answered" for row in task.get("requirement_results") or [])
+        or {row.get("requirement_id") for row in task.get("answer_requirements") or []}
+           != {row.get("requirement_id") for row in task.get("requirement_results") or []} for task in tasks))
+    answer_status = "blocked" if blocked else "partial" if incomplete else "answered"
+    if (tasks or understanding.get("route") == "research") and not supported and not any(task.get("status") == "blocked" for task in tasks):
         answer_status = "unavailable"
     quality.update({
         "answer_status": answer_status,
+        "content_status": answer_status,
+        "content_contract_version": "research_content.v2",
         "has_supported_content": supported if tasks else bool(str(artifacts.get("draft_markdown") or "").strip()),
         "publishable": not blocked,
         "missing_requirements": missing_requirements,
@@ -397,7 +410,7 @@ def is_quality_blocked(payload: Any) -> bool:
 
 
 def should_publish_report(report: Any) -> bool:
-    return not is_quality_blocked(report)
+    return not is_quality_blocked(report) and extract_report_quality(report).get("publishable") is not False
 
 
 def record_quality_metrics(quality: dict[str, Any], *, source: str) -> None:

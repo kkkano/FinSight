@@ -23,6 +23,7 @@ from backend.api.session_context import SessionOwnershipError, _resolve_owned_th
 from backend.api.stream_replay import replay_buffer
 from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
 from backend.services.model_preflight import ensure_model_available
+from backend.services.run_context import RunContext, run_context_scope
 from backend.services.research_run_store import (
     HEARTBEAT_SECONDS, PostgresResearchRunStore, ResearchRunConflict,
     get_research_run_store, public_run, request_fingerprint,
@@ -32,6 +33,7 @@ from backend.services.research_run_store import (
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _STREAM_TASKS: set[asyncio.Task[Any]] = set()
 _STREAM_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
+_ENTRY_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
 _RUN_OWNERS: OrderedDict[str, str] = OrderedDict()
 _MAX_RUN_OWNERS = 256
 logger = logging.getLogger(__name__)
@@ -421,7 +423,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         if not _generation_enabled():
             raise HTTPException(status_code=503, detail={"code": "generation_disabled", "message": "生成服务维护中"})
         _enforce_user_quota(http_request)
-        await ensure_model_available()
+        run_context = RunContext.create(owner=user_id, entry=output_mode or "chat", run_id=run_id)
         if store is not None:
             try:
                 existing, created = await asyncio.to_thread(
@@ -437,6 +439,29 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
                 return existing_response()
         _register_run_owner(run_id, user_id)
 
+        run_key = _run_key(run_id, user_id)
+        entry_task = asyncio.current_task()
+        if entry_task is not None:
+            _ENTRY_TASKS_BY_RUN[run_key] = entry_task
+        with run_context_scope(run_context):
+            try:
+                await ensure_model_available()
+            except BaseException as exc:
+                cancelled = isinstance(exc, asyncio.CancelledError)
+                run_context.finish("cancelled" if cancelled else "failed")
+                detail = exc.detail if isinstance(exc, HTTPException) and isinstance(exc.detail, dict) else {}
+                payload = {"type": "cancelled" if cancelled else "error", "publishable": False,
+                    "answer_status": "unavailable", "error_code": detail.get("code", "model_preflight_failed"),
+                    "message": "已停止生成，可重新生成。" if cancelled else detail.get("message", "模型前置检查未完成。"),
+                    "metrics": run_context.usage.summary()}
+                if store is not None:
+                    await _persist_callback(store, run_id, user_id)(payload)
+                await run_context.archive_usage()
+                raise
+            finally:
+                if _ENTRY_TASKS_BY_RUN.get(run_key) is entry_task:
+                    _ENTRY_TASKS_BY_RUN.pop(run_key, None)
+
         pipeline = run_graph_pipeline(
             deps=_build_execution_deps(deps, _persist_callback(store, run_id, user_id)),
             query=request.query,
@@ -449,6 +474,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             source=request.source or "chat",
             user_id=user_id,
             trace_raw_enabled=bool(trace_raw),
+            run_context=run_context,
         )
         return _buffered_sse_response(pipeline, run_id=run_id, thread_id=thread_id, user_id=user_id, store=store)
 
@@ -487,7 +513,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         row = await _load_run(store, normalized, user_id) if store is not None else None
         if row is None:
             _authorize_run(normalized, user_id)
-        task = _STREAM_TASKS_BY_RUN.get(_run_key(normalized, user_id))
+        task = _STREAM_TASKS_BY_RUN.get(_run_key(normalized, user_id)) or _ENTRY_TASKS_BY_RUN.get(_run_key(normalized, user_id))
         if task is None or task.done():
             raise HTTPException(status_code=409, detail={"code": "run_not_active", "message": "run is not active"})
         task.cancel()

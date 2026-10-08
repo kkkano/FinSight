@@ -40,7 +40,9 @@ def compiled(raw=None):
 def test_registered_attribute_preserves_original_id_and_gets_unique_metric_owner():
     rows = compiled()['understanding']['semantic_contract']['requirements']
     attribute = rows[-1]
-    assert attribute['requirement_id'] == 'requirement:2cf63fcd68292565'
+    changed = replay_semantics()
+    changed['requirements'][-1]['description'] = '模型改写的描述不改变原始要求身份'
+    assert attribute['requirement_id'] == compiled(changed)['understanding']['semantic_contract']['requirements'][-1]['requirement_id']
     assert attribute['source_text'] == '说明你是否计入分红'
     assert attribute['metric'] == 'cumulative_return' and attribute['raw_metric'] == 'unknown'
     assert attribute['capability_status'] == 'supported'

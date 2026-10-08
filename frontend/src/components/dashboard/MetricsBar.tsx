@@ -7,7 +7,7 @@
  * Gracefully degrades to "--" when data is null or missing.
  */
 import type { ValuationData, SnapshotData } from '../../types/dashboard';
-import { currencySymbolForTicker, formatMarketCapForMarket } from '../../utils/format';
+import { formatMoney, formatMarketCapForMarket } from '../../utils/format';
 import { Stat } from '../ui';
 
 // --- Props ---
@@ -60,20 +60,17 @@ function buildMetrics(
   const v = valuation ?? {};
   const s = snapshot ?? {};
 
-  // 市场感知币种前缀：A股 ¥ / 港股 HK$ / 其余 $
-  const cur = currencySymbolForTicker(ticker);
-
   const w52Low = fmtPrice(v.week52_low);
   const w52High = fmtPrice(v.week52_high);
   // 范围只在最前面加一次币种前缀，避免 "¥1 - ¥2" 冗余
   const rangeStr =
-    w52Low === '--' && w52High === '--' ? '--' : `${cur}${w52Low} - ${w52High}`;
+    w52Low === '--' && w52High === '--' ? '--' : `${formatMoney(v.week52_low, v.currency)} - ${formatMoney(v.week52_high, v.currency)}`;
 
   return [
     { label: '总市值', value: formatMarketCapForMarket(v.market_cap, ticker, v.market_cap_currency) },
     { label: 'P/E', value: fmtRatio(v.trailing_pe) },
     { label: 'P/B', value: fmtRatio(v.price_to_book) },
-    { label: 'EPS', value: s.eps !== null && s.eps !== undefined ? `${cur}${s.eps.toFixed(2)}` : '--' },
+    { label: 'EPS', value: formatMoney(s.eps, s.financial_currency) },
     { label: '股息率', value: formatDividendYield(v.dividend_yield) },
     { label: '52周范围', value: rangeStr },
     { label: 'Beta', value: fmtRatio(v.beta) },

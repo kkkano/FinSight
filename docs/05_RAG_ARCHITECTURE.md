@@ -1,6 +1,6 @@
 # FinSight RAG 架构
 
-更新时间：2026-10-03
+更新时间：2026-10-08
 
 ## 1. 当前生产基线
 
@@ -50,6 +50,10 @@ flowchart LR
 
 `20261003_0006` 允许 `rag_documents_v2.embedding` 为 NULL。推理失败时保留文本、来源和 scope，供词法检索；更新已有 chunk 时不因无向量回退抹掉原有向量及其身份。既有身份未知的向量保留原数据，不批量猜测或回填 BGE 身份。
 
+文档元数据的 `index_state` 区分 `lexical_only` 与带实际模型身份的索引。`HybridRAGService.index_status(identity)` 统计未过期文档及匹配该身份的向量；文档保存成功不等于语义索引就绪。
+
+模型恢复后执行 `python scripts/reindex_rag_documents.py --batch-size 4 --max-batches 100`，可用 `--collection` 限定集合。每批只处理 NULL 或身份不匹配的向量，推理在事务外；写回同时核对 collection/source_id/原文，避免覆盖并发重新摄取的内容。批次独立提交，中断后可重跑；不会重新抓取外部网页或猜测旧向量身份。
+
 ## 4. 检索与合成边界
 
 - RAG 返回候选上下文和分数，不直接宣称投资结论。
@@ -69,6 +73,10 @@ worker 共享 `model_cache` 持久卷，默认 `RAG_RERANKER=none`；开启 rera
 首次加载 BGE 前，worker 读取 `/proc/meminfo` 的 `MemAvailable`，并与 cgroup v2 的 `memory.max-memory.current` 取较小值。默认 `RAG_WORKER_MIN_AVAILABLE_MB=2400`；可用内存不足时返回 `status=resource_limited`、`inference_verified=false`，编码请求返回 503 `embedding_memory_unavailable`，不尝试加载模型。API 保持明确词法降级；提高容器上限并不能创造宿主可用内存，也不能在 API 或额外验收进程里绕过保护重复加载模型。
 
 健康成功状态缓存约 15 秒后重查，失败/降级默认缓存 45 秒，可由 `RAG_PROBE_FAILURE_TTL_SECONDS` 调整。生产 `/readyz` 的数据库检查必须正常；当 RAG `status=degraded` 且 `lexical_ready=true` 时允许服务就绪，同时公开 `semantic_ready=false` 和 `semantic_retrieval_unavailable_using_lexical`。`ready=true` 不能被报告成真实语义推理已通过。
+
+`/api/capabilities` 将服务就绪与检索能力分开。`full_ready=true` 必须同时满足实际 BGE 编码验证、实际 reranker 推理成功、全部未过期文档匹配当前索引身份。worker warmup 在资源允许时验证编码及重排；reranker 首次加载同样检查宿主与容器剩余内存，不足明确为 `resource_limited`。
+
+当前主机约3.3 GiB内存，安全清理后仍不足以加载完整组合；清理磁盘不能补足内存。独立8 GiB推理节点是资源验证起点，共机运行其它应用建议16 GiB，实际峰值与延迟仍需验收。资源未满足时保持词法模式，不能将配置开关或 fixture 通过称为完整 RAG 已恢复。
 
 评估方法、数据集和门禁见 [`rag-evaluation-guide.md`](rag-evaluation-guide.md)。真实 worker 推理、目标机资源占用和线上语义能力必须由本次发布记录补充，配置或 fixture 通过不能代替这些证据。
 

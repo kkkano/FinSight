@@ -34,6 +34,17 @@ def test_root_route_is_not_a_second_health_contract(client):
     assert resp.status_code == 404
 
 
+def test_service_capabilities_are_public_read_only_and_do_not_expose_credentials(client, monkeypatch):
+    monkeypatch.setenv("API_AUTH_ENABLED", "true")
+    from backend.config.settings import clear_settings_caches
+    clear_settings_caches()
+    response = client.get("/api/capabilities")
+    assert response.status_code == 200
+    assert set(response.json()["features"]) == {"user_prediction", "us20", "monitor", "retrieval"}
+    serialized = repr(response.json()).lower()
+    assert "api_key" not in serialized and "password" not in serialized
+
+
 def test_health_endpoint_exposes_only_core_readiness(client):
     resp = client.get("/health")
     assert resp.status_code in {200, 503}

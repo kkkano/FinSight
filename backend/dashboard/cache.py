@@ -10,8 +10,10 @@ TTL 策略：
 """
 import time
 import logging
+from dataclasses import replace
 from typing import Any, Optional
 
+from backend.services.data_contract import DataResult
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,10 @@ class DashboardCache:
         Returns:
             Any | None: 缓存数据，若不存在或已过期则返回 None
         """
+        result = self.get_result(symbol, data_type)
+        return result.data if result is not None else None
+
+    def get_result(self, symbol: str, data_type: str) -> DataResult | None:
         key = self._key(symbol, data_type)
         entry = self._store.get(key)
 
@@ -88,6 +94,25 @@ class DashboardCache:
 
         logger.debug(f"Cache hit: {key}")
         return value
+
+    def update_meta(self, symbol: str, data_type: str, key: str, meta: dict[str, Any]) -> None:
+        entry = self._store.get(self._key(symbol, data_type))
+        if entry is not None:
+            expires_at, result = entry
+            views = {**result.meta, key: dict(meta)}
+            aggregate = data_type in {"charts", "news"}
+            statuses = {view.get("status") for view in views.values()}
+            status = meta.get("status", result.status)
+            if aggregate:
+                status = "error" if statuses <= {"error", "missing"} else "empty" if statuses == {"empty"} else "degraded" if statuses & {"error", "missing", "degraded"} else "ok"
+            self._store[self._key(symbol, data_type)] = (
+                expires_at, replace(
+                    result, meta=views, status=status,
+                    as_of=result.as_of if aggregate else meta.get("as_of") or None,
+                    currency=result.currency if aggregate else meta.get("currency") or None,
+                    error_code=result.error_code if aggregate else meta.get("error_code") or None,
+                ),
+            )
 
     def get_with_stale(
         self,
@@ -120,13 +145,13 @@ class DashboardCache:
         if now <= expires_at:
             # Fresh
             logger.debug(f"Cache hit (fresh): {key}")
-            return value, False
+            return value.data, False
 
         # Expired but within stale window?
         stale_deadline = expires_at + stale_ttl
         if now <= stale_deadline:
             logger.debug(f"Cache hit (stale): {key}")
-            return value, True
+            return value.data, True
 
         # Beyond stale window — treat as miss
         del self._store[key]
@@ -174,7 +199,8 @@ class DashboardCache:
 
         key = self._key(symbol, data_type)
         expires_at = time.time() + ttl
-        self._store[key] = (expires_at, value)
+        result = value if isinstance(value, DataResult) else DataResult.from_payload(value)
+        self._store[key] = (expires_at, result)
         logger.debug(f"Cache set: {key}, TTL={ttl}s")
 
     def invalidate(self, symbol: str) -> None:

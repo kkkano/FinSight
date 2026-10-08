@@ -18,6 +18,12 @@ export type MonitorComment = {
   chart_url: string | null;
 };
 
+export type MonitorWorkState = {
+  status: 'disabled' | 'stopped' | 'starting' | 'running' | 'closed' | 'degraded' | 'error';
+  reason: string | null;
+  enabled_triggers: string[];
+};
+
 function mergeComments(previous: MonitorComment[], incoming: MonitorComment[]): MonitorComment[] {
   const byId = new Map(previous.map((item) => [item.id, item]));
   incoming.forEach((item) => byId.set(item.id, item));
@@ -54,6 +60,7 @@ export function useMonitorCommentFeed(
   const [comments, setComments] = useState<MonitorComment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [workState, setWorkState] = useState<MonitorWorkState | null>(null);
   const userId = useStore((state) => state.authIdentity?.userId);
   const isAvailable = isAuthenticatedMonitorSession(userId);
   const normalizedSymbol = (symbol || '').trim().toUpperCase();
@@ -63,11 +70,13 @@ export function useMonitorCommentFeed(
       setComments([]);
       setError(null);
       setUnavailable(false);
+      setWorkState(null);
       return undefined;
     }
     setComments([]);
     setError(null);
     setUnavailable(false);
+    setWorkState(null);
     const controller = new AbortController();
     let retries = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -104,6 +113,11 @@ export function useMonitorCommentFeed(
             const data = frame.match(/^data:\s*(.*)$/m)?.[1];
             if (!data || event === 'heartbeat') continue;
             if (id) lastEventId = id;
+            if (event === 'status') {
+              setWorkState(JSON.parse(data) as MonitorWorkState);
+              continue;
+            }
+            if (event === 'error') throw new Error('点评流不可用');
             const parsed = JSON.parse(data) as MonitorComment | MonitorComment[];
             if (event === 'snapshot' && Array.isArray(parsed)) setComments(mergeComments([], parsed));
             if (event === 'comment' && !Array.isArray(parsed)) setComments((prev) => mergeComments(prev, [parsed]));
@@ -127,5 +141,5 @@ export function useMonitorCommentFeed(
     };
   }, [isAvailable, normalizedSymbol, sessionId]);
 
-  return { comments, error, isAvailable, unavailable };
+  return { comments, error, isAvailable, unavailable, workState };
 }

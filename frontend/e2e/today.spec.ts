@@ -106,7 +106,7 @@ test('authenticated Today renders sourced data and navigates from cards', async 
   await page.route('**/api/stock/price/**', (route) => fulfillJson(route, {
     ticker: 'AAPL',
     data: {
-      data: { price: 233.42, change: 2.5, change_percent: 1.08 },
+      data: { price: 233.42, change: 2.5, change_percent: 1.08, currency: 'USD' },
       provider: 'finnhub',
       source: 'quote',
       as_of: '2026-09-15T01:30:00Z',

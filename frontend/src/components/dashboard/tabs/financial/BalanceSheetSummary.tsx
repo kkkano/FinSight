@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 
 import type { FinancialStatement } from '../../../../types/dashboard';
 import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { formatMoney } from '../../../../utils/format';
 
 // --- Props ---
 
@@ -16,14 +17,6 @@ interface BalanceSheetSummaryProps {
 }
 
 // --- Helpers ---
-
-const fmtNum = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  if (Math.abs(v) >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
-  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-  return `$${v.toLocaleString()}`;
-};
 
 const fmtRatio = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '--';
@@ -38,20 +31,6 @@ interface BalanceItem {
   subtext?: string;
 }
 
-const pickLatestAvailable = (
-  periods: string[] | undefined,
-  series: Array<number | null> | undefined,
-): { value: number | null; period?: string } => {
-  if (!Array.isArray(series) || series.length === 0) return { value: null };
-  for (let idx = 0; idx < series.length; idx += 1) {
-    const value = series[idx];
-    if (value != null) {
-      return { value, period: periods?.[idx] };
-    }
-  }
-  return { value: null };
-};
-
 function buildItems(financials: FinancialStatement | null | undefined): BalanceItem[] {
   if (!financials) {
     return [
@@ -62,29 +41,14 @@ function buildItems(financials: FinancialStatement | null | undefined): BalanceI
     ];
   }
 
-  const latestAssets = pickLatestAvailable(financials.periods, financials.total_assets);
-  const latestLiabilities = pickLatestAvailable(financials.periods, financials.total_liabilities);
-  const totalAssets = latestAssets.value;
-  const totalLiabilities = latestLiabilities.value;
-  const period = latestAssets.period ?? latestLiabilities.period ?? '';
-
-  // Compute equity = assets - liabilities
-  let equity: number | null = null;
-  if (totalAssets != null && totalLiabilities != null) {
-    equity = totalAssets - totalLiabilities;
-  }
-
-  // D/E ratio
-  let deRatio: number | null = null;
-  if (totalLiabilities != null && equity != null && equity !== 0) {
-    deRatio = totalLiabilities / equity;
-  }
+  const summary = financials.balance_summary;
+  const money = (value: number | null | undefined) => formatMoney(value, financials.currency, true);
 
   return [
-    { label: '总资产', value: fmtNum(totalAssets), subtext: period },
-    { label: '总负债', value: fmtNum(totalLiabilities) },
-    { label: '股东权益', value: fmtNum(equity) },
-    { label: '负债/权益比', value: fmtRatio(deRatio) },
+    { label: '总资产', value: formatMoney(summary?.total_assets, financials.metric_currencies?.total_assets ?? financials.currency, true), subtext: summary?.period ?? undefined },
+    { label: '总负债', value: formatMoney(summary?.total_liabilities, financials.metric_currencies?.total_liabilities ?? financials.currency, true) },
+    { label: '股东权益', value: money(summary?.equity) },
+    { label: '负债/权益比', value: fmtRatio(summary?.de_ratio) },
   ];
 }
 

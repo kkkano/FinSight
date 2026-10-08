@@ -10,40 +10,29 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Plus, ExternalLink, X, RefreshCw } from 'lucide-react';
 import { useDashboardStore } from '../../store/dashboardStore';
+import { useWatchlist } from '../../hooks/useWatchlist';
 import { apiClient } from '../../api/client';
 import type { WatchItem, ActiveAsset } from '../../types/dashboard';
 // 共享 UI 组件
 import { Button, Input, useToast } from '../ui';
+import { formatMoney } from '../../utils/format';
+import type { QuoteData as MarketQuote } from '../../api/contracts';
 
 // 价格数据类型
 type QuoteData = {
   price?: number | null;
   change?: number | null;
   changePct?: number | null;
+  currency?: string | null;
   loading?: boolean;
 };
 
-// 解析价格响应
-const parsePriceText = (payload: any): QuoteData => {
-  if (!payload) return {};
-  if (typeof payload === 'object' && payload.price) {
-    return {
-      price: Number(payload.price),
-      change: payload.change !== undefined ? Number(payload.change) : undefined,
-      changePct: payload.change_percent !== undefined ? Number(payload.change_percent) : undefined,
-    };
-  }
-  const text = typeof payload === 'string' ? payload : String(payload);
-  const priceMatch = text.match(/Current Price:\s*\$([0-9.,]+)/i);
-  const changeMatch = text.match(/Change:\s*([+-]?[0-9.]+)/i);
-  const pctMatch = text.match(/\(([-+]?[0-9.]+)%\)/);
-  const fallbackPrice = text.match(/\$([0-9]+(?:\.[0-9]+)?)/);
-
-  const price = priceMatch ? Number(priceMatch[1].replace(/,/g, '')) : fallbackPrice ? Number(fallbackPrice[1]) : undefined;
-  const change = changeMatch ? Number(changeMatch[1]) : undefined;
-  const changePct = pctMatch ? Number(pctMatch[1]) : undefined;
-  return { price, change, changePct };
-};
+const quoteForDisplay = (quote: MarketQuote | null | undefined): QuoteData => ({
+  price: quote?.price,
+  change: quote?.change,
+  changePct: quote?.change_percent,
+  currency: quote?.currency,
+});
 
 // 格式化涨跌幅
 const formatChangePct = (value?: number | null) => {
@@ -60,8 +49,8 @@ interface WatchlistProps {
 }
 
 export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
-  const { watchlist, addWatchItemApi, removeWatchItemApi, setActiveAsset } =
-    useDashboardStore();
+  const { setActiveAsset } = useDashboardStore();
+  const { watchlist, addWatchItemApi, removeWatchItemApi, query: watchlistQuery } = useWatchlist();
   const { toast } = useToast();
 
   // 添加模式状态
@@ -91,8 +80,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
       watchlist.map(async (item) => {
         try {
           const response = await apiClient.fetchStockPrice(item.symbol);
-          const payload = response?.data ?? response;
-          const parsed = parsePriceText(payload?.data ?? payload);
+          const parsed = quoteForDisplay(response?.data?.data);
           results[item.symbol] = parsed;
         } catch {
           results[item.symbol] = {};
@@ -276,7 +264,14 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
 
       {/* 列表 */}
       <div className="flex-1 overflow-y-auto">
-        {watchlist.length === 0 ? (
+        {watchlistQuery.isError ? (
+          <div role="alert" className="px-4 py-6 text-xs text-t-down">
+            自选列表读取失败
+            <button type="button" onClick={() => void watchlistQuery.refetch()} className="ml-2" aria-label="重试自选列表"><RefreshCw size={14} /></button>
+          </div>
+        ) : watchlistQuery.isPending && watchlistQuery.fetchStatus !== 'idle' ? (
+          <div className="px-4 py-6 text-xs text-t-text3">正在读取自选列表...</div>
+        ) : watchlist.length === 0 ? (
           <div className="p-4 text-center text-xs text-fin-muted">
             暂无自选，点击上方 + 添加
           </div>
@@ -318,7 +313,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                     {/* 中间：价格和涨跌幅 */}
                     <div className="flex flex-col items-end flex-1 mx-2">
                       <span className="text-xs font-medium text-fin-text">
-                        {hasPrice ? `$${quote.price!.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
+                        {hasPrice ? formatMoney(quote.price, quote.currency) : '--'}
                       </span>
                       <span className={`text-2xs font-medium ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
                         {hasPrice ? formatChangePct(quote.changePct) : '--'}

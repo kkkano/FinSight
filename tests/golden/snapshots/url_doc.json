@@ -3,7 +3,7 @@
   "output_mode": "chat",
   "plan_steps": [
     {
-      "group": "task_1",
+      "group": "request_task_1",
       "kind": "tool",
       "name": "fetch_url_content"
     }

@@ -233,16 +233,18 @@ async def run_forecast(
         if input_bound > FORECAST_INPUT_TOKEN_LIMIT:
             return result(code="input_budget_exceeded")
 
-        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        from backend.services.llm_retry import LLMCallContext, ainvoke_frozen_llm
         from backend.services.rate_limiter import acquire_llm_token
+        from backend.services.run_context import remaining_timeout
 
-        token_ready = await acquire_llm_token(timeout=timeout, agent_name=f"forecast_{prediction_type}")
+        token_ready = await acquire_llm_token(timeout=remaining_timeout(timeout), agent_name=f"forecast_{prediction_type}")
         if not token_ready:
             return result(code="rate_limiter_timeout", retryable=True)
-        response = await ainvoke_with_rate_limit_retry(
+        response = await ainvoke_frozen_llm(
             llm, [HumanMessage(content=request_text)],
-            llm_factory=None, max_attempts=1, acquire_token=False,
-            agent_name=f"forecast_{prediction_type}",
+            context=LLMCallContext.create(stage="us20_forecast", agent=f"forecast_{prediction_type}",
+                                          layer="forecast", max_provider_attempts=1),
+            request_timeout=timeout,
         )
         _response_metadata(response, metadata)
         if metadata["finish_reason"].lower() in {"length", "max_tokens", "max_output_tokens"}:

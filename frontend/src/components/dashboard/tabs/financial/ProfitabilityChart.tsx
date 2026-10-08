@@ -11,6 +11,7 @@ import ReactECharts from 'echarts-for-react';
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { FinancialStatement } from '../../../../types/dashboard';
 import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { formatMoney } from '../../../../utils/format';
 
 // --- Props ---
 
@@ -20,21 +21,10 @@ interface ProfitabilityChartProps {
 
 // --- Helpers ---
 
-/** Format large numbers compactly: $1.2B, $340M, etc. */
-const formatLargeNumber = (value: number): string => {
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1)}T`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
-  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
-};
-
 interface ChartData {
   periods: string[];
-  revenues: number[];
-  netIncomes: number[];
+  revenues: (number | null)[];
+  netIncomes: (number | null)[];
   grossMargins: (number | null)[];
   netMargins: (number | null)[];
 }
@@ -44,30 +34,28 @@ function extractChartData(financials: FinancialStatement | null | undefined): Ch
 
   const periods = financials.periods ?? [];
   const revenue = financials.revenue ?? [];
-  const grossProfit = financials.gross_profit ?? [];
   const netIncome = financials.net_income ?? [];
 
   if (periods.length === 0) return null;
 
-  // Take last 8 periods
-  const start = Math.max(0, periods.length - 8);
-
   const slicedPeriods: string[] = [];
-  const revenues: number[] = [];
-  const netIncomes: number[] = [];
+  const revenues: (number | null)[] = [];
+  const netIncomes: (number | null)[] = [];
   const grossMargins: (number | null)[] = [];
   const netMargins: (number | null)[] = [];
 
-  for (let i = start; i < periods.length; i++) {
+  const indices = periods.map((_, idx) => idx)
+    .sort((a, b) => (financials.period_ends?.[b] ?? periods[b]).localeCompare(financials.period_ends?.[a] ?? periods[a]))
+    .slice(0, 8).reverse();
+  for (const i of indices) {
     slicedPeriods.push(periods[i]);
-    const rev = revenue[i] ?? 0;
-    const ni = netIncome[i] ?? 0;
+    const rev = revenue[i] ?? null;
+    const ni = netIncome[i] ?? null;
     revenues.push(rev);
     netIncomes.push(ni);
 
-    const gp = grossProfit[i];
-    grossMargins.push(rev !== 0 && gp != null ? Math.round((gp / rev) * 1000) / 10 : null);
-    netMargins.push(rev !== 0 ? Math.round((ni / rev) * 1000) / 10 : null);
+    grossMargins.push(financials.gross_margin?.[i] ?? null);
+    netMargins.push(financials.net_margin?.[i] ?? null);
   }
 
   return { periods: slicedPeriods, revenues, netIncomes, grossMargins, netMargins };
@@ -111,7 +99,7 @@ export function ProfitabilityChart({ financials }: ProfitabilityChartProps) {
           axisLabel: {
             color: theme.muted,
             fontSize: 9,
-            formatter: (v: number) => formatLargeNumber(v),
+            formatter: (v: number) => formatMoney(v, financials?.currency, true),
           },
           splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
         },

@@ -160,7 +160,7 @@ _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
     ),
     "capital_allocation": EvidenceDefinition(
         "capital_allocation", scope="per_ticker", producer="tool_only",
-        tools=("get_sec_capital_allocation",), markets=("US",),
+        tools=("get_sec_capital_allocation", "get_local_market_filings"), markets=("US", "CN", "HK"),
     ),
     "price_snapshot": EvidenceDefinition(
         "price_snapshot",

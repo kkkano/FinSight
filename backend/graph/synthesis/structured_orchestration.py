@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.graph.failure import build_runtime
 from backend.graph.state import GraphState
-from backend.graph.synthesis.contracts import TaskSynthesisResult, stable_unique
+from backend.graph.synthesis.contracts import EvidenceNormalizationResult, TaskSynthesisResult, stable_unique
 from backend.graph.synthesis.analysis_requirements import analysis_task_modes, answer_requirements_by_task, requested_task_partition
 from backend.graph.synthesis.requirement_validation import evaluate_answer_requirements
 from backend.graph.synthesis.opinion_readiness import build_opinion_readiness
@@ -28,6 +28,16 @@ from backend.services.llm_retry import LLMCallContext
 
 
 ChatTaskContract = tuple[Any, Any, Any, Any, list[dict[str, Any]], dict[str, Any]]
+
+
+def _execution_evidence(artifacts, descriptors, plan_steps, agent_outputs):
+    stored = artifacts.get("task_evidence_normalization")
+    if isinstance(stored, dict):
+        return EvidenceNormalizationResult.model_validate(stored)
+    return normalize_evidence(
+        task_descriptors=descriptors, plan_steps=plan_steps, agent_outputs=agent_outputs,
+        raw_evidence_by_task=artifacts.get("evidence_by_task") or {},
+    )
 
 
 def _failure_diagnostics_by_stage(draft) -> dict[str, Any]:
@@ -85,16 +95,7 @@ def prepare_chat_task_contract(
         plan_tasks=plan_tasks,
         plan_steps=plan_steps,
     )
-    evidence_normalization = normalize_evidence(
-        task_descriptors=descriptor_build.descriptors,
-        plan_steps=plan_steps,
-        agent_outputs=agent_outputs,
-        raw_evidence_by_task=(
-            artifacts.get("evidence_by_task")
-            if isinstance(artifacts.get("evidence_by_task"), dict)
-            else {}
-        ),
-    )
+    evidence_normalization = _execution_evidence(artifacts, descriptor_build.descriptors, plan_steps, agent_outputs)
     claim_validation = validate_claims(
         run_id=str(state.get("run_id") or trace.get("run_id") or "chat-run"),
         task_descriptors=descriptor_build.descriptors,
@@ -216,16 +217,7 @@ async def synthesize_structured_report(
             error_codes=["invalid_task_identity"],
         ))
         descriptor_build.quality_block_reasons.append("invalid_task_identity")
-    evidence_normalization = normalize_evidence(
-        task_descriptors=descriptor_build.descriptors,
-        plan_steps=plan_steps,
-        agent_outputs=agent_outputs,
-        raw_evidence_by_task=(
-            artifacts.get("evidence_by_task")
-            if isinstance(artifacts.get("evidence_by_task"), dict)
-            else {}
-        ),
-    )
+    evidence_normalization = _execution_evidence(artifacts, descriptor_build.descriptors, plan_steps, agent_outputs)
     run_id = str(state.get("run_id") or trace.get("run_id") or "research-run").strip() or "research-run"
     claim_validation = validate_claims(
         run_id=run_id,

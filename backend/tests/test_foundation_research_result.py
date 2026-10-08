@@ -54,7 +54,11 @@ def test_render_node_consumes_canonical_result_and_keeps_facts_in_blocked_report
     evidence = NormalizedEvidence(source_id="source", task_ids=["task"], subject="NVDA", kind="price_snapshot", usage="fact", text="源报价。", market_price=140.5, currency="USD", as_of="2026-10-02T20:00:00Z")
     draft = _draft(evidence)
     state = {"output_mode": "investment_report", "artifacts": {"research_result": draft.model_dump(), "research_requested_task_ids": ["task"]}}
+    from backend.graph.nodes.validate import validate
+    state.update(validate(state))
+    original = state["artifacts"]["research_result"]
     rendered = render_node(state)
+    assert rendered["artifacts"]["research_result"] == original
     assert "140.5 USD" in rendered["artifacts"]["draft_markdown"]
     assert rendered["artifacts"]["quality_blocked"] is True
     assert rendered["artifacts"]["publishable"] is False

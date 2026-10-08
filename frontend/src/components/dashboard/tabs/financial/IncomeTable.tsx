@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 
 import type { FinancialStatement } from '../../../../types/dashboard';
 import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { formatMoney } from '../../../../utils/format';
 
 // --- Props ---
 
@@ -18,22 +19,8 @@ interface IncomeTableProps {
 
 // --- Helpers ---
 
-/** Format large numbers into compact representation */
-const fmtNum = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
-  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-  if (Math.abs(v) >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
-  return v.toFixed(2);
-};
-
-/** Compute YoY change class for a value compared to prior-year quarter (4 periods back) */
-function yoyClass(values: (number | null)[], index: number): string {
-  if (index < 4) return '';
-  const current = values[index];
-  const prior = values[index - 4];
-  if (current == null || prior == null || prior === 0) return '';
-  const change = (current - prior) / Math.abs(prior);
+function yoyClass(change: number | null | undefined): string {
+  if (change == null) return '';
   if (change > 0.05) return 'text-fin-success';
   if (change < -0.05) return 'text-fin-danger';
   return '';
@@ -58,14 +45,9 @@ const ROWS: RowDef[] = [
 
 export function IncomeTable({ financials }: IncomeTableProps) {
   const periods = useMemo(
-    () => (financials?.periods ?? []).slice(-8),
+    () => (financials?.periods ?? []).slice(0, 8),
     [financials],
   );
-
-  const startIdx = useMemo(() => {
-    const total = financials?.periods?.length ?? 0;
-    return Math.max(0, total - 8);
-  }, [financials]);
 
   if (!financials || periods.length === 0) {
     return (
@@ -82,7 +64,7 @@ export function IncomeTable({ financials }: IncomeTableProps) {
   return (
     <div className="p-4 bg-fin-card rounded-lg border border-fin-border overflow-x-auto">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-xs font-medium text-fin-muted">利润表</div>
+        <div className="text-xs font-medium text-fin-muted">利润表{financials.frequency === 'annual' ? ' · 年度' : financials.frequency === 'quarterly' ? ' · 单季' : financials.frequency === 'semiannual' ? ' · 半年' : ''}</div>
         <DashboardSourceBadge metaKey="financials" />
       </div>
 
@@ -108,9 +90,9 @@ export function IncomeTable({ financials }: IncomeTableProps) {
                   {row.label}
                 </td>
                 {periods.map((_, colIdx) => {
-                  const dataIdx = startIdx + colIdx;
+                  const dataIdx = colIdx;
                   const val = values[dataIdx];
-                  const colorClass = yoyClass(values, dataIdx);
+                  const colorClass = yoyClass(financials.yoy?.[row.key]?.[dataIdx]);
                   return (
                     <td
                       key={colIdx}
@@ -118,7 +100,7 @@ export function IncomeTable({ financials }: IncomeTableProps) {
                         colorClass || 'text-fin-text'
                       }`}
                     >
-                      {fmtNum(val)}
+                      {formatMoney(val, financials.metric_currencies?.[row.key] ?? financials.currency, row.key !== 'eps')}
                     </td>
                   );
                 })}

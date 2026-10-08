@@ -1,6 +1,6 @@
 # Execution Event Contract
 
-更新时间：2026-10-03
+更新时间：2026-10-08
 
 ## 完成与交付状态
 
@@ -11,6 +11,10 @@
 旧客户端未发送消息 ID 时，服务器可能在本地问题快照后补建带 run 的问题/回答。历史恢复以本地问题 ID 精确定位，允许其末尾紧邻一组或多组同文且绑定一致的完整 canonical 问答；只在本地呈现合并最前面的 legacy 副本，保留所有真实运行记录。不同问题、缺失绑定、未完成尾部、换账号或新消息均禁止覆盖，不依赖客户端时钟。
 
 本契约约束后端执行事件、SSE 序列化和前端消费。事件是可观测事实，不是前端模拟动画。
+
+内容完成度由验证节点产出 `content_contract_version=research_content.v2` 与 `content_status`，同时兼容 `answer_status`。状态为 `answered/partial/unavailable/blocked/clarification_required`；来源 `pass/warn/block` 和 `publishable` 独立。前端当前合同直接使用服务端内容判定，只有缺少该版本字段的旧报告才做展示兼容推断。
+
+普通研究180秒、报告300秒，模型预检、语义抽取、取数内的模型抽取和分析共享同一截止时间；语义报告模式按本轮原始起点调整预算。到期停止新增模型调用，已完成步骤用确定性投影保留事实及缺项，终态 `error` 携带 `run_deadline_exceeded`、`response`、`task_results` 和 `publishable=false`。投影最多3秒、终态保存最多2秒；保存失败如实标为 `persistence_status=failed`，不能宣称可恢复。
 
 ## 阶段
 

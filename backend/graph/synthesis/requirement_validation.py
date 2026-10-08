@@ -143,8 +143,14 @@ def _financial_component_supported(component: str, claims: list[Claim], evidence
     return False
 
 
-def _attribute_present(evidence: NormalizedEvidence, attribute: str) -> bool:
+def _attribute_present(evidence: NormalizedEvidence, attribute: str, requirement: dict | None = None) -> bool:
     payload = _payload(evidence)
+    record = metric_record(evidence, str((requirement or {}).get("metric") or "")) or {}
+    payload = {**payload, **record}
+    if attribute == "reporting_basis":
+        requested = ((requirement or {}).get("time_scope") or {}).get("reporting_basis", "unspecified")
+        basis = payload.get("reporting_basis")
+        return basis in {"consolidated", "parent"} and (requested == "unspecified" or basis == requested)
     if attribute == "as_of":
         return payload.get("source_time_status") != "unknown" and _present(evidence.as_of or payload.get("as_of"))
     if attribute == "currency":
@@ -286,7 +292,7 @@ def evaluate_answer_requirements(
         if not facts and control_reasons is None:
             reasons.append("requirement_evidence_not_presented" if available_facts else "requirement_evidence_missing")
         for attribute in requirement.get("attributes") or []:
-            if not any(_attribute_present(fact, str(attribute)) for fact in facts):
+            if not any(_attribute_present(fact, str(attribute), requirement) for fact in facts):
                 reasons.append(f"missing_attribute:{attribute}")
         if requirement.get("requires_analysis") and not claims and control_reasons is None:
             reasons.append("requirement_explanation_missing")

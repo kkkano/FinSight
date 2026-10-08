@@ -8,7 +8,7 @@
  * Row 3: EarningsSurpriseChart + AnalystTargetCard  (G2 new)
  * Row 4: BalanceSheetSummary
  */
-import { useDashboardStore } from '../../../store/dashboardStore';
+import { useDashboardSnapshot } from '../../../hooks/useDashboardData';
 import { IncomeTable } from './financial/IncomeTable';
 import { ProfitabilityChart } from './financial/ProfitabilityChart';
 import { ValuationGrid } from './financial/ValuationGrid';
@@ -19,7 +19,7 @@ import { AnalystTargetCard } from './financial/AnalystTargetCard';
 // --- Component ---
 
 export function FinancialTab() {
-  const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const dashboardData = useDashboardSnapshot();
 
   const financials = dashboardData?.financials;
   const valuation = dashboardData?.valuation;

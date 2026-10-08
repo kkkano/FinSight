@@ -147,6 +147,8 @@ def _financial(payload: dict, evidence, *, compact: bool = False, summary: bool 
             lines.append(f"[数据缺失] {label}只有 {meta['frequency']} 数据，不能当作完整季度或财年值。")
             continue
         line = f"{period} {label} {money(values[0], unit)}"
+        if meta.get("reporting_basis") in {"consolidated", "parent"}:
+            line += "；合并口径" if meta["reporting_basis"] == "consolidated" else "；母公司口径"
         if meta.get("period_start") and not summary:
             line += f"（{meta['period_start']} 至 {period}）"
         elif meta.get("frequency") == "instant":
@@ -350,11 +352,19 @@ def _capital_allocation(payload: dict, evidence) -> str:
     period_label = "完整财年" if payload.get("frequency") == "annual" else "单季度"
     currency = payload.get("currency") or evidence.currency
     lines = [f"{evidence.subject or payload.get('ticker') or '公司'} {period_label} {payload.get('period_start') or '起日未提供'} 至 {payload.get('period_end') or '期末未提供'}。"]
-    labels = {"operating_cash_flow": "经营现金流", "capital_expenditure": "资本开支现金支付", "dividends_paid": "股息现金支付", "repurchases_paid": "股票回购现金支付", "cash_and_equivalents": "期末现金及等价物", "debt_current": "流动债务（按来源定义）", "debt_noncurrent": "非流动长期债务"}
+    labels = {"operating_cash_flow": "经营现金流", "capital_expenditure": "资本开支现金支付", "dividends_paid": "股息现金支付", "repurchases_paid": "股票回购现金支付", "cash_and_equivalents": "期末现金及等价物", "debt_current": "流动债务（按来源定义）", "debt_noncurrent": "非流动长期债务", "free_cash_flow": "自由现金流", "capital_allocation_surplus": "资本分配余缺", "dividend_coverage": "自由现金流对股息现金支付的覆盖"}
     if evidence.metric in labels and payload.get("value") is not None:
-        lines.append(f"{labels[evidence.metric]}：{money(payload['value'], payload.get('unit') or currency)}。")
+        value = number(payload["value"]) + " 倍" if evidence.metric == "dividend_coverage" else money(payload["value"], payload.get("unit") or currency)
+        lines.append(f"{labels[evidence.metric]}：{value}。")
+        for record in payload.get("derivation_inputs") or []:
+            lines.append(f"计算输入：{record.get('period_end')} {labels.get(record.get('metric'), record.get('metric'))} {money(record.get('value'), record.get('unit'))}。")
         if payload.get("page"):
             lines.append(f"原文位置：第 {payload['page']} 页。")
+        basis = payload.get("reporting_basis")
+        if basis in {"consolidated", "parent"}:
+            lines.append("报表口径：" + ("合并" if basis == "consolidated" else "母公司") + "。")
+        if payload.get("basis_quote"):
+            lines.append(f"口径出处：第 {payload.get('basis_page')} 页，{payload['basis_quote']}。")
         return "\n".join(lines)
     for key, label in labels.items():
         record = facts.get(key)

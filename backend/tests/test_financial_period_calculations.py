@@ -192,7 +192,7 @@ def test_single_requested_listing_expansion_gets_one_semantic_repair(monkeypatch
         rows = [{"source_text": "营收", "description": "营收", "kind": "fact_attribute", "metric": "revenue",
             "subject_refs": [subject["id"]], "subject": subject["tickers"][0]} for subject in subjects]
         return {"raw": AIMessage(content="{}", response_metadata={"finish_reason": "stop"}),
-            "parsed": {"subjects": subjects, "relation": "single", "requirements": rows}}
+            "parsed": {"route": "research", "subjects": subjects, "relation": "single", "requirements": rows}}
 
     monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
     raw, diagnostics = asyncio.run(module.extract_semantic_requirements({"query": query}, {}))
@@ -228,7 +228,7 @@ def test_standard_window_return_operator_conflict_gets_one_semantic_repair(monke
         if len(calls) == 1:
             row["calculation"] = {"operation": "growth_rate", "baseline": "previous_period"}
         return {"raw": AIMessage(content="{}", response_metadata={"finish_reason": "stop"}),
-            "parsed": {"subjects": [{"id": "exm", "label": "Example", "type": "company", "tickers": ["EXM"]}], "requirements": [row]}}
+            "parsed": {"route": "research", "subjects": [{"id": "exm", "label": "Example", "type": "company", "tickers": ["EXM"]}], "requirements": [row]}}
 
     monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
     raw, diagnostics = asyncio.run(module.extract_semantic_requirements({"query": query}, {}))

@@ -31,6 +31,7 @@ from backend.llm_config import (
     AllEndpointsCoolingDown,
     EndpointConfig,
     EndpointManager,
+    EndpointRuntime,
     create_llm_for_endpoint,
     get_endpoint_manager,
     report_llm_failure,
@@ -42,8 +43,10 @@ from backend.services.llm_usage import (
     record_llm_attempt,
     record_llm_selection_failure,
     record_llm_usage,
+    LLMAttribution, get_llm_attribution, get_token_accumulator, reset_llm_attribution, set_llm_attribution,
 )
 from backend.services.llm_response import completion_metadata, raw_completion
+from backend.services.run_context import RunContext, current_run_context, remaining_timeout, run_context_scope
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +192,14 @@ def record_failure_diagnostic(context: LLMCallContext, exc: BaseException, *, du
 
 def classify_llm_error(exc: BaseException) -> LLMErrorClassification:
     """Classify provider failures conservatively; unknown failures never retry."""
+    from backend.services.llm_usage_store import LLMUsageStoreUnavailable, UserDailyCostLimitExceeded
+    from backend.services.run_context import RunCancelledError
+    if isinstance(exc, UserDailyCostLimitExceeded):
+        return LLMErrorClassification("quota_exhausted", "llm_quota_exhausted", None, False, False)
+    if isinstance(exc, LLMUsageStoreUnavailable):
+        return LLMErrorClassification("configuration", "llm_usage_store_unavailable", None, False, False)
+    if isinstance(exc, RunCancelledError):
+        return LLMErrorClassification("cancelled", "run_cancelled", None, False, False)
     completion = getattr(exc, "completion", None)
     if completion is not None and completion_metadata(completion)["finish_reason"] == "length":
         return LLMErrorClassification("output_truncated", "llm_output_truncated", None, False, False)
@@ -259,6 +270,9 @@ def _emit(event: str, payload: dict[str, Any]) -> None:
 
 
 def _observe_attempt(context: LLMCallContext, payload: Mapping[str, Any]) -> None:
+    run = current_run_context()
+    if run is not None:
+        run.attempts.append(dict(payload))
     observer = context.on_attempt
     if observer is None:
         return
@@ -309,6 +323,10 @@ async def ainvoke_llm(
     endpoint_count = len([ep for ep in endpoint_manager.endpoints if ep.cfg.enabled])
     single_endpoint = endpoint_count == 1
     while context.budget.remaining > 0:
+        run = current_run_context()
+        if run is not None:
+            await asyncio.to_thread(run.check_quota)
+            run.guard()
         try:
             if single_endpoint and attempted:
                 endpoint = endpoint_manager.endpoints[0].cfg
@@ -335,7 +353,10 @@ async def ainvoke_llm(
         attempt = context.budget.reserve_provider_attempt()
         started = perf_counter()
         try:
-            result = await invoke(client, messages)
+            configured_timeout = context.call_parameters.get("request_timeout") or 600
+            if isinstance(configured_timeout, dict):
+                configured_timeout = configured_timeout.get("read") or 600
+            result = await asyncio.wait_for(invoke(client, messages), timeout=remaining_timeout(float(configured_timeout)))
             prompt_tokens, completion_tokens = _usage_or_none(result)
             record_llm_usage(result, getattr(client, "model_name", endpoint.model), count_call=False)
             record_llm_attempt(model=getattr(client, "model_name", endpoint.model), status="success", duration_ms=int((perf_counter() - started) * 1000), response=result)
@@ -352,7 +373,21 @@ async def ainvoke_llm(
             }
             _emit("llm.attempt", attempt_payload)
             _observe_attempt(context, attempt_payload)
+            if run is not None and run.status != "running":
+                await asyncio.wait_for(run.archive_usage(), timeout=5.0)
             return result
+        except asyncio.CancelledError:
+            record_llm_attempt(model=getattr(client, "model_name", endpoint.model), status="cancelled",
+                               duration_ms=int((perf_counter() - started) * 1000))
+            _observe_attempt(context, {
+                "logical_call_id": context.logical_call_id, "stage": context.stage,
+                "agent": context.agent, "layer": context.layer, "model": endpoint.model,
+                "provider": endpoint.provider, "endpoint_name": endpoint.name,
+                "attempt": attempt, "status": "cancelled", "error_code": "run_cancelled",
+                "duration_ms": int((perf_counter() - started) * 1000),
+                "prompt_tokens": None, "completion_tokens": None,
+            })
+            raise
         except Exception as exc:
             diagnostic = record_failure_diagnostic(context, exc, duration_ms=int((perf_counter() - started) * 1000))
             classification = classify_llm_error(exc)
@@ -376,6 +411,8 @@ async def ainvoke_llm(
             }
             _emit("llm.attempt", attempt_payload)
             _observe_attempt(context, attempt_payload)
+            if run is not None and run.status != "running":
+                await asyncio.wait_for(run.archive_usage(), timeout=5.0)
             if not retry_provider_errors or not classification.retryable or context.budget.remaining <= 0 or (single_endpoint and attempt >= 2):
                 if classification.endpoint_failure:
                     endpoint_manager.report_failure(
@@ -394,11 +431,41 @@ async def ainvoke_llm(
                 )
             if context.budget.remaining <= 0:
                 raise
-            await sleeper(random.uniform(0.25, 1.0))
+            await asyncio.wait_for(sleeper(random.uniform(0.25, 1.0)), timeout=remaining_timeout(1.0))
     raise RuntimeError("llm_provider_attempt_budget_exhausted")
 
 
-async def ainvoke_configured_llm(
+async def ainvoke_configured_llm(messages: Any, *, context: LLMCallContext, **kwargs: Any) -> Any:
+    """唯一调用入口；HTTP和scheduler提供整轮上下文，独立调用也必须可计量。"""
+    if current_run_context() is None:
+        acc = get_token_accumulator()
+        run = RunContext.create(owner=acc.user_id if acc is not None else "public", entry=context.stage)
+        if acc is not None:
+            run.usage = acc
+        with run_context_scope(run):
+            try:
+                result = await ainvoke_configured_llm(messages, context=context, **kwargs)
+                run.finish("completed")
+                return result
+            except asyncio.CancelledError:
+                run.finish("cancelled")
+                raise
+            except Exception:
+                run.finish("failed")
+                raise
+            finally:
+                await asyncio.wait_for(run.archive_usage(), timeout=5.0)
+    attribution_token = None
+    if get_llm_attribution() is None:
+        attribution_token = set_llm_attribution(LLMAttribution(agent=context.agent, layer=context.layer))
+    try:
+        return await _ainvoke_configured_llm(messages, context=context, **kwargs)
+    finally:
+        if attribution_token is not None:
+            reset_llm_attribution(attribution_token)
+
+
+async def _ainvoke_configured_llm(
     messages: Any,
     *,
     context: LLMCallContext,
@@ -406,7 +473,7 @@ async def ainvoke_configured_llm(
     model: str | None = None,
     temperature: float = 0.3,
     max_tokens: int | None = None,
-    request_timeout: int = 600,
+    request_timeout: float = 600,
     acquire_token: bool = True,
     acquire_timeout_seconds: float | None = None,
     client_transform: Callable[[Any], Any] | None = None,
@@ -414,6 +481,7 @@ async def ainvoke_configured_llm(
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> Any:
     """Invoke the configured provider through the single endpoint state machine."""
+    request_timeout = remaining_timeout(request_timeout)
     context.call_parameters.update(request_timeout=request_timeout, max_tokens=max_tokens, max_retries=0)
     check_token_budget()
     if acquire_token and not context.budget.rate_limit_token_acquired:
@@ -424,7 +492,10 @@ async def ainvoke_configured_llm(
             if acquire_timeout_seconds is not None
             else _env_float("LLM_RATE_LIMIT_RETRY_ACQUIRE_TIMEOUT_SECONDS", 15.0)
         )
-        acquired = await acquire_llm_token(timeout=timeout, agent_name=context.agent)
+        acquired = await asyncio.wait_for(
+            acquire_llm_token(timeout=remaining_timeout(timeout), agent_name=context.agent),
+            timeout=remaining_timeout(timeout),
+        )
         if not acquired:
             raise RuntimeError("llm_rate_limit_acquire_timeout")
         context.budget.rate_limit_token_acquired = True
@@ -445,7 +516,7 @@ async def ainvoke_configured_llm(
             endpoint,
             temperature=temperature,
             max_tokens=max_tokens,
-            request_timeout=request_timeout,
+            request_timeout=remaining_timeout(request_timeout),
         )
         metadata = getattr(client, "_finsight_call_metadata", None)
         configured = metadata.get("request_parameters") if isinstance(metadata, dict) else {}
@@ -468,6 +539,41 @@ async def ainvoke_configured_llm(
         sleeper=sleeper,
         retry_provider_errors=chosen is None,
     )
+
+
+def invoke_configured_llm(messages: Any, **kwargs: Any) -> Any:
+    """同步文档工具复用调用状态机；供应商在途请求仍有剩余预算上限。"""
+    transform = kwargs.pop("client_transform", None)
+
+    class SyncClient:
+        def __init__(self, client: Any) -> None:
+            self.client = transform(client) if transform is not None else client
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.client, name)
+
+        async def ainvoke(self, payload: Any) -> Any:
+            return await asyncio.to_thread(self.client.invoke, payload)
+
+    return asyncio.run(ainvoke_configured_llm(messages, client_transform=SyncClient, **kwargs))
+
+
+async def ainvoke_frozen_llm(client: Any, messages: Any, *, context: LLMCallContext, request_timeout: float) -> Any:
+    """固定评测已冻结客户端参数，调用仍使用同一个预算和尝试状态机。"""
+    metadata = getattr(client, "_finsight_call_metadata", {})
+    endpoint = EndpointConfig(name=str(metadata.get("endpoint_alias") or "frozen-forecast"),
+                              provider="configured", api_base="", api_key="",
+                              model=str(getattr(client, "model_name", None) or metadata.get("configured_model") or "frozen"))
+    context.call_parameters.update(request_timeout=remaining_timeout(request_timeout),
+                                   max_tokens=getattr(client, "max_tokens", None), max_retries=0)
+    attribution_token = set_llm_attribution(LLMAttribution(agent=context.agent, layer=context.layer))
+    try:
+        return await ainvoke_llm(messages=messages, context=context,
+            endpoint_manager=EndpointManager(endpoints=[EndpointRuntime(cfg=endpoint)], fingerprint=endpoint.name),
+            client_factory=lambda _endpoint: client, invoke=lambda selected, payload: selected.ainvoke(payload),
+            retry_provider_errors=False)
+    finally:
+        reset_llm_attribution(attribution_token)
 
 
 def _exception_chain_summary(exc: BaseException, *, max_depth: int = 4) -> str:

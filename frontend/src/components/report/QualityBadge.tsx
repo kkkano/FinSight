@@ -74,7 +74,7 @@ export const QualityBadge: React.FC<QualityBadgeProps> = ({ quality }) => {
 
   const reasons: ReportQualityReason[] = Array.isArray(quality.reasons) ? quality.reasons : [];
   const { label: stateLabel, icon, tone } = buildStyle(state, reasons.length);
-  const label = answerStatus === 'unavailable' ? '无法回答'
+  const label = answerStatus === 'clarification_required' ? '需要补充信息' : answerStatus === 'unavailable' ? '无法回答'
     : answerStatus === 'partial' && state !== 'block' ? '部分完成'
       : stateLabel;
   const missingRequirements = [...new Set((quality.missing_requirements || []).map(formatMissingRequirement))];

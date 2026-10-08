@@ -1,6 +1,6 @@
 # FinSight 当前架构
 
-更新时间：2026-10-04
+更新时间：2026-10-08
 
 ## 1. 产品边界
 
@@ -40,7 +40,7 @@ FastAPI 注册以下十一个 Router：
 
 | Router | 责任 |
 |---|---|
-| `system_router` | `/livez`、`/readyz`、`/health` 与 `/metrics` |
+| `system_router` | `/livez`、`/readyz`、`/health`、公开只读 `/api/capabilities` 与 `/metrics` |
 | `user_router` | 当前用户只读资料 |
 | `watchlist_router` | Watchlist 增删查 |
 | `conversation_router` | 对话列表与历史 |
@@ -74,17 +74,17 @@ flowchart TD
 ```
 
 - `prepare_context`：恢复同 thread 上下文并建立本轮状态。
-- `route_request`：确定性理解并绑定本轮主体后，通过 `request_compiler.finalize_request_contract` 生成关联一致的 frame、tasks、证据义务及兼容 operation，不调用路由 LLM。
-- `collect_evidence`：实际工具 schema、任务引用、依赖和无环校验后执行计划；覆盖按 `(task_id, subject, evidence_kind)` 检查。工具和 collector 共享本轮 `RequestData`，collector 关闭自身 LLM 与 reflection。
+- `route_request`：模型抽取语义并由 `request_compiler` 唯一编译版本化 `RequestSpec`；注册能力、主体、限定条件和展示要求在入口冻结，兼容 operation 只作为投影。语义不可用时保留明确未确认状态的备用规则合同。
+- `collect_evidence`：实际工具 schema、任务引用、依赖和无环校验后执行计划；覆盖按 `(task_id, subject, evidence_kind)` 检查。工具和 collector 共享本轮 `RequestData`；执行时一次归一化证据，合成不再同时重建原始 Agent evidence。
 - `analyze`：基于规范化 evidence/claim 生成唯一 `research_result`；事实可确定性渲染，分析、报告草稿及核验调用按真实 usage 统计。
-- `validate`：统一检查 Claim、引用、TaskOutcome、报告/回答质量与失败披露。
-- `render`：按 Chat 或 Report 合同输出，不重新取数或发明证据。
+- `validate`：冻结逐需求结果、来源质量与发布资格，保留真实缺项和硬冲突；恢复过的执行告警不自动改成内容缺项。
+- `render`：只读已验证结果，按 Chat 或 Report 合同输出，不重新判定需求或修改业务状态。
 
 `GraphState` 保存 query、thread、UI 上下文、请求帧、计划、证据、产物、trace 与最终回复。用户本轮显式标的优先于历史和 UI hint；diagnostics 不得进入 evidence；取消信号贯穿 SSE、图和执行器。
 
 `depends_on` 表示必须成功的控制依赖；`data_dependencies` 表示等待数据生产者进入成功或失败终态后再分析。某个来源失败不会让仅等待其数据的 Agent 或无依赖分支被连带跳过。用户明确要求的维度不能被成本 profile 删除；缺失按任务披露。
 
-`research_result` 保留事实、判断、引用、每个任务的结果和缺口。质量统一为 `pass/warn/block` 并按最严重状态合并，不能由报告构建器或 `report=None` 覆盖已有聊天阻断。完整报告必须有受支持论据；仅有事实时可以展示预览但不能冒充完整报告发布。
+`research_result` 保留事实、判断、引用、每个任务的结果和缺口。来源质量为 `pass/warn/block`，内容状态单独记录；澄清为 `clarification_required`，不能发布为研究报告。真实来源冲突与发布硬阻断不能被后续成功洗掉；完整报告必须有受支持论据。
 
 ## 4. AI 角色
 
@@ -94,11 +94,15 @@ LLM 按调用用途区分，均继承请求中选定的模型配置：
 2. `ResearchAnalyst`：消费规范化证据和论据，生成任务分析及报告草稿；按任务、草稿、核验和重试阶段记录实际调用，不把一个角色等同于一次模型调用。
 3. `direct_answer`：回答无需实时资料的通用概念与虚构示例；不采集行情，已有固定回复或澄清问题时无需模型。
 
-Price、Technical、Fundamental、News、Macro、Risk、Deep Search 只作为内部 evidence collector/profile。Technical 指标由代码计算。任何 collector 都不得自行调用 LLM、reflection 或补充搜索循环。
+Price、Technical、Fundamental、News、Macro、Risk、Deep Search 作为内部 evidence collector/profile。Technical 指标由代码计算。公告财务抽取是显式、可计量的模型调用，候选数值、单位、期间、页码和口径必须回到原文核验；其预算与研究分析共享 `RunContext`，不再隐藏在工具内部另开预算。
+
+`RunContext` 绑定服务端 owner、所选模型、累计截止时间、额度、取消信号和实际用量。普通研究180秒、报告300秒、个人预测180秒，纠错共享剩余时间。每个完成步骤即时记录，到期只做本地事实投影并停止新模型调用；投影与终态保存各有3秒/2秒上限，保存失败明确标记。
 
 ## 5. 行情与真实性
 
 `backend/services/market_data_gateway.py` 是 quote/Kline/news/financials 的规范化入口。每种 capability 最多配置 primary 与 secondary 两级供应商。响应携带 `provider`、`as_of`、`freshness_seconds`、`quality` 与稳定错误码。
+
+`AssetContext` 绑定市场、时区与交易日历；`DataResult` 区分数据状态、源时间与抓取时间。报价币种和财报币种独立；看板保留实际期间及频率，公共计算按期间键匹配同比和权益，缺失保持 null。默认日线报价明确为 `daily_close`，不能支撑盘中异动；监控按每个目标日历和实际输入能力运行。
 
 硬约束：
 

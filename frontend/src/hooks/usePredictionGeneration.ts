@@ -7,9 +7,10 @@ import {
   type PredictionRunView,
 } from '../api/domains/predictions';
 import { apiClient } from '../api/client';
+import { useStore } from '../store/useStore';
 
 export const PREDICTION_POLL_INTERVAL_MS = 1_500;
-export const PREDICTION_POLL_BUDGET_MS = 75_000;
+export const PREDICTION_POLL_BUDGET_MS = 185_000;
 
 const TERMINAL_STATUSES = new Set<PredictionRunView['status']>([
   'succeeded',
@@ -37,11 +38,15 @@ export function predictionPollDelay(milliseconds: number, signal?: AbortSignal):
       reject(abortError());
       return;
     }
-    const timer = window.setTimeout(resolve, milliseconds);
-    signal?.addEventListener('abort', () => {
+    const onAbort = () => {
       window.clearTimeout(timer);
       reject(abortError());
-    }, { once: true });
+    };
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -86,6 +91,9 @@ export function usePredictionGeneration(
   const [state, setState] = useState<PredictionGenerationState>(INITIAL_STATE);
   const controllerRef = useRef<AbortController | null>(null);
   const onSucceededRef = useRef(onSucceeded);
+  const userId = useStore((store) => store.authIdentity?.userId);
+  const normalizedSymbol = symbol.trim().toUpperCase();
+  const storageKey = `finsight:prediction-run:${userId || 'anonymous'}:${normalizedSymbol}`;
 
   useEffect(() => {
     onSucceededRef.current = onSucceeded;
@@ -97,10 +105,58 @@ export function usePredictionGeneration(
     setState(INITIAL_STATE);
   }, []);
 
-  useEffect(() => reset, [reset, symbol]);
+  const rememberRun = useCallback((run: PredictionRunView) => {
+    try {
+      if (TERMINAL_STATUSES.has(run.status)) localStorage.removeItem(storageKey);
+      else localStorage.setItem(storageKey, run.id);
+    } catch {
+      // 存储不可用时仍可以在当前页面追踪该运行。
+    }
+  }, [storageKey]);
+
+  const followRun = useCallback(async (initialRun: PredictionRunView, controller: AbortController) => {
+    rememberRun(initialRun);
+    setState({ phase: 'polling', run: initialRun, failure: null });
+    const run = await pollPredictionRun(initialRun, { signal: controller.signal });
+    if (controller.signal.aborted) return null;
+    rememberRun(run);
+    if (!TERMINAL_STATUSES.has(run.status)) {
+      setState({ phase: 'timed_out', run, failure: {
+        code: 'prediction_status_timeout', message: '暂未取得运行终态，可刷新继续查看本次任务。', status: null,
+      } });
+    } else if (run.status === 'succeeded' && run.prediction_id) {
+      setState({ phase: 'succeeded', run, failure: null });
+      onSucceededRef.current?.(run.prediction_id);
+    } else {
+      setState({ phase: 'failed', run, failure: describePredictionFailure(run.failure_code, run.failure_detail) });
+    }
+    return run;
+  }, [rememberRun]);
+
+  const resume = useCallback(async () => {
+    let runId: string | null = null;
+    try { runId = localStorage.getItem(storageKey); } catch { return null; }
+    if (!runId || !userId) return null;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    try {
+      const run = await apiClient.getPredictionRun(runId, controller.signal);
+      if (controller.signal.aborted) return null;
+      return await followRun(run, controller);
+    } catch (error) {
+      if (!controller.signal.aborted) setState((previous) => ({ ...previous, phase: 'failed', failure: toPredictionFailure(error) }));
+      return null;
+    }
+  }, [followRun, storageKey, userId]);
+
+  useEffect(() => {
+    reset();
+    void resume();
+    return reset;
+  }, [reset, resume]);
 
   const generate = useCallback(async () => {
-    const normalizedSymbol = symbol.trim().toUpperCase();
     if (!normalizedSymbol) return null;
 
     controllerRef.current?.abort();
@@ -112,49 +168,18 @@ export function usePredictionGeneration(
       const created = await apiClient.generatePrediction(normalizedSymbol, controller.signal);
       if (controller.signal.aborted) return null;
 
-      setState({
-        phase: TERMINAL_STATUSES.has(created.run.status) ? 'submitting' : 'polling',
-        run: created.run,
-        failure: null,
-      });
-      const run = await pollPredictionRun(created.run, { signal: controller.signal });
-      if (controller.signal.aborted) return null;
-
-      if (!TERMINAL_STATUSES.has(run.status)) {
-        setState({
-          phase: 'timed_out',
-          run,
-          failure: {
-            code: 'prediction_status_timeout',
-            message: '生成任务仍在后台运行，请稍后刷新查看结果。',
-            status: null,
-          },
-        });
-        return run;
-      }
-
-      if (run.status === 'succeeded' && run.prediction_id) {
-        setState({ phase: 'succeeded', run, failure: null });
-        onSucceededRef.current?.(run.prediction_id);
-        return run;
-      }
-
-      setState({
-        phase: 'failed',
-        run,
-        failure: describePredictionFailure(run.failure_code, run.failure_detail),
-      });
-      return run;
+      return await followRun(created.run, controller);
     } catch (error) {
       if (controller.signal.aborted) return null;
-      setState({ phase: 'failed', run: null, failure: toPredictionFailure(error) });
+      setState((previous) => ({ ...previous, phase: 'failed', failure: toPredictionFailure(error) }));
       return null;
     }
-  }, [symbol]);
+  }, [normalizedSymbol, followRun]);
 
   return {
     ...state,
     generate,
+    resume,
     reset,
     isGenerating: state.phase === 'submitting' || state.phase === 'polling',
   };

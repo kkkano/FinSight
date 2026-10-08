@@ -1,6 +1,8 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const rawBuildId = process.env.FRONTEND_BUILD_ID?.trim() || 'local'
 const serviceWorkerBuildId = rawBuildId.replace(/[^A-Za-z0-9._-]/g, '-') || 'local'
@@ -29,6 +31,9 @@ const versionedServiceWorkerRegistration = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: {
+    fs: { allow: [fileURLToPath(new URL('.', import.meta.url)), realpathSync(fileURLToPath(new URL('./node_modules', import.meta.url)))] },
+  },
   plugins: [
     react(),
     VitePWA({

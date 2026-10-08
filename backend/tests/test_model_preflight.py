@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from backend.services import model_preflight, model_selection
+from backend.services import llm_retry, model_preflight, model_selection
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ async def test_probe_uses_exact_selection_and_closes_clients(monkeypatch):
         model_selection.track_model_client(client)
         return SimpleNamespace(ainvoke=AsyncMock(return_value=SimpleNamespace(content="OK", response_metadata={"finish_reason": "stop"})))
 
-    monkeypatch.setattr(model_preflight, "create_llm_for_endpoint", make_llm)
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", make_llm)
     with model_selection.model_selection_scope(selected):
         await model_preflight.ensure_model_available()
         assert model_selection.current_model() is selected
@@ -41,7 +41,7 @@ async def test_probe_failure_does_not_retry_or_expose_provider_text(monkeypatch,
         status_code = status
 
     invoke = AsyncMock(side_effect=ProviderError("fixture-private-key secret upstream response"))
-    monkeypatch.setattr(model_preflight, "create_llm_for_endpoint", lambda *args, **kwargs: SimpleNamespace(ainvoke=invoke))
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", lambda *args, **kwargs: SimpleNamespace(ainvoke=invoke))
     selected = model_selection.SelectedModel("system", "step-5-preview", model_selection.STEP_BASE_URL, "fixture-private-key")
     with model_selection.model_selection_scope(selected), pytest.raises(HTTPException) as caught:
         await model_preflight.ensure_model_available()
@@ -55,7 +55,7 @@ async def test_probe_failure_does_not_retry_or_expose_provider_text(monkeypatch,
 @pytest.mark.asyncio
 async def test_empty_or_truncated_probe_is_not_success(monkeypatch, content, finish):
     invoke = AsyncMock(return_value=SimpleNamespace(content=content, response_metadata={"finish_reason": finish}))
-    monkeypatch.setattr(model_preflight, "create_llm_for_endpoint", lambda *args, **kwargs: SimpleNamespace(ainvoke=invoke))
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", lambda *args, **kwargs: SimpleNamespace(ainvoke=invoke))
     selected = model_selection.SelectedModel("custom", "own-model", "https://example.com/v1", "fixture-private-key")
     with model_selection.model_selection_scope(selected), pytest.raises(HTTPException) as caught:
         await model_preflight.ensure_model_available()
@@ -73,8 +73,9 @@ async def test_probe_timeout_stops_and_closes_client(monkeypatch):
         model_selection.track_model_client(client)
         return SimpleNamespace(ainvoke=invoke)
 
-    monkeypatch.setattr(model_preflight, "PREFLIGHT_TIMEOUT_SECONDS", .01)
-    monkeypatch.setattr(model_preflight, "create_llm_for_endpoint", make_llm)
+    monkeypatch.setattr(model_preflight, "PREFLIGHT_TIMEOUT_SECONDS", .1)
+    monkeypatch.setattr("backend.services.rate_limiter.acquire_llm_token", AsyncMock(return_value=True))
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", make_llm)
     selected = model_selection.SelectedModel("system", "own-model", "https://example.com/v1", "fixture-private-key")
     with model_selection.model_selection_scope(selected), pytest.raises(HTTPException) as caught:
         await model_preflight.ensure_model_available()

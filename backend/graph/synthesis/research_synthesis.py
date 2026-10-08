@@ -69,6 +69,14 @@ _AGENT_DIMENSION: dict[str, EvidenceDimension] = {
 }
 
 
+class _TaskExplanation(StrictContract):
+    text: NonEmptyStr
+    dimension: NonEmptyStr | None = None
+    requirement_ids: list[NonEmptyStr] = Field(default_factory=list)
+    evidence_ids: list[NonEmptyStr] = Field(default_factory=list)
+    claim_ids: list[NonEmptyStr] = Field(default_factory=list)
+
+
 class _TaskSynthesisSelection(StrictContract):
     """LLM 只能选择已经通过校验的 Claim，不能创建新的事实。"""
 
@@ -79,7 +87,7 @@ class _TaskSynthesisSelection(StrictContract):
     fact_ids: list[NonEmptyStr] = Field(default_factory=list)
     explanation: NonEmptyStr | None = None
     explanation_evidence_ids: list[NonEmptyStr] = Field(default_factory=list)
-    explanations: list[dict[str, Any]] = Field(default_factory=list, description="每段包含 text、dimension、requirement_ids，以及 evidence_ids（本任务 E 编号列表）或 claim_ids（本任务 C 编号列表）；C 编号会映射到已验证来源。text 使用自然语言，不回显 E/C 别名和内部字段名，引用仅放引用字段。没有引用依据时省略该段。")
+    explanations: list[_TaskExplanation] = Field(default_factory=list, description="引用限本任务 E/C 编号，requirement_ids绑定本任务要求；正文不回显内部编号。")
 
 
 class _ReportSynthesisSelection(StrictContract):
@@ -299,7 +307,9 @@ def normalize_evidence(
                 step = step_index.get(_text(raw.get("step_id")))
                 agent_name = _text(step.get("name")) if step and step.get("kind") == "agent" else None
                 candidates.append((raw, [task_id] if task_id in descriptor_ids else [], step, agent_name))
-    for step, output in _agent_output_entries(plan_steps, agent_outputs):
+    # 旧产物只在没有执行证据池时适配一次，不能与新入口重复构造事实。
+    legacy_outputs = {} if raw_evidence_by_task else agent_outputs
+    for step, output in _agent_output_entries(plan_steps, legacy_outputs):
         bindings = [item for item in (_step_task_ids(step) if step else _strings(output.get("task_ids"))) if item in descriptor_ids]
         agent_name = _text(output.get("agent_name")) or (_text(step.get("name")) if step else "") or None
         for evidence_ordinal, raw in enumerate(output.get("evidence", []) if isinstance(output.get("evidence"), list) else []):
@@ -311,11 +321,7 @@ def normalize_evidence(
                     raw["title"] = f"{agent_name} evidence" if evidence_is_global(raw, agent_name) else f"{agent_name} evidence {evidence_ordinal + 1}"
                 if not raw.get("text"):
                     raw["text"] = raw.get("snippet") or raw.get("summary")
-                if output.get("as_of") is not None and _kind(raw, step) not in {"news_context", "document_context", "filing_context", "transcript_context"} and _meta(raw).get("source_time_status") != "unknown" and not evidence_is_global(raw, agent_name or "") and not any(
-                    raw.get(key) or _meta(raw).get(key)
-                    for key in ("as_of", "timestamp", "published_date")
-                ):
-                    raw.setdefault("as_of", output["as_of"])
+                raw.setdefault("observed_at", output.get("as_of"))
                 explicit = _strings(raw.get("task_ids")) + _strings(raw.get("task_id"))
                 merged = stable_unique([item for item in bindings + explicit if item in descriptor_ids])
                 candidates.append((raw, merged, step, agent_name))
@@ -380,7 +386,7 @@ def normalize_evidence(
         for key in ("content_read", "content_sections", "content_excerpt"):
             if key in raw and key not in payload:
                 payload = {**payload, key: raw[key]}
-        for key in ("coverage_window", "request_window", "market_session", "source_timestamp", "source_time_precision", "source_time_status"):
+        for key in ("coverage_window", "request_window", "market_session", "source_timestamp", "source_time_precision", "source_time_status", "observed_at"):
             value = raw.get(key, payload.get(key))
             if key not in meta and value is not None:
                 meta = {**meta, key: value}
@@ -456,6 +462,8 @@ def normalize_evidence(
             usage=usage, metadata=dict(meta), structured_data=payload,
             **{key: _optional_text(value) for key, value in semantic.items()},
         )
+        if evidence_is_document_index(evidence):
+            evidence = evidence.model_copy(update={"usage": "raw", "metadata": {**evidence.metadata, "verification": "discovery_only"}})
         existing = evidence_index.get(source_id)
         if existing is None:
             evidence_index[source_id] = evidence
@@ -509,7 +517,7 @@ def _evidence_content_identity(evidence: NormalizedEvidence) -> dict[str, Any]:
     for field in ("metadata", "structured_data"):
         content[field] = {key: value for key, value in content[field].items() if key not in {
             "evidence_quality", "agent_quality", "confidence", "overall_score", "audit_fields",
-            "step_ids", "source_ids", "fetched_at",
+            "step_ids", "source_ids", "fetched_at", "observed_at",
         }}
     return content
 
@@ -931,7 +939,7 @@ def _validate_task_selection(
     if (direction is None and support) or (direction is not None and (not support or any(claim_index[item].stance != direction for item in support))):
         errors.append({"field": "proposed_direction", "code": "task_synthesis_direction_stance_mismatch"})
         direction, support = None, []
-    explanations = list(selection.explanations)
+    explanations = [item.model_dump(exclude_unset=True) for item in selection.explanations]
     if selection.explanation:
         explanations.insert(0, {"text": selection.explanation, "evidence_ids": selection.explanation_evidence_ids})
     valid_explanations = []
@@ -1116,7 +1124,7 @@ async def synthesize_task_results(
         prompt_payload = {
             **reference_payload,
             "task": {"task_id": outcome.task_id, "title": outcome.title,
-                     "request_text": "；".join(str(item.get("description") or item.get("source_text") or "") for item in requirements) if requirements else outcome.request_text,
+                     "request_text": outcome.request_text,
                      "subject": outcome.subject_label, "tickers": outcome.tickers, "operation": outcome.operation,
                      "status": outcome.status, "requested_dimensions": (requested_dimensions_by_task or {}).get(outcome.task_id, []),
                      "answer_requirements": [{**item, "requirement_id": requirement_refs[item["requirement_id"]]} for item in requirements]},
@@ -1169,16 +1177,17 @@ async def synthesize_task_results(
                         requirements=requirements,
                         requirement_aliases=requirement_aliases,
                     )
-                    repaired_requirements = {value for row in repaired.explanations for value in _strings(row.get("requirement_ids"))}
-                    retained_explanations = [row for row in selection.explanations
-                                             if not repaired_requirements.intersection(_strings(row.get("requirement_ids")))]
+                    repaired_rows = [row.model_dump() for row in repaired.explanations]
+                    repaired_requirements = {value for row in repaired_rows for value in _strings(row.get("requirement_ids"))}
+                    retained_explanations = [row.model_dump() for row in selection.explanations
+                                             if not repaired_requirements.intersection(row.requirement_ids)]
                     selection = _TaskSynthesisSelection(
                         claim_ids=stable_unique(selection.claim_ids + repaired.claim_ids),
                         conclusion_claim_id=selection.conclusion_claim_id or repaired.conclusion_claim_id,
                         proposed_direction=selection.proposed_direction or repaired.proposed_direction,
                         direction_supporting_claim_ids=selection.direction_supporting_claim_ids if selection.proposed_direction else repaired.direction_supporting_claim_ids,
                         fact_ids=stable_unique(selection.fact_ids + repaired.fact_ids),
-                        explanations=_deduplicate_explanations(retained_explanations + repaired.explanations),
+                        explanations=_deduplicate_explanations(retained_explanations + repaired_rows),
                     )
                 except Exception as exc:
                     validation_errors.append({"field": "repair", "code": _failure_code(exc)})
@@ -1187,7 +1196,7 @@ async def synthesize_task_results(
             support = selection.direction_supporting_claim_ids
             selected_claims = [claim_by_id[item] for item in selected_ids]
             material_index = {item.source_id: item for item in materials}
-            explanations = list(selection.explanations)
+            explanations = [item.model_dump() for item in selection.explanations]
             explanation_errors = [item["code"] for item in validation_errors]
             explanation_texts = []
             for ordinal, explanation in enumerate(explanations):

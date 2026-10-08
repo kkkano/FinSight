@@ -87,11 +87,19 @@ def test_resolve_subject_active_symbol_fallback():
     from backend.graph import GraphRunner
 
     runner = GraphRunner.create()
-    result = _run(runner.ainvoke(thread_id="t-symbol", query="这只股票最新股价", ui_context={"active_symbol": "aapl"}))
+    result = _run(runner.ainvoke(thread_id="t-symbol", query="这只股票最新股价", ui_context={"active_symbol": "aapl", "view": "dashboard"}))
 
     subject = result.get("subject") or {}
     assert subject.get("subject_type") == "company"
     assert subject.get("tickers") == ["AAPL"]
+
+
+def test_unscoped_active_symbol_is_not_silently_confirmed_as_subject():
+    from backend.graph import GraphRunner
+    result = _run(GraphRunner.create().ainvoke(thread_id="t-unscoped-symbol", query="这只股票最新股价",
+                                              ui_context={"active_symbol": "aapl"}))
+    assert result["understanding"]["route"] == "clarify"
+    assert not result.get("tasks") and not (result.get("plan_ir") or {}).get("steps")
 
 
 def test_resolve_subject_query_ticker_overrides_active_symbol():

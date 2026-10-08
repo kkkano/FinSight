@@ -183,11 +183,15 @@ def policy_gate(state: GraphState) -> dict:
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
     query_text = str(state.get("query") or "")
-    facets = state.get("facets") if isinstance(state.get("facets"), dict) else derive_request_facets(
+    understanding = state.get("understanding") or {}
+    confirmed = understanding.get("requirements_status") == "confirmed"
+    facets = ({name: True for contract in state.get("intent_contracts") or [state.get("intent_contract") or {}]
+               for name in contract.get("facets") or []} if confirmed else
+              state.get("facets") if isinstance(state.get("facets"), dict) else derive_request_facets(
         query=query_text,
         operation=operation if isinstance(operation, dict) else {},
         subject=subject if isinstance(subject, dict) else {},
-    )
+    ))
     intent_contract = state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else {}
     valuation_contract = bool(is_valuation_contract(intent_contract))
 
@@ -205,12 +209,12 @@ def policy_gate(state: GraphState) -> dict:
         analysis_depth = None
     if analysis_depth is None and output_mode == "investment_report":
         query_text = str(state.get("query") or "")
-        analysis_depth = "deep_research" if _contains_any(query_text, _DEEP_RESEARCH_HINTS) else "report"
+        analysis_depth = "report" if confirmed else "deep_research" if _contains_any(query_text, _DEEP_RESEARCH_HINTS) else "report"
     explicit_skill = (
         str(ui_context.get("skill") or ui_context.get("selected_skill") or "").strip()
         if isinstance(ui_context, dict)
         else ""
-    ) or (extract_explicit_skill(query_text) or "")
+    ) or (extract_explicit_skill(query_text) or "" if not confirmed else "")
     skill_registry = get_builtin_skill_registry()
     skill_selection_model = select_skill_for_facets(
         facets,
@@ -261,7 +265,7 @@ def policy_gate(state: GraphState) -> dict:
     earnings_impact_requested = (
         op_name == "earnings_impact"
         or _has_ready_operation(ready_tasks, "earnings_impact")
-        or query_requests_earnings_price_impact(query_text)
+        or not confirmed and query_requests_earnings_price_impact(query_text)
     )
 
     if output_mode == "investment_report":
@@ -294,90 +298,93 @@ def policy_gate(state: GraphState) -> dict:
         market = _infer_market_from_subject(subject) or "US"
         market_explicit = False
     fallback_reason: str | None = None
-    try:
-        from backend.tools.manifest import select_tools
+    if confirmed:
+        allowed_tools = []
+    else:
+        try:
+            from backend.tools.manifest import select_tools
 
-        allowed_tools = select_tools(
-            subject_type=subject_type,
-            operation_name=op_name,
-            output_mode=output_mode,
-            analysis_depth=analysis_depth,
-            market=market,
-        )
-        if not allowed_tools:
+            allowed_tools = select_tools(
+                subject_type=subject_type,
+                operation_name=op_name,
+                output_mode=output_mode,
+                analysis_depth=analysis_depth,
+                market=market,
+            )
+            if not allowed_tools:
+                allowed_tools = _legacy_select_tools(subject_type, op_name)
+                fallback_reason = "manifest_empty_selection"
+            allowed_tools = _with_us_holdings_tools(
+                list(allowed_tools),
+                subject_type=str(subject_type).strip().lower(),
+                op_name=op_name,
+                market=market,
+            )
+            if subject_type in {"index", "commodity"}:
+                for tool_name in _legacy_select_tools(subject_type, op_name):
+                    if tool_name not in allowed_tools:
+                        allowed_tools.append(tool_name)
+            if ready_tasks:
+                union_tools = list(allowed_tools)
+                seen_tools = set(union_tools)
+                for task in ready_tasks:
+                    task_subject_type = _task_subject_type(task)
+                    task_op_name = _task_operation_name(task)
+                    task_market = market if market_explicit else _infer_market_from_task(task, market)
+                    task_tools = select_tools(
+                        subject_type=task_subject_type,
+                        operation_name=task_op_name,
+                        output_mode=output_mode,
+                        analysis_depth=analysis_depth,
+                        market=task_market,
+                    )
+                    if not task_tools:
+                        task_tools = _legacy_select_tools(task_subject_type, task_op_name)
+                    task_tools = _with_us_holdings_tools(
+                        list(task_tools),
+                        subject_type=task_subject_type,
+                        op_name=task_op_name,
+                        market=task_market,
+                    )
+                    if task_subject_type in {"index", "commodity"}:
+                        task_tools = list(task_tools) + [
+                            name for name in _legacy_select_tools(task_subject_type, task_op_name)
+                            if name not in task_tools
+                        ]
+                    for tool_name in task_tools:
+                        if tool_name in seen_tools:
+                            continue
+                        seen_tools.add(tool_name)
+                        union_tools.append(tool_name)
+                allowed_tools = union_tools
+        except Exception:
             allowed_tools = _legacy_select_tools(subject_type, op_name)
-            fallback_reason = "manifest_empty_selection"
-        allowed_tools = _with_us_holdings_tools(
-            list(allowed_tools),
-            subject_type=str(subject_type).strip().lower(),
-            op_name=op_name,
-            market=market,
-        )
-        if subject_type in {"index", "commodity"}:
-            for tool_name in _legacy_select_tools(subject_type, op_name):
-                if tool_name not in allowed_tools:
-                    allowed_tools.append(tool_name)
-        if ready_tasks:
-            union_tools = list(allowed_tools)
-            seen_tools = set(union_tools)
-            for task in ready_tasks:
-                task_subject_type = _task_subject_type(task)
-                task_op_name = _task_operation_name(task)
-                task_market = market if market_explicit else _infer_market_from_task(task, market)
-                task_tools = select_tools(
-                    subject_type=task_subject_type,
-                    operation_name=task_op_name,
-                    output_mode=output_mode,
-                    analysis_depth=analysis_depth,
-                    market=task_market,
-                )
-                if not task_tools:
-                    task_tools = _legacy_select_tools(task_subject_type, task_op_name)
-                task_tools = _with_us_holdings_tools(
-                    list(task_tools),
-                    subject_type=task_subject_type,
-                    op_name=task_op_name,
-                    market=task_market,
-                )
-                if task_subject_type in {"index", "commodity"}:
-                    task_tools = list(task_tools) + [
-                        name for name in _legacy_select_tools(task_subject_type, task_op_name)
-                        if name not in task_tools
-                    ]
-                for tool_name in task_tools:
-                    if tool_name in seen_tools:
-                        continue
-                    seen_tools.add(tool_name)
-                    union_tools.append(tool_name)
-            allowed_tools = union_tools
-    except Exception:
-        allowed_tools = _legacy_select_tools(subject_type, op_name)
-        fallback_reason = "manifest_exception"
-        allowed_tools = _with_us_holdings_tools(
-            list(allowed_tools),
-            subject_type=str(subject_type).strip().lower(),
-            op_name=op_name,
-            market=market,
-        )
-        if ready_tasks:
-            union_tools = list(allowed_tools)
-            seen_tools = set(union_tools)
-            for task in ready_tasks:
-                task_subject_type = _task_subject_type(task)
-                task_op_name = _task_operation_name(task)
-                task_market = market if market_explicit else _infer_market_from_task(task, market)
-                task_tools = _with_us_holdings_tools(
-                    _legacy_select_tools(task_subject_type, task_op_name),
-                    subject_type=task_subject_type,
-                    op_name=task_op_name,
-                    market=task_market,
-                )
-                for tool_name in task_tools:
-                    if tool_name in seen_tools:
-                        continue
-                    seen_tools.add(tool_name)
-                    union_tools.append(tool_name)
-            allowed_tools = union_tools
+            fallback_reason = "manifest_exception"
+            allowed_tools = _with_us_holdings_tools(
+                list(allowed_tools),
+                subject_type=str(subject_type).strip().lower(),
+                op_name=op_name,
+                market=market,
+            )
+            if ready_tasks:
+                union_tools = list(allowed_tools)
+                seen_tools = set(union_tools)
+                for task in ready_tasks:
+                    task_subject_type = _task_subject_type(task)
+                    task_op_name = _task_operation_name(task)
+                    task_market = market if market_explicit else _infer_market_from_task(task, market)
+                    task_tools = _with_us_holdings_tools(
+                        _legacy_select_tools(task_subject_type, task_op_name),
+                        subject_type=task_subject_type,
+                        op_name=task_op_name,
+                        market=task_market,
+                    )
+                    for tool_name in task_tools:
+                        if tool_name in seen_tools:
+                            continue
+                        seen_tools.add(tool_name)
+                        union_tools.append(tool_name)
+                allowed_tools = union_tools
 
     requested_markets = {inferred for task in ready_tasks for ticker in task.get("tickers", [])
                          if ticker and (inferred := _infer_market_from_ticker(str(ticker))) is not None}
@@ -396,7 +403,7 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
 
-    if skill_manifest is not None:
+    if skill_manifest is not None and not confirmed:
         seen_tools = set(allowed_tools)
         for tool_name in skill_manifest.preferred_tools:
             if tool_name in seen_tools:
@@ -447,7 +454,8 @@ def policy_gate(state: GraphState) -> dict:
     agent_selection: dict[str, object] = {}
     evidence_agents = [
         name
-        for name in evidence_agents_for_kinds(required_evidence, market=market)
+        for name in dict.fromkeys(name for requested_market in requested_markets
+                                 for name in evidence_agents_for_kinds(required_evidence, market=requested_market))
         if name in REPORT_AGENT_CANDIDATES
     ]
     short_research_operation = ""
@@ -460,7 +468,11 @@ def policy_gate(state: GraphState) -> dict:
     elif op_name == "technical" or _has_ready_operation(ready_tasks, "technical"):
         short_research_operation = "technical"
 
-    if agents_override and isinstance(agents_override, list):
+    if confirmed:
+        allowed_agents = list(evidence_agents)
+        agent_selection = {"selected": allowed_agents, "required": allowed_agents,
+                           "reason": "compiled_capabilities", "required_evidence": required_evidence}
+    elif agents_override and isinstance(agents_override, list):
         validated = [
             a for a in agents_override
             if isinstance(a, str) and a in REPORT_AGENT_CANDIDATES

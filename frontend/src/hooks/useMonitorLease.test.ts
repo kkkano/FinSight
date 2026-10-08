@@ -88,4 +88,18 @@ describe('monitor page lease lifecycle', () => {
     expect(transport.renew).not.toHaveBeenCalled();
     expect(transport.release).not.toHaveBeenCalled();
   });
+
+  it('reports lease failure even when a comment stream could remain connected', async () => {
+    vi.useFakeTimers();
+    const status = vi.fn();
+    const transport: MonitorLeaseTransport = {
+      acquire: vi.fn().mockRejectedValue(new Error('offline')),
+      renew: vi.fn(), release: vi.fn(),
+    };
+    const controller = createMonitorLeaseController(transport, undefined, status);
+    controller.start({ sessionId: 'session-1', symbol: 'AAPL' });
+    await flush();
+    expect(status).toHaveBeenLastCalledWith('error');
+    controller.dispose();
+  });
 });

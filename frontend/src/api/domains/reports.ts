@@ -17,14 +17,15 @@ export const reportsApi = {
   },
 
   async listReportIndex(params: {
-    sessionId: string;
+    sessionId?: string;
     ticker?: string;
     query?: string;
     sourceType?: string;
     includeBlocked?: boolean;
     limit?: number;
-  }): Promise<{ session_id: string; items: Contracts.ReportIndexItem[]; count: number }> {
+  }, signal?: AbortSignal): Promise<{ session_id: string | null; items: Contracts.ReportIndexItem[]; count: number }> {
     const response = await api.get('/api/reports/index', {
+      signal,
       params: {
         session_id: params.sessionId,
         ticker: params.ticker,
@@ -38,11 +39,12 @@ export const reportsApi = {
   },
 
   async getReportReplay(params: {
-    sessionId: string;
+    sessionId?: string;
     reportId: string;
     includeBlocked?: boolean;
-  }): Promise<{ session_id: string; report: any; citations: any[]; trace_digest: Record<string, any> }> {
+  }, signal?: AbortSignal): Promise<{ session_id: string; report: any; citations: any[]; trace_digest: Record<string, any> }> {
     const response = await api.get(`/api/reports/replay/${encodeURIComponent(params.reportId)}`, {
+      signal,
       params: { session_id: params.sessionId, include_blocked: params.includeBlocked },
     });
     return response.data;

@@ -26,6 +26,11 @@ RUN_ID = "00000000-0000-4000-8000-000000000101"
 PREDICTION_ID = "00000000-0000-4000-8000-000000000201"
 
 
+@pytest.fixture(autouse=True)
+def isolated_quota(monkeypatch):
+    monkeypatch.setenv("USER_DAILY_COST_LIMIT_USD", "0")
+
+
 def _run(**overrides: Any) -> PredictionRun:
     payload = {
         "id": RUN_ID,
@@ -397,9 +402,9 @@ async def test_selected_model_prediction_uses_reasoning_budget_and_timeout(monke
         )
 
     assert observed["max_tokens"] == 8192
-    assert observed["request_timeout"] == 1200
+    assert observed["request_timeout"] == 180
     assert observed["acquire_timeout_seconds"] == 120
-    assert service.timeout_seconds == 1800
+    assert service.timeout_seconds == 180
 
 
 @pytest.mark.asyncio
@@ -450,7 +455,7 @@ async def test_prediction_background_preserves_selected_model_and_closes_clients
         observed.append(chosen)
         assert chosen == selected
         assert chosen.runtime_config()["reasoning_effort"] == "high"
-        assert kwargs["request_timeout"] == 1200
+        assert 0 < kwargs["request_timeout"] <= 180
         assert kwargs["max_tokens"] >= 4096
         track_model_client(Client())
         context.on_attempt({

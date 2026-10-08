@@ -68,3 +68,25 @@ def test_per_subject_missing_requirement_stays_visible_in_chat_and_report():
     assert chat["state"] == "warn" and chat["answer_status"] == "partial"
     assert chat["missing_requirements"] == [missing]
     assert report["state"] == "block"
+
+
+def test_completed_requirements_remain_answered_with_execution_warning():
+    state = {"output_mode": "chat", "artifacts": {
+        "research_result": _result().model_dump(),
+        "research_result_quality": {"state": "warn", "reasons": [{"code": "RECOVERED_PROVIDER_FAILURE", "severity": "warn"}]},
+    }}
+    quality = evaluate_result_quality(state=state)
+    assert quality["state"] == "warn"
+    assert quality["answer_status"] == "answered" and quality["missing_requirements"] == []
+
+
+def test_clarification_has_no_answered_or_publishable_terminal_state():
+    state = {"understanding": {"route": "clarify"}, "artifacts": {"draft_markdown": "请补充公司名称。"}}
+    quality = evaluate_result_quality(state=state)
+    assert quality["answer_status"] == "clarification_required"
+    assert quality["publishable"] is False and quality["has_supported_content"] is False
+    from backend.report.quality_engine import should_publish_report
+    from backend.services.report_index import _derive_quality_fields
+    report = {"report_quality": quality}
+    assert should_publish_report(report) is False
+    assert _derive_quality_fields(report)[1] == 0

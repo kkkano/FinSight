@@ -92,6 +92,22 @@ def test_worker_failure_keeps_documents_searchable_lexically():
     assert hit["dense_rank"] is None
 
 
+def test_recovery_backfills_saved_documents_and_is_idempotent_across_model_versions():
+    embedder = VersionedEmbedder()
+    embedder.unavailable = True
+    service = HybridRAGService(backend="memory", vector_dim=16, rrf_k=40, embedder=embedder)
+    service.ingest_documents([RAGDocument(collection="fixture", source_id="saved", scope="ephemeral", content="经营现金流")])
+    assert service.index_status()["pending"] == 1
+    embedder.unavailable = False
+    assert service.reindex_pending()["updated"] == 1
+    assert service.reindex_pending()["updated"] == 0
+    assert service.index_status("fixture:a:16")["pending"] == 0
+    embedder.version = "b"
+    assert service.index_status("fixture:b:16")["pending"] == 1
+    assert service.reindex_pending()["updated"] == 1
+    assert service.hybrid_search("改写后的问题", collection="fixture")[0]["dense_rank"] == 1
+
+
 def test_worker_auth_and_actual_inference_health(monkeypatch):
     from fastapi.testclient import TestClient
     from backend.rag import worker

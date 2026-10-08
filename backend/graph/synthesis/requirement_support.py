@@ -10,11 +10,7 @@ from typing import Any
 PRICE_METRICS = {"cumulative_return", "max_drawdown", "volume_breakout"}
 MACRO_METRICS = {"nonfarm_payroll_change", "unemployment", "cpi", "fed_rate", "gdp_growth", "treasury_10y", "yield_spread"}
 TECHNICAL_METRICS = {"rsi14", "macd", "support", "resistance", "support_resistance"}
-FINANCIAL_METRICS = {
-    "operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid",
-    "capital_allocation_surplus", "shares_outstanding", "net_share_change", "dividend_coverage", "free_cash_flow",
-    "revenue", "net_income", "operating_income", "debt_burden",
-}
+from backend.graph.research_capabilities import FINANCIAL_METRICS
 _ALIASES = {
     "cash_flow": ("operating_cash_flow", "free_cash_flow"),
     "capital_expenditure": ("capital_expenditure", "capex"),
@@ -184,10 +180,15 @@ def exact_support_reasons(requirement: dict, facts: list) -> list[str]:
     status = requirement.get("capability_status")
     if status in {"unsupported", "input_missing"}:
         reasons.append("requirement_unsupported" if status == "unsupported" else "requirement_input_missing")
+    if requirement.get("unmapped_qualifiers"):
+        reasons.append("requirement_qualifier_unmapped")
     metric = str(requirement.get("metric") or "")
     if metric == "unknown" and requirement.get("kind") != "constraint":
         reasons.append("requirement_metric_unmapped")
     scope = requirement.get("time_scope") if isinstance(requirement.get("time_scope"), dict) else {}
+    if scope.get("reporting_basis") in {"consolidated", "parent"}:
+        if not any((metric_record(fact, metric) or payload_for(fact)).get("reporting_basis") == scope["reporting_basis"] for fact in facts):
+            reasons.append("requirement_reporting_basis_unverified")
     requested_frequency = requirement.get("data_frequency")
     if requested_frequency and requested_frequency not in {"none", "unspecified"}:
         frequencies = {"1d": "daily", "day": "daily", "daily": "daily", "1wk": "weekly", "week": "weekly", "weekly": "weekly", "1mo": "monthly", "month": "monthly", "monthly": "monthly"}

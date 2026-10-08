@@ -42,7 +42,7 @@ def test_recorded_growth_analysis_counts_as_partial_financial_support_without_co
     assert "agent_claim:933d312dac76999f" not in financial["claim_ids"]  # 未被实际选中的现金流论据不能代答。
 
 
-def test_renderer_rechecks_the_evidence_it_actually_shows_and_retains_real_gaps():
+def test_final_requirements_are_checked_before_read_only_rendering():
     _, task, evidence, claims, requirements = _recorded()
     evaluate_answer_requirements(result=task, requirements=requirements, evidence_index=evidence, claim_index=claims, subjects=["ORCL"], displayed_evidence_ids=task.selected_fact_ids, displayed_claim_ids=task.claim_ids)
     impact = task.requirement_results[1]
@@ -50,7 +50,10 @@ def test_renderer_rechecks_the_evidence_it_actually_shows_and_retains_real_gaps(
     assert "requirement_evidence_not_presented" in impact["reason"]
     draft = ReportSynthesisDraft(status="partial", overall_conclusion=None, task_results=[task], claim_index=claims,
                                  evidence_index=evidence, citation_ids=list(evidence), conflicts=[], disagreements=[], risks=[], limitations=[], fallback_used=False)
+    evaluate_answer_requirements(result=task, requirements=requirements, evidence_index=evidence, claim_index=claims, subjects=["ORCL"])
+    before = draft.model_dump()
     rendered = render_research_report(draft, output_mode="chat")
+    assert draft.model_dump() == before
     impact = draft.task_results[0].requirement_results[1]
     assert "get_sec_company_facts_quarterly:s5" in impact["evidence_ids"]
     assert "get_stock_price:s15" in impact["evidence_ids"]
@@ -137,7 +140,7 @@ def test_claim_only_explanation_references_map_to_verified_evidence_without_loos
         assert not selected.explanations and errors[0]["code"] == expected_error
     else:
         assert not errors
-        assert selected.explanations[0]["evidence_ids"] == native[0].evidence_ids
+        assert selected.explanations[0].evidence_ids == native[0].evidence_ids
 
 
 def test_missing_reference_diagnostics_keep_the_actual_fields_without_inventing_the_cause():

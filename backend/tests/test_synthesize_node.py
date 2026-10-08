@@ -588,7 +588,10 @@ def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
     assert "Gemini 2.0 will launch in 2026Q2" not in conclusion
     assert artifacts.get("research_result")
     from backend.graph.nodes.render_node import render_node
-    rendered = render_node({**state, **out})
+    from backend.graph.nodes.validate import validate
+    analyzed = {**state, **out}
+    analyzed.update(validate(analyzed))
+    rendered = render_node(analyzed)
     assert rendered["artifacts"]["quality_blocked"] is True
     assert "Gemini 2.0 will launch in 2026Q2" not in rendered["artifacts"]["draft_markdown"]
 

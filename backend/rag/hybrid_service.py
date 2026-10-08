@@ -450,11 +450,44 @@ class _InMemoryHybridStore:
                 for index, (key, payload, _content) in enumerate(pending):
                     payload["embedding"] = embed_result.dense[index] if embed_result else None
                     payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
+                    previous = self._docs.get(key)
+                    if not embed_result and previous and previous["content"] == payload["content"]:
+                        payload["embedding"] = previous.get("embedding")
+                        payload["metadata"]["embedding_identity"] = previous["metadata"].get("embedding_identity")
+                    payload["metadata"]["index_state"] = "semantic_ready" if payload["embedding"] and payload["metadata"].get("embedding_identity") else "lexical_only"
                     payload["sparse"] = _hash_sparse(_content)
                     self._docs[key] = payload
                     indexed += 1
 
         return {"indexed": indexed, "skipped": skipped}
+
+    def index_status(self, identity: str | None = None) -> dict[str, Any]:
+        with self._lock:
+            rows = [row for row in self._docs.values() if not row.get("expires_at") or row["expires_at"] > _utc_now()]
+            ready = sum(bool(row.get("embedding") and row["metadata"].get("embedding_identity")
+                             and (identity is None or row["metadata"]["embedding_identity"] == identity)) for row in rows)
+        return {"documents": len(rows), "semantic_ready": ready, "pending": len(rows) - ready}
+
+    def reindex_pending(self, *, batch_size: int = 8, collection: str | None = None) -> dict[str, Any]:
+        identity = embedding_identity(self._embedder.encode(["FinSight index identity"]))
+        with self._lock:
+            rows = [(key, dict(row)) for key, row in self._docs.items()
+                    if (collection is None or row["collection"] == collection)
+                    and (not row.get("expires_at") or row["expires_at"] > _utc_now())
+                    and (not row.get("embedding") or row["metadata"].get("embedding_identity") != identity)][:max(1, min(8, batch_size))]
+        if not rows:
+            return {"updated": 0, **self.index_status(identity)}
+        result = self._embedder.encode([row["content"] for _, row in rows])
+        updated = 0
+        with self._lock:
+            for index, (key, original) in enumerate(rows):
+                current = self._docs.get(key)
+                if not current or current["content"] != original["content"]:
+                    continue
+                current["embedding"] = result.dense[index]
+                current["metadata"].update(embedding_identity=embedding_identity(result), index_state="semantic_ready")
+                updated += 1
+        return {"updated": updated, **self.index_status(embedding_identity(result))}
 
     def _active_docs(self, *, collection: str, now: datetime) -> list[dict[str, Any]]:
         docs: list[dict[str, Any]] = []
@@ -716,7 +749,9 @@ class _PostgresHybridStore:
                 parent_collection = EXCLUDED.parent_collection,
                 parent_run_id = EXCLUDED.parent_run_id,
                 metadata = CASE WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
-                    THEN EXCLUDED.metadata || jsonb_build_object('embedding_identity', rag_documents_v2.metadata->'embedding_identity')
+                    THEN EXCLUDED.metadata || jsonb_build_object('embedding_identity', rag_documents_v2.metadata->'embedding_identity',
+                        'index_state', CASE WHEN rag_documents_v2.embedding IS NOT NULL AND rag_documents_v2.metadata->>'embedding_identity' IS NOT NULL
+                            THEN 'semantic_ready' ELSE 'lexical_only' END)
                     ELSE EXCLUDED.metadata END,
                 embedding = CASE WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
                     THEN rag_documents_v2.embedding ELSE EXCLUDED.embedding END,
@@ -754,6 +789,7 @@ class _PostgresHybridStore:
             with self._engine.begin() as conn:
                 for index, payload in enumerate(pending):
                     payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
+                    payload["metadata"]["index_state"] = "semantic_ready" if embed_result else "lexical_only"
                     conn.execute(
                         sql,
                         {
@@ -780,6 +816,47 @@ class _PostgresHybridStore:
                     )
                     indexed += 1
         return {"indexed": indexed, "skipped": skipped}
+
+    def index_status(self, identity: str | None = None) -> dict[str, Any]:
+        self._ensure_schema()
+        with self._engine.connect() as connection:
+            total, ready = connection.execute(text("""
+                SELECT count(*), count(*) FILTER (WHERE embedding IS NOT NULL
+                    AND metadata->>'embedding_identity' IS NOT NULL
+                    AND (CAST(:identity AS text) IS NULL OR metadata->>'embedding_identity'=:identity))
+                FROM rag_documents_v2 WHERE expires_at IS NULL OR expires_at > now()
+            """), {"identity": identity}).one()
+        return {"documents": total, "semantic_ready": ready, "pending": total - ready}
+
+    def reindex_pending(self, *, batch_size: int = 8, collection: str | None = None) -> dict[str, Any]:
+        self._ensure_schema()
+        identity = embedding_identity(self._embedder.encode(["FinSight index identity"]))
+        with self._engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT collection,source_id,content FROM rag_documents_v2
+                WHERE (expires_at IS NULL OR expires_at > now())
+                    AND (CAST(:collection AS text) IS NULL OR collection=:collection)
+                    AND (embedding IS NULL OR metadata->>'embedding_identity' IS DISTINCT FROM :identity)
+                ORDER BY created_at,collection,source_id LIMIT :limit
+            """), {"collection": collection, "identity": identity, "limit": max(1, min(8, batch_size))}).mappings().all()
+        if not rows:
+            return {"updated": 0, **self.index_status(identity)}
+        # 推理在事务外；条件更新保护补索引期间被重新摄取的正文。
+        result = self._embedder.encode([row["content"] for row in rows])
+        self._validate_embedding_dim(result.dim, operation="reindex")
+        updated = 0
+        with self._engine.begin() as connection:
+            for index, row in enumerate(rows):
+                updated += connection.execute(text("""
+                    UPDATE rag_documents_v2 SET embedding=CAST(:embedding AS vector),
+                        metadata=metadata || CAST(:metadata AS jsonb)
+                    WHERE collection=:collection AND source_id=:source_id AND content=:content
+                        AND (embedding IS NULL OR metadata->>'embedding_identity' IS DISTINCT FROM :identity)
+                """), {**dict(row), "embedding": _vector_literal(result.dense[index]),
+                         "identity": embedding_identity(result), "metadata": json.dumps({
+                             "embedding_identity": embedding_identity(result), "index_state": "semantic_ready",
+                             "indexed_at": _utc_now().isoformat()})}).rowcount
+        return {"updated": updated, **self.index_status(embedding_identity(result))}
 
     def hybrid_search(self, query: str, *, collection: str, top_k: int) -> list[dict[str, Any]]:
         self._ensure_schema()
@@ -1139,6 +1216,12 @@ class HybridRAGService:
 
     def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:
         return self._store.ingest_documents(docs)
+
+    def index_status(self, identity: str | None = None) -> dict[str, Any]:
+        return self._store.index_status(identity)
+
+    def reindex_pending(self, *, batch_size: int = 8, collection: str | None = None) -> dict[str, Any]:
+        return self._store.reindex_pending(batch_size=batch_size, collection=collection)
 
     def hybrid_search(self, query: str, *, collection: str, top_k: int = 6) -> list[dict[str, Any]]:
         hits = self._store.hybrid_search(query, collection=collection, top_k=max(1, int(top_k)))

@@ -7,9 +7,9 @@
  */
 import { Star } from 'lucide-react';
 
-import { useDashboardStore } from '../../store/dashboardStore';
+import { useWatchlist } from '../../hooks/useWatchlist';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
-import { formatMarketCapForMarket, formatPriceForMarket } from '../../utils/format';
+import { formatMarketCapForMarket, formatMoney } from '../../utils/format';
 import { Stat, useToast } from '../ui';
 import { DashboardSourceBadge } from './DashboardSourceBadge';
 import { MiniPriceChart } from './tabs/overview/MiniPriceChart';
@@ -61,7 +61,7 @@ export function StockHeader({
     watchlist,
     addWatchItemApi,
     removeWatchItemApi,
-  } = useDashboardStore();
+  } = useWatchlist();
   const { toast } = useToast();
 
   // Watchlist toggle state
@@ -112,7 +112,7 @@ export function StockHeader({
             {closePrice !== null && (
               <Stat
                 label={ticker}
-                value={formatPriceForMarket(closePrice, ticker)}
+                value={formatMoney(closePrice, snapshot?.currency ?? charts.market_chart?.at(-1)?.currency)}
                 change={priceChange?.value}
                 changeText={priceChange?.text}
                 className="min-w-[92px]"

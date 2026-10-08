@@ -289,7 +289,7 @@ def test_unknown_event_window_metric_still_plans_future_event_calendar():
     assert {'news_context', 'event_calendar'} <= set(compiled['evidence_kinds'])
 
 
-def test_unmapped_requirement_keeps_rule_plan_evidence_for_same_subject():
+def test_unmapped_requirement_uses_confirmed_subject_without_reparsing_query():
     from backend.graph.intent.deterministic_engine import route_request_deterministic
     query = '只看 AVGO 的技术面：日线趋势和量子动能，不需要新闻或基本面。'
     seed = asyncio.run(route_request_deterministic({'query': query, 'output_mode': 'chat', 'ui_context': {}}, emit_understanding=False))
@@ -298,7 +298,7 @@ def test_unmapped_requirement_keeps_rule_plan_evidence_for_same_subject():
          'metric_text': '量子动能', 'subject': 'AVGO', 'subject_refs': ['avgo']}]}
     task = compile_semantic_contract(seed, raw, {'status': 'confirmed'})['tasks'][0]
     assert task['answer_requirements'][0]['capability_status'] == 'unsupported'
-    assert 'technical_snapshot' in task['required_evidence']
+    assert set(task['required_evidence']) == {'document_context', 'company_profile', 'filing_context'}
     assert 'news_context' not in task['required_evidence']
 
 
@@ -345,7 +345,7 @@ def test_unknown_quote_measurement_gets_one_structural_correction_not_silent_uns
         if len(calls) == 2:
             row.update(measurement='price', price_role='window_end')
         return {'raw': AIMessage(content='{}', response_metadata={'finish_reason': 'stop'}),
-                'parsed': {'subjects': [{'id': 'ko', 'type': 'company', 'label': 'KO', 'tickers': ['KO']}], 'requirements': [row]}, 'parsing_error': None}
+                'parsed': {'route': 'research', 'subjects': [{'id': 'ko', 'type': 'company', 'label': 'KO', 'tickers': ['KO']}], 'requirements': [row]}, 'parsing_error': None}
     monkeypatch.setattr(module, 'ainvoke_configured_llm', invoke)
     raw, diagnostics = asyncio.run(extract_semantic_requirements({'query': query}, {}))
     assert raw is not None and len(calls) == 2 and calls[0] is calls[1]
@@ -480,7 +480,7 @@ def test_unmapped_research_uses_semantic_subject_for_discovery(query):
 
 
 @pytest.mark.parametrize("ticker", ["600519.SS", "0700.HK"])
-def test_financial_requirements_without_market_producer_read_disclosures(ticker):
+def test_financial_requirements_use_local_disclosure_producer(ticker):
     query = f"{ticker} 最新完整财年的经营现金流是多少？"
     semantic = {"subjects": [{"id": "company", "type": "company", "label": ticker, "tickers": [ticker]}],
                 "requirements": [{"source_text": "经营现金流", "description": "经营现金流", "kind": "fact_attribute",
@@ -490,9 +490,11 @@ def test_financial_requirements_without_market_producer_read_disclosures(ticker)
     state.update(compile_semantic_contract(state, semantic, {}))
     state.update(policy_gate(state))
     state.update(rule_based_planner(state))
-    assert state["tasks"][0]["answer_requirements"][0]["capability_status"] == "retrieval_required"
+    assert state["tasks"][0]["answer_requirements"][0]["capability_status"] == "supported"
     names = {step["name"] for step in state["plan_ir"]["steps"]}
-    assert {"get_local_market_filings", "search"} <= names
+    assert "get_local_market_filings" in names
+    producer = next(step for step in state["plan_ir"]["steps"] if step["name"] == "get_local_market_filings")
+    assert producer["inputs"]["include_financial_facts"] is True
     assert "get_sec_capital_allocation" not in names
     assert state["trace"]["coverage_validator"]["status"] == "ok"
 

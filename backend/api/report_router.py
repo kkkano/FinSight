@@ -92,7 +92,8 @@ def _public_citation(value: Any) -> dict[str, Any] | None:
 def _public_report_quality(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
-    quality = _project_fields(value, ("schema_version", "state", "evaluated_at"))
+    quality = _project_fields(value, ("schema_version", "state", "evaluated_at", "content_contract_version",
+                                      "content_status", "answer_status", "has_supported_content", "publishable", "conclusion_status"))
     quality["reasons"] = [
         _project_fields(item, ("code", "severity", "metric", "message"))
         for item in (value.get("reasons") or [])
@@ -190,14 +191,14 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
     @router.get("/api/reports/index")
     async def list_report_index(
         request: Request,
-        session_id: str,
+        session_id: str | None = None,
         ticker: str | None = None,
         query: str | None = None,
         source_type: str | None = None,
         include_blocked: bool = False,
         limit: int = Query(default=50, ge=1, le=500),
     ):
-        normalized, user_id = owned_session(session_id, request)
+        normalized, user_id = owned_session(session_id, request) if session_id else (None, authenticated_user(request))
         rows = deps.get_report_index_store().list_reports(
             session_id=normalized,
             ticker=ticker,
@@ -213,10 +214,10 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
     async def get_report_replay(
         report_id: str,
         request: Request,
-        session_id: str,
+        session_id: str | None = None,
         include_blocked: bool = False,
     ):
-        normalized, user_id = owned_session(session_id, request)
+        normalized, user_id = owned_session(session_id, request) if session_id else (None, authenticated_user(request))
         replay = deps.get_report_index_store().get_report_replay(
             session_id=normalized,
             report_id=_validate_report_id(report_id),
@@ -225,7 +226,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         )
         if not replay:
             raise HTTPException(status_code=404, detail="report not found")
-        return {"session_id": normalized, **replay}
+        return {"session_id": replay.get("session_id", normalized), **replay}
 
     @router.post("/api/reports/{report_id}/share")
     async def create_report_share(report_id: str, request: Request):

@@ -66,12 +66,20 @@ def test_builder_preserves_state_and_uses_same_rendered_text():
     assert result["output_mode"] == "brief"
 
 
-def test_route_request_short_circuits_before_context_and_collectors(monkeypatch):
+def test_route_request_confirms_concept_semantically_before_collectors(monkeypatch):
     from backend.graph.nodes.route_request import route_request
+    from importlib import import_module
 
-    monkeypatch.setenv("FINSIGHT_FINANCIAL_TERM_RESOLVER", "on")
+    calls = []
+    async def extract(state, _seed):
+        calls.append(state["query"])
+        return {"route": "direct", "subjects": [], "requirements": [], "relation": "none"}, {"status": "confirmed"}
+
+    monkeypatch.setattr(import_module("backend.graph.nodes.route_request"), "extract_semantic_requirements", extract)
     state = {"query": "PE 是什么？", "ui_context": {"active_symbol": "NVDA"}, "trace": {}, "artifacts": {}}
     result = asyncio.run(route_request(state))
-    assert result["chat_responded"] is True
+    assert calls == [state["query"]]
+    assert result["chat_responded"] is False
     assert result["tasks"] == []
-    assert result["understanding"]["intent_frame"]["source"] == "deterministic_term_resolver"
+    assert result["understanding"]["route"] == "direct"
+    assert result["artifacts"]["direct_answer_request"]["query"] == state["query"]

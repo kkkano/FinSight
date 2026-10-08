@@ -464,6 +464,8 @@ def create_llm_for_endpoint(
     if cfg.model == STEP_MODEL and not preserve_output_budget:
         # 推理与最终文本共享输出额度；固定评测显式保留冻结预算。
         resolved_max_tokens = min(65536, max(resolved_max_tokens, _env_int("LLM_FOREGROUND_MAX_TOKENS", 65536)))
+    from backend.services.run_context import remaining_timeout
+    request_timeout = remaining_timeout(request_timeout)
     effort = chosen.effort if chosen is not None else model_capabilities(cfg.model).get("default_effort")
     options: dict[str, Any] = {}
     if temperature is not None:

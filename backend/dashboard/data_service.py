@@ -16,7 +16,7 @@ import pandas as pd
 
 from backend.dashboard.cache import dashboard_cache
 from backend.utils.quote import safe_float
-from backend.tools.financial_facts import fact_number, monetary_amount
+from backend.tools.financial_facts import fact_date, fact_number, monetary_amount, normalize_currency, statement_frequency
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,8 @@ def fetch_macro_snapshot() -> dict[str, Any]:
         "treasury_10y": None,
         "yield_spread": None,
         "source": "macro_tools",
-        "as_of": datetime.now(timezone.utc).isoformat(),
+        "as_of": None,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
         "status": "unavailable",
     }
 
@@ -270,6 +271,7 @@ def fetch_market_chart(symbol: str, period: str = "1y", interval: str = "1d") ->
                     "low": safe_float(row.get("Low")),
                     "close": safe_float(row.get("Close")),
                     "volume": safe_float(row.get("Volume")) or 0,
+                    **hist.attrs,
                 }
             )
         return output
@@ -298,6 +300,10 @@ def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any] | None:
             last_close = None
 
         output: dict[str, Any] = {}
+        output["currency"] = normalize_currency(info.get("currency"))
+        output["financial_currency"] = normalize_currency(info.get("financialCurrency"))
+        output["provider"] = "yfinance"
+        output["as_of"] = fact_date(hist.index[-1]) if asset_type != "equity" and last_close is not None else None
         if asset_type == "equity":
             output.update(
                 {
@@ -314,46 +320,23 @@ def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any] | None:
             nav = safe_float(info.get("navPrice"))
             output["nav"] = nav if nav is not None else last_close
 
-        return output
+        return output if any(fact_number(output.get(key)) is not None for key in ("revenue", "eps", "gross_margin", "fcf", "index_level", "nav")) else None
     except Exception as exc:
         logger.warning("[DataService] fetch_snapshot failed for %s: %s", symbol, exc)
         return None  # failure — do not cache
 
 
 def fetch_revenue_trend(symbol: str) -> list[dict[str, Any]]:
-    try:
-
-        ticker = _create_ticker(symbol)
-        financials = getattr(ticker, "quarterly_income_stmt", None)
-        if financials is None or (hasattr(financials, "empty") and financials.empty):
-            financials = getattr(ticker, "quarterly_financials", None)
-        if financials is None or (hasattr(financials, "empty") and financials.empty):
-            return []
-
-        revenue_row = None
-        for key in ("Total Revenue", "Revenue", "Net Sales", "Operating Revenue"):
-            if key in financials.index:
-                revenue_row = financials.loc[key]
-                break
-        if revenue_row is None:
-            return []
-
-        output: list[dict[str, Any]] = []
-        for col in revenue_row.index:
-            value = safe_float(revenue_row[col])
-            if value is None:
-                continue
-            if isinstance(col, pd.Timestamp):
-                period = f"{col.year} Q{(col.month - 1) // 3 + 1}"
-            else:
-                period = str(col)[:10]
-            output.append({"period": period, "value": value, "name": period})
-
-        output.reverse()
-        return output[-8:]
-    except Exception as exc:
-        logger.warning("[DataService] fetch_revenue_trend failed for %s: %s", symbol, exc)
+    statements = fetch_financial_statements(symbol)
+    if statements is None:
         return []
+    return [
+        {"period": period, "value": value, "name": period, "currency": statements.get("currency"),
+         "frequency": statements.get("frequency"), "period_end": statements["period_ends"][index],
+         "as_of": statements.get("as_of"), "provider": statements.get("provider")}
+        for index, period in reversed(list(enumerate(statements["periods"])))
+        if (value := statements["revenue"][index]) is not None
+    ]
 
 
 def fetch_segment_mix(symbol: str) -> list[dict[str, Any]]:
@@ -811,6 +794,9 @@ def _load_ohlcv_frame(symbol: str, period: str = "1y", interval: str = "1d") -> 
         frame = _build_ohlcv_frame_from_rows(rows)
         if frame is None or frame.empty:
             return None
+        frame.attrs = {
+            key: payload.get(key) for key in ("currency", "provider", "as_of", "observed_at", "quality", "degraded", "source_time_precision", "source_timestamp")
+        }
         logger.info(
             "[DataService] OHLCV gateway hit symbol=%s provider=%s quality=%s rows=%s",
             symbol,
@@ -1000,17 +986,8 @@ def _financial_table_series(
     position = next((lookup[name.lower()] for name in candidates if name.lower() in lookup), None)
     if position is None or position >= len(rows) or not isinstance(rows[position], dict):
         return [None for _ in columns]
-    row = rows[position]
-    return [safe_float(row.get(column)) for column in columns]
-
-
-def _financial_period_label(value: str) -> str:
-    text = str(value or "").strip()
-    try:
-        parsed = pd.to_datetime(text)
-        return f"{parsed.year}Q{(parsed.month - 1) // 3 + 1}"
-    except Exception:
-        return text[:10]
+    row = {fact_date(key) or str(key): value for key, value in rows[position].items()}
+    return [safe_float(row.get(fact_date(column) or column)) for column in columns]
 
 
 def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] | None:
@@ -1028,10 +1005,10 @@ def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] 
             if not isinstance(table, dict):
                 continue
             for column in table.get("columns") or []:
-                text = str(column)
+                text = fact_date(column) or str(column)
                 if text not in columns:
                     columns.append(text)
-        columns = columns[: max(1, int(periods))]
+        columns = sorted(columns, key=lambda value: fact_date(value) or value, reverse=True)[: max(1, int(periods))]
         if not columns:
             return None
 
@@ -1039,7 +1016,10 @@ def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] 
         balance = payload.get("balance_sheet")
         cashflow = payload.get("cashflow")
         result: dict[str, Any] = {
-            "periods": [_financial_period_label(column) for column in columns],
+            "periods": [fact_date(column) or column for column in columns],
+            "period_ends": [fact_date(column) or column for column in columns],
+            "currency": normalize_currency(payload.get("currency") or (income or {}).get("currency")),
+            "frequency": statement_frequency(income or {}, [fact_date(column) for column in columns if fact_date(column)]),
             "revenue": _financial_table_series(
                 income,
                 ("Total Revenue", "Revenue", "Net Sales", "Operating Revenue"),
@@ -1071,11 +1051,33 @@ def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] 
             "free_cash_flow": _financial_table_series(cashflow, ("Free Cash Flow",), columns),
             "provider": gateway_result.get("provider"),
             "as_of": gateway_result.get("as_of"),
+            "observed_at": gateway_result.get("observed_at"),
             "freshness_seconds": gateway_result.get("freshness_seconds"),
             "quality": gateway_result.get("quality"),
             "degraded": gateway_result.get("degraded"),
             "error_code": None,
         }
+        table_metrics = (
+            (income, ("revenue", "gross_profit", "operating_income", "net_income", "eps")),
+            (balance, ("total_assets", "total_liabilities")),
+            (cashflow, ("operating_cash_flow", "free_cash_flow")),
+        )
+        result["metric_frequencies"] = {}
+        result["metric_currencies"] = {}
+        result["fact_metadata"] = {}
+        for table, metrics in table_metrics:
+            table = table if isinstance(table, dict) else {}
+            table_columns = list(table.get("columns") or [])
+            frequency = statement_frequency(table, sorted({fact_date(col) for col in table_columns if fact_date(col)}, reverse=True))
+            for metric in metrics:
+                result["metric_frequencies"][metric] = frequency
+                result["metric_currencies"][metric] = normalize_currency(table.get("currency") or payload.get("currency"))
+                original = (table.get("fact_metadata") or payload.get("fact_metadata") or {}).get(metric) or []
+                by_end = {fact_date(row.get("period_end")): row for row in original if isinstance(row, dict)}
+                result["fact_metadata"][metric] = [by_end.get(fact_date(col)) for col in columns]
+        from backend.services.financial_series import derive_financial_series
+
+        result.update(derive_financial_series(result))
         metric_keys = (
             "revenue",
             "gross_profit",
@@ -1142,6 +1144,8 @@ def fetch_earnings_history(symbol: str) -> list[dict[str, Any]] | None:
         # 'epsEstimate', 'epsActual', 'epsDifference', 'surprisePercent'
         import pandas as pd
         if isinstance(eh, pd.DataFrame):
+            info = getattr(ticker, "info", {}) or {}
+            currency = normalize_currency(info.get("financialCurrency"))
             entries: list[dict[str, Any]] = []
             for idx, row in eh.iterrows():
                 quarter_str = str(idx) if idx is not None else ""
@@ -1149,6 +1153,7 @@ def fetch_earnings_history(symbol: str) -> list[dict[str, Any]] | None:
                     quarter_str = idx.strftime("%Y-%m-%d")
                 entries.append({
                     "quarter": quarter_str,
+                    "currency": currency,
                     "eps_estimate": safe_float(row.get("epsEstimate")),
                     "eps_actual": safe_float(row.get("epsActual")),
                     "surprise_pct": safe_float(row.get("surprisePercent")),
@@ -1195,6 +1200,8 @@ def fetch_analyst_targets(symbol: str) -> dict[str, Any] | None:
 
         if all(v is None for v in result.values()):
             return None
+        info = getattr(ticker, "info", {}) or {}
+        result["currency"] = normalize_currency(info.get("currency"))
         return result
     except Exception as exc:
         logger.warning("[DataService] fetch_analyst_targets failed for %s: %s", symbol, exc)

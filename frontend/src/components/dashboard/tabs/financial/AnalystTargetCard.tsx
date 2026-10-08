@@ -5,6 +5,7 @@
  * with current price marker. Optional recommendation bar below.
  */
 import { useMemo } from 'react';
+import { formatMoney } from '../../../../utils/format';
 import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
@@ -66,7 +67,7 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
         itemStyle: { color: theme.primary },
         label: {
           show: true,
-          formatter: `当前 $${currentPrice.toFixed(1)}`,
+          formatter: `当前 ${formatMoney(currentPrice, targets.currency)}`,
           position: 'top',
           fontSize: 10,
           color: theme.primary,
@@ -84,7 +85,7 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
         axisLabel: {
           color: theme.muted,
           fontSize: 9,
-          formatter: (v: number) => `$${v.toFixed(0)}`,
+          formatter: (v: number) => formatMoney(v, targets.currency),
         },
         splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
       },
@@ -107,21 +108,21 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: { color: theme.danger },
-                label: { show: true, formatter: `$${low.toFixed(0)}`, position: 'bottom' as const, fontSize: 9, color: theme.danger },
+                label: { show: true, formatter: formatMoney(low, targets.currency), position: 'bottom' as const, fontSize: 9, color: theme.danger },
               }] : []),
               ...(mean != null ? [{
                 coord: [mean, 0],
                 symbol: 'circle',
                 symbolSize: 12,
                 itemStyle: { color: theme.warning },
-                label: { show: true, formatter: `均值 $${mean.toFixed(0)}`, position: 'bottom' as const, fontSize: 9, color: theme.warning },
+                label: { show: true, formatter: `均值 ${formatMoney(mean, targets.currency)}`, position: 'bottom' as const, fontSize: 9, color: theme.warning },
               }] : []),
               ...(high != null ? [{
                 coord: [high, 0],
                 symbol: 'diamond',
                 symbolSize: 10,
                 itemStyle: { color: theme.success },
-                label: { show: true, formatter: `$${high.toFixed(0)}`, position: 'bottom' as const, fontSize: 9, color: theme.success },
+                label: { show: true, formatter: formatMoney(high, targets.currency), position: 'bottom' as const, fontSize: 9, color: theme.success },
               }] : []),
               ...markPoints,
             ],

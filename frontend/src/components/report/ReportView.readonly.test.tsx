@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { ReportIR } from '../../types';
 import { ToastProvider } from '../ui';
@@ -19,9 +20,9 @@ const report: ReportIR = {
 };
 
 const renderReport = (readOnly: boolean) => renderToStaticMarkup(
-  <ToastProvider>
+  <QueryClientProvider client={new QueryClient()}><ToastProvider>
     <ReportView report={report} readOnly={readOnly} />
-  </ToastProvider>,
+  </ToastProvider></QueryClientProvider>,
 );
 
 describe('ReportView 只读分享态', () => {

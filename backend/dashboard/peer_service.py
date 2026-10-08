@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from typing import Any, Optional
 
 from backend.utils.quote import safe_float
+from backend.tools.financial_facts import normalize_currency
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ def _fetch_single_peer_metrics_from_finnhub(sym: str) -> dict[str, Any] | None:
 
     result = {
         "symbol": sym,
+        "currency": normalize_currency(profile.get("currency")) if isinstance(profile, dict) else None,
         "name": (profile or {}).get("name") if isinstance(profile, dict) else sym,
         "trailing_pe": safe_float(metric.get("peTTM") or metric.get("peBasicExclExtraTTM")),
         "forward_pe": safe_float(metric.get("forwardPE") or metric.get("peExclExtraAnnual")),
@@ -147,6 +149,7 @@ def _fetch_single_peer_metrics_from_cn_hk(sym: str) -> dict[str, Any] | None:
             return None
         result = {
             "symbol": sym,
+            "currency": normalize_currency(payload.get("currency")),
             "name": payload.get("name") or sym,
             "trailing_pe": safe_float(payload.get("trailing_pe")),
             "forward_pe": safe_float(payload.get("forward_pe")),
@@ -256,6 +259,7 @@ def _fetch_single_peer_metrics(sym: str) -> dict[str, Any]:
         info = _create_ticker(sym).info or {}
         yfinance_result = {
             "symbol": sym,
+            "currency": normalize_currency(info.get("currency")),
             "name": info.get("shortName") or info.get("longName") or sym,
             "trailing_pe": safe_float(info.get("trailingPE")),
             "forward_pe": safe_float(info.get("forwardPE")),

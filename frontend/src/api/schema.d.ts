@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Service Capabilities */
+        get: operations["service_capabilities_api_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/conversations": {
         parameters: {
             query?: never;
@@ -694,6 +711,8 @@ export interface components {
          * @description 分析师目标价
          */
         AnalystTargets: {
+            /** Currency */
+            currency?: string | null;
             /** Current */
             current?: number | null;
             /** High */
@@ -704,6 +723,19 @@ export interface components {
             mean?: number | null;
             /** Median */
             median?: number | null;
+        };
+        /** BalanceSummary */
+        BalanceSummary: {
+            /** De Ratio */
+            de_ratio?: number | null;
+            /** Equity */
+            equity?: number | null;
+            /** Period */
+            period?: string | null;
+            /** Total Assets */
+            total_assets?: number | null;
+            /** Total Liabilities */
+            total_liabilities?: number | null;
         };
         /**
          * Capabilities
@@ -873,6 +905,8 @@ export interface components {
          * @description 单季度 EPS 历史记录
          */
         EarningsHistoryEntry: {
+            /** Currency */
+            currency?: string | null;
             /** Eps Actual */
             eps_actual?: number | null;
             /** Eps Estimate */
@@ -937,6 +971,7 @@ export interface components {
          * @description 财务报表结构化 (v2 新增)
          */
         FinancialStatement: {
+            balance_summary?: components["schemas"]["BalanceSummary"] | null;
             /** Currency */
             currency?: string | null;
             /** Eps */
@@ -947,10 +982,27 @@ export interface components {
             };
             /** Free Cash Flow */
             free_cash_flow?: (number | null)[];
+            /**
+             * Frequency
+             * @default unknown
+             */
+            frequency: string;
+            /** Gross Margin */
+            gross_margin?: (number | null)[];
             /** Gross Profit */
             gross_profit?: (number | null)[];
+            /** Metric Currencies */
+            metric_currencies?: {
+                [key: string]: string | null;
+            };
+            /** Metric Frequencies */
+            metric_frequencies?: {
+                [key: string]: string;
+            };
             /** Net Income */
             net_income?: (number | null)[];
+            /** Net Margin */
+            net_margin?: (number | null)[];
             /** Operating Cash Flow */
             operating_cash_flow?: (number | null)[];
             /** Operating Income */
@@ -968,6 +1020,10 @@ export interface components {
             total_assets?: (number | null)[];
             /** Total Liabilities */
             total_liabilities?: (number | null)[];
+            /** Yoy */
+            yoy?: {
+                [key: string]: (number | null)[];
+            };
         };
         /** GeneratePredictionRequest */
         GeneratePredictionRequest: {
@@ -1131,6 +1187,8 @@ export interface components {
          * @description 同行单项指标
          */
         PeerMetrics: {
+            /** Currency */
+            currency?: string | null;
             /** Dividend Yield */
             dividend_yield?: number | null;
             /** Ev To Ebitda */
@@ -1669,6 +1727,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    service_capabilities_api_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -2453,8 +2531,8 @@ export interface operations {
     };
     list_report_index_api_reports_index_get: {
         parameters: {
-            query: {
-                session_id: string;
+            query?: {
+                session_id?: string | null;
                 ticker?: string | null;
                 query?: string | null;
                 source_type?: string | null;
@@ -2489,8 +2567,8 @@ export interface operations {
     };
     get_report_replay_api_reports_replay__report_id__get: {
         parameters: {
-            query: {
-                session_id: string;
+            query?: {
+                session_id?: string | null;
                 include_blocked?: boolean;
             };
             header?: never;

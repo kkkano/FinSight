@@ -33,6 +33,8 @@ from backend.services.llm_retry import (
     classify_llm_error,
 )
 from backend.services.llm_usage import estimate_cost
+from backend.services.llm_usage_store import check_user_quota
+from backend.services.run_context import RunContext, current_run_context, remaining_timeout, run_context_scope
 from backend.services.market_data_gateway import get_market_data_gateway
 from backend.services.model_selection import (
     SelectedModel,
@@ -55,8 +57,8 @@ PREDICTION_AGENT = "prediction_analyst"
 PREDICTION_OPERATION = "technical"
 PREDICTION_MIN_BARS = 60
 PREDICTION_MAX_PROVIDER_ATTEMPTS = 2
-PREDICTION_HARD_TIMEOUT_SECONDS = 1800.0
-PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS = 1200.0
+PREDICTION_HARD_TIMEOUT_SECONDS = 180.0
+PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS = 180.0
 PREDICTION_NEWS_TIMEOUT_SECONDS = 5.0
 PREDICTION_DEFAULT_LLM_ENDPOINT_NAMES = ("openai-compatible-primary",)
 
@@ -165,7 +167,7 @@ def _safe_failure_detail(value: Any) -> str:
 
 
 def _attempt_totals(attempts: list[Mapping[str, Any]]) -> dict[str, Any]:
-    bounded = attempts[:PREDICTION_MAX_PROVIDER_ATTEMPTS]
+    bounded = attempts
     prompt = sum(max(0, int(item.get("prompt_tokens") or 0)) for item in bounded)
     completion = sum(max(0, int(item.get("completion_tokens") or 0)) for item in bounded)
     last = bounded[-1] if bounded else {}
@@ -427,7 +429,7 @@ class PredictionRunStore:
         prediction_id: str | None,
         attempts: list[Mapping[str, Any]],
     ) -> None:
-        for raw in attempts[:PREDICTION_MAX_PROVIDER_ATTEMPTS]:
+        for index, raw in enumerate(attempts, start=1):
             model = str(raw.get("model") or "unknown")
             prompt = max(0, int(raw.get("prompt_tokens") or 0))
             completion = max(0, int(raw.get("completion_tokens") or 0))
@@ -440,8 +442,8 @@ class PredictionRunStore:
             ), {
                 "run_id": run.id,
                 "user_id": run.user_id,
-                "logical_role": PREDICTION_AGENT,
-                "attempt": max(1, min(2, int(raw.get("attempt") or 1))),
+                "logical_role": str(raw.get("agent") or PREDICTION_AGENT),
+                "attempt": index,
                 "provider": str(raw.get("provider") or raw.get("endpoint_name") or "unknown"),
                 "model": model,
                 "prompt_version": run.prompt_version,
@@ -662,6 +664,7 @@ class PredictionService:
         self._run_slots = asyncio.Semaphore(max(1, min(16, int(max_concurrent_runs))))
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._run_models: dict[str, SelectedModel | None] = {}
+        self._run_contexts: dict[str, RunContext] = {}
         self._recovery_task: asyncio.Task[None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -674,6 +677,7 @@ class PredictionService:
         normalized_symbol = normalize_prediction_symbol(symbol)
         if timeframe != "1d":
             raise ValueError("unsupported prediction timeframe")
+        await asyncio.to_thread(check_user_quota, normalized_user)
         selected = current_model()
         run, created = await asyncio.to_thread(
             self.store.create_or_get_active,
@@ -684,6 +688,10 @@ class PredictionService:
         )
         if created:
             self._run_models[run.id] = selected
+            context = current_run_context() or RunContext.create(owner=normalized_user, entry="prediction",
+                                                                  budget_seconds=self.timeout_seconds)
+            context.run_id = run.id
+            self._run_contexts[run.id] = context
             self._schedule(run.id)
         return run, created
 
@@ -753,6 +761,7 @@ class PredictionService:
         normalized_symbol = normalize_prediction_symbol(symbol)
         if timeframe != "1d":
             raise ValueError("unsupported prediction timeframe")
+        check_user_quota(normalized_user)
         loop = self._loop
         if loop is None or loop.is_closed() or not loop.is_running():
             raise PredictionServiceUnavailable("prediction worker unavailable")
@@ -764,6 +773,8 @@ class PredictionService:
         )
         if created:
             self._run_models[run.id] = None
+            self._run_contexts[run.id] = RunContext.create(owner=normalized_user, entry="prediction", run_id=run.id,
+                                                           budget_seconds=self.timeout_seconds)
             loop.call_soon_threadsafe(self._schedule, run.id)
         return run, created
 
@@ -784,6 +795,7 @@ class PredictionService:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
         self._run_models.clear()
+        self._run_contexts.clear()
         self._loop = None
 
     def _schedule(self, run_id: str) -> None:
@@ -797,6 +809,7 @@ class PredictionService:
             if self._tasks.get(key) is done:
                 self._tasks.pop(key, None)
                 self._run_models.pop(key, None)
+                self._run_contexts.pop(key, None)
             try:
                 done.exception()
             except (asyncio.CancelledError, Exception):
@@ -840,14 +853,21 @@ class PredictionService:
                     await self._process_claimed_run(run_id)
 
     async def _process_claimed_run(self, run_id: str) -> None:
-        started = perf_counter()
-        attempts: list[Mapping[str, Any]] = []
         run = await asyncio.to_thread(self.store.claim, run_id)
         if run is None:
             return
+        context = self._run_contexts.get(run_id) or RunContext.create(owner=run.user_id, entry="prediction",
+                                                                     run_id=run_id, budget_seconds=self.timeout_seconds)
+        with run_context_scope(context):
+            await self._execute_claimed_run(run, context)
+
+    async def _execute_claimed_run(self, run: PredictionRun, run_context: RunContext) -> None:
+        started = perf_counter()
+        attempts: list[Mapping[str, Any]] = list(run_context.attempts)
         stage = "market"
         try:
-            async with asyncio.timeout(self.timeout_seconds):
+            run_context.guard()
+            async with asyncio.timeout(run_context.remaining_seconds):
                 market_task = asyncio.to_thread(
                     self.market_gateway.get_kline,
                     run.symbol,
@@ -883,6 +903,7 @@ class PredictionService:
                         existing,
                         latency_ms=int((perf_counter() - started) * 1000),
                     )
+                    run_context.finish("completed")
                     return
 
                 previous = await asyncio.to_thread(
@@ -965,7 +986,9 @@ class PredictionService:
                     attempts=attempts,
                     latency_ms=int((perf_counter() - started) * 1000),
                 )
+                run_context.finish("completed")
         except asyncio.CancelledError:
+            run_context.finish("cancelled")
             await self._finish_failure(
                 run,
                 status="cancelled",
@@ -976,6 +999,7 @@ class PredictionService:
             )
             raise
         except TimeoutError as exc:
+            run_context.finish("timed_out")
             code = MARKET_DATA_UNAVAILABLE if stage == "market" else "llm_timeout"
             await self._finish_failure(
                 run,
@@ -986,6 +1010,7 @@ class PredictionService:
                 started=started,
             )
         except MarketDataUnavailable as exc:
+            run_context.finish("failed")
             await self._finish_failure(
                 run,
                 status="unavailable",
@@ -995,6 +1020,7 @@ class PredictionService:
                 started=started,
             )
         except PredictionValidationError as exc:
+            run_context.finish("failed")
             await self._finish_failure(
                 run,
                 status="failed",
@@ -1004,6 +1030,7 @@ class PredictionService:
                 started=started,
             )
         except Exception as exc:
+            run_context.finish("failed")
             if stage == "llm":
                 classification = classify_llm_error(exc)
                 code = _public_llm_error_code(classification.code)
@@ -1025,7 +1052,7 @@ class PredictionService:
 
         # 推理 token 与正文共用输出预算；具体模型的最低预算由中央配置保证。
         max_tokens = max(512, env_int("PREDICTION_LLM_MAX_TOKENS", 8192))
-        request_timeout = int(self.llm_attempt_timeout_seconds)
+        request_timeout = remaining_timeout(self.llm_attempt_timeout_seconds)
         return await self.invoke_llm(
             [HumanMessage(content=prompt)],
             context=context,
@@ -1188,6 +1215,7 @@ def _public_llm_error_code(code: str) -> str:
         "llm_policy_refusal": "llm_policy_rejected",
         "llm_timeout": "llm_timeout",
         "llm_configuration_error": "llm_authentication_failed",
+        "llm_usage_store_unavailable": "store_unavailable",
     }
     return mapping.get(code, "llm_timeout")
 
@@ -1214,9 +1242,9 @@ def get_prediction_service() -> PredictionService:
                 store=PredictionRunStore(dsn=dsn),
                 market_gateway=get_market_data_gateway(),
                 prompt_version=str(os.getenv("PREDICTION_PROMPT_VERSION") or PREDICTION_PROMPT_VERSION),
-                timeout_seconds=float(os.getenv("PREDICTION_RUN_TIMEOUT_SECONDS", "1800")),
+                timeout_seconds=float(os.getenv("PREDICTION_RUN_TIMEOUT_SECONDS", "180")),
                 llm_attempt_timeout_seconds=float(
-                    os.getenv("PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS", "1200")
+                    os.getenv("PREDICTION_LLM_ATTEMPT_TIMEOUT_SECONDS", "180")
                 ),
                 news_timeout_seconds=float(os.getenv("PREDICTION_NEWS_TIMEOUT_SECONDS", "5")),
                 max_concurrent_runs=int(os.getenv("PREDICTION_MAX_CONCURRENT_RUNS", "2")),

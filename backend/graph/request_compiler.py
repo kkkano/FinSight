@@ -12,82 +12,14 @@ from backend.config.ticker_mapping import normalize_ticker
 from backend.graph.request_frame import compile_request_frame, compile_request_frames
 from backend.graph.request_constraints import conditional_impact
 from backend.graph.intent_contract import MACRO_INDICATOR_KEYS, canonical_evidence_kinds, evidence_plan_for_kinds, legacy_operation_for_contract
+from backend.graph.request_spec import RequestSpec, RequirementSpec, UnmappedRequirement
 
 
-_METRIC_CONTRACTS = {
-    "quote": ("performance", ["price_snapshot"], "price"),
-    "cumulative_return": ("performance", ["price_window"], "price"),
-    "max_drawdown": ("risk_level", ["price_window"], "risk"),
-    "volume_breakout": ("technical_quality", ["price_window"], "technical"),
-    "business_model": ("business_model", ["company_profile", "filing_context"], "business"),
-    "competition": ("competition", ["company_profile", "document_context"], "competition"),
-    "fundamental_quality": ("fundamental_quality", ["fundamental_snapshot", "filing_context"], "fundamental"),
-    "valuation_reasonableness": ("valuation_reasonableness", ["price_snapshot", "company_profile", "earnings_estimates", "filing_context"], "valuation"),
-    "risk_level": ("risk_level", ["risk_profile"], "risk"),
-    "news_catalysts": ("news_catalysts", ["news_context"], "news"),
-    "macro_impact": ("macro_impact", ["macro_context"], "macro"),
-    "technical_quality": ("technical_quality", ["technical_snapshot"], "technical"),
-    **{metric: ("technical_quality", ["technical_snapshot"], "technical") for metric in (
-        "rsi14", "macd", "support", "resistance", "support_resistance",
-    )},
-    "earnings_date": ("news_catalysts", ["event_calendar"], "catalyst"),
-    "macro_data": ("macro_impact", ["macro_context"], "macro"),
-    **{metric: ("macro_impact", ["macro_context"], "macro") for metric in MACRO_INDICATOR_KEYS},
-    "dividend_announcement": ("news_catalysts", ["filing_context"], "filing"),
-    "investment_attractiveness": ("investment_attractiveness", ["price_snapshot", "technical_snapshot", "news_context", "company_profile", "fundamental_snapshot", "risk_profile"], "investment_opinion"),
-    "earnings_impact": ("earnings_impact", ["filing_context", "earnings_estimates", "price_snapshot", "news_context", "transcript_context", "risk_profile"], "earnings"),
-    "earnings_performance": ("fundamental_quality", ["filing_context", "earnings_estimates", "fundamental_snapshot", "news_context", "transcript_context"], "earnings"),
-    "trend_quality": ("trend_quality", ["price_snapshot", "technical_snapshot"], "trend"),
-    "performance": ("performance", ["price_snapshot"], "price"),
-    "holdings_ownership": ("holdings_ownership", ["holdings_ownership"], "holdings"),
-    "external_impact": ("external_impact", ["price_snapshot", "news_context", "risk_profile"], "external_entity_impact"),
-    "document_summary": ("document_context", ["document_context"], "document"),
-    "document_question": ("document_context", ["document_context"], "document"),
-    **{metric: ("fundamental_quality", ["capital_allocation"], "fundamental") for metric in (
-        "operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid",
-        "capital_allocation_surplus", "shares_outstanding", "net_share_change", "dividend_coverage", "debt_burden", "free_cash_flow",
-    )},
-    **{metric: ("fundamental_quality", ["filing_context"], "fundamental") for metric in (
-        "revenue", "net_income", "operating_income",
-    )},
-}
-
-_DETERMINISTIC_MEASUREMENTS = {
-    "quote", "cumulative_return", "max_drawdown", "volume_breakout", "operating_cash_flow",
-    "capital_expenditure", "free_cash_flow", "dividends_paid", "repurchases_paid", "capital_allocation_surplus",
-    "shares_outstanding", "net_share_change", "dividend_coverage", "debt_burden", "revenue", "net_income",
-    "operating_income", "earnings_date", "dividend_announcement", "macro_data",
-} | set(MACRO_INDICATOR_KEYS)
-_DETERMINISTIC_MEASUREMENTS.update({"rsi14", "macd", "support", "resistance", "support_resistance"})
-_QUALITATIVE_MEASUREMENTS = {
-    "business_model", "competition", "fundamental_quality", "valuation_reasonableness", "risk_level",
-    "earnings_impact", "earnings_performance", "investment_attractiveness", "macro_impact", "external_impact",
-    "document_summary", "document_question",
-}
-_TECHNICAL_MEASUREMENTS = {"technical_quality", "trend_quality", "rsi14", "macd", "support", "resistance", "support_resistance"}
-
-_COMMON_SOURCE_ATTRIBUTES = {"source_timestamp", "source_url", "unit", "frequency", "period_start", "period_end", "published_at"}
-_METRIC_ATTRIBUTES = {
-    "quote": {"currency", "source_timestamp", "market_session", "end_close", "price_basis"},
-    "cumulative_return": {"currency", "source_timestamp", "price_basis", "dividends_included", "end_close", "base_close", "base_date", "end_date", "intervals"},
-    "max_drawdown": {"currency", "source_timestamp", "price_basis", "peak_date", "peak_close", "trough_date", "trough_close"},
-    "volume_breakout": {"currency", "source_timestamp", "price_basis", "confirmation_threshold", "range_start", "range_end"},
-    **{metric: _COMMON_SOURCE_ATTRIBUTES | {"currency"} for metric in (
-        "operating_cash_flow", "capital_expenditure", "free_cash_flow", "dividends_paid", "repurchases_paid", "capital_allocation_surplus", "debt_burden",
-    )},
-    **{metric: _COMMON_SOURCE_ATTRIBUTES | {"report_month", "observation_date", "source_updated_at"} for metric in ("macro_data", *MACRO_INDICATOR_KEYS)},
-}
-for _price_metric in ("quote", "cumulative_return", "max_drawdown", "volume_breakout"):
-    _METRIC_ATTRIBUTES[_price_metric] |= _COMMON_SOURCE_ATTRIBUTES
-# 报价、区间和技术指标由工具按标准定义计算；模型列出的价量原料不是独立采集项。
-_TOOL_COMPUTED_MEASUREMENTS = {"quote", "cumulative_return", "max_drawdown", "volume_breakout"} | _TECHNICAL_MEASUREMENTS
-# 模型偶尔把币种、时间等属性写进 components，这里归回属性。
-_COMPONENT_ATTRIBUTES = {"currency": "currency", "quote_timestamp": "source_timestamp", "timestamp": "source_timestamp",
-                         "source_timestamp": "source_timestamp", "after_hours_flag": "market_session",
-                         "is_after_hours": "market_session", "market_session": "market_session",
-                         "source": "source_url", "fiscal_period": "period_end"}
-_REGISTERED_ATTRIBUTES = set().union(*_METRIC_ATTRIBUTES.values()) | {"data_frequency", "confirmation_status", "amount_per_share", "announced_at", "payable_date", "record_date"}
-
+from backend.graph.research_capabilities import (
+    CAPABILITIES, _METRIC_CONTRACTS, _DETERMINISTIC_MEASUREMENTS,
+    _QUALITATIVE_MEASUREMENTS, _TECHNICAL_MEASUREMENTS, _METRIC_ATTRIBUTES,
+    _TOOL_COMPUTED_MEASUREMENTS, _COMPONENT_ATTRIBUTES, _REGISTERED_ATTRIBUTES,
+)
 
 def _constraint_needs_analysis(requirement: dict[str, Any], local_constraints: list[dict[str, Any]], scope: dict[str, Any]) -> bool:
     controls = [item for item in local_constraints if item.get("source_text") == requirement.get("source_text")]
@@ -309,22 +241,105 @@ def _scoped_constraints(constraints: list[dict[str, Any]], refs: list[str]) -> l
 def deterministic_fallback_contract(result: dict[str, Any], diagnostics: dict[str, Any]) -> dict[str, Any]:
     """语义确认失败时沿用规则计划继续研究；结果质量会标注要求未确认，不能宣称完整回答。"""
     understanding = dict(result.get("understanding") or {})
-    understanding.update(requirements_status="deterministic_fallback",
-                         semantic_contract={"status": "unconfirmed", "tasks": [], "requirements": []})
+    if understanding.get("route") == "direct" or diagnostics.get("validation_code") == "request_subject_context_unbound":
+        question = "请补充需要研究的公司、证券代码或具体主题；当前未确认请求范围。"
+        understanding.update(route="clarify", tasks=[], blocked_tasks=[], request_frames=[])
+        result.update(tasks=[], blocked_tasks=[], chat_responded=False,
+                      subject={"subject_type": "unknown", "tickers": []}, request_frames=[], intent_contracts=[],
+                      clarify={"needed": True, "reason": "request_contract_unconfirmed", "question": question, "suggestions": []})
+        for key in ("intent_contract", "request_frame"):
+            result.pop(key, None)
+            understanding.pop(key, None)
+        artifacts = dict(result.get("artifacts") or {})
+        artifacts.pop("direct_answer_request", None)
+        artifacts["draft_markdown"] = question
+        result["artifacts"] = artifacts
+    query = str(understanding.get("original_query") or result.get("query") or "")
+    unconfirmed = UnmappedRequirement(requirement_id="unconfirmed:" + hashlib.sha256(query.encode("utf-8")).hexdigest()[:16],
+        source_text=query, description=query, kind="explanation", metric_text=query,
+        capability_status="unsupported", requires_analysis=True)
+    snapshot = RequestSpec(status="unconfirmed", route=str(understanding.get("route") or "clarify"), query=query,
+        output_mode=str(result.get("output_mode") or "chat"), relation="none", requirements=[unconfirmed], tasks=[]).model_dump()
+    understanding.update(requirements_status="deterministic_fallback", semantic_contract=snapshot)
     result["understanding"] = understanding
-    result["trace"] = {**dict(result.get("trace") or {}), "request_requirements": diagnostics}
+    result["trace"] = {**dict(result.get("trace") or {}), "request_requirements": diagnostics, "semantic_contract": snapshot}
     if result.get("understanding_v2"):
         result["understanding_v2"] = {**dict(result["understanding_v2"]), "requirements_status": "deterministic_fallback"}
+    _store_run_context(result, enabled=True)
     return result
 
 
-def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], diagnostics: dict[str, Any], *, input_context: dict[str, Any] | None = None) -> dict[str, Any]:
+def _store_run_context(result: dict[str, Any], *, enabled: bool) -> None:
+    if not enabled:
+        return
+    from backend.services.run_context import current_run_context
+    run = current_run_context()
+    if run is not None:
+        run.select_entry(str(result.get("output_mode") or "chat"))
+        run.compiled_state = {key: result.get(key) for key in (
+            "tasks", "blocked_tasks", "understanding", "query", "output_mode", "subject", "request_frames")}
+
+
+def _typed_requirement(row: dict[str, Any]) -> RequirementSpec:
+    spec_type = UnmappedRequirement if row.get("metric") == "unknown" and row.get("capability_status") in {"unsupported", "input_missing"} else RequirementSpec
+    return spec_type.model_validate(row)
+
+
+def _compile_non_research_route(result: dict[str, Any], *, route: str, query: str, mode: str,
+                                subjects: list[dict], requirements: list[dict], constraints: list[dict],
+                                semantic: dict, diagnostics: dict, apply_run_context: bool) -> dict[str, Any]:
+    if route == "direct" and any(row.get("kind") not in {"explanation", "constraint"} for row in requirements):
+        raise ValueError("request_direct_route_retrieval_conflict")
+    rows = [_typed_requirement(row) for row in requirements]
+    snapshot = RequestSpec(status="confirmed", route=route, query=query, output_mode=mode,
+        subjects=subjects, requirements=rows, constraints=constraints,
+        relation=str(semantic.get("relation") or "none")).model_dump(exclude_unset=True)
+    snapshot["version"] = RequestSpec.model_fields["version"].default
+    understanding = {**dict(result.get("understanding") or {}), "route": route, "tasks": [], "blocked_tasks": [],
+        "requirements_status": "confirmed", "semantic_contract": snapshot, "original_query": query,
+        "user_visible_summary": "需要补充分析对象或输入。" if route == "clarify" else "概念解释，无需查询公司当前事实。"}
+    artifacts = dict(result.get("artifacts") or {})
+    artifacts.pop("draft_markdown", None)
+    artifacts.pop("direct_answer_request", None)
+    question = str(semantic.get("clarification_question") or "请补充需要分析的公司、证券代码、主题或原始资料。")
+    if route == "direct":
+        artifacts["direct_answer_request"] = {"query": query,
+            "instructions": "按已确认的概念请求直接解释；虚构算例须明确标注，不补造当前公司事实或实时数据。"}
+    else:
+        artifacts["draft_markdown"] = question
+    frame = {"version": "request_frame.v2", "frame_id": "conversation_request", "query_text": query,
+        "subject": {"type": "unknown", "tickers": []}, "lane": "answer" if route == "direct" else "clarify",
+        "relation": snapshot["relation"], "task_ids": [], "evidence_obligations": [],
+        "render_contract": {"shape": "answer", "dimensions": [], "answer_requirements": snapshot["requirements"]},
+        "source": "confirmed_semantic_requirements"}
+    understanding.update(request_frame=frame, request_frames=[frame])
+    result.update(query=query, output_mode=mode, understanding=understanding, tasks=[], blocked_tasks=[],
+        request_frames=[frame], request_frame=frame, intent_contracts=[], artifacts=artifacts, chat_responded=False,
+        operation={"name": "qa", "params": {}}, subject={"subject_type": "unknown", "tickers": []},
+        clarify={"needed": route == "clarify", "reason": "task_missing_input" if route == "clarify" else "",
+                 "question": question if route == "clarify" else "", "suggestions": []})
+    result.pop("intent_contract", None)
+    result.pop("messages", None)
+    from backend.graph.request_task_contract import build_reply_contract
+    result["reply_contract"] = build_reply_contract(query=query, output_mode=mode, tasks=[], blocked_tasks=[])
+    result["trace"] = {**dict(result.get("trace") or {}), "understanding": understanding,
+        "request_requirements": diagnostics, "semantic_contract": snapshot, "request_frames": [frame],
+        "request_compiler": {"version": "request_compiler.v2", "requirement_count": len(rows), "task_count": 0}}
+    _store_run_context(result, enabled=apply_run_context)
+    return result
+
+
+def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], diagnostics: dict[str, Any], *, input_context: dict[str, Any] | None = None, apply_run_context: bool = True) -> dict[str, Any]:
     """只验证语义抽取对象并投影，不能重新解析原文或裁剪原始要求。"""
     understanding = dict(result.get("understanding") or {})
     diagnostics = {**diagnostics, "raw_semantic": deepcopy(semantic)}
     query = str(understanding.get("original_query") or result.get("query") or "")
+    result["query"] = query
     mode = str(semantic.get("output_mode") or result.get("output_mode") or "chat")
     result["output_mode"] = mode
+    route = str(semantic.get("route") or "research")
+    if route not in {"research", "direct", "clarify"}:
+        raise ValueError("request_route_invalid")
     subjects = [dict(item) for item in semantic.get("subjects", []) if isinstance(item, dict)]
     subject_map = {str(item.get("id")): item for item in subjects}
     if len(subject_map) != len(subjects) or any(not key or key == "None" for key in subject_map):
@@ -335,6 +350,19 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             from backend.graph.intent.predicates import _subject_type_for_ticker
             subject["raw_type"] = subject.get("type")
             subject["type"] = _subject_type_for_ticker(subject["tickers"][0]) if subject["tickers"] else "unknown"
+    context = input_context or {}
+    ui = context.get("ui_context") or {}
+    if route == "research" and ui.get("active_symbol"):
+        from backend.config.ticker_mapping import extract_tickers
+        from backend.graph.intent.predicates import _history_tickers_from_messages, _is_scoped_active_symbol_context
+        active = normalize_ticker(str(ui["active_symbol"]))
+        explicit = set(extract_tickers(query).get("tickers") or [])
+        historical = set(_history_tickers_from_messages(context, query))
+        selected = bool(ui.get("selections"))
+        if not _is_scoped_active_symbol_context(ui) and not selected and active not in explicit | historical:
+            if any(active in subject["tickers"] and not (str(subject.get("label") or "").strip()
+                   and str(subject["label"]).casefold() in query.casefold()) for subject in subjects):
+                raise ValueError("request_subject_context_unbound")
     if semantic.get("relation", "single") == "single":
         company_subjects = [subject for subject in subjects if subject.get("type") == "company" and subject.get("tickers")]
         tickers = {ticker for subject in company_subjects for ticker in subject["tickers"]}
@@ -429,7 +457,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             market = "HK" if ticker and ticker.endswith(".HK") else "CN" if ticker and ticker.endswith((".SS", ".SZ", ".BJ")) else "US"
             if market in {"CN", "HK"} and metric in {"revenue", "net_income", "operating_income"}:
                 evidence = list(dict.fromkeys([*evidence, "fundamental_snapshot"]))
-            if not evidence_plan_for_kinds(evidence, market=market):
+            if not CAPABILITIES[metric].supports_market(market):
                 requirement["capability_status"] = "retrieval_required"
                 requirement["capability_reason"] = "structured_source_unavailable_for_market"
                 evidence = ["filing_context", "document_context"]
@@ -454,12 +482,25 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             raise ValueError("request_requirement_exclusion_conflict")
         raw_scope = dict(requirement.get("time_scope") or {"kind": "none"})
         scope = _normalize_semantic_scope(raw_scope, metric)
+        qualifiers = requirement.get("qualifiers") or []
+        for qualifier in qualifiers:
+            if not qualifier.get("source_text") or qualifier["source_text"] not in query:
+                raise ValueError("request_qualifier_source_unbound")
+            if qualifier.get("name") == "reporting_basis" and qualifier.get("value") in {"consolidated", "parent", "unspecified"}:
+                scope["reporting_basis"] = qualifier["value"]
+                if qualifier["value"] == "parent" and ticker and not ticker.endswith((".SS", ".SZ", ".BJ", ".HK")):
+                    requirement.update(capability_status="retrieval_required", capability_reason="entity_wide_structured_source_has_no_parent_context")
+            else:
+                requirement.setdefault("unmapped_qualifiers", []).append(qualifier)
         frequency_aliases = {"daily": "daily", "1d": "daily", "weekly": "weekly", "1wk": "weekly", "monthly": "monthly", "1mo": "monthly"}
         presentation = list(requirement.get("presentation") or [])
         from backend.graph.semantic_requirements import PRESENTATION_FIELDS
         if any(item not in PRESENTATION_FIELDS for item in presentation):
             raise ValueError("request_presentation_invalid")
         attributes = []
+        unmapped_qualifiers = list(requirement.get("unmapped_qualifiers") or [])
+        if any(qualifier.get("name") == "reporting_basis" for qualifier in qualifiers):
+            attributes.append("reporting_basis")
         for attribute in requirement.get("attributes") or []:
             if attribute in PRESENTATION_FIELDS:
                 presentation.append(attribute)
@@ -477,7 +518,10 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                     requirement["data_frequency"] = frequency_aliases[value.strip()]
             if not normalized_attribute or normalized_attribute == "data_frequency":
                 continue
-            attributes.append(normalized_attribute if normalized_attribute in _REGISTERED_ATTRIBUTES else raw_attribute)
+            if normalized_attribute in _REGISTERED_ATTRIBUTES:
+                attributes.append(normalized_attribute)
+            else:
+                unmapped_qualifiers.append({"name": raw_attribute, "source_text": source})
         components = []
         from backend.graph.semantic_requirements import ExtractedRequirement
         for component in requirement.get("components") or []:
@@ -496,6 +540,9 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         if set(presentation) & {"include_inputs", "include_formula"} and not requirement.get("calculation") and metric not in {"cumulative_return", "max_drawdown", "volume_breakout"}:
             raise ValueError("request_calculation_presentation_domain_conflict")
         requirement["attributes"] = attributes
+        if unmapped_qualifiers:
+            requirement["unmapped_qualifiers"] = unmapped_qualifiers
+            requirement.update(capability_status="unsupported", capability_reason="unmapped_qualifier")
         if metric in {"quote", "news_catalysts", "earnings_date"}:
             # 即时/收盘报价没有采样频率可言，日线措辞不应变成需要核对的频率要求。
             requirement["data_frequency"] = "unspecified"
@@ -555,10 +602,18 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         requirement["requirement_id"] = requirement_id
         requirements.append(requirement)
         groups.setdefault(tuple(refs), []).append(requirement)
+    if route != "research":
+        return _compile_non_research_route(result, route=route, query=query, mode=mode, subjects=subjects,
+            requirements=requirements, constraints=constraints, semantic=semantic, diagnostics=diagnostics,
+            apply_run_context=apply_run_context)
     if not requirements:
         raise ValueError("request_requirements_empty")
     _bind_attribute_requirements(requirements, subject_map)
     _bind_comparison_requirements(requirements)
+    for requirement in requirements:
+        canonical = _typed_requirement(requirement).model_dump(exclude_unset=True)
+        requirement.clear()
+        requirement.update(canonical)
     for requirement in requirements:
         if (requirement.get("metric") == "quote" and requirement.get("time_scope", {}).get("kind") == "latest_quote"
                 and requirement.get("time_scope", {}).get("selection") == "latest_complete"
@@ -572,7 +627,6 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
     ready, blocked, frames = [], [], []
     bound_tasks = [task for task in result.get("tasks", []) if isinstance(task, dict)]
     relation = str(semantic.get("relation") or "single")
-    seed_tasks: list[dict[str, Any]] | None = None
     for index, (refs, rows) in enumerate(groups.items(), 1):
         group_subjects = [subject_map[ref] for ref in refs]
         tickers = list(dict.fromkeys(ticker for item in group_subjects for ticker in item.get("tickers", [])))
@@ -589,12 +643,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             excluded_kinds = {kind for definition in _METRIC_CONTRACTS.values() if definition[0] in exclusions for kind in definition[1]}
             unmapped_research = any(row.get("capability_status") == "unsupported"
                 and (row.get("requires_analysis") or row.get("kind") in {"explanation", "comparison"}) for row in rows)
-            if unmapped_research and seed_tasks is None:
-                seed_tasks = finalize_request_contract(deepcopy(result)).get("tasks", [])
-            seeded_evidence = [kind for seed in seed_tasks or [] if unmapped_research and set(seed.get("tickers") or []) == set(tickers)
-                               for kind in seed.get("required_evidence") or []]
-            discovery = ["document_context", *seeded_evidence]
-            if unmapped_research and not seeded_evidence and subject_type == "company":
+            discovery = ["document_context"]
+            if unmapped_research and subject_type == "company":
                 discovery.extend(["company_profile", "filing_context"])
             evidence = list(dict.fromkeys([*evidence, *(kind for kind in discovery if kind not in excluded_kinds)]))
         if named_company and not tickers:
@@ -614,7 +664,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                     "budget_profile": "semantic_requirements", "source": "confirmed_semantic_requirements"}
         operation = legacy_operation_for_contract(contract, subject_type=subject_type)
         active_rows = [row for row in rows if row.get("kind") not in {"constraint", "input_dependency"}]
-        if shape != "compare" and active_rows and all(row.get("kind") in {"fact_attribute", "calculation"} and not row.get("requires_analysis") for row in active_rows):
+        if operation["name"] == "investment_opinion" and active_rows and not any(row.get("requires_analysis") for row in active_rows):
             operation["name"] = "qa"
         operation["params"]["budget_profile"] = "semantic_requirements"
         if shape == "compare" and "performance_comparison" not in evidence:
@@ -659,9 +709,10 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                        "relation": relation, "time_scope": time_scope, "excluded_facets": sorted(exclusions),
                        "evidence_obligations": evidence, "render_contract": render, "intent_contract": contract,
                        "legacy_operation": operation, "source": "confirmed_semantic_requirements"})
-    snapshot = {"version": "semantic_requirements.v1", "status": "confirmed", "query": query, "subjects": subjects, "output_mode": mode,
-                "relation": relation, "requirements": deepcopy(requirements), "constraints": deepcopy(constraints),
-                "tasks": deepcopy([*ready, *blocked])}
+    snapshot = RequestSpec(status="confirmed", route="research" if ready else "clarify", query=query,
+        subjects=subjects, output_mode=mode, relation=relation, requirements=requirements,
+        constraints=constraints, tasks=[*ready, *blocked]).model_dump(exclude_unset=True)
+    snapshot["version"] = RequestSpec.model_fields["version"].default
     understanding.update(route="research" if ready else "clarify", tasks=ready, blocked_tasks=blocked,
                          request_frames=frames, requirements_status="confirmed", semantic_contract=snapshot,
                          user_visible_summary=f"已保留 {len(requirements)} 项原始要求；可执行任务 {len(ready)} 项，待补充输入 {len(blocked)} 项。")
@@ -715,6 +766,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
               "provenance": [{"source": "request_compiler", "method": "confirmed_semantic_requirements"}],
               "legacy_projection": {"subject": result.get("subject"), "operation": result.get("operation"), "reply_contract": result.get("reply_contract")}}
         result["understanding_v2"] = understanding["v2"] = trace["understanding_v2"] = v2
+    _store_run_context(result, enabled=apply_run_context)
     return result
 
 
@@ -753,18 +805,20 @@ def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
         params = dict(previous.get("params") or {})
         scoped_query = str(task.get("request_text") or query)
         # 分句仅由 request_frame 编译器解释；不按相似度猜测任务身份。
-        if len(all_tickers) > 1 and len(tickers) == 1 and name != "compare":
-            candidates = [frame for frame in fragments if set(frame.get("subject", {}).get("tickers", [])) == set(tickers)]
-            matching = [frame for frame in candidates if frame.get("legacy_operation", {}).get("name") == name]
-            candidates = matching or candidates
+        if tickers and scoped_query == query:
+            candidates = [frame for frame in fragments if frame.get("subject", {}).get("tickers")
+                and set(tickers).intersection(frame["subject"]["tickers"])
+                and frame.get("subject", {}).get("type") != "macro"]
+            if name == "compare":
+                candidates = [frame for frame in candidates if set(tickers).issubset(set(frame["subject"]["tickers"]))]
             if candidates:
                 scoped_query = "；".join(str(frame["query_text"]) for frame in candidates)
-        elif subject_type == "macro" and not task.get('conditional_impact'):
+        elif subject_type == "macro" and scoped_query == query and not task.get('conditional_impact'):
             candidates = [frame for frame in fragments if frame.get("subject", {}).get("type") == "macro"]
             if candidates:
                 scoped_query = "；".join(str(frame["query_text"]) for frame in candidates)
         frame_id = f"request_{task_id}"
-        domain = {"price": "quote", "fetch": "news", "technical": "technical", "macro_brief": "macro"}.get(name, "")
+        domain = {"price": "quote", "fetch": "news", "technical": "technical"}.get(name, "")
         if subject_type == "macro":
             domain = "macro"
         frame = compile_request_frame(query=scoped_query, tickers=tickers, output_mode=mode,
@@ -773,6 +827,17 @@ def finalize_request_contract(result: dict[str, Any]) -> dict[str, Any]:
         frame["task_ids"] = [task_id]
         frame["subject"]["label"] = str(task.get("subject_label") or ", ".join(tickers) or subject_type)
         contract = frame["intent_contract"]
+        if tickers:
+            from backend.graph.intent_contract import evidence_registry
+            from backend.services.data_contract import AssetContext
+            markets = {AssetContext.from_symbol(ticker).market for ticker in tickers}
+            registry = evidence_registry()
+            declared = {kind for row in frame["render_contract"].get("answer_requirements", [])
+                        for kind in row.get("evidence_kinds", [])}
+            obligations = [kind for kind in frame["evidence_obligations"] if kind in declared
+                or kind not in registry or markets.issubset(set(registry[kind].markets))]
+            frame["evidence_obligations"] = contract["required_evidence"] = obligations
+            contract["evidence_plan"] = evidence_plan_for_kinds(obligations)
         if task.get("reason") == "intent_contract_per_ticker_evidence":
             parent = next((item for item in frames if item["render_contract"].get("shape") == "compare"
                            and set(tickers) <= set(item["subject"].get("tickers", []))), None)

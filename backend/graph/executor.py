@@ -14,6 +14,7 @@ from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
 from backend.config.settings import executor_settings
 from backend.graph.request_task_contract import output_is_error_like
+from backend.services.run_context import current_run_context
 
 logger = logging.getLogger(__name__)
 
@@ -340,6 +341,9 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
             "task_id": task_id,
             "task_ids": task_ids,
         }
+        run = current_run_context()
+        if run is not None:
+            run.record_step(step, ctx.artifacts["step_results"][step_id])
         ctx.exec_events.append(
             {
                 "event": "executor.step_finished",
@@ -391,6 +395,9 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
                 "task_id": task_id,
                 "task_ids": task_ids,
             }
+            run = current_run_context()
+            if run is not None:
+                run.record_step(step, ctx.artifacts["step_results"][step_id])
             ctx.exec_events.append(
                 {
                     "event": "executor.step_finished",
@@ -514,6 +521,9 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
             "task_id": task_id,
             "task_ids": task_ids,
         }
+        run = current_run_context()
+        if run is not None:
+            run.record_step(step, ctx.artifacts["step_results"][step_id])
         if status_reason == "error":
             message = output.get("error") or output.get("error_message") or output.get("status") if isinstance(output, dict) else output
             raise ValueError(str(message or "tool_business_error"))

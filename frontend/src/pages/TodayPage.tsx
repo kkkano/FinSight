@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -16,12 +16,15 @@ import { apiClient, type MarketDataResponse, type QuoteData } from '../api/clien
 import type { PredictionHistoryItem } from '../api/domains/predictions';
 import { usePredictionHistory } from '../hooks/usePredictionHistory';
 import { useStore } from '../store/useStore';
-import { useDashboardStore } from '../store/dashboardStore';
+import { useWatchlist } from '../hooks/useWatchlist';
 import type { WatchItem } from '../types/dashboard';
 import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
+import { formatMoney } from '../utils/format';
 
 type QuoteState = {
   price?: number;
+  currency?: string | null;
+  dataKind?: QuoteData['data_kind'];
   changePct?: number;
   source?: string | null;
   asOf?: string | null;
@@ -57,11 +60,6 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
-function formatPrice(value: number | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '不可用';
-  return value.toFixed(2);
-}
-
 function formatPercent(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '不可用';
   const sign = value >= 0 ? '+' : '';
@@ -77,11 +75,13 @@ function formatHitRate(value: number | null | undefined): string {
 function normalizeQuote(payload: MarketDataResponse<QuoteData>): Omit<QuoteState, 'status'> {
   const envelope = payload.data;
   const quote = envelope.data;
-  const price = Number(quote?.price);
-  const changePct = Number(quote?.change_percent);
+  const price = quote?.price == null ? undefined : Number(quote.price);
+  const changePct = quote?.change_percent == null ? undefined : Number(quote.change_percent);
   return {
-    price: Number.isFinite(price) ? price : undefined,
+    price: price !== undefined && Number.isFinite(price) && price > 0 ? price : undefined,
     changePct: Number.isFinite(changePct) ? changePct : undefined,
+    currency: quote?.currency,
+    dataKind: quote?.data_kind,
     source: envelope.provider || envelope.source,
     asOf: envelope.as_of,
     quality: envelope.quality,
@@ -122,7 +122,8 @@ function getStatusBadgeTone(status: string): string {
 function getQuoteStatusLabel(quote: QuoteState | undefined): string {
   if (!quote || quote.status === 'loading') return '读取中';
   if (quote.status !== 'ready') return '不可用';
-  if (!quote.source || !quote.asOf) return '信息不完整';
+  if (!quote.source || !quote.asOf || !quote.currency) return '信息不完整';
+  if (quote.dataKind === 'daily_close') return '日线报价';
   if (quote.quality === 'degraded') return '降级数据';
   return quote.cached ? '缓存数据' : '可信数据';
 }
@@ -168,7 +169,7 @@ function QuoteCard({
       </div>
       <div className="mt-5 flex items-end justify-between gap-2">
         <div>
-          <div className="font-mono text-xl font-semibold tabular-nums text-t-text">{isLoading ? '读取中...' : formatPrice(quote?.price)}</div>
+          <div className="font-mono text-xl font-semibold tabular-nums text-t-text">{isLoading ? '读取中...' : formatMoney(quote?.price, quote?.currency)}</div>
           <div className={`mt-1 text-xs ${hasPrice ? (isUp ? 'text-t-up' : 'text-t-down') : 'text-t-text3'}`}>
             {isLoading ? '等待行情' : hasPrice ? formatPercent(quote?.changePct) : '行情不可用'}
           </div>
@@ -231,22 +232,8 @@ export function TodayPage() {
   const navigate = useNavigate();
   const authIdentity = useStore((state) => state.authIdentity);
   const entryMode = useStore((state) => state.entryMode);
-  const setWatchlist = useDashboardStore((state) => state.setWatchlist);
   const [updatedAt, setUpdatedAt] = useState(() => new Date());
-  const watchlistQuery = useQuery({
-    queryKey: ['watchlist', authIdentity?.userId || 'anonymous'],
-    queryFn: ({ signal }) => apiClient.getWatchlist(signal),
-    enabled: Boolean(authIdentity?.userId),
-    staleTime: 30_000,
-  });
-  const watchlist = useMemo<WatchItem[]>(
-    () => (watchlistQuery.data?.items ?? []).map((item) => ({
-      symbol: item.ticker.trim().toUpperCase(),
-      type: 'equity',
-      name: item.note || item.ticker.trim().toUpperCase(),
-    })),
-    [watchlistQuery.data?.items],
-  );
+  const { query: watchlistQuery, watchlist } = useWatchlist();
   const quoteSymbols = useMemo(() => watchlist.map((item) => item.symbol), [watchlist]);
   const quoteQuery = useQuery({
     queryKey: ['today-watchlist-quotes', quoteSymbols],
@@ -274,9 +261,6 @@ export function TodayPage() {
     refresh: refreshPredictions,
   } = usePredictionHistory({ enabled: Boolean(authIdentity?.userId), limit: 100 });
 
-  useEffect(() => {
-    if (watchlistQuery.isSuccess) setWatchlist(watchlist);
-  }, [setWatchlist, watchlist, watchlistQuery.isSuccess]);
 
   const recentPredictions = useMemo(
     () => [...predictionItems]

@@ -29,12 +29,76 @@ def test_financial_fact_preserves_original_unit_period_and_source_page():
     assert _extract({**ROW, "page": "[Page 85]"})[0]["page"] == 85
 
 
+def test_amount_from_other_year_column_cannot_be_relabelled_as_requested_year():
+    previous = {**ROW, "period_start": "2024-01-01", "period_end": "2024-12-31"}
+    assert not _extract(previous)
+    assert _extract({**previous, "amount_text": "8,901.23"})[0]["value"] == pytest.approx(89_012_300)
+
+
+def test_half_year_header_cannot_be_claimed_as_single_quarter():
+    row = {**ROW, "period_start": "2025-04-01", "period_end": "2025-06-30",
+           "period_quote": "2025年上半年 2024年上半年"}
+    body = BODY.replace(ROW["period_quote"], row["period_quote"])
+    assert not validate_financial_facts({"facts": [row]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+    quarter = "2025年第二季度 2024年第二季度"
+    body = body.replace(row["period_quote"], quarter)
+    assert validate_financial_facts({"facts": [{**row, "period_quote": quarter}]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+
+
+@pytest.mark.parametrize("basis,heading", [("consolidated", "合并现金流量表"), ("parent", "母公司现金流量表")])
+def test_reporting_basis_is_bound_to_actual_table_heading_and_requested_scope(basis, heading):
+    body = BODY.replace("[Page 85]\n", f"[Page 85]\n{heading}\n")
+    row = {**ROW, "reporting_basis": basis, "basis_quote": heading, "basis_page": 85}
+    def validate(candidate, requested):
+        return validate_financial_facts({"facts": [candidate]}, text=body, ticker="600519.SS",
+            source_url="https://www.cninfo.com.cn/report.pdf", time_scope={"reporting_basis": requested})
+    assert validate(row, basis)[0]["reporting_basis"] == basis
+    other = "parent" if basis == "consolidated" else "consolidated"
+    assert not validate(row, other)
+    assert not validate({**row, "basis_quote": "原文没有这个表头"}, basis)
+
+
 def test_reporting_currency_declaration_can_be_verified_separately_from_table_scale():
     declaration = "本公司编制本财务报表时所采用的货币为人民币。"
     body = BODY.replace("单位：万元 币种：人民币", "单位：万元") + "\n[Page 90]\n" + declaration
     row = {**ROW, "unit_quote": "单位：万元", "currency_quote": declaration}
     assert validate_financial_facts({"facts": [row]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
     assert not validate_financial_facts({"facts": [{**row, "currency_quote": "财务报表以美元列示。"}]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+
+
+@pytest.mark.asyncio
+async def test_typed_extraction_composes_sync_transport_and_shared_usage(monkeypatch):
+    import asyncio
+    from backend.llm_config import EndpointConfig, EndpointManager, EndpointRuntime
+    from backend.services import llm_retry, rate_limiter
+    from backend.services.run_context import RunContext, run_context_scope
+    from backend.tools.disclosure_financial_facts import FinancialExtraction, extract_financial_facts
+
+    run = RunContext.create(owner="alice", entry="investment_report", budget_seconds=2)
+    run.quota_checker = lambda _owner: None
+    observed = []
+
+    class Client:
+        model_name = "fixture-model"
+        def with_structured_output(self, schema, **_kwargs):
+            observed.append(schema)
+            return self
+        def invoke(self, _messages):
+            return {"raw": SimpleNamespace(content="{}", usage_metadata={"input_tokens": 7, "output_tokens": 3}),
+                    "parsed": FinancialExtraction(facts=[ROW])}
+
+    async def acquire(**_kwargs):
+        return True
+
+    endpoint = EndpointConfig("fixture", "openai_compatible", "https://fixture.test/v1", "fixture-key", "fixture-model")
+    monkeypatch.setattr(llm_retry, "get_endpoint_manager", lambda **_kwargs: EndpointManager(
+        endpoints=[EndpointRuntime(cfg=endpoint)], fingerprint="typed-financial"))
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", lambda *_args, **_kwargs: Client())
+    monkeypatch.setattr(rate_limiter, "acquire_llm_token", acquire)
+    with run_context_scope(run):
+        facts = await asyncio.to_thread(extract_financial_facts, BODY, "600519.SS", "https://www.cninfo.com.cn/report.pdf")
+    assert observed == [FinancialExtraction] and facts[0]["value"] == pytest.approx(123_456_700)
+    assert run.usage.user_id == "alice" and run.usage.total_tokens == 10
 
 
 def test_pdf_adjacent_numeric_columns_keep_complete_first_amount():

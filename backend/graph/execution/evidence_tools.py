@@ -233,6 +233,7 @@ def _append_tool_evidence(
             description = str(filing.get("primary_doc_description") or form_type).strip()
             evidence_pool.append(
                 {
+                    "kind": "filing_context",
                     **_contract_fields(filing),
                     "title": f"{company_name} {form_type} ({filing_date or 'N/A'})".strip(),
                     "url": filing_url or None,
@@ -293,10 +294,21 @@ def _append_tool_evidence(
             if filing.get("issuer_verified") is not True or filing.get("issuer_ticker") != ticker:
                 continue
             for fact_index, fact in enumerate(filing.get("financial_facts") or []):
-                if not isinstance(fact, dict) or fact.get("verification") != "official_filing_body":
+                if not isinstance(fact, dict):
+                    continue
+                if fact.get("verification") == "derived_verified_financial_facts":
+                    from backend.tools.financial_facts import derive_cash_flow_facts
+                    inputs = fact.get("derivation_inputs") or []
+                    if not inputs or not all(row.get("verification") == "official_filing_body" for row in inputs):
+                        continue
+                    computed = derive_cash_flow_facts(inputs, [fact.get("metric")])
+                    if not computed or computed[0]["value"] != fact.get("value"):
+                        continue
+                elif fact.get("verification") != "official_filing_body":
                     continue
                 metric = fact.get("metric")
-                cash_metric = metric in {"operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid"}
+                from backend.graph.research_capabilities import FINANCIAL_INPUTS
+                cash_metric = metric in {"operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid", *FINANCIAL_INPUTS}
                 evidence_pool.append({
                     **_contract_fields(fact), "subject": ticker,
                     "kind": "capital_allocation" if cash_metric else "fundamental_snapshot",

@@ -15,6 +15,9 @@ PRODUCTION_CALLSITES = (
     "backend/graph/synthesis/narrative.py",
     "backend/graph/synthesis/research_synthesis.py",
     "backend/report/verifier.py",
+    "backend/services/model_preflight.py",
+    "backend/tools/disclosure_financial_facts.py",
+    "backend/research/forecasting.py",
 )
 
 

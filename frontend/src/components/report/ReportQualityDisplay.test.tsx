@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import type { ReportIR } from '../../types';
 import { ToastProvider } from '../ui';
@@ -24,7 +25,7 @@ const partialReport: ReportIR = {
 };
 
 const renderReport = (report: ReportIR, readOnly = false) => renderToStaticMarkup(
-  <ToastProvider><ReportView report={report} readOnly={readOnly} /></ToastProvider>,
+  <QueryClientProvider client={new QueryClient()}><ToastProvider><ReportView report={report} readOnly={readOnly} /></ToastProvider></QueryClientProvider>,
 );
 
 const renderHeader = (report: ReportIR, fullscreen: boolean) => renderToStaticMarkup(
@@ -33,6 +34,14 @@ const renderHeader = (report: ReportIR, fullscreen: boolean) => renderToStaticMa
 );
 
 describe('报告判断与完整度展示', () => {
+  it('当前合同采用服务器内容判定，来源告警和无总体观点不重算为内容缺项', () => {
+    const report = { ...partialReport, report_quality: { ...partialReport.report_quality!,
+      content_contract_version: 'research_content.v2', content_status: 'answered' as const,
+      answer_status: 'answered' as const, missing_requirements: [],
+    } };
+    expect(getReportPresentation(report).answerStatus).toBe('answered');
+    expect(getReportPresentation(report).judgmentLabel).toBe('无法判断');
+  });
   it('部分报告在卡片、只读和全屏中显示无法判断，并保留事实与来源', () => {
     for (const html of [renderReport(partialReport), renderReport(partialReport, true), renderHeader(partialReport, true)]) {
       expect(html).toContain('无法判断');

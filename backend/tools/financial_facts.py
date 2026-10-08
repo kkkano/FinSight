@@ -102,6 +102,8 @@ class FinancialFact:
     concept: str | None = None
     form: str | None = None
     source_url: str | None = None
+    reporting_basis: str | None = None
+    basis_context: str | None = None
 
     def metadata(self) -> dict[str, Any]:
         return asdict(self)
@@ -157,6 +159,33 @@ def growth_rate(latest: Any, previous: Any) -> float | None:
     if current is None or base in {None, 0}:
         return None
     return (current - base) / abs(base)
+
+
+def derive_cash_flow_facts(facts: list[dict[str, Any]], metrics: list[str]) -> list[dict[str, Any]]:
+    from backend.graph.research_capabilities import FINANCIAL_INPUTS
+    groups: dict[tuple, dict[str, dict]] = {}
+    for fact in facts:
+        key = tuple(fact.get(name) for name in ("subject", "period_start", "period_end", "frequency", "unit", "reporting_basis", "source_url"))
+        groups.setdefault(key, {})[fact["metric"]] = fact
+    derived = []
+    for rows in groups.values():
+        for metric in metrics:
+            needed = FINANCIAL_INPUTS.get(metric)
+            if not needed or any(part not in rows or fact_number(rows[part].get("value")) is None for part in needed):
+                continue
+            inputs = [rows[part] for part in needed]
+            values = [fact_number(row["value"]) for row in inputs]
+            value = values[0] - values[1]
+            if metric == "capital_allocation_surplus":
+                value -= values[2] + values[3]
+            elif metric == "dividend_coverage":
+                if values[2] <= 0:
+                    continue
+                value /= values[2]
+            derived.append({**inputs[0], "metric": metric, "value": value,
+                            "unit": "ratio" if metric == "dividend_coverage" else inputs[0]["unit"],
+                            "derivation_inputs": inputs, "verification": "derived_verified_financial_facts"})
+    return derived
 
 
 def search_line_is_noise(value: Any) -> bool:

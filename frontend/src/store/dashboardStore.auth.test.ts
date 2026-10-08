@@ -1,34 +1,30 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { useDashboardStore } from './dashboardStore';
+import { changeWatchlist, watchlistKey, watchlistQueryOptions } from '../hooks/useWatchlist';
 import { useStore } from './useStore';
 
 
-describe('dashboardStore watchlist authentication', () => {
+describe('shared watchlist query authentication and invalidation', () => {
+  let client: QueryClient;
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(apiClient, 'getConversation').mockImplementation(async (sessionId) => ({ success: true, session_id: sessionId, conversation: { messages: [] } }));
     useStore.getState().setAuthIdentity(null);
-    useDashboardStore.setState({
-      watchlist: [],
-      _isWatchlistLoaded: false,
-      _isWatchlistLoading: false,
-      _watchlistOwnerId: null,
-    });
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
+  afterEach(() => client.clear());
 
   it('does not request the protected watchlist for anonymous entry', async () => {
     const getWatchlist = vi.spyOn(apiClient, 'getWatchlist').mockResolvedValue({ items: [] });
 
-    await useDashboardStore.getState().initWatchlist();
+    const observer = new QueryObserver(client, watchlistQueryOptions(undefined));
+    const unsubscribe = observer.subscribe(() => {});
 
     expect(getWatchlist).not.toHaveBeenCalled();
-    expect(useDashboardStore.getState()).toMatchObject({
-      watchlist: [],
-      _isWatchlistLoaded: true,
-      _isWatchlistLoading: false,
-      _watchlistOwnerId: null,
-    });
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    unsubscribe();
   });
 
   it('loads the authenticated user watchlist', async () => {
@@ -37,34 +33,23 @@ describe('dashboardStore watchlist authentication', () => {
       items: [{ ticker: 'aapl', note: 'Apple', added_at: '2026-07-16T00:00:00Z' }],
     });
 
-    await useDashboardStore.getState().initWatchlist();
+    const payload = await client.fetchQuery(watchlistQueryOptions('user-1'));
 
     expect(getWatchlist).toHaveBeenCalledOnce();
-    expect(useDashboardStore.getState()).toMatchObject({
-      watchlist: [{ symbol: 'AAPL', type: 'equity', name: 'Apple' }],
-      _isWatchlistLoaded: true,
-      _isWatchlistLoading: false,
-      _watchlistOwnerId: 'user-1',
-    });
+    expect(payload.items[0].ticker).toBe('aapl');
+    expect(client.getQueryData(watchlistKey('user-1'))).toBe(payload);
   });
 
   it('clears the visible watchlist immediately when the authenticated user changes', () => {
     useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
-    useDashboardStore.setState({
-      watchlist: [{ symbol: 'AAPL', type: 'equity', name: 'Apple' }],
-      _isWatchlistLoaded: true,
-      _isWatchlistLoading: false,
-      _watchlistOwnerId: 'alice',
-    });
+    client.setQueryData(watchlistKey('alice'), { items: [{ ticker: 'AAPL', note: 'Alice only', added_at: '' }] });
+    const observer = new QueryObserver(client, watchlistQueryOptions('alice', false));
+    expect(observer.getCurrentResult().data?.items).toHaveLength(1);
 
     useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
 
-    expect(useDashboardStore.getState()).toMatchObject({
-      watchlist: [],
-      _isWatchlistLoaded: false,
-      _isWatchlistLoading: false,
-      _watchlistOwnerId: null,
-    });
+    observer.setOptions(watchlistQueryOptions('bob', false));
+    expect(observer.getCurrentResult().data).toBeUndefined();
   });
 
   it('ignores a late watchlist response from the previous user', async () => {
@@ -74,17 +59,14 @@ describe('dashboardStore watchlist authentication', () => {
     }));
     useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
 
-    const pending = useDashboardStore.getState().initWatchlist();
+    const pending = client.fetchQuery(watchlistQueryOptions('alice'));
     useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
     resolveRequest({
       items: [{ ticker: 'AAPL', note: 'Alice only', added_at: '2026-07-16T00:00:00Z' }],
     });
     await pending;
 
-    expect(useDashboardStore.getState()).toMatchObject({
-      watchlist: [],
-      _watchlistOwnerId: null,
-    });
+    expect(client.getQueryData(watchlistKey('bob'))).toBeUndefined();
   });
 
   it('ignores a late watchlist mutation response after an account switch', async () => {
@@ -93,18 +75,46 @@ describe('dashboardStore watchlist authentication', () => {
       resolveRequest = resolve;
     }));
     useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
-    useDashboardStore.setState({ _watchlistOwnerId: 'alice' });
-
-    const pending = useDashboardStore.getState().addWatchItemApi('AAPL');
+    client.setQueryData(watchlistKey('bob'), { items: [{ ticker: 'MSFT', note: 'Bob only', added_at: '' }] });
+    const pending = changeWatchlist(client, 'alice', 'AAPL', false);
+    await vi.waitFor(() => expect(resolveRequest).toBeTypeOf('function'));
     useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
     resolveRequest({
       item: { ticker: 'AAPL', note: 'Alice only', added_at: '2026-07-16T00:00:00Z' },
     });
     await pending;
 
-    expect(useDashboardStore.getState()).toMatchObject({
-      watchlist: [],
-      _watchlistOwnerId: null,
+    expect(client.getQueryData(watchlistKey('bob'))).toEqual({ items: [{ ticker: 'MSFT', note: 'Bob only', added_at: '' }] });
+  });
+
+  it('updates both page observers through one server query after a mutation', async () => {
+    useStore.getState().setAuthIdentity({ userId: 'alice', email: null });
+    let items: Array<{ ticker: string; note: string; added_at: string }> = [];
+    const getWatchlist = vi.spyOn(apiClient, 'getWatchlist').mockImplementation(async () => ({ items }));
+    vi.spyOn(apiClient, 'addWatchlistItem').mockImplementation(async ({ ticker }) => {
+      const item = { ticker, note: '', added_at: '' };
+      items = [item];
+      return { item };
     });
+    const today = new QueryObserver(client, watchlistQueryOptions('alice'));
+    const dashboard = new QueryObserver(client, watchlistQueryOptions('alice'));
+    const stopToday = today.subscribe(() => {});
+    const stopDashboard = dashboard.subscribe(() => {});
+    await vi.waitFor(() => expect(today.getCurrentResult().isSuccess).toBe(true));
+    expect(getWatchlist).toHaveBeenCalledTimes(1);
+    await changeWatchlist(client, 'alice', 'AAPL', false);
+    expect(today.getCurrentResult().data?.items[0].ticker).toBe('AAPL');
+    expect(dashboard.getCurrentResult().data).toBe(today.getCurrentResult().data);
+    expect(getWatchlist).toHaveBeenCalledTimes(2);
+    stopToday();
+    stopDashboard();
+  });
+
+  it('rejects anonymous or stale-owner mutations before making a network call', async () => {
+    const add = vi.spyOn(apiClient, 'addWatchlistItem');
+    await expect(changeWatchlist(client, undefined, 'AAPL', false)).rejects.toThrow('请先登录');
+    useStore.getState().setAuthIdentity({ userId: 'bob', email: null });
+    await expect(changeWatchlist(client, 'alice', 'AAPL', false)).rejects.toThrow('账户已切换');
+    expect(add).not.toHaveBeenCalled();
   });
 });

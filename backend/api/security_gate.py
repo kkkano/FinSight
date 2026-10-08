@@ -124,7 +124,7 @@ def _is_allowlisted_path(path: str) -> bool:
 
 
 def _is_public_read_path(path: str) -> bool:
-    if path in {"/api/models", "/api/models/capabilities", "/api/predictions/track-record",
+    if path in {"/api/models", "/api/models/capabilities", "/api/capabilities", "/api/predictions/track-record",
                 "/api/benchmarks/us20-v1/track-record", "/api/client-recovery"}:
         return True
     defaults = (

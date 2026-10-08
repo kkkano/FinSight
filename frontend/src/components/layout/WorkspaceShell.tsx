@@ -7,7 +7,6 @@ import { SettingsModal } from '../SettingsModal';
 import { useStore } from '../../store/useStore';
 import { useIsMobileLayout } from '../../hooks/useIsMobileLayout';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
-import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import { HistoryWorkspace } from './HistoryWorkspace';
@@ -15,7 +14,7 @@ import { TodayPage } from '../../pages/TodayPage';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
 import { ApplicationUpdateBanner } from '../common/ApplicationUpdateBanner';
-import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
+import { useWorkspaceHealth } from '../../hooks/useWorkspaceHealth';
 import { ContextPanelShell } from './ContextPanelShell';
 import { useDashboardStore } from '../../store/dashboardStore';
 
@@ -69,25 +68,7 @@ export function WorkspaceShell({
   const activeSymbol = useDashboardStore((state) => state.activeAsset?.symbol);
   const currentTicker = useStore((state) => state.currentTicker);
   const { quotes: marketQuotes } = useMarketQuotes();
-  const [workspaceHealth, setWorkspaceHealth] = useState<WorkspaceHealthStatus | null>(null);
-
-  // 启动时检查 dry_run / 后端可达性，并用状态条持久展示。
-  useEffect(() => {
-    let isMounted = true;
-    const checkDryRun = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/health`);
-        const data = await res.json();
-        if (isMounted) setWorkspaceHealth(buildWorkspaceHealthStatus(data));
-      } catch {
-        if (isMounted) setWorkspaceHealth(buildWorkspaceHealthStatus(null));
-      }
-    };
-    checkDryRun();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const workspaceHealth = useWorkspaceHealth();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -209,12 +190,12 @@ export function WorkspaceShell({
             data-testid="workspace-health-banner"
             className={[
               'mx-3 mt-3 shrink-0 rounded-lg border px-3 py-2 text-xs flex items-start gap-2',
-              workspaceHealth.state === 'dry_run'
+              ['dry_run', 'retrieval_limited'].includes(workspaceHealth.state)
                 ? 'border-fin-warning/40 bg-fin-warning/10 text-fin-warning'
                 : 'border-fin-danger/40 bg-fin-danger/10 text-fin-danger',
             ].join(' ')}
           >
-            {workspaceHealth.state === 'dry_run' ? (
+            {workspaceHealth.state !== 'unreachable' ? (
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             ) : (
               <WifiOff size={14} className="mt-0.5 shrink-0" />

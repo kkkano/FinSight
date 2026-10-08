@@ -201,9 +201,10 @@ def rule_based_planner(state: GraphState) -> dict:
         "财报",
         "电话会",
     )
-    ctx.is_deep_financial_report = ctx.output_mode == "investment_report" and (
+    confirmed = (state.get("understanding") or {}).get("requirements_status") == "confirmed"
+    ctx.is_deep_financial_report = ctx.output_mode == "investment_report" and (not confirmed and (
         _contains_any(ctx, deep_financial_tokens) or "deep_search_agent" in ctx.allowed_agents
-    )
+    ))
 
 
 
@@ -245,6 +246,8 @@ def rule_based_planner(state: GraphState) -> dict:
 
 
     used_request_frame_plan = _append_request_frame_steps(ctx)
+    if confirmed:
+        used_request_frame_plan = True
     if not used_request_frame_plan and _request_frames_authoritatively_need_no_plan_steps(ctx):
         used_request_frame_plan = True
     used_understanding_task_plan = False if used_request_frame_plan else _append_understanding_task_steps(ctx)

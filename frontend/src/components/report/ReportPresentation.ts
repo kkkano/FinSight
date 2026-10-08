@@ -47,6 +47,7 @@ export const qualityHasMissingConclusion = (quality?: ReportQuality | null): boo
 
 export const getQualityAnswerStatus = (quality?: ReportQuality | null): ReportQuality['answer_status'] => {
   if (!quality) return undefined;
+  if (quality.content_contract_version === 'research_content.v2' && quality.content_status) return quality.content_status;
   if (quality.answer_status === 'unavailable' || quality.has_supported_content === false) return 'unavailable';
   if (quality.answer_status === 'blocked' || ['block', 'soft_blocked', 'soft_block'].includes(quality.state)) return 'blocked';
   if (quality.answer_status === 'partial' || quality.missing_requirements?.length || qualityHasMissingConclusion(quality)) return 'partial';
@@ -76,11 +77,11 @@ export const getReportPresentation = (report: ReportIR) => {
     || isLegacyMissingSummary(summary);
   const sentiment = !unavailable && report.sentiment !== 'unknown' && report.sentiment in SENTIMENT_LABELS ? report.sentiment : null;
 
-  if (unavailable && answerStatus !== 'blocked' && answerStatus !== 'unavailable' && quality) answerStatus = 'partial';
+  if (unavailable && answerStatus !== 'blocked' && answerStatus !== 'unavailable' && quality && !quality.content_status) answerStatus = 'partial';
   const answerLabel = answerStatus === 'answered' ? '已回答'
     : answerStatus === 'partial' ? '部分完成'
       : answerStatus === 'blocked' ? '未通过质量检查'
-        : answerStatus === 'unavailable' ? '无法回答' : '完整度未评估';
+        : answerStatus === 'unavailable' ? '无法回答' : answerStatus === 'clarification_required' ? '需要补充信息' : '完整度未评估';
 
   return {
     quality: quality ? { ...quality, answer_status: answerStatus } : undefined,

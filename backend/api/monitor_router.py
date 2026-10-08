@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.monitor_comment_store import get_monitor_comment_store
 from backend.services.monitor_lease_store import get_monitor_lease_store
+from backend.services.monitor_engine import monitor_work_state
 
 monitor_router = APIRouter(tags=["Monitor"])
 
@@ -177,6 +178,9 @@ async def stream_monitor_comments(
     async def events():
         current_id = resume_id
         try:
+            state = await asyncio.to_thread(monitor_work_state, user_id=user_id,
+                                            session_id=owned_session_id, symbol=symbol)
+            yield "event: status\ndata: " + json.dumps(state, ensure_ascii=False) + "\n\n"
             if initial_is_snapshot:
                 if initial_items:
                     current_id = initial_items[0].id
@@ -221,6 +225,9 @@ async def stream_monitor_comments(
                 idle_seconds += 2
                 if idle_seconds >= 8:
                     idle_seconds = 0
+                    state = await asyncio.to_thread(monitor_work_state, user_id=user_id,
+                                                    session_id=owned_session_id, symbol=symbol)
+                    yield "event: status\ndata: " + json.dumps(state, ensure_ascii=False) + "\n\n"
                     yield "event: heartbeat\ndata: {}\n\n"
         except Exception:
             yield 'event: error\ndata: {"message":"monitor comment stream unavailable"}\n\n'

@@ -11,6 +11,7 @@ import ReactECharts from 'echarts-for-react';
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { EarningsHistoryEntry } from '../../../../types/dashboard';
 import { DashboardSourceBadge } from '../../DashboardSourceBadge';
+import { formatMoney } from '../../../../utils/format';
 
 // --- Props ---
 
@@ -27,7 +28,8 @@ export function EarningsSurpriseChart({ data }: EarningsSurpriseChartProps) {
     if (!data || data.length === 0) return null;
 
     // Take last 8 quarters, sorted chronologically
-    const sorted = [...data].slice(-8);
+    const sorted = [...data].sort((a, b) => a.quarter.localeCompare(b.quarter)).slice(-8);
+    const currency = sorted.find((entry) => entry.currency)?.currency;
     const quarters = sorted.map((e) => e.quarter);
     const estimates = sorted.map((e) => e.eps_estimate ?? null);
     const actuals = sorted.map((e) => e.eps_actual ?? null);
@@ -60,7 +62,7 @@ export function EarningsSurpriseChart({ data }: EarningsSurpriseChartProps) {
       yAxis: [
         {
           type: 'value' as const,
-          axisLabel: { color: theme.muted, fontSize: 9, formatter: '${value}' },
+          axisLabel: { color: theme.muted, fontSize: 9, formatter: (value: number) => formatMoney(value, currency) },
           splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
         },
         {

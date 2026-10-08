@@ -185,8 +185,9 @@ async def test_heartbeat_must_be_info_and_valid_comment_keeps_prediction():
     prediction = SimpleNamespace(id="11111111-1111-1111-1111-111111111111")
 
     async def valid(_prompt):
-        return {"level": "info", "text": "价格平稳"}
+        raise AssertionError("普通心跳不得调用模型")
 
     assert await produce_monitor_comments(target, snapshot, [trigger], prediction, generator=valid, store=store) == 1
     assert captured[0]["level"] == "info"
+    assert captured[0]["source"] == "system"
     assert captured[0]["prediction_id"] == prediction.id

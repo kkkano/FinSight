@@ -1,10 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import type { PredictionHistoryItem } from '../../api/domains/predictions';
 import { useStore } from '../../store/useStore';
 import { PersonalPredictionDetail, RightPanelTrackRecordTab } from './RightPanelTrackRecordTab';
 import { PERSONAL_PAGE_SIZE, loadPersonalPredictionPage } from './personalTrackRecord';
+
+const render = (node: ReactNode) => renderToStaticMarkup(
+  <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>,
+);
 
 const item: PredictionHistoryItem = {
   prediction: {
@@ -39,7 +45,7 @@ describe('personal prediction track record', () => {
   });
 
   it('explains an ended bearish hypothesis and formats percentage points without multiplying twice', () => {
-    const markup = renderToStaticMarkup(<PersonalPredictionDetail item={item} />);
+    const markup = render(<PersonalPredictionDetail item={item} />);
     expect(markup).toContain('原判断：回落假设');
     expect(markup).toContain('历史判断');
     expect(markup).toContain('不代表当前观点');
@@ -50,7 +56,7 @@ describe('personal prediction track record', () => {
   });
 
   it('does not invent an outcome for an open hypothesis', () => {
-    const markup = renderToStaticMarkup(<PersonalPredictionDetail item={{ prediction: { ...item.prediction, status: 'open' }, outcome: null }} />);
+    const markup = render(<PersonalPredictionDetail item={{ prediction: { ...item.prediction, status: 'open' }, outcome: null }} />);
     expect(markup).toContain('AI 回落假设');
     expect(markup).toContain('尚未产生最终结果');
     expect(markup).not.toContain('不代表当前观点');
@@ -58,7 +64,7 @@ describe('personal prediction track record', () => {
 
   it('gates personal records for anonymous users and returns to the actual workspace after login', () => {
     useStore.getState().setAuthIdentity(null);
-    const markup = renderToStaticMarkup(<MemoryRouter initialEntries={['/dashboard/AAPL?analysis=prediction']}><RightPanelTrackRecordTab initialView="personal" symbol="AAPL" /></MemoryRouter>);
+    const markup = render(<MemoryRouter initialEntries={['/dashboard/AAPL?analysis=prediction']}><RightPanelTrackRecordTab initialView="personal" symbol="AAPL" /></MemoryRouter>);
     expect(markup).toContain('personal-track-record-login');
     expect(markup).toContain('/welcome?from=%2Fdashboard%2FAAPL%3Fanalysis%3Dprediction');
     expect(markup).not.toContain('personal-record-row');

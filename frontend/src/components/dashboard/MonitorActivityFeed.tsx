@@ -6,6 +6,7 @@ import {
   useMonitorCommentFeed,
   type MonitorComment,
 } from '../../hooks/useMonitorCommentFeed';
+import { useMonitorLease } from '../../hooks/useMonitorLease';
 
 type FeedItem =
   | { kind: 'comment'; comment: MonitorComment }
@@ -59,7 +60,19 @@ type MonitorActivityFeedProps = {
 
 export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedProps) {
   const navigate = useNavigate();
-  const { comments, error, isAvailable, unavailable } = useMonitorCommentFeed(sessionId, symbol);
+  const { comments, error, isAvailable, unavailable, workState } = useMonitorCommentFeed(sessionId, symbol);
+  const leaseStatus = useMonitorLease(symbol);
+  const statusText = !isAvailable ? '登录后启用'
+    : leaseStatus === 'error' ? '监控未启动：租约连接失败'
+    : leaseStatus === 'stopped' ? '监控已停止'
+    : unavailable ? '实时点评服务不可用'
+    : error ? '连接中断'
+    : workState?.status === 'degraded' ? '缺少盘中快照，实时触发暂停'
+    : workState?.status === 'closed' ? '当前市场休市'
+    : workState?.status === 'disabled' ? '实时监控未启用'
+    : workState?.status === 'error' ? '监控运行异常'
+    : workState?.status === 'running' ? '等待当前标的的确定性触发'
+    : '监控启动中';
   const items = foldHeartbeatComments(comments);
   const storageKey = `finsight:monitor-comment-seen:${sessionId || 'none'}:${symbol.toUpperCase()}`;
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
@@ -104,22 +117,12 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
             <span className="shrink-0 text-xs text-t-warning">未读 {alertCount}</span>
           )}
         </div>
-        {!isAvailable && <span className="shrink-0 text-xs text-t-text3">登录后启用</span>}
-        {isAvailable && unavailable && (
-          <span className="text-xs text-t-warning">实时点评服务不可用</span>
-        )}
-        {isAvailable && error && !unavailable && (
-          <span className="text-xs text-t-warning">连接中断，正在重试</span>
-        )}
+        <span className="text-xs text-t-text3">{statusText}</span>
       </div>
 
       {items.length === 0 ? (
         <div className="flex min-h-11 items-center px-6 pb-3 text-sm text-t-text3 max-lg:px-4">
-          {unavailable
-            ? '实时点评存储当前不可访问。'
-            : isAvailable
-              ? '等待当前标的的确定性触发。'
-              : '匿名模式不会启动实时 AI 监控。'}
+          {statusText}
         </div>
       ) : (
         <div className="max-h-48 overflow-y-auto">

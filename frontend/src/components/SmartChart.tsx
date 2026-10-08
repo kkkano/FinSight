@@ -14,7 +14,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { apiClient } from '../api/client';
 import { useChartTheme, type ChartTheme } from '../hooks/useChartTheme';
-import { useDashboardStore } from '../store/dashboardStore';
+import { useDashboardSnapshot } from '../hooks/useDashboardData';
 import { applyPredictionOverlay } from './charts/PredictionOverlay';
 import { SourceBadge } from './ui/SourceBadge';
 import {
@@ -1890,7 +1890,7 @@ export function SmartChartRenderer({
   fullRange = false,
 }: SmartChartRendererProps) {
   const theme = useChartTheme();
-  const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const dashboardData = useDashboardSnapshot();
   const [remotePrediction, setRemotePrediction] = useState<PredictionOverlay | null>(null);
   const [predictionUnavailable, setPredictionUnavailable] = useState(false);
   const [overlayEnabled, setOverlayEnabled] = useState(true);

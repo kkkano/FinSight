@@ -71,6 +71,16 @@ def test_pgvector_outage_inserts_null_embedding_and_keeps_lexical_search(rag):
     assert hits[0]["dense_rank"] is None
 
 
+def test_pgvector_recovery_backfills_content_without_reingest(rag):
+    service, embedding, collection, _ = rag
+    embedding.unavailable = True
+    service.ingest_documents([document(collection, "saved", "经营现金流为100亿元")])
+    embedding.unavailable = False
+    assert service.reindex_pending(collection=collection)["updated"] == 1
+    assert service.reindex_pending(collection=collection)["updated"] == 0
+    assert service.hybrid_search("现金经营净额", collection=collection)[0]["dense_rank"] is not None
+
+
 def test_pgvector_unknown_legacy_embedding_is_not_assumed_to_match(rag):
     service, _embedding, collection, engine = rag
     service.ingest_documents([document(collection, "legacy", "apple revenue")])

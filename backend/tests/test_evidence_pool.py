@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import copy
+import pytest
 
 from backend.graph.execution.evidence_pipeline import normalize_execution_evidence
 
@@ -33,7 +34,8 @@ def test_evidence_pool_built_from_selection_payload():
     assert pool[0].get("title") == "Hello"
 
 
-def test_shared_url_keeps_all_task_and_step_provenance(monkeypatch):
+@pytest.mark.parametrize("same_content", [True, False])
+def test_shared_url_preserves_text_and_only_merges_identical_task_references(monkeypatch, same_content):
     monkeypatch.setenv("JINA_ENRICH_EVIDENCE", "false")
     shared_url = "https://example.com/shared-report"
     plan_ir = {
@@ -54,7 +56,7 @@ def test_shared_url_keeps_all_task_and_step_provenance(monkeypatch):
             "step-b": {
                 "output": {
                     "evidence": [
-                        {"title": "Shared report", "text": "Evidence for B", "url": shared_url}
+                        {"title": "Shared report", "text": "Evidence for A" if same_content else "Evidence for B", "url": shared_url}
                     ]
                 }
             },
@@ -68,9 +70,13 @@ def test_shared_url_keeps_all_task_and_step_provenance(monkeypatch):
     )
 
     shared = [item for item in evidence_pool if item.get("url") == shared_url]
-    assert len(shared) == 1
-    assert shared[0]["task_ids"] == ["task-a", "task-b"]
-    assert shared[0]["step_ids"] == ["step-a", "step-b"]
+    assert len(shared) == (1 if same_content else 2)
+    if same_content:
+        assert shared[0]["task_ids"] == ["task-a", "task-b"]
+        assert shared[0]["step_ids"] == ["step-a", "step-b"]
+    else:
+        assert {item["text"] for item in shared} == {"Evidence for A", "Evidence for B"}
+        assert {tuple(item["task_ids"]) for item in shared} == {("task-a",), ("task-b",)}
     assert artifacts["evidence_by_task"]["task-a"][0]["url"] == shared_url
     assert artifacts["evidence_by_task"]["task-b"][0]["url"] == shared_url
 

@@ -90,6 +90,7 @@ test.beforeEach(async ({ page }) => {
 
   await page.route('**/api/execute', (route) => fulfillDoneStream(route));
   await page.route('**/api/dashboard**', async (route) => {
+    if (!new URL(route.request().url()).pathname.startsWith('/api/')) return route.fallback();
     const symbol = new URL(route.request().url()).searchParams.get('symbol') || 'AAPL';
     await fulfillJson(route, dashboardPayload(symbol));
   });

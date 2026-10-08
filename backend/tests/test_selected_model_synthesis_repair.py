@@ -7,6 +7,7 @@ from backend.graph.synthesis.contracts import ClaimValidationResult, EvidenceNor
 from backend.graph.synthesis.research_synthesis import synthesize_task_results
 from backend.graph.synthesis.task_outcomes import TaskOutcome
 from backend.services import llm_retry, model_selection, rate_limiter
+from backend.services.run_context import RunContext, run_context_scope
 
 
 @pytest.mark.asyncio
@@ -39,7 +40,9 @@ async def test_selected_model_success_then_reference_repair_uses_same_model_and_
     context = llm_retry.LLMCallContext.create(stage="synthesize", max_provider_attempts=2)
     outcome = TaskOutcome(task_id="task", title="业务解释", priority=0, order_index=0, operation="qa", subject_label="CRM", tickers=["CRM"], request_frame_id="frame", render_kind="single", render_group_id="frame", intent_status="ready", required_step_ids=["step"], required_evidence=["company_profile"], error_codes=[], status="answered", successful_step_ids=["step"], evidence_ids=["source"], missing_evidence=[])
     evidence = NormalizedEvidence(source_id="source", task_ids=["task"], kind="company_profile", usage="fact", text="企业订阅业务需要客户续约。", subject="CRM")
-    with model_selection.model_selection_scope(model_selection.SelectedModel("custom", "selected-model", "https://api.example.com/v1", "fixture-key")):
+    run = RunContext.create(owner="alice", entry="chat", budget_seconds=180)
+    run.quota_checker = lambda _owner: None
+    with run_context_scope(run), model_selection.model_selection_scope(model_selection.SelectedModel("custom", "selected-model", "https://api.example.com/v1", "fixture-key")):
         result = (await synthesize_task_results(task_outcomes=[outcome], findings=[],
             claim_validation=ClaimValidationResult(valid_claims={}, rejected_claims=[], conflicts=[], quality_block_reasons=[]),
             evidence_normalization=EvidenceNormalizationResult(evidence_by_task={"task": [evidence]}, evidence_index={"source": evidence}, rejected_evidence=[], quality_block_reasons=[]),
@@ -51,7 +54,8 @@ async def test_selected_model_success_then_reference_repair_uses_same_model_and_
     assert result.synthesis_validation["repair_attempts"] == 1
     assert result.synthesis_validation["initial_errors"][0]["code"] == "task_synthesis_unknown_evidence_id"
     assert not result.synthesis_validation["remaining_errors"]
-    assert all(limit["max_tokens"] == 65536 and limit["request_timeout"] == 1200 for limit in limits)
+    assert all(limit["max_tokens"] == 65536 and 0 < limit["request_timeout"] <= 180 for limit in limits)
+    assert limits[1]["request_timeout"] <= limits[0]["request_timeout"]
 
 
 @pytest.mark.asyncio

@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import {
   toPredictionFailure,
   type PredictionFailure,
-  type PredictionHistoryItem,
-  type PredictionRunView,
-  type PredictionStatsResponse,
 } from '../api/domains/predictions';
+import { useStore } from '../store/useStore';
 
 export interface PredictionHistoryOptions {
   /** Disable network reads for anonymous surfaces such as Today. */
@@ -18,79 +16,38 @@ export interface PredictionHistoryOptions {
 export function usePredictionHistory(options: PredictionHistoryOptions = {}) {
   const enabled = options.enabled ?? true;
   const limit = options.limit ?? 100;
-  const [items, setItems] = useState<PredictionHistoryItem[]>([]);
-  const [stats, setStats] = useState<PredictionStatsResponse['stats'] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failure, setFailure] = useState<PredictionFailure | null>(null);
-  const [requestKey, setRequestKey] = useState(0);
-
-  const refresh = useCallback(() => setRequestKey((value) => value + 1), []);
-
-  useEffect(() => {
-    if (!enabled) {
-      setItems([]);
-      setStats(null);
-      setFailure(null);
-      setLoading(false);
-      return undefined;
-    }
-
-    const controller = new AbortController();
-    setLoading(true);
-    setFailure(null);
-
-    void Promise.all([
-      apiClient.getPredictionHistory({ limit }, controller.signal),
-      apiClient.getPredictionStats({ days: 90 }, controller.signal),
-    ]).then(([history, statsResponse]) => {
-      if (controller.signal.aborted) return;
-      setItems(history.items);
-      setStats(statsResponse.stats);
-    }).catch((error) => {
-      if (!controller.signal.aborted) setFailure(toPredictionFailure(error));
-    }).finally(() => {
-      if (!controller.signal.aborted) setLoading(false);
-    });
-
-    return () => controller.abort();
-  }, [enabled, limit, requestKey]);
-
-  return { items, stats, loading, failure, refresh };
+  const owner = useStore((state) => state.authIdentity?.userId);
+  const history = useQuery({
+    queryKey: ['predictions', owner || 'anonymous', 'history', limit],
+    queryFn: ({ signal }) => apiClient.getPredictionHistory({ limit }, signal),
+    enabled: enabled && Boolean(owner), retry: false,
+  });
+  const stats = useQuery({
+    queryKey: ['predictions', owner || 'anonymous', 'stats', 90],
+    queryFn: ({ signal }) => apiClient.getPredictionStats({ days: 90 }, signal),
+    enabled: enabled && Boolean(owner), retry: false,
+  });
+  const error = history.error ?? stats.error;
+  const refresh = () => { void history.refetch(); void stats.refetch(); };
+  return {
+    items: owner && enabled ? history.data?.items ?? [] : [],
+    stats: owner && enabled ? stats.data?.stats ?? null : null,
+    loading: history.isLoading || stats.isLoading,
+    failure: error ? toPredictionFailure(error) : null,
+    refresh,
+  };
 }
 
 export function usePredictionRunState(runId: string | null | undefined) {
-  const [run, setRun] = useState<PredictionRunView | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [failure, setFailure] = useState<PredictionFailure | null>(null);
-  const [requestKey, setRequestKey] = useState(0);
-  const refresh = useCallback(() => setRequestKey((value) => value + 1), []);
-
-  useEffect(() => {
-    const normalized = String(runId || '').trim();
-    if (!normalized) {
-      setRun(null);
-      setLoading(false);
-      setFailure(null);
-      return undefined;
-    }
-    const controller = new AbortController();
-    setRun(null);
-    setLoading(true);
-    setFailure(null);
-    void apiClient.getPredictionRun(normalized, controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) setRun(value);
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setFailure(toPredictionFailure(error));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [runId, requestKey]);
-
-  return { run, loading, failure, refresh };
+  const owner = useStore((state) => state.authIdentity?.userId);
+  const normalized = String(runId || '').trim();
+  const query = useQuery({
+    queryKey: ['predictions', owner || 'anonymous', 'run', normalized],
+    queryFn: ({ signal }) => apiClient.getPredictionRun(normalized, signal),
+    enabled: Boolean(owner && normalized), retry: false,
+  });
+  const failure: PredictionFailure | null = query.error ? toPredictionFailure(query.error) : null;
+  return { run: owner ? query.data ?? null : null, loading: query.isLoading, failure, refresh: () => { void query.refetch(); } };
 }
 
 export function usePredictionRun(runId: string | null | undefined) {

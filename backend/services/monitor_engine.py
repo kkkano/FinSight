@@ -23,12 +23,14 @@ from backend.services.monitor_signals import (
     MonitorTrigger,
     detect_triggers,
     heartbeat_due,
+    available_trigger_kinds,
 )
 
 logger = logging.getLogger(__name__)
 
 # 行情游标只用于判断相邻 tick 是否穿越关键价位；lease 和点评游标均在 PostgreSQL。
 _realtime_snapshots: dict[tuple[str, str, str], MarketSnapshot] = {}
+_realtime_states: dict[tuple[str, str, str], dict[str, Any]] = {}
 
 
 class RealtimeMarketDataUnavailable(RuntimeError):
@@ -80,13 +82,37 @@ def _fetch_realtime_snapshot(target: RealtimeMonitorTarget, now: datetime) -> Ma
         or quote_result.get("error_code")
         or not isinstance(quote, dict)
         or quote.get("price") is None
+        or quote_result.get("data_kind") != "intraday_snapshot"
     ):
-        raise RealtimeMarketDataUnavailable("trusted quote unavailable")
+        raise RealtimeMarketDataUnavailable("intraday_snapshot_required")
+    observed_at = str(quote_result.get("as_of") or "")
+    try:
+        observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
+        age = (now - observed).total_seconds()
+        if observed.tzinfo is None or age < -30 or age > 120:
+            raise ValueError("stale_snapshot")
+    except (TypeError, ValueError):
+        raise RealtimeMarketDataUnavailable("fresh_intraday_snapshot_required") from None
     return MarketSnapshot(
         symbol=target.symbol,
-        observed_at=str(quote_result.get("as_of") or now.isoformat()),
+        observed_at=observed_at,
         price=float(quote["price"]),
+        data_kind="intraday_snapshot",
+        **{key: quote.get(key) for key in ("volume", "average_volume20", "macd_hist", "flow_value",
+                                           "flow_peak_abs", "previous_day_high", "previous_day_low")},
     )
+
+
+def monitor_work_state(*, user_id: str, session_id: str, symbol: str) -> dict[str, Any]:
+    key = (user_id, session_id, symbol.strip().upper())
+    if os.getenv("MONITOR_REALTIME_ENABLED", "false").lower() not in {"true", "1", "yes"}:
+        return {"status": "disabled", "reason": "monitor_disabled", "enabled_triggers": []}
+    leases = get_monitor_lease_store().list_active()
+    if not any((str(item.get("user_id")), str(item.get("session_id")), str(item.get("symbol"))) == key for item in leases):
+        return {"status": "stopped", "reason": "no_active_lease", "enabled_triggers": []}
+    if get_market_session(symbol=key[2]) == "closed":
+        return {"status": "closed", "reason": "market_closed", "enabled_triggers": []}
+    return _realtime_states.get(key, {"status": "starting", "reason": None, "enabled_triggers": []})
 
 
 def _latest_prediction(target: RealtimeMonitorTarget) -> Any:
@@ -188,11 +214,6 @@ def run_realtime_monitor_cycle(
                 increment_monitor_tick("no_lease")
                 logger.info("[RealtimeMonitor] no active page leases; skip before market/LLM I/O")
                 return 0
-            if get_market_session(tick_at) == "closed":
-                increment_monitor_tick("closed")
-                logger.info("[RealtimeMonitor] market closed; skip active page leases")
-                return 0
-
             unique_targets: dict[tuple[str, str, str], RealtimeMonitorTarget] = {}
             for lease in leases:
                 target = _target_from_lease(lease)
@@ -203,11 +224,21 @@ def run_realtime_monitor_cycle(
             active_keys = set(unique_targets)
             for stale_key in set(_realtime_snapshots) - active_keys:
                 _realtime_snapshots.pop(stale_key, None)
+            for stale_key in set(_realtime_states) - active_keys:
+                _realtime_states.pop(stale_key, None)
+
+            open_targets = {key: target for key, target in unique_targets.items()
+                            if get_market_session(tick_at, symbol=target.symbol) != "closed"}
+            for key in active_keys - set(open_targets):
+                _realtime_states[key] = {"status": "closed", "reason": "market_closed", "enabled_triggers": []}
+            if not open_targets:
+                increment_monitor_tick("closed")
+                return 0
 
             comment_store = get_monitor_comment_store()
             written_targets = 0
             errors = 0
-            for key, target in unique_targets.items():
+            for key, target in open_targets.items():
                 try:
                     # 点评库不可用时不再消耗行情或 LLM 配额。
                     last_comment_at = comment_store.latest_comment_at(
@@ -216,8 +247,12 @@ def run_realtime_monitor_cycle(
                         symbol=target.symbol,
                     )
                     current = fetcher(target, tick_at)
+                    if current.data_kind != "intraday_snapshot":
+                        raise RealtimeMarketDataUnavailable("intraday_snapshot_required")
                     previous = _realtime_snapshots.get(key, current)
                     prediction = _latest_prediction(target)
+                    _realtime_states[key] = {"status": "running", "reason": None,
+                                             "enabled_triggers": available_trigger_kinds(current, prediction)}
                     triggers = evaluate_realtime_snapshot(
                         previous=previous,
                         current=current,
@@ -245,6 +280,9 @@ def run_realtime_monitor_cycle(
                     )
                     written_targets += int(bool(wrote))
                 except Exception as exc:
+                    _realtime_states[key] = {"status": "degraded" if isinstance(exc, RealtimeMarketDataUnavailable) else "error",
+                                             "reason": str(exc) if isinstance(exc, RealtimeMarketDataUnavailable) else "monitor_cycle_failed",
+                                             "enabled_triggers": []}
                     errors += 1
                     logger.warning(
                         "[RealtimeMonitor] tick failed user=%s session=%s symbol=%s error=%s",
@@ -272,7 +310,7 @@ def evaluate_realtime_snapshot(
     now: datetime,
 ) -> list[MonitorTrigger]:
     """只计算实时触发，不调用 LLM、不写库。"""
-    if get_market_session(now) == "closed":
+    if get_market_session(now, symbol=current.symbol) == "closed" or current.data_kind != "intraday_snapshot":
         return []
     triggers = detect_triggers(previous=previous, current=current, prediction=prediction)
     if triggers:

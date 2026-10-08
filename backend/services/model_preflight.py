@@ -6,7 +6,8 @@ import logging
 
 from fastapi import HTTPException
 
-from backend.llm_config import EndpointConfig, create_llm_for_endpoint
+from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm
+from backend.services.run_context import remaining_timeout
 from backend.services.model_selection import (
     current_model, model_client_scope, model_selection_scope, resolve_default_model,
 )
@@ -19,13 +20,15 @@ MODEL_UNAVAILABLE_MESSAGE = "当前模型暂时不可用，尚未启动研究。
 async def ensure_model_available() -> None:
     try:
         selected = current_model() or resolve_default_model()
-        cfg = EndpointConfig(selected.endpoint_name, "openai_compatible", selected.base_url,
-                             selected.api_key, selected.model)
-        async with asyncio.timeout(PREFLIGHT_TIMEOUT_SECONDS), model_client_scope():
+        async with asyncio.timeout(remaining_timeout(PREFLIGHT_TIMEOUT_SECONDS)), model_client_scope():
             with model_selection_scope(selected):
-                llm = create_llm_for_endpoint(cfg, temperature=None, max_tokens=65536,
-                                              request_timeout=PREFLIGHT_TIMEOUT_SECONDS)
-                response = await llm.ainvoke("连接检查。仅回复 OK，不需要解释。")
+                response = await ainvoke_configured_llm(
+                    "连接检查。仅回复 OK，不需要解释。",
+                    context=LLMCallContext.create(stage="model_preflight", agent="model_preflight",
+                                                  layer="preflight", max_provider_attempts=1),
+                    temperature=None, max_tokens=65536,
+                    request_timeout=PREFLIGHT_TIMEOUT_SECONDS,
+                )
         content = response.content
         if not isinstance(content, str) or not content.strip():
             raise ValueError("empty_model_completion")

@@ -82,6 +82,17 @@
       "AnalystTargets": {
         "description": "分析师目标价",
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "current": {
             "anyOf": [
               {
@@ -139,6 +150,67 @@
           }
         },
         "title": "AnalystTargets",
+        "type": "object"
+      },
+      "BalanceSummary": {
+        "properties": {
+          "de_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "De Ratio"
+          },
+          "equity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equity"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "total_assets": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Assets"
+          },
+          "total_liabilities": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Liabilities"
+          }
+        },
+        "title": "BalanceSummary",
         "type": "object"
       },
       "Capabilities": {
@@ -587,6 +659,17 @@
       "EarningsHistoryEntry": {
         "description": "单季度 EPS 历史记录",
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "eps_actual": {
             "anyOf": [
               {
@@ -812,6 +895,16 @@
       "FinancialStatement": {
         "description": "财务报表结构化 (v2 新增)",
         "properties": {
+          "balance_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BalanceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "currency": {
             "anyOf": [
               {
@@ -856,6 +949,25 @@
             "title": "Free Cash Flow",
             "type": "array"
           },
+          "frequency": {
+            "default": "unknown",
+            "title": "Frequency",
+            "type": "string"
+          },
+          "gross_margin": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Gross Margin",
+            "type": "array"
+          },
           "gross_profit": {
             "items": {
               "anyOf": [
@@ -870,6 +982,27 @@
             "title": "Gross Profit",
             "type": "array"
           },
+          "metric_currencies": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Metric Currencies",
+            "type": "object"
+          },
+          "metric_frequencies": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Metric Frequencies",
+            "type": "object"
+          },
           "net_income": {
             "items": {
               "anyOf": [
@@ -882,6 +1015,20 @@
               ]
             },
             "title": "Net Income",
+            "type": "array"
+          },
+          "net_margin": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Net Margin",
             "type": "array"
           },
           "operating_cash_flow": {
@@ -968,6 +1115,23 @@
             },
             "title": "Total Liabilities",
             "type": "array"
+          },
+          "yoy": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Yoy",
+            "type": "object"
           }
         },
         "title": "FinancialStatement",
@@ -1356,6 +1520,17 @@
       "PeerMetrics": {
         "description": "同行单项指标",
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "dividend_yield": {
             "anyOf": [
               {
@@ -3172,6 +3347,25 @@
         ]
       }
     },
+    "/api/capabilities": {
+      "get": {
+        "operationId": "service_capabilities_api_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Service Capabilities",
+        "tags": [
+          "System"
+        ]
+      }
+    },
     "/api/conversations": {
       "get": {
         "operationId": "list_conversations_api_conversations_get",
@@ -4355,10 +4549,17 @@
           {
             "in": "query",
             "name": "session_id",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "Session Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
             }
           },
           {
@@ -4474,10 +4675,17 @@
           {
             "in": "query",
             "name": "session_id",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "Session Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
             }
           },
           {

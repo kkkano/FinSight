@@ -10,10 +10,11 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import urlparse
 
+from backend.services.data_contract import AssetContext, DataResult
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ def validate_kline_bars(raw_bars: Any) -> list[dict[str, Any]]:
     return normalized
 
 
-def validate_quote_payload(raw: Any) -> tuple[dict[str, float | None], datetime]:
+def validate_quote_payload(raw: Any) -> tuple[dict[str, Any], datetime | None]:
     """规范化最新价，拒绝非正价格和非有限涨跌数据。"""
     from backend.utils.quote import parse_quote_payload
 
@@ -141,12 +142,14 @@ def validate_quote_payload(raw: Any) -> tuple[dict[str, float | None], datetime]
             else _signed_finite_number(change_percent, field="change_percent")
         ),
     }
-    for key in ("currency", "market_session", "source_timestamp", "source_time_precision", "source_time_status"):
-        if parsed.get(key) is not None:
-            normalized[key] = parsed[key]
     payload = raw if isinstance(raw, Mapping) else {}
-    as_of_value = payload.get("as_of") or payload.get("timestamp")
-    as_of = _parse_event_time(as_of_value) if as_of_value else datetime.now(UTC)
+    details = payload.get("data") if isinstance(payload.get("data"), Mapping) else payload
+    for key in ("currency", "market_session", "source_timestamp", "source_time_precision", "source_time_status", "data_kind", "source_timezone"):
+        value = parsed.get(key, details.get(key))
+        if value is not None:
+            normalized[key] = value
+    as_of_value = parsed.get("as_of")
+    as_of = _parse_event_time(as_of_value) if as_of_value else None
     return normalized, as_of
 
 
@@ -203,7 +206,7 @@ def validate_news_items(raw: Any) -> tuple[list[dict[str, Any]], datetime]:
     return normalized, newest
 
 
-def validate_financial_payload(raw: Any) -> tuple[dict[str, Any], datetime]:
+def validate_financial_payload(raw: Any) -> tuple[dict[str, Any], datetime | None]:
     """校验财报表合同，至少要求损益、资产负债或现金流中的一张真实表。"""
     payload = raw.get("data") if isinstance(raw, Mapping) and isinstance(raw.get("data"), Mapping) else raw
     if not isinstance(payload, Mapping) or payload.get("error"):
@@ -211,8 +214,17 @@ def validate_financial_payload(raw: Any) -> tuple[dict[str, Any], datetime]:
     if not any(payload.get(key) for key in ("financials", "balance_sheet", "cashflow")):
         raise MarketDataValidationError("Financial 没有有效报表")
     normalized = dict(payload)
-    as_of_value = normalized.get("as_of") or normalized.get("timestamp")
-    as_of = _parse_event_time(as_of_value) if as_of_value else datetime.now(UTC)
+    from backend.tools.financial_facts import fact_date
+
+    filed_dates = [
+        day for name in ("financials", "balance_sheet", "cashflow")
+        if isinstance(table := normalized.get(name), Mapping)
+        for rows in (table.get("fact_metadata") or {}).values()
+        if isinstance(rows, list)
+        for row in rows if isinstance(row, Mapping) and (day := fact_date(row.get("filed")))
+    ]
+    as_of_value = normalized.get("as_of") or normalized.get("source_latest_filed") or (max(filed_dates) if filed_dates else None)
+    as_of = _parse_event_time(as_of_value) if as_of_value else None
     return normalized, as_of
 
 
@@ -304,12 +316,18 @@ def _fetch_stooq(symbol: str, period: str, interval: str) -> Mapping[str, Any] |
     return _fetch_with_stooq_history(symbol, period, interval)
 
 
-def _quote_from_kline_provider(provider: KlineProvider) -> QuoteProvider:
+def _quote_from_kline_provider(provider: KlineProvider, *, clock: Callable[[], datetime] | None = None) -> QuoteProvider:
     def fetch(symbol: str) -> Mapping[str, Any] | None:
         raw = provider(symbol, "5d", "1d")
         if not isinstance(raw, Mapping):
             return None
         bars = validate_kline_bars(raw.get("kline_data"))
+        from backend.services.market_hours import is_completed_session
+        asset = AssetContext.from_symbol(symbol)
+        as_of = clock() if clock is not None else datetime.now(UTC)
+        bars = [bar for bar in bars if is_completed_session(date.fromisoformat(str(bar["time"])[:10]), asset=asset, as_of=as_of)]
+        if not bars:
+            raise MarketDataValidationError("报价来源尚无已结束交易日的日线收盘")
         latest = bars[-1]
         previous_close = bars[-2]["close"] if len(bars) > 1 else None
         change = latest["close"] - previous_close if previous_close else None
@@ -319,8 +337,9 @@ def _quote_from_kline_provider(provider: KlineProvider) -> QuoteProvider:
                 "price": latest["close"],
                 "change": change,
                 "change_percent": change_percent,
-                "currency": raw.get("currency") or ("HKD" if symbol.upper().endswith('.HK') else "CNY" if symbol.upper().endswith(('.SS','.SZ','.BJ')) else "USD"),
-                "market_session": "continuous_close" if symbol.upper().endswith('-USD') else "regular_close",
+                "currency": raw.get("currency"),
+                "data_kind": "daily_close",
+                "market_session": "continuous_close" if asset.market == "CRYPTO" else "regular_close",
                 "source_timestamp": str(latest["time"])[:10],
                 "source_time_precision": "date",
                 "source_time_status": "provided",
@@ -554,7 +573,7 @@ class MarketDataGateway:
         symbol: str,
         cache_parts: tuple[str, ...],
         invoke: Callable[[Callable[..., Any]], Any],
-        normalize: Callable[[Any], tuple[Any, datetime]],
+        normalize: Callable[[Any], tuple[Any, datetime | None]],
         success_aliases: Callable[[Any], Mapping[str, Any]],
         error_aliases: Mapping[str, Any],
     ) -> dict[str, Any]:
@@ -601,13 +620,19 @@ class MarketDataGateway:
                     continue
 
                 quality = "trusted" if provider_name in config.trusted_providers else "degraded"
+                result = DataResult(
+                    data=data, status="ok" if index == 0 and quality == "trusted" else "degraded",
+                    provider=provider_name, as_of=as_of.isoformat().replace("+00:00", "Z") if as_of else None,
+                    currency=data.get("currency") if isinstance(data, Mapping) else None,
+                )
                 payload: dict[str, Any] = {
+                    **result.metadata(),
                     "data": data,
+                    "asset": AssetContext.from_symbol(normalized_symbol).metadata(),
                     "capability": capability,
                     "provider": provider_name,
                     "source": provider_name,
-                    "as_of": as_of.isoformat().replace("+00:00", "Z"),
-                    "freshness_seconds": max(0, int((datetime.now(UTC) - as_of).total_seconds())),
+                    "freshness_seconds": max(0, int((datetime.now(UTC) - as_of).total_seconds())) if as_of else None,
                     "quality": quality,
                     "degraded": index > 0 or quality != "trusted",
                     "error_code": None,
@@ -620,7 +645,9 @@ class MarketDataGateway:
                 return payload
 
         return {
+            **DataResult(data=error_aliases.get("data"), status="error", error_code=MARKET_DATA_UNAVAILABLE).metadata(),
             "data": error_aliases.get("data"),
+            "asset": AssetContext.from_symbol(normalized_symbol).metadata(),
             "capability": capability,
             "provider": None,
             "source": None,
@@ -672,7 +699,7 @@ class MarketDataGateway:
             cache_parts=(),
             invoke=lambda provider: provider(str(symbol or "").strip().upper()),
             normalize=validate_quote_payload,
-            success_aliases=lambda quote: {"quote": quote},
+            success_aliases=lambda quote: {"quote": quote, "data_kind": quote.get("data_kind", "unknown")},
             error_aliases={"data": {}, "quote": None},
         )
 

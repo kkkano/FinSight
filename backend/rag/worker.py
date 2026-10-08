@@ -61,6 +61,8 @@ def _encode(texts: list[str]) -> dict:
 async def _warmup():
     try:
         await asyncio.to_thread(_encode, ["FinSight embedding readiness"])
+        if _state["reranker"] != "disabled":
+            await asyncio.to_thread(rerank, RerankRequest(query="经营现金流", documents=["经营现金流来自企业经营活动。", "股价价格报价。"] ))
     except Exception:
         pass
 
@@ -115,6 +117,11 @@ def rerank(request: RerankRequest):
     if sum(map(len, request.documents)) > 128000:
         raise HTTPException(status_code=413, detail="reranker_batch_too_large")
     with _inference_lock:
+        available = _memory_available_mb()
+        needed = max(512, int(os.getenv("RAG_WORKER_RERANK_MIN_AVAILABLE_MB", "2400")))
+        if _reranker._model is None and available is not None and available < needed:
+            _state["reranker"] = "resource_limited"
+            raise HTTPException(status_code=503, detail="reranker_memory_unavailable")
         try:
             scores = _reranker.predict([(request.query, text) for text in request.documents])
             _state["reranker"] = "ok"

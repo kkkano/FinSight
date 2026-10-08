@@ -53,4 +53,5 @@ def test_fetch_macro_snapshot_gracefully_handles_tool_failures(monkeypatch):
     assert payload["status"] == "unavailable"
     assert payload["fear_greed_index"] is None
     assert payload["fed_rate"] is None
-    assert isinstance(payload.get("as_of"), str) and payload["as_of"]
+    assert payload["as_of"] is None
+    assert isinstance(payload.get("observed_at"), str) and payload["observed_at"]

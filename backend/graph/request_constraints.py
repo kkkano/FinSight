@@ -66,17 +66,8 @@ def parse_time_scope(query: str) -> dict[str, Any]:
 
 
 def concept_without_retrieval(query: str, tickers: list[str], *, has_subject_context: bool = False) -> bool:
-    """解释型无标的问题无需证据采集；有真实主体的研究不能被降为概念问答。"""
-    if tickers:
-        return False
-    text = str(query or "")
-    explanation = bool(re.search(r"为什么|为何|怎么|如何|什么是|是什么|解释|区别|差异|差很多|举例|原理|\b(?:why|how|explain|define|difference|what\s+is)\b", text, re.I))
-    if not explanation:
-        return False
-    no_live = bool(re.search(r"不(?:要|用|必)?(?:查询|查|搜)|无需(?:查询|查|搜)|虚构|假设数字|\b(?:fictional|hypothetical\s+numbers|without\s+(?:search|live)|do\s+not\s+(?:search|fetch))\b", text, re.I))
-    current = bool(re.search(r"最新|最近|近期|今天|当前|过去\d|最新公布|\b(?:latest|recent|today|current|this\s+(?:week|month))\b", text, re.I))
-    deictic = bool(re.search(r"它|这家|那家|这只|该公司|\b(?:it|this\s+stock|that\s+company)\b", text, re.I))
-    return explanation and (no_live or (not current and not deictic and not has_subject_context))
+    """旧 frame 入口不再按问法判定概念；唯一语义 route 决定 direct。"""
+    return False
 
 
 def conditional_impact(query: str) -> bool:

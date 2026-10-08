@@ -140,10 +140,14 @@ def _rag_health_uncached() -> dict[str, object]:
             health = service._embedder.worker_health()
             semantic_ready = bool(health.get("inference_verified") and health.get("status") == "ok")
             lexical_ready = service.backend_name == "postgres"
+            identity = f"bge-m3:{health.get('model_version')}:1024" if semantic_ready else None
+            index = service.index_status(identity)
+            full_ready = semantic_ready and health.get("reranker") == "ok" and index["pending"] == 0
             return {"status": "ok" if semantic_ready else ("degraded" if lexical_ready else "error"),
                     "backend": service.backend_name, "backend_requested": os.getenv("RAG_V2_BACKEND", "postgres"),
                     "embedding": service.embedding_model, "semantic_ready": semantic_ready,
                     "lexical_ready": lexical_ready, "reranker": health.get("reranker", "disabled"),
+                    "index": index, "full_ready": full_ready,
                     "reason": None if semantic_ready else "semantic_retrieval_unavailable_using_lexical"}
         backend_actual = str(getattr(service, "backend_name", "unknown") or "unknown").lower()
         embedding = str(getattr(service, "embedding_model", "unknown") or "unknown").lower()

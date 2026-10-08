@@ -22,6 +22,7 @@ from backend.services.llm_usage_store import (
     UserDailyCostLimitExceeded,
 )
 from backend.services.model_preflight import ensure_model_available
+from backend.services.run_context import RunContext, run_context_scope
 
 
 class PredictionRunView(BaseModel):
@@ -291,21 +292,41 @@ def create_predictions_router(deps: PredictionsRouterDeps) -> APIRouter:
             raise _error(429, "llm_quota_exceeded", str(exc)) from exc
         except LLMUsageStoreUnavailable as exc:
             raise _error(503, "store_unavailable", "AI 额度暂时无法检查") from exc
-        await ensure_model_available()
+        run_context = RunContext.create(owner=user_id, entry="prediction")
+        with run_context_scope(run_context):
+            try:
+                await ensure_model_available()
+            except BaseException:
+                run_context.finish("failed")
+                await run_context.archive_usage()
+                raise
+        created = False
         try:
-            run, created = await service().generate(
-                user_id=user_id,
-                symbol=payload.symbol,
-                timeframe=payload.timeframe,
-            )
+            with run_context_scope(run_context):
+                run, created = await service().generate(
+                    user_id=user_id,
+                    symbol=payload.symbol,
+                    timeframe=payload.timeframe,
+                )
+            if not created:
+                run_context.finish("completed")
         except PredictionServiceUnavailable as exc:
             raise _error(503, "store_unavailable", "Prediction 服务未就绪") from exc
+        except UserDailyCostLimitExceeded as exc:
+            raise _error(429, "llm_quota_exceeded", str(exc)) from exc
+        except LLMUsageStoreUnavailable as exc:
+            raise _error(503, "store_unavailable", "AI 额度暂时无法检查") from exc
         except ValueError as exc:
             if str(exc) == "auth_required":
                 raise _error(401, "auth_required", "登录后才能生成 AI Prediction") from exc
             raise _error(422, "prediction_validation_failed", str(exc)) from exc
         except Exception as exc:
             raise _error(503, "store_unavailable", "Prediction run 无法创建") from exc
+        finally:
+            if not created:
+                if run_context.status == "running":
+                    run_context.finish("failed")
+                await run_context.archive_usage()
         return GeneratePredictionResponse(
             run=_public_run(run),
             created=created,

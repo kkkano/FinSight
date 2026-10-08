@@ -77,7 +77,7 @@ def _report_row():
 def test_postgres_history_and_replay_queries_are_tenant_scoped():
     engine = _Engine(
         _Result(rows=[_report_row()]),
-        _Result(rows=[{"report": {"report_id": "rpt-1"}, "trace_digest": {"span_count": 1}}]),
+        _Result(rows=[{"report": {"report_id": "rpt-1"}, "trace_digest": {"span_count": 1}, "session_id": "web:alice:thread-1"}]),
         _Result(rows=[{"source_id": "src-1", "url": "https://example.com"}]),
     )
     store = ReportIndexStore(engine=engine)

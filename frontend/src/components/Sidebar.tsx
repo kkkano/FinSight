@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   Command,
   History,
@@ -13,6 +13,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
+import { useWatchlist } from '../hooks/useWatchlist';
 
 interface SidebarProps {
   onSettingsClick?: () => void;
@@ -53,8 +54,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const { currentTicker } = useStore();
-  const authUserId = useStore((state) => state.authIdentity?.userId);
-  const { watchlist, initWatchlist, activeAsset: lastDashboardAsset } = useDashboardStore();
+  const { activeAsset: lastDashboardAsset } = useDashboardStore();
+  const { watchlist } = useWatchlist();
 
   const compactMobile = !isMobileOpen;
   const activeKey = currentView ?? (
@@ -65,11 +66,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         : 'chat'
   );
 
-  useEffect(() => {
-    // Today owns the authenticated watchlist query so its loading/error state is visible.
-    if (currentView === 'today') return;
-    void initWatchlist();
-  }, [authUserId, currentView, initWatchlist]);
 
   const closeMobile = () => onMobileClose?.();
 

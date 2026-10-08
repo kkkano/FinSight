@@ -160,6 +160,7 @@ def test_store_failure_prevents_graph_and_failed_save_preserves_preview(delivery
     store.fail_begin = True
     rejected = client.post("/api/execute", json=request_body())
     assert rejected.status_code == 503 and calls["graph"] == 0
+    assert calls["preflight"] == 0
     assert "credentials" not in rejected.text
     store.fail_begin = False
     store.fail_finish = True
@@ -169,6 +170,25 @@ def test_store_failure_prevents_graph_and_failed_save_preserves_preview(delivery
     assert done["error_code"] == "conversation_persistence_failed"
     assert done["publishable"] is False
     assert "credentials" not in str(done)
+
+
+def test_failed_preflight_is_durable_and_recovery_never_calls_model_again(delivery_client, monkeypatch):
+    from fastapi import HTTPException
+    client, store, calls = delivery_client
+    probes = []
+
+    async def unavailable():
+        probes.append(True)
+        raise HTTPException(503, detail={"code": "model_unavailable", "message": "模型暂时不可用。"})
+
+    monkeypatch.setattr(execution_router, "ensure_model_available", unavailable)
+    failed = client.post("/api/execute", json=request_body())
+    assert failed.status_code == 503 and calls["graph"] == 0
+    row = store.rows[("user-a", "delivery-run")]
+    assert row["status"] == "failed" and row["final_payload"]["error_code"] == "model_unavailable"
+    replay = events(client.post("/api/execute", json=request_body()))[-1]
+    assert replay["error_code"] == "model_unavailable" and not replay["publishable"]
+    assert probes == [True]
 
 
 def test_unexpected_pipeline_end_is_persisted_as_interrupted(delivery_client, monkeypatch):

@@ -4,6 +4,7 @@ import type { KeyboardEvent } from 'react';
 import { Paperclip, SendHorizontal, Square, X } from 'lucide-react';
 
 import { useChatStream } from '../hooks/useChatStream';
+import { useWatchlist } from '../hooks/useWatchlist';
 import { zh } from '../locales/zh';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
@@ -45,7 +46,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const setDraft = useStore((state) => state.setDraft);
   const currentTicker = useStore((state) => state.currentTicker);
   const sessionId = useStore((state) => state.sessionId);
-  const { activeAsset, activeSelections, clearSelection, watchlist } = useDashboardStore();
+  const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
+  const { watchlist } = useWatchlist();
   const suggestions = buildChatSuggestions(watchlist);
   const chatStream = useChatStream(sessionId);
   const inputRef = useRef<HTMLTextAreaElement>(null);
