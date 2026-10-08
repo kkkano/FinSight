@@ -292,17 +292,24 @@ class DeepSearchAgent(BaseFinancialAgent):
         from backend.tools.local_disclosure import _extract_date
         from dateutil.parser import parse
         date_expression = r"(?:20\d{2}(?:[-/.]\d{1,2}[-/.]\d{1,2}|年\d{1,2}月\d{1,2}日)|\d{1,2}\s+[A-Za-z]+\s+20\d{2}|[A-Za-z]+\s+\d{1,2},?\s+20\d{2})"
+        candidates, explicit = set(), set()
         for line in str(text or "")[:1500].splitlines():
-            value = re.sub(r"^(?:发布日期|发布时间|出版日期|Published(?:\s+on)?|Issued(?:\s+on)?)\s*[:：]?\s*", "", line.strip(), flags=re.IGNORECASE)
-            if re.fullmatch(date_expression, value):
-                numeric = _extract_date(value)
-                if numeric:
-                    return numeric
-                try:
-                    return parse(value, fuzzy=False).date().isoformat()
-                except ValueError:
+            for match in re.finditer(date_expression, line):
+                before, after = line[max(0, match.start() - 24):match.start()], line[match.end():match.end() + 12]
+                if re.search(r"(?:截至|截止|期末|period\s+end(?:ed|ing)?|as\s+of)\s*$", before, re.IGNORECASE) or re.match(r"\s*期末", after):
                     continue
-        return None
+                value = match.group(0)
+                numeric = _extract_date(value)
+                if not numeric:
+                    try:
+                        numeric = parse(value, fuzzy=False).date().isoformat()
+                    except ValueError:
+                        continue
+                candidates.add(numeric)
+                if re.search(r"(?:发布日期|发布时间|出版日期|Published(?:\s+on)?|Issued(?:\s+on)?)\s*[:：]?\s*$", before, re.IGNORECASE):
+                    explicit.add(numeric)
+        dates = explicit or candidates
+        return next(iter(dates)) if len(dates) == 1 else None
 
     @classmethod
     def _mark_document_time(cls, docs: list[dict], time_scope: dict | None) -> list[dict]:

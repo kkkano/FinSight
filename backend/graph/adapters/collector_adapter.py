@@ -137,6 +137,8 @@ def _build_agent_fallback_output(
     )
     return {
         "agent_name": step_name,
+        "status": "error",
+        "error": safe_error,
         "summary": summary,
         "confidence": 0.2,
         "as_of": None,

@@ -27,7 +27,11 @@ def _append_evidence_steps_for_ticker(ctx,
     evidence_profile: str = "",
 ) -> None:
     lightweight_external_impact = evidence_profile == EXTERNAL_IMPACT_LIGHT_PROFILE
-    tasks = [ctx.ready_tasks_by_id.get(task_id, {}) for task_id in task_ids]
+    tasks = []
+    for task_id in task_ids:
+        task = ctx.ready_tasks_by_id.get(task_id, {})
+        rows = task.get("answer_requirements", [])
+        tasks.append({**task, "answer_requirements": [*rows, *(row for requirement in rows for row in requirement.get("comparison_inputs", []))]})
     scoped_query = "；".join(dict.fromkeys(str(task.get("request_text") or ctx.query) for task in tasks)) or ctx.query
     hours = [int((task.get("time_scope") or {}).get("hours_back", 0)) for task in tasks]
     news_window = {"max_age_hours": max(hours)} if any(hours) else {}
@@ -47,14 +51,20 @@ def _append_evidence_steps_for_ticker(ctx,
         for req in task.get("answer_requirements", []):
             if req.get("subject") and req["subject"] != ticker:
                 continue
-            if req.get("metric") not in {"revenue", "net_income", "operating_income", "earnings_performance"} and "capital_allocation" not in req.get("evidence_kinds", []):
+            if (req.get("metric") not in {"revenue", "net_income", "operating_income", "earnings_performance"}
+                    and "capital_allocation" not in req.get("evidence_kinds", [])
+                    and not set(req.get("components") or []).intersection({"revenue", "net_income", "operating_income"})):
+                continue
+            if req.get("comparison_inputs"):
                 continue
             scope = req.get("time_scope") or {"kind": "none"}
             key = json.dumps({name: value for name, value in scope.items() if name != "source_text"}, sort_keys=True)
-            request = financial_requests.setdefault(key, {"time_scope": scope, "financial_metrics": [], "calculations": []})
-            request["financial_metrics"] = list(dict.fromkeys([*request["financial_metrics"], *[metric for metric in [req.get("metric"), *req.get("components", [])] if metric and metric != "unknown"]]))
+            request = financial_requests.setdefault(key, {"time_scope": {name: value for name, value in scope.items() if name != "source_text"}, "financial_metrics": [], "calculations": []})
+            request["financial_metrics"] = list(dict.fromkeys([*request["financial_metrics"], *[metric for metric in [req.get("metric"), *req.get("components", [])] if metric and metric not in {"unknown", "comparison"}]]))
             if req.get("calculation"):
-                request["calculations"].append({"metric": req["metric"], **req["calculation"]})
+                calculation = {"metric": req["metric"], **req["calculation"]}
+                if calculation not in request["calculations"]:
+                    request["calculations"].append(calculation)
     if not financial_requests:
         financial_requests["default"] = {"time_scope": next((req["time_scope"] for task in tasks for req in task.get("answer_requirements", []) if (req.get("time_scope") or {}).get("kind") not in {None, "none"}), {"kind": "none"}), "financial_metrics": [], "calculations": []}
     for kind in required_evidence:

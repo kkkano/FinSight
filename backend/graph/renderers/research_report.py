@@ -321,7 +321,16 @@ def render_research_report(
         discovery = [evidence for evidence in draft.evidence_index.values() if task.task_id in evidence.task_ids and evidence.metadata.get("verification") == "discovery_only" and evidence.source_id not in claimed_sources]
         if discovery:
             lines.extend(["", "**未核实的检索材料**"])
-            lines.append("部分材料的来源、发布日期或内容尚未核实，未纳入上述结论。")
+            seen_urls = {canonical_news_url(draft.evidence_index[source_id].url or "") for source_id in shown_sources}
+            selected_discovery = []
+            for evidence in discovery:
+                identity = canonical_news_url(evidence.url or "") or evidence.source_id
+                if identity not in seen_urls:
+                    selected_discovery.append(evidence.source_id)
+                    seen_urls.add(identity)
+            selected_discovery = selected_discovery[:3 if profile == "full" else 1]
+            lines.append(f"部分材料仅为检索线索，来源、发布日期或内容尚未核实，未纳入上述结论。 {refs(selected_discovery)}".rstrip())
+            shown_sources.update(selected_discovery)
         covered_missing = {missing.get("evidence_kind") for missing in task.missing_requirements}
         for kind in task.missing_evidence:
             if kind in covered_missing:

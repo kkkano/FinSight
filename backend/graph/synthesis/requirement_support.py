@@ -159,6 +159,7 @@ def calculation_record(evidence, requirement: dict) -> dict | None:
 
 def presentation_reasons(requirement: dict, facts: list) -> list[str]:
     reasons = []
+    calculations = [row for fact in facts if (row := calculation_record(fact, requirement)) is not None]
     for field in requirement.get("presentation") or []:
         if field == "itemized":
             continue
@@ -166,6 +167,10 @@ def presentation_reasons(requirement: dict, facts: list) -> list[str]:
             reasons.append("presentation_link_missing")
         if field == "include_date" and (not facts or any(not (payload_for(fact).get("published_at") or payload_for(fact).get("published_date") or fact.as_of or fact.period_end) for fact in facts)):
             reasons.append("presentation_date_missing")
+        if field in {"include_inputs", "include_formula"} and not calculations:
+            reasons.append("presentation_" + field.removeprefix("include_") + "_missing")
+        if field == "include_provenance" and not any(all(row.get("source_url") for row in calculation["derivation_inputs"]) for calculation in calculations):
+            reasons.append("presentation_provenance_missing")
     return reasons
 
 

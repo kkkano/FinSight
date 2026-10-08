@@ -89,6 +89,8 @@ def select_fact_ids(draft, task, profile: str) -> list[str]:
 
 
 def select_claims(draft, task, profile: str, *, direction_allowed: bool):
+    if task.answer_requirements and not any(item.get("requires_analysis") for item in task.answer_requirements):
+        return []
     claims = [draft.claim_index[claim_id] for claim_id in task.claim_ids if claim_id in draft.claim_index and (direction_allowed or not draft.claim_index[claim_id].directional)]
     unique_claims = {}
     for claim in claims:

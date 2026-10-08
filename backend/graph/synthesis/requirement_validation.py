@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.graph.synthesis.contracts import Claim, NormalizedEvidence, ReportSynthesisDraft, TaskSynthesisResult, stable_unique
 from backend.research.filing_evidence import disclosure_sections
-from backend.graph.synthesis.requirement_support import FINANCIAL_METRICS, attached_source_policy_reasons, calculation_record, control_support_reasons, exact_support_reasons, metric_record, metric_supports, presentation_reasons
+from backend.graph.synthesis.requirement_support import FINANCIAL_METRICS, attached_source_policy_reasons, calculation_record, control_support_reasons, exact_support_reasons, metric_record, metric_supports, period_for, presentation_reasons, time_scope_matches
 
 
 def _present(value: Any) -> bool:
@@ -145,6 +145,8 @@ def _financial_component_supported(component: str, claims: list[Claim], evidence
 
 def _attribute_present(evidence: NormalizedEvidence, attribute: str) -> bool:
     payload = _payload(evidence)
+    if attribute == "as_of":
+        return payload.get("source_time_status") != "unknown" and _present(evidence.as_of or payload.get("as_of"))
     if attribute == "currency":
         return _present(evidence.currency) or _present(payload.get("currency")) or any(isinstance(row, dict) and _present(row.get("currency")) for row in payload.get("dividend_announcements") or [])
     if attribute == "source_timestamp":
@@ -233,10 +235,26 @@ def evaluate_answer_requirements(
                  and (not kinds or evidence_index[source_id].kind in kinds
                       or requirement.get("metric") in FINANCIAL_METRICS
                       and metric_record(evidence_index[source_id], requirement["metric"]) is not None)
-                 and (not subject or evidence_index[source_id].subject == subject)
+                 and (not subject or requirement.get("kind") == "comparison" or result.render_kind == "compare"
+                      or evidence_index[source_id].subject == subject
+                      or evidence_index[source_id].kind == "document_context"
+                      and evidence_index[source_id].metadata.get("shared_document")
+                      and requirement.get("metric") not in FINANCIAL_METRICS)
                  and (calculation_record(evidence_index[source_id], requirement) is not None if requirement.get("calculation")
                       else metric_supports(evidence_index[source_id], str(requirement.get("metric") or "")))
                  and _supports_dimension(evidence_index[source_id], dimension)]
+        fiscal_scope = requirement.get("time_scope") or {}
+        if requirement.get("metric") in FINANCIAL_METRICS and fiscal_scope.get("kind") in {"fiscal_year", "fiscal_quarter"}:
+            # 以已选择的完整财期锚定跨来源事实，供应商的近似日期不能形成第二套“同季”答案。
+            anchors: dict[str | None, set[str]] = {}
+            for evidence in available_facts:
+                selected = _payload(evidence).get("selected_period")
+                if selected and time_scope_matches(evidence, fiscal_scope, metric_record(evidence, requirement["metric"])):
+                    anchors.setdefault(evidence.subject, set()).add(selected)
+            available_facts = [evidence for evidence in available_facts
+                if len(anchors.get(evidence.subject, set())) != 1
+                or period_for(evidence, calculation_record(evidence, requirement) if requirement.get("calculation")
+                              else metric_record(evidence, requirement["metric"]))[1] in anchors[evidence.subject]]
         facts = [evidence for evidence in available_facts if evidence.source_id in shown_ids]
         supported_ids = {fact.source_id for fact in facts}
         explicit_binding = bool(requirement.get("requires_explicit_binding")) or requirement.get("kind") == "event_window" or requirement_id.endswith(":event_grouping")

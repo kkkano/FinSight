@@ -156,6 +156,35 @@ def _scope_projection(scope: dict[str, Any]) -> dict[str, Any]:
     return projected
 
 
+def _bind_comparison_requirements(requirements: list[dict[str, Any]]) -> None:
+    for requirement in requirements:
+        if requirement.get("kind") != "comparison":
+            continue
+        components = requirement.get("components") or []
+        metric = requirement.get("metric")
+        relationship = metric == "comparison" or metric == "unknown" and components and all(component in _METRIC_CONTRACTS for component in components)
+        related = [candidate for candidate in requirements if candidate is not requirement
+            and candidate.get("kind") not in {"constraint", "input_dependency", "comparison"}
+            and candidate.get("capability_status") in {"supported", "retrieval_required"}
+            and set(candidate.get("subject_refs") or []).issubset(set(requirement.get("subject_refs") or []))
+            and candidate.get("subject_refs")
+            and (candidate.get("metric") in components if components else relationship or candidate.get("metric") == metric)]
+        scope = requirement.get("time_scope") or {}
+        if components and scope.get("kind") in {"fiscal_quarter", "fiscal_year"}:
+            related = [candidate for candidate in related if (candidate.get("time_scope") or {}).get("kind") == scope["kind"]]
+        if metric == "comparison" and not components and not related:
+            raise ValueError("request_comparison_inputs_missing")
+        if relationship and (components or related):
+            requirement.update(raw_metric=metric, metric="comparison", dimension="comparison", capability_status="supported", requires_analysis=True)
+        if related:
+            requirement["comparison_requirement_ids"] = [candidate["requirement_id"] for candidate in related]
+            requirement["comparison_inputs"] = deepcopy(related)
+        if related or relationship and components:
+            requirement["evidence_kinds"] = list(dict.fromkeys([*requirement.get("evidence_kinds", []),
+                *(kind for component in components for kind in _METRIC_CONTRACTS.get(component, ("", [], ""))[1]),
+                *(kind for candidate in related for kind in candidate.get("evidence_kinds", []))]))
+
+
 def _normalize_semantic_scope(scope: dict[str, Any], metric: str) -> dict[str, Any]:
     """按结构字段纠正词表漂移；latest 由服务端取当前时点，不接收模型造的日期。"""
     normalized = dict(scope)
@@ -296,6 +325,18 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             from backend.graph.intent.predicates import _subject_type_for_ticker
             subject["raw_type"] = subject.get("type")
             subject["type"] = _subject_type_for_ticker(subject["tickers"][0]) if subject["tickers"] else "unknown"
+    if semantic.get("relation", "single") == "single":
+        company_subjects = [subject for subject in subjects if subject.get("type") == "company" and subject.get("tickers")]
+        tickers = {ticker for subject in company_subjects for ticker in subject["tickers"]}
+        mentioned = {ticker for ticker in tickers if re.search(r"(?<![A-Za-z0-9])" + re.escape(ticker) + r"(?![A-Za-z0-9])", query, re.I)}
+        if len(mentioned) == 1 and (len(tickers) > 1 or len(company_subjects) > 1):
+            primary_labels = {str(subject.get("label") or "").casefold() for subject in company_subjects if mentioned.intersection(subject["tickers"])}
+            additional_named = any(str(subject.get("label") or "").casefold() in query.casefold()
+                and str(subject.get("label") or "").strip()
+                and str(subject.get("label") or "").casefold() not in primary_labels
+                for subject in company_subjects if not mentioned.intersection(subject["tickers"]))
+            if not additional_named:
+                raise ValueError("request_single_subject_expanded")
     declared_constraints = [item for item in semantic.get("constraints", []) if isinstance(item, dict)]
     declared_constraints.extend(item for row in semantic.get("requirements", []) for item in row.get("constraints", []) if isinstance(item, dict))
     normalized_constraints = _normalize_constraints(declared_constraints, subject_map, query)
@@ -346,12 +387,19 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             # 事件窗口本身就是事件/催化查询；未知指标名不应让整项失去取数计划。
             requirement["raw_metric"] = metric
             metric = requirement["metric"] = "news_catalysts"
+        if calculation is not None and metric in _TOOL_COMPUTED_MEASUREMENTS:
+            raise ValueError("request_calculation_domain_conflict")
         definition = _METRIC_CONTRACTS.get(metric)
         is_constraint = requirement.get("kind") == "constraint"
         supplied_evidence = list(requirement.get("evidence_kinds") or [])
         evidence = canonical_evidence_kinds(supplied_evidence)
         unknown_evidence = [kind for kind in supplied_evidence if kind not in evidence]
         if is_constraint:
+            matching_controls = [item for item in [*constraints, *local_constraints]
+                if item.get("source_text") and item["source_text"] in source
+                and (not item.get("subject_refs") or set(item["subject_refs"]).issubset(set(refs)))]
+            if definition and definition[1] and not matching_controls:
+                raise ValueError("request_constraint_metric_conflict")
             evidence = []
             requirement["capability_status"] = "supported"
             local_types = {item.get("constraint_type") for item in local_constraints}
@@ -375,6 +423,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 requirement["capability_status"] = "retrieval_required"
                 requirement["capability_reason"] = "security_identifier_pending"
                 evidence = ["document_context"]
+        elif requirement.get("kind") == "comparison" and metric == "comparison":
+            requirement.update(dimension="comparison", capability_status="supported")
         elif not is_constraint:
             requirement.update(metric_text=str(requirement.get("metric_text") or metric), metric="unknown", capability_status="unsupported")
         if unknown_evidence:
@@ -391,11 +441,12 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         scope = _normalize_semantic_scope(raw_scope, metric)
         frequency_aliases = {"daily": "daily", "1d": "daily", "weekly": "weekly", "1wk": "weekly", "monthly": "monthly", "1mo": "monthly"}
         presentation = list(requirement.get("presentation") or [])
-        if any(item not in {"itemized", "include_date", "include_link"} for item in presentation):
+        from backend.graph.semantic_requirements import PRESENTATION_FIELDS
+        if any(item not in PRESENTATION_FIELDS for item in presentation):
             raise ValueError("request_presentation_invalid")
         attributes = []
         for attribute in requirement.get("attributes") or []:
-            if attribute in {"itemized", "include_date", "include_link"}:
+            if attribute in PRESENTATION_FIELDS:
                 presentation.append(attribute)
                 continue
             raw_attribute = str(attribute).strip()
@@ -419,6 +470,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                     or component in ExtractedRequirement.model_fields or component in {"value", "operation", "baseline"}):
                 raise ValueError("request_component_shape_invalid")
             name = str(component).strip()
+            if name in _METRIC_CONTRACTS and name not in _DETERMINISTIC_MEASUREMENTS:
+                raise ValueError("request_component_qualitative_invalid")
             if name in _COMPONENT_ATTRIBUTES:
                 attributes.append(_COMPONENT_ATTRIBUTES[name])
             elif name and metric not in _TOOL_COMPUTED_MEASUREMENTS:
@@ -488,6 +541,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
     if not requirements:
         raise ValueError("request_requirements_empty")
     _bind_attribute_requirements(requirements, subject_map)
+    _bind_comparison_requirements(requirements)
     for requirement in requirements:
         if (requirement.get("metric") == "quote" and requirement.get("time_scope", {}).get("kind") == "latest_quote"
                 and requirement.get("time_scope", {}).get("selection") == "latest_complete"
@@ -516,12 +570,14 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         if any(row.get("capability_status") == "unsupported" and row.get("kind") != "constraint" for row in rows):
             # 以已确认的主体和原文检索，不再依赖旧规则能否认识该公司。
             excluded_kinds = {kind for definition in _METRIC_CONTRACTS.values() if definition[0] in exclusions for kind in definition[1]}
-            if seed_tasks is None:
+            unmapped_research = any(row.get("capability_status") == "unsupported"
+                and (row.get("requires_analysis") or row.get("kind") in {"explanation", "comparison"}) for row in rows)
+            if unmapped_research and seed_tasks is None:
                 seed_tasks = finalize_request_contract(deepcopy(result)).get("tasks", [])
-            seeded_evidence = [kind for seed in seed_tasks if set(seed.get("tickers") or []) == set(tickers)
+            seeded_evidence = [kind for seed in seed_tasks or [] if unmapped_research and set(seed.get("tickers") or []) == set(tickers)
                                for kind in seed.get("required_evidence") or []]
             discovery = ["document_context", *seeded_evidence]
-            if not seeded_evidence and subject_type == "company":
+            if unmapped_research and not seeded_evidence and subject_type == "company":
                 discovery.extend(["company_profile", "filing_context"])
             evidence = list(dict.fromkeys([*evidence, *(kind for kind in discovery if kind not in excluded_kinds)]))
         if named_company and not tickers:
@@ -540,6 +596,9 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                     "render_intent": render, "required_evidence": evidence, "evidence_plan": evidence_plan_for_kinds(evidence),
                     "budget_profile": "semantic_requirements", "source": "confirmed_semantic_requirements"}
         operation = legacy_operation_for_contract(contract, subject_type=subject_type)
+        active_rows = [row for row in rows if row.get("kind") not in {"constraint", "input_dependency"}]
+        if shape != "compare" and active_rows and all(row.get("kind") in {"fact_attribute", "calculation"} and not row.get("requires_analysis") for row in active_rows):
+            operation["name"] = "qa"
         operation["params"]["budget_profile"] = "semantic_requirements"
         if shape == "compare" and "performance_comparison" not in evidence:
             operation["params"].update(synthesis_only=True, data_profile="research_synthesis")

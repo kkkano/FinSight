@@ -32,19 +32,19 @@ def build_tool_invokers(*, allowed_tools: Iterable[str]) -> dict[str, Callable[[
         if not tool:
             continue
         def invoke(inputs, _tool=tool, _name=name):
-            if data is None:
-                return _tool.invoke(inputs)
-            schema = getattr(_tool, "args_schema", None)
-            normalized = schema.model_validate(inputs).model_dump() if hasattr(schema, "model_validate") else dict(inputs)
             def fetch():
                 value = _tool.invoke(inputs)
-                # 新闻 registry 使用 JSON 文本，Agent 原工具使用列表；缓存统一原始数据。
-                if _name == "get_company_news" and isinstance(value, str):
+                # registry 的 JSON 文本在执行入口还原；采集、业务错误和 Agent 共享同一种结构。
+                if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
                     try:
                         return json.loads(value)
                     except ValueError:
                         pass
                 return value
+            if data is None:
+                return fetch()
+            schema = getattr(_tool, "args_schema", None)
+            normalized = schema.model_validate(inputs).model_dump() if hasattr(schema, "model_validate") else dict(inputs)
             return data.call(_name, normalized, fetch)
         invokers[name] = invoke
 

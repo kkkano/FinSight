@@ -9,6 +9,19 @@ from backend.graph.synthesis.research_synthesis import _TaskSynthesisSelection, 
 from backend.graph.synthesis.task_outcomes import TaskDescriptor
 
 
+def test_registry_json_is_structured_before_execution_and_agent_sharing(monkeypatch):
+    from types import SimpleNamespace
+    from backend.graph.adapters.tool_adapter import build_tool_invokers
+    from backend.graph.execution import request_data
+    from backend import langchain_tools
+
+    monkeypatch.setattr(request_data, "current_request_data", lambda: None)
+    monkeypatch.setattr(langchain_tools, "get_tool_by_name", lambda _name: SimpleNamespace(
+        invoke=lambda _inputs: '{"error":"invalid_close_path","metrics":{}}'))
+    assert build_tool_invokers(allowed_tools=["window"])["window"]({}) == {
+        "error": "invalid_close_path", "metrics": {}}
+
+
 @pytest.mark.asyncio
 async def test_business_error_retains_output_and_only_skips_dependent_steps():
     async def bad(_inputs):

@@ -7,7 +7,7 @@ from backend.graph.request_compiler import compile_semantic_contract
 from backend.graph.nodes.policy_gate import policy_gate
 from backend.graph.planning.rule_planner import rule_based_planner
 from backend.graph.synthesis.contracts import NormalizedEvidence
-from backend.graph.synthesis.requirement_support import calculation_record, exact_support_reasons, time_scope_matches
+from backend.graph.synthesis.requirement_support import calculation_record, exact_support_reasons, presentation_reasons, time_scope_matches
 from backend.graph.renderers.fact_formatters import format_fact
 from backend.tools import sec
 from backend.tools.financial_calculations import calculate_period_change
@@ -34,14 +34,17 @@ def test_growth_keeps_two_inputs_and_cannot_be_satisfied_by_amount_only():
     payload = {"selected_period": "2026-06-30", "frequency": "quarterly", "revenue": [150],
         "fact_metadata": {"revenue": [current]}, "calculations": [computed]}
     req = {"metric": "revenue", "kind": "calculation", "calculation": spec,
+        "presentation": ["include_inputs", "include_formula", "include_provenance"],
         "time_scope": {"kind": "fiscal_quarter", "selection": "latest_complete", "completed_only": True}}
     item = evidence(payload)
     assert calculation_record(item, req) == computed
     assert exact_support_reasons(req, [item]) == []
+    assert presentation_reasons(req, [item]) == []
     assert "营收同比增长率 50%" in format_fact(item, profile="chat")
     assert "2025-04-01 至 2025-06-30" in format_fact(item)
     payload["calculations"] = []
     assert "requirement_calculation_missing:revenue" in exact_support_reasons(req, [evidence(payload)])
+    assert "presentation_inputs_missing" in presentation_reasons(req, [evidence(payload)])
 
 
 @pytest.mark.parametrize("changes", [{"unit": "CNY"}, {"concept": "OtherRevenue"},
@@ -107,3 +110,156 @@ def test_planner_keeps_annual_and_quarterly_calculations_separate():
     assert len(steps) == 2
     assert {step["inputs"]["time_scope"]["kind"] for step in steps} == {"fiscal_year", "fiscal_quarter"}
     assert all(step["inputs"]["calculations"] == [{"metric": "revenue", "operation": "growth_rate", "baseline": "year_ago"}] for step in steps)
+
+
+def test_unknown_fact_does_not_inherit_a_seeded_investment_report():
+    query = "EXM营收同比，列计算依据和未知量"
+    rows = [{"source_text": "营收同比", "description": "营收同比", "kind": "calculation", "metric": "revenue",
+        "subject": "EXM", "subject_refs": ["exm"], "calculation": {"operation": "growth_rate", "baseline": "year_ago"},
+        "presentation": ["include_inputs", "include_formula", "include_provenance"],
+        "time_scope": {"kind": "fiscal_quarter", "selection": "latest_complete", "completed_only": True}},
+        {"source_text": "未知量", "description": "未知量", "kind": "fact_attribute", "metric": "unknown",
+         "subject": "EXM", "subject_refs": ["exm"]}]
+    seed = {"query": query, "tasks": [{"id": "seed", "subject_type": "company", "subject_label": "Example", "tickers": ["EXM"],
+        "operation": {"name": "investment_opinion", "params": {}}, "required_evidence": ["news_context", "technical_snapshot", "company_profile"]}]}
+    state = {"query": query, "output_mode": "chat", **compile_semantic_contract(seed,
+        {"subjects": [{"id": "exm", "label": "Example", "type": "company", "tickers": ["EXM"]}], "requirements": rows}, {"status": "confirmed"})}
+    task = state["tasks"][0]
+    assert task["operation"]["name"] == "qa"
+    assert task["required_evidence"] == ["filing_context", "document_context"]
+    assert task["answer_requirements"][1]["metric"] == "unknown"
+    state.update(policy_gate(state))
+    state.update(rule_based_planner(state))
+    names = {step["name"] for step in state["plan_ir"]["steps"]}
+    assert "get_sec_company_facts_quarterly" in names
+    assert not names.intersection({"get_company_news", "news_agent", "technical_agent", "get_technical_snapshot"})
+
+
+def test_comparison_reuses_both_companies_annual_calculations():
+    query = "甲营收增长、乙营收增长，比较两家公司"
+    rows = [{"source_text": text, "description": text, "kind": "calculation", "metric": "revenue",
+        "subject": ticker, "subject_refs": [ref], "calculation": {"operation": "growth_rate", "baseline": "year_ago"},
+        "time_scope": {"kind": "fiscal_year", "selection": "latest_complete", "completed_only": True, "source_text": text}}
+        for text, ticker, ref in [("甲营收增长", "EXMA", "a"), ("乙营收增长", "EXMB", "b")]]
+    rows.append({"source_text": "比较两家公司", "description": "比较增长", "kind": "comparison", "metric": "unknown",
+        "subject_refs": ["a", "b"], "components": ["revenue"],
+        "time_scope": {"kind": "fiscal_year", "selection": "latest_complete", "completed_only": True}})
+    state = {"query": query, "output_mode": "chat", **compile_semantic_contract({"query": query},
+        {"subjects": [{"id": ref, "label": ref, "type": "company", "tickers": [ticker]} for ref, ticker in [("a", "EXMA"), ("b", "EXMB")]],
+         "relation": "compare", "requirements": rows}, {"status": "confirmed"})}
+    comparison = state["tasks"][2]["answer_requirements"][0]
+    assert comparison["metric"] == "comparison"
+    assert comparison["capability_status"] == "supported"
+    assert "filing_context" in state["tasks"][2]["required_evidence"]
+    assert len(comparison["comparison_requirement_ids"]) == 2
+    state.update(policy_gate(state))
+    state.update(rule_based_planner(state))
+    steps = [step for step in state["plan_ir"]["steps"] if step["name"] == "get_sec_company_facts_quarterly"]
+    assert len(steps) == 2
+    assert {step["inputs"]["ticker"] for step in steps} == {"EXMA", "EXMB"}
+    assert all("task_3" in step["task_ids"] and len(step["task_ids"]) == 2 for step in steps)
+    assert all(step["inputs"]["time_scope"]["kind"] == "fiscal_year" and step["inputs"]["calculations"] for step in steps)
+
+
+def test_qualitative_components_trigger_semantic_repair_and_unknown_metric_remains():
+    query = "估值、量子指标"
+    raw = {"subjects": [{"id": "exm", "label": "Example", "type": "company", "tickers": ["EXM"]}],
+        "requirements": [{"source_text": "估值", "description": "估值", "kind": "explanation", "metric": "valuation_reasonableness",
+             "subject_refs": ["exm"], "components": ["valuation_reasonableness"]}]}
+    with pytest.raises(ValueError, match="request_component_qualitative_invalid"):
+        compile_semantic_contract({"query": query}, raw, {})
+    raw["requirements"] = [{"source_text": "量子指标", "description": "未知实际指标比较", "kind": "comparison", "metric": "unknown",
+        "metric_text": "量子指标", "subject_refs": ["exm"]}]
+    requirement = compile_semantic_contract({"query": query}, raw, {})["tasks"][0]["answer_requirements"][0]
+    assert requirement["metric"] == "unknown"
+    assert requirement["capability_status"] == "unsupported"
+
+
+def test_single_requested_listing_expansion_gets_one_semantic_repair(monkeypatch):
+    import asyncio
+    from langchain_core.messages import AIMessage
+    import backend.graph.semantic_requirements as module
+
+    query = "Example 0123.HK 最新营收"
+    calls = []
+
+    async def invoke(messages, **kwargs):
+        calls.append(kwargs["context"])
+        kwargs["context"].budget.reserve_provider_attempt()
+        subjects = [{"id": "listing", "label": "Example", "type": "company", "tickers": ["0123.HK"]}]
+        if len(calls) == 1:
+            subjects.append({"id": "other", "label": "Example alternate listing", "type": "company", "tickers": ["EXM"]})
+        rows = [{"source_text": "营收", "description": "营收", "kind": "fact_attribute", "metric": "revenue",
+            "subject_refs": [subject["id"]], "subject": subject["tickers"][0]} for subject in subjects]
+        return {"raw": AIMessage(content="{}", response_metadata={"finish_reason": "stop"}),
+            "parsed": {"subjects": subjects, "relation": "single", "requirements": rows}}
+
+    monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
+    raw, diagnostics = asyncio.run(module.extract_semantic_requirements({"query": query}, {}))
+    assert len(calls) == 2 and calls[0] is calls[1]
+    assert diagnostics["validation_attempts"] == ["request_single_subject_expanded"]
+    assert [subject["tickers"] for subject in raw["subjects"]] == [["0123.HK"]]
+
+
+@pytest.mark.parametrize("relation,query", [("compare", "比较0123.HK和Example"), ("single", "0123.HK和EXM的营收"),
+    ("single", "0123.HK和Second Company的营收")])
+def test_explicit_comparison_or_multiple_requested_subjects_are_kept(relation, query):
+    subjects = [{"id": "a", "label": "Example", "type": "company", "tickers": ["0123.HK"]},
+        {"id": "b", "label": "Second Company", "type": "company", "tickers": ["EXM"]}]
+    rows = [{"source_text": query, "description": "营收", "kind": "fact_attribute", "metric": "revenue",
+        "subject_refs": [subject["id"]], "subject": subject["tickers"][0]} for subject in subjects]
+    result = compile_semantic_contract({"query": query}, {"subjects": subjects, "relation": relation, "requirements": rows}, {})
+    assert {ticker for task in result["tasks"] for ticker in task["tickers"]} == {"0123.HK", "EXM"}
+
+
+def test_standard_window_return_operator_conflict_gets_one_semantic_repair(monkeypatch):
+    import asyncio
+    from langchain_core.messages import AIMessage
+    import backend.graph.semantic_requirements as module
+
+    query = "EXM最近20个交易日收益率"
+    calls = []
+
+    async def invoke(messages, **kwargs):
+        calls.append(kwargs["context"])
+        kwargs["context"].budget.reserve_provider_attempt()
+        row = {"source_text": "20个交易日收益率", "description": "窗口收益", "kind": "calculation", "metric": "cumulative_return",
+            "subject": "EXM", "subject_refs": ["exm"], "time_scope": {"kind": "trading_sessions", "count": 20, "completed_only": True}}
+        if len(calls) == 1:
+            row["calculation"] = {"operation": "growth_rate", "baseline": "previous_period"}
+        return {"raw": AIMessage(content="{}", response_metadata={"finish_reason": "stop"}),
+            "parsed": {"subjects": [{"id": "exm", "label": "Example", "type": "company", "tickers": ["EXM"]}], "requirements": [row]}}
+
+    monkeypatch.setattr(module, "ainvoke_configured_llm", invoke)
+    raw, diagnostics = asyncio.run(module.extract_semantic_requirements({"query": query}, {}))
+    assert len(calls) == 2 and calls[0] is calls[1]
+    assert diagnostics["validation_attempts"] == ["request_calculation_domain_conflict"]
+    row = raw["requirements"][0]
+    assert row["metric"] == "cumulative_return" and row["time_scope"]["count"] == 20 and row["calculation"] is None
+    independent = deepcopy(raw)
+    independent["requirements"].append({"source_text": "收益率", "description": "比较两个已计算收益率的真实要求", "kind": "calculation", "metric": "unknown",
+        "metric_text": "两个收益率的变化", "subject_refs": ["exm"], "components": ["cumulative_return"],
+        "calculation": {"operation": "growth_rate", "baseline": "previous_period"}})
+    requirements = compile_semantic_contract({"query": query}, independent, {})["tasks"][0]["answer_requirements"]
+    assert len(requirements) == 2 and requirements[1]["metric"] == "unknown" and requirements[1]["calculation"]
+
+
+def test_data_obligations_disguised_as_empty_constraints_are_rejected():
+    query = "列出AAOI过去七天新闻，附日期链接，排除旧消息，去重"
+    raw = {"subjects": [{"id": "aaoi", "type": "company", "label": "AAOI", "tickers": ["AAOI"]}],
+        "relation": "single", "requirements": [{"source_text": source, "description": source, "kind": "constraint",
+            "metric": "news_catalysts", "subject_refs": ["aaoi"], "constraints": []}
+            for source in ["列出AAOI过去七天新闻", "附日期链接", "排除旧消息", "去重"]], "constraints": []}
+    with pytest.raises(ValueError, match="request_constraint_metric_conflict"):
+        compile_semantic_contract({"query": query}, raw, {})
+    corrected = deepcopy(raw)
+    corrected["requirements"][0].update(kind="event_window", presentation=["include_date", "include_link"],
+        time_scope={"kind": "calendar_window", "count": 7, "unit": "days", "direction": "past"})
+    corrected["requirements"] = corrected["requirements"][:1]
+    task = compile_semantic_contract({"query": query}, corrected, {})["tasks"][0]
+    assert task["required_evidence"] == ["news_context"]
+    control = {"constraint_type": "other", "source_text": "去重", "subject_refs": ["aaoi"]}
+    raw["requirements"] = [{"source_text": "去重", "description": "仅保留控制条件", "kind": "constraint",
+        "metric": "news_catalysts", "subject_refs": ["aaoi"], "constraints": [control]}]
+    compiled = compile_semantic_contract({"query": query}, raw, {})
+    assert compiled["understanding"]["semantic_contract"]["requirements"][0]["kind"] == "constraint"

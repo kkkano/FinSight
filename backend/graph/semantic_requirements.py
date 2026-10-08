@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
@@ -17,6 +17,8 @@ from backend.utils.env import env_int
 
 
 MetricComponent = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
+PresentationField = Literal["itemized", "include_date", "include_link", "include_inputs", "include_formula", "include_provenance"]
+PRESENTATION_FIELDS = frozenset(get_args(PresentationField))
 
 
 class SemanticTimeScope(BaseModel):
@@ -66,7 +68,7 @@ class SemanticRequirement(BaseModel):
     time_scope: SemanticTimeScope = Field(default_factory=SemanticTimeScope)
     components: list[MetricComponent] = Field(default_factory=list, description="仅列需要实际采集或计算的规范数值指标；币种、源时间和收益口径放attributes，定性传导对象独立为explanation要求。")
     calculation: SemanticCalculation | None = None
-    presentation: list[Literal["itemized", "include_date", "include_link"]] = Field(default_factory=list)
+    presentation: list[PresentationField] = Field(default_factory=list)
     attributes: list[str] = Field(default_factory=list)
     evidence_kinds: list[str] = Field(default_factory=list)
     requires_analysis: bool = False
@@ -116,7 +118,7 @@ class ExtractedRequirement(BaseModel):
     time_scope: SemanticTimeScope = Field(default_factory=SemanticTimeScope)
     components: list[MetricComponent] = Field(default_factory=list, description="需要实际取数的规范指标列表；例如现金覆盖的组成量或宏观指标，不包含定性因果对象、币种、时间或口径属性。")
     calculation: SemanticCalculation | None = Field(default=None, description="同一指标两期计算：同比为growth_rate/year_ago，环比为growth_rate/previous_period。metric仍保留原指标，不能用return替代营收或净利。")
-    presentation: list[Literal["itemized", "include_date", "include_link"]] = Field(default_factory=list)
+    presentation: list[PresentationField] = Field(default_factory=list, description="计算输入依据、两期数值、公式和来源分别以include_inputs/include_formula/include_provenance附在对应计算要求；不是独立未知指标。")
     attributes: list[str] = Field(default_factory=list)
     requires_analysis: bool = False
     input_dependencies: list[RequiredInput] = Field(default_factory=list)
@@ -150,11 +152,16 @@ def requires_semantic_extraction(query: str, *, output_mode: str = "chat") -> bo
 
 _SYSTEM_PROMPT = """你负责提取用户原始请求，不负责回答或选择工具。返回符合 schema 的对象。
 同一指标的两期增减使用calculation={operation:growth_rate/difference/ratio,baseline:year_ago/previous_period}，metric仍为原始指标。营收同比是revenue + growth_rate + year_ago，不是unknown或累计价格收益。数值比较与优劣解释分开保存；同比值需要kind=calculation，而解释增长原因仍单列explanation。仅在需要两期计算时填写calculation，工具已有标准定义的收益/回撤不填。
+标准窗口收益、回撤、技术指标或报价使用metric自身的规范定义，不兼容财务两期calculation运算；这类错配会触发request_calculation_domain_conflict结构修复。若用户明确要求再比较两个窗口各自已计算的收益率，保留两项窗口事实与独立再计算要求；不要将后者降成单个窗口收益。独立再计算无法映射时保留metric=unknown与原始metric_text，不能删除真实要求。
+计算依据属于计算的可追溯展示：原始输入或两期依据使用presentation=include_inputs，计算公式使用include_formula，输入出处与来源使用include_provenance，直接附在对应calculation要求。统一展示指令应用到每个相关计算要求，不另列metric=unknown的事实要求，也不因为要求依据就产生投资判断、新闻或增长原因解释。真正要求因果分析才requires_analysis=true；未知实际指标仍保留unknown。
+跨主体比较是关系：先保留每个主体各项事实或计算要求，再用kind=comparison、metric=comparison和参与subjects引用表达这些实际要求的总比较。只比较营收则components=[revenue]；定性估值、业务、竞争等不能作为数值components，应各自成为metric=valuation_reasonableness/business_model/competition的comparison要求。总比较引用已列的参与公司要求，不另造unknown比较指标，不补用户未要求的报告维度，财务区间与估值观察时点仍各自独立。真正未知的比较对象指标仍metric=unknown并保留metric_text。
 components必须只含真实指标identifier，不得输出metric、measurement、value等内部字段名或嵌套对象。逐项、附日期、附链接等展示要求放presentation，不能放attributes；attributes只描述事实口径。估值的观察时点独立于营收财期：只有用户明确要求历史估值，估值time_scope才绑定历史日期，不把比较营收的财年要求扩散到当前估值。
 output_mode 单独表达用户的交付意图：要求一份完整研究材料或报告时为investment_report，普通问答为chat，明确拒绝报告时为chat。按语义判断，不依赖固定词语。报告是交付形式，不是待测指标，不能把整个报告建成unknown或自造report指标。
 用户要求报告但未列研究维度时，将报告展开为常规的业务、财务、估值、竞争与风险研究要求，description标明这是默认报告范围，source_text引用原始报告请求。用户明确列出的范围与排除项优先，不额外扩充。
 requirements 是所有原始要求的唯一事实源。逐项保存每个肯定要求、计算、解释、属性、时间窗口、输入依赖和明确约束；不要合并掉不同指标或不同财期，不得根据已有工具能力删减要求。
+kind=constraint只表达真实控制条件，必须由constraints中的类型化SemanticConstraint绑定原文与主体范围。数据获取或列举事实本身不是constraint；日期、链接、逐项展示附在对应数据要求的presentation，排除范围与去重等控制放类型化constraints。不能将肯定的数据要求全部改成约束从而消掉采集义务。已注册取数指标的constraint没有匹配控制条件会触发request_constraint_metric_conflict结构修复。
 source_text 必须是当前用户原文中连续的非空片段。subject_refs 引用 subjects.id；subject 是确切 ticker 或 null。沿用解析主体和历史绑定，但比较上下文里的竞品不是新增主研究对象。
+subjects仅包含用户本轮要求研究的主体。公司关联的其它上市证券、ADR、母子公司或竞品属于上下文，不能自动扩成研究主体。用户指定上市代码时以该代码为标的，不因公司名称另加另一市场证券；只有用户确实要求多个标的才保留多个主体，并准确表达relation。
 每个明确指标单独一项；components 仅保存该指标的必要子项。最新已完成季度与最新完整财年是不同时间范围；20交易日不是20自然日。时间限制必须逐项保留到 time_scope；calendar_window 的 count/unit/direction 保留原单位。
 measurement 表示测量对象，price_role表示价格身份：quote统一涵盖当前报价、最近完整收盘价和窗口终点收盘价；这些是价格测量，不是未支持的新指标。终点收盘价可作为cumulative_return的end_close属性，也可单列quote/measurement=price/price_role=window_end。未知本体用measurement=other、metric=unknown，不得按能力目录删要求。
 可识别的 metric 示例：quote,cumulative_return,max_drawdown,volume_breakout,operating_cash_flow,capital_expenditure,free_cash_flow,dividends_paid,repurchases_paid,capital_allocation_surplus,shares_outstanding,net_share_change,dividend_coverage,dividend_announcement,debt_burden,revenue,net_income,operating_income,earnings_date,macro_data；一般研究指标可用 business_model,competition,fundamental_quality,valuation_reasonableness,risk_level,news_catalysts,macro_impact,technical_quality,trend_quality,earnings_performance,earnings_impact,investment_attractiveness,holdings_ownership,external_impact；已有指定文档的摘要/问答用document_summary/document_question。

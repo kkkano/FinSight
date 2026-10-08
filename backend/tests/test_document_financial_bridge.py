@@ -87,3 +87,10 @@ def test_frontmatter_publication_date_is_historical_but_fiscal_year_stays_unknow
     assert docs[2]["published_at"] == "2026-09-02" and "temporal_role" not in docs[2]
     assert docs[3]["published_at"] == "2024-10-22" and docs[3]["temporal_role"] == "historical"
     assert docs[0]["fetched_at"] == "2026-10-08"
+
+
+def test_inline_frontmatter_date_does_not_promote_financial_dates_or_ambiguous_headers():
+    parser = DeepSearchAgent._publication_date
+    assert parser("证券研究报告|2024年02月23日 买入\n截至2023年12月31日的财务情况") == "2024-02-23"
+    assert parser("截至2024年02月23日\n2024年03月31日期末余额") is None
+    assert parser("证券研究报告|2024年02月23日 买入\n修订版 2024年02月24日") is None
