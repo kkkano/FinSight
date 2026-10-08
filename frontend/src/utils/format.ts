@@ -45,6 +45,18 @@ export function formatMoney(
   return new Intl.NumberFormat('zh-CN', { ...numberOptions, style: 'currency', currency }).format(value);
 }
 
+/** 交易日是日期，不转换为浏览器时区或补造时分。 */
+export function formatSourceDateTime(value: string | null | undefined): string {
+  if (!value) return '未提供';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit', day: '2-digit',
+    ...(dateOnly ? { timeZone: 'UTC' } : { hour: '2-digit', minute: '2-digit', hour12: false }),
+  }).format(date);
+}
+
 // --- 市场感知格式化（P2-10 A股体验补齐） ---
 
 /**

@@ -2,11 +2,24 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatMoney,
+  formatSourceDateTime,
   currencySymbolForTicker,
   formatMarketCapForMarket,
   formatPriceForMarket,
   isAShareTicker,
 } from './format';
+
+describe('formatSourceDateTime', () => {
+  it('keeps a source trading date unchanged and does not invent a time', () => {
+    expect(formatSourceDateTime('2026-10-07')).toBe('10/07');
+    expect(formatSourceDateTime('2026-10-07')).not.toContain(':');
+  });
+
+  it('preserves missing and invalid source time states', () => {
+    expect(formatSourceDateTime(null)).toBe('未提供');
+    expect(formatSourceDateTime('unknown')).toBe('unknown');
+  });
+});
 
 describe('formatMoney', () => {
   it('uses the source currency independently of the listing market', () => {

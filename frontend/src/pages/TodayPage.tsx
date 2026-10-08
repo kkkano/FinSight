@@ -19,7 +19,7 @@ import { useStore } from '../store/useStore';
 import { useWatchlist } from '../hooks/useWatchlist';
 import type { WatchItem } from '../types/dashboard';
 import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
-import { formatMoney } from '../utils/format';
+import { formatMoney, formatSourceDateTime as formatDateTime } from '../utils/format';
 
 type QuoteState = {
   price?: number;
@@ -47,19 +47,6 @@ const OUTCOME_LABELS: Record<string, string> = {
 
 const DIRECTION_LABELS = { long: '上行假设', short: '回落假设', neutral: '区间假设' } as const;
 
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '未提供';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
-
 function formatPercent(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '不可用';
   const sign = value >= 0 ? '+' : '';
@@ -83,7 +70,7 @@ function normalizeQuote(payload: MarketDataResponse<QuoteData>): Omit<QuoteState
     currency: quote?.currency,
     dataKind: quote?.data_kind,
     source: envelope.provider || envelope.source,
-    asOf: envelope.as_of,
+    asOf: quote?.source_timestamp || envelope.as_of,
     quality: envelope.quality,
     cached: envelope.cached || payload.cached === true,
   };
