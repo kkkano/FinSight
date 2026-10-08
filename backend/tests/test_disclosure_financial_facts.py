@@ -28,6 +28,14 @@ def test_financial_fact_preserves_original_unit_period_and_source_page():
     assert fact["page"] == 85 and fact["period_end"] == "2025-12-31"
 
 
+def test_reporting_currency_declaration_can_be_verified_separately_from_table_scale():
+    declaration = "本公司编制本财务报表时所采用的货币为人民币。"
+    body = BODY.replace("单位：万元 币种：人民币", "单位：万元") + "\n[Page 90]\n" + declaration
+    row = {**ROW, "unit_quote": "单位：万元", "currency_quote": declaration}
+    assert validate_financial_facts({"facts": [row]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+    assert not validate_financial_facts({"facts": [{**row, "currency_quote": "财务报表以美元列示。"}]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf")
+
+
 def test_pdf_adjacent_numeric_columns_keep_complete_first_amount():
     body = BODY.replace("12,345.67", "12,345.6745,678.90")
     row = {**ROW, "quote": ROW["quote"].replace("12,345.67", "12,345.6745,678.90")}
