@@ -281,3 +281,15 @@ def test_relational_explanation_binds_known_inputs_without_forcing_numeric_analy
     assert all("filing_context" in row["evidence_kinds"] for row in relational)
     unknown = compile_semantic_contract({"query": query}, {"subjects": subjects, "relation": "compare", "requirements": rows[-1:]}, {})
     assert unknown["tasks"][0]["answer_requirements"][0]["metric"] == "unknown"
+
+
+@pytest.mark.parametrize("ticker,needs_snapshot", [("0700.HK", True), ("300750.SZ", True), ("NVDA", False)])
+def test_market_financial_numeric_floor_preserves_structured_source(ticker, needs_snapshot):
+    query = f"{ticker}季度营收"
+    raw = {"subjects": [{"id": "company", "type": "company", "label": ticker, "tickers": [ticker]}],
+        "relation": "single", "requirements": [{"source_text": query, "description": query,
+            "kind": "fact_attribute", "metric": "revenue", "subject_refs": ["company"]}]}
+    result = compile_semantic_contract({"query": query}, raw, {})
+    evidence = result["tasks"][0]["required_evidence"]
+    assert "filing_context" in evidence
+    assert ("fundamental_snapshot" in evidence) is needs_snapshot

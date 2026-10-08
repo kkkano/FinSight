@@ -424,6 +424,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             requirement["raw_capability_status"] = requirement.get("capability_status")
             requirement["capability_status"] = "supported"
             market = "HK" if ticker and ticker.endswith(".HK") else "CN" if ticker and ticker.endswith((".SS", ".SZ", ".BJ")) else "US"
+            if market in {"CN", "HK"} and metric in {"revenue", "net_income", "operating_income"}:
+                evidence = list(dict.fromkeys([*evidence, "fundamental_snapshot"]))
             if not evidence_plan_for_kinds(evidence, market=market):
                 requirement["capability_status"] = "retrieval_required"
                 requirement["capability_reason"] = "structured_source_unavailable_for_market"
