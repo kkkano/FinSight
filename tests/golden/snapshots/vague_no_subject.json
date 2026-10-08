@@ -1,7 +1,5 @@
 {
-  "blocked_reasons": [
-    "missing_analysis_target"
-  ],
+  "blocked_reasons": [],
   "output_mode": "chat",
   "plan_steps": [],
   "route": "clarify",

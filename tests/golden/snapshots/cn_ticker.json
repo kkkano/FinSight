@@ -2,12 +2,21 @@
   "blocked_reasons": [],
   "output_mode": "chat",
   "plan_steps": [
-    {"group": "request_task_1", "kind": "tool", "name": "get_stock_price"},
-    {"group": "request_task_1", "kind": "tool", "name": "get_technical_snapshot"},
-    {"group": "request_task_1_technical_agents", "kind": "agent", "name": "technical_agent"}
+    {
+      "group": "request_unconfirmed",
+      "kind": "tool",
+      "name": "search"
+    }
   ],
   "route": "research",
   "tasks": [
-    {"operation": "technical", "reason": "ticker_or_alias", "subject_type": "company", "tickers": ["600036.SS"]}
+    {
+      "operation": "qa",
+      "reason": null,
+      "subject_type": "research_doc",
+      "tickers": [
+        "600036.SS"
+      ]
+    }
   ]
 }

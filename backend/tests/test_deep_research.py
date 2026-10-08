@@ -539,6 +539,7 @@ def test_fetch_document_uses_jina_fallback_for_short_trusted_content(monkeypatch
             self.url = url
             self.headers = {"Content-Type": "text/html; charset=utf-8"}
             self.text = "<html><body>short</body></html>"
+            self.content = self.text.encode("utf-8")
 
         def raise_for_status(self):
             return None
@@ -586,6 +587,7 @@ def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch, publ
             self.url = url
             self.headers = {"Content-Type": "text/html; charset=utf-8"}
             self.text = "<html><body>blocked</body></html>"
+            self.content = self.text.encode("utf-8")
 
         def raise_for_status(self):
             return None
@@ -624,6 +626,24 @@ def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch, publ
     assert isinstance(doc, dict)
     assert len(str(doc.get("content") or "")) >= 1200
     assert bool(doc.get("degraded")) is False
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "gb18030"])
+def test_html_document_respects_page_encoding_instead_of_http_default(monkeypatch, public_document_dns, encoding):
+    import requests
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    text = "游族网络的经营现金流和年度财务报告。" * 40
+    response = requests.Response()
+    response.status_code = 200
+    response.url = "https://example.com/report"
+    response.headers["Content-Type"] = "text/html"
+    response.encoding = "ISO-8859-1"
+    response._content = (f'<html><head><meta charset="{encoding}"></head><body>{text}</body></html>').encode(encoding)
+    session = MagicMock()
+    session.get.return_value = response
+    monkeypatch.setattr(agent, "_get_session", lambda: session)
+    document = agent._fetch_document({"url": response.url, "title": "年度报告", "source": "fixture"})
+    assert document is not None and text in document["content"]
 
 
 def test_fetch_document_uses_bounded_http_budget(monkeypatch, public_document_dns):

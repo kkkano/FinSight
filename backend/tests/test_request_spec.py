@@ -99,6 +99,24 @@ async def test_unconfirmed_workspace_binding_does_not_execute_the_rule_seed(monk
         return None, {"status": "unconfirmed", "validation_code": "request_subject_context_unbound"}
     monkeypatch.setattr(import_module("backend.graph.nodes.route_request"), "extract_semantic_requirements", unbound)
     result = await route_request({"query": "这只股票最新股价", "ui_context": {"active_symbol": "AAPL"}})
-    assert result["understanding"]["route"] == "clarify"
-    assert result["subject"]["tickers"] == [] and not result["tasks"]
+    assert result["understanding"]["route"] == "research"
+    assert result["subject"]["tickers"] == [] and len(result["tasks"]) == 1
+    assert result["tasks"][0]["request_text"] == "这只股票最新股价"
+    assert result["tasks"][0]["required_evidence"] == ["document_context"]
     assert result["understanding"]["semantic_contract"]["status"] == "unconfirmed"
+
+
+@pytest.mark.asyncio
+async def test_user_trace_does_not_claim_unconfirmed_question_was_understood(monkeypatch):
+    events = []
+    module = import_module("backend.graph.nodes.route_request")
+    async def failed(_state, _seed):
+        return None, {"status": "unconfirmed", "error_code": "request_contract_unconfirmed"}
+    async def capture(payload):
+        events.append(payload)
+    monkeypatch.setattr(module, "extract_semantic_requirements", failed)
+    monkeypatch.setattr(module, "emit_event", capture)
+    await route_request({"query": "EXM营收及估值"})
+    finished = next(event for event in events if event.get("stage") == "understanding" and event.get("status") == "done")
+    assert finished["requirements_status"] == "unconfirmed"
+    assert "尚未完全确认" in finished["title"] and finished["title"] != "已理解请求"

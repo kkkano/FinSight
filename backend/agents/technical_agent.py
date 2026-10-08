@@ -66,6 +66,11 @@ class TechnicalAgent(BaseFinancialAgent):
 
     def _enrich_with_side_signals(self, data: Dict[str, Any], ticker: str) -> Dict[str, Any]:
         enriched = dict(data)
+        from backend.services.market_hours import filter_open_daily_bars
+        enriched["kline_data"] = filter_open_daily_bars(data.get("kline_data") or [], symbol=ticker, as_of=data.get("observed_at"))
+        rows = enriched["kline_data"]
+        last_time = rows[-1].get("time") if rows else None
+        enriched["source_timestamp"] = str(last_time)[:10] if last_time else None
         # 分工说明：TechnicalAgent 保留 quote/options 作为指标形态的旁证校准，不在这里生成价格行为结论。
         price_snapshot = self._call_optional_tool("get_stock_price", ticker)
         if price_snapshot:

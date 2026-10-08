@@ -52,14 +52,14 @@ def overall_conclusion_block_reasons(draft: ReportSynthesisDraft) -> list[str]:
 
 def evidence_is_document_index(evidence: NormalizedEvidence) -> bool:
     payload = _payload(evidence)
+    content_type = str(payload.get("content_type") or payload.get("document_type") or "").lower()
+    if content_type in {"filing_index", "disclosure_index", "index", "directory"}:
+        return True
     if disclosure_sections(payload):
         return False
     if payload.get("content_read") is True and any(_present(payload.get(key)) for key in ("document_body", "body", "content")):
         return False
     if "content_read" in payload and evidence.kind in {"filing_context", "document_context"}:
-        return True
-    content_type = str(payload.get("content_type") or payload.get("document_type") or "").lower()
-    if content_type in {"filing_index", "disclosure_index", "index", "directory"}:
         return True
     return bool(re.search(r"^(?:SEC EDGAR .+ filing\. Filed:|(?:HK|CN) local disclosure .+\. Filed:)", evidence.text))
 
@@ -234,7 +234,8 @@ def evaluate_answer_requirements(
         dimension = str(requirement.get("dimension") or "")
         kinds = set(requirement.get("evidence_kinds") or [])
         subject = requirement.get("subject")
-        scope = [str(subject)] if subject and requirement.get("kind") != "comparison" and result.render_kind != "compare" else subjects
+        comparison = requirement.get("kind") == "comparison" or result.render_kind == "compare" and not requirement.get("source_text")
+        scope = [str(subject)] if subject and not comparison else subjects
         available_facts = [evidence_index[source_id] for source_id in available_ids if source_id in evidence_index
                  and result.task_id in evidence_index[source_id].task_ids
                  and _reliable_task_evidence(evidence_index[source_id], result, scope)
@@ -243,7 +244,7 @@ def evaluate_answer_requirements(
                       and not evidence_is_document_index(evidence_index[source_id])
                       or requirement.get("metric") in FINANCIAL_METRICS
                       and metric_record(evidence_index[source_id], requirement["metric"]) is not None)
-                 and (not subject or requirement.get("kind") == "comparison" or result.render_kind == "compare"
+                 and (not subject or comparison
                       or evidence_index[source_id].subject == subject
                       or evidence_index[source_id].kind == "document_context"
                       and evidence_index[source_id].metadata.get("shared_document")
@@ -285,6 +286,10 @@ def evaluate_answer_requirements(
                   and claim_has_reliable_sources(claim, result, evidence_index, subjects=scope)]
         control_reasons = control_support_reasons(requirement, result, facts)
         reasons = exact_support_reasons(requirement, facts) if control_reasons is None else list(control_reasons)
+        from backend.graph.research_capabilities import input_groups
+        for group in input_groups(requirement) if "required_input_groups" in requirement else []:
+            if not any(fact.kind in group["any_of"] for fact in facts):
+                reasons.append("requirement_input_group_missing:" + group["group_id"])
         reasons.extend(attached_source_policy_reasons(requirement, result, facts))
         if not facts:
             reasons.extend(source_rejections)
@@ -306,7 +311,7 @@ def evaluate_answer_requirements(
             reasons.extend(f"requirement_component_missing:{component}" for component in missing_components)
         if requirement.get("kind") == "conclusion" and not result.conclusion:
             reasons.append("requirement_conclusion_missing")
-        if requirement.get("kind") == "comparison" or result.render_kind == "compare":
+        if comparison:
             compared = {fact.subject for fact in facts}
             if any(ticker not in compared for ticker in subjects):
                 reasons.append("comparison_subject_evidence_missing")

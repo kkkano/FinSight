@@ -3,60 +3,19 @@
   "output_mode": "chat",
   "plan_steps": [
     {
-      "group": "request_task_1",
+      "group": "request_unconfirmed",
       "kind": "tool",
-      "name": "get_stock_price"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_company_info"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_earnings_estimates"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_stock_price"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_company_info"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_earnings_estimates"
+      "name": "search"
     }
   ],
   "route": "research",
   "tasks": [
     {
-      "operation": "compare",
-      "reason": "intent_contract_synthesis_compare",
-      "subject_type": "company",
+      "operation": "qa",
+      "reason": null,
+      "subject_type": "research_doc",
       "tickers": [
         "AAPL",
-        "MSFT"
-      ]
-    },
-    {
-      "operation": "investment_opinion",
-      "reason": "intent_contract_per_ticker_evidence",
-      "subject_type": "company",
-      "tickers": [
-        "AAPL"
-      ]
-    },
-    {
-      "operation": "investment_opinion",
-      "reason": "intent_contract_per_ticker_evidence",
-      "subject_type": "company",
-      "tickers": [
         "MSFT"
       ]
     }

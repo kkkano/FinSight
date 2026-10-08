@@ -207,7 +207,8 @@ def _technical(payload: dict, evidence) -> str:
         lines.append(f"{label}指标，截至 {payload.get('source_timestamp') or evidence.as_of or '源时间未提供'}")
     if payload.get("currency") or evidence.currency:
         lines.append(f"价格类指标单位 {payload.get('currency') or evidence.currency}")
-    specs = (("close", "收盘价", 2), ("ma20", "MA20", 2), ("ma50", "MA50", 2), ("ma200", "MA200", 2), ("rsi14", "RSI(14)", 2), ("macd", "MACD", 4), ("macd_signal", "MACD 信号线", 4), ("support", "支撑", 2), ("resistance", "阻力", 2), ("volume", "成交量", 0), ("volume_avg20", "20 日均量", 0))
+    close_label = "收盘价" if payload.get("market_session") in {"regular_close", "continuous_close"} else "日线最新价"
+    specs = (("close", close_label, 2), ("ma20", "MA20", 2), ("ma50", "MA50", 2), ("ma200", "MA200", 2), ("rsi14", "RSI(14)", 2), ("macd", "MACD", 4), ("macd_signal", "MACD 信号线", 4), ("support", "支撑", 2), ("resistance", "阻力", 2), ("volume", "成交量", 0), ("volume_avg20", "20 日均量", 0))
     for key, label, digits in specs:
         if payload.get(key) is not None:
             lines.append(f"{label} {number(payload[key], digits)}")
@@ -434,7 +435,10 @@ def format_fact(evidence, *, profile: str = "full") -> str:
             session_label = {"regular_close":"常规交易时段的日线收盘价，非盘后价格", "regular":"常规交易时段", "post":"盘后交易", "postmarket":"盘后交易", "after_hours":"盘后交易", "pre":"盘前交易", "premarket":"盘前交易", "continuous_close":"24 小时市场的日线收盘价"}.get(str(session or '').lower())
             precision = (quote or {}).get("source_time_precision") or evidence.metadata.get("source_time_precision")
             timing = f"源日期：{as_of}（来源仅提供交易日，不代表精确成交时刻）" if precision == 'date' else f"源数据时间：{as_of}"
-            return f"{evidence.subject or '标的'} {label} {number(price)} {currency}；{timing}；{session_label or '[数据缺失] 来源未提供常规/盘前/盘后属性'}。"
+            basis = (quote or {}).get("price_basis") or payload.get("price_basis")
+            basis_label = "拆股调整收盘价，不计现金分红" if basis == "split_adjusted_close" else basis
+            basis_text = f"；价格口径：{basis_label}" if basis_label else ""
+            return f"{evidence.subject or '标的'} {label} {number(price)} {currency}；{timing}；{session_label or '[数据缺失] 来源未提供常规/盘前/盘后属性'}{basis_text}。"
     formatter = {"earnings_estimates": lambda data, item: _earnings(data, item, compact=compact, summary=profile in {"comparison", "brief"}), "company_profile": lambda data, item: _profile(data, item, compact=compact), "technical_snapshot": _technical, "risk_profile": lambda data, item: _risk(data, item, compact=compact, brief=profile == "brief"), "options_derivatives": _options, "event_calendar": lambda data, item: _calendar(data, item, limit=1 if profile == "brief" else 3 if compact else None)}.get(evidence.kind)
     text = formatter(payload, evidence) if formatter else ""
     if not text and evidence.kind == "macro_context":

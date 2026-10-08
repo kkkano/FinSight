@@ -32,6 +32,11 @@ def payload_for(evidence) -> dict:
 def metric_record(evidence, metric: str) -> dict | None:
     """仅认结构化值；标题、概述和加权平均股数不能替代实际指标。"""
     payload = payload_for(evidence)
+    if metric == "earnings_estimates":
+        for row in payload.get("earnings_estimate") or []:
+            if isinstance(row, dict) and row.get("period") and _number(row.get("avg")):
+                return {**row, "value": row["avg"], "forecast_period": row["period"]}
+        return None
     if metric == "dividend_announcement":
         for row in payload.get("dividend_announcements") or []:
             if isinstance(row, dict) and row.get("content_read") is True and row.get("verification") == "official_filing_body" and _number(row.get("amount_per_share")) and row.get("source_url"):
@@ -163,7 +168,9 @@ def presentation_reasons(requirement: dict, facts: list) -> list[str]:
             reasons.append("presentation_link_missing")
         if field == "include_date" and (not facts or any(not (payload_for(fact).get("published_at") or payload_for(fact).get("published_date") or fact.as_of or fact.period_end) for fact in facts)):
             reasons.append("presentation_date_missing")
-        if field in {"include_inputs", "include_formula"} and not calculations:
+        if field == "include_inputs" and not calculations and not facts:
+            reasons.append("presentation_inputs_missing")
+        if field == "include_formula" and not calculations:
             reasons.append("presentation_" + field.removeprefix("include_") + "_missing")
         provenance = any(all(row.get("source_url") for row in calculation["derivation_inputs"]) for calculation in calculations) if requirement.get("calculation") else bool(facts) and all(fact.url or payload_for(fact).get("source_url") for fact in facts)
         if field == "include_provenance" and not provenance:
@@ -198,7 +205,7 @@ def exact_support_reasons(requirement: dict, facts: list) -> list[str]:
         reasons.append("requirement_period_unverified")
     if requirement.get("calculation") and not any(calculation_record(fact, requirement) for fact in facts):
         reasons.append("requirement_calculation_missing:" + metric)
-    if metric in PRICE_METRICS | FINANCIAL_METRICS | MACRO_METRICS | TECHNICAL_METRICS | {"quote"} and not any(metric_supports(fact, metric) and time_scope_matches(fact, scope, metric_record(fact, metric)) for fact in facts):
+    if metric in PRICE_METRICS | FINANCIAL_METRICS | MACRO_METRICS | TECHNICAL_METRICS | {"quote", "earnings_estimates"} and not any((metric_record(fact, metric) is not None if metric == "earnings_estimates" else metric_supports(fact, metric)) and time_scope_matches(fact, scope, metric_record(fact, metric)) for fact in facts):
         reasons.append("requirement_metric_missing:" + metric)
     if metric == "dividend_announcement":
         records = [record for fact in facts if (record := metric_record(fact, metric)) is not None]

@@ -55,13 +55,25 @@ async def route_request(state: GraphState) -> dict[str, Any]:
                 semantic = None
         if semantic is None:
             result = deterministic_fallback_contract(_bind_task_render_identity(result), diagnostics)
-        await _emit_understanding_trace(result["understanding"])
+        if result["understanding"].get("requirements_status") == "deterministic_fallback":
+            await emit_event({"type": "trace", "visibility": "user", "stage": "understanding", "status": "done",
+                "title": "请求范围尚未完全确认", "summary": "原问尚未完全确认，将保留检索范围并明确标出未完成要求。",
+                "requirements_status": "unconfirmed"})
+        else:
+            await _emit_understanding_trace(result["understanding"])
     else:
         result = _bind_task_render_identity(result)
     understanding = result.get("understanding") if isinstance(result.get("understanding"), dict) else {}
     frame = intent_frame_from_legacy(understanding)
     frame.source = "selected_model_semantic_extraction" if understanding.get("requirements_status") == "confirmed" else "deterministic_rules"
     understanding["intent_frame"] = frame.model_dump()
+    from backend.services.run_context import current_run_context
+    run = current_run_context()
+    if run is not None and run.compiled_state is not None:
+        diagnostics = (result.get("trace") or {}).get("request_requirements") or {}
+        run.compiled_state["trace"] = {"request_requirements": {key: diagnostics[key] for key in (
+            "status", "validation_code", "cause_code", "error_code", "provider_attempts", "stage_budget_seconds") if key in diagnostics},
+            "request_compiler": (result.get("trace") or {}).get("request_compiler") or {}}
     return result
 
 

@@ -142,3 +142,27 @@ def test_failed_primary_metadata_does_not_leak_into_secondary_currency():
     result = gateway.get_kline("9988.HK")
     assert result["provider"] == "secondary"
     assert result.get("currency") is None
+
+
+def test_open_daily_bar_is_removed_from_direct_and_agent_indicators(monkeypatch):
+    rows = _rows()
+    rows.append({"time": "2026-10-08", "open": 200, "high": 2000, "low": 10, "close": 1000, "volume": 5})
+    raw = {"kline_data": rows, "currency": "USD", "source": "fixture", "interval": "1d",
+           "source_timestamp": "2026-10-08", "observed_at": "2026-10-08T15:00:00Z"}
+    monkeypatch.setattr(tools, "_get_stock_historical_data", lambda *args, **kwargs: deepcopy(raw))
+    direct = json.loads(tools.get_technical_snapshot.invoke({"ticker": "TSLA"}))
+    agent = TechnicalAgent(None, None, SimpleNamespace())
+    enriched = agent._enrich_with_side_signals(raw, "TSLA")
+    native = agent._compute_indicators(enriched["kline_data"])
+    assert direct["close"] == native["close"] == 159
+    assert direct["points"] == len(enriched["kline_data"]) == 60
+    assert direct["source_timestamp"] == enriched["source_timestamp"] == rows[-2]["time"]
+    assert direct["market_session"] == "regular_close"
+    assert direct["resistance"] == native["resistance"] == 161
+
+
+def test_cached_intraday_bar_is_not_relabelled_closed_after_the_bell(monkeypatch):
+    from backend.services.market_hours import filter_open_daily_bars
+    rows = [{"time": "2026-10-07", "close": 100}, {"time": "2026-10-08", "close": 110}]
+    assert filter_open_daily_bars(rows, symbol="TSLA", as_of="2026-10-08T15:00:00Z") == rows[:1]
+    assert filter_open_daily_bars(rows, symbol="0700.HK", as_of="2026-10-08T15:00:00Z") == rows

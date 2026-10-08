@@ -144,7 +144,7 @@ def validate_quote_payload(raw: Any) -> tuple[dict[str, Any], datetime | None]:
     }
     payload = raw if isinstance(raw, Mapping) else {}
     details = payload.get("data") if isinstance(payload.get("data"), Mapping) else payload
-    for key in ("currency", "market_session", "source_timestamp", "source_time_precision", "source_time_status", "data_kind", "source_timezone"):
+    for key in ("currency", "market_session", "source_timestamp", "source_time_precision", "source_time_status", "data_kind", "source_timezone", "price_basis", "dividends_included"):
         value = parsed.get(key, details.get(key))
         if value is not None:
             normalized[key] = value
@@ -252,6 +252,7 @@ def _fetch_yfinance(symbol: str, period: str, interval: str) -> Mapping[str, Any
     frame = stock.history(
         period=period,
         interval=interval,
+        auto_adjust=False,
         timeout=20,
         raise_errors=True,
     )
@@ -289,6 +290,8 @@ def _fetch_yfinance(symbol: str, period: str, interval: str) -> Mapping[str, Any
         "period": period,
         "interval": interval,
         "source": "yfinance",
+        "price_basis": "split_adjusted_close",
+        "dividends_included": False,
         "currency": metadata.get("currency"),
         "source_timezone": metadata.get("exchangeTimezoneName"),
         "source_timestamp": rows[-1]["time"] if include_time else rows[-1]["time"][:10],
@@ -318,7 +321,7 @@ def _fetch_stooq(symbol: str, period: str, interval: str) -> Mapping[str, Any] |
 
 def _quote_from_kline_provider(provider: KlineProvider, *, clock: Callable[[], datetime] | None = None) -> QuoteProvider:
     def fetch(symbol: str) -> Mapping[str, Any] | None:
-        raw = provider(symbol, "5d", "1d")
+        raw = provider(symbol, "1mo", "1d")
         if not isinstance(raw, Mapping):
             return None
         bars = validate_kline_bars(raw.get("kline_data"))
@@ -343,6 +346,8 @@ def _quote_from_kline_provider(provider: KlineProvider, *, clock: Callable[[], d
                 "source_timestamp": str(latest["time"])[:10],
                 "source_time_precision": "date",
                 "source_time_status": "provided",
+                "price_basis": raw.get("price_basis"),
+                "dividends_included": raw.get("dividends_included"),
             },
             "as_of": latest["time"],
         }
@@ -677,7 +682,7 @@ class MarketDataGateway:
             currency = normalize_currency(raw.get("currency"))
             if currency:
                 source_metadata["currency"] = currency
-            for key in ("source_timestamp", "source_time_precision", "source_time_status", "source_timezone", "source_url"):
+            for key in ("source_timestamp", "source_time_precision", "source_time_status", "source_timezone", "source_url", "price_basis", "dividends_included"):
                 if raw.get(key) is not None:
                     source_metadata[key] = raw[key]
             return bars, _as_of_from_payload(raw, bars)

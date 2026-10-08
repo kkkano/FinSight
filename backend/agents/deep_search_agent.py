@@ -1065,7 +1065,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         if is_pdf:
             text = self._extract_pdf_text(response.content, full_document=True) if full_document else self._extract_pdf_text(response.content)
         else:
-            text = self._extract_html_text(response.text)
+            text = self._extract_html_text(response.content)
 
         text = self._trim_text(text, 600_000 if full_document else None)
         domain = self._normalized_domain_from_url(url)
@@ -1259,7 +1259,7 @@ class DeepSearchAgent(BaseFinancialAgent):
             logger.info(f"[DeepSearch] PDF parse failed: {exc}")
             return ""
 
-    def _extract_html_text(self, html: str) -> str:
+    def _extract_html_text(self, html: str | bytes) -> str:
         soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()

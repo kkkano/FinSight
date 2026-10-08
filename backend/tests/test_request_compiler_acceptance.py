@@ -138,7 +138,8 @@ def test_hong_kong_research_plans_quote_and_profile_without_us_sec():
     state=compile_request('研究阿里巴巴港股 9988.HK 最新财务、估值和风险，只分析这个上市代码。')
     names={s['name'] for s in state['plan_ir']['steps']}
     assert state['subject']['tickers']==['9988.HK']
-    assert {'get_stock_price','get_company_info','get_local_market_filings'} <= names
+    assert {'get_stock_price','get_company_info','fundamental_agent'} <= names
+    assert state['trace']['coverage_validator']['status'] == 'ok'
     assert 'get_sec_company_facts_quarterly' not in names
 
 

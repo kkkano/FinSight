@@ -18,6 +18,13 @@ from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, proj
 from backend.graph.evidence_dependencies import input_tickers
 
 
+def _input_optional(ctx, task_ids: list[str] | None, kind: str | None, fallback: bool) -> bool:
+    tasks = [ctx.ready_tasks_by_id[task_id] for task_id in task_ids or [] if task_id in ctx.ready_tasks_by_id]
+    if not kind or not tasks or any("required_input_groups" not in task for task in tasks):
+        return fallback
+    return fallback or not any(group["any_of"] == [kind] for task in tasks for group in task["required_input_groups"])
+
+
 def _step_task_ids(step: dict) -> list[str]:
     values = step.get("task_ids") if isinstance(step.get("task_ids"), list) else []
     task_ids = [str(value or "").strip() for value in values if str(value or "").strip()]
@@ -93,6 +100,7 @@ def _append_tool_step(ctx,
 ) -> None:
     if name not in ctx.allowed_tools:
         return
+    optional = _input_optional(ctx, task_ids, evidence_kind, optional)
     try:
         inputs_key = json.dumps(inputs, ensure_ascii=False, sort_keys=True, default=str)
     except Exception:
@@ -155,6 +163,7 @@ def _append_agent_step(ctx,
 ) -> None:
     if name not in ctx.allowed_agents:
         return
+    optional = _input_optional(ctx, task_ids, evidence_kind, optional)
     try:
         inputs_key = json.dumps(inputs, ensure_ascii=False, sort_keys=True, default=str)
     except Exception:

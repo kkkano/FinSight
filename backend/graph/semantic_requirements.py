@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import asyncio
 from copy import deepcopy
 from typing import Annotated, Any, Literal, get_args
 
@@ -13,7 +14,8 @@ from backend.services.llm_response import completion_metadata, final_completion_
 from backend.services.llm_response import LLMCompletionError
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, classify_llm_error
 from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
-from backend.utils.env import env_int
+from backend.utils.env import env_float, env_int
+from backend.services.run_context import current_run_context, deadline_scope, remaining_timeout
 from backend.graph.research_capabilities import _REGISTERED_ATTRIBUTES
 
 
@@ -23,12 +25,25 @@ PRESENTATION_FIELDS = frozenset(get_args(PresentationField))
 FactAttribute = Literal[tuple(sorted(_REGISTERED_ATTRIBUTES))]
 
 
-class RequirementQualifier(BaseModel):
+class ReportingBasisQualifier(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: Literal["reporting_basis", "unknown"]
+    name: Literal["reporting_basis"]
+    value: Literal["consolidated", "parent", "unspecified"] | None = Field(
+        default=None, description="仅指合并报表、母公司报表或未指定合并范围；不是年度/季度、价格收益或股息收益口径。"
+    )
+    source_text: str
+    description: str = ""
+
+
+class UnknownQualifier(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: Literal["unknown"]
     value: str | None = None
     source_text: str
     description: str = ""
+
+
+RequirementQualifier = Annotated[ReportingBasisQualifier | UnknownQualifier, Field(discriminator="name")]
 
 
 class SemanticTimeScope(BaseModel):
@@ -174,6 +189,7 @@ def requires_semantic_extraction(query: str, *, output_mode: str = "chat") -> bo
 _SYSTEM_PROMPT = """你负责提取用户原始请求，不负责回答或选择工具。返回符合 schema 的对象。
 先判断route：真实公司、市场、事件或时效事实需要research；一般概念与明确虚构的算例可direct；必要主体或资料不明时clarify。陌生公司名称或裸证券代码仍是待研究主体，不能因规则没有别名而转概念答复。direct不得承诺查到公司当前事实。route=research必须完整保留研究要求，route=direct可仅保存概念解释要求，route=clarify询问缺失输入。
 当前请求中的明确主体、用户选择的材料与同会话已确认主题优先于workspace。workspace_scope.binding_allowed=false时，active_symbol和由它形成的规则种子只是弱提示，不能作为已确认主体；只有指代而没有可靠绑定时使用clarify。具体看板内binding_allowed=true可绑定当前标的。
+qualifiers.reporting_basis只表达合并报表/母公司报表范围，value只能consolidated/parent/unspecified/null。年度报告与财年频率使用time_scope，价格收益口径使用price_basis/dividends_included属性；没有对应类别的真实限定条件使用name=unknown并保留原文和value，不套用reporting_basis。
 同一指标的两期增减使用calculation={operation:growth_rate/difference/ratio,baseline:year_ago/previous_period}，metric仍为原始指标。营收同比是revenue + growth_rate + year_ago，不是unknown或累计价格收益。数值比较与优劣解释分开保存；同比值需要kind=calculation，而解释增长原因仍单列explanation。仅在需要两期计算时填写calculation，工具已有标准定义的收益/回撤不填。
 标准窗口收益、回撤、技术指标或报价使用metric自身的规范定义，不兼容财务两期calculation运算；这类错配会触发request_calculation_domain_conflict结构修复。若用户明确要求再比较两个窗口各自已计算的收益率，保留两项窗口事实与独立再计算要求；不要将后者降成单个窗口收益。独立再计算无法映射时保留metric=unknown与原始metric_text，不能删除真实要求。
 计算依据属于计算的可追溯展示：原始输入或两期依据使用presentation=include_inputs，计算公式使用include_formula，输入出处与来源使用include_provenance，直接附在对应calculation要求。统一展示指令应用到每个相关计算要求，不另列metric=unknown的事实要求，也不因为要求依据就产生投资判断、新闻或增长原因解释。真正要求因果分析才requires_analysis=true；未知实际指标仍保留unknown。
@@ -205,7 +221,23 @@ kind=constraint 时不产生数据采集义务。业务质量/估值判断应保
 
 
 async def extract_semantic_requirements(state: dict[str, Any], seed: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-    context = LLMCallContext.create(stage="request_requirements", agent="request_compiler", layer="understanding")
+    run = current_run_context()
+    if run is None:
+        return await _extract_semantic_requirements(state, seed)
+    budget = min(60.0, env_float("LANGGRAPH_REQUEST_TIMEOUT_SEC", 1200), run.remaining_seconds / 3)
+    diagnostics = {"status": "unconfirmed", "source": "selected_model_semantic_extraction", "stage_budget_seconds": budget}
+    try:
+        with deadline_scope(budget):
+            async with asyncio.timeout(budget):
+                return await _extract_semantic_requirements(state, seed, diagnostics=diagnostics)
+    except TimeoutError:
+        diagnostics.update(error_code="request_contract_unconfirmed", cause_code="llm_timeout",
+                           validation_code="request_understanding_timeout", exception_type="TimeoutError")
+        return None, diagnostics
+
+
+async def _extract_semantic_requirements(state: dict[str, Any], seed: dict[str, Any], *, diagnostics: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    context = LLMCallContext.create(stage="request_requirements", agent="request_compiler", layer="understanding", max_provider_attempts=2)
     attribution = set_llm_attribution(LLMAttribution(agent="request_compiler", layer="understanding"))
     ui = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
     history = ui.get("session_history") or state.get("messages") or []
@@ -224,15 +256,15 @@ async def extract_semantic_requirements(state: dict[str, Any], seed: dict[str, A
     from backend.graph.intent.predicates import _is_scoped_active_symbol_context
     payload["workspace_scope"] = {"active_symbol": ui.get("active_symbol"), "view": ui.get("view"),
                                   "binding_allowed": _is_scoped_active_symbol_context(ui)}
-    diagnostics: dict[str, Any] = {"status": "unconfirmed", "source": "selected_model_semantic_extraction"}
+    diagnostics = diagnostics if diagnostics is not None else {"status": "unconfirmed", "source": "selected_model_semantic_extraction"}
     try:
         messages = [SystemMessage(content=_SYSTEM_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))]
         for attempt in range(2):
             response = await ainvoke_configured_llm(
                 messages, context=context, temperature=0.0, acquire_token=True,
                 max_tokens=env_int("LANGGRAPH_REQUEST_MAX_TOKENS", 65536),
-                request_timeout=env_int("LANGGRAPH_REQUEST_TIMEOUT_SEC", 1200),
-                acquire_timeout_seconds=env_int("LANGGRAPH_REQUEST_ACQUIRE_TIMEOUT_SEC", 120),
+                request_timeout=remaining_timeout(env_float("LANGGRAPH_REQUEST_TIMEOUT_SEC", 1200)),
+                acquire_timeout_seconds=remaining_timeout(env_float("LANGGRAPH_REQUEST_ACQUIRE_TIMEOUT_SEC", 120)),
                 client_transform=lambda client: client.with_structured_output(ExtractedRequest, method="json_schema", include_raw=True),
             )
             diagnostics.update(completion_metadata(response))

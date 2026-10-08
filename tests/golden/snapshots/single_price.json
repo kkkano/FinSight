@@ -3,17 +3,17 @@
   "output_mode": "chat",
   "plan_steps": [
     {
-      "group": "request_task_1",
+      "group": "request_unconfirmed",
       "kind": "tool",
-      "name": "get_stock_price"
+      "name": "search"
     }
   ],
   "route": "research",
   "tasks": [
     {
-      "operation": "price",
-      "reason": "ticker_or_alias",
-      "subject_type": "company",
+      "operation": "qa",
+      "reason": null,
+      "subject_type": "research_doc",
       "tickers": [
         "AAPL"
       ]

@@ -76,7 +76,9 @@ def test_new_evidence_kinds_reach_market_policy_and_exact_tool_arguments():
     assert {"get_price_window_metrics", "get_sec_capital_allocation"} <= set(state["policy"]["allowed_tools"])
     capital = [step for step in state["plan_ir"]["steps"] if step["name"] == "get_sec_capital_allocation"]
     assert {step["inputs"]["frequency"] for step in capital} == {"quarterly", "annual"}
-    assert all(step["inputs"]["limit"] == 2 and not step["optional"] for step in capital)
+    assert all(step["inputs"]["limit"] == 2 for step in capital)
+    assert state['trace']['coverage_validator']['status'] == 'ok'
+    assert any('capital_allocation' in group['any_of'] for group in state['tasks'][0]['required_input_groups'])
     window = next(step for step in state["plan_ir"]["steps"] if step["name"] == "get_price_window_metrics")
     assert window["inputs"] == {"ticker": "KO", "sessions": 20, "metrics": ["cumulative_return", "max_drawdown", "volume_breakout"],
                                 "as_of": None, "price_basis": "close"}
@@ -123,7 +125,8 @@ def test_known_metrics_project_capability_and_dimension_despite_model_tool_vocab
     canonical = result["tasks"][0]["answer_requirements"][:5]
     assert all(row["capability_status"] == "supported" for row in canonical)
     assert all(row["dimension"] == "fundamental_quality" for row in canonical)
-    assert all(row["evidence_kinds"] == ["capital_allocation"] for row in canonical)
+    assert all(set(row["required_input_groups"][0]["any_of"]) == {"capital_allocation", "filing_context", "fundamental_snapshot"} for row in canonical)
+    assert all('financial_statement' not in row['evidence_kinds'] for row in canonical)
     assert all(row["time_scope"]["kind"] == "fiscal_quarter" and row["time_scope"]["as_of"] is None for row in canonical)
     assert result["trace"]["request_requirements"]["raw_semantic"]["requirements"][0]["time_scope"]["as_of"] == "latest_reported"
     assert canonical[0]["unmapped_evidence_kinds"] == ["financial_statement"]
@@ -306,7 +309,9 @@ def test_key_value_attributes_keep_only_registered_keys():
     raw = semantic_fixture()
     raw['requirements'][10]['attributes'] = ['confirmation_status:confirmed', 'data_frequency:daily', 'currency']
     compiled = compile_fixture(raw)['tasks'][0]['answer_requirements'][10]
-    assert 'confirmation_status' in compiled['attributes'] and 'currency' in compiled['attributes']
+    assert 'currency' in compiled['attributes'] and 'confirmation_status' not in compiled['attributes']
+    assert compiled['capability_status'] == 'supported'
+    assert any(row['name'] == 'confirmation_status:confirmed' for row in compiled['unmapped_qualifiers'])
     assert not any(':' in item for item in compiled['attributes'])
     assert 'data_frequency' not in compiled['attributes'] and compiled['data_frequency'] == 'daily'
 
@@ -428,7 +433,8 @@ def test_semantic_failure_falls_back_to_rule_plan_and_cannot_claim_complete(monk
     assert result["trace"]["request_requirements"]["error_code"] == "request_contract_unconfirmed"
     quality = evaluate_result_quality(state={**result, "output_mode": "chat"})
     assert quality["answer_status"] != "answered"
-    assert any(item["code"] == "REQUEST_REQUIREMENTS_UNCONFIRMED" and item["severity"] == "warn" for item in quality["reasons"])
+    assert any(item["code"] == "REQUEST_REQUIREMENTS_UNCONFIRMED" for item in quality["reasons"])
+    assert quality["publishable"] is False
     report_quality = evaluate_result_quality(state={**result, "output_mode": "investment_report"})
     assert report_quality["publishable"] is False
 

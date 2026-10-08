@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from backend.services.data_contract import AssetContext
@@ -53,4 +54,20 @@ def is_completed_session(day: date, *, asset: AssetContext, as_of: datetime) -> 
     return schedule is not None and schedule["market_close"] <= as_of
 
 
-__all__ = ["MarketSession", "get_market_session", "is_completed_session"]
+def filter_open_daily_bars(rows: list[dict[str, Any]], *, symbol: str, as_of: datetime | str | None = None) -> list[dict[str, Any]]:
+    """剔除已知未结束日线；未知时间保留为未知，不借用上一行时间。"""
+    asset = AssetContext.from_symbol(symbol)
+    now = datetime.fromisoformat(as_of.replace("Z", "+00:00")) if isinstance(as_of, str) else as_of or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    today = now.astimezone(ZoneInfo(asset.timezone)).date()
+    completed = []
+    for row in rows:
+        stamp = (row.get("time") or row.get("datetime") or row.get("ts")) if isinstance(row, dict) else None
+        day = date.fromisoformat(str(stamp)[:10]) if stamp else None
+        if day is None or day < today or is_completed_session(day, asset=asset, as_of=now):
+            completed.append(row)
+    return completed
+
+
+__all__ = ["MarketSession", "get_market_session", "is_completed_session", "filter_open_daily_bars"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+from pydantic import BaseModel, ConfigDict
 
 from backend.graph.intent_contract import MACRO_INDICATOR_KEYS, evidence_plan_for_kinds
 
@@ -23,6 +24,7 @@ _METRIC_CONTRACTS = {
         "rsi14", "macd", "support", "resistance", "support_resistance",
     )},
     "earnings_date": ("news_catalysts", ["event_calendar"], "catalyst"),
+    "earnings_estimates": ("earnings_forecast", ["earnings_estimates"], "earnings"),
     "macro_data": ("macro_impact", ["macro_context"], "macro"),
     **{metric: ("macro_impact", ["macro_context"], "macro") for metric in MACRO_INDICATOR_KEYS},
     "dividend_announcement": ("news_catalysts", ["filing_context"], "filing"),
@@ -48,7 +50,7 @@ _DETERMINISTIC_MEASUREMENTS = {
     "quote", "cumulative_return", "max_drawdown", "volume_breakout", "operating_cash_flow",
     "capital_expenditure", "free_cash_flow", "dividends_paid", "repurchases_paid", "capital_allocation_surplus",
     "shares_outstanding", "net_share_change", "dividend_coverage", "debt_burden", "revenue", "net_income",
-    "operating_income", "earnings_date", "dividend_announcement", "macro_data",
+    "operating_income", "earnings_date", "earnings_estimates", "dividend_announcement", "macro_data",
 } | set(MACRO_INDICATOR_KEYS)
 _DETERMINISTIC_MEASUREMENTS.update({"rsi14", "macd", "support", "resistance", "support_resistance"})
 _QUALITATIVE_MEASUREMENTS = {
@@ -115,9 +117,12 @@ class CapabilitySpec:
     facet: str
     attributes: frozenset[str]
     validation: Literal["structured_fact", "cited_analysis"]
+    required_input_groups: tuple[InputGroup, ...]
+    enrichment: tuple[str, ...] = ()
 
     def supports_market(self, market: str) -> bool:
-        return bool(self.producers(market)) and (market not in {"CN", "HK"} or self.metric not in FINANCIAL_METRICS
+        return all(any(any(item["tools"] or item["agents"] for item in evidence_plan_for_kinds([kind], market=market)) for kind in group.any_of)
+                   for group in self.required_input_groups) and (market not in {"CN", "HK"} or self.metric not in FINANCIAL_METRICS
             or all(part in FINANCIAL_DEFINITIONS for part in financial_metric_inputs([self.metric])))
 
     def producers(self, market: str = "US") -> tuple[str, ...]:
@@ -125,12 +130,70 @@ class CapabilitySpec:
                                    for name in [*item["tools"], *item["agents"]]))
 
 
-CAPABILITIES = {
-    metric: CapabilitySpec(metric, dimension, tuple(kinds), facet,
-                           frozenset(_METRIC_ATTRIBUTES.get(metric, _COMMON_SOURCE_ATTRIBUTES)),
-                           "structured_fact" if metric in _DETERMINISTIC_MEASUREMENTS else "cited_analysis")
-    for metric, (dimension, kinds, facet) in _METRIC_CONTRACTS.items()
-}
+class InputGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    group_id: str
+    any_of: list[str]
+    requirement_id: str | None = None
+
+
+def _capability_inputs(metric: str, kinds: list[str]) -> tuple[tuple[InputGroup, ...], tuple[str, ...]]:
+    alternatives = {
+        "business_model": ("company_profile", "filing_context", "document_context"),
+        "competition": ("document_context", "filing_context"),
+        "fundamental_quality": ("fundamental_snapshot", "filing_context"),
+        "earnings_performance": ("fundamental_snapshot", "filing_context"),
+        "revenue": ("filing_context", "fundamental_snapshot"),
+        "net_income": ("filing_context", "fundamental_snapshot"),
+        "operating_income": ("filing_context", "fundamental_snapshot"),
+        "risk_level": ("risk_profile", "filing_context", "document_context"),
+    }
+    if metric in alternatives:
+        choices = alternatives[metric]
+        enrichment = tuple(kind for kind in kinds if kind not in choices)
+        return (InputGroup(group_id=f"{metric}:basis", any_of=list(choices)),), enrichment
+    if metric == "valuation_reasonableness":
+        return (InputGroup(group_id="valuation:profile", any_of=["company_profile"]),
+                InputGroup(group_id="valuation:basis", any_of=["fundamental_snapshot", "filing_context", "document_context"])), ("earnings_estimates",)
+    if metric in FINANCIAL_METRICS and "capital_allocation" in kinds:
+        return (InputGroup(group_id=f"{metric}:facts", any_of=["capital_allocation", "filing_context", "fundamental_snapshot"]),), ()
+    return tuple(InputGroup(group_id=f"{metric}:{kind}", any_of=[kind]) for kind in kinds), ()
+
+
+def _build_capability(metric: str, definition: tuple) -> CapabilitySpec:
+    dimension, kinds, facet = definition
+    groups, enrichment = _capability_inputs(metric, kinds)
+    inputs = tuple(dict.fromkeys([*kinds, *(kind for group in groups for kind in group.any_of)]))
+    return CapabilitySpec(metric, dimension, inputs, facet,
+                          frozenset(_METRIC_ATTRIBUTES.get(metric, _COMMON_SOURCE_ATTRIBUTES)),
+                          "structured_fact" if metric in _DETERMINISTIC_MEASUREMENTS else "cited_analysis", groups, enrichment)
+
+
+CAPABILITIES = {metric: _build_capability(metric, definition) for metric, definition in _METRIC_CONTRACTS.items()}
+
+
+def input_groups(requirement: dict) -> list[dict]:
+    if isinstance(requirement.get("required_input_groups"), list):
+        return requirement["required_input_groups"]
+    return [{"group_id": str(kind), "any_of": [kind]} for kind in requirement.get("evidence_kinds", [])]
+
+
+def task_input_groups(requirements: list[dict]) -> list[dict]:
+    return [
+        {**group, "group_id": f"{row.get('requirement_id', index)}:{group['group_id']}", "requirement_id": row.get("requirement_id")}
+        for index, row in enumerate(requirements) if row.get("kind") not in {"constraint", "input_dependency"}
+        and row.get("capability_status") in {"supported", "retrieval_required"}
+        for group in input_groups(row)
+    ]
+
+
+REPORTING_BASIS_LABELS = {"consolidated": "合并", "parent": "母公司", "unspecified": "未指定"}
+
+
+def reporting_basis_value(value: str | None) -> str | None:
+    return next((key for key, label in REPORTING_BASIS_LABELS.items() if value in {key, label}), None)
+
+
 DIMENSION_KINDS: dict[str, set[str]] = {}
 for capability in CAPABILITIES.values():
     DIMENSION_KINDS.setdefault(capability.dimension, set()).update(capability.evidence_kinds)

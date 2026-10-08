@@ -35,7 +35,7 @@ flowchart TD
 - 标的绑定完成后，一次性编译 `request_frame_id`、task ID、`required_evidence` 与 render identity；兼容 operation 是投影视图，不能成为另一个意图所有者。
 - 多标的请求逐项检查 `(task_id, subject, evidence_kind)`，只取得 AAPL 报价不能满足 MSFT 的技术或基本面义务。
 - 复杂请求的原始分母保存在 `understanding.semantic_contract`，包括指标、交易日/日历/财期、否定约束及输入依赖。后续计划丢项不能缩小完整性检查范围；未知能力保留为未支持，缺公司或旧报告时明确澄清。
-- 模型只抽取语义，注册能力、证据类别和工具参数由代码确定。结构校验失败最多在同一模型、同一预算上下文中纠正一次；仍失败则在 `trace.request_requirements` 记录 `request_contract_unconfirmed`，沿用规则任务继续作答，同时把 `requirements_status` 标为 `deterministic_fallback`：聊天结果质量追加 `REQUEST_REQUIREMENTS_UNCONFIRMED` 警告，最多为 partial；正式报告直接阻断归档。不会让用户空等后只看到“稍后重试”，也不会把规则结果宣称为完整回答。
+- 模型只抽取语义，注册能力、证据类别和工具参数由代码确定。报表合并/母公司口径使用类型化限定值，时间范围及价格口径有各自字段；未知限定原样保留，不让已支持基础指标停止取数。结构校验最多纠正一次，与首次理解共用阶段截止时间。仍失败则在 `trace.request_requirements` 记录 `request_contract_unconfirmed`，按原问进行通用检索，并将完整原问保留为未确认要求；实际事实可以展示，但任何旧规则任务不得据此被标成已回答，未确认报告不归档。
 
 `request_spec.py` 定义版本化请求与限定条件；`research_capabilities.py` 是指标、属性、实际生产者与验证域的共享注册。未知限定条件保留原文并标记未映射，不能作为自由 payload 键查找。报告意图由入口语义决定，编译后不再以全局 query 或旧 operation 重写任务范围。
 

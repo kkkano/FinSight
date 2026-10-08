@@ -470,6 +470,10 @@ def get_technical_snapshot(ticker: str) -> str:
 
         from backend.tools.financial_facts import fact_number, normalize_currency
         from backend.tools.technical import _calc_ma, _calc_rsi, _calc_macd
+        from backend.services.market_hours import filter_open_daily_bars
+        from backend.services.data_contract import AssetContext
+
+        kline = filter_open_daily_bars(kline, symbol=ticker, as_of=data.get("observed_at"))
 
         closes = []
         rows = []
@@ -512,7 +516,7 @@ def get_technical_snapshot(ticker: str) -> str:
         support = min(lows) if complete_hlc else None
         resistance = max(highs) if complete_hlc else None
         currency = normalize_currency(data.get("currency"))
-        source_time = data.get("source_timestamp") or last_time
+        source_time = str(last_time)[:10] if last_time else None
         missing = [key for key, value in {"support": support, "resistance": resistance,
             "currency": currency, "source_time": source_time}.items() if value is None]
 
@@ -548,6 +552,8 @@ def get_technical_snapshot(ticker: str) -> str:
             "source_timezone": data.get("source_timezone"),
             "source": data.get("source"),
             "source_url": data.get("source_url"),
+            "market_session": ("continuous_close" if AssetContext.from_symbol(ticker).market == "CRYPTO" else "regular_close") if last_time else "unknown",
+            "price_basis": data.get("price_basis"),
             "currency": currency,
             "unit": currency,
             "support": support,

@@ -9,7 +9,7 @@ from backend.graph.semantic_requirements import (
     FactAttribute, RequirementQualifier, SemanticConstraint, SemanticRequirement,
     SemanticSubject, SemanticTimeScope,
 )
-from backend.graph.research_capabilities import CAPABILITIES
+from backend.graph.research_capabilities import CAPABILITIES, InputGroup
 
 CanonicalMetric = Literal[tuple(sorted(CAPABILITIES)) + ("unknown", "comparison")]
 
@@ -56,6 +56,8 @@ class RequirementSpec(SemanticRequirement):
     unsupported_reason: str | None = None
     unmapped_qualifiers: list[UnmappedQualifier] = Field(default_factory=list)
     unmapped_evidence_kinds: list[str] = Field(default_factory=list)
+    required_input_groups: list[InputGroup] = Field(default_factory=list)
+    enrichment: list[str] = Field(default_factory=list)
     input_dependency_specs: list[InputDependencySpec] = Field(default_factory=list)
     attribute_owner_requirement_id: str | None = None
     comparison_requirement_ids: list[str] = Field(default_factory=list)

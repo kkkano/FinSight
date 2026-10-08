@@ -333,8 +333,44 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         normalization = artifacts.get("task_evidence_normalization") or {}
         evidence = normalization.get("evidence_index") if isinstance(normalization, dict) else {}
         evidence = evidence if isinstance(evidence, dict) else {}
-    supported_facts = [item for item in evidence.values() if isinstance(item, dict) and item.get("usage") == "fact"]
-    supported = bool(claims or supported_facts)
+    checked_sources: set[str] = set()
+    checked_claims: set[str] = set()
+    unconfirmed = (state.get("understanding") or {}).get("requirements_status") == "deterministic_fallback"
+    for task in tasks:
+        if task.get("answer_requirements"):
+            for check in task.get("requirement_results") or []:
+                checked_sources.update(check.get("evidence_ids") or [])
+                checked_claims.update(check.get("claim_ids") or [])
+        else:
+            checked_sources.update(task.get("selected_fact_ids") or task.get("fact_ids") or [])
+            checked_claims.update(task.get("claim_ids") or [])
+        if unconfirmed:
+            checked_sources.update(task.get("selected_fact_ids") or task.get("fact_ids") or [])
+    from types import SimpleNamespace
+    from backend.graph.synthesis.requirement_validation import evidence_is_document_index, _supports_dimension
+    from backend.graph.synthesis.requirement_support import FINANCIAL_METRICS, PRICE_METRICS, MACRO_METRICS, TECHNICAL_METRICS, metric_record, metric_supports
+    from backend.graph.request_task_contract import output_is_error_like
+
+    def usable(source_id: str) -> bool:
+        item = evidence.get(source_id)
+        if not isinstance(item, dict) or item.get("usage") != "fact":
+            return False
+        source = SimpleNamespace(kind=item.get("kind"), metadata=item.get("metadata") or {},
+                                 structured_data=item.get("structured_data") or {}, text=item.get("text") or "",
+                                 metric=item.get("metric"), market_price=item.get("market_price"), usage=item.get("usage"),
+                                 subject=item.get("subject"), task_ids=item.get("task_ids") or [])
+        if evidence_is_document_index(source) or source.metadata.get("subject_binding") == "unverified" or output_is_error_like(source.text) or output_is_error_like(source.structured_data):
+            return False
+        if unconfirmed:
+            return (source.kind == "price_snapshot" and metric_supports(source, "quote")
+                    or any(metric_record(source, metric) is not None for metric in FINANCIAL_METRICS | PRICE_METRICS | MACRO_METRICS | TECHNICAL_METRICS)
+                    or source.kind == "company_profile" and (_supports_dimension(source, "business_model") or _supports_dimension(source, "valuation_reasonableness")))
+        return True
+
+    supported_facts = [evidence[source_id] for source_id in checked_sources if usable(source_id)]
+    supported_claims = [claims[claim_id] for claim_id in checked_claims if claim_id in claims
+                        and claims[claim_id].get("evidence_ids") and all(usable(source_id) for source_id in claims[claim_id]["evidence_ids"])]
+    supported = bool(supported_claims or supported_facts)
     reasons: list[dict[str, Any]] = []
 
     def reason(code: str, severity: str, message: str) -> None:
@@ -353,11 +389,9 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
                        content_contract_version="research_content.v2")
         return quality
     if understanding.get("requirements_status") == "deterministic_fallback":
-        reason("REQUEST_REQUIREMENTS_UNCONFIRMED", "block" if report_mode else "warn",
+        reason("REQUEST_REQUIREMENTS_UNCONFIRMED", "warn" if supported else "block",
                "模型未能确认完整的原始要求，本轮按规则识别的任务作答，可能遗漏部分要求。")
-    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
-    coverage = trace.get("coverage_validator") if isinstance(trace.get("coverage_validator"), dict) else {}
-    missing_requirements = list(coverage.get("missing_requirements") or [])
+    missing_requirements = []
     for task in tasks:
         for missing in task.get("missing_requirements") or []:
             if isinstance(missing, dict) and missing not in missing_requirements:
@@ -365,16 +399,15 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     for missing in missing_requirements:
         if isinstance(missing, dict):
             reasons.append(_quality_reason(
-                code="REQUIRED_EVIDENCE_MISSING", severity="block" if report_mode or not supported else "warn",
+                code="REQUIRED_EVIDENCE_MISSING", severity="block" if not supported else "warn",
                 metric="task_evidence", actual=missing, threshold="verified_evidence",
                 message="请求中的主体或证据维度尚未满足。",
             ))
     if (tasks or understanding.get("route") == "research") and not supported:
         reason("NO_SUPPORTED_CONTENT", "block", "本轮没有可展示的已验证事实或论据。")
     if any(task.get("status") != "answered" or task.get("missing_evidence") for task in tasks):
-        missing_required = any(task.get("missing_evidence") for task in tasks)
-        reason("TASK_PARTIALLY_ANSWERED", "block" if not supported or report_mode and missing_required else "warn", "部分请求维度仍缺少证据。")
-    if report_mode and result and not claims:
+        reason("TASK_PARTIALLY_ANSWERED", "block" if not supported else "warn", "部分请求维度仍缺少证据。")
+    if report_mode and result and not supported:
         reason("NO_SUPPORTED_REPORT_CLAIMS", "block", "报告缺少受支持的研究论据，不能发布或归档。")
     if isinstance(report, dict) and isinstance(report.get("meta"), dict) and report["meta"].get("builder_fallback"):
         reason("REPORT_BUILD_FAILED", "block", "报告构建失败，当前内容仅为错误说明。")

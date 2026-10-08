@@ -27,8 +27,8 @@ def test_golden(name, deterministic_env):
 CONFIRMED_CASES = {
     "single_price": (["AAPL"], {"quote"}, {"get_stock_price"}),
     "single_report": (["NVDA"], {"investment_attractiveness"}, {"get_stock_price", "get_company_info"}),
-    "compare": (["AAPL", "MSFT"], {"valuation_reasonableness"}, {"get_stock_price", "get_company_info", "get_earnings_estimates"}),
-    "multi_question": (["AAPL", "MSFT"], {"valuation_reasonableness", "macro_data"}, {"get_stock_price", "get_company_info", "get_official_macro_releases"}),
+    "compare": (["AAPL", "MSFT"], {"valuation_reasonableness"}, {"get_company_info"}),
+    "multi_question": (["AAPL", "MSFT"], {"valuation_reasonableness", "macro_data"}, {"get_company_info", "get_official_macro_releases"}),
     "macro_only": ([], {"macro_data"}, {"get_official_macro_releases"}),
     "news_impact": (["TSLA"], {"external_impact"}, {"get_stock_price", "get_company_news"}),
     "url_doc": ([], {"document_summary"}, {"fetch_url_content"}),
@@ -66,12 +66,12 @@ def test_unconfirmed_report_without_evidence_cannot_claim_completion(determinist
     assert result["artifacts"]["publishable"] is False
 
 
-def test_mixed_fallback_keeps_company_and_macro_evidence_scopes_separate(deterministic_env):
+def test_confirmed_mixed_question_keeps_company_and_macro_evidence_scopes_separate(confirmed_semantic_env):
     result = run_pipeline_deterministic(GOLDEN_QUERIES["multi_question"], full_state=True)
     companies = [task for task in result["tasks"] if task["subject_type"] == "company"]
     macro = [task for task in result["tasks"] if task["subject_type"] == "macro"]
-    assert len(macro) == 1
+    assert len(macro) == 1 and companies
     assert all("macro_context" not in task["required_evidence"] for task in companies)
     assert all("美联储" not in task["request_text"] for task in companies)
-    macro_steps = [step for step in result["plan_ir"]["steps"] if step["name"] in {"get_current_datetime", "search", "macro_agent"}]
+    macro_steps = [step for step in result["plan_ir"]["steps"] if step["name"] in {"get_current_datetime", "search", "macro_agent", "get_official_macro_releases"}]
     assert all(step["task_ids"] == [macro[0]["id"]] for step in macro_steps)

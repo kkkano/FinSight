@@ -43,6 +43,7 @@ from backend.research.filing_evidence import is_filing_evidence
 from backend.research.news_event_quality import canonical_news_url
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, classify_llm_error, record_failure_diagnostic
 from backend.services.llm_response import LLMCompletionError, completion_metadata, final_completion_text
+from backend.services.run_context import current_run_context
 from backend.utils.quote import parse_quote_payload
 from backend.utils.env import env_int
 
@@ -399,7 +400,7 @@ def normalize_evidence(
         if quote:
             kind = "price_snapshot"
             raw = {**raw, "market_price": quote["price"], "currency": quote.get("currency"), "as_of": quote.get("as_of") or raw.get("as_of"), "source_name": quote.get("source") or raw.get("source_name")}
-            meta = {**meta, **{key: quote[key] for key in ("market_session", "source_timestamp", "source_time_precision", "source_time_status") if key in quote}}
+            meta = {**meta, **{key: quote[key] for key in ("market_session", "source_timestamp", "source_time_precision", "source_time_status", "price_basis", "dividends_included") if key in quote}}
         fact_metadata = payload.get("fact_metadata") if isinstance(payload.get("fact_metadata"), dict) else {}
         metric_metadata = next((
             item for values in fact_metadata.values() if isinstance(values, list)
@@ -1074,6 +1075,46 @@ def _fallback_task_result(
     )
 
 
+def _selection_explanation_claims(selection, *, outcome: TaskOutcome, selected_claims: list[Claim],
+                                  materials: list[NormalizedEvidence], requirements: list[dict],
+                                  requested_dimensions: list[str]) -> list[Claim]:
+    """普通交付与修复前快照复用同一份合法解释→claim投影。"""
+    material_index = {item.source_id: item for item in materials}
+    claims = []
+    for ordinal, explanation in enumerate(selection.explanations):
+        referenced = [material_index[source_id] for source_id in explanation.evidence_ids]
+        requirement_ids = [item for item in explanation.requirement_ids if item in {row.get("requirement_id") for row in requirements}]
+        metric = explanation.dimension if explanation.dimension in requested_dimensions else None
+        bound_dimensions = {row.get("dimension") for row in requirements if row.get("requirement_id") in requirement_ids
+                            and row.get("dimension") in requested_dimensions}
+        if metric is None and len(bound_dimensions) == 1:
+            metric = next(iter(bound_dimensions))
+        claims.append(Claim(
+            claim_id=f"synthesis:{outcome.task_id}:explanation" + (f":{ordinal}" if ordinal else ""), task_id=outcome.task_id,
+            agent_name="research_analyst", text=explanation.text, stance="unknown", assertion_type="opinion", directional=False,
+            dimension=_dimension({}, referenced, None, "research_analyst"), confidence=min([claim.confidence for claim in selected_claims] or [0.6]),
+            evidence_ids=explanation.evidence_ids,
+            limitations=["解释基于列出的材料，不替代原始公告或数据核验。"] if any(item.usage == "raw" for item in referenced) else [],
+            subject=outcome.subject_label, metric=metric, requirement_ids=requirement_ids))
+    return claims
+
+
+def _preserve_validated_analysis(selection, *, outcome: TaskOutcome, claims: list[Claim], materials: list[NormalizedEvidence],
+                                  requirements: list[dict], dimensions: list[str], evidence_normalization: EvidenceNormalizationResult) -> None:
+    from backend.graph.synthesis.analysis_requirements import unconfirmed_request_requirement
+    run = current_run_context()
+    if run is None or run.compiled_state is None or unconfirmed_request_requirement(run.compiled_state) is not None:
+        return
+    if (run.compiled_state.get("understanding") or {}).get("semantic_contract", {}).get("status") != "confirmed":
+        return
+    projected = _selection_explanation_claims(selection, outcome=outcome,
+        selected_claims=[claim for claim in claims if claim.claim_id in selection.claim_ids],
+        materials=materials, requirements=requirements, requested_dimensions=dimensions)
+    if projected:
+        run.record_analysis(outcome.task_id, {"claims": [claim.model_dump() for claim in projected],
+                                            "evidence_normalization": evidence_normalization.model_dump()})
+
+
 async def synthesize_task_results(
     *,
     task_outcomes: list[TaskOutcome],
@@ -1160,6 +1201,9 @@ async def synthesize_task_results(
                 requirements=requirements,
                 requirement_aliases=requirement_aliases,
             )
+            _preserve_validated_analysis(selection, outcome=outcome, claims=claims, materials=materials,
+                requirements=requirements, dimensions=(requested_dimensions_by_task or {}).get(outcome.task_id, []),
+                evidence_normalization=evidence_normalization)
             initial_errors = list(validation_errors)
             repair_attempts = 0
             if validation_errors and context.budget.remaining > 0:
@@ -1196,34 +1240,14 @@ async def synthesize_task_results(
             support = selection.direction_supporting_claim_ids
             selected_claims = [claim_by_id[item] for item in selected_ids]
             material_index = {item.source_id: item for item in materials}
-            explanations = [item.model_dump() for item in selection.explanations]
             explanation_errors = [item["code"] for item in validation_errors]
             explanation_texts = []
-            for ordinal, explanation in enumerate(explanations):
-                explanation_text = explanation["text"]
-                explanation_ids = explanation["evidence_ids"]
-                referenced = [material_index[source_id] for source_id in explanation_ids]
-                requirement_ids = [item for item in _strings(explanation.get("requirement_ids")) if item in {requirement.get("requirement_id") for requirement in requirements}]
-                requested_dimensions = (requested_dimensions_by_task or {}).get(outcome.task_id, [])
-                metric = explanation.get("dimension") if explanation.get("dimension") in requested_dimensions else None
-                bound_dimensions = {requirement.get("dimension") for requirement in requirements if requirement.get("requirement_id") in requirement_ids and requirement.get("dimension") in requested_dimensions}
-                if metric is None and len(bound_dimensions) == 1:
-                    metric = next(iter(bound_dimensions))
-                explanation_claim = Claim(
-                    claim_id=f"synthesis:{outcome.task_id}:explanation" + (f":{ordinal}" if ordinal else ""), task_id=outcome.task_id,
-                    agent_name="research_analyst", text=explanation_text, stance="unknown",
-                    assertion_type="opinion", directional=False,
-                    dimension=_dimension({}, referenced, None, "research_analyst"), confidence=min([claim.confidence for claim in selected_claims] or [0.6]),
-                    evidence_ids=explanation_ids,
-                    limitations=["解释基于列出的材料，不替代原始公告或数据核验。"] if any(item.usage == "raw" for item in referenced) else [],
-                    subject=outcome.subject_label,
-                    metric=metric,
-                    requirement_ids=requirement_ids,
-                )
+            for explanation_claim in _selection_explanation_claims(selection, outcome=outcome, selected_claims=selected_claims,
+                    materials=materials, requirements=requirements, requested_dimensions=(requested_dimensions_by_task or {}).get(outcome.task_id, [])):
                 claim_validation.valid_claims[explanation_claim.claim_id] = explanation_claim
                 selected_claims.append(explanation_claim)
                 selected_ids.append(explanation_claim.claim_id)
-                explanation_texts.append(explanation_text)
+                explanation_texts.append(explanation_claim.text)
             conclusion = (
                 claim_by_id[selection.conclusion_claim_id].text
                 if selection.conclusion_claim_id else None
@@ -1265,6 +1289,9 @@ async def synthesize_task_results(
             if explanation_errors:
                 results[-1].status = "partial"
                 results[-1].limitations.append("部分模型解释未通过事实绑定校验，已移除对应段落；其它已验证事实与论据仍保留。")
+            _preserve_validated_analysis(selection, outcome=outcome, claims=claims, materials=materials,
+                requirements=requirements, dimensions=(requested_dimensions_by_task or {}).get(outcome.task_id, []),
+                evidence_normalization=evidence_normalization)
         except Exception as exc:
             fallback = _fallback_task_result(
                 outcome=outcome, findings=task_findings, claims=claims, conflicts=conflicts,

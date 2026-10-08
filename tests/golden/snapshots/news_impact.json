@@ -3,37 +3,17 @@
   "output_mode": "chat",
   "plan_steps": [
     {
-      "group": "request_task_1",
+      "group": "request_unconfirmed",
       "kind": "tool",
-      "name": "get_stock_price"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_company_news"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_authoritative_media_news"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "analyze_historical_drawdowns"
-    },
-    {
-      "group": "request_task_1",
-      "kind": "tool",
-      "name": "get_factor_exposure"
+      "name": "search"
     }
   ],
   "route": "research",
   "tasks": [
     {
-      "operation": "analyze_impact",
-      "reason": "ticker_or_alias",
-      "subject_type": "company",
+      "operation": "qa",
+      "reason": null,
+      "subject_type": "research_doc",
       "tickers": [
         "TSLA"
       ]

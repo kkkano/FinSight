@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import asyncio
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -12,6 +13,7 @@ from backend.graph.synthesis.contracts import ClaimValidationResult, EvidenceNor
 from backend.graph.synthesis.research_synthesis import synthesize_task_results
 from backend.graph.synthesis.task_outcomes import TaskOutcome
 from backend.services.llm_retry import LLMCallContext
+from backend.services.run_context import RunContext, run_context_scope
 
 
 def _evidence(source_id="stable:filing:2026:business", **kwargs):
@@ -124,6 +126,50 @@ async def test_failed_reference_repair_keeps_legal_explanation_and_rejects_unbou
     assert "999" not in result.conclusion
     assert "explanation_contains_unbound_number" in result.error_codes
     assert "llm_timeout" in result.error_codes
+
+
+@pytest.mark.asyncio
+async def test_cancelled_repair_preserves_only_verified_explanation_for_deadline_delivery(monkeypatch):
+    from backend.graph.execution.partial_delivery import build_partial_delivery
+    module = importlib.import_module("backend.graph.synthesis.research_synthesis")
+    row = _evidence()
+    normalization = EvidenceNormalizationResult(evidence_by_task={"task": [row]}, evidence_index={row.source_id: row},
+                                                rejected_evidence=[], quality_block_reasons=[])
+    requirement = {"requirement_id": "business", "source_text": "分析CRM业务", "description": "分析CRM业务",
+                   "kind": "explanation", "metric": "business_model", "dimension": "business_model",
+                   "requires_analysis": True, "requires_explicit_binding": True, "evidence_kinds": ["company_profile"]}
+    task = {"id": "task", "title": "CRM", "subject_type": "company", "subject_label": "CRM", "tickers": ["CRM"],
+            "operation": {"name": "qa"}, "priority": 0, "order_index": 0, "request_frame_id": "frame",
+            "render_kind": "single", "render_group_id": "frame", "answer_requirements": [requirement], "required_evidence": ["company_profile"]}
+    run = RunContext.create(owner="public", entry="investment_report")
+    run.compiled_state = {"tasks": [task], "understanding": {"requirements_status": "confirmed",
+        "semantic_contract": {"status": "confirmed", "tasks": [task]}}, "query": "分析CRM业务"}
+    run.record_step({"id": "step", "kind": "tool", "name": "get_company_info", "task_ids": ["task"],
+                     "evidence_kinds": ["company_profile"], "inputs": {"ticker": "CRM"}}, {"status_reason": "done", "output": {"description": row.text}})
+    calls = []
+    async def invoke(**kwargs):
+        calls.append(True)
+        kwargs["context"].budget.reserve_provider_attempt()
+        if len(calls) == 2:
+            raise asyncio.CancelledError()
+        return kwargs["schema"].model_validate({"claim_ids": [], "direction_supporting_claim_ids": [], "fact_ids": ["E1"], "explanations": [
+            {"text": "企业订阅的续约影响现金流稳定性。", "evidence_ids": ["E1"], "requirement_ids": ["R1"], "dimension": "business_model"},
+            {"text": "收入增长9999%。", "evidence_ids": ["E1"], "requirement_ids": ["R1"], "dimension": "business_model"}]})
+    monkeypatch.setattr(module, "_invoke_structured", invoke)
+    with run_context_scope(run):
+        with pytest.raises(asyncio.CancelledError):
+            await synthesize_task_results(task_outcomes=[_outcome()], findings=[],
+                claim_validation=ClaimValidationResult(valid_claims={}, rejected_claims=[], conflicts=[], quality_block_reasons=[]),
+                evidence_normalization=normalization, llm_call_context_factory=lambda _: LLMCallContext.create(stage="synthesize", max_provider_attempts=2),
+                answer_requirements_by_task={"task": [requirement]}, requested_dimensions_by_task={"task": ["business_model"]})
+    assert len(calls) == 2 and run.validated_analysis
+    run.finish("timed_out")
+    delivered = await build_partial_delivery(run)
+    assert "续约影响现金流稳定性" in delivered["response"] and "9999" not in delivered["response"]
+    assert delivered["task_results"][0]["requirement_results"][0]["status"] == "answered"
+    assert delivered["answer_status"] == "partial" and delivered["content_contract_version"] == "research_content.v2"
+    assert delivered["quality"]["answer_status"] == delivered["answer_status"] and not delivered["publishable"]
+    assert len(calls) == 2
 
 
 @pytest.mark.parametrize("operation", ["valuation_sanity", "qa", "investment_opinion"])

@@ -65,7 +65,24 @@ def _frame_tickers(ctx, frame: dict) -> list[str]:
 
 def _frame_required_evidence(ctx, frame: dict) -> list[str]:
     raw_evidence = frame.get("evidence_obligations")
-    return canonical_evidence_kinds(raw_evidence if isinstance(raw_evidence, list) else [])
+    kinds = canonical_evidence_kinds(raw_evidence if isinstance(raw_evidence, list) else [])
+    if "required_input_groups" not in frame:
+        return kinds
+    from backend.graph.intent_contract import evidence_plan_for_kinds
+    if ctx.output_mode == "investment_report":
+        return [kind for kind in kinds if evidence_plan_for_kinds([kind], market=ctx.market or "US")]
+    groups = frame["required_input_groups"]
+    selected = []
+    for group in groups:
+        choice = next((kind for kind in group["any_of"] if evidence_plan_for_kinds([kind], market=ctx.market or "US")), None)
+        if choice and choice not in selected:
+            selected.append(choice)
+    grouped = {kind for group in groups for kind in group["any_of"]}
+    enrichment = set(frame.get("enrichment") or [])
+    selected.extend(kind for kind in kinds if kind not in grouped | enrichment)
+    if ctx.output_mode == "investment_report":
+        selected.extend(kind for kind in kinds if kind in enrichment and evidence_plan_for_kinds([kind], market=ctx.market or "US"))
+    return list(dict.fromkeys(selected))
 
 
 def _frame_evidence_profile(ctx, frame: dict) -> str:

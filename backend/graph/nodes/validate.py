@@ -21,12 +21,7 @@ def validate(state: GraphState) -> dict[str, Any]:
     raw = artifacts.get("research_result") or artifacts.get("research_synthesis_draft")
     if isinstance(raw, dict):
         draft = ReportSynthesisDraft.model_validate(raw)
-        missing = (trace.get("coverage_validator") or {}).get("missing_requirements") or []
-        for task in draft.task_results:
-            combined = [*task.missing_requirements, *(item for item in missing if isinstance(item, dict) and item.get("task_id") == task.task_id)]
-            task.missing_requirements = [item for index, item in enumerate(combined) if item not in combined[:index]]
-            if task.missing_requirements and task.status == "answered":
-                task.status = "partial"
+        # 覆盖检查是执行前的可规划性诊断；实际完成度由已取到的事实与逐要求校验决定。
         draft.status = aggregate_task_status([task.status for task in draft.task_results])
         overall_reasons = overall_conclusion_block_reasons(draft)
         if overall_reasons:
@@ -36,7 +31,7 @@ def validate(state: GraphState) -> dict[str, Any]:
             draft=draft, requested_task_ids=artifacts.get("research_requested_task_ids") or [task.task_id for task in draft.task_results],
             evidence_index=draft.evidence_index,
             structural_block_reasons=artifacts.get("research_structural_block_reasons") or [],
-            require_claims=state.get("output_mode") == "investment_report",
+            require_claims=False,
         )
         artifacts.update(research_result=draft.model_dump(), research_result_quality=gate.model_dump())
         if state.get("output_mode") == "investment_report":

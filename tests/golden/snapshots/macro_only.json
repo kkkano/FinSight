@@ -2,17 +2,18 @@
   "blocked_reasons": [],
   "output_mode": "chat",
   "plan_steps": [
-    {"group": "task_1", "kind": "tool", "name": "get_current_datetime"},
-    {"group": "task_1", "kind": "tool", "name": "get_official_macro_releases"},
-    {"group": "task_1", "kind": "tool", "name": "get_authoritative_media_news"},
-    {"group": "task_1", "kind": "tool", "name": "search"}
+    {
+      "group": "request_unconfirmed",
+      "kind": "tool",
+      "name": "search"
+    }
   ],
   "route": "research",
   "tasks": [
     {
-      "operation": "macro_brief",
-      "reason": "macro_hint",
-      "subject_type": "macro",
+      "operation": "qa",
+      "reason": null,
+      "subject_type": "research_doc",
       "tickers": []
     }
   ]

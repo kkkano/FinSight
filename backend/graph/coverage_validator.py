@@ -67,24 +67,40 @@ def validate_plan_coverage(
             and any(row.get("kind") not in {"constraint", "input_dependency"} for row in requirements)):
         missing_evidence.append("research_evidence")
         missing_requirements.append({"frame_id": frame.get("frame_id"), "reason": "research_evidence_not_planned"})
-    for kind in required_evidence:
-        for task_id in task_ids or [None]:
-            for ticker in tickers or [None]:
+    from backend.graph.research_capabilities import input_groups
+    groups = input_groups({"required_input_groups": frame["required_input_groups"]}) if "required_input_groups" in frame else [
+        {"group_id": kind, "any_of": [kind]} for kind in required_evidence]
+    for group in groups:
+        choices = group["any_of"]
+        requirement = next((row for row in requirements if row.get("requirement_id") == group.get("requirement_id")), None) if group.get("requirement_id") else None
+        scoped_tickers = ([normalize_ticker(str(requirement["subject"]))] if requirement.get("subject") and requirement.get("kind") != "comparison"
+                          else tickers if requirement.get("subject_refs") or requirement.get("kind") == "comparison" else []) if requirement else tickers
+        scoped_task_ids = [task_id for task_id in task_ids if not plan.get("tasks") or any(
+            task.get("id") == task_id and (not task.get("answer_requirements") or any(
+                row.get("requirement_id") == group.get("requirement_id") for row in task["answer_requirements"]))
+            for task in plan["tasks"])] if requirement else task_ids
+        group_missing = False
+        for task_id in scoped_task_ids or [None]:
+            for ticker in scoped_tickers or [None]:
                 required_market = "HK" if ticker and ticker.endswith(".HK") else ("CN" if ticker and ticker.endswith((".SS", ".SZ", ".BJ")) else market)
-                producers = _evidence_producers(kind, market=required_market)
+                producers = {name for kind in choices for name in _evidence_producers(kind, market=required_market)}
                 candidates = [step for step in steps
-                    if step.get("name") in producers
-                    and kind in step_evidence_kinds(step)
+                    if any(step.get("name") in _evidence_producers(kind, market=required_market)
+                           and kind in step_evidence_kinds(step)
+                           and (ticker is None or evidence_registry()[kind].scope == 'per_topic' or ticker in step_subjects(step))
+                           for kind in choices)
                     and (task_id is None or task_id in step_task_ids(step))
-                    and (ticker is None or evidence_registry()[kind].scope == 'per_topic' or ticker in step_subjects(step))]
+                    ]
                 if not candidates:
+                    group_missing = True
                     missing_requirements.append({"task_id": task_id, "subject": ticker,
-                        "evidence_kind": kind, "frame_id": frame.get("frame_id"),
+                        "evidence_kind": choices[0], "input_group_id": group["group_id"],
+                        "requirement_id": group.get("requirement_id"), "any_of": choices, "frame_id": frame.get("frame_id"),
                         "reason": "producer_unavailable" if not producers else "producer_not_planned"})
-        if any(item["evidence_kind"] == kind for item in missing_requirements):
-            missing_evidence.append(kind)
+        if group_missing:
+            missing_evidence.extend(kind for kind in choices if kind not in missing_evidence)
         else:
-            fulfilled_evidence.append(kind)
+            fulfilled_evidence.extend(kind for kind in choices if kind not in fulfilled_evidence and any(kind in step_evidence_kinds(step) for step in steps))
 
     status = "ok" if not missing_evidence else "missing"
     return {

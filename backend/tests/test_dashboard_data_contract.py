@@ -113,7 +113,7 @@ async def test_cache_roundtrip_preserves_failure_and_source_metadata(monkeypatch
 
 def test_daily_quote_cannot_claim_intraday_capability():
     def provider(symbol, period, interval):
-        assert (period, interval) == ("5d", "1d")
+        assert (period, interval) == ("1mo", "1d")
         return {"currency": "HKD", "kline_data": [
             {"time": "2026-10-07", "open": 100, "high": 110, "low": 90, "close": 105, "volume": 1000},
         ]}

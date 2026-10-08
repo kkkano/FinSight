@@ -3,16 +3,16 @@
   "output_mode": "chat",
   "plan_steps": [
     {
-      "group": "request_task_1",
+      "group": "request_unconfirmed",
       "kind": "tool",
-      "name": "fetch_url_content"
+      "name": "search"
     }
   ],
   "route": "research",
   "tasks": [
     {
       "operation": "qa",
-      "reason": "explicit_url_reference",
+      "reason": null,
       "subject_type": "research_doc",
       "tickers": []
     }

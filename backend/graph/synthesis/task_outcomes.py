@@ -9,6 +9,7 @@ from pydantic import Field
 from backend.graph.request_task_contract import output_is_error_like
 
 from backend.graph.intent_contract import EvidenceKind
+from backend.graph.research_capabilities import InputGroup
 from backend.graph.synthesis.contracts import (
     ClaimValidationResult,
     EvidenceNormalizationResult,
@@ -74,6 +75,7 @@ class TaskDescriptor(StrictContract):
     intent_status: Literal["ready", "blocked"]
     required_step_ids: list[NonEmptyStr]
     required_evidence: list[EvidenceKind]
+    required_input_groups: list[InputGroup] | None = None
     error_codes: list[NonEmptyStr]
     # 已确认的原始要求全部是按标准定义取数/计算时，已校验事实本身就是完整回答，不需要模型论据。
     facts_sufficient: bool = False
@@ -220,6 +222,7 @@ def build_task_descriptors(
             intent_status=intent_status,  # type: ignore[arg-type]
             required_step_ids=required_steps,
             required_evidence=required,
+            required_input_groups=raw.get("required_input_groups"),
             error_codes=errors,
             facts_sufficient=_facts_sufficient(raw),
         ))
@@ -254,7 +257,6 @@ def finalize_task_outcomes(
     evidence_normalization: EvidenceNormalizationResult,
     claim_validation: ClaimValidationResult,
 ) -> TaskOutcomeBuildResult:
-    del plan_steps
     outcomes: list[TaskOutcome] = []
     for descriptor in descriptors:
         evidence = evidence_normalization.evidence_by_task.get(descriptor.task_id, [])
@@ -265,9 +267,13 @@ def finalize_task_outcomes(
             and not output_is_error_like(item.text)
             and not output_is_error_like(item.structured_data)
         ])
-        missing = [item for item in descriptor.required_evidence if item not in covered]
+        groups = descriptor.required_input_groups
+        missing = [item for item in descriptor.required_evidence if item not in covered] if groups is None else stable_unique([
+            kind for group in groups if not set(group.any_of).intersection(covered) for kind in group.any_of])
+        candidates = descriptor.required_step_ids if groups is None else [
+            str(step["id"]) for step in plan_steps if descriptor.task_id in _step_task_ids(step)]
         successful = [
-            step_id for step_id in descriptor.required_step_ids
+            step_id for step_id in candidates
             if _step_succeeded(task_results.get(step_id))
         ]
         claims = [claim for claim in claim_validation.valid_claims.values() if claim.task_id == descriptor.task_id]
@@ -278,7 +284,7 @@ def finalize_task_outcomes(
             step_id for step_id in descriptor.required_step_ids
             if step_id not in successful
         ]
-        if missing_steps:
+        if missing_steps and groups is None:
             error_codes.append("required_step_unavailable")
         has_supported_conclusion = bool(claims) or (
             (descriptor.operation in _DETERMINISTIC_TOOL_OPERATIONS or descriptor.facts_sufficient)
@@ -293,7 +299,7 @@ def finalize_task_outcomes(
         elif (
             has_supported_conclusion
             and not missing
-            and not missing_steps
+            and (groups is not None or not missing_steps)
             and "legacy_task_binding_degraded" not in error_codes
         ):
             status = "answered"

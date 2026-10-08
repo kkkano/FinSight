@@ -51,6 +51,7 @@ class RunContext:
     started_monotonic: float = field(default_factory=monotonic)
     deadline_timer: asyncio.Timeout | None = field(default=None, repr=False)
     completed_steps: dict[str, tuple[dict[str, Any], dict[str, Any]]] = field(default_factory=dict)
+    validated_analysis: dict[str, dict[str, Any]] = field(default_factory=dict)
     compiled_state: dict[str, Any] | None = None
     _step_lock: Lock = field(default_factory=Lock, repr=False)
     _archive_lock: Lock = field(default_factory=Lock, repr=False)
@@ -119,6 +120,14 @@ class RunContext:
         with self._step_lock:
             return dict(self.completed_steps)
 
+    def record_analysis(self, task_id: str, analysis: dict[str, Any]) -> None:
+        with self._step_lock:
+            self.validated_analysis[task_id] = analysis
+
+    def validated_analysis_snapshot(self) -> dict[str, dict[str, Any]]:
+        with self._step_lock:
+            return dict(self.validated_analysis)
+
     async def archive_usage(self) -> None:
         if not self.usage.call_count:
             return
@@ -135,6 +144,7 @@ class RunContext:
 
 
 _CURRENT: ContextVar[RunContext | None] = ContextVar("finsight_run_context", default=None)
+_STAGE_DEADLINE: ContextVar[float | None] = ContextVar("finsight_stage_deadline", default=None)
 
 
 def current_run_context() -> RunContext | None:
@@ -154,4 +164,22 @@ def run_context_scope(context: RunContext) -> Iterator[RunContext]:
 
 def remaining_timeout(requested: float) -> float:
     context = current_run_context()
-    return context.timeout(requested) if context is not None else float(requested)
+    timeout = context.timeout(requested) if context is not None else float(requested)
+    deadline = _STAGE_DEADLINE.get()
+    if deadline is not None:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise RunDeadlineExceeded("stage_deadline_exceeded")
+        timeout = min(timeout, remaining)
+    return timeout
+
+
+@contextmanager
+def deadline_scope(seconds: float) -> Iterator[None]:
+    inherited = _STAGE_DEADLINE.get()
+    deadline = monotonic() + seconds
+    token = _STAGE_DEADLINE.set(min(deadline, inherited) if inherited is not None else deadline)
+    try:
+        yield
+    finally:
+        _STAGE_DEADLINE.reset(token)

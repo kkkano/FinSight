@@ -15,10 +15,10 @@ def _snapshot(agent, payload):
     ).to_dict()
 
 
-def _normalized_quote(output, *, execution_projected=False):
+def _normalized_quote(output, *, execution_projected=False, symbol="0700.HK"):
     descriptor = TaskDescriptor(
         task_id="task1", title="腾讯报价", priority=20, order_index=0, operation="price",
-        subject_label="0700.HK", tickers=["0700.HK"], request_frame_id="frame1", render_kind="single",
+        subject_label=symbol, tickers=[symbol], request_frame_id="frame1", render_kind="single",
         render_group_id="frame1", intent_status="ready", required_step_ids=["s1"],
         required_evidence=["price_snapshot"], error_codes=[],
     )
@@ -32,7 +32,7 @@ def _normalized_quote(output, *, execution_projected=False):
             raw_evidence.append(raw)
     normalized = normalize_evidence(
         task_descriptors=[descriptor],
-        plan_steps=[{"id": "s1", "kind": "agent", "name": "price_agent", "task_ids": ["task1"], "inputs": {"ticker": "0700.HK"}}],
+        plan_steps=[{"id": "s1", "kind": "agent", "name": "price_agent", "task_ids": ["task1"], "inputs": {"ticker": symbol}}],
         agent_outputs={"s1": asdict(output)}, raw_evidence_by_task={"task1": raw_evidence} if execution_projected else {},
     )
     return next(item for item in normalized.evidence_by_task["task1"] if item.metadata.get("metric_key") == "price_quote")
@@ -89,3 +89,41 @@ def test_legacy_price_output_preserves_observation_time_and_unknown_time():
     unknown = agent._format_output("", {"price": 427.6})
     assert unknown.evidence[0].timestamp is None
     assert "USD" not in unknown.summary
+
+
+def test_quote_basis_survives_gateway_legacy_tool_agent_and_normalization(monkeypatch):
+    from backend.services.market_data_gateway import MarketDataGateway, _quote_from_kline_provider
+    from backend.tools.price import get_stock_price
+    from datetime import datetime, timezone
+
+    def source(_symbol, period, _interval):
+        assert period == "1mo"
+        return {"currency": "USD", "price_basis": "split_adjusted_close", "dividends_included": False,
+                "kline_data": [{"time": "2026-10-06", "open": 98, "high": 102, "low": 97, "close": 100, "volume": 10},
+                               {"time": "2026-10-07", "open": 101, "high": 103, "low": 100, "close": 102, "volume": 20}]}
+
+    provider = _quote_from_kline_provider(source, clock=lambda: datetime(2026, 10, 8, 15, tzinfo=timezone.utc))
+    gateway = MarketDataGateway(providers={}, primary_provider="", quote_providers={"fixture": provider},
+                               quote_primary_provider="fixture", quote_secondary_provider=None,
+                               quote_trusted_providers={"fixture"}, quote_cache_ttl_seconds=0)
+    monkeypatch.setattr("backend.services.market_data_gateway.get_market_data_gateway", lambda: gateway)
+    payload = get_stock_price("ADI")
+    agent = PriceAgent(None, None, None)
+    snapshot = agent._build_price_behavior_snapshot(ticker="ADI", quote_payload=payload, history_payload={},
+        benchmark_histories={}, option_metrics={}, drawdown_summary=None, event_explanation={}).to_dict()
+    quote = snapshot["quote"]
+    assert quote["price_basis"] == "split_adjusted_close"
+    assert quote["dividends_included"] is False
+    assert quote["market_session"] == "regular_close" and quote["as_of"] == "2026-10-07"
+    output = agent._format_snapshot_output("", snapshot)
+    normalized = _normalized_quote(output, symbol="ADI")
+    assert normalized.metadata["price_basis"] == "split_adjusted_close"
+    assert normalized.metadata["dividends_included"] is False
+    from backend.graph.renderers.fact_formatters import format_fact
+    assert "拆股调整收盘价，不计现金分红" in format_fact(normalized)
+
+
+def test_unknown_quote_basis_is_not_assumed_from_daily_close_label():
+    from backend.utils.quote import parse_quote_payload
+    payload = parse_quote_payload("Current Price: $100 | Session: regular_close | Price basis: unknown")
+    assert payload is not None and "price_basis" not in payload

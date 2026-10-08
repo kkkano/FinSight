@@ -100,9 +100,9 @@ IMAGE_TAG="$release_sha" FRONTEND_IMAGE_TAG="$release_sha" docker compose --env-
 
 worker 默认限制 3000m 内存、3600m 内存加 swap、1 CPU、128 PID，启动保护 180 秒，失败自动重启最多 3 次。3600m 是内存与 swap 总和。首次加载前读取 `/proc/meminfo` 的 `MemAvailable` 和 cgroup `memory.max-memory.current`，按较小值判断；默认 `RAG_WORKER_MIN_AVAILABLE_MB=2400`，不足则返回 `resource_limited/inference_verified=false`，不启动模型加载。部署前必须实测宿主可用内存及其它容器占用，不能同时在主 backend 与额外审计进程加载模型。资源不足时保留文本和 NULL 向量，明确使用 PostgreSQL 词法检索。
 
-前台研究保留已配置的大输出和长推理预算：Step 上限 65536 token，单次 1200 秒，聊天整轮 3600 秒，报告整轮 7200 秒；重试仍有次数上限。采集外部行情/搜索的等待与模型推理分开，`COLLECTOR_TIMEOUT_SECONDS=180`、`COLLECTOR_REPORT_TIMEOUT_SECONDS=300` 控制采集等待，不缩小 LLM 预算。不得复制旧的 75/30 秒 Prediction 或 3000/6000 token 合成模板覆盖当前生产配置。
+前台研究采用 `RunContext` 累计预算：聊天整轮 180 秒、报告整轮 300 秒、个人预测 180 秒。理解阶段包含限流等待和最多一次结构修复，共用一个窗口，默认不超过 60 秒及进入阶段时整轮剩余预算的三分之一，不能每次重试重新计时。工具内模型抽取、分析与合成继续共用整轮余量；显式更小的调用超时仍受尊重。Step 输出额度保留 65536 token，时间预算与输出额度独立，不能用缩小推理输出掩盖超时。
 
-本轮目标机预检总内存约 3.32 GiB、其他业务占用后可用约 600 MiB，预计发布后 worker 会进入 `resource_limited`。这是预期的保护与语义降级，不是真实 BGE 推理通过；需要运维提供至少满足预检门槛的可用资源后再验证模型 revision 与实际编码。本次不清理其他业务容器、不擅自修改已有全局并发/预算配置来换取推理资源。
+目标机总内存约 3.32 GiB，两轮安全清理释放约 4.9 GiB 磁盘、空闲约 6.4 GiB，但可用内存仍约 1 GiB。worker 的 `resource_limited` 必须如实展示为词法检索，不能宣称 BGE 推理通过。完整 embedding 与 reranker 以专用 8 GiB / 4 核作为验收起点；保留现有共机业务建议整机 16 GiB，并至少留 10 GiB 磁盘空闲，按实际双模型峰值配置 worker 上限。清理磁盘、调低资源门槛或使用 swap 都不能代替足够的物理内存。
 
 `/readyz` 在 PostgreSQL 健康且 `lexical_ready=true` 时允许 RAG 降级就绪，必须同时记录 `semantic_ready=false` 及原因；不能把 API 就绪当成语义检索验收通过。PostgreSQL 不可用仍阻断生产就绪，不以内存/hash 替代生产存储或 BGE 向量。不同模型/版本的 `metadata.embedding_identity` 必须隔离，旧未知身份不自动回填。
 
@@ -375,7 +375,7 @@ unset lease_token CANARY_TOKEN
 - 相同 run 重放或 POST 不新增模型调用；主动重新生成新 run/assistant ID，旧 run 晚到也不能覆盖新回答。
 - 在隔离实例清空内存回放或重启后，GET run/events 能恢复最终结果；失联 running 转为 interrupted，而非自动重新收费。
 - 迟到旧快照不能抹去服务器回复；跨用户 run GET、events、cancel 均被拒绝。
-- 完整报告必须有受支持论据及有效引用。零论据或必需维度缺失的报告应被 block，保留预览且不归档；不能 mock quality=pass 绕过成功 fixture。
+- 完整报告必须满足原始要求并有有效引用；有实际支持内容但仍缺源的报告明确保存为 `partial`，不生成未支持的总体判断。必需输入按能力注册的来源组验证，可选补充不计入内容分母；显式精确事实、预测输入及用户限定条件仍必须核验。零支持内容、来源硬冲突或未确认合同不归档，不能 mock quality=pass 绕过成功 fixture。
 - 数据库保存失败须保留正文预览并提示，不能声称已保存。故障注入只在隔离实例完成。
 - RAG 记录 worker 实际推理状态与 embedding identity；语义未验证、仅词法降级通过时分别记录。
 

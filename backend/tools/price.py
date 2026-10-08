@@ -638,6 +638,8 @@ def get_stock_price(ticker: str) -> str:
         f"| Currency: {quote.get('currency') or 'unknown'} | Quality: {result.get('quality')}"
         f" | Session: {quote.get('market_session') or 'unknown'} | Time precision: {quote.get('source_time_precision') or 'unknown'}"
         f" | Time status: {quote.get('source_time_status') or 'unknown'}"
+        f" | Price basis: {quote.get('price_basis') or 'unknown'}"
+        f" | Dividends included: {quote.get('dividends_included') if quote.get('dividends_included') is not None else 'unknown'}"
     )
 
 # ============================================

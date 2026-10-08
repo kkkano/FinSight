@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
+import hashlib
+
+from backend.graph.request_spec import UnmappedRequirement
 
 
 _ANALYTICAL_OPERATIONS = {
@@ -15,14 +19,34 @@ _ANALYTICAL_DIMENSIONS = {
 }
 
 
+def unconfirmed_request_requirement(state: dict[str, Any]) -> dict[str, Any] | None:
+    understanding = state.get("understanding") or {}
+    semantic = understanding.get("semantic_contract") or {}
+    if semantic.get("status") != "unconfirmed" and understanding.get("requirements_status") not in {"unconfirmed", "deterministic_fallback"}:
+        return None
+    query = str(semantic.get("query") or state.get("query") or understanding.get("original_query") or "原始研究请求")
+    row = next((item for item in semantic.get("requirements", []) if isinstance(item, dict)
+                and item.get("metric") == "unknown" and item.get("source_text") == query), None)
+    if row is not None:
+        return deepcopy(row)
+    return UnmappedRequirement(requirement_id="unconfirmed:" + hashlib.sha256(query.encode("utf-8")).hexdigest()[:16],
+        source_text=query, description=query, metric_text=query, kind="explanation",
+        requires_analysis=True, capability_status="unsupported").model_dump()
+
+
 def compiled_tasks(state: dict[str, Any]) -> list[dict[str, Any]]:
     understanding = state.get("understanding") or {}
     semantic = understanding.get("semantic_contract") if isinstance(understanding, dict) else None
-    if isinstance(semantic, dict) and semantic.get("status") == "confirmed":
+    unconfirmed = unconfirmed_request_requirement(state)
+    if isinstance(semantic, dict) and semantic.get("status") == "confirmed" and unconfirmed is None:
         return [dict(task) for task in semantic.get("tasks", []) if isinstance(task, dict)]
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
         tasks = understanding.get("tasks", []) if isinstance(understanding, dict) else []
+    if unconfirmed is not None:
+        # 旧任务 ID 只绑定实际采集的事实，不能继续决定原问的回答分母。
+        return [{**task, "answer_requirements": [deepcopy(unconfirmed)], "requirements_status": "unconfirmed"}
+                for task in tasks if isinstance(task, dict)]
     return [task for task in tasks if isinstance(task, dict)]
 
 
@@ -30,7 +54,7 @@ def requested_task_partition(state: dict[str, Any]) -> tuple[list[dict], list[di
     """请求分母来自已确认的原始合同，不能跟随下游丢项而缩小。"""
     understanding = state.get("understanding") or {}
     semantic = understanding.get("semantic_contract") if isinstance(understanding, dict) else None
-    if isinstance(semantic, dict) and semantic.get("status") == "confirmed":
+    if isinstance(semantic, dict) and semantic.get("status") == "confirmed" and unconfirmed_request_requirement(state) is None:
         tasks = compiled_tasks(state)
         return ([task for task in tasks if task.get("status") != "blocked"],
                 [task for task in tasks if task.get("status") == "blocked"])
@@ -77,6 +101,8 @@ def task_needs_analysis(task: dict[str, Any], *, report: bool = False) -> bool:
 
 
 def analysis_task_modes(state: dict[str, Any]) -> dict[str, str]:
+    if unconfirmed_request_requirement(state) is not None:
+        return {str(task.get("id") or task.get("task_id") or ""): "deterministic" for task in compiled_tasks(state)}
     requirements = answer_requirements_by_task(state)
     report = str(state.get("output_mode") or "").lower() == "investment_report"
     return {
@@ -86,4 +112,4 @@ def analysis_task_modes(state: dict[str, Any]) -> dict[str, str]:
     }
 
 
-__all__ = ["analysis_task_modes", "answer_requirements_by_task", "compiled_tasks", "requested_task_partition", "task_needs_analysis"]
+__all__ = ["analysis_task_modes", "answer_requirements_by_task", "compiled_tasks", "requested_task_partition", "task_needs_analysis", "unconfirmed_request_requirement"]

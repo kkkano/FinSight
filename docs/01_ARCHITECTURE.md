@@ -74,7 +74,7 @@ flowchart TD
 ```
 
 - `prepare_context`：恢复同 thread 上下文并建立本轮状态。
-- `route_request`：模型抽取语义并由 `request_compiler` 唯一编译版本化 `RequestSpec`；注册能力、主体、限定条件和展示要求在入口冻结，兼容 operation 只作为投影。语义不可用时保留明确未确认状态的备用规则合同。
+- `route_request`：模型抽取语义并由 `request_compiler` 唯一编译版本化 `RequestSpec`；注册能力、主体、限定条件和展示要求在入口冻结，兼容 operation 只作为投影。语义不可用时保留完整原问的未确认检索合同，不用旧规则任务替换原始需求。`CapabilitySpec` 区分必需来源组与可选补充，能力与未知限定条件分别判定。
 - `collect_evidence`：实际工具 schema、任务引用、依赖和无环校验后执行计划；覆盖按 `(task_id, subject, evidence_kind)` 检查。工具和 collector 共享本轮 `RequestData`；执行时一次归一化证据，合成不再同时重建原始 Agent evidence。
 - `analyze`：基于规范化 evidence/claim 生成唯一 `research_result`；事实可确定性渲染，分析、报告草稿及核验调用按真实 usage 统计。
 - `validate`：冻结逐需求结果、来源质量与发布资格，保留真实缺项和硬冲突；恢复过的执行告警不自动改成内容缺项。

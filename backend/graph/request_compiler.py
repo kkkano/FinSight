@@ -18,7 +18,7 @@ from backend.graph.request_spec import RequestSpec, RequirementSpec, UnmappedReq
 from backend.graph.research_capabilities import (
     CAPABILITIES, _METRIC_CONTRACTS, _DETERMINISTIC_MEASUREMENTS,
     _QUALITATIVE_MEASUREMENTS, _TECHNICAL_MEASUREMENTS, _METRIC_ATTRIBUTES,
-    _TOOL_COMPUTED_MEASUREMENTS, _COMPONENT_ATTRIBUTES, _REGISTERED_ATTRIBUTES,
+    _TOOL_COMPUTED_MEASUREMENTS, _COMPONENT_ATTRIBUTES, _REGISTERED_ATTRIBUTES, FINANCIAL_METRICS,
 )
 
 def _constraint_needs_analysis(requirement: dict[str, Any], local_constraints: list[dict[str, Any]], scope: dict[str, Any]) -> bool:
@@ -66,6 +66,7 @@ def _bind_attribute_requirements(requirements: list[dict[str, Any]], subjects: d
         owner = next(iter(owners.values()))
         requirement.update(raw_metric="unknown", metric=owner["metric"], dimension=owner["dimension"],
                            evidence_kinds=list(owner["evidence_kinds"]), capability_status="supported", requires_analysis=False,
+                           required_input_groups=deepcopy(owner.get("required_input_groups") or []), enrichment=list(owner.get("enrichment") or []),
                            attribute_owner_requirement_id=owner["requirement_id"])
 
 
@@ -121,6 +122,11 @@ def _bind_comparison_requirements(requirements: list[dict[str, Any]]) -> None:
         if related:
             requirement["comparison_requirement_ids"] = [candidate["requirement_id"] for candidate in related]
             requirement["comparison_inputs"] = deepcopy(related)
+            from backend.graph.research_capabilities import input_groups
+            requirement["required_input_groups"] = [
+                {**group, "group_id": candidate["requirement_id"] + ":" + group["group_id"]}
+                for candidate in related for group in input_groups(candidate)]
+            requirement["enrichment"] = list(dict.fromkeys(kind for candidate in related for kind in candidate.get("enrichment", [])))
         if related or relationship and components:
             requirement["evidence_kinds"] = list(dict.fromkeys([*requirement.get("evidence_kinds", []),
                 *(kind for component in components for kind in _METRIC_CONTRACTS.get(component, ("", [], ""))[1]),
@@ -239,29 +245,53 @@ def _scoped_constraints(constraints: list[dict[str, Any]], refs: list[str]) -> l
 
 
 def deterministic_fallback_contract(result: dict[str, Any], diagnostics: dict[str, Any]) -> dict[str, Any]:
-    """语义确认失败时沿用规则计划继续研究；结果质量会标注要求未确认，不能宣称完整回答。"""
+    """未确认时只检索完整原问，规则种子的猜测不成为已确认的回答分母。"""
     understanding = dict(result.get("understanding") or {})
-    if understanding.get("route") == "direct" or diagnostics.get("validation_code") == "request_subject_context_unbound":
+    if understanding.get("route") == "clarify" and diagnostics.get("validation_code") != "request_subject_context_unbound":
         question = "请补充需要研究的公司、证券代码或具体主题；当前未确认请求范围。"
         understanding.update(route="clarify", tasks=[], blocked_tasks=[], request_frames=[])
-        result.update(tasks=[], blocked_tasks=[], chat_responded=False,
-                      subject={"subject_type": "unknown", "tickers": []}, request_frames=[], intent_contracts=[],
-                      clarify={"needed": True, "reason": "request_contract_unconfirmed", "question": question, "suggestions": []})
-        for key in ("intent_contract", "request_frame"):
-            result.pop(key, None)
-            understanding.pop(key, None)
-        artifacts = dict(result.get("artifacts") or {})
-        artifacts.pop("direct_answer_request", None)
-        artifacts["draft_markdown"] = question
+        result.update(tasks=[], blocked_tasks=[], chat_responded=False, subject={"subject_type": "unknown", "tickers": []},
+                      request_frames=[], intent_contracts=[], clarify={"needed": True, "reason": "request_contract_unconfirmed", "question": question, "suggestions": []})
+        artifacts = dict(result.get("artifacts") or {}); artifacts["draft_markdown"] = question; artifacts.pop("direct_answer_request", None)
         result["artifacts"] = artifacts
+        query = str(understanding.get("original_query") or result.get("query") or "")
+        unconfirmed = UnmappedRequirement(requirement_id="unconfirmed:" + hashlib.sha256(query.encode("utf-8")).hexdigest()[:16], source_text=query, description=query, kind="explanation", metric_text=query, capability_status="unsupported", requires_analysis=True)
+        snapshot = RequestSpec(status="unconfirmed", route="clarify", query=query, output_mode=str(result.get("output_mode") or "chat"), relation="none", requirements=[unconfirmed], tasks=[]).model_dump()
+        understanding.update(requirements_status="deterministic_fallback", semantic_contract=snapshot)
+        result["understanding"] = understanding
+        result["trace"] = {**dict(result.get("trace") or {}), "request_requirements": diagnostics, "semantic_contract": snapshot}
+        return result
     query = str(understanding.get("original_query") or result.get("query") or "")
+    from backend.config.ticker_mapping import extract_tickers
+    tickers = extract_tickers(query).get("tickers") or []
     unconfirmed = UnmappedRequirement(requirement_id="unconfirmed:" + hashlib.sha256(query.encode("utf-8")).hexdigest()[:16],
         source_text=query, description=query, kind="explanation", metric_text=query,
         capability_status="unsupported", requires_analysis=True)
-    snapshot = RequestSpec(status="unconfirmed", route=str(understanding.get("route") or "clarify"), query=query,
-        output_mode=str(result.get("output_mode") or "chat"), relation="none", requirements=[unconfirmed], tasks=[]).model_dump()
-    understanding.update(requirements_status="deterministic_fallback", semantic_contract=snapshot)
-    result["understanding"] = understanding
+    rows = [unconfirmed.model_dump()]
+    task = {"id": "task_unconfirmed", "title": "未确认的原始请求", "request_text": query,
+            "subject_type": "research_doc", "subject_label": query, "tickers": tickers,
+            "operation": {"name": "qa", "params": {}}, "status": "ready", "priority": 50, "order_index": 0,
+            "request_frame_id": "request_unconfirmed", "render_kind": "single", "render_group_id": "request_unconfirmed",
+            "answer_requirements": rows, "required_evidence": ["document_context"],
+            "required_input_groups": [{"group_id": "unconfirmed:retrieval", "any_of": ["document_context"]}],
+            "requirements_status": "deterministic_fallback"}
+    contract = {"version": "intent_contract.v2", "contract_id": "contract_unconfirmed", "required_evidence": ["document_context"],
+                "required_input_groups": task["required_input_groups"], "render_intent": {"shape": "answer", "answer_requirements": rows}}
+    frame = {"version": "request_frame.v2", "frame_id": "request_unconfirmed", "query_text": query,
+             "subject": {"type": "research_doc", "label": query, "tickers": tickers}, "task_ids": [task["id"]],
+             "lane": "research", "relation": "none", "evidence_obligations": ["document_context"],
+             "required_input_groups": task["required_input_groups"], "render_contract": contract["render_intent"], "intent_contract": contract}
+    snapshot = RequestSpec(status="unconfirmed", route="research", query=query,
+        output_mode=str(result.get("output_mode") or "chat"), relation="none", requirements=[unconfirmed], tasks=[task]).model_dump()
+    understanding.update(route="research", tasks=[task], blocked_tasks=[], request_frames=[frame], request_frame=frame,
+                         requirements_status="deterministic_fallback", semantic_contract=snapshot)
+    artifacts = dict(result.get("artifacts") or {})
+    for key in ("direct_answer_request", "draft_markdown"):
+        artifacts.pop(key, None)
+    result.update(understanding=understanding, tasks=[task], blocked_tasks=[], request_frames=[frame], request_frame=frame,
+                  intent_contract=contract, intent_contracts=[contract], artifacts=artifacts, chat_responded=False,
+                  subject={"subject_type": "research_doc", "tickers": tickers}, operation=task["operation"],
+                  clarify={"needed": False, "reason": "", "question": "", "suggestions": []})
     result["trace"] = {**dict(result.get("trace") or {}), "request_requirements": diagnostics, "semantic_contract": snapshot}
     if result.get("understanding_v2"):
         result["understanding_v2"] = {**dict(result["understanding_v2"]), "requirements_status": "deterministic_fallback"}
@@ -277,7 +307,7 @@ def _store_run_context(result: dict[str, Any], *, enabled: bool) -> None:
     if run is not None:
         run.select_entry(str(result.get("output_mode") or "chat"))
         run.compiled_state = {key: result.get(key) for key in (
-            "tasks", "blocked_tasks", "understanding", "query", "output_mode", "subject", "request_frames")}
+            "tasks", "blocked_tasks", "understanding", "query", "output_mode", "subject", "request_frames", "trace")}
 
 
 def _typed_requirement(row: dict[str, Any]) -> RequirementSpec:
@@ -414,7 +444,9 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         if calculation is not None:
             from backend.graph.semantic_requirements import SemanticCalculation
             requirement["calculation"] = SemanticCalculation.model_validate(calculation).model_dump()
-            if requirement.get("kind") not in {"calculation", "comparison"}:
+            if requirement.get("kind") == "fact_attribute":
+                requirement["kind"] = "calculation"
+            elif requirement.get("kind") not in {"calculation", "comparison"}:
                 raise ValueError("request_calculation_kind_invalid")
         if metric == "rsi":
             requirement["raw_metric"] = metric
@@ -449,7 +481,13 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             if len(source_levels) == 1:
                 requirement["source_requirement"] = next(iter(source_levels))
         elif definition:
-            evidence = list(dict.fromkeys([*definition[1], *evidence]))
+            capability = CAPABILITIES[metric]
+            evidence = list(dict.fromkeys([*capability.evidence_kinds, *evidence]))
+            requirement["required_input_groups"] = [group.model_dump() for group in capability.required_input_groups]
+            requirement["enrichment"] = list(capability.enrichment)
+            for kind in supplied_evidence:
+                if kind in evidence and kind not in capability.evidence_kinds:
+                    requirement["required_input_groups"].append({"group_id": f"{metric}:{kind}", "any_of": [kind]})
             requirement["raw_dimension"] = requirement.get("dimension")
             requirement["dimension"] = definition[0]
             requirement["raw_capability_status"] = requirement.get("capability_status")
@@ -461,11 +499,13 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 requirement["capability_status"] = "retrieval_required"
                 requirement["capability_reason"] = "structured_source_unavailable_for_market"
                 evidence = ["filing_context", "document_context"]
+                requirement["required_input_groups"] = [{"group_id": f"{metric}:retrieval", "any_of": evidence}]
             if (not ticker and not any(subject_map[ref].get("tickers") for ref in refs)
                     and any(subject_map[ref].get("type") == "company" and subject_map[ref].get("label") for ref in refs)):
                 requirement["capability_status"] = "retrieval_required"
                 requirement["capability_reason"] = "security_identifier_pending"
                 evidence = ["document_context"]
+                requirement["required_input_groups"] = [{"group_id": f"{metric}:identifier", "any_of": evidence}]
         elif requirement.get("kind") == "comparison" and metric == "comparison":
             requirement.update(dimension="comparison", capability_status="supported")
         elif not is_constraint:
@@ -483,15 +523,22 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         raw_scope = dict(requirement.get("time_scope") or {"kind": "none"})
         scope = _normalize_semantic_scope(raw_scope, metric)
         qualifiers = requirement.get("qualifiers") or []
+        from backend.graph.research_capabilities import reporting_basis_value
         for qualifier in qualifiers:
             if not qualifier.get("source_text") or qualifier["source_text"] not in query:
                 raise ValueError("request_qualifier_source_unbound")
-            if qualifier.get("name") == "reporting_basis" and qualifier.get("value") in {"consolidated", "parent", "unspecified"}:
-                scope["reporting_basis"] = qualifier["value"]
-                if qualifier["value"] == "parent" and ticker and not ticker.endswith((".SS", ".SZ", ".BJ", ".HK")):
+            basis = reporting_basis_value(qualifier.get("value")) if qualifier.get("name") == "reporting_basis" else None
+            if basis == "unspecified":
+                qualifier["value"] = basis
+            elif basis is not None and metric in FINANCIAL_METRICS:
+                qualifier["value"] = basis
+                if basis != "unspecified":
+                    scope["reporting_basis"] = basis
+                if basis == "parent" and ticker and not ticker.endswith((".SS", ".SZ", ".BJ", ".HK")):
                     requirement.update(capability_status="retrieval_required", capability_reason="entity_wide_structured_source_has_no_parent_context")
             else:
-                requirement.setdefault("unmapped_qualifiers", []).append(qualifier)
+                requirement.setdefault("unmapped_qualifiers", []).append(dict(qualifier))
+                qualifier.update(name="unknown", description=qualifier.get("description") or "限定条件未映射")
         frequency_aliases = {"daily": "daily", "1d": "daily", "weekly": "weekly", "1wk": "weekly", "monthly": "monthly", "1mo": "monthly"}
         presentation = list(requirement.get("presentation") or [])
         from backend.graph.semantic_requirements import PRESENTATION_FIELDS
@@ -499,7 +546,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             raise ValueError("request_presentation_invalid")
         attributes = []
         unmapped_qualifiers = list(requirement.get("unmapped_qualifiers") or [])
-        if any(qualifier.get("name") == "reporting_basis" for qualifier in qualifiers):
+        if scope.get("reporting_basis") in {"parent", "consolidated"}:
             attributes.append("reporting_basis")
         for attribute in requirement.get("attributes") or []:
             if attribute in PRESENTATION_FIELDS:
@@ -519,7 +566,12 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             if not normalized_attribute or normalized_attribute == "data_frequency":
                 continue
             if normalized_attribute in _REGISTERED_ATTRIBUTES:
-                attributes.append(normalized_attribute)
+                if normalized_attribute == "reporting_basis" and any(reporting_basis_value(item.get("value")) == "unspecified" for item in qualifiers):
+                    continue
+                if definition and normalized_attribute not in CAPABILITIES[metric].attributes:
+                    unmapped_qualifiers.append({"name": raw_attribute, "source_text": source})
+                else:
+                    attributes.append(normalized_attribute)
             else:
                 unmapped_qualifiers.append({"name": raw_attribute, "source_text": source})
         components = []
@@ -537,12 +589,12 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 components.append(name)
         requirement["components"] = components
         requirement["presentation"] = list(dict.fromkeys(presentation))
-        if set(presentation) & {"include_inputs", "include_formula"} and not requirement.get("calculation") and metric not in {"cumulative_return", "max_drawdown", "volume_breakout"}:
+        if "include_formula" in presentation and not requirement.get("calculation") and metric not in {"cumulative_return", "max_drawdown", "volume_breakout"}:
             raise ValueError("request_calculation_presentation_domain_conflict")
         requirement["attributes"] = attributes
         if unmapped_qualifiers:
             requirement["unmapped_qualifiers"] = unmapped_qualifiers
-            requirement.update(capability_status="unsupported", capability_reason="unmapped_qualifier")
+            requirement["capability_reason"] = "unmapped_qualifier"
         if metric in {"quote", "news_catalysts", "earnings_date"}:
             # 即时/收盘报价没有采样频率可言，日线措辞不应变成需要核对的频率要求。
             requirement["data_frequency"] = "unspecified"
@@ -620,6 +672,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 and any("price_window" in candidate.get("evidence_kinds", []) and candidate.get("subject_refs") == requirement.get("subject_refs")
                         and candidate.get("time_scope", {}).get("completed_only") for candidate in requirements)):
             requirement["evidence_kinds"] = ["price_window"]
+            requirement["required_input_groups"] = [{"group_id": "quote:window_end", "any_of": ["price_window"]}]
     # 全局约束与当前首个主体共享执行边界，不派生额外空任务。
     if () in groups and len(groups) > 1 and all(row.get("kind") == "constraint" for row in groups[()]):
         global_rows = groups.pop(())
@@ -638,6 +691,9 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         task_id, frame_id = f"task_{index}", f"request_task_{index}"
         evidence = list(dict.fromkeys(kind for row in rows if row.get("capability_status") in {"supported", "retrieval_required"}
                                      for kind in row.get("evidence_kinds", [])))
+        from backend.graph.research_capabilities import task_input_groups
+        required_groups = task_input_groups(rows)
+        enrichment = list(dict.fromkeys(kind for row in rows for kind in row.get("enrichment", [])))
         if any(row.get("capability_status") == "unsupported" and row.get("kind") != "constraint" for row in rows):
             # 以已确认的主体和原文检索，不再依赖旧规则能否认识该公司。
             excluded_kinds = {kind for definition in _METRIC_CONTRACTS.values() if definition[0] in exclusions for kind in definition[1]}
@@ -660,7 +716,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         contract = {"version": "intent_contract.v2", "contract_id": f"contract_{frame_id}", "frame_id": frame_id,
                     "subject_type": subject_type, "target_scope": "multi" if len(tickers) > 1 else "single" if tickers else "unknown",
                     "primary_tickers": tickers, "facets": facets, "per_ticker_required": shape == "compare",
-                    "render_intent": render, "required_evidence": evidence, "evidence_plan": evidence_plan_for_kinds(evidence),
+                    "render_intent": render, "required_evidence": evidence, "required_input_groups": required_groups,
+                    "enrichment": enrichment, "evidence_plan": evidence_plan_for_kinds(evidence),
                     "budget_profile": "semantic_requirements", "source": "confirmed_semantic_requirements"}
         operation = legacy_operation_for_contract(contract, subject_type=subject_type)
         active_rows = [row for row in rows if row.get("kind") not in {"constraint", "input_dependency"}]
@@ -676,6 +733,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 "operation": operation, "request_text": task_text, "priority": 50, "order_index": index - 1,
                 "request_frame_id": frame_id, "render_kind": "compare" if shape == "compare" else "single",
                 "render_group_id": frame_id, "answer_requirements": rows, "required_evidence": evidence,
+                "required_input_groups": required_groups, "enrichment": enrichment,
                 "time_scope": time_scope, "constraints": task_constraints, "requirements_status": "confirmed"}
         bound = next((seed for seed in bound_tasks if seed.get("subject_type") == subject_type
                       and (not tickers or set(tickers) == set(seed.get("tickers") or []))), None)
@@ -707,7 +765,8 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                        "subject": {"type": subject_type, "tickers": tickers, "label": label}, "task_ids": [task_id],
                        "lane": "clarify" if missing_subject or missing_input else "report" if mode == "investment_report" else "research",
                        "relation": relation, "time_scope": time_scope, "excluded_facets": sorted(exclusions),
-                       "evidence_obligations": evidence, "render_contract": render, "intent_contract": contract,
+                       "evidence_obligations": evidence, "required_input_groups": required_groups, "enrichment": enrichment,
+                       "render_contract": render, "intent_contract": contract,
                        "legacy_operation": operation, "source": "confirmed_semantic_requirements"})
     snapshot = RequestSpec(status="confirmed", route="research" if ready else "clarify", query=query,
         subjects=subjects, output_mode=mode, relation=relation, requirements=requirements,

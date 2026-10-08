@@ -1,13 +1,19 @@
 {
   "blocked_reasons": [],
   "output_mode": "chat",
-  "plan_steps": [],
+  "plan_steps": [
+    {
+      "group": "request_unconfirmed",
+      "kind": "tool",
+      "name": "search"
+    }
+  ],
   "route": "research",
   "tasks": [
     {
       "operation": "qa",
-      "reason": "ticker_or_alias",
-      "subject_type": "company",
+      "reason": null,
+      "subject_type": "research_doc",
       "tickers": [
         "NVDA"
       ]
