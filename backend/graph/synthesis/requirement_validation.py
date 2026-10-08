@@ -19,7 +19,7 @@ def _payload(evidence: NormalizedEvidence) -> dict[str, Any]:
 
 
 def _reliable_task_evidence(evidence: NormalizedEvidence, task: TaskSynthesisResult, subjects: list[str]) -> bool:
-    if evidence.usage != "fact" or task.task_id not in evidence.task_ids or evidence.metadata.get("subject_binding") == "unverified":
+    if evidence.usage != "fact" or task.task_id not in evidence.task_ids or evidence.metadata.get("subject_binding") == "unverified" or evidence.metadata.get("temporal_role") == "historical":
         return False
     allowed = {str(subject).upper() for subject in subjects if subject}
     global_context = evidence.kind == "macro_context" or evidence.metadata.get("entity_scope") in {"global", "macro"}
@@ -72,7 +72,7 @@ def _supports_dimension(evidence: NormalizedEvidence, dimension: str) -> bool:
         if "content_read" in payload:
             sections = disclosure_sections(payload)
             return bool(sections.get("business") if dimension == "business_model" else sections.get("competition")) or (
-                evidence.kind == "document_context" and payload.get("content_read") is True
+                evidence.kind in {"document_context", "filing_context"} and payload.get("content_read") is True
                 and any(_present(payload.get(key)) for key in ("document_body", "body", "content"))
             )
         explicit = evidence.metric == dimension or payload.get("dimension") == dimension

@@ -263,3 +263,21 @@ def test_data_obligations_disguised_as_empty_constraints_are_rejected():
         "metric": "news_catalysts", "subject_refs": ["aaoi"], "constraints": [control]}]
     compiled = compile_semantic_contract({"query": query}, raw, {})
     assert compiled["understanding"]["semantic_contract"]["requirements"][0]["kind"] == "constraint"
+
+
+def test_relational_explanation_binds_known_inputs_without_forcing_numeric_analysis():
+    query = "甲营收、乙营收，并列数值并解释两公司差异"
+    subjects = [{"id": ref, "label": ref, "type": "company", "tickers": [ticker]} for ref, ticker in [("a", "EXMA"), ("b", "EXMB")]]
+    rows = [{"source_text": text, "description": text, "kind": "fact_attribute", "metric": "revenue", "subject_refs": [ref]}
+        for text, ref in [("甲营收", "a"), ("乙营收", "b")]]
+    rows.extend([
+        {"source_text": "并列数值", "description": "并列数值", "kind": "comparison", "metric": "comparison", "subject_refs": ["a", "b"], "requires_analysis": False},
+        {"source_text": "解释两公司差异", "description": "解释两公司差异", "kind": "explanation", "metric": "unknown", "subject_refs": ["a", "b"], "requires_analysis": True}])
+    result = compile_semantic_contract({"query": query}, {"subjects": subjects, "relation": "compare", "requirements": rows}, {})
+    relational = result["tasks"][2]["answer_requirements"]
+    assert [row["metric"] for row in relational] == ["comparison", "comparison"]
+    assert [row["requires_analysis"] for row in relational] == [False, True]
+    assert all(len(row["comparison_requirement_ids"]) == 2 for row in relational)
+    assert all("filing_context" in row["evidence_kinds"] for row in relational)
+    unknown = compile_semantic_contract({"query": query}, {"subjects": subjects, "relation": "compare", "requirements": rows[-1:]}, {})
+    assert unknown["tasks"][0]["answer_requirements"][0]["metric"] == "unknown"

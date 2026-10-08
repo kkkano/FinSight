@@ -1106,7 +1106,8 @@ async def synthesize_task_results(
         requirements = (answer_requirements_by_task or {}).get(outcome.task_id, [])
         prompt_payload = {
             **reference_payload,
-            "task": {"task_id": outcome.task_id, "title": outcome.title, "request_text": outcome.request_text,
+            "task": {"task_id": outcome.task_id, "title": outcome.title,
+                     "request_text": "；".join(str(item.get("description") or item.get("source_text") or "") for item in requirements) if requirements else outcome.request_text,
                      "subject": outcome.subject_label, "tickers": outcome.tickers, "operation": outcome.operation,
                      "status": outcome.status, "requested_dimensions": (requested_dimensions_by_task or {}).get(outcome.task_id, []), "answer_requirements": requirements},
             "risks": stable_unique([value for item in task_findings for value in item.risks]),

@@ -321,7 +321,9 @@ class DeepSearchAgent(BaseFinancialAgent):
             published = doc.get("published_date") or cls._publication_date(str(doc.get("content") or ""))
             doc["published_date"] = doc["published_at"] = published
             doc["source_time_status"] = "provided" if published else "unknown"
-            if published and scope.get("selection") in {"latest", "latest_complete"}:
+            current_context = scope.get("selection") in {"latest", "latest_complete"} or (
+                scope.get("kind") in {None, "none"} and not scope.get("period_start") and not scope.get("period_end"))
+            if published and current_context:
                 try:
                     age = (datetime.fromisoformat(reference) - datetime.fromisoformat(str(published)[:10])).days
                     if age > 365:
@@ -883,10 +885,11 @@ class DeepSearchAgent(BaseFinancialAgent):
             if self._is_blocked_result(item):
                 continue
             domain = self._normalized_domain_from_url(item.get("url") or "")
-            if finance_intent and strict_finance_sources and not self._is_trusted_finance_domain(domain):
+            document_candidate = ".pdf" in str(item.get("url") or "").lower()
+            if finance_intent and strict_finance_sources and not self._is_trusted_finance_domain(domain) and not document_candidate:
                 continue
             score = self._result_relevance_score(item, query=query, ticker=ticker)
-            if finance_intent and score < 2.4:
+            if finance_intent and score < 2.4 and not document_candidate:
                 continue
             scope = time_scope or {}
             period_end = str(scope.get("period_end") or "")[:10]

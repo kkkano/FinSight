@@ -158,13 +158,18 @@ def _scope_projection(scope: dict[str, Any]) -> dict[str, Any]:
 
 def _bind_comparison_requirements(requirements: list[dict[str, Any]]) -> None:
     for requirement in requirements:
-        if requirement.get("kind") != "comparison":
+        multiple_subjects = len(set(requirement.get("subject_refs") or [])) > 1
+        relational_explanation = requirement.get("kind") == "explanation" and multiple_subjects
+        if requirement.get("kind") != "comparison" and not relational_explanation:
             continue
         components = requirement.get("components") or []
         metric = requirement.get("metric")
-        relationship = metric == "comparison" or metric == "unknown" and components and all(component in _METRIC_CONTRACTS for component in components)
+        relationship = metric == "comparison" or metric == "unknown" and (
+            components and all(component in _METRIC_CONTRACTS for component in components)
+            or relational_explanation and not components)
         related = [candidate for candidate in requirements if candidate is not requirement
             and candidate.get("kind") not in {"constraint", "input_dependency", "comparison"}
+            and candidate.get("metric") in _METRIC_CONTRACTS
             and candidate.get("capability_status") in {"supported", "retrieval_required"}
             and set(candidate.get("subject_refs") or []).issubset(set(requirement.get("subject_refs") or []))
             and candidate.get("subject_refs")
@@ -174,8 +179,13 @@ def _bind_comparison_requirements(requirements: list[dict[str, Any]]) -> None:
             related = [candidate for candidate in related if (candidate.get("time_scope") or {}).get("kind") == scope["kind"]]
         if metric == "comparison" and not components and not related:
             raise ValueError("request_comparison_inputs_missing")
+        if relational_explanation and metric == "unknown" and not components:
+            bound_refs = {ref for candidate in related for ref in candidate.get("subject_refs", [])}
+            relationship = set(requirement.get("subject_refs") or []).issubset(bound_refs)
+            if not relationship:
+                related = []
         if relationship and (components or related):
-            requirement.update(raw_metric=metric, metric="comparison", dimension="comparison", capability_status="supported", requires_analysis=True)
+            requirement.update(raw_metric=metric, metric="comparison", dimension="comparison", capability_status="supported")
         if related:
             requirement["comparison_requirement_ids"] = [candidate["requirement_id"] for candidate in related]
             requirement["comparison_inputs"] = deepcopy(related)
@@ -478,8 +488,10 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 components.append(name)
         requirement["components"] = components
         requirement["presentation"] = list(dict.fromkeys(presentation))
+        if set(presentation) & {"include_inputs", "include_formula"} and not requirement.get("calculation") and metric not in {"cumulative_return", "max_drawdown", "volume_breakout"}:
+            raise ValueError("request_calculation_presentation_domain_conflict")
         requirement["attributes"] = attributes
-        if metric == "quote":
+        if metric in {"quote", "news_catalysts", "earnings_date"}:
             # 即时/收盘报价没有采样频率可言，日线措辞不应变成需要核对的频率要求。
             requirement["data_frequency"] = "unspecified"
         if metric in _TECHNICAL_MEASUREMENTS or is_constraint and scope.get("kind") == "trading_sessions" and scope.get("count") is None:
@@ -516,7 +528,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
             requirement["attributes"] = list(dict.fromkeys([*requirement["attributes"], "price_basis", "dividends_included"]))
         if metric == "quote" and requirement.get("price_role") == "window_end":
             requirement["attributes"] = list(dict.fromkeys([*requirement["attributes"], "end_close"]))
-        requires_analysis = bool(requirement.get("requires_analysis") or requirement.get("kind") in {"explanation", "comparison"})
+        requires_analysis = bool(requirement.get("requires_analysis") or requirement.get("kind") == "explanation")
         if requirement.get("kind") == "constraint":
             requires_analysis = _constraint_needs_analysis(requirement, local_constraints, scope)
         elif metric in _QUALITATIVE_MEASUREMENTS:

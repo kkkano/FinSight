@@ -662,7 +662,17 @@ def get_sec_filings(
                     filing["content_excerpt"] = "\n\n".join(f"{name}: {text}" for name, text in sections.items())
                     filing["content_read"] = bool(sections)
                     if not sections:
-                        filing["content_error"] = "research_section_not_found"
+                        from bs4 import BeautifulSoup
+                        document = BeautifulSoup(response.text, "html.parser")
+                        for node in document.select("script, style, ix\\:header, [hidden]"):
+                            node.decompose()
+                        body = document.get_text(" ", strip=True)
+                        if len(body) >= 300 and not re.search(r"captcha|security verification|just a moment", body[:1000], re.I):
+                            filing.update(content_read=True, document_body=body[:100000],
+                                content_excerpt=body[:16000], verification="official_filing_body",
+                                content_warning="section_labels_unavailable")
+                        else:
+                            filing["content_error"] = "research_section_not_found"
                 except Exception as exc:
                     filing["content_error"] = f"filing_fetch_failed:{type(exc).__name__}"
         return {

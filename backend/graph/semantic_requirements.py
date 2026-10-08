@@ -37,7 +37,7 @@ class SemanticTimeScope(BaseModel):
 
 class SemanticConstraint(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    constraint_type: Literal["exclude_dimension", "exclude_comparison", "source_policy", "scenario_separation", "other"]
+    constraint_type: Literal["exclude_dimension", "exclude_comparison", "source_policy", "scenario_separation", "deduplicate", "other"]
     source_text: str
     dimension: str | None = None
     description: str = ""
@@ -173,10 +173,11 @@ measurement 表示测量对象，price_role表示价格身份：quote统一涵�
 属性保留在对应指标attributes：currency,source_timestamp,market_session,end_close,price_basis,dividends_included,confirmation_status。收益是否计入分红、收益口径和终点收盘价是cumulative_return属性，不能另造unknown/methodology要求。若单列quote最新终点收盘，使用latest_quote/latest_complete而不是1交易日收益窗口。公告派息与实际季度现金支付须分开。
 属性是规范identifier，不添加冒号、反引号或timeframe:daily等键值表达式。定性质量/估值/风险/因果判断始终需要解释；准确数值和技术指标可按标准定义确定性展示。
 纯数值、按标准定义计算收益或回撤、列出币种时间及计算口径属于fact_attribute/calculation，不需要研究解释。只有解释因果、判断投资意义、比较优劣等使用explanation/comparison；说明是否计入分红用attributes=dividends_included和price_basis，不要丢掉属性。
-解释、判断、因果、比较设置 requires_analysis=true。约束独立保存 constraint 项并在 constraints 标记类型（exclude_dimension/exclude_comparison/source_policy/scenario_separation/other）。不查新闻等否定要求不是肯定新闻要求。
+解释、判断、因果设置 requires_analysis=true；仅并列数值或确定性比较计算保持requires_analysis=false，比较优劣或解释差异才为true。跨多个已列主体解释差异引用它们的已知要求，是comparison关系，不是新增未知指标。约束独立保存 constraint 项并在 constraints 标记类型（exclude_dimension/exclude_comparison/source_policy/scenario_separation/other）。不查新闻等否定要求不是肯定新闻要求。
 source_policy的source_requirement：仅公司/官方原始声明用primary，媒体归因材料用attributed，可追溯链接用traceable，未限制用unspecified；不能把媒体转述当成用户要求的官方原始声明。
 约束subject_refs引用真实subjects.id；空为全局，非空只应用这些主体。独立constraint要求继承约束主体范围，不得把一个主体的排除维度应用到其他主体。
 kind=constraint 时不产生数据采集义务。业务质量/估值判断应保留所需口径，不得用默认报告范围替代用户明确要求。
+事件发布日期不是采样频率，新闻日级时间精度不填写data_frequency。去重使用constraint_type=deduplicate，不需要研究解释；原始事实的出处用include_provenance，include_inputs/include_formula仅适用于实际计算。报价没有计算输入或公式，时间和时段属于事实属性。
 """
 
 

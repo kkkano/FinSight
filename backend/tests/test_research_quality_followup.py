@@ -94,3 +94,23 @@ def test_ambiguous_explanation_requires_binding_instead_of_answering_every_dimen
         requirements=[{"requirement_id": dimension, "dimension": dimension, "requires_analysis": True, "requires_explicit_binding": True}
             for dimension in ["business_model", "competition"]])
     assert errors[0]["code"] == "task_synthesis_requirement_binding_missing"
+
+
+def test_official_filing_body_without_section_labels_is_read_material_not_index():
+    from backend.graph.synthesis.requirement_validation import _supports_dimension, evidence_is_document_index
+
+    evidence = NormalizedEvidence(source_id="official", task_ids=["a"], kind="filing_context",
+        usage="fact", text="实际业务及竞争正文", url="https://www.sec.gov/Archives/edgar/data/1/report.htm",
+        structured_data={"content_read": True, "content_sections": {}, "document_body": "实际业务及竞争正文"})
+    assert not evidence_is_document_index(evidence)
+    assert _supports_dimension(evidence, "business_model")
+    assert _supports_dimension(evidence, "competition")
+
+
+def test_confirmed_report_contract_does_not_add_unrequested_enrichment(monkeypatch):
+    from types import SimpleNamespace
+    from backend.graph.planning import report_mode
+
+    monkeypatch.setattr(report_mode, "_append_report_ticker_enrichment", lambda _ctx: pytest.fail("已确认的报告范围不能扩展"))
+    report_mode._append_report_mode_enrichment_steps(SimpleNamespace(
+        output_mode="investment_report", ready_tasks=[{"requirements_status": "confirmed"}]))

@@ -169,7 +169,8 @@ def presentation_reasons(requirement: dict, facts: list) -> list[str]:
             reasons.append("presentation_date_missing")
         if field in {"include_inputs", "include_formula"} and not calculations:
             reasons.append("presentation_" + field.removeprefix("include_") + "_missing")
-        if field == "include_provenance" and not any(all(row.get("source_url") for row in calculation["derivation_inputs"]) for calculation in calculations):
+        provenance = any(all(row.get("source_url") for row in calculation["derivation_inputs"]) for calculation in calculations) if requirement.get("calculation") else bool(facts) and all(fact.url or payload_for(fact).get("source_url") for fact in facts)
+        if field == "include_provenance" and not provenance:
             reasons.append("presentation_provenance_missing")
     return reasons
 
@@ -234,6 +235,11 @@ def control_support_reasons(requirement: dict, task, facts: list | None = None) 
         return None
     scope = requirement.get("time_scope") or {}
     constraint_type = requirement.get("constraint_type")
+    if constraint_type == "deduplicate":
+        urls = [fact.url for fact in facts or [] if fact.url]
+        from backend.research.news_event_quality import canonical_news_url
+        identities = [canonical_news_url(url) for url in urls]
+        return [] if len(identities) == len(set(identities)) else ["requirement_duplicate_content"]
     # 约束自身绑定了财期时，按同期数据结构核对；模型给出的维度名不作为必要条件。
     if constraint_type in {None, "other"} and scope.get("kind") in {"fiscal_quarter", "fiscal_year"}:
         metrics = list(dict.fromkeys(row.get("metric") for row in task.answer_requirements

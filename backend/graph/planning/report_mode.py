@@ -21,6 +21,8 @@ from backend.graph.planning.steps import _append_agent_step, _append_tool_step, 
 def _append_report_mode_enrichment_steps(ctx) -> None:
     if ctx.output_mode != "investment_report":
         return
+    if ctx.ready_tasks and all(task.get("requirements_status") == "confirmed" for task in ctx.ready_tasks):
+        return
     tickers = list(dict.fromkeys(ticker for task in ctx.ready_tasks for ticker in task.get("tickers", []))) or list(ctx.tickers or [])
     for ticker in tickers:
         relevant_ids = {str(task.get("id")) for task in ctx.ready_tasks if ticker in task.get("tickers", [])}
