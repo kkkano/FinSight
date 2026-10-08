@@ -233,6 +233,8 @@ def evaluate_answer_requirements(
                  and result.task_id in evidence_index[source_id].task_ids
                  and _reliable_task_evidence(evidence_index[source_id], result, scope)
                  and (not kinds or evidence_index[source_id].kind in kinds
+                      or "document_context" in kinds and evidence_index[source_id].kind == "filing_context"
+                      and not evidence_is_document_index(evidence_index[source_id])
                       or requirement.get("metric") in FINANCIAL_METRICS
                       and metric_record(evidence_index[source_id], requirement["metric"]) is not None)
                  and (not subject or requirement.get("kind") == "comparison" or result.render_kind == "compare"

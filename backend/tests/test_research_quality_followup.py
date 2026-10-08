@@ -85,6 +85,13 @@ def test_legacy_single_explanation_binds_to_unique_analysis_requirement():
     assert not errors
     assert result.explanations[0]["requirement_ids"] == ["competition"]
     assert result.explanations[0]["dimension"] == "competition"
+    aliased, errors = _validate_task_selection(
+        _TaskSynthesisSelection(claim_ids=[], direction_supporting_claim_ids=[],
+            explanations=[{"text": "客户续约支持业务竞争优势。", "evidence_ids": ["E1"], "requirement_ids": ["R1"]}]),
+        claims=[], materials=[source], claim_aliases={}, evidence_aliases={"E1": "source"},
+        requirements=[{"requirement_id": "competition", "dimension": "competition", "requires_analysis": True, "requires_explicit_binding": True}],
+        requirement_aliases={"R1": "competition"})
+    assert not errors and aliased.explanations[0]["requirement_ids"] == ["competition"]
 
 
 def test_ambiguous_explanation_requires_binding_instead_of_answering_every_dimension():

@@ -898,6 +898,7 @@ def _validate_task_selection(
     selection: _TaskSynthesisSelection, *, claims: list[Claim], materials: list[NormalizedEvidence],
     claim_aliases: dict[str, str], evidence_aliases: dict[str, str],
     requirements: list[dict[str, Any]] | None = None,
+    requirement_aliases: dict[str, str] | None = None,
 ) -> tuple[_TaskSynthesisSelection, list[dict[str, Any]]]:
     """逐段校验并保留合法内容，未知 ID 不能借其它合法引用混入。"""
     errors: list[dict[str, Any]] = []
@@ -947,14 +948,15 @@ def _validate_task_selection(
             continue
         analysis_requirements = [item for item in requirements or [] if item.get("requires_analysis") and item.get("requires_explicit_binding")]
         if analysis_requirements:
-            allowed_requirements = {item["requirement_id"]: item for item in analysis_requirements}
-            bound_ids = _strings(explanation.get("requirement_ids"))
+            allowed_requirements = {item["requirement_id"]: item for item in requirements or []}
+            analysis_ids = {item["requirement_id"] for item in analysis_requirements}
+            bound_ids = [(requirement_aliases or {}).get(value, value) for value in _strings(explanation.get("requirement_ids"))]
             if not bound_ids and len(analysis_requirements) == 1:
                 bound_ids = [analysis_requirements[0]["requirement_id"]]
-            if not bound_ids or any(value not in allowed_requirements for value in bound_ids):
+            if not bound_ids or not analysis_ids.intersection(bound_ids) or any(value not in allowed_requirements for value in bound_ids):
                 errors.append({"field": field, "code": "task_synthesis_requirement_binding_missing"})
                 continue
-            dimensions = {allowed_requirements[value].get("dimension") for value in bound_ids} - {None, ""}
+            dimensions = {allowed_requirements[value].get("dimension") for value in bound_ids if value in analysis_ids} - {None, ""}
             dimension = explanation.get("dimension")
             if not dimension and len(dimensions) == 1:
                 dimension = next(iter(dimensions))
@@ -1104,12 +1106,15 @@ async def synthesize_task_results(
             continue
         reference_payload, claim_aliases, evidence_aliases = _task_reference_payload(claims, materials)
         requirements = (answer_requirements_by_task or {}).get(outcome.task_id, [])
+        requirement_aliases = {f"R{index}": item["requirement_id"] for index, item in enumerate(requirements, 1)}
+        requirement_refs = {value: key for key, value in requirement_aliases.items()}
         prompt_payload = {
             **reference_payload,
             "task": {"task_id": outcome.task_id, "title": outcome.title,
                      "request_text": "；".join(str(item.get("description") or item.get("source_text") or "") for item in requirements) if requirements else outcome.request_text,
                      "subject": outcome.subject_label, "tickers": outcome.tickers, "operation": outcome.operation,
-                     "status": outcome.status, "requested_dimensions": (requested_dimensions_by_task or {}).get(outcome.task_id, []), "answer_requirements": requirements},
+                     "status": outcome.status, "requested_dimensions": (requested_dimensions_by_task or {}).get(outcome.task_id, []),
+                     "answer_requirements": [{**item, "requirement_id": requirement_refs[item["requirement_id"]]} for item in requirements]},
             "risks": stable_unique([value for item in task_findings for value in item.risks]),
             "limitations": stable_unique([value for item in task_findings for value in item.limitations]),
         }
@@ -1140,6 +1145,7 @@ async def synthesize_task_results(
                 raw_selection, claims=claims, materials=materials,
                 claim_aliases=claim_aliases, evidence_aliases=evidence_aliases,
                 requirements=requirements,
+                requirement_aliases=requirement_aliases,
             )
             initial_errors = list(validation_errors)
             repair_attempts = 0
@@ -1156,6 +1162,7 @@ async def synthesize_task_results(
                         repaired_raw, claims=claims, materials=materials,
                         claim_aliases=claim_aliases, evidence_aliases=evidence_aliases,
                         requirements=requirements,
+                        requirement_aliases=requirement_aliases,
                     )
                     repaired_requirements = {value for row in repaired.explanations for value in _strings(row.get("requirement_ids"))}
                     retained_explanations = [row for row in selection.explanations
