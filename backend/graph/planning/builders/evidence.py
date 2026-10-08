@@ -46,14 +46,15 @@ def _append_evidence_steps_for_ticker(ctx,
         for task in tasks for req in task.get("answer_requirements", [])
     )
     company_name = next((task.get("subject_label") for task in tasks if ticker in task.get("tickers", [])), "") or ""
+    from backend.tools.disclosure_financial_facts import _METRICS as disclosure_metrics
     financial_requests = {}
     for task in tasks:
         for req in task.get("answer_requirements", []):
             if req.get("subject") and req["subject"] != ticker:
                 continue
-            if (req.get("metric") not in {"revenue", "net_income", "operating_income", "earnings_performance"}
+            if (req.get("metric") not in {*disclosure_metrics, "earnings_performance"}
                     and "capital_allocation" not in req.get("evidence_kinds", [])
-                    and not set(req.get("components") or []).intersection({"revenue", "net_income", "operating_income"})):
+                    and not set(req.get("components") or []).intersection(disclosure_metrics)):
                 continue
             if req.get("comparison_inputs"):
                 continue
