@@ -233,7 +233,7 @@ def render_research_report(
                 displayed_evidence_ids=list(comparison_sources) if comparison_task else display_fact_ids,
                 displayed_claim_ids=[claim.claim_id for claim in display_claims],
             )
-        display_status = "partial" if task.status == "answered" and (task.fallback_used or task.missing_evidence or task.missing_requirements) else task.status
+        display_status = "partial" if task.status == "answered" and (task.missing_evidence or task.missing_requirements) else task.status
         lines.extend([f"## {task.title} · {_STATUS_LABEL[display_status]}", ""])
         if direction_requested and isinstance(readiness, dict) and not direction_allowed:
             lines.extend(["当前证据不足以形成统一方向判断，以下保留已验证事实与风险。", ""])

@@ -245,6 +245,17 @@ def evaluate_answer_requirements(
                  and (calculation_record(evidence_index[source_id], requirement) is not None if requirement.get("calculation")
                       else metric_supports(evidence_index[source_id], str(requirement.get("metric") or "")))
                  and _supports_dimension(evidence_index[source_id], dimension)]
+        source_rejections = []
+        source_facts = []
+        for evidence in available_facts:
+            rejected = attached_source_policy_reasons(requirement, result, [evidence])
+            if requirement.get("kind") == "constraint" and requirement.get("constraint_type") == "source_policy":
+                rejected.extend(control_support_reasons(requirement, result, [evidence]) or [])
+            if rejected:
+                source_rejections.extend(rejected)
+            else:
+                source_facts.append(evidence)
+        available_facts = source_facts
         fiscal_scope = requirement.get("time_scope") or {}
         if requirement.get("metric") in FINANCIAL_METRICS and fiscal_scope.get("kind") in {"fiscal_year", "fiscal_quarter"}:
             # 以已选择的完整财期锚定跨来源事实，供应商的近似日期不能形成第二套“同季”答案。
@@ -269,6 +280,8 @@ def evaluate_answer_requirements(
         control_reasons = control_support_reasons(requirement, result, facts)
         reasons = exact_support_reasons(requirement, facts) if control_reasons is None else list(control_reasons)
         reasons.extend(attached_source_policy_reasons(requirement, result, facts))
+        if not facts:
+            reasons.extend(source_rejections)
         reasons.extend(presentation_reasons(requirement, facts))
         if not facts and control_reasons is None:
             reasons.append("requirement_evidence_not_presented" if available_facts else "requirement_evidence_missing")
@@ -335,6 +348,11 @@ def evaluate_answer_requirements(
     result.missing_requirements = stable_unique(result.missing_requirements)
     if result.missing_requirements and result.status == "answered":
         result.status = "partial"
+    elif (requirements and result.status == "partial" and not result.missing_requirements and not result.missing_evidence
+          and all(check["status"] == "answered" for check in result.requirement_results)
+          and not result.synthesis_validation.get("remaining_errors")
+          and all(claim_has_reliable_sources(claim, result, evidence_index, subjects=subjects) for claim in shown_claims)):
+        result.status = "answered"
 
 
 __all__ = ["claim_has_reliable_sources", "disclosure_sections", "evaluate_answer_requirements", "evidence_is_document_index", "overall_conclusion_block_reasons"]

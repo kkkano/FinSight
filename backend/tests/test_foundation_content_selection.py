@@ -23,6 +23,25 @@ def _draft(facts, tasks):
     return ReportSynthesisDraft(status="answered", overall_conclusion=None, task_results=tasks, claim_index={}, evidence_index={item.source_id: item for item in facts}, citation_ids=[item.source_id for item in facts], conflicts=[], disagreements=[], risks=[], limitations=[], fallback_used=False)
 
 
+def test_primary_policy_checks_qualified_facts_and_preserves_real_source_gaps():
+    from backend.graph.synthesis.requirement_validation import evaluate_answer_requirements
+
+    primary = _fact("primary", "filing_context", {"value": 100})
+    primary.metric, primary.url = "revenue", "https://www.sec.gov/Archives/edgar/data/1/report.htm"
+    secondary = _fact("secondary", "filing_context", {"value": 100})
+    secondary.metric, secondary.url = "revenue", "https://finance.yahoo.com/quote/INTC/financials/"
+    task = _task(status="partial", fact_ids=["primary", "secondary"], requested_subjects=["INTC"])
+    requirement = {"requirement_id": "revenue", "metric": "revenue", "kind": "fact_attribute",
+        "dimension": "fundamental_quality", "capability_status": "supported", "evidence_kinds": ["filing_context"],
+        "constraints": [{"constraint_type": "source_policy", "source_requirement": "primary", "dimension": "fundamental"}]}
+    index = {item.source_id: item for item in [primary, secondary]}
+    evaluate_answer_requirements(result=task, requirements=[requirement], evidence_index=index, claim_index={}, subjects=["INTC"])
+    assert task.status == "answered" and task.requirement_results[0]["evidence_ids"] == ["primary"]
+    task.fact_ids, task.status = ["secondary"], "partial"
+    evaluate_answer_requirements(result=task, requirements=[requirement], evidence_index=index, claim_index={}, subjects=["INTC"])
+    assert task.status != "answered" and "requirement_primary_source_missing" in task.requirement_results[0]["reason"]
+
+
 def test_raw_discovery_keeps_clickable_source_without_becoming_a_fact():
     article = _fact("article", "news_context", {"title": "Intel analysis"})
     article.usage = "raw"
