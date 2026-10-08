@@ -387,7 +387,7 @@ def output_is_error_like(output: Any) -> bool:
         return False
     if isinstance(output, str):
         text = output.strip().lower()
-        return bool(text) and (text.startswith("search error:") or any(token in text for token in ("403 forbidden", "401 unauthorized", "timeout", "rejected")))
+        return bool(text) and (text.startswith(("error:", "search error:")) or any(token in text for token in ("403 forbidden", "401 unauthorized", "timeout", "rejected")))
     if not isinstance(output, dict):
         return False
     if output.get("skipped"):
