@@ -158,7 +158,7 @@ export async function ensureStreamResponseOk(response: Response): Promise<void> 
   }
   try {
     const payload = await response.clone().json();
-    if (payload?.detail?.code === 'model_unavailable') {
+    if (['model_unavailable', 'model_account_verification_required', 'model_not_available'].includes(payload?.detail?.code)) {
       throw new StreamRequestError('model_unavailable',
         typeof payload.detail.message === 'string' && payload.detail.message.trim()
           ? payload.detail.message : '当前模型暂时不可用，请检查模型设置或稍后重试。', response.status);

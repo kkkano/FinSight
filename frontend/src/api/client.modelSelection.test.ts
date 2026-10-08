@@ -144,6 +144,19 @@ describe('model request headers', () => {
     expect(callbacks.onThinking).not.toHaveBeenCalled();
   });
 
+  it.each(['model_account_verification_required', 'model_not_available'])(
+    'preserves the provider action message for %s before starting the stream', async (code) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        detail: { code, message: '当前模型需要完成服务商认证。' },
+      }), { status: 503, headers: { 'Content-Type': 'application/json' } })));
+      const callbacks = { onDone: vi.fn(), onToken: vi.fn(), onThinking: vi.fn() };
+      await expect(apiClient.sendMessageStream({ query: 'NVDA' }, callbacks)).rejects.toThrow('当前模型需要完成服务商认证');
+      expect(callbacks.onDone).not.toHaveBeenCalled();
+      expect(callbacks.onToken).not.toHaveBeenCalled();
+      expect(callbacks.onThinking).not.toHaveBeenCalled();
+    },
+  );
+
   it('requires login for an applied model without sending anonymous fallback requests, while data reads still work', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

@@ -344,14 +344,14 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         else:
             checked_sources.update(task.get("selected_fact_ids") or task.get("fact_ids") or [])
             checked_claims.update(task.get("claim_ids") or [])
-        checked_sources.update(task.get("evidence_ids") or [])
-        task_source_ids = set(task.get("evidence_ids") or task.get("fact_ids") or [])
-        if task_source_ids:
-            checked_claims.update(
-                claim_id for claim_id, claim in claims.items()
-                if isinstance(claim, dict) and claim.get("task_id") == task.get("task_id")
-                and set(claim.get("evidence_ids") or []).issubset(task_source_ids)
-            )
+            checked_sources.update(task.get("evidence_ids") or [])
+            task_source_ids = set(task.get("evidence_ids") or task.get("fact_ids") or [])
+            if task_source_ids:
+                checked_claims.update(
+                    claim_id for claim_id, claim in claims.items()
+                    if isinstance(claim, dict) and claim.get("task_id") == task.get("task_id")
+                    and set(claim.get("evidence_ids") or []).issubset(task_source_ids)
+                )
         if unconfirmed:
             checked_sources.update(task.get("selected_fact_ids") or task.get("fact_ids") or [])
     from types import SimpleNamespace
@@ -390,6 +390,8 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     for code in structural if isinstance(structural, list) else []:
         reason(str(code), "block", "任务或引用结构不一致。")
     report_mode = str(state.get("output_mode") or "") == "investment_report"
+    typed_requirements = [row for task in tasks for row in task.get("answer_requirements") or []]
+    legacy_report = report_mode and not typed_requirements
     understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
     if understanding.get("route") == "clarify" or (state.get("clarify") or {}).get("needed"):
         quality.update(answer_status="clarification_required", has_supported_content=False,
@@ -398,7 +400,7 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         return quality
     if understanding.get("requirements_status") == "deterministic_fallback":
         reason("REQUEST_REQUIREMENTS_UNCONFIRMED", "warn" if supported else "block",
-               "模型未能确认完整的原始要求，本轮按规则识别的任务作答，可能遗漏部分要求。")
+               "模型未能确认完整的原始要求，本轮保留原问并检索资料，未确认的要求仍为未完成。")
     missing_requirements = []
     for task in tasks:
         for missing in task.get("missing_requirements") or []:
@@ -407,12 +409,12 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     for missing in missing_requirements:
         if isinstance(missing, dict):
             reasons.append(_quality_reason(
-                code="REQUIRED_EVIDENCE_MISSING", severity="block" if report_mode or not supported else "warn",
+                code="REQUIRED_EVIDENCE_MISSING", severity="block" if legacy_report or not supported else "warn",
                 metric="task_evidence", actual=missing, threshold="verified_evidence",
                 message="请求中的主体或证据维度尚未满足。",
             ))
     coverage_missing = (((state.get("trace") or {}).get("coverage_validator") or {}).get("missing_requirements")
-                        if isinstance(state.get("trace"), dict) else []) or []
+                        if not typed_requirements and isinstance(state.get("trace"), dict) else []) or []
     for missing in coverage_missing:
         if isinstance(missing, dict) and missing not in missing_requirements:
             missing_requirements.append(missing)
@@ -424,8 +426,9 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     if (tasks or understanding.get("route") == "research") and not supported:
         reason("NO_SUPPORTED_CONTENT", "block", "本轮没有可展示的已验证事实或论据。")
     if any(task.get("status") != "answered" or task.get("missing_evidence") for task in tasks):
-        reason("TASK_PARTIALLY_ANSWERED", "block" if report_mode or not supported else "warn", "部分请求维度仍缺少证据。")
-    if report_mode and result and not supported_claims:
+        reason("TASK_PARTIALLY_ANSWERED", "block" if legacy_report or not supported else "warn", "部分请求维度仍缺少证据。")
+    analysis_required = legacy_report or any(row.get("requires_analysis") for row in typed_requirements)
+    if report_mode and result and analysis_required and not supported_claims:
         reason("NO_SUPPORTED_REPORT_CLAIMS", "block", "报告缺少受支持的研究论据，不能发布或归档。")
     if isinstance(report, dict) and isinstance(report.get("meta"), dict) and report["meta"].get("builder_fallback"):
         reason("REPORT_BUILD_FAILED", "block", "报告构建失败，当前内容仅为错误说明。")
@@ -447,7 +450,7 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         "content_status": answer_status,
         "content_contract_version": "research_content.v2",
         "has_supported_content": supported if tasks else bool(str(artifacts.get("draft_markdown") or "").strip()),
-        "publishable": not blocked,
+        "publishable": not blocked and not unconfirmed,
         "missing_requirements": missing_requirements,
     })
     return quality

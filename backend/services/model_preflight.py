@@ -17,6 +17,18 @@ PREFLIGHT_TIMEOUT_SECONDS = 60.0
 MODEL_UNAVAILABLE_MESSAGE = "当前模型暂时不可用，尚未启动研究。请稍后重试或在设置中切换模型。"
 
 
+def _unavailable_detail(exc: Exception) -> dict[str, str]:
+    body = getattr(exc, "body", None)
+    error = body.get("error", body) if isinstance(body, dict) else {}
+    kind = (error.get("code") or error.get("type")) if isinstance(error, dict) else None
+    if kind == "real_name_required":
+        return {"code": "model_account_verification_required",
+                "message": "当前模型服务商要求账号完成人脸实名，尚未启动研究。请在服务商平台完成认证后重试。"}
+    if kind == "model_not_found":
+        return {"code": "model_not_available", "message": "所选模型不在当前连接的可用模型中，尚未启动研究。请选择该连接支持的模型。"}
+    return {"code": "model_unavailable", "message": MODEL_UNAVAILABLE_MESSAGE}
+
+
 async def ensure_model_available() -> None:
     try:
         selected = current_model() or resolve_default_model()
@@ -36,4 +48,4 @@ async def ensure_model_available() -> None:
             raise ValueError("incomplete_model_completion")
     except Exception as exc:
         logger.warning("模型前置检查失败 kind=%s status=%s", type(exc).__name__, getattr(exc, "status_code", None))
-        raise HTTPException(status_code=503, detail={"code": "model_unavailable", "message": MODEL_UNAVAILABLE_MESSAGE}) from None
+        raise HTTPException(status_code=503, detail=_unavailable_detail(exc)) from None

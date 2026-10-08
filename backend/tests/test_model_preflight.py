@@ -81,3 +81,24 @@ async def test_probe_timeout_stops_and_closes_client(monkeypatch):
         await model_preflight.ensure_model_available()
     assert caught.value.status_code == 503
     client.aclose.assert_awaited_once()
+
+
+@pytest.mark.parametrize("provider_kind,code", [
+    ("real_name_required", "model_account_verification_required"),
+    ("model_not_found", "model_not_available"),
+])
+@pytest.mark.asyncio
+async def test_provider_account_or_model_requirement_is_actionable_without_raw_details(monkeypatch, provider_kind, code):
+    class ProviderError(Exception):
+        status_code = 403
+        body = {"error": {"type": provider_kind, "message": "fixture-private-key secret upstream response"}}
+
+    invoke = AsyncMock(side_effect=ProviderError())
+    monkeypatch.setattr(llm_retry, "create_llm_for_endpoint", lambda *args, **kwargs: SimpleNamespace(ainvoke=invoke))
+    selected = model_selection.SelectedModel("system", "step-5-preview", model_selection.STEP_BASE_URL, "fixture-private-key")
+    with model_selection.model_selection_scope(selected), pytest.raises(HTTPException) as caught:
+        await model_preflight.ensure_model_available()
+    assert caught.value.status_code == 503 and caught.value.detail["code"] == code
+    assert "fixture-private-key" not in str(caught.value.detail)
+    assert "upstream response" not in str(caught.value.detail)
+    invoke.assert_awaited_once()

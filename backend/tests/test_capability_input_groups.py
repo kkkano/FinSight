@@ -99,12 +99,12 @@ def test_input_presentation_and_typed_calculation_classification_do_not_drop_val
     assert rows[0]["presentation"] == ["include_inputs"] and rows[1]["calculation"]["baseline"] == "year_ago"
 
 
-def test_partial_report_can_publish_verified_selected_facts_but_index_only_cannot():
+def test_partial_fact_report_can_publish_verified_selected_facts_but_index_only_cannot():
     fact = {"source_id": "fact", "usage": "fact", "kind": "fundamental_snapshot", "text": "Revenue 100 CNY", "structured_data": {"revenue": 100}}
-    task = {"task_id": "task", "status": "partial", "answer_requirements": [{"requirement_id": "revenue"}],
+    task = {"task_id": "task", "status": "partial", "answer_requirements": [{"requirement_id": "revenue", "metric": "revenue", "requires_analysis": False}],
             "requirement_results": [{"requirement_id": "revenue", "status": "partial", "evidence_ids": ["fact"], "claim_ids": []}],
             "missing_requirements": [{"requirement_id": "revenue", "reason": "requirement_qualifier_unmapped"}]}
-    state = {"output_mode": "chat", "understanding": {"route": "research", "requirements_status": "confirmed"},
+    state = {"output_mode": "investment_report", "understanding": {"route": "research", "requirements_status": "confirmed"},
              "artifacts": {"research_result": {"task_results": [task], "evidence_index": {"fact": fact}, "claim_index": {}}}}
     quality = evaluate_result_quality(state=state)
     assert quality["answer_status"] == "partial" and quality["publishable"] is True
@@ -113,4 +113,21 @@ def test_partial_report_can_publish_verified_selected_facts_but_index_only_canno
     assert quality["has_supported_content"] is False and quality["publishable"] is False
     state["artifacts"]["research_structural_block_reasons"] = ["evidence_id_content_conflict"]
     fact.update(kind="fundamental_snapshot", structured_data={"revenue": 100})
+    assert evaluate_result_quality(state=state)["publishable"] is False
+
+
+def test_typed_partial_report_keeps_verified_analysis_without_replaying_planning_gaps():
+    fact = {"source_id": "fact", "task_ids": ["task"], "usage": "fact", "kind": "company_profile",
+            "text": "Revenue 100 CNY", "structured_data": {"revenue": 100}}
+    claim = {"claim_id": "analysis", "task_id": "task", "text": "已核验的经营分析", "evidence_ids": ["fact"]}
+    task = {"task_id": "task", "status": "partial", "answer_requirements": [{"requirement_id": "business", "requires_analysis": True}],
+            "requirement_results": [{"requirement_id": "business", "status": "partial", "evidence_ids": ["fact"], "claim_ids": ["analysis"]}],
+            "missing_requirements": [{"requirement_id": "business", "reason": "requirement_qualifier_unmapped"}]}
+    state = {"output_mode": "investment_report", "understanding": {"route": "research", "requirements_status": "confirmed"},
+             "artifacts": {"research_result": {"task_results": [task], "evidence_index": {"fact": fact}, "claim_index": {"analysis": claim}}},
+             "trace": {"coverage_validator": {"missing_requirements": [{"reason": "producer_not_planned", "evidence_kind": "earnings_estimates"}]}}}
+    quality = evaluate_result_quality(state=state)
+    assert quality["answer_status"] == "partial" and quality["publishable"] is True
+    assert quality["missing_requirements"] == task["missing_requirements"]
+    state["artifacts"]["research_result"]["claim_index"] = {}
     assert evaluate_result_quality(state=state)["publishable"] is False

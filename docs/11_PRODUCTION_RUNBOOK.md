@@ -102,6 +102,8 @@ worker 默认限制 3000m 内存、3600m 内存加 swap、1 CPU、128 PID，启�
 
 前台研究采用 `RunContext` 累计预算：聊天整轮 180 秒、报告整轮 300 秒、个人预测 180 秒。理解阶段包含限流等待和最多一次结构修复，共用一个窗口，默认不超过 60 秒及进入阶段时整轮剩余预算的三分之一，不能每次重试重新计时。工具内模型抽取、分析与合成继续共用整轮余量；显式更小的调用超时仍受尊重。Step 输出额度保留 65536 token，时间预算与输出额度独立，不能用缩小推理输出掩盖超时。
 
+模型请求预检失败时不启动研究。服务商要求实名或当前连接缺少所选模型时，分别返回 `model_account_verification_required`、`model_not_available` 和受控提示；不回显服务商原始错误、密钥或内部地址。服务端就绪表示基础设施可用，不代替真实模型请求的可用性与内容验收。
+
 目标机总内存约 3.32 GiB，两轮安全清理释放约 4.9 GiB 磁盘、空闲约 6.4 GiB，但可用内存仍约 1 GiB。worker 的 `resource_limited` 必须如实展示为词法检索，不能宣称 BGE 推理通过。完整 embedding 与 reranker 以专用 8 GiB / 4 核作为验收起点；保留现有共机业务建议整机 16 GiB，并至少留 10 GiB 磁盘空闲，按实际双模型峰值配置 worker 上限。清理磁盘、调低资源门槛或使用 swap 都不能代替足够的物理内存。
 
 `/readyz` 在 PostgreSQL 健康且 `lexical_ready=true` 时允许 RAG 降级就绪，必须同时记录 `semantic_ready=false` 及原因；不能把 API 就绪当成语义检索验收通过。PostgreSQL 不可用仍阻断生产就绪，不以内存/hash 替代生产存储或 BGE 向量。不同模型/版本的 `metadata.embedding_identity` 必须隔离，旧未知身份不自动回填。
