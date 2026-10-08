@@ -174,7 +174,7 @@ jobs:
         env:
           RAG_EMBEDDING: bge-m3
           RAG_V2_VECTOR_DIM: "1024"
-          RAG_V2_POSTGRES_DSN: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/postgres
+          RAG_V2_POSTGRES_DSN: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/finsight_test_platform
         run: |
           python tests/retrieval_eval/run_retrieval_eval.py \
             --backend postgres \

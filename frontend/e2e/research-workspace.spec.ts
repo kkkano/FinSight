@@ -28,7 +28,7 @@ async function setup(page: Page, authenticated = true, ended = false) {
   });
   if (authenticated) await installAuthenticatedSession(page);
   await page.route('**/health', (route) => json(route, { status: 'healthy' }));
-  await page.route('**/api/**', (route) => {
+  await page.route('**://*/api/**', (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
     if (!path.startsWith('/api/')) return route.fallback();

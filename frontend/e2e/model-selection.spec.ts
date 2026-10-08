@@ -24,7 +24,7 @@ async function setup(page: Page, authenticated = true) {
     localStorage.setItem('finsight-entry-mode', hasSession ? 'pending' : 'anonymous');
     localStorage.setItem('finsight-session-id', 'public:anonymous:e2e-model-selection');
   }, authenticated);
-  await page.route('**/api/**', async (route) => {
+  await page.route('**://*/api/**', async (route) => {
     if (!['fetch', 'xhr'].includes(route.request().resourceType())) return route.continue();
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === '/api/models') {
