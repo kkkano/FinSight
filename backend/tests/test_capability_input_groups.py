@@ -104,12 +104,12 @@ def test_partial_report_can_publish_verified_selected_facts_but_index_only_canno
     task = {"task_id": "task", "status": "partial", "answer_requirements": [{"requirement_id": "revenue"}],
             "requirement_results": [{"requirement_id": "revenue", "status": "partial", "evidence_ids": ["fact"], "claim_ids": []}],
             "missing_requirements": [{"requirement_id": "revenue", "reason": "requirement_qualifier_unmapped"}]}
-    state = {"output_mode": "investment_report", "understanding": {"route": "research", "requirements_status": "confirmed"},
+    state = {"output_mode": "chat", "understanding": {"route": "research", "requirements_status": "confirmed"},
              "artifacts": {"research_result": {"task_results": [task], "evidence_index": {"fact": fact}, "claim_index": {}}}}
     quality = evaluate_result_quality(state=state)
     assert quality["answer_status"] == "partial" and quality["publishable"] is True
     fact.update(kind="filing_context", structured_data={"content_type": "filing_index", "content_read": True, "body": "目录"})
-    quality = evaluate_result_quality(state=state)
+    quality = evaluate_result_quality(state={**state, "output_mode": "investment_report"})
     assert quality["has_supported_content"] is False and quality["publishable"] is False
     state["artifacts"]["research_structural_block_reasons"] = ["evidence_id_content_conflict"]
     fact.update(kind="fundamental_snapshot", structured_data={"revenue": 100})

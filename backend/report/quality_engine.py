@@ -344,6 +344,14 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
         else:
             checked_sources.update(task.get("selected_fact_ids") or task.get("fact_ids") or [])
             checked_claims.update(task.get("claim_ids") or [])
+        checked_sources.update(task.get("evidence_ids") or [])
+        task_source_ids = set(task.get("evidence_ids") or task.get("fact_ids") or [])
+        if task_source_ids:
+            checked_claims.update(
+                claim_id for claim_id, claim in claims.items()
+                if isinstance(claim, dict) and claim.get("task_id") == task.get("task_id")
+                and set(claim.get("evidence_ids") or []).issubset(task_source_ids)
+            )
         if unconfirmed:
             checked_sources.update(task.get("selected_fact_ids") or task.get("fact_ids") or [])
     from types import SimpleNamespace
@@ -399,15 +407,25 @@ def evaluate_result_quality(*, state: dict[str, Any], report: dict[str, Any] | N
     for missing in missing_requirements:
         if isinstance(missing, dict):
             reasons.append(_quality_reason(
-                code="REQUIRED_EVIDENCE_MISSING", severity="block" if not supported else "warn",
+                code="REQUIRED_EVIDENCE_MISSING", severity="block" if report_mode or not supported else "warn",
+                metric="task_evidence", actual=missing, threshold="verified_evidence",
+                message="请求中的主体或证据维度尚未满足。",
+            ))
+    coverage_missing = (((state.get("trace") or {}).get("coverage_validator") or {}).get("missing_requirements")
+                        if isinstance(state.get("trace"), dict) else []) or []
+    for missing in coverage_missing:
+        if isinstance(missing, dict) and missing not in missing_requirements:
+            missing_requirements.append(missing)
+            reasons.append(_quality_reason(
+                code="REQUIRED_EVIDENCE_MISSING", severity="block" if report_mode else "warn",
                 metric="task_evidence", actual=missing, threshold="verified_evidence",
                 message="请求中的主体或证据维度尚未满足。",
             ))
     if (tasks or understanding.get("route") == "research") and not supported:
         reason("NO_SUPPORTED_CONTENT", "block", "本轮没有可展示的已验证事实或论据。")
     if any(task.get("status") != "answered" or task.get("missing_evidence") for task in tasks):
-        reason("TASK_PARTIALLY_ANSWERED", "block" if not supported else "warn", "部分请求维度仍缺少证据。")
-    if report_mode and result and not supported:
+        reason("TASK_PARTIALLY_ANSWERED", "block" if report_mode or not supported else "warn", "部分请求维度仍缺少证据。")
+    if report_mode and result and not supported_claims:
         reason("NO_SUPPORTED_REPORT_CLAIMS", "block", "报告缺少受支持的研究论据，不能发布或归档。")
     if isinstance(report, dict) and isinstance(report.get("meta"), dict) and report["meta"].get("builder_fallback"):
         reason("REPORT_BUILD_FAILED", "block", "报告构建失败，当前内容仅为错误说明。")

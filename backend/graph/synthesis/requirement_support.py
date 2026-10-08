@@ -168,7 +168,7 @@ def presentation_reasons(requirement: dict, facts: list) -> list[str]:
             reasons.append("presentation_link_missing")
         if field == "include_date" and (not facts or any(not (payload_for(fact).get("published_at") or payload_for(fact).get("published_date") or fact.as_of or fact.period_end) for fact in facts)):
             reasons.append("presentation_date_missing")
-        if field == "include_inputs" and not calculations and not facts:
+        if field == "include_inputs" and not calculations:
             reasons.append("presentation_inputs_missing")
         if field == "include_formula" and not calculations:
             reasons.append("presentation_" + field.removeprefix("include_") + "_missing")

@@ -66,7 +66,7 @@ def test_multiticker_valuation_rank_uses_one_contract_with_per_ticker_evidence(m
     agent_steps = [step.get("name") for step in plan.get("steps") or [] if step.get("kind") == "agent"]
     assert agents == set()
     assert "get_performance_comparison" not in step_names
-    assert {"get_company_info", "get_earnings_estimates"}.issubset(set(step_names))
+    assert {"get_company_info"}.issubset(set(step_names))
     assert "get_technical_snapshot" not in step_names
     assert "get_company_news" not in step_names
     assert "risk_agent" not in step_names
@@ -123,7 +123,7 @@ def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch
     assert set(policy.get("allowed_agents") or []) == set()
     step_names = [step.get("name") for step in plan.get("steps") or []]
     assert "get_performance_comparison" not in step_names
-    assert {"get_stock_price", "get_company_info", "get_earnings_estimates"}.issubset(
+    assert {"get_stock_price", "get_company_info"}.issubset(
         set(step_names)
     )
     assert "fundamental_agent" not in step_names

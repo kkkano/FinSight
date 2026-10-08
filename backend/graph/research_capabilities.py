@@ -150,11 +150,14 @@ def _capability_inputs(metric: str, kinds: list[str]) -> tuple[tuple[InputGroup,
     }
     if metric in alternatives:
         choices = alternatives[metric]
+        if metric == "fundamental_quality":
+            return (InputGroup(group_id="fundamental:agent", any_of=["fundamental_snapshot"]),
+                    InputGroup(group_id="fundamental:filing", any_of=["filing_context"])), tuple(kind for kind in kinds if kind not in choices)
         enrichment = tuple(kind for kind in kinds if kind not in choices)
         return (InputGroup(group_id=f"{metric}:basis", any_of=list(choices)),), enrichment
     if metric == "valuation_reasonableness":
         return (InputGroup(group_id="valuation:profile", any_of=["company_profile"]),
-                InputGroup(group_id="valuation:basis", any_of=["fundamental_snapshot", "filing_context", "document_context"])), ("earnings_estimates",)
+                InputGroup(group_id="valuation:basis", any_of=["company_profile", "fundamental_snapshot", "filing_context", "document_context"])), ("earnings_estimates",)
     if metric in FINANCIAL_METRICS and "capital_allocation" in kinds:
         return (InputGroup(group_id=f"{metric}:facts", any_of=["capital_allocation", "filing_context", "fundamental_snapshot"]),), ()
     return tuple(InputGroup(group_id=f"{metric}:{kind}", any_of=[kind]) for kind in kinds), ()
@@ -163,8 +166,7 @@ def _capability_inputs(metric: str, kinds: list[str]) -> tuple[tuple[InputGroup,
 def _build_capability(metric: str, definition: tuple) -> CapabilitySpec:
     dimension, kinds, facet = definition
     groups, enrichment = _capability_inputs(metric, kinds)
-    inputs = tuple(dict.fromkeys([*kinds, *(kind for group in groups for kind in group.any_of)]))
-    return CapabilitySpec(metric, dimension, inputs, facet,
+    return CapabilitySpec(metric, dimension, tuple(kinds), facet,
                           frozenset(_METRIC_ATTRIBUTES.get(metric, _COMMON_SOURCE_ATTRIBUTES)),
                           "structured_fact" if metric in _DETERMINISTIC_MEASUREMENTS else "cited_analysis", groups, enrichment)
 

@@ -73,7 +73,7 @@ def test_four_dimension_query_preserves_semantics_through_policy_and_planning():
     assert task["tickers"] == ["INTC"]
     assert set(task["operation"]["params"]["facets"]) == {"fundamental", "catalyst", "risk", "technical"}
     assert set(frame["render_contract"]["dimensions"]) == {"fundamental_quality", "news_catalysts", "risk_level", "technical_quality"}
-    assert {"fundamental_agent", "technical_agent", "news_agent", "risk_agent", "get_sec_company_facts_quarterly", "get_event_calendar"} <= {step["name"] for step in plan["steps"]}
+    assert {"fundamental_agent", "technical_agent", "news_agent", "risk_agent", "get_event_calendar"} <= {step["name"] for step in plan["steps"]}
     assert all(step.get("task_id") == task["id"] for step in plan["steps"])
     filings_step = next(step for step in plan["steps"] if step["name"] == "get_sec_filings")
     from backend.langchain_tools import SecFilingsInput

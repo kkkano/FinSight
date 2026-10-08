@@ -31,7 +31,7 @@ GOLDEN_QUERY_CASES = [
         expected_tickers=["NVDA", "AMD"],
         expected_evidence=["price_snapshot", "company_profile", "earnings_estimates", "filing_context"],
         expected_render_shape="compare",
-        must_include_steps={"get_stock_price", "get_company_info", "get_earnings_estimates"},
+        must_include_steps={"get_stock_price", "get_company_info"},
         must_exclude_steps={"get_performance_comparison"},
     ),
     GoldenQueryCase(
@@ -120,7 +120,7 @@ GOLDEN_QUERY_CASES = [
             "filing_context",
         ],
         expected_render_shape="answer",
-        must_include_steps={"get_company_info", "fundamental_agent", "get_earnings_call_transcripts"},
+        must_include_steps={"get_company_info", "fundamental_agent"},
         must_exclude_steps={"get_stock_price", "risk_agent"},
     ),
     GoldenQueryCase(

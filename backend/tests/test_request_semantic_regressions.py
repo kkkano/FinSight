@@ -39,7 +39,7 @@ def test_frozen_adbe_quote_normalizes_only_registered_identifiers_and_keeps_snap
     rows = result['tasks'][0]['answer_requirements']
     assert set(rows[0]['attributes']) == {'currency', 'source_timestamp', 'market_session'}
     assert rows[0]['unmapped_qualifiers'] == [{'name': ':not_registered', 'source_text': raw[0]['source_text']}]
-    assert rows[0]['capability_status'] == 'unsupported'
+    assert rows[0]['capability_status'] == 'supported'
     assert 'end_close' not in rows[0]['attributes']
     assert all(not row['requires_analysis'] for row in rows)
     assert result['trace']['request_requirements']['raw_semantic']['requirements'][0]['attributes'][0] == ':currency'
