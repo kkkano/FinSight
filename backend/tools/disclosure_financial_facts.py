@@ -88,6 +88,10 @@ def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url
         if not isinstance(row, dict) or row.get("metric") not in _METRICS:
             continue
         page = row.get("page")
+        if isinstance(page, str):
+            reference = re.fullmatch(r"(?:\[Page\s+)?(\d+)\]?", page.strip())
+            if reference:
+                page = int(reference.group(1))
         quote = str(row.get("quote") or "")
         amount_text = str(row.get("amount_text") or "")
         unit_quote = str(row.get("unit_quote") or "")

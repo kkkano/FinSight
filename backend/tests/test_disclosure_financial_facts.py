@@ -26,6 +26,7 @@ def test_financial_fact_preserves_original_unit_period_and_source_page():
     assert fact["value"] == pytest.approx(123_456_700)
     assert fact["frequency"] == "annual" and fact["unit"] == "CNY"
     assert fact["page"] == 85 and fact["period_end"] == "2025-12-31"
+    assert _extract({**ROW, "page": "[Page 85]"})[0]["page"] == 85
 
 
 def test_reporting_currency_declaration_can_be_verified_separately_from_table_scale():
