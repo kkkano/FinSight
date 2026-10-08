@@ -40,6 +40,7 @@ from backend.graph.synthesis.task_outcomes import TaskDescriptor, TaskOutcome
 from backend.graph.synthesis.analysis_requirements import task_needs_analysis
 from backend.graph.synthesis.requirement_validation import disclosure_sections, evaluate_answer_requirements, evidence_is_document_index, overall_conclusion_block_reasons
 from backend.research.filing_evidence import is_filing_evidence
+from backend.research.news_event_quality import canonical_news_url
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, classify_llm_error, record_failure_diagnostic
 from backend.services.llm_response import LLMCompletionError, completion_metadata, final_completion_text
 from backend.utils.quote import parse_quote_payload
@@ -310,7 +311,7 @@ def normalize_evidence(
                     raw["title"] = f"{agent_name} evidence" if evidence_is_global(raw, agent_name) else f"{agent_name} evidence {evidence_ordinal + 1}"
                 if not raw.get("text"):
                     raw["text"] = raw.get("snippet") or raw.get("summary")
-                if output.get("as_of") is not None and _meta(raw).get("source_time_status") != "unknown" and not evidence_is_global(raw, agent_name or "") and not any(
+                if output.get("as_of") is not None and _kind(raw, step) not in {"news_context", "document_context", "filing_context", "transcript_context"} and _meta(raw).get("source_time_status") != "unknown" and not evidence_is_global(raw, agent_name or "") and not any(
                     raw.get(key) or _meta(raw).get(key)
                     for key in ("as_of", "timestamp", "published_date")
                 ):
@@ -423,8 +424,9 @@ def normalize_evidence(
         flow_arrays = [payload[key] for key in ("revenue", "gross_profit", "net_income", "eps", "operating_cash_flow") if isinstance(payload.get(key), list)]
         if flow_arrays and not any(value is not None for values in flow_arrays for value in values):
             usage = "raw"
+        shared_document = bool(meta.get("shared_document")) and kind == "document_context"
         semantic = {
-            "subject": raw.get("subject") or meta.get("subject") or meta.get("ticker") or metric_metadata.get("subject") or payload.get("subject") or payload.get("ticker") or (None if evidence_is_global(raw, _text(step.get("name")) if step else agent_name or "") else inputs.get("ticker") or ((step.get("subject_tickers") or [None])[0] if step and len(step.get("subject_tickers") or []) == 1 else None)),
+            "subject": None if shared_document else raw.get("subject") or meta.get("subject") or meta.get("ticker") or metric_metadata.get("subject") or payload.get("subject") or payload.get("ticker") or (None if evidence_is_global(raw, _text(step.get("name")) if step else agent_name or "") else inputs.get("ticker") or ((step.get("subject_tickers") or [None])[0] if step and len(step.get("subject_tickers") or []) == 1 else None)),
             "metric": raw.get("metric") or meta.get("metric") or meta.get("metric_key"),
             "period_start": raw.get("period_start") or meta.get("start") or meta.get("period_start") or metric_metadata.get("period_start"),
             "period_end": raw.get("period_end") or meta.get("end") or meta.get("period_end") or meta.get("latest_period") or metric_metadata.get("period_end"),
@@ -458,15 +460,30 @@ def normalize_evidence(
         if existing is None:
             evidence_index[source_id] = evidence
             continue
-        existing_content = existing.model_dump(exclude={"task_ids"})
-        new_content = evidence.model_dump(exclude={"task_ids"})
+        existing_content = _evidence_content_identity(existing)
+        new_content = _evidence_content_identity(evidence)
         if existing_content != new_content:
             rejected.append(RejectedEvidence(ordinal=ordinal, source_id=source_id, task_ids=task_ids, agent_name=agent_name, reason_code="evidence_id_content_conflict"))
             quality.append("evidence_id_content_conflict")
             continue
         merged_task_ids = stable_unique(existing.task_ids + task_ids)
-        evidence_index[source_id] = existing.model_copy(update={"task_ids": merged_task_ids})
+        merged_meta = {**existing.metadata, "subject_refs": stable_unique(
+            _strings(existing.metadata.get("subject_refs")) + _strings(evidence.metadata.get("subject_refs"))
+        )} if shared_document else existing.metadata
+        evidence_index[source_id] = existing.model_copy(update={"task_ids": merged_task_ids, "metadata": merged_meta})
 
+    known_news_times: dict[str, set[str]] = {}
+    for evidence in evidence_index.values():
+        if evidence.kind == "news_context" and evidence.url and evidence.as_of:
+            known_news_times.setdefault(canonical_news_url(evidence.url), set()).add(evidence.as_of)
+    for source_id, evidence in list(evidence_index.items()):
+        times = known_news_times.get(canonical_news_url(evidence.url or ""), set())
+        if evidence.kind == "news_context" and not evidence.as_of and len(times) == 1:
+            published = next(iter(times))
+            evidence_index[source_id] = evidence.model_copy(update={
+                "as_of": published,
+                "metadata": {**evidence.metadata, "published_at": published, "source_time_status": "provided"},
+            })
     by_task: dict[str, list[NormalizedEvidence]] = {item.task_id: [] for item in task_descriptors}
     for evidence in evidence_index.values():
         for task_id in evidence.task_ids:
@@ -478,6 +495,23 @@ def normalize_evidence(
         rejected_evidence=rejected,
         quality_block_reasons=quality,
     )
+
+
+def _evidence_content_identity(evidence: NormalizedEvidence) -> dict[str, Any]:
+    """调用评分与任务关系不改变原文身份，真实数值和正文变化仍属于冲突。"""
+    if evidence.metadata.get("shared_document") and evidence.kind == "document_context":
+        return {
+            "url": evidence.url,
+            "body": evidence.metadata.get("document_body") or evidence.structured_data.get("document_body") or evidence.text,
+            "published_at": evidence.as_of,
+        }
+    content = evidence.model_dump(exclude={"task_ids", "agent_name"})
+    for field in ("metadata", "structured_data"):
+        content[field] = {key: value for key, value in content[field].items() if key not in {
+            "evidence_quality", "agent_quality", "confidence", "overall_score", "audit_fields",
+            "step_ids", "source_ids", "fetched_at",
+        }}
+    return content
 
 
 def _dimension(raw: dict[str, Any], evidence: list[NormalizedEvidence], step: dict[str, Any] | None, agent_name: str) -> EvidenceDimension:
@@ -863,6 +897,7 @@ def _deduplicate_explanations(explanations: list[dict[str, Any]]) -> list[dict[s
 def _validate_task_selection(
     selection: _TaskSynthesisSelection, *, claims: list[Claim], materials: list[NormalizedEvidence],
     claim_aliases: dict[str, str], evidence_aliases: dict[str, str],
+    requirements: list[dict[str, Any]] | None = None,
 ) -> tuple[_TaskSynthesisSelection, list[dict[str, Any]]]:
     """逐段校验并保留合法内容，未知 ID 不能借其它合法引用混入。"""
     errors: list[dict[str, Any]] = []
@@ -910,6 +945,23 @@ def _validate_task_selection(
         evidence_ids = resolve(direct_references, evidence_aliases, set(material_index), field, "task_synthesis_unknown_evidence_id")
         if len(errors) != before:
             continue
+        analysis_requirements = [item for item in requirements or [] if item.get("requires_analysis") and item.get("requires_explicit_binding")]
+        if analysis_requirements:
+            allowed_requirements = {item["requirement_id"]: item for item in analysis_requirements}
+            bound_ids = _strings(explanation.get("requirement_ids"))
+            if not bound_ids and len(analysis_requirements) == 1:
+                bound_ids = [analysis_requirements[0]["requirement_id"]]
+            if not bound_ids or any(value not in allowed_requirements for value in bound_ids):
+                errors.append({"field": field, "code": "task_synthesis_requirement_binding_missing"})
+                continue
+            dimensions = {allowed_requirements[value].get("dimension") for value in bound_ids} - {None, ""}
+            dimension = explanation.get("dimension")
+            if not dimension and len(dimensions) == 1:
+                dimension = next(iter(dimensions))
+            if dimensions and (len(dimensions) != 1 or dimension not in dimensions):
+                errors.append({"field": field, "code": "task_synthesis_dimension_binding_invalid"})
+                continue
+            explanation = {**explanation, "requirement_ids": bound_ids, "dimension": dimension}
         try:
             referenced = [material_index[source_id] for source_id in evidence_ids]
             if all(evidence_is_document_index(source) for source in referenced):
@@ -1035,7 +1087,10 @@ async def synthesize_task_results(
         conflicts = [item for item in claim_validation.conflicts if item.task_id == outcome.task_id]
         task_evidence = evidence_normalization.evidence_by_task.get(outcome.task_id, [])
         materials = [item for item in task_evidence if item.usage == "fact" or item.usage == "raw" and (item.url or item.metadata.get("producer") == "search") and clean_research_text(item.text)]
-        materials = [item for item in materials if item.metadata.get("subject_binding") != "unverified"]
+        materials = [item for item in materials if item.metadata.get("subject_binding") != "unverified"
+                     and item.metadata.get("temporal_role") != "historical"]
+        historical_ids = {item.source_id for item in task_evidence if item.metadata.get("temporal_role") == "historical"}
+        claims = [claim for claim in claims if not historical_ids.intersection(claim.evidence_ids)]
         verified_materials = [item for item in materials if item.usage == "fact" and not evidence_is_document_index(item)]
         if verified_materials:
             materials = verified_materials
@@ -1083,6 +1138,7 @@ async def synthesize_task_results(
             selection, validation_errors = _validate_task_selection(
                 raw_selection, claims=claims, materials=materials,
                 claim_aliases=claim_aliases, evidence_aliases=evidence_aliases,
+                requirements=requirements,
             )
             initial_errors = list(validation_errors)
             repair_attempts = 0
@@ -1098,6 +1154,7 @@ async def synthesize_task_results(
                     repaired, validation_errors = _validate_task_selection(
                         repaired_raw, claims=claims, materials=materials,
                         claim_aliases=claim_aliases, evidence_aliases=evidence_aliases,
+                        requirements=requirements,
                     )
                     repaired_requirements = {value for row in repaired.explanations for value in _strings(row.get("requirement_ids"))}
                     retained_explanations = [row for row in selection.explanations

@@ -218,6 +218,7 @@ class LocalFilingsInput(BaseModel):
     company_name: str = Field(default="", description="语义请求已确认的发行人名称")
     query: str = Field(default="", description="原始研究要求与财期范围")
     financial_metrics: Optional[list[str]] = Field(default=None, description="本轮实际需要抽取的规范财务指标")
+    time_scope: Optional[dict[str, Any]] = None
 
 
 class SecFilingsInput(BaseModel):
@@ -245,6 +246,8 @@ class SecCompanyFactsInput(BaseModel):
 
     ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
     limit: int = Field(default=8, ge=1, le=12, description="Maximum quarterly periods to return")
+    time_scope: Optional[dict[str, Any]] = None
+    calculations: Optional[list[dict[str, Any]]] = None
 
 
 class PriceWindowInput(BaseModel):
@@ -696,14 +699,15 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> str:
 
 @tool("get_local_market_filings", args_schema=LocalFilingsInput, return_direct=False)
 def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False,
-                             company_name: str = "", query: str = "", financial_metrics: Optional[list[str]] = None) -> str:
+                             company_name: str = "", query: str = "", financial_metrics: Optional[list[str]] = None,
+                             time_scope: Optional[dict[str, Any]] = None) -> str:
     """Find CN/HK exchange disclosures via free local filing sources."""
 
     if not callable(_get_local_market_filings):
         return "get_local_market_filings unavailable: backend.tools function not found"
     try:
         payload = _get_local_market_filings(ticker=ticker, limit=limit, include_financial_facts=include_financial_facts,
-                                            company_name=company_name, query=query, financial_metrics=financial_metrics)
+                                            company_name=company_name, query=query, financial_metrics=financial_metrics, time_scope=time_scope)
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_local_market_filings failed: {exc}"
@@ -736,13 +740,14 @@ def get_sec_material_events(ticker: str, limit: int = 10, include_content: bool 
 
 
 @tool("get_sec_company_facts_quarterly", args_schema=SecCompanyFactsInput, return_direct=False)
-def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> str:
-    """Get quarterly SEC CompanyFacts (XBRL) normalized metrics for a US ticker."""
+def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: Optional[dict[str, Any]] = None,
+    calculations: Optional[list[dict[str, Any]]] = None) -> str:
+    """按请求财期取得 SEC CompanyFacts，并核对同口径两期计算。"""
 
     if not callable(_get_sec_company_facts_quarterly):
         return "get_sec_company_facts_quarterly unavailable: backend.tools function not found"
     try:
-        payload = _get_sec_company_facts_quarterly(ticker=ticker, limit=limit)
+        payload = _get_sec_company_facts_quarterly(ticker=ticker, limit=limit, time_scope=time_scope, calculations=calculations)
         return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_sec_company_facts_quarterly failed: {exc}"

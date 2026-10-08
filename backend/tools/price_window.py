@@ -70,6 +70,7 @@ def get_price_window_metrics(
         result["unit"] = metadata.get("currency")
         result["request_as_of"] = now.isoformat()
         bars = []
+        result["bars"] = bars
         if frame is not None:
             for index, row in frame.sort_index().iterrows():
                 day = index.date()
@@ -77,6 +78,12 @@ def get_price_window_metrics(
                     continue
                 close, high, low, volume = (fact_number(row.get(key)) for key in ("Close", "High", "Low", "Volume"))
                 if close is None or close <= 0:
+                    # 仅有公司行动的空行情行不算收盘点；缺少真实收盘仍由交易日完整性检查拒绝。
+                    if close is None and high is None and low is None and (volume is None or volume == 0):
+                        result.setdefault("empty_session_dates", []).append(day.isoformat())
+                        continue
+                    result["invalid_session_date"] = day.isoformat()
+                    result["invalid_close_reason"] = "missing_or_nonfinite" if close is None else "nonpositive"
                     raise ValueError("invalid_close_path")
                 if bars and bars[-1]["date"] == day.isoformat():
                     raise ValueError("duplicate_session")

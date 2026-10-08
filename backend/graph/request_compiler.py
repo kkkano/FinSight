@@ -328,6 +328,12 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         applied_constraints = _scoped_constraints([*constraints, *local_constraints], applicable_refs)
         exclusions = {str(item.get("dimension")) for item in applied_constraints if item.get("constraint_type") == "exclude_dimension"}
         metric = str(requirement.get("metric") or "unknown")
+        calculation = requirement.get("calculation")
+        if calculation is not None:
+            from backend.graph.semantic_requirements import SemanticCalculation
+            requirement["calculation"] = SemanticCalculation.model_validate(calculation).model_dump()
+            if requirement.get("kind") not in {"calculation", "comparison"}:
+                raise ValueError("request_calculation_kind_invalid")
         if metric == "rsi":
             requirement["raw_metric"] = metric
             metric = requirement["metric"] = "rsi14"
@@ -384,8 +390,14 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         raw_scope = dict(requirement.get("time_scope") or {"kind": "none"})
         scope = _normalize_semantic_scope(raw_scope, metric)
         frequency_aliases = {"daily": "daily", "1d": "daily", "weekly": "weekly", "1wk": "weekly", "monthly": "monthly", "1mo": "monthly"}
+        presentation = list(requirement.get("presentation") or [])
+        if any(item not in {"itemized", "include_date", "include_link"} for item in presentation):
+            raise ValueError("request_presentation_invalid")
         attributes = []
         for attribute in requirement.get("attributes") or []:
+            if attribute in {"itemized", "include_date", "include_link"}:
+                presentation.append(attribute)
+                continue
             raw_attribute = str(attribute).strip()
             if raw_attribute.startswith("timeframe:") and raw_attribute.partition(":")[2] in frequency_aliases:
                 requirement["data_frequency"] = frequency_aliases[raw_attribute.partition(":")[2]]
@@ -401,13 +413,18 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                 continue
             attributes.append(normalized_attribute if normalized_attribute in _REGISTERED_ATTRIBUTES else raw_attribute)
         components = []
+        from backend.graph.semantic_requirements import ExtractedRequirement
         for component in requirement.get("components") or []:
+            if (not isinstance(component, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", component)
+                    or component in ExtractedRequirement.model_fields or component in {"value", "operation", "baseline"}):
+                raise ValueError("request_component_shape_invalid")
             name = str(component).strip()
             if name in _COMPONENT_ATTRIBUTES:
                 attributes.append(_COMPONENT_ATTRIBUTES[name])
             elif name and metric not in _TOOL_COMPUTED_MEASUREMENTS:
                 components.append(name)
         requirement["components"] = components
+        requirement["presentation"] = list(dict.fromkeys(presentation))
         requirement["attributes"] = attributes
         if metric == "quote":
             # 即时/收盘报价没有采样频率可言，日线措辞不应变成需要核对的频率要求。
@@ -459,7 +476,7 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
                            evidence_kinds=evidence, time_scope=scope, requires_explicit_binding=True,
                            requires_analysis=requires_analysis,
                            constraints=applied_constraints)
-        identity = {key: requirement.get(key) for key in ("source_text", "subject_refs", "subject", "metric", "kind", "time_scope", "components", "attributes")}
+        identity = {key: requirement.get(key) for key in ("source_text", "subject_refs", "subject", "metric", "kind", "time_scope", "components", "attributes", "calculation", "presentation")}
         digest = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
         requirement_id = f"requirement:{digest}"
         if requirement_id in seen_ids:

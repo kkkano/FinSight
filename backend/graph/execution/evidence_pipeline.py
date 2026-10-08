@@ -257,7 +257,7 @@ def normalize_execution_evidence(
                     "snippet": str(snippet).strip()[:800],
                     "text": item.get("text") or item.get("snippet") or item.get("summary"),
                     "source": source,
-                    "published_date": item.get("timestamp") or (None if evidence_is_global(item, agent_name) else as_of),
+                    "published_date": item.get("published_at") or item.get("published_date") or item.get("timestamp"),
                     "confidence": item.get("confidence", confidence_base if isinstance(confidence_base, (int, float)) else 0.6),
                     "type": "agent",
                     "id": item.get("id") or f"{agent_name}:{step_id}:{i+1}",

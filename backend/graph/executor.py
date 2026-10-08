@@ -13,6 +13,7 @@ from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
 from backend.config.settings import executor_settings
+from backend.graph.request_task_contract import output_is_error_like
 
 logger = logging.getLogger(__name__)
 
@@ -487,7 +488,7 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
                         "type": "agent_done",
                         "agent": str(name),
                         "name": str(name),
-                        "status": "done",
+                        "status": "error" if output_is_error_like(output) else "done",
                         "step_id": step_id,
                         "task_id": task_id,
                         "task_ids": task_ids,
@@ -496,11 +497,14 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
             else:
                 raise ValueError(f"unsupported step kind/name in Phase 3 executor: {kind}:{name}")
 
-        ctx.cache[key] = output
         duration_ms = int((time.perf_counter() - start) * 1000)
         status_reason = "done"
         if isinstance(output, dict) and output.get("skipped") is True:
             status_reason = str(output.get("reason") or "skipped")
+        elif output_is_error_like(output):
+            status_reason = "error"
+        elif isinstance(output, dict) and output.get("missing_metrics"):
+            status_reason = "partial"
         ctx.artifacts["step_results"][step_id] = {
             "cached": False,
             "output": output,
@@ -510,6 +514,10 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
             "task_id": task_id,
             "task_ids": task_ids,
         }
+        if status_reason == "error":
+            message = output.get("error") or output.get("error_message") or output.get("status") if isinstance(output, dict) else output
+            raise ValueError(str(message or "tool_business_error"))
+        ctx.cache[key] = output
         _update_signals_from_output(ctx.artifacts, output)
         ctx.exec_events.append(
             {
@@ -540,6 +548,9 @@ async def run_single_step(step: dict[str, Any], ctx: StepContext) -> None:
         await ctx.emit_cancelled_stage()
         raise
     except Exception as exc:
+        result = ctx.artifacts["step_results"].get(step_id)
+        if isinstance(result, dict):
+            result["status_reason"] = "error"
         err = {
             "schema_version": FAILURE_STRATEGY_VERSION,
             "step_id": step_id,

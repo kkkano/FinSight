@@ -108,14 +108,14 @@ def _parse_search_text(raw: str) -> list[dict[str, str]]:
 def _infer_form(text: str, market: str) -> str:
     lowered = str(text or "").lower()
     if market == "CN":
-        if any(token in lowered for token in ("年报", "annual report")):
+        if re.search(r"年(?:度)?报(?:告)?|annual\s+report", lowered):
             return "annual_report"
         if any(token in lowered for token in ("季报", "quarterly", "q1", "q2", "q3", "中报", "半年报")):
             return "quarterly_report"
         return "announcement"
 
     if market == "HK":
-        if any(token in lowered for token in ("annual report", "年报")):
+        if re.search(r"annual\s+report|年(?:度)?报(?:告)?", lowered):
             return "annual_report"
         if any(token in lowered for token in ("interim report", "中期报告", "quarterly", "季报")):
             return "interim_report"
@@ -160,19 +160,42 @@ def _build_queries(ticker: str, market: str, company_name: str = "", query: str 
     return []
 
 
-def _issuer_identity(text: str, ticker: str) -> str | None:
+def _issuer_identity(text: str, ticker: str, company_name: str = "") -> str | None:
     front = str(text or "")[:5000]
     requested_code = str(ticker).split(".")[0].lstrip("0")
     codes = re.findall(r"(?:证券代码|股票代码|公司代码|股份代號|股份代号|stock\s*code)\s*[:：]?\s*(\d{1,6})", front, re.IGNORECASE)
     if codes:
         return "document_stock_code" if requested_code in {code.lstrip("0") for code in codes} else None
     aliases = [name for name, symbol in CN_TO_TICKER.items() if symbol.upper() == ticker.upper() and len(name) >= 4]
+    if company_name:
+        aliases.append(company_name)
     aliases += {"0700.HK": ["腾讯控股", "騰訊控股", "Tencent Holdings"], "9988.HK": ["阿里巴巴集團", "Alibaba Group"]}.get(ticker.upper(), [])
     declared_name = any(
-        re.search(r"(?:^|\n)\s*" + re.escape(alias) + r"\s*(?:股份有限公司|有限公司|集團有限公司|集团有限公司|Limited|Ltd\.?)(?:\s|$|[，。,])", front[:1500], re.IGNORECASE)
+        re.search(r"(?:^|\n)\s*" + re.escape(alias) + r"[^\n]{0,30}(?:股份有限公司|有限公司|集團有限公司|集团有限公司|Limited|Ltd\.?)(?:\s|$|[，。,])", front[:1500], re.IGNORECASE)
         for alias in aliases
     )
     return "document_company_name" if declared_name else None
+
+
+def _document_title(text: str, fallback: str) -> str:
+    lines = [line.strip() for line in str(text or "")[:1500].splitlines()
+             if line.strip() and not re.fullmatch(r"\[Page \d+\]|\d+", line.strip())]
+    if not lines or not 10 <= len(lines[0]) <= 200:
+        return fallback
+    if len(lines) > 1 and re.search(r"20\d{2}.*(?:报告|report)", lines[1], re.IGNORECASE):
+        return f"{lines[0]} {lines[1]}"
+    return lines[0]
+
+
+def verified_disclosure_document(text: str, url: str, ticker: str, company_name: str = "") -> str | None:
+    """交易所或正文声明的发行人网站，仍须独立核对原文发行人身份。"""
+    identity = _issuer_identity(text, ticker, company_name)
+    if not identity:
+        return None
+    host = _normalize_domain(url)
+    exchange = any(host == domain or host.endswith("." + domain) for domain in _LOCAL_DISCLOSURE_DOMAINS)
+    declared_host = re.search(r"(?<![\w.-])(?:https?://)?(?:www\.)?" + re.escape(host) + r"(?:[/\s]|$)", text[:600000], re.IGNORECASE)
+    return identity if exchange or declared_host else None
 
 
 def _fetch_disclosure_text(url: str, *, full_document: bool = False) -> str:
@@ -214,7 +237,8 @@ def _fetch_disclosure_text(url: str, *, full_document: bool = False) -> str:
 
 
 def get_local_market_filings(ticker: str, limit: int = 8, include_financial_facts: bool = False,
-                             company_name: str = "", query: str = "", financial_metrics: list[str] | None = None) -> dict[str, Any]:
+                             company_name: str = "", query: str = "", financial_metrics: list[str] | None = None,
+                             time_scope: dict | None = None) -> dict[str, Any]:
     """Fetch CN/HK local disclosure links via free search sources."""
     ticker_norm = str(ticker or "").strip().upper()
     capped_limit = max(1, min(int(limit or 8), 20))
@@ -245,7 +269,8 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
     discoveries: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     verification_attempts = 0
-    extraction_attempted = False
+    extraction_attempts = 0
+    extracted_metrics: set[str] = set()
 
     for query in _build_queries(ticker_norm, market, company_name, query):
         try:
@@ -284,14 +309,14 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
             if verification_attempts < min(capped_limit, 3):
                 verification_attempts += 1
                 content = _fetch_disclosure_text(url, full_document=True) if include_financial_facts else _fetch_disclosure_text(url)
-                issuer_method = _issuer_identity(content, ticker_norm)
+                issuer_method = _issuer_identity(content, ticker_norm, company_name)
             if not issuer_method:
                 discoveries.append({"title": title, "url": url, "snippet": snippet, "issuer_verified": False, "reason": "issuer_not_verified"})
                 continue
             rows.append(
                 {
-                    "title": title or f"{ticker_norm} local filing",
-                    "form": _infer_form(joined_text, market),
+                    "title": _document_title(content, title or f"{ticker_norm} local filing"),
+                    "form": _infer_form(content[:1500], market),
                     "filing_url": url,
                     "filing_date": _extract_date(joined_text),
                     "primary_doc_description": snippet or title,
@@ -301,15 +326,26 @@ def get_local_market_filings(ticker: str, limit: int = 8, include_financial_fact
                     "issuer_verified": True,
                     "issuer_ticker": ticker_norm,
                     "identity_method": issuer_method,
-                    "content": content[:24000],
+                    "content": content if include_financial_facts else content[:24000],
                     "content_read": True,
                 }
             )
-            if include_financial_facts and not extraction_attempted:
+            from .disclosure_financial_facts import _METRICS
+            wanted = set(financial_metrics or _METRICS).intersection(_METRICS)
+            requested_form = "annual_report" if (time_scope or {}).get("kind") == "fiscal_year" else None
+            matching_form = not requested_form or rows[-1]["form"] == requested_form
+            if include_financial_facts and matching_form and extraction_attempts < 2 and (not extracted_metrics or wanted - extracted_metrics):
                 from .disclosure_financial_facts import extract_financial_facts
 
-                extraction_attempted = True
-                rows[-1]["financial_facts"] = extract_financial_facts(content, ticker_norm, url, financial_metrics)
+                extraction_attempts += 1
+                diagnostics: dict = {}
+                rows[-1]["financial_facts"] = extract_financial_facts(content, ticker_norm, url, financial_metrics,
+                    time_scope=time_scope, diagnostics=diagnostics)
+                rows[-1]["financial_extraction"] = diagnostics
+                for fact in rows[-1]["financial_facts"]:
+                    fact["filed"] = rows[-1]["filing_date"]
+                    fact["published_at"] = rows[-1]["filing_date"]
+                extracted_metrics.update(fact["metric"] for fact in rows[-1]["financial_facts"])
             if len(rows) >= capped_limit:
                 break
         if len(rows) >= capped_limit:

@@ -163,6 +163,10 @@ class DeepSearchAgent(BaseFinancialAgent):
         query: str,
         ticker: str,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
+        time_scope: dict | None = None,
+        financial_metrics: list[str] | None = None,
+        company_name: str = "",
+        documents: list[dict] | None = None,
     ) -> AgentOutput:
         """执行一次安全检索和确定性证据整理。"""
 
@@ -188,7 +192,13 @@ class DeepSearchAgent(BaseFinancialAgent):
 
         queries = self._build_queries(query, ticker)
         emit("search_start", {"queries": queries})
-        docs = await self._initial_search(query, ticker, queries=queries)
+        remaining_extraction = sum("financial_extraction" in doc for doc in documents or []) < 2
+        docs = await self._initial_search(query, ticker, queries=queries, time_scope=time_scope,
+                                          full_document=bool(financial_metrics) and remaining_extraction, documents=documents)
+        docs = self._mark_document_time(docs, time_scope)
+        if financial_metrics:
+            docs = await asyncio.to_thread(self._extract_document_facts, docs, ticker,
+                                           financial_metrics, time_scope, company_name)
         self._log_documents(docs, "initial")
         emit("search_result", self._build_trace_payload(queries, docs))
 
@@ -229,8 +239,15 @@ class DeepSearchAgent(BaseFinancialAgent):
         query: str,
         ticker: str,
         queries: Optional[List[str]] = None,
+        time_scope: dict | None = None,
+        full_document: bool = False,
+        documents: list[dict] | None = None,
     ) -> List[Dict[str, Any]]:
-        cache_key = f"{ticker}:deep_search:{hash(query)}"
+        already_read = [{**doc, "url": doc.get("url") or doc.get("filing_url"),
+                         "published_date": doc.get("published_date") or doc.get("filing_date"),
+                         "degraded": False} for doc in documents or [] if doc.get("content_read") and doc.get("content")]
+        read_urls = {doc["url"] for doc in already_read}
+        cache_key = f"{ticker}:deep_search:{hash(query)}:{time_scope!r}:{full_document}:{sorted(read_urls)!r}"
         cached = self.cache.get(cache_key)
         if isinstance(cached, list) and cached:
             return cached
@@ -247,9 +264,11 @@ class DeepSearchAgent(BaseFinancialAgent):
                 results.append(enriched)
 
         results = self._dedupe_results(results)
+        results = [result for result in results if result.get("url") not in read_urls]
         results = self._reject_unsafe_results(results)
-        results = self._filter_results(results, query=query, ticker=ticker)[:self.MAX_RESULTS]
-        docs = await asyncio.to_thread(self._fetch_documents, results)
+        results = self._filter_results(results, query=query, ticker=ticker, time_scope=time_scope)[:self.MAX_RESULTS]
+        fetch_options = {"full_document": True} if full_document else {}
+        docs = await asyncio.to_thread(self._fetch_documents, results, **fetch_options)
         if docs:
             sources = sorted({doc.get("source", "web") for doc in docs if isinstance(doc, dict)})
             pdf_count = sum(1 for doc in docs if doc.get("is_pdf"))
@@ -264,8 +283,79 @@ class DeepSearchAgent(BaseFinancialAgent):
             docs = self._build_snippet_docs(results)
 
         if docs:
+            docs = [*already_read, *docs]
             self.cache.set(cache_key, docs, ttl=self.CACHE_TTL)
-        return docs
+        return docs or already_read
+
+    @staticmethod
+    def _publication_date(text: str) -> str | None:
+        from backend.tools.local_disclosure import _extract_date
+        from dateutil.parser import parse
+        date_expression = r"(?:20\d{2}(?:[-/.]\d{1,2}[-/.]\d{1,2}|年\d{1,2}月\d{1,2}日)|\d{1,2}\s+[A-Za-z]+\s+20\d{2}|[A-Za-z]+\s+\d{1,2},?\s+20\d{2})"
+        for line in str(text or "")[:1500].splitlines():
+            value = re.sub(r"^(?:发布日期|发布时间|出版日期|Published(?:\s+on)?|Issued(?:\s+on)?)\s*[:：]?\s*", "", line.strip(), flags=re.IGNORECASE)
+            if re.fullmatch(date_expression, value):
+                numeric = _extract_date(value)
+                if numeric:
+                    return numeric
+                try:
+                    return parse(value, fuzzy=False).date().isoformat()
+                except ValueError:
+                    continue
+        return None
+
+    @classmethod
+    def _mark_document_time(cls, docs: list[dict], time_scope: dict | None) -> list[dict]:
+        scope = time_scope or {}
+        reference = str(scope.get("as_of") or datetime.now(timezone.utc).date().isoformat())[:10]
+        output = []
+        for original in docs:
+            doc = dict(original)
+            published = doc.get("published_date") or cls._publication_date(str(doc.get("content") or ""))
+            doc["published_date"] = doc["published_at"] = published
+            doc["source_time_status"] = "provided" if published else "unknown"
+            if published and scope.get("selection") in {"latest", "latest_complete"}:
+                try:
+                    age = (datetime.fromisoformat(reference) - datetime.fromisoformat(str(published)[:10])).days
+                    if age > 365:
+                        doc["temporal_role"] = "historical"
+                except ValueError:
+                    pass
+            output.append(doc)
+        return output
+
+    def _extract_document_facts(self, docs: list[dict], ticker: str, metrics: list[str],
+                                time_scope: dict | None, company_name: str) -> list[dict]:
+        from backend.tools.disclosure_financial_facts import _METRICS, extract_financial_facts
+        from backend.tools.local_disclosure import _document_title, verified_disclosure_document
+
+        documents = [dict(doc) for doc in docs]
+        metrics = [metric for metric in metrics if metric in _METRICS]
+        if not metrics:
+            return documents
+        attempts = sum("financial_extraction" in doc for doc in documents)
+        obtained = {fact["metric"] for doc in documents for fact in doc.get("financial_facts") or []}
+        for doc in documents:
+            body, url = str(doc.get("content") or ""), str(doc.get("url") or "")
+            identity = None if doc.get("degraded") else verified_disclosure_document(body, url, ticker, company_name)
+            if not identity:
+                continue
+            doc.update(issuer_verified=True, issuer_ticker=ticker,
+                       title=_document_title(body, str(doc.get("title") or url)))
+            if attempts >= 2 or "financial_extraction" in doc or set(metrics).issubset(obtained):
+                continue
+            attempts += 1
+            diagnostics: dict = {}
+            facts = extract_financial_facts(body, ticker, url, metrics,
+                time_scope=time_scope, diagnostics=diagnostics)
+            for fact in facts:
+                fact["published_at"] = doc.get("published_date")
+                fact["filed"] = doc.get("published_date")
+            doc["financial_facts"], doc["financial_extraction"] = facts, diagnostics
+            obtained.update(fact["metric"] for fact in facts)
+            if set(metrics).issubset(obtained):
+                break
+        return documents
 
     async def _first_summary(self, data: List[Dict[str, Any]]) -> str:
         return self._build_degraded_summary(data)
@@ -304,6 +394,15 @@ class DeepSearchAgent(BaseFinancialAgent):
                     confidence=item.get("confidence", 0.7),
                     title=title,
                     meta={
+                        "shared_document": True,
+                        "subject_binding": "body_verified" if item.get("issuer_verified") else "document_context",
+                        "subject": item.get("issuer_ticker") if item.get("issuer_verified") else None,
+                        "subject_refs": [item["issuer_ticker"]] if item.get("issuer_verified") else [],
+                        "source_time_status": "provided" if item.get("published_date") else "unknown",
+                        "published_at": item.get("published_at") or item.get("published_date"),
+                        "temporal_role": item.get("temporal_role"),
+                        "fetched_at": item.get("fetched_at"),
+                        "financial_extraction": item.get("financial_extraction"),
                         "is_pdf": item.get("is_pdf", False),
                         "degraded": degraded,
                         "degrade_reason": item.get("degrade_reason"),
@@ -319,6 +418,17 @@ class DeepSearchAgent(BaseFinancialAgent):
                         "conflict_flag": has_conflicts,
                     },
                 ))
+                for fact in item.get("financial_facts") or []:
+                    evidence.append(EvidenceItem(
+                        text=str(fact.get("quote") or ""), source=source, url=fact.get("source_url"),
+                        timestamp=item.get("published_date"), title=f"{fact['metric']} ({fact['period_end']})",
+                        meta={**fact, "kind": "capital_allocation" if fact["metric"] in {
+                            "operating_cash_flow", "capital_expenditure", "dividends_paid", "repurchases_paid"
+                        } else "fundamental_snapshot", "issuer_verified": True,
+                              "subject_binding": "body_verified", "usage": "fact",
+                              "temporal_role": item.get("temporal_role"),
+                              "source_time_status": "provided" if item.get("published_date") else "unknown"},
+                    ))
         else:
             all_degraded = False
 
@@ -750,7 +860,8 @@ class DeepSearchAgent(BaseFinancialAgent):
 
         return score
 
-    def _filter_results(self, results: List[Dict[str, Any]], *, query: str, ticker: str) -> List[Dict[str, Any]]:
+    def _filter_results(self, results: List[Dict[str, Any]], *, query: str, ticker: str,
+                        time_scope: dict | None = None) -> List[Dict[str, Any]]:
         if not isinstance(results, list) or not results:
             return []
 
@@ -770,6 +881,22 @@ class DeepSearchAgent(BaseFinancialAgent):
             score = self._result_relevance_score(item, query=query, ticker=ticker)
             if finance_intent and score < 2.4:
                 continue
+            scope = time_scope or {}
+            period_end = str(scope.get("period_end") or "")[:10]
+            if period_end:
+                years = set(re.findall(r"\b20\d{2}\b", str(item.get("title") or "") + " " + str(item.get("snippet") or "")))
+                score += 3.0 if period_end[:4] in years else -2.0 if years else 0.0
+            published = str(item.get("published_date") or "")[:10]
+            cutoff = str(scope.get("as_of") or "")[:10]
+            if cutoff and published and published > cutoff:
+                continue
+            if scope.get("selection") == "latest_complete" and published:
+                reference = cutoff or datetime.now(timezone.utc).date().isoformat()
+                try:
+                    age = (datetime.fromisoformat(reference) - datetime.fromisoformat(published)).days
+                    score += max(-2.0, 2.0 - max(age, 0) / 365.0)
+                except ValueError:
+                    pass
             scored.append((score, item))
 
         if not scored:
@@ -857,11 +984,11 @@ class DeepSearchAgent(BaseFinancialAgent):
             })
         return docs
 
-    def _fetch_documents(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _fetch_documents(self, results: List[Dict[str, Any]], *, full_document: bool = False) -> List[Dict[str, Any]]:
         docs: List[Dict[str, Any]] = []
         degraded_docs: List[Dict[str, Any]] = []
         for item in results[: self.MAX_DOCS]:
-            doc = self._fetch_document(item)
+            doc = self._fetch_document(item, full_document=True) if full_document else self._fetch_document(item)
             if not doc:
                 continue
 
@@ -895,7 +1022,7 @@ class DeepSearchAgent(BaseFinancialAgent):
 
         return docs
 
-    def _fetch_document(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_document(self, item: Dict[str, Any], *, full_document: bool = False) -> Optional[Dict[str, Any]]:
         url = item.get("url", "")
         if not url:
             return None
@@ -926,11 +1053,11 @@ class DeepSearchAgent(BaseFinancialAgent):
         text = ""
         used_snippet_fallback = False
         if is_pdf:
-            text = self._extract_pdf_text(response.content)
+            text = self._extract_pdf_text(response.content, full_document=True) if full_document else self._extract_pdf_text(response.content)
         else:
             text = self._extract_html_text(response.text)
 
-        text = self._trim_text(text)
+        text = self._trim_text(text, 600_000 if full_document else None)
         domain = self._normalized_domain_from_url(url)
 
         enable_jina_fallback = str(os.getenv("DEEPSEARCH_ENABLE_JINA_FALLBACK", "true")).strip().lower() in {"1", "true", "yes", "on"}
@@ -995,6 +1122,7 @@ class DeepSearchAgent(BaseFinancialAgent):
             "content": text,
             "source": item.get("source", self._infer_source(url)),
             "published_date": item.get("published_date"),
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
             "is_pdf": is_pdf,
             "search_query": item.get("search_query"),
             "search_queries": item.get("search_queries") or [],
@@ -1099,16 +1227,23 @@ class DeepSearchAgent(BaseFinancialAgent):
             return build_thread_working_set_collection(str(thread_id))
         return build_deepsearch_working_set_collection(query=query, ticker=ticker)
 
-    def _extract_pdf_text(self, data: bytes) -> str:
+    def _extract_pdf_text(self, data: bytes, *, full_document: bool = False) -> str:
         if not PdfReader:
             return ""
         try:
             from io import BytesIO
 
+            if full_document and len(data) > 15_000_000:
+                return ""
             reader = PdfReader(BytesIO(data))
             pages = []
-            for page in reader.pages[:8]:
-                pages.append(page.extract_text() or "")
+            size = 0
+            for number, page in enumerate(reader.pages[:400 if full_document else 8], 1):
+                body = page.extract_text() or ""
+                size += len(body)
+                if size > 600_000:
+                    break
+                pages.append(f"[Page {number}]\n{body}")
             return "\n".join(pages)
         except Exception as exc:
             logger.info(f"[DeepSearch] PDF parse failed: {exc}")

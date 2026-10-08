@@ -7,7 +7,7 @@ from typing import Any
 
 from backend.graph.synthesis.contracts import Claim, NormalizedEvidence, ReportSynthesisDraft, TaskSynthesisResult, stable_unique
 from backend.research.filing_evidence import disclosure_sections
-from backend.graph.synthesis.requirement_support import FINANCIAL_METRICS, attached_source_policy_reasons, control_support_reasons, exact_support_reasons, metric_record, metric_supports
+from backend.graph.synthesis.requirement_support import FINANCIAL_METRICS, attached_source_policy_reasons, calculation_record, control_support_reasons, exact_support_reasons, metric_record, metric_supports, presentation_reasons
 
 
 def _present(value: Any) -> bool:
@@ -234,7 +234,8 @@ def evaluate_answer_requirements(
                       or requirement.get("metric") in FINANCIAL_METRICS
                       and metric_record(evidence_index[source_id], requirement["metric"]) is not None)
                  and (not subject or evidence_index[source_id].subject == subject)
-                 and metric_supports(evidence_index[source_id], str(requirement.get("metric") or ""))
+                 and (calculation_record(evidence_index[source_id], requirement) is not None if requirement.get("calculation")
+                      else metric_supports(evidence_index[source_id], str(requirement.get("metric") or "")))
                  and _supports_dimension(evidence_index[source_id], dimension)]
         facts = [evidence for evidence in available_facts if evidence.source_id in shown_ids]
         supported_ids = {fact.source_id for fact in facts}
@@ -248,6 +249,7 @@ def evaluate_answer_requirements(
         control_reasons = control_support_reasons(requirement, result, facts)
         reasons = exact_support_reasons(requirement, facts) if control_reasons is None else list(control_reasons)
         reasons.extend(attached_source_policy_reasons(requirement, result, facts))
+        reasons.extend(presentation_reasons(requirement, facts))
         if not facts and control_reasons is None:
             reasons.append("requirement_evidence_not_presented" if available_facts else "requirement_evidence_missing")
         for attribute in requirement.get("attributes") or []:

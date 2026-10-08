@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import urlsplit
 from typing import Any
 
 from backend.graph.synthesis.contracts import ReportSynthesisDraft, ResearchReportRenderResult, aggregate_task_status
@@ -11,7 +12,7 @@ from backend.graph.synthesis.requirement_validation import claim_has_reliable_so
 from backend.graph.synthesis.research_synthesis import clean_research_text
 from backend.graph.renderers.fact_formatters import format_fact, number
 from backend.graph.renderers.content_selection import DIMENSION_KINDS, select_claims, select_fact_ids
-from backend.research.news_event_quality import news_quality_label
+from backend.research.news_event_quality import canonical_news_url
 
 _STATUS_LABEL = {
     "answered": "已回答",
@@ -120,6 +121,9 @@ def _source_label(evidence) -> str:
     source = evidence.source_name or ""
     if re.search(r"(?:get_|_agent)", source):
         source = ""
+    origin = urlsplit(evidence.url or "").hostname
+    if origin and source and "." in source and origin.removeprefix("www.") != source.removeprefix("www."):
+        source = f"{origin}（经 {source}）"
     return " / ".join(value for value in (title, source, evidence.as_of or evidence.period_end or "") if value)
 
 
@@ -186,7 +190,7 @@ def render_research_report(
         evidence = draft.evidence_index.get(source_id)
         if evidence is None:
             continue
-        identity = (_source_label(evidence), evidence.url)
+        identity = (canonical_news_url(evidence.url), evidence.as_of) if evidence.url else (_source_label(evidence), None)
         if identity not in reference_identities:
             reference_identities[identity] = str(len(reference_identities) + 1)
         reference_numbers[source_id] = reference_identities[identity]
@@ -317,11 +321,7 @@ def render_research_report(
         discovery = [evidence for evidence in draft.evidence_index.values() if task.task_id in evidence.task_ids and evidence.metadata.get("verification") == "discovery_only" and evidence.source_id not in claimed_sources]
         if discovery:
             lines.extend(["", "**未核实的检索材料**"])
-            for evidence in discovery:
-                label = news_quality_label({"event_quality": evidence.metadata.get("event_quality") or {}})
-                note = f"{label}；" if label else ""
-                lines.append(f"- {_source_label(evidence)} {refs([evidence.source_id])}；{note}仅为检索线索，本轮未形成通过事实校验的对应解释。")
-                shown_sources.add(evidence.source_id)
+            lines.append("部分材料的来源、发布日期或内容尚未核实，未纳入上述结论。")
         covered_missing = {missing.get("evidence_kind") for missing in task.missing_requirements}
         for kind in task.missing_evidence:
             if kind in covered_missing:
@@ -376,7 +376,7 @@ def render_research_report(
         evidence = draft.evidence_index[source_id]
         label = _source_label(evidence)
         number = reference_numbers[source_id]
-        identity = (label, evidence.url)
+        identity = number
         if identity in shown_reference_labels:
             continue
         shown_reference_labels.add(identity)

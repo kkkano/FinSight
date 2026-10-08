@@ -89,9 +89,45 @@ def test_financial_extraction_runs_once_after_issuer_verification(monkeypatch):
     monkeypatch.setattr(local_disclosure, "search", lambda _: "1. 年报\nhttps://www.cninfo.com.cn/report.pdf")
     monkeypatch.setattr(local_disclosure, "_fetch_disclosure_text", lambda *_, **__: BODY)
     calls = []
-    monkeypatch.setattr(disclosure_financial_facts, "extract_financial_facts", lambda *args: calls.append(args) or _extract(ROW))
+    monkeypatch.setattr(disclosure_financial_facts, "extract_financial_facts", lambda *args, **kwargs: calls.append(args) or _extract(ROW))
     result = local_disclosure.get_local_market_filings("600519.SS", include_financial_facts=True)
     assert len(calls) == 1 and result["filings"][0]["financial_facts"][0]["unit"] == "CNY"
+
+
+def test_missing_currency_records_rejection_without_inventing_market_currency():
+    diagnostics = {}
+    body = BODY.replace(" 币种：人民币", "")
+    row = {**ROW, "unit_quote": "单位：万元"}
+    assert validate_financial_facts({"facts": [row]}, text=body, ticker="600519.SS", source_url="https://example.com/report.pdf", diagnostics=diagnostics) == []
+    assert diagnostics["rejected"][0]["reason"] == "source_amount_or_currency_mismatch"
+
+
+def test_disclosure_retries_one_already_read_candidate_and_corrects_search_title(monkeypatch):
+    from backend.tools import disclosure_financial_facts
+    monkeypatch.setattr(local_disclosure, "search", lambda _: "1. 错误2021摘要\nhttps://static.cninfo.com.cn/first.pdf\n2. 全文\nhttps://static.cninfo.com.cn/second.pdf\n3. 其他\nhttps://static.cninfo.com.cn/third.pdf")
+    reads, calls = [], []
+    def read(url, **kwargs):
+        reads.append(url)
+        return "[Page 1]\n测试公司2025年年度报告\n证券代码：600519\n" + BODY
+    def extract(text, ticker, url, metrics, **kwargs):
+        calls.append(url)
+        return [] if url.endswith("first.pdf") else _extract(ROW)
+    monkeypatch.setattr(local_disclosure, "_fetch_disclosure_text", read)
+    monkeypatch.setattr(disclosure_financial_facts, "extract_financial_facts", extract)
+    result = local_disclosure.get_local_market_filings("600519.SS", include_financial_facts=True, financial_metrics=["operating_cash_flow"])
+    assert len(calls) == 2 and len(reads) == len(set(reads))
+    assert result["filings"][0]["title"] == "测试公司2025年年度报告"
+    assert result["filings"][1]["financial_facts"]
+
+
+def test_financial_mode_keeps_already_read_late_pages_for_downstream_reuse(monkeypatch):
+    from backend.tools import disclosure_financial_facts
+    body = BODY + "正文" * 13000 + "\n[Page 100]\n财务表正文"
+    monkeypatch.setattr(local_disclosure, "search", lambda _: "1. 公告\nhttps://static.cninfo.com.cn/report.pdf")
+    monkeypatch.setattr(local_disclosure, "_fetch_disclosure_text", lambda *_, **__: body)
+    monkeypatch.setattr(disclosure_financial_facts, "extract_financial_facts", lambda *_, **__: [])
+    result = local_disclosure.get_local_market_filings("600519.SS", include_financial_facts=True)
+    assert result["filings"][0]["content"] == body
 
 
 @pytest.mark.parametrize("ticker", ["600519.SS", "0700.HK"])

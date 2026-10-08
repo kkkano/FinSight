@@ -41,6 +41,22 @@ def _append_evidence_steps_for_ticker(ctx,
                                  "capital_allocation_surplus", "dividend_coverage"}
         for task in tasks for req in task.get("answer_requirements", [])
     )
+    company_name = next((task.get("subject_label") for task in tasks if ticker in task.get("tickers", [])), "") or ""
+    financial_requests = {}
+    for task in tasks:
+        for req in task.get("answer_requirements", []):
+            if req.get("subject") and req["subject"] != ticker:
+                continue
+            if req.get("metric") not in {"revenue", "net_income", "operating_income", "earnings_performance"} and "capital_allocation" not in req.get("evidence_kinds", []):
+                continue
+            scope = req.get("time_scope") or {"kind": "none"}
+            key = json.dumps({name: value for name, value in scope.items() if name != "source_text"}, sort_keys=True)
+            request = financial_requests.setdefault(key, {"time_scope": scope, "financial_metrics": [], "calculations": []})
+            request["financial_metrics"] = list(dict.fromkeys([*request["financial_metrics"], *[metric for metric in [req.get("metric"), *req.get("components", [])] if metric and metric != "unknown"]]))
+            if req.get("calculation"):
+                request["calculations"].append({"metric": req["metric"], **req["calculation"]})
+    if not financial_requests:
+        financial_requests["default"] = {"time_scope": next((req["time_scope"] for task in tasks for req in task.get("answer_requirements", []) if (req.get("time_scope") or {}).get("kind") not in {None, "none"}), {"kind": "none"}), "financial_metrics": [], "calculations": []}
     for kind in required_evidence:
         if kind == "price_window":
             windows: dict[str, dict] = {}
@@ -237,16 +253,11 @@ def _append_evidence_steps_for_ticker(ctx,
                     _append_tool_step(ctx, "get_sec_material_events", {"ticker": ticker, "limit": 6, "include_content": True},
                         why=f"{ticker}：读取发行人派息声明与官方公告附件，区分公告金额和实际已付现金。", optional=False,
                         parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
-                _append_tool_step(ctx, 
-                    "get_sec_company_facts_quarterly",
-                    {"ticker": ticker},
-                    why=f"{ticker} evidence contract: quarterly company facts.",
-                    optional=False,
-                    parallel_group=group,
-                    task_ids=task_ids,
-                subject_tickers=[ticker],
-                evidence_kind=kind,
-                )
+                for request in financial_requests.values():
+                    _append_tool_step(ctx, "get_sec_company_facts_quarterly",
+                        {"ticker": ticker, "time_scope": request["time_scope"], "calculations": request["calculations"]},
+                        why=f"{ticker}：按请求财期核对公司事实和两期计算。", optional=False,
+                        parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
                 _append_tool_step(ctx, 
                     "get_sec_filings",
                     {"ticker": ticker, "forms": "10-K,10-Q", "limit": 4, **({"include_content": True} if read_disclosures else {})},
@@ -258,21 +269,13 @@ def _append_evidence_steps_for_ticker(ctx,
                 evidence_kind=kind,
                 )
             else:
-                _append_tool_step(ctx, 
-                    "get_local_market_filings",
-                    {"ticker": ticker, "limit": 5, "query": scoped_query,
-                     "company_name": next((task.get("subject_label") for task in tasks if ticker in task.get("tickers", [])), "") or "",
-                     **({"include_financial_facts": True,
-                         "financial_metrics": list(dict.fromkeys(metric for task in tasks for req in task.get("answer_requirements", [])
-                                                                  for metric in [req.get("metric"), *req.get("components", [])] if metric))}
-                        if extract_financial else {})},
-                    why=f"{ticker} evidence contract: local-market filings.",
-                    optional=False,
-                    parallel_group=group,
-                    task_ids=task_ids,
-                subject_tickers=[ticker],
-                evidence_kind=kind,
-                )
+                for request in financial_requests.values():
+                    _append_tool_step(ctx, "get_local_market_filings",
+                        {"ticker": ticker, "limit": 5, "query": scoped_query, "company_name": company_name,
+                         "time_scope": request["time_scope"],
+                         **({"include_financial_facts": True, "financial_metrics": request["financial_metrics"]} if extract_financial else {})},
+                        why=f"{ticker}：按请求财期读取当地市场公告。", optional=False,
+                        parallel_group=group, task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
         elif kind == "transcript_context":
             _append_tool_step(ctx, 
                 "get_earnings_call_transcripts",
@@ -311,10 +314,13 @@ def _append_evidence_steps_for_ticker(ctx,
             _append_tool_step(ctx, "search", {"query": f"{ticker} {ctx.query}"},
                 why=f"{ticker}：补充业务及竞争材料。", optional=False, parallel_group=group,
                 task_ids=task_ids, subject_tickers=[ticker], evidence_kind=kind)
-            _append_agent_step(ctx, "deep_search_agent", {"query": ctx.query, "ticker": ticker},
-                why=f"{ticker}：核对业务与竞争材料的来源。", optional=True,
-                parallel_group=f"{group}_research_agents", task_ids=task_ids,
-                subject_tickers=[ticker], evidence_kind=kind)
+            for request in financial_requests.values():
+                _append_agent_step(ctx, "deep_search_agent",
+                    {"query": scoped_query, "ticker": ticker, "company_name": company_name,
+                     "time_scope": request["time_scope"], "financial_metrics": request["financial_metrics"]},
+                    why=f"{ticker}：核对所需文档正文与来源。", optional=False,
+                    parallel_group=f"{group}_research_agents", task_ids=task_ids,
+                    subject_tickers=[ticker], evidence_kind=kind)
         elif kind == "holdings_ownership":
             if not _sec_holdings_enabled():
                 continue

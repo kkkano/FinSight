@@ -95,6 +95,12 @@ def _evidence_identity(item: Any, agent_name: str, index: int) -> dict[str, Any]
     meta = _meta(item)
     event_quality = _get_value(item, "event_quality") or meta.get("event_quality")
     event_quality = event_quality if isinstance(event_quality, dict) else {}
+    if meta.get("shared_document"):
+        return {
+            "url": _clean_text(_get_value(item, "url") or meta.get("url")),
+            "body": _clean_text(meta.get("document_body") or _get_value(item, "text")),
+            "published_at": _clean_text(_get_value(item, "timestamp") or meta.get("published_at") or meta.get("published_date")),
+        }
     return {
         "agent_name": agent_name,
         "source": _clean_text(_get_value(item, "source") or meta.get("source")),

@@ -4,16 +4,19 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
 
 from backend.services.llm_response import completion_metadata, final_completion_text
 from backend.services.llm_response import LLMCompletionError
 from backend.services.llm_retry import LLMCallContext, ainvoke_configured_llm, classify_llm_error
 from backend.services.llm_usage import LLMAttribution, reset_llm_attribution, set_llm_attribution
 from backend.utils.env import env_int
+
+
+MetricComponent = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
 
 
 class SemanticTimeScope(BaseModel):
@@ -41,6 +44,12 @@ class SemanticConstraint(BaseModel):
                                    description="约束应用的真实subject IDs，空列表为全局；不得将一个主体的排除项扩展到其他主体。")
 
 
+class SemanticCalculation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation: Literal["growth_rate", "difference", "ratio"]
+    baseline: Literal["year_ago", "previous_period"]
+
+
 class SemanticRequirement(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_text: str
@@ -55,7 +64,9 @@ class SemanticRequirement(BaseModel):
     subject: str | None = None
     subject_refs: list[str] = Field(default_factory=list)
     time_scope: SemanticTimeScope = Field(default_factory=SemanticTimeScope)
-    components: list[str] = Field(default_factory=list, description="仅列需要实际采集或计算的规范数值指标；币种、源时间和收益口径放attributes，定性传导对象独立为explanation要求。")
+    components: list[MetricComponent] = Field(default_factory=list, description="仅列需要实际采集或计算的规范数值指标；币种、源时间和收益口径放attributes，定性传导对象独立为explanation要求。")
+    calculation: SemanticCalculation | None = None
+    presentation: list[Literal["itemized", "include_date", "include_link"]] = Field(default_factory=list)
     attributes: list[str] = Field(default_factory=list)
     evidence_kinds: list[str] = Field(default_factory=list)
     requires_analysis: bool = False
@@ -103,7 +114,9 @@ class ExtractedRequirement(BaseModel):
     subject: str | None = None
     subject_refs: list[str] = Field(default_factory=list)
     time_scope: SemanticTimeScope = Field(default_factory=SemanticTimeScope)
-    components: list[str] = Field(default_factory=list, description="需要实际取数的规范指标列表；例如现金覆盖的组成量或宏观指标，不包含定性因果对象、币种、时间或口径属性。")
+    components: list[MetricComponent] = Field(default_factory=list, description="需要实际取数的规范指标列表；例如现金覆盖的组成量或宏观指标，不包含定性因果对象、币种、时间或口径属性。")
+    calculation: SemanticCalculation | None = Field(default=None, description="同一指标两期计算：同比为growth_rate/year_ago，环比为growth_rate/previous_period。metric仍保留原指标，不能用return替代营收或净利。")
+    presentation: list[Literal["itemized", "include_date", "include_link"]] = Field(default_factory=list)
     attributes: list[str] = Field(default_factory=list)
     requires_analysis: bool = False
     input_dependencies: list[RequiredInput] = Field(default_factory=list)
@@ -136,6 +149,8 @@ def requires_semantic_extraction(query: str, *, output_mode: str = "chat") -> bo
 
 
 _SYSTEM_PROMPT = """你负责提取用户原始请求，不负责回答或选择工具。返回符合 schema 的对象。
+同一指标的两期增减使用calculation={operation:growth_rate/difference/ratio,baseline:year_ago/previous_period}，metric仍为原始指标。营收同比是revenue + growth_rate + year_ago，不是unknown或累计价格收益。数值比较与优劣解释分开保存；同比值需要kind=calculation，而解释增长原因仍单列explanation。仅在需要两期计算时填写calculation，工具已有标准定义的收益/回撤不填。
+components必须只含真实指标identifier，不得输出metric、measurement、value等内部字段名或嵌套对象。逐项、附日期、附链接等展示要求放presentation，不能放attributes；attributes只描述事实口径。估值的观察时点独立于营收财期：只有用户明确要求历史估值，估值time_scope才绑定历史日期，不把比较营收的财年要求扩散到当前估值。
 output_mode 单独表达用户的交付意图：要求一份完整研究材料或报告时为investment_report，普通问答为chat，明确拒绝报告时为chat。按语义判断，不依赖固定词语。报告是交付形式，不是待测指标，不能把整个报告建成unknown或自造report指标。
 用户要求报告但未列研究维度时，将报告展开为常规的业务、财务、估值、竞争与风险研究要求，description标明这是默认报告范围，source_text引用原始报告请求。用户明确列出的范围与排除项优先，不额外扩充。
 requirements 是所有原始要求的唯一事实源。逐项保存每个肯定要求、计算、解释、属性、时间窗口、输入依赖和明确约束；不要合并掉不同指标或不同财期，不得根据已有工具能力删减要求。

@@ -468,7 +468,7 @@ def policy_gate(state: GraphState) -> dict:
         if validated:
             allowed_agents = validated
             agent_selection = {"selected": validated, "override": True}
-    elif evidence_agents and (output_mode != "investment_report" or required_evidence == ["document_context"]):
+    elif evidence_agents:
         allowed_agents = list(evidence_agents)
         agent_selection = {
             "selected": list(allowed_agents),

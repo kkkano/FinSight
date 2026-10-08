@@ -277,12 +277,12 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
                             continue
                         output = item.get("output")
                         step_meta = step_index.get(str(step_id)) or {}
-                        status_reason = "done"
+                        status_reason = item.get("status_reason") or "done"
                         if isinstance(output, dict):
                             if output.get("skipped") is True:
                                 status_reason = str(output.get("reason") or "skipped")
                             elif output.get("error"):
-                                status_reason = str(output.get("error"))
+                                status_reason = "error"
                         compact.append(
                             {
                                 "id": step_id,

@@ -66,14 +66,21 @@ def _table_context(text: str, limit: int = 100_000) -> str:
     return "\n".join(f"[Page {number}]\n{pages[number]}" for number in sorted(selected))
 
 
-def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url: str) -> list[dict[str, Any]]:
+def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url: str,
+                             diagnostics: dict | None = None, time_scope: dict | None = None) -> list[dict[str, Any]]:
     """模型只提供候选：事实必须回到原始页面核验，缺少单位或财期就保留缺失。"""
+    diagnostics = diagnostics if diagnostics is not None else {}
+    rejected = diagnostics.setdefault("rejected", [])
+    def reject(row: dict, reason: str) -> None:
+        rejected.append({"metric": row.get("metric"), "page": row.get("page"), "reason": reason})
     if not isinstance(payload, dict):
+        diagnostics["error"] = "invalid_extraction_payload"
         return []
     pages = _pages(text)
     whole = _compact(text)
     facts = []
     seen = set()
+    diagnostics["candidate_count"] = len(payload.get("facts") or [])
     for row in (payload.get("facts") or [])[:24]:
         if not isinstance(row, dict) or row.get("metric") not in _METRICS:
             continue
@@ -83,10 +90,13 @@ def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url
         unit_quote = str(row.get("unit_quote") or "")
         period_quote = str(row.get("period_quote") or "")
         if page not in pages or not quote or _compact(quote) not in _compact(pages[page]):
+            reject(row, "source_quote_unverified")
             continue
         if not amount_text or _compact(amount_text) not in _compact(quote):
+            reject(row, "source_amount_missing")
             continue
         if not unit_quote or not period_quote or _compact(unit_quote) not in whole or _compact(period_quote) not in whole:
+            reject(row, "source_unit_or_period_missing")
             continue
         raw_amount = amount_text.replace(",", "").replace("，", "").replace(" ", "")
         if raw_amount.startswith("(") and raw_amount.endswith(")"):
@@ -96,14 +106,25 @@ def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url
         currency = normalize_currency(row.get("currency"))
         start, end = fact_date(row.get("period_start")), fact_date(row.get("period_end"))
         if amount is None or scale not in {1.0, 1e3, 1e4, 1e6, 1e8, 1e9} or not currency or not start or not end:
+            reject(row, "amount_unit_or_period_invalid")
             continue
         # PDF 表格可将两列金额连成 61,522.3592,463.43；只允许完整金额与下一列分组金额相邻。
         next_column = r"\d{1,3}(?:[,，]\d{3})+\.\d{2}(?![\d.])"
         amount_pattern = r"(?<![\d,，.])" + re.escape(amount_text) + r"(?:(?![\d,，.])|(?=" + next_column + r"))"
         if not re.search(amount_pattern, quote) or not _source_unit_matches(unit_quote, currency, scale):
+            reject(row, "source_amount_or_currency_mismatch")
             continue
         frequency = duration_frequency(start, end)
         if frequency == "unknown" or start[:4] not in period_quote or end[:4] not in period_quote:
+            reject(row, "source_period_unverified")
+            continue
+        scope = time_scope or {}
+        expected = {"fiscal_year": "annual", "fiscal_quarter": "quarterly"}.get(scope.get("kind"))
+        if (expected and frequency != expected
+            or scope.get("period_start") and start != scope["period_start"]
+            or scope.get("period_end") and end != scope["period_end"]
+            or scope.get("as_of") and end > str(scope["as_of"])[:10]):
+            reject(row, "requested_period_mismatch")
             continue
         value = fact_number(amount * scale)
         if value is None:
@@ -121,16 +142,21 @@ def validate_financial_facts(payload: Any, *, text: str, ticker: str, source_url
             "period_quote": period_quote, "verification": "official_filing_body",
             "content_read": True,
         })
+    diagnostics["fact_count"] = len(facts)
+    if not facts and not rejected:
+        diagnostics["error"] = "no_financial_candidates"
     return facts
 
 
-def extract_financial_facts(text: str, ticker: str, source_url: str, metrics: list[str] | None = None) -> list[dict[str, Any]]:
+def extract_financial_facts(text: str, ticker: str, source_url: str, metrics: list[str] | None = None,
+                            *, time_scope: dict | None = None, diagnostics: dict | None = None) -> list[dict[str, Any]]:
     from backend.llm_config import create_llm, report_llm_failure, report_llm_success
     from backend.services.llm_response import final_completion_text
     from backend.utils.llm_json import _extract_json
     from langchain_core.messages import HumanMessage, SystemMessage
 
     client = None
+    diagnostics = diagnostics if diagnostics is not None else {}
     definitions = {key: value for key, value in _METRICS.items() if metrics is None or key in metrics}
     if not definitions:
         return []
@@ -149,13 +175,16 @@ def extract_financial_facts(text: str, ticker: str, source_url: str, metrics: li
                 "取不到满足条件的指标就省略，每指标每财期一条，最多24条。指标定义："
                 + json.dumps(definitions, ensure_ascii=False)
             )),
-            HumanMessage(content=json.dumps({"ticker": ticker, "source_url": source_url, "document": _table_context(text)}, ensure_ascii=False)),
+            HumanMessage(content=json.dumps({"ticker": ticker, "source_url": source_url,
+                "requested_time_scope": time_scope or {}, "document": _table_context(text)}, ensure_ascii=False)),
         ])
         payload = _extract_json(final_completion_text(response))
         report_llm_success(client)
-        return [fact for fact in validate_financial_facts(payload, text=text, ticker=ticker, source_url=source_url)
+        return [fact for fact in validate_financial_facts(payload, text=text, ticker=ticker, source_url=source_url,
+                                                       diagnostics=diagnostics, time_scope=time_scope)
                 if fact["metric"] in definitions]
     except Exception as exc:
+        diagnostics["error"] = type(exc).__name__
         if client is not None:
             report_llm_failure(client, exc)
         logger.info("[LocalDisclosure] 财务事实提取未完成 %s: %s", ticker, type(exc).__name__)

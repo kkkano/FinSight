@@ -342,6 +342,18 @@ def build_collector_invokers(*, allowed_collectors: Iterable[str], state: Mappin
                     for key in ("indicators", "as_of"):
                         if key in inputs:
                             research_kwargs[key] = inputs[key]
+                if _name == "deep_search_agent" and isinstance(inputs, dict):
+                    for key in ("time_scope", "financial_metrics", "company_name"):
+                        if key in inputs:
+                            research_kwargs[key] = inputs[key]
+                    research_kwargs["documents"] = [
+                        filing
+                        for dependency in inputs.get("__evidence_inputs", [])
+                        if dependency.get("name") == "get_local_market_filings"
+                        and str((dependency.get("inputs") or {}).get("ticker", "")).upper() == ticker
+                        for filing in (dependency.get("output") or {}).get("filings", [])
+                        if isinstance(filing, dict)
+                    ]
                 result = await asyncio.wait_for(
                     instance.research(query=query or "N/A", ticker=ticker, **research_kwargs),
                     timeout=timeout_seconds,

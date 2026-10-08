@@ -21,9 +21,9 @@ DIMENSION_KINDS = {
 
 
 def select_fact_ids(draft, task, profile: str) -> list[str]:
-    if profile == "full":
-        return list(task.fact_ids)
-    facts = [draft.evidence_index[source_id] for source_id in task.fact_ids if source_id in draft.evidence_index and draft.evidence_index[source_id].usage == "fact"]
+    facts = [draft.evidence_index[source_id] for source_id in task.fact_ids if source_id in draft.evidence_index
+             and draft.evidence_index[source_id].usage == "fact"
+             and draft.evidence_index[source_id].metadata.get("temporal_role") != "historical"]
     preferred = [*task.selected_fact_ids, *[source_id for claim_id in task.claim_ids if claim_id in draft.claim_index and draft.claim_index[claim_id].agent_name == "research_analyst" for source_id in draft.claim_index[claim_id].evidence_ids]]
     wanted = set()
     for dimension in task.requested_dimensions:
@@ -32,7 +32,7 @@ def select_fact_ids(draft, task, profile: str) -> list[str]:
         wanted.update(requirement.get("evidence_kinds") or [])
     if not wanted:
         wanted = {item.kind for item in facts}
-    if task.operation in {"price", "investment_opinion", "technical"}:
+    if task.operation in {"price", "technical"}:
         wanted.add("price_snapshot")
     if task.operation == "macro_brief":
         wanted.update({"macro_context", "event_calendar"})
@@ -82,7 +82,7 @@ def select_fact_ids(draft, task, profile: str) -> list[str]:
             if not selected:
                 selected = items[:1]
         else:
-            limit = 2 if kind == "news_context" and profile == "chat" else 1
+            limit = 4 if profile == "full" else 2 if kind == "news_context" and profile == "chat" else 1
             selected = items[:limit]
         selected_ids.extend(item.source_id for item in selected)
     return list(dict.fromkeys(selected_ids))
@@ -94,8 +94,6 @@ def select_claims(draft, task, profile: str, *, direction_allowed: bool):
     for claim in claims:
         unique_claims.setdefault(claim.text, claim)
     claims = list(unique_claims.values())
-    if profile == "full":
-        return claims
     explanations = [claim for claim in claims if claim.agent_name == "research_analyst"]
     if explanations:
         unique = {}

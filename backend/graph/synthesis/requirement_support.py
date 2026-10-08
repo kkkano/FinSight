@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from datetime import date
 from urllib.parse import urlsplit
 from typing import Any
 
@@ -69,7 +70,8 @@ def metric_record(evidence, metric: str) -> dict | None:
         values, rows = payload.get(key), metadata.get(key)
         if isinstance(values, list) and isinstance(rows, list):
             for value, row in zip(values, rows):
-                if _number(value) and isinstance(row, dict) and row.get("period_end"):
+                if (_number(value) and isinstance(row, dict) and row.get("period_end")
+                        and (not payload.get("selected_period") or row["period_end"] == payload["selected_period"])):
                     return {**row, "value": value}
     return None
 
@@ -103,7 +105,7 @@ def period_for(evidence, record: dict | None = None) -> tuple[str, str, str]:
     )
 
 
-def time_scope_matches(evidence, scope: dict) -> bool:
+def time_scope_matches(evidence, scope: dict, record: dict | None = None) -> bool:
     payload = payload_for(evidence)
     kind = scope.get("kind")
     if kind == "trading_sessions":
@@ -111,9 +113,60 @@ def time_scope_matches(evidence, scope: dict) -> bool:
             return False
         return scope.get("completed_only") is not True or payload.get("completed_only") is True
     if kind in {"fiscal_quarter", "fiscal_year"}:
-        frequency = str(evidence.frequency or payload.get("frequency") or "").lower()
-        return frequency in ({"quarterly", "quarter", "single_quarter"} if kind == "fiscal_quarter" else {"annual", "yearly", "fiscal_year"})
+        from backend.tools.financial_facts import duration_frequency, fact_date
+        data = record or {}
+        start, end, _ = period_for(evidence, data)
+        if not start or not end:
+            records = [row for key in ("metrics", "facts") for row in (payload.get(key) or {}).values() if isinstance(row, dict)]
+            records.extend(row for rows in (payload.get("fact_metadata") or {}).values() if isinstance(rows, list) for row in rows[:1] if isinstance(row, dict))
+            data = next((row for row in records if row.get("period_start") and row.get("period_end")), data)
+            start, end, _ = period_for(evidence, data)
+        frequency = str(data.get("frequency") or evidence.frequency or payload.get("frequency") or "").lower()
+        expected = {"quarterly", "quarter", "single_quarter"} if kind == "fiscal_quarter" else {"annual", "yearly", "fiscal_year"}
+        if frequency not in expected or duration_frequency(start, end) != ("quarterly" if kind == "fiscal_quarter" else "annual"):
+            return False
+        if any(scope.get(key) and fact_date(scope[key]) != fact_date(value) for key, value in (("period_start", start), ("period_end", end))):
+            return False
+        as_of = fact_date(scope.get("as_of")) or date.today().isoformat()
+        filed = fact_date(data.get("filed") or data.get("published_at") or payload.get("filed") or payload.get("published_at") or evidence.as_of)
+        if end > as_of or filed and filed > as_of:
+            return False
+        if scope.get("completed_only") is True and not filed:
+            return False
+        selected = payload.get("selected_period")
+        if scope.get("selection") == "latest_complete" and selected and end != selected:
+            return False
+        return True
     return True
+
+
+def calculation_record(evidence, requirement: dict) -> dict | None:
+    spec = requirement.get("calculation")
+    if not isinstance(spec, dict):
+        return None
+    payload = payload_for(evidence)
+    for row in payload.get("calculations") or []:
+        if (isinstance(row, dict) and row.get("metric") == requirement.get("metric")
+                and all(row.get(key) == spec.get(key) for key in ("operation", "baseline"))
+                and _number(row.get("value")) and len(row.get("derivation_inputs") or []) == 2
+                and time_scope_matches(evidence, requirement.get("time_scope") or {}, row)):
+            from backend.tools.financial_calculations import calculate_period_change
+            verified = calculate_period_change(*row["derivation_inputs"], **spec)
+            if verified and math.isclose(verified["value"], row["value"], rel_tol=1e-9, abs_tol=1e-12):
+                return row
+    return None
+
+
+def presentation_reasons(requirement: dict, facts: list) -> list[str]:
+    reasons = []
+    for field in requirement.get("presentation") or []:
+        if field == "itemized":
+            continue
+        if field == "include_link" and (not facts or any(not (fact.url or payload_for(fact).get("source_url")) for fact in facts)):
+            reasons.append("presentation_link_missing")
+        if field == "include_date" and (not facts or any(not (payload_for(fact).get("published_at") or payload_for(fact).get("published_date") or fact.as_of or fact.period_end) for fact in facts)):
+            reasons.append("presentation_date_missing")
+    return reasons
 
 
 def component_support(component: str, facts: list, scope: dict) -> bool:
@@ -136,7 +189,9 @@ def exact_support_reasons(requirement: dict, facts: list) -> list[str]:
             reasons.append("requirement_sampling_frequency_unverified")
     if scope and facts and not any(time_scope_matches(fact, scope) for fact in facts):
         reasons.append("requirement_period_unverified")
-    if metric in PRICE_METRICS | FINANCIAL_METRICS | MACRO_METRICS | TECHNICAL_METRICS | {"quote"} and not any(metric_supports(fact, metric) and time_scope_matches(fact, scope) for fact in facts):
+    if requirement.get("calculation") and not any(calculation_record(fact, requirement) for fact in facts):
+        reasons.append("requirement_calculation_missing:" + metric)
+    if metric in PRICE_METRICS | FINANCIAL_METRICS | MACRO_METRICS | TECHNICAL_METRICS | {"quote"} and not any(metric_supports(fact, metric) and time_scope_matches(fact, scope, metric_record(fact, metric)) for fact in facts):
         reasons.append("requirement_metric_missing:" + metric)
     if metric == "dividend_announcement":
         records = [record for fact in facts if (record := metric_record(fact, metric)) is not None]
@@ -264,4 +319,4 @@ def attached_source_policy_reasons(requirement: dict, task, facts: list) -> list
     return list(dict.fromkeys(reasons))
 
 
-__all__ = ["attached_source_policy_reasons", "control_support_reasons", "exact_support_reasons", "metric_supports", "time_scope_matches"]
+__all__ = ["attached_source_policy_reasons", "calculation_record", "presentation_reasons", "control_support_reasons", "exact_support_reasons", "metric_supports", "time_scope_matches"]

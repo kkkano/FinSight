@@ -121,3 +121,20 @@ def test_explicit_date_as_of_means_end_of_that_utc_day(monkeypatch):
     assert result["error"] is None
     assert result["period_end"] == "2026-10-02"
     assert result["metrics"]["cumulative_return"]["value"] == pytest.approx(.05)
+
+
+def test_bad_close_reports_date_and_retains_valid_observations(monkeypatch):
+    _history(monkeypatch, [100, 0], dates=["2026-10-01", "2026-10-02"])
+    result = price_window.get_price_window_metrics("SPY", 1, ["cumulative_return"], "2026-10-04T09:31:00Z")
+    assert result["error"] == "invalid_close_path"
+    assert result["invalid_session_date"] == "2026-10-02"
+    assert result["invalid_close_reason"] == "nonpositive"
+    assert result["bars"][0]["close"] == 100
+    assert not result["metrics"]
+
+
+def test_empty_action_row_does_not_replace_or_duplicate_real_close(monkeypatch):
+    _history(monkeypatch, [100, float("nan"), 110], dates=["2026-10-01", "2026-10-02", "2026-10-02"], volume=[100, 0, 100])
+    result = price_window.get_price_window_metrics("SPY", 1, ["cumulative_return"], "2026-10-04T09:31:00Z")
+    assert result["error"] is None
+    assert result["metrics"]["cumulative_return"]["value"] == pytest.approx(.1)

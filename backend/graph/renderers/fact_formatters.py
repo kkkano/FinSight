@@ -143,8 +143,8 @@ def _financial(payload: dict, evidence, *, compact: bool = False, summary: bool 
             lines.append(f"[数据缺失] {period} {label}没有可验证的对应期间数据。")
             continue
         unit = meta.get("unit") or evidence.unit or payload.get("currency") or evidence.currency
-        if meta.get("frequency") not in {None, "quarterly", "instant"} and key not in {"total_assets", "total_liabilities"}:
-            lines.append(f"[数据缺失] {label}只有 {meta['frequency']} 数据，不能当作单季值。")
+        if meta.get("frequency") not in {None, "quarterly", "annual", "instant"} and key not in {"total_assets", "total_liabilities"}:
+            lines.append(f"[数据缺失] {label}只有 {meta['frequency']} 数据，不能当作完整季度或财年值。")
             continue
         line = f"{period} {label} {money(values[0], unit)}"
         if meta.get("period_start") and not summary:
@@ -154,6 +154,21 @@ def _financial(payload: dict, evidence, *, compact: bool = False, summary: bool 
         if meta.get("filed") and not summary:
             line += f"；披露日 {meta['filed']}"
         lines.append(line)
+    labels = dict(specs)
+    for record in _rows(payload.get("calculations")):
+        inputs = record.get("derivation_inputs") or []
+        if record.get("value") is None or len(inputs) != 2:
+            continue
+        current, previous = inputs
+        label = labels.get(record.get("metric"), record.get("metric") or "指标")
+        baseline = "同比" if record.get("baseline") == "year_ago" else "环比"
+        operation = record.get("operation")
+        change = number(record["value"], percent=True) if operation == "growth_rate" else money(record["value"], record.get("unit")) if operation == "difference" else number(record["value"])
+        formula = {"growth_rate": "本期 ÷ 基期 − 1", "difference": "本期 − 基期", "ratio": "本期 ÷ 基期"}.get(operation, "")
+        lines.append(f"{current.get('period_end')} {label}{baseline}{'增长率' if operation == 'growth_rate' else '变化' if operation == 'difference' else '比值'} {change}；{formula}。本期 {current.get('period_start')} 至 {current.get('period_end')}：{money(current.get('value'), current.get('unit'))}；基期 {previous.get('period_start')} 至 {previous.get('period_end')}：{money(previous.get('value'), previous.get('unit'))}。")
+        sources = list(dict.fromkeys(str(row.get("source_url") or "") for row in inputs if row.get("source_url")))
+        if sources:
+            lines.append("计算输入来源：" + "；".join(sources) + "；申报版本：" + " / ".join(str(row.get("accession") or row.get("filed") or "未提供") for row in inputs))
     return "\n".join(lines)
 
 

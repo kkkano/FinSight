@@ -76,7 +76,10 @@ async def test_deep_search_agent_runs_one_search_round():
     assert len(result.evidence) == 1
     assert "tavily" in result.data_sources
     agent._initial_search.assert_awaited_once()
-    agent._first_summary.assert_awaited_once_with(base_docs)
+    agent._first_summary.assert_awaited_once()
+    summary_docs = agent._first_summary.await_args.args[0]
+    assert summary_docs[0]["content"] == base_docs[0]["content"]
+    assert summary_docs[0]["source_time_status"] == "unknown"
 
 
 @pytest.mark.asyncio

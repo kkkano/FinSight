@@ -7,6 +7,7 @@ import os
 import re
 import time
 import posixpath
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Dict
@@ -795,7 +796,11 @@ _COMPANYFACTS_METRIC_MAP: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 }
 
 
-def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, Any]:
+def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dict | None = None,
+    calculations: list[dict] | None = None) -> Dict[str, Any]:
+    # 保留旧入口默认季度行为；主流程用逐项财期合同选择年度或季度。
+    scope = time_scope or {}
+    frequency = "annual" if scope.get("kind") == "fiscal_year" else "quarterly"
     normalized_ticker = str(ticker or "").strip().upper()
     if not normalized_ticker:
         return _error_payload(
@@ -840,6 +845,14 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
         if payload.get("cik") is not None and str(payload["cik"]).lstrip("0") != str(cik).lstrip("0"):
             return _error_payload(normalized_ticker, error="issuer_mismatch", message="SEC response issuer does not match requested CIK.", market=market)
 
+        as_of = fact_date(scope.get("as_of")) or date.today().isoformat()
+        payload = deepcopy(payload)
+        for taxonomy in (payload.get("facts") or {}).values():
+            for fact in taxonomy.values():
+                for unit, entries in (fact.get("units") or {}).items():
+                    fact["units"][unit] = [entry for entry in entries
+                        if fact_date(entry.get("filed")) and fact_date(entry["filed"]) <= as_of
+                        and (not fact_date(entry.get("end")) or fact_date(entry["end"]) <= as_of)]
         source_latest_filed = max((
             filed for taxonomy in (payload.get("facts") or {}).values()
             for fact in taxonomy.values() for entries in (fact.get("units") or {}).values()
@@ -857,6 +870,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
                 metric=field,
                 instant=field in {"total_assets", "total_liabilities"},
                 source_url=_SEC_COMPANYFACTS_URL.format(cik=cik),
+                frequency=frequency,
             )
             metric_maps[field] = {end: fact.value for end, fact in metric_facts[field].items()}
 
@@ -864,7 +878,14 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
         for field, series in metric_maps.items():
             if field not in {"total_assets", "total_liabilities"}:
                 all_periods.update(series.keys())
-        period_labels = sorted(all_periods, key=_period_sort_key, reverse=True)[: max(1, min(limit, 12))]
+        target_periods = sorted(all_periods, key=_period_sort_key, reverse=True)
+        if scope.get("period_end"):
+            target_periods = [period for period in target_periods if period == fact_date(scope["period_end"])]
+        if scope.get("period_start"):
+            target_periods = [period for period in target_periods if any(
+                fact.period_start == fact_date(scope["period_start"]) for facts in metric_facts.values()
+                if (fact := facts.get(period)) is not None and fact.frequency == frequency)]
+        period_labels = target_periods[: max(1, min(limit, 12))]
         if not period_labels:
             return {
                 "ticker": normalized_ticker,
@@ -873,8 +894,8 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
                 "company_name": company.get("title"),
                 "cik": cik,
                 "periods": [],
-                "error": "companyfacts_no_quarterly_data",
-                "message": "No quarterly company facts found for ticker.",
+                "error": "companyfacts_period_unavailable",
+                "message": "No disclosed company facts match requested period.",
             }
 
         result: dict[str, Any] = {
@@ -886,7 +907,10 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
             "source_latest_filed": source_latest_filed,
             "periods": period_labels,
             "period_ends": period_labels,
-            "frequency": "quarterly",
+            "frequency": frequency,
+            "selected_period": period_labels[0],
+            "request_time_scope": scope,
+            "calculations": [],
             "currency": "USD",
             "fact_metadata": {
                 field: [facts[period].metadata() if period in facts else None for period in period_labels]
@@ -896,7 +920,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
                 field: [period for period in period_labels if period not in values]
                 for field, values in metric_maps.items() if any(period not in values for period in period_labels)
             },
-            "warnings": ["季度流量优先采用已披露的单季区间；现金流仅允许同标签、同财年起点的相邻累计差分，并保留两项申报来源。"],
+            "warnings": ["年度流量采用完整财年申报区间，不以季度或累计期代替。" if frequency == "annual" else "季度流量优先采用已披露的单季区间；现金流仅允许同标签、同财年起点的相邻累计差分，并保留两项申报来源。"],
             "revenue": [metric_maps["revenue"].get(period) for period in period_labels],
             "gross_profit": [metric_maps["gross_profit"].get(period) for period in period_labels],
             "operating_income": [metric_maps["operating_income"].get(period) for period in period_labels],
@@ -928,6 +952,22 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> Dict[str, An
                 }
                 if fcf is not None and ocf_fact and capex_fact else None
             )
+
+        from .financial_calculations import calculate_period_change
+        selected_period = period_labels[0]
+        for spec in calculations or []:
+            metric = str(spec.get("metric") or "")
+            current = metric_facts.get(metric, {}).get(selected_period)
+            if current is None:
+                continue
+            candidates = [record for record in metric_facts[metric].values() if record.period_end < current.period_end]
+            candidates.sort(key=lambda record: record.period_end, reverse=True)
+            for previous in candidates:
+                computed = calculate_period_change(current.metadata(), previous.metadata(),
+                    operation=spec.get("operation"), baseline=spec.get("baseline"))
+                if computed is not None:
+                    result["calculations"].append(computed)
+                    break
 
         has_any = any(
             any(v is not None for v in (result.get(field) or []))

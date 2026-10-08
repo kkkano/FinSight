@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -10,7 +10,7 @@ from backend.agents.chart_specs import build_fundamental_chart_specs
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.tools.financial_facts import (
-    comparison_point, growth_rate, statement_dates, statement_frequency, statement_row,
+    comparison_point, duration_frequency, growth_rate, statement_dates, statement_frequency, statement_row,
 )
 
 
@@ -254,6 +254,7 @@ class FundamentalAgent(BaseFinancialAgent):
                         url=metric.get("source_url") or _yf_financials_url,
                         timestamp=str(metric.get("latest_period") or ""),
                         meta={
+                            "value": latest_value,
                             "metric_key": key,
                             "metric": key,
                             "subject": _ticker,
@@ -261,6 +262,8 @@ class FundamentalAgent(BaseFinancialAgent):
                             "frequency": metric.get("period_type"),
                             "period_end": metric.get("latest_period"),
                             "yoy": metric.get("yoy"),
+                            "yoy_period": metric.get("yoy_period"),
+                            "series": metric.get("series"),
                             "qoq": metric.get("qoq"),
                             "latest_period": metric.get("latest_period"),
                             "comparison_period": metric.get("comparison_period"),
@@ -570,6 +573,11 @@ class FundamentalAgent(BaseFinancialAgent):
             metadata = table.get("fact_metadata") or {}
             raw_facts = (metadata.get(definition["key"]) or []) if isinstance(metadata, dict) else []
             fact = next((item for item in raw_facts if isinstance(item, dict) and item.get("period_end") == latest_period), {})
+            period_start = fact.get("period_start")
+            if not period_start and not is_balance and len(table_columns) > 1:
+                candidate_start = (datetime.fromisoformat(table_columns[1]) + timedelta(days=1)).date().isoformat()
+                if duration_frequency(candidate_start, table_columns[0]) == metric_period_type:
+                    period_start = candidate_start
 
             metrics[definition["key"]] = {
                 "label": definition["label"],
@@ -584,7 +592,7 @@ class FundamentalAgent(BaseFinancialAgent):
                 "series": series[:8],
                 "currency": table.get("currency") or financials.get("currency"),
                 "unit": fact.get("unit") or table.get("currency") or financials.get("currency"),
-                "period_start": fact.get("period_start"),
+                "period_start": period_start,
                 "source": table.get("source") or financials.get("source"),
                 "source_url": fact.get("source_url"),
                 "filed": fact.get("filed"),
