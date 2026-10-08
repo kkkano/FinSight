@@ -369,6 +369,9 @@ def compile_semantic_contract(result: dict[str, Any], semantic: dict[str, Any], 
         if any(ref not in subject_map for ref in refs):
             raise ValueError("request_requirement_subject_unbound")
         ticker = normalize_ticker(str(requirement.get("subject") or "")) or None
+        referenced_tickers = {symbol for ref in refs for symbol in subject_map[ref].get("tickers", [])}
+        if ticker is None and len(referenced_tickers) == 1:
+            ticker = next(iter(referenced_tickers))
         if ticker and refs and not any(ticker in subject_map[ref].get("tickers", []) for ref in refs):
             raise ValueError("request_requirement_ticker_unbound")
         if not refs and ticker:
