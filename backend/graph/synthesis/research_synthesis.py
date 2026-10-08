@@ -845,6 +845,11 @@ def _reference_content(item: NormalizedEvidence) -> tuple[str, dict[str, Any]]:
         except (ValueError, TypeError):
             pass
     sections = disclosure_sections(data)
+    body = item.metadata.get("document_body") or data.get("document_body") or data.get("body") or data.get("content")
+    if not sections and isinstance(body, str) and body.strip() and (item.metadata.get("content_read") or data.get("content_read")):
+        text = body[:12000]
+        for key in ("document_body", "body", "content", "content_excerpt"):
+            data.pop(key, None)
     if sections and text == "\n\n".join(f"{name}: {body}" for name, body in sections.items()):
         text = ""
     return text, data

@@ -112,6 +112,9 @@ def test_official_filing_body_without_section_labels_is_read_material_not_index(
     assert not evidence_is_document_index(evidence)
     assert _supports_dimension(evidence, "business_model")
     assert _supports_dimension(evidence, "competition")
+    from backend.graph.synthesis.research_synthesis import _reference_content
+    text, data = _reference_content(evidence)
+    assert text == "实际业务及竞争正文" and "document_body" not in data
 
 
 def test_confirmed_report_contract_does_not_add_unrequested_enrichment(monkeypatch):
