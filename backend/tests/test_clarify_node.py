@@ -35,9 +35,8 @@ def test_clarify_node_allows_continue_when_subject_known():
     from backend.graph import GraphRunner
 
     runner = GraphRunner.create()
-    # "股价分析" contains unambiguous Tier-2 keyword "股价",
-    # so active_symbol binding is safe and subject resolves to company.
-    result = _run(runner.ainvoke(thread_id="t-clarify-company", query="股价分析", ui_context={"active_symbol": "AAPL"}))
+    # 看板为本轮提供明确标的作用域；全局 active_symbol 不能自动确认主体。
+    result = _run(runner.ainvoke(thread_id="t-clarify-company", query="股价分析", ui_context={"active_symbol": "AAPL", "view": "dashboard"}))
 
     assert (result.get("clarify") or {}).get("needed") is False
 
