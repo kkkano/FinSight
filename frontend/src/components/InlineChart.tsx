@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './charts/EChart';
 import { ChartNoAxesCombined, Loader2 } from 'lucide-react';
 
 import { apiClient } from '../api/client';

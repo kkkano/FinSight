@@ -6,7 +6,7 @@
  * Shows up to 8 quarters of data.
  */
 import { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../../../charts/EChart';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { FinancialStatement } from '../../../../types/dashboard';

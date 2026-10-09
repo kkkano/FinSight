@@ -6,7 +6,7 @@
  * Green = beat estimate, Red = missed estimate.
  */
 import { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../../../charts/EChart';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { EarningsHistoryEntry } from '../../../../types/dashboard';

@@ -18,7 +18,8 @@ import { ReportView } from '../components/report';
 import { usePredictionHistory, usePredictionRun } from '../hooks/usePredictionHistory';
 import { useReportDetail, useReportHistory } from '../hooks/useReportHistory';
 import { formatPercentagePoints, formatRatioPercent } from './historyFormatting';
-import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
+import { getEffectivePredictionStatus, getPredictionDirectionPresentation } from '../utils/predictionPresentation';
+import { buildPredictionDashboardUrl } from '../components/chatChartIntent';
 
 type HistoryTab = 'predictions' | 'reports';
 
@@ -85,7 +86,7 @@ function PredictionListItem({
   onSelect: () => void;
 }) {
   const { prediction, outcome } = item;
-  const status = outcome?.status || prediction.status;
+  const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
   return (
     <button
       type="button"
@@ -121,7 +122,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
     return <div className="flex min-h-56 items-center justify-center px-6 text-center text-sm text-t-text2 lg:h-full">选择一条 AI 判断查看详情</div>;
   }
 
-  const status = outcome?.status || prediction.status;
+  const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
   const levels = [
     ['锚点', prediction.anchor.price],
     ['入场', prediction.entry],
@@ -147,7 +148,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
         </div>
         <button
           type="button"
-          onClick={() => navigate(`/dashboard/${encodeURIComponent(prediction.symbol)}?analysis=prediction&predictionId=${encodeURIComponent(prediction.prediction_id)}`)}
+          onClick={() => navigate(buildPredictionDashboardUrl(prediction.symbol, prediction.prediction_id))}
           className="inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover px-3 text-sm text-t-text2 transition-colors hover:text-t-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent"
         >
           打开看板 <ArrowRight size={15} />

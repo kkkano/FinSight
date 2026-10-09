@@ -44,6 +44,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
     setColorConvention,
     setDraft,
     currentTicker,
+    startNewChat,
   } = useStore();
   const handoffToChat = useChatHandoff();
   const activeAsset = useDashboardStore((state) => state.activeAsset);
@@ -61,6 +62,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         icon: MessageSquarePlus,
         keywords: ['chat', 'new'],
         execute: () => {
+          startNewChat();
           navigate('/chat');
           onClose();
         },
@@ -159,6 +161,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
       navigate,
       onClose,
       setDraft,
+      startNewChat,
       setColorConvention,
       handoffToChat,
       setTheme,

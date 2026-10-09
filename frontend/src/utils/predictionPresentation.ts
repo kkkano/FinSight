@@ -2,6 +2,10 @@ import type { PredictionDirection } from '../types/chartPrediction';
 
 const TERMINAL_STATUSES = new Set(['hit_target', 'hit_stop', 'invalidated', 'held_range', 'broke_range']);
 
+export function getEffectivePredictionStatus<T>(original: T, outcome?: T | null): T {
+  return outcome ?? original;
+}
+
 export function isTerminalPredictionStatus(status: string | null | undefined): boolean {
   return TERMINAL_STATUSES.has(status || '');
 }

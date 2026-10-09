@@ -18,7 +18,8 @@ import { usePredictionHistory } from '../hooks/usePredictionHistory';
 import { useStore } from '../store/useStore';
 import { useWatchlist } from '../hooks/useWatchlist';
 import type { WatchItem } from '../types/dashboard';
-import { getPredictionDirectionPresentation } from '../utils/predictionPresentation';
+import { getEffectivePredictionStatus, getPredictionDirectionPresentation } from '../utils/predictionPresentation';
+import { buildPredictionDashboardUrl } from '../components/chatChartIntent';
 import { formatMoney, formatSourceDateTime as formatDateTime } from '../utils/format';
 
 type QuoteState = {
@@ -179,7 +180,7 @@ function PredictionCard({ item, onDashboard, onAsk, onHistory }: {
 }) {
   const prediction = item.prediction;
   const outcome = item.outcome;
-  const status = outcome?.status || prediction.status;
+  const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
   const directionTone = getDirectionTone(prediction.direction);
   return (
     <article className="rounded-lg border border-t-border bg-t-surface p-5" data-testid="today-prediction-card">
@@ -257,7 +258,7 @@ export function TodayPage() {
   );
   const followUps = useMemo(
     () => recentPredictions.filter(({ prediction, outcome }) => {
-      const status = outcome?.status || prediction.status;
+      const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
       return ['waiting', 'open', 'triggered', 'data_pending'].includes(status);
     }).slice(0, 3),
     [recentPredictions],
@@ -371,7 +372,7 @@ export function TodayPage() {
               <button type="button" onClick={() => navigate('/chat')} className="mt-4 inline-flex min-h-9 items-center gap-1.5 rounded-md bg-t-accent px-3 text-xs text-white">开始提问 <ArrowRight size={13} /></button>
             </div>
           ) : (
-            <div className="mt-3 space-y-3">{recentPredictions.map((item) => <PredictionCard key={item.prediction.prediction_id} item={item} onDashboard={() => navigate(`/dashboard/${encodeURIComponent(item.prediction.symbol)}?analysis=prediction&predictionId=${encodeURIComponent(item.prediction.prediction_id)}`)} onAsk={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${item.prediction.symbol} 这条研究判断，说明最新公开证据、反方证据和失效条件`)}&context_symbol=${encodeURIComponent(item.prediction.symbol)}`)} onHistory={() => navigate('/history')} />)}</div>
+            <div className="mt-3 space-y-3">{recentPredictions.map((item) => <PredictionCard key={item.prediction.prediction_id} item={item} onDashboard={() => navigate(buildPredictionDashboardUrl(item.prediction.symbol, item.prediction.prediction_id))} onAsk={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${item.prediction.symbol} 这条研究判断，说明最新公开证据、反方证据和失效条件`)}&context_symbol=${encodeURIComponent(item.prediction.symbol)}`)} onHistory={() => navigate('/history')} />)}</div>
           )}
         </div>
 
@@ -389,7 +390,7 @@ export function TodayPage() {
             ) : (
               <div className="space-y-3" data-testid="today-followups">
                 {followUps.map(({ prediction, outcome }) => {
-                  const status = outcome?.status || prediction.status;
+                  const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
                   return (
                     <button key={prediction.prediction_id} type="button" onClick={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${prediction.symbol} 的${DIRECTION_LABELS[prediction.direction]}研究判断，说明最新公开证据、反方证据和失效条件`)}&context_symbol=${encodeURIComponent(prediction.symbol)}`)} className="w-full border-b border-t-border pb-3 text-left last:border-b-0 last:pb-0 hover:text-t-accent" data-testid="today-followup-item">
                       <div className="flex items-center justify-between gap-2"><span className="font-mono text-xs font-semibold text-t-text">{prediction.symbol}</span><StatusBadge status={status} /></div>

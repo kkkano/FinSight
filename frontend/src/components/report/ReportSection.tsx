@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { normalizeMarkdown } from '../../utils/markdown';
 import type { ReportSection as ReportSectionType, ReportContent, Citation } from '../../types/index';
 import { ChevronDown, ChevronUp, BarChart2 } from 'lucide-react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../charts/EChart';
 import type { ChartTheme } from '../../hooks/useChartTheme';
 import { useChartTheme } from '../../hooks/useChartTheme';
 import { buildChartOption } from './ReportUtils';

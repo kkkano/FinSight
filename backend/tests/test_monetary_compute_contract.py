@@ -83,3 +83,52 @@ def test_cn_hk_dashboard_requires_provider_currency_for_market_cap(monkeypatch):
     result = data_service._fetch_valuation_from_cn_hk_market("600519.SS")
     assert result["market_cap"] is None
     assert result["currency"] is None
+
+
+@pytest.mark.parametrize("symbol,currency", [("0700.HK", "HKD"), ("600519.SS", "CNY"), ("AAPL", "USD")])
+def test_valuation_keeps_declared_quote_currency_and_source_time_in_all_markets(monkeypatch, symbol, currency):
+    monkeypatch.setattr(data_service, "_create_ticker", lambda _: SimpleNamespace(info={
+        "marketCap": 4000, "currency": currency, "financialCurrency": "EUR", "trailingPE": 20,
+        "regularMarketTime": 1791489600, "fiftyTwoWeekHigh": 120, "fiftyTwoWeekLow": 80,
+    }))
+    monkeypatch.setattr(data_service, "_fetch_valuation_from_cn_hk_market", lambda _: None)
+    result = data_service.fetch_valuation(symbol)
+    from backend.dashboard.snapshot import _build_meta
+    import time
+    meta = _build_meta(provider="unknown", source_type="fundamental", payload=result,
+                       started_at=time.perf_counter(), fallback_reason=None)
+    assert result["currency"] == result["market_cap_currency"] == currency
+    assert meta["provider"] == "yfinance" and meta["status"] == "ok"
+    assert meta["as_of"] == result["as_of"] and meta["as_of"]
+
+
+def test_local_valuation_does_not_lose_fallback_provider_or_claim_complete_metadata(monkeypatch):
+    import backend.tools.cn_hk_market as market
+    monkeypatch.setattr(market, "fetch_cn_hk_quote_metrics", lambda _: {
+        "market_cap": 4000, "price_to_book": 2.9, "source": "eastmoney_quote",
+    })
+    result = data_service._fetch_valuation_from_cn_hk_market("0700.HK")
+    assert result["provider"] == "eastmoney_quote"
+    assert result["status"] == "degraded" and result["as_of"] is None
+    assert result["market_cap"] is None and result["currency"] is None
+
+
+def test_local_valuation_merges_explicit_quote_currency_for_price_fields(monkeypatch):
+    import backend.tools.cn_hk_market as market
+    monkeypatch.setattr(market, "fetch_cn_hk_quote_metrics", lambda _: {
+        "market_cap": 4000, "week52_high": 500, "week52_low": 300,
+        "source": "eastmoney_quote",
+    })
+    monkeypatch.setattr(data_service, "_create_ticker", lambda _: SimpleNamespace(info={"currency": "HKD"}))
+    result = data_service.fetch_valuation("0700.HK")
+    assert result["currency"] == "HKD"
+    assert result["market_cap"] is None
+
+
+def test_eastmoney_dynamic_pe_is_not_a_zero_ttm_metric(monkeypatch):
+    import backend.tools.cn_hk_market as market
+    monkeypatch.setattr(market, "_eastmoney_get_json", lambda *_args: {"data": {
+        "f59": 2, "f43": 41920, "f116": 4000, "f162": 0, "f167": 291,
+    }})
+    result = market.fetch_cn_hk_quote_metrics("0700.HK")
+    assert result["trailing_pe"] is None

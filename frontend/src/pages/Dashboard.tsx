@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, RefreshCw, Sun, Moon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { useDashboardData } from '../hooks/useDashboardData';
+import { DashboardContext, useDashboardData } from '../hooks/useDashboardData';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { useDashboardStore } from '../store/dashboardStore';
 import { Watchlist } from '../components/dashboard/Watchlist';
@@ -54,9 +54,10 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   const handoffToChat = useChatHandoff();
 
   const [clock, setClock] = useState<string>(formatClock());
-  const [currentSymbol, setCurrentSymbol] = useState<string>(
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(
     () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
+  const currentSymbol = (initialSymbol || selectedSymbol).trim().toUpperCase();
   const [predictionRefreshKey, setPredictionRefreshKey] = useState(0);
   const authenticated = Boolean(authIdentity?.userId);
   const prediction = usePredictionOverlay(
@@ -75,16 +76,15 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
     return () => window.clearInterval(timer);
   }, []);
 
+  const { refetch, dashboardData, asset: loadedAsset, isLoading, error } = useDashboardData(currentSymbol);
+  const pageAsset = useMemo(() => ({
+    symbol: currentSymbol,
+    display_name: loadedAsset?.display_name || currentSymbol,
+    type: loadedAsset?.type || 'equity' as const,
+  }), [currentSymbol, loadedAsset]);
   useEffect(() => {
-    if (!initialSymbol || initialSymbol === currentSymbol) return;
-
-    setCurrentSymbol(initialSymbol);
-    if (activeAsset && activeAsset.symbol !== initialSymbol) {
-      setActiveAsset({ ...activeAsset, symbol: initialSymbol });
-    }
-  }, [activeAsset, currentSymbol, initialSymbol, setActiveAsset]);
-
-  const { refetch, dashboardData, isLoading, error } = useDashboardData(currentSymbol);
+    if (currentSymbol) setActiveAsset(pageAsset);
+  }, [currentSymbol, pageAsset, setActiveAsset]);
 
   useEffect(() => {
     if (!error) {
@@ -103,11 +103,11 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   }, [error, toast]);
 
   const handleSymbolChange = (symbol: string) => {
-    setCurrentSymbol(symbol);
+    setSelectedSymbol(symbol);
     setActiveAsset({
       symbol,
       display_name: symbol,
-      type: activeAsset?.type || 'equity',
+      type: 'equity',
     });
     onSymbolChange?.(symbol);
   };
@@ -120,15 +120,9 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   };
 
   const handleAskAi = () => {
-    const symbol = (activeAsset?.symbol || currentSymbol).trim().toUpperCase();
+    const symbol = currentSymbol;
     if (!symbol) return;
-    if (!activeAsset || activeAsset.symbol !== symbol) {
-      setActiveAsset({
-        symbol,
-        display_name: activeAsset?.display_name || symbol,
-        type: activeAsset?.type || 'equity',
-      });
-    }
+    setActiveAsset(pageAsset);
     handoffToChat({
       draft: buildDashboardAskAiDraft(symbol, searchParams.get('tab')),
       activeSymbol: symbol,
@@ -186,6 +180,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
   }
 
   return (
+    <DashboardContext.Provider value={{ asset: pageAsset, data: dashboardData }}>
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-t-bg text-t-text">
       {isTerminalStyle && (
         <div className="min-h-9 shrink-0 border-b border-t-divider bg-t-surface px-4 py-2 flex items-center justify-between gap-3 text-xs">
@@ -202,7 +197,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
 
       <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
         <aside className="w-[220px] shrink-0 border-r border-t-divider bg-t-surface flex flex-col max-lg:w-full max-lg:h-[180px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]">
-          <Watchlist activeSymbol={activeAsset?.symbol || currentSymbol} onSymbolSelect={handleSymbolChange} />
+          <Watchlist activeSymbol={currentSymbol} onSymbolSelect={handleSymbolChange} />
         </aside>
 
         <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto bg-t-bg">
@@ -263,21 +258,21 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
           )}
 
           <StockHeader
-            ticker={activeAsset?.symbol || currentSymbol}
-            displayName={activeAsset?.display_name || currentSymbol}
-            assetType={activeAsset?.type || 'equity'}
+            ticker={currentSymbol}
+            displayName={pageAsset.display_name}
+            assetType={pageAsset.type}
             snapshot={snapshot}
             charts={charts}
             valuation={valuation}
             loading={isLoading && !dashboardData}
           />
 
-          <CNMarketNotice ticker={activeAsset?.symbol || currentSymbol} />
+          <CNMarketNotice ticker={currentSymbol} />
 
           <MetricsBar
             valuation={valuation}
             snapshot={snapshot}
-            ticker={activeAsset?.symbol || currentSymbol}
+            ticker={currentSymbol}
             loading={isLoading && !dashboardData}
           />
 
@@ -295,7 +290,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
 
           <MonitorActivityFeed
             sessionId={sessionId}
-            symbol={activeAsset?.symbol || currentSymbol}
+            symbol={currentSymbol}
           />
 
           <DashboardTabs predictionOverlay={prediction.overlay} />
@@ -315,6 +310,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
         </main>
       </div>
     </div>
+    </DashboardContext.Provider>
   );
 }
 

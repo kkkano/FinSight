@@ -10,7 +10,7 @@
  * Graceful degradation: JSON parse failures or missing data → silent skip.
  */
 import { useEffect, useMemo, useState } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './charts/EChart';
 
 import { apiClient } from '../api/client';
 import { useChartTheme, type ChartTheme } from '../hooks/useChartTheme';

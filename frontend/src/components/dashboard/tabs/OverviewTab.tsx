@@ -1,7 +1,6 @@
 import { BarChart3, Newspaper, Scale } from 'lucide-react';
 
-import { useDashboardStore } from '../../../store/dashboardStore';
-import { useDashboardSnapshot } from '../../../hooks/useDashboardData';
+import { useDashboardAsset, useDashboardSnapshot } from '../../../hooks/useDashboardData';
 import { DashboardSourceBadge } from '../DashboardSourceBadge';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { ValuationGrid } from './financial/ValuationGrid';
@@ -10,7 +9,7 @@ import { formatMoney } from '../../../utils/format';
 
 export function OverviewTab() {
   const dashboardData = useDashboardSnapshot();
-  const activeAsset = useDashboardStore((state) => state.activeAsset);
+  const activeAsset = useDashboardAsset();
 
   if (!dashboardData) {
     return <div className="py-12 text-center text-sm text-t-text3">正在读取市场快照...</div>;

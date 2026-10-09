@@ -1,3 +1,5 @@
+import { getEffectivePredictionStatus } from '../utils/predictionPresentation';
+
 export type PredictionDirection = 'long' | 'short' | 'neutral';
 
 export type PredictionStatus =
@@ -8,7 +10,8 @@ export type PredictionStatus =
   | 'hit_target'
   | 'hit_stop'
   | 'held_range'
-  | 'broke_range';
+  | 'broke_range'
+  | 'data_pending';
 
 export interface PredictionRange {
   low: number;
@@ -48,6 +51,7 @@ const STATUSES = new Set<PredictionStatus>([
   'hit_stop',
   'held_range',
   'broke_range',
+  'data_pending',
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,7 +84,8 @@ export function normalizePredictionOverlay(
   const predictionId = String(envelope.predictionId ?? envelope.prediction_id ?? '').trim();
   const symbol = String(envelope.symbol ?? '').trim().toUpperCase();
   const direction = envelope.direction;
-  const status = envelope.status;
+  const outcome = isRecord(value) && isRecord(value.outcome) ? value.outcome : null;
+  const status = getEffectivePredictionStatus(envelope.status, outcome?.status);
   const timeframe = String(envelope.anchor.timeframe ?? '').trim();
   const time = String(envelope.anchor.time ?? '').trim();
   const price = readFiniteNumber(envelope.anchor.price);
@@ -120,7 +125,7 @@ export function normalizePredictionOverlay(
     if (parsed !== undefined) result[key] = parsed;
   }
 
-  const range = readRange(envelope.range);
+  const range = readRange(envelope.range ?? { low: envelope.range_low, high: envelope.range_high });
   if (range) result.range = range;
   if (zones?.length) result.zones = zones;
   return result;

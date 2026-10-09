@@ -12,7 +12,7 @@ async function setup(page: Page) {
   });
   await installAuthenticatedSession(page);
   await page.route('**/health', (route) => json(route, { status: 'healthy' }));
-  await page.route('**/api/**', (route) => {
+  await page.route('**://*/api/**', (route) => {
     const url = new URL(route.request().url());
     if (!url.pathname.startsWith('/api/')) return route.fallback();
     if (url.pathname === '/api/capabilities') return json(route, { status: 'ready', ready: true,
@@ -106,4 +106,29 @@ test('lexical retrieval is visible despite successful core health', async ({ pag
     features: { retrieval: { mode: 'lexical', full_ready: false } } }));
   await page.goto('/today');
   await expect(page.getByTestId('workspace-health-banner')).toContainText('当前使用词法检索');
+});
+
+test('new route owns the subject while dashboard data is pending or unavailable', async ({ page }) => {
+  await setup(page);
+  await page.goto('/dashboard/AAPL');
+  await expect(page.getByRole('main')).toContainText('AAPL');
+  await page.route('**/api/dashboard?symbol=NVDA', async route => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await json(route, { detail: '本次来源不可用' }, 503);
+  });
+  await page.goto('/dashboard/NVDA');
+  await expect(page.getByRole('main')).toContainText('NVDA');
+  await expect(page.getByRole('region', { name: 'NVDA AI 动态' })).toBeVisible();
+  await expect(page.getByRole('main')).not.toContainText('Apple');
+  await page.getByRole('button', { name: '追问', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '输入聊天消息' })).toHaveValue(/NVDA/);
+});
+
+test('command palette starts a new session instead of retaining the previous context', async ({ page }) => {
+  await setup(page);
+  await page.goto('/chat');
+  const previous = await page.evaluate(() => localStorage.getItem('finsight-session-id'));
+  await page.getByTestId('sidebar-nav-command-palette').click();
+  await page.getByRole('option', { name: '新建对话', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('finsight-session-id'))).not.toBe(previous);
 });

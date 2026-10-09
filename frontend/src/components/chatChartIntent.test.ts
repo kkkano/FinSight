@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getPredictionIdFromSearch } from './chatChartIntent';
+import { buildPredictionDashboardUrl, getPredictionIdFromSearch } from './chatChartIntent';
 
 describe('prediction deep-link contract', () => {
   it('只读取 analysis 参数中的 prediction id', () => {
@@ -10,5 +10,13 @@ describe('prediction deep-link contract', () => {
   it('拒绝缺失或过长的 id', () => {
     expect(getPredictionIdFromSearch('?entry=100')).toBeNull();
     expect(getPredictionIdFromSearch(`?analysis=${'x'.repeat(161)}`)).toBeNull();
+  });
+
+  it('今日与历史链接往返，并兼容已发布的旧链接', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const url = buildPredictionDashboardUrl('0700.HK', id);
+    expect(getPredictionIdFromSearch(url.split('?')[1])).toBe(id);
+    expect(getPredictionIdFromSearch(`analysis=prediction&predictionId=${id}`)).toBe(id);
+    expect(getPredictionIdFromSearch('analysis=prediction')).toBe('prediction');
   });
 });

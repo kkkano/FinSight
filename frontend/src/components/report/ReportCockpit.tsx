@@ -299,7 +299,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
             </ul>
           </div>
 
-          <div className="rounded-2xl border border-fin-border bg-fin-card p-4">
+          {metricItems.length > 0 && <div className="rounded-2xl border border-fin-border bg-fin-card p-4">
             <div className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-fin-muted mb-3">核心指标</div>
             <div className="space-y-2.5">
               {metricItems.length > 0 ? (
@@ -315,7 +315,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
                 <div className="text-xs text-fin-muted">暂无</div>
               )}
             </div>
-          </div>
+          </div>}
 
           {citations.length > 0 && (
             <div className="rounded-2xl border border-fin-border bg-fin-card p-4">

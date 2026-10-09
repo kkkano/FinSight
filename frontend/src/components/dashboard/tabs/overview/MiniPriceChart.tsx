@@ -6,7 +6,7 @@
  * Uses useChartTheme() for theme-aware colors.
  */
 import { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../../../charts/EChart';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { ChartPoint } from '../../../../types/dashboard';

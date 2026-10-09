@@ -6,7 +6,7 @@
  * DataZoom allows zooming into specific date ranges.
  */
 import { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../../../charts/EChart';
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
 import type { ChartPoint, TechnicalData } from '../../../../types/dashboard';

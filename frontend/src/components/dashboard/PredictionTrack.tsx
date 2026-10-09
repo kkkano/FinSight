@@ -18,7 +18,7 @@ import type {
 } from '../../api/domains/predictions';
 import type { PredictionOverlayLoadState } from '../../hooks/usePredictionOverlay';
 import type { PredictionEligibility } from '../../hooks/usePredictionEligibility';
-import { getPredictionDirectionPresentation } from '../../utils/predictionPresentation';
+import { getEffectivePredictionStatus, getPredictionDirectionPresentation } from '../../utils/predictionPresentation';
 
 type PredictionTrackProps = {
   authenticated: boolean;
@@ -115,7 +115,7 @@ export function PredictionTrack({
   const run = generationRun?.status === 'succeeded' ? generationRun : loadState.run;
   const canGenerate = authenticated && eligibility.status === 'trusted' && !isGenerating;
   const direction = prediction ? DIRECTION[prediction.direction] : null;
-  const status = outcome?.status || prediction?.status;
+  const status = getEffectivePredictionStatus(prediction?.status, outcome?.status);
   const meaning = prediction ? getPredictionDirectionPresentation(prediction.direction, status) : null;
 
   const generationMessage = generationPhase === 'submitting'
@@ -126,15 +126,15 @@ export function PredictionTrack({
 
   const emptyMessage = !authenticated
     ? '登录后才能生成和读取个人 AI 判断。'
-    : eligibility.status === 'checking'
+    : loadState.failure
+      ? loadState.failure.message
+      : eligibility.status === 'checking'
       ? '正在校验行情来源...'
       : eligibility.status === 'degraded' || eligibility.status === 'unavailable'
         ? eligibility.reason
         : loadState.status === 'loading'
           ? '正在读取最近一次判断...'
-          : loadState.status === 'not_found'
-            ? '尚未生成 AI 判断。'
-            : loadState.failure?.message ?? '尚未生成 AI 判断。';
+          : '尚未生成 AI 判断。';
 
   const generateLabel = meaning?.historical ? '生成当前判断' : prediction ? '刷新判断' : '生成 AI 判断';
   const controls = <div className="flex shrink-0 items-center gap-2">

@@ -28,6 +28,16 @@ const AAPL_PREDICTION: PredictionResponse = {
 };
 
 describe('dashboard prediction loader', () => {
+  it('uses the settled outcome in chart state without mutating the original prediction', async () => {
+    const settled = { ...AAPL_PREDICTION, outcome: {
+      prediction_id: AAPL_PREDICTION.prediction!.prediction_id, status: 'hit_target',
+    } } as PredictionResponse;
+    const loaded = await loadDashboardPredictionOverlay('AAPL', null, {
+      getById: vi.fn(), getLatest: async () => ({ status: 'ready', payload: settled }),
+    });
+    expect(loaded).toMatchObject({ status: 'ready', overlay: { status: 'hit_target' } });
+    expect(settled.prediction?.status).toBe('open');
+  });
   it('uses a valid explicit id exclusively and never falls back to latest', async () => {
     const getById = vi.fn(async () => AAPL_PREDICTION);
     const getLatest = vi.fn(async () => ({ status: 'not_found' as const }));

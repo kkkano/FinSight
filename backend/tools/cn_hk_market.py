@@ -4,6 +4,7 @@ import logging
 import os
 import re
 from typing import Any, Optional
+from datetime import datetime, timezone
 
 from backend.utils.quote import safe_float
 
@@ -96,7 +97,7 @@ def fetch_cn_hk_quote_metrics(ticker: str) -> dict[str, Any] | None:
         _EASTMONEY_QUOTE_URL,
         {
             "secid": secid,
-            "fields": "f43,f57,f58,f59,f116,f162,f167,f170,f168,f169,f174,f175",
+            "fields": "f43,f57,f58,f59,f116,f124,f162,f167,f170,f168,f169,f174,f175",
         },
     )
     data = payload.get("data") if isinstance(payload, dict) else None
@@ -104,13 +105,16 @@ def fetch_cn_hk_quote_metrics(ticker: str) -> dict[str, Any] | None:
         return None
 
     decimals = int(safe_float(data.get("f59")) or 2)
+    source_time = safe_float(data.get("f124"))
     result = {
         "symbol": ticker_norm,
         "market": market,
         "name": str(data.get("f58") or "").strip() or ticker_norm,
         "last_price": _price_from_raw(data.get("f43"), decimals),
         "market_cap": safe_float(data.get("f116")),
-        "trailing_pe": _percent_div_100(data.get("f162")),
+        # f162 是动态市盈率，不能显示成 TTM 市盈率。
+        "trailing_pe": None,
+        "dynamic_pe": _percent_div_100(data.get("f162")),
         "forward_pe": None,
         "price_to_book": _percent_div_100(data.get("f167")),
         "price_to_sales": None,
@@ -120,6 +124,8 @@ def fetch_cn_hk_quote_metrics(ticker: str) -> dict[str, Any] | None:
         "week52_high": _price_from_raw(data.get("f174"), decimals),
         "week52_low": _price_from_raw(data.get("f175"), decimals),
         "source": "eastmoney_quote",
+        "currency": data.get("currency"),
+        "as_of": datetime.fromtimestamp(source_time, tz=timezone.utc).isoformat() if source_time else None,
     }
     if all(
         result.get(key) is None

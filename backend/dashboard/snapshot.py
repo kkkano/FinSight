@@ -441,7 +441,7 @@ async def get_dashboard(
             "valuation": {
                 "fetch_name": "fetch_valuation",
                 "fn": fetch_valuation,
-                "timeout": 6.0,
+                "timeout": 10.0,
                 "ttl": dashboard_cache.TTL_VALUATION,
             },
             "financials": {

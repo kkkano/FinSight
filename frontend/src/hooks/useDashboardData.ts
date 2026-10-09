@@ -1,8 +1,9 @@
-import { useCallback, useEffect } from 'react';
+import { createContext, useCallback, useContext } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { buildApiUrl } from '../config/runtime';
-import { useDashboardStore } from '../store/dashboardStore';
-import type { DashboardResponse } from '../types/dashboard';
+import type { ActiveAsset, DashboardData, DashboardResponse } from '../types/dashboard';
+
+export const DashboardContext = createContext<{ asset: ActiveAsset; data: DashboardData | null } | null>(null);
 
 const dashboardQueryKey = (symbol: string) => ['dashboard', symbol] as const;
 
@@ -17,15 +18,11 @@ const fetchDashboard = async (symbol: string, signal?: AbortSignal): Promise<Das
 
 export function useDashboardData(symbol: string | null, enabled = true) {
   const client = useQueryClient();
-  const setActiveAsset = useDashboardStore((state) => state.setActiveAsset);
   const query = useQuery({
     queryKey: dashboardQueryKey(symbol || ''),
     queryFn: ({ signal }) => fetchDashboard(symbol!, signal),
     enabled: enabled && Boolean(symbol),
   });
-  useEffect(() => {
-    if (enabled && query.data) setActiveAsset(query.data.state.active_asset);
-  }, [enabled, query.data, setActiveAsset]);
   const refetch = useCallback(async (nextSymbol: string) => {
     const normalized = nextSymbol.trim();
     if (!normalized) return;
@@ -34,11 +31,15 @@ export function useDashboardData(symbol: string | null, enabled = true) {
   return {
     refetch, dashboardData: query.data?.data ?? null,
     capabilities: query.data?.state.capabilities ?? null,
+    asset: query.data?.state.active_asset ?? null,
     isLoading: query.isFetching, error: query.error instanceof Error ? query.error.message : null,
   };
 }
 
 export function useDashboardSnapshot() {
-  const symbol = useDashboardStore((state) => state.activeAsset?.symbol ?? null);
-  return useDashboardData(symbol, false).dashboardData;
+  return useContext(DashboardContext)?.data ?? null;
+}
+
+export function useDashboardAsset() {
+  return useContext(DashboardContext)?.asset ?? null;
 }

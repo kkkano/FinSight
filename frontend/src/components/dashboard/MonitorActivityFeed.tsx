@@ -10,7 +10,8 @@ import { useMonitorLease } from '../../hooks/useMonitorLease';
 
 type FeedItem =
   | { kind: 'comment'; comment: MonitorComment }
-  | { kind: 'heartbeat'; id: string; from: string; to: string; count: number };
+  | { kind: 'heartbeat'; id: string; from: string; to: string; count: number }
+  | { kind: 'errors'; id: string; comments: MonitorComment[] };
 
 // eslint-disable-next-line react-refresh/only-export-components -- 纯折叠策略需要独立单测
 export function foldHeartbeatComments(comments: MonitorComment[]): FeedItem[] {
@@ -20,7 +21,8 @@ export function foldHeartbeatComments(comments: MonitorComment[]): FeedItem[] {
     if (!group.length) return;
     const newest = group[0];
     const oldest = group[group.length - 1];
-    result.push({
+    if (newest.level === 'error') result.push({ kind: 'errors', id: `errors:${newest.id}`, comments: group });
+    else result.push({
       kind: 'heartbeat',
       id: `heartbeat:${newest.id}`,
       from: oldest.ts,
@@ -30,9 +32,8 @@ export function foldHeartbeatComments(comments: MonitorComment[]): FeedItem[] {
     group = [];
   };
   for (const comment of comments) {
-    // 旧版本曾把心跳写成 error，但它的触发语义仍是“无显式触发”。
-    // 以触发类型为准，避免历史记录被渲染成点评失败。
-    if (comment.trigger.kind === 'heartbeat') {
+    if ((comment.level === 'info' || comment.level === 'error') && comment.trigger.kind === 'heartbeat') {
+      if (group.length && (group[0].level === 'error') !== (comment.level === 'error')) flush();
       group.push(comment);
     } else {
       flush();
@@ -43,7 +44,8 @@ export function foldHeartbeatComments(comments: MonitorComment[]): FeedItem[] {
   return result;
 }
 
-const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN', {
+const formatTime = (value: string) => new Date(value).toLocaleString('zh-CN', {
+  year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit',
   minute: '2-digit',
 });
@@ -129,6 +131,15 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
       ) : (
         <div className="max-h-48 overflow-y-auto">
           {items.map((item) => {
+            if (item.kind === 'errors') return (
+              <details key={item.id} className="border-b border-t-divider/70 px-6 py-3 text-xs text-t-text3 max-lg:px-4">
+                <summary className="cursor-pointer text-t-warning">历史点评未完成 · {item.comments.length} 次 · {formatTime(item.comments.at(-1)!.ts)}–{formatTime(item.comments[0].ts)}</summary>
+                {item.comments.map((comment) => <div key={comment.id} className="mt-2 break-words leading-5">
+                  <span>{formatTime(comment.ts)} · {comment.text}</span>
+                  <p>{comment.trigger.detail}</p>
+                </div>)}
+              </details>
+            );
             if (item.kind === 'heartbeat') return (
             <div
               key={item.id}

@@ -10,7 +10,7 @@
 import { useMemo } from 'react';
 
 import { useDashboardStore } from '../../../store/dashboardStore';
-import { useDashboardSnapshot } from '../../../hooks/useDashboardData';
+import { useDashboardAsset, useDashboardSnapshot } from '../../../hooks/useDashboardData';
 import { useChatHandoff } from '../../../hooks/useChatHandoff';
 import type { NewsItem, SelectionItem, NewsTagGroup } from '../../../types/dashboard';
 import { NEWS_TAG_GROUP_MAP } from '../../../types/dashboard';
@@ -66,7 +66,7 @@ function filterByTagGroup(items: NewsItem[], group: NewsTagGroup): NewsItem[] {
 // ---------------------------------------------------------------------------
 export function NewsTab() {
   // --- Store ---
-  const activeAsset = useDashboardStore((s) => s.activeAsset);
+  const activeAsset = useDashboardAsset();
   const dashboardData = useDashboardSnapshot();
   const newsSubTab = useDashboardStore((s) => s.newsSubTab);
   const newsTagFilter = useDashboardStore((s) => s.newsTagFilter);
@@ -78,6 +78,8 @@ export function NewsTab() {
   const toggleSelection = useDashboardStore((s) => s.toggleSelection);
   const handoffToChat = useChatHandoff();
   const ticker = activeAsset?.symbol ?? null;
+  const newsMeta = dashboardData?.meta?.news_impact;
+  const sourceUnavailable = ['error', 'missing', 'degraded'].includes(newsMeta?.status ?? '');
 
   // --- Raw data arrays ---
   const marketNews = useMemo(() => deduplicateNews(dashboardData?.news?.market ?? []), [dashboardData]);
@@ -205,7 +207,7 @@ export function NewsTab() {
             </>
           ) : (
             <span>
-              暂无匹配的新闻
+              {sourceUnavailable ? '新闻来源暂不可用，当前没有可核验的报道' : '暂无匹配的新闻'}
               {newsTagFilter !== '全部' && ` (${newsTagFilter})`}
               {newsTimeRange !== '30d' && ` · ${newsTimeRange}内`}
             </span>

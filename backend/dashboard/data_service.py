@@ -859,6 +859,8 @@ def _fetch_valuation_from_finnhub(symbol: str) -> dict[str, Any] | None:
         "market_cap": market_cap.value if market_cap.currency else None,
         "market_cap_currency": market_cap.currency,
         "currency": market_cap.currency,
+        "provider": "finnhub",
+        "status": "degraded",
         "trailing_pe": safe_float(metric.get("peTTM") or metric.get("peBasicExclExtraTTM")),
         "forward_pe": safe_float(metric.get("forwardPE") or metric.get("peExclExtraAnnual")),
         "price_to_book": safe_float(metric.get("pbQuarterly")),
@@ -895,12 +897,23 @@ def _fetch_valuation_from_cn_hk_market(symbol: str) -> dict[str, Any] | None:
         }
         market_cap = monetary_amount(payload.get("market_cap"), payload.get("market_cap_currency") or payload.get("currency"))
         result.update({"market_cap": market_cap.value if market_cap.currency else None, "market_cap_currency": market_cap.currency, "currency": market_cap.currency})
+        result.update({"provider": payload.get("source") or "eastmoney_quote", "as_of": payload.get("as_of"),
+                       "status": "ok" if market_cap.currency and payload.get("as_of") else "degraded"})
         if not any(fact_number(value) is not None for value in result.values()):
             return None
         return result
     except Exception as exc:
         logger.warning("[DataService] CN/HK valuation fallback failed for %s: %s", symbol, exc)
         return None
+
+
+def _quote_currency_from_provider(symbol: str) -> str | None:
+    """读取供应商明确声明的报价币种，不从股票代码推断。"""
+    try:
+        info = _create_ticker(symbol).info or {}
+    except Exception:
+        return None
+    return normalize_currency(info.get("currency"))
 
 
 def _match_report_value(
@@ -932,20 +945,28 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
     """
     market = _infer_equity_market(symbol)
     if market in {"CN", "HK"}:
-        cn_hk_fallback = _fetch_valuation_from_cn_hk_market(symbol)
-        if cn_hk_fallback:
-            logger.info("[DataService] valuation fallback via CN/HK source for %s", symbol)
-            return cn_hk_fallback
-
+        local = _fetch_valuation_from_cn_hk_market(symbol)
+        if local:
+            quote_currency = local.get("currency") or _quote_currency_from_provider(symbol)
+            local["currency"] = quote_currency
+            if local.get("market_cap") is not None and quote_currency:
+                local["market_cap_currency"] = quote_currency
+            return local
     try:
 
         info = _create_ticker(symbol).info or {}
         market_cap = monetary_amount(info.get("marketCap"), info.get("currency"))
+        market_time = safe_float(info.get("regularMarketTime"))
+        from datetime import datetime, timezone
+        as_of = datetime.fromtimestamp(market_time, tz=timezone.utc).isoformat() if market_time else None
         result = {
+            "provider": "yfinance",
+            "as_of": as_of,
+            "status": "ok" if market_cap.currency and as_of else "degraded",
             "market_cap": market_cap.value if market_cap.currency else None,
             "market_cap_currency": market_cap.currency,
             "currency": market_cap.currency,
-            "trailing_pe": safe_float(info.get("trailingPE")),
+            "trailing_pe": safe_float(info.get("trailingPE")) or None,
             "forward_pe": safe_float(info.get("forwardPE")),
             "price_to_book": safe_float(info.get("priceToBook")),
             "price_to_sales": safe_float(info.get("priceToSalesTrailing12Months")),

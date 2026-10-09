@@ -8,7 +8,7 @@ import { IncomeTable } from './IncomeTable';
 import { ProfitabilityChart } from './ProfitabilityChart';
 import { BalanceSheetSummary } from './BalanceSheetSummary';
 
-vi.mock('echarts-for-react', () => ({ default: ({ option }: { option: unknown }) => <pre>{JSON.stringify(option)}</pre> }));
+vi.mock('../../../charts/EChart', () => ({ default: ({ option }: { option: unknown }) => <pre>{JSON.stringify(option)}</pre> }));
 vi.mock('../../../../hooks/useChartTheme', () => ({ useChartTheme: () => ({}) }));
 
 const render = (node: ReactNode) => renderToStaticMarkup(

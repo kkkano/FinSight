@@ -6,7 +6,7 @@
  */
 import { useMemo } from 'react';
 import { formatMoney } from '../../../../utils/format';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../../../charts/EChart';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import { CardInfoTip } from '../../../ui/CardInfoTip';

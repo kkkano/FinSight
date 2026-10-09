@@ -5,7 +5,7 @@
  * 因此这里仅基于单条新闻的 sentiment/impact/reliability 字段做客户端聚合。
  */
 import { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '../../../charts/EChart';
 import { Activity, Flame, Minus, RadioTower, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
@@ -606,20 +606,6 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
           )}
         </div>
 
-        <div className="rounded-lg border border-dashed border-fin-border bg-fin-card p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-fin-text">舆情-价格传导</h3>
-            <span className="text-2xs text-fin-muted">待接入</span>
-          </div>
-          <p className="text-sm leading-6 text-fin-muted">
-            Dashboard REST 尚未暴露 NewsSentimentSnapshot.price_transmission，
-            当前不推断价格共振、背离或传导强度。
-          </p>
-          <div className="mt-3 rounded-lg bg-fin-hover/40 p-3 text-xs text-fin-muted">
-            {/* TODO: 后端 dashboard.news 接入 NewsSentimentSnapshot.price_transmission 后，在此展示共振/背离、价格窗口和置信度。 */}
-            需要后端把 NewsAgent 聚合快照同步进 /api/dashboard。
-          </div>
-        </div>
       </div>
     </section>
   );

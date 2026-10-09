@@ -263,30 +263,12 @@ export const extractMetrics = (sections: ReportSection[]): { label: string; valu
   const metrics: { label: string; value: string }[] = [];
   for (const section of sections) {
     for (const content of section.contents) {
-      if (content.type === 'table') {
-        const headers = content.content.headers || [];
+      if (content.type === 'table' && content.metadata?.kind === 'verified_metrics') {
         const rows = content.content.rows || [];
-        if (rows.length > 0) {
-          headers.slice(0, 4).forEach((header: string, idx: number) => {
-            const value = rows[0][idx];
-            if (header && value && metrics.length < 4) {
-              metrics.push({ label: header, value });
-            }
-          });
-        }
-      }
-    }
-  }
-  if (metrics.length > 0) return metrics;
-
-  for (const section of sections) {
-    for (const content of section.contents) {
-      if (content.type === 'text') {
-        const raw = String(content.content || '');
-        const matches = raw.matchAll(/([A-Za-z\u4e00-\u9fff]{2,8})[:：]\s*([0-9][^，。\n]{0,12})/g);
-        for (const match of matches) {
-          if (metrics.length >= 4) break;
-          metrics.push({ label: match[1], value: match[2] });
+        for (const row of rows) {
+          if (typeof row[0] === 'string' && typeof row[1] === 'string' && metrics.length < 4) {
+            metrics.push({ label: row[0], value: row[1] });
+          }
         }
       }
     }

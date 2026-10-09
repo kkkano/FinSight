@@ -36,13 +36,20 @@ describe('MonitorActivityFeed heartbeat folding', () => {
     expect(items[2]).toMatchObject({ kind: 'heartbeat', count: 1 });
   });
 
-  it('folds legacy error-level heartbeats as normal no-change checks', () => {
+  it('preserves failed heartbeat details separately from successful checks', () => {
     const items = foldHeartbeatComments([
       make('legacy-error', 'heartbeat', 'error', 10),
       make('legacy-info', 'heartbeat', 'info', 5),
     ]);
 
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ kind: 'heartbeat', count: 2 });
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ kind: 'errors', comments: [{ id: 'legacy-error', level: 'error' }] });
+    expect(items[1]).toMatchObject({ kind: 'heartbeat', count: 1 });
+  });
+
+  it('aggregates repeated failures without losing their original timestamps or reasons', () => {
+    const older = { ...make('old', 'heartbeat', 'error', 5), ts: '2026-09-15T10:00:00Z', text: 'APIConnectionError' };
+    const newer = { ...make('new', 'heartbeat', 'error', 10), ts: '2026-10-02T15:00:00Z', text: 'NotFoundError' };
+    expect(foldHeartbeatComments([newer, older])[0]).toMatchObject({ kind: 'errors', comments: [newer, older] });
   });
 });

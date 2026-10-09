@@ -25,6 +25,7 @@ export const STATUS_SUFFIX: Record<PredictionOverlay['status'], string> = {
   hit_stop: '已止损',
   held_range: '区间成立',
   broke_range: '区间突破',
+  data_pending: '等待行情',
 };
 
 function levelColor(kind: 'entry' | 'stop' | 'target'): string {
