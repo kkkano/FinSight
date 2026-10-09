@@ -921,6 +921,11 @@ def _fetch_with_twelve_data(ticker: str, period: str = "1y") -> dict:
         if not values:
             return None
 
+        # Twelve Data 将报价币种放在 time_series 响应的 meta.currency；
+        # 保留供应商声明，交给统一行情网关传播到看板和自选列表。
+        metadata = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+        currency = metadata.get("currency") or data.get("currency")
+
         kline_data = []
         for item in values:
             kline_data.append({
@@ -937,7 +942,14 @@ def _fetch_with_twelve_data(ticker: str, period: str = "1y") -> dict:
             kline_data = list(reversed(kline_data))
             as_of = values[0].get("datetime", "")[:19]
             logger.info(f"[get_stock_historical_data] Twelve Data 成功获取 {len(kline_data)} 条数据")
-            return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "twelve_data", "as_of": as_of}
+            return {
+                "kline_data": kline_data,
+                "period": period,
+                "interval": "1d",
+                "source": "twelve_data",
+                "as_of": as_of,
+                "currency": currency,
+            }
 
         return None
     except Exception as e:

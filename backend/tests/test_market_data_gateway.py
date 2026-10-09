@@ -8,6 +8,7 @@ import pytest
 from backend.services.market_data_gateway import (
     MarketDataGateway,
     MarketDataValidationError,
+    _quote_from_kline_provider,
     validate_financial_payload,
     validate_kline_bars,
     validate_news_items,
@@ -192,6 +193,39 @@ def test_quote_contract_accepts_negative_change_and_exposes_provenance():
     assert result["provider"] == "primary"
     assert result["quality"] == "trusted"
     assert result["error_code"] is None
+
+
+def test_twelve_data_history_preserves_meta_currency_for_quote(monkeypatch):
+    from backend.tools import price
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "status": "ok",
+                "meta": {"symbol": "AAPL", "currency": "USD"},
+                "values": [
+                    {"datetime": "2026-10-08", "open": "100", "high": "102", "low": "99", "close": "101", "volume": "10"},
+                    {"datetime": "2026-10-07", "open": "98", "high": "100", "low": "97", "close": "99", "volume": "11"},
+                ],
+            }
+
+    monkeypatch.setattr(price, "TWELVE_DATA_API_KEY", "fixture-key")
+    monkeypatch.setattr(price, "_http_get", lambda *_args, **_kwargs: Response())
+
+    payload = price._fetch_with_twelve_data("AAPL", period="1mo")
+
+    assert payload is not None and payload["currency"] == "USD"
+    gateway = MarketDataGateway(
+        providers={},
+        primary_provider="",
+        quote_providers={"fixture": _quote_from_kline_provider(lambda *_args: payload)},
+        quote_primary_provider="fixture",
+        quote_trusted_providers={"fixture"},
+        quote_cache_ttl_seconds=0,
+    )
+    assert gateway.get_quote("AAPL")["data"]["currency"] == "USD"
 
 
 def test_news_contract_rejects_unlinked_primary_then_uses_one_secondary():
