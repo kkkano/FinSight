@@ -35,4 +35,14 @@ describe('MonitorActivityFeed heartbeat folding', () => {
     expect(items[1]).toMatchObject({ kind: 'comment', comment: { id: 'alert' } });
     expect(items[2]).toMatchObject({ kind: 'heartbeat', count: 1 });
   });
+
+  it('folds legacy error-level heartbeats as normal no-change checks', () => {
+    const items = foldHeartbeatComments([
+      make('legacy-error', 'heartbeat', 'error', 10),
+      make('legacy-info', 'heartbeat', 'info', 5),
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'heartbeat', count: 2 });
+  });
 });

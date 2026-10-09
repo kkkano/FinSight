@@ -30,7 +30,9 @@ export function foldHeartbeatComments(comments: MonitorComment[]): FeedItem[] {
     group = [];
   };
   for (const comment of comments) {
-    if (comment.level === 'info' && comment.trigger.kind === 'heartbeat') {
+    // 旧版本曾把心跳写成 error，但它的触发语义仍是“无显式触发”。
+    // 以触发类型为准，避免历史记录被渲染成点评失败。
+    if (comment.trigger.kind === 'heartbeat') {
       group.push(comment);
     } else {
       flush();
