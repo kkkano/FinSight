@@ -106,6 +106,8 @@ def fetch_cn_hk_quote_metrics(ticker: str) -> dict[str, Any] | None:
 
     decimals = int(safe_float(data.get("f59")) or 2)
     source_time = safe_float(data.get("f124"))
+    if source_time is not None and source_time < 946684800:
+        source_time = None
     result = {
         "symbol": ticker_norm,
         "market": market,
