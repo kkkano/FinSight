@@ -4,9 +4,9 @@
 
 FinSight 用真实行情、财报、新闻和可回读来源帮助用户提问、追问、比较股票、阅读研究报告与核对预测。主工作区为 Today、Dashboard、Chat、History；公开战绩与只读分享保持独立。组合管理、筛选、回测与自动交易不属于当前产品。
 
-更新时间：2026-11-08。当前主应用（后端与前端）为 `agent-20261107-8f0622c4d835`，独立 compute 为 `python-20261107-a0b8e1d70e82`，均已部署。发布身份与验证范围见[本次记录](docs/reports/2026-11-07_natural_response_compute/README.md)。已部署快照已按功能提交；本轮新闻、补查与来源修复完成代码验证，尚未部署。
+更新时间：2026-11-08。当前主应用（后端与前端）为 `agent-20261108-365a20081c6b`，代码基线 `ddee6360`；独立 compute 保持 `python-20261107-a0b8e1d70e82`。均已部署，源码已提交推送。发布身份与验证范围见[本次记录](docs/reports/2026-11-08_research_recovery/LIVE_RESEARCH.md)。
 
-当前版本使用过程/答案分离、最多一次禁工具修正、自然文案和有界隔离计算。公网页面与生产 worker 同输入重放已有证据；受保护的生产研究会话因验收登录态不可用而未执行，不能把 harness 验收当作生产默认预算已验证。
+当前版本使用过程/答案分离、当前问题证据检查、有界修正和真实数据交付。数字、财期、区间和来源可回读；明确重新检索会产生本轮新尝试。公开检查、容器内研究验证与受保护HTTP/本人OAuth验收分别记录，不能互相替代。
 
 ## 当前能力
 
@@ -102,7 +102,8 @@ chcp 65001 > $null
 - [当前架构](docs/01_ARCHITECTURE.md) · [Agent指南](docs/AGENTS_GUIDE.md) · [执行事件合同](docs/execution-event-contract.md)
 - [RAG架构](docs/05_RAG_ARCHITECTURE.md) · [显式legacy流程](docs/LANGGRAPH_FLOW.md)
 - [实施与发布记录](docs/reports/2026-11-07_agent_runtime_implementation.md)
-- [本次响应与计算复验](docs/reports/2026-11-07_natural_response_compute/README.md) · [冻结 before](docs/reports/2026-11-07_natural_response_compute/BEFORE.md)
+- [研究恢复与发布验收](docs/reports/2026-11-08_research_recovery/LIVE_RESEARCH.md) · [文案与截图](docs/reports/2026-11-08_research_recovery/README.md)
+- [此前响应与计算复验](docs/reports/2026-11-07_natural_response_compute/README.md) · [冻结 before](docs/reports/2026-11-07_natural_response_compute/BEFORE.md)
 - [页面对照](docs/reports/2026-11-07_page_design_alignment/PAGES_COMPARISON.md) · [对话与右栏对照](docs/reports/2026-11-07_chat_design_alignment/README.md) · [真实图表渲染](docs/reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md)
 - [结果、过程与图标验收](docs/reports/2026-11-07_chat_design_alignment/RESULT_PROCESS_ICONS.md)：前端 fixture 与真实 artifact 数值核对分开记录。
 - [文档索引](docs/DOCS_INDEX.md) · [设计合同](DESIGN.md)

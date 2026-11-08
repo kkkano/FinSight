@@ -35,7 +35,7 @@ Python 环境预置 `datasets/pd/np/get_frame`。SEC 平行数组可用 `get_fra
 
 当前文本 phase 由后端写入 blocks/checkpoint；前端“思考/思考过程”“参数/结果”只是展示文案，不改变类型与真实错误。progress 不参与正式复制、会话摘要或后续回答历史。旧图的 `prior_artifacts` 仅保留有有效原始数据支撑的投影，不自动重画。
 
-当前主应用后端与前端为 `agent-20261107-8f0622c4d835`，独立 compute `python-20261107-a0b8e1d70e82` 已部署。真实八题核心交付通过，但harness与生产默认预算分开验收；生产受保护会话因无可用验收登录态未执行，详情见[本次记录](reports/2026-11-07_natural_response_compute/README.md)。
+当前主应用后端与前端为 `agent-20261108-365a20081c6b`，独立 compute 保持 `python-20261107-a0b8e1d70e82`。本次新闻、财报、估值与追问的实际结果见[研究恢复验收](reports/2026-11-08_research_recovery/LIVE_RESEARCH.md)；受保护HTTP/本人OAuth与容器内部验证分开记录。
 
 `compact_result` 优先投影财务数值、财期与口径、新闻原文和日期、完整计算区间与比较统计；长行情用明确的采样标记，不能将预览省略解释成数据缺失。`inspect_dataset` 按数据顺序取最新财期，显式元数据列保留口径及差分输入的有界投影；原始申报链继续可回读。显式回读的游标只推进实际返回的字符数。修正反馈硬限 10000 UTF-8 字节，仍受整体上下文/时间/token 预算约束。展示隐藏内部资料编号，真实引用继续可查看来源详情。
 

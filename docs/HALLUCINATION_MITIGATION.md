@@ -18,7 +18,7 @@ flowchart LR
     POOL --> NATIVE[原生数值 / metadata / 图表coverage检查]
     NATIVE --> NEED{候选需要修正}
     NEED -->|有预算且未修正过| REPAIR[一次修正阶段 / 最多两轮已有资料补计算]
-    REPAIR --> VERIFY[最终检查 / 删除无支持内容]
+    REPAIR --> VERIFY[最终检查 / 真实事实交付]
     NEED -->|直接收束| VERIFY
     VERIFY --> BLOCKS[progress 过程 / answer 正文]
     BLOCKS --> SCRUB

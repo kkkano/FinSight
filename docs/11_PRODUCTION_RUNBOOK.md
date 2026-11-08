@@ -2,7 +2,7 @@
 
 更新时间：2026-11-07（主应用新修复待 after/发布；独立 compute 已更新）
 
-本文是当前唯一生产运维规范。当前后端与前端均为 `agent-20261107-8f0622c4d835`，独立 compute 为 `python-20261107-a0b8e1d70e82`，已部署。发布与验证证据见[本次记录](reports/2026-11-07_natural_response_compute/README.md)：公网检查和匿名401边界通过，生产受保护会话canary因验收身份不可用未执行，不将其写成默认180秒流程通过。
+本文是当前唯一生产运维规范。当前后端与前端均为 `agent-20261108-365a20081c6b`，代码基线 `ddee6360`；独立 compute 为 `python-20261107-a0b8e1d70e82`，已部署。发布与验证证据见[本次记录](reports/2026-11-08_research_recovery/LIVE_RESEARCH.md)。公开、内部组件及受保护HTTP检查必须明确区分。
 
 ## 1. 发布不变量
 
@@ -147,8 +147,8 @@ Git 提交发布可用精确 commit SHA；用户明确授权发布未提交实�
 
 ```bash
 docker compose -p finsight \
-  --env-file /home/ubuntu/finsight-releases/agent-20261107-8f0622c4d835/.env.server \
-  -f /home/ubuntu/finsight-releases/agent-20261107-8f0622c4d835/docker-compose.yml \
+  --env-file /home/ubuntu/finsight-releases/agent-20261108-365a20081c6b/.env.server \
+  -f /home/ubuntu/finsight-releases/agent-20261108-365a20081c6b/docker-compose.yml \
   --profile predictions config --quiet
 ```
 
@@ -181,7 +181,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 `prediction-watchdog` 仅按既有公开账本授权使用 `predictions` profile；保留 ledger/watchdog 文件。不能为了启动新研究开 US20 采集、补写历史预测或发送测试告警。
 
-前端可独立设置 `FRONTEND_IMAGE_TAG`，并保持后端 `IMAGE_TAG` 与实际运行镜像一致。当前两端统一为 `agent-20261107-8f0622c4d835`；后续若独立打补丁，仍分别核对源码、镜像与build_id，不由一端推断另一端。
+前端可独立设置 `FRONTEND_IMAGE_TAG`，并保持后端 `IMAGE_TAG` 与实际运行镜像一致。当前两端统一为 `agent-20261108-365a20081c6b`；后续若独立打补丁，仍分别核对源码、镜像与build_id，不由一端推断另一端。
 
 ## 7. 真实 canary 与交付验收
 
@@ -201,7 +201,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 没有支持内容或保存失败时只保留失败预览，不宣称可恢复或已回答。报告归档、publishable 与执行完成各自检查，不能只 grep `done`。
 
-当前发布的受保护生产研究 canary 记录为 `not_executed`：验收环境没有可用 Supabase 登录态，生产没有配置内部 API keys；模型调用为0。外部匿名 `POST /api/execute` 返回401是正确鉴权边界，不能据此称登录后的默认180秒会话通过。本次不创建测试账号、启用内部密钥或绕过鉴权补验收；后续应通过正常、合法的登录路径另验，见[边界证据](reports/2026-11-07_natural_response_compute/production-protected-canary.json)。
+本次受保护HTTP研究与本人OAuth交互验收仍为 `not_executed`。生产容器内的临时研究调用用于确认部署代码、真实模型与供应商连接，不写业务数据库，不代表JWT、HTTP SSE或持久化用户会话验收。此前匿名401与缺少验收身份的记录保留在[旧边界证据](reports/2026-11-07_natural_response_compute/production-protected-canary.json)。
 
 ## 8. 前端与观察期
 
@@ -227,8 +227,8 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 | 服务 | 当前已确认上线版本 | 边界 |
 | --- | --- | --- |
-| 主后端 | `agent-20261107-8f0622c4d835` | 已部署healthy；受保护会话canary未执行 |
-| 前端 | `agent-20261107-8f0622c4d835` | 公网build_id/原Logo/GitHub入口通过，pageErrors=0 |
+| 主后端 | `agent-20261108-365a20081c6b` | 已部署healthy；受保护会话canary未执行 |
+| 前端 | `agent-20261108-365a20081c6b` | 公网build_id/原Logo/GitHub入口通过，pageErrors=0 |
 | 独立 compute | `python-20261107-a0b8e1d70e82` | 已确认 healthy；更新它未重启主后端，健康不代表任意研究任务成功 |
 
 当前运行行为遵循本文与[事件合同](execution-event-contract.md)。发布过程、候选、分类回归、真实 before/after、源码/镜像哈希和待验项集中在[本次复验记录](reports/2026-11-07_natural_response_compute/README.md)；此前迁移、公网验证和清理事实保留在[原实施报告](reports/2026-11-07_agent_runtime_implementation.md)，不作为即时资源证明。
