@@ -322,6 +322,30 @@ def test_question_about_quoted_decline_keeps_its_negative_magnitude():
     assert validate_paragraph("报道未说明“近30%”是否为收盘还是盘中涨幅。", data) != []
 
 
+def test_streak_fact_delivery_matches_real_calculation_and_created_chart():
+    from types import SimpleNamespace
+    from backend.agent_runtime.analysis import render_chart
+    from backend.agent_runtime.fact_answer import factual_answer
+    query = "SOXX连续至少5周下跌有哪些阶段，画图"
+    data = RunData("u", "s", "r", query)
+    dates = ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26", "2026-11-02"]
+    ref = data.record("get_stock_historical_data", {"ticker": "SOXX", "interval": "1wk"}, {
+        "source": "fixture", "observed_at": "2026-11-08T12:00:00Z", "asset": {"calendar_name": "NYSE"},
+        "rows": [{"date": day, "close": 210-index*10} for index, day in enumerate(dates)]})
+    calculated = analyze_dataset(data, ref, "historical_drawdown_episodes", {"frequency": "weekly", "min_periods": 5})
+    render_chart(data, dataset_ref=calculated["data_refs"][0], title="SOXX周线", chart_type="line",
+                 x="date", series=[{"field": "close"}])
+    rt = SimpleNamespace(query=query, completeness=ResearchCompleteness(query, [], {}), data=data,
+                         report_title=None, executor=SimpleNamespace(attempts=[]))
+    answer = factual_answer(rt)
+    assert "生成走势图" in answer and "末周已收盘" in answer and "仍在延续" in answer
+    assert "2026-11-06 21:00:00 UTC" in answer
+    assert verified_text(answer, data)[1] == []
+    data.record("get_company_news", {"ticker": "SOXX"}, [{"title": "SOXX news", "url": "https://example.com/news", "published_at": "2026-11-06"}])
+    rt.query = "SOXX连续至少5周下跌有哪些阶段和新闻，画图"
+    rt.completeness = ResearchCompleteness(rt.query, [], {})
+    assert not rt.completeness.missing(data, [])
+    assert factual_answer(rt) == ""
 
 
 def test_repair_feedback_keeps_the_actual_error_beyond_a_short_chinese_prefix():

@@ -19,6 +19,45 @@ def factual_answer(runtime) -> str:
     records = [(ref, row) for ref, row in reversed(list(data.records.items())) if row.get("status") == "success"
                and str(row.get("inputs", {}).get("ticker", "")).upper() == ticker]
     facets = set(check.facets)
+    streak_query = re.search(r"连续(?:至少|不少于)?\s*(\d+)\s*(周|天).*下跌", query)
+    if facets == {"chart"} and streak_query and not re.search(r"Python|代码|源码", query, re.I):
+        for ref, record in reversed(list(data.records.items())):
+            output = record.get("output")
+            if record.get("status") != "success" or not isinstance(output, dict):
+                continue
+            method = output.get("method") or {}
+            if method.get("kind") != "consecutive_decline_streaks":
+                continue
+            if (method.get("min_periods") != int(streak_query[1]) or method.get("minimum_loss") != 0
+                    or method.get("frequency") != ("weekly" if streak_query[2] == "周" else "daily")):
+                continue
+            primary = data.records.get(record.get("inputs", {}).get("dataset_ref"), {})
+            if str(primary.get("inputs", {}).get("ticker", "")).upper() != ticker:
+                continue
+            refs, rows, episodes = data.source_refs(ref), output.get("rows", []), output.get("episodes", [])
+            if not refs or not rows or not data.artifacts:
+                continue
+            sid = refs[0]
+            unit = "周" if method.get("frequency") == "weekly" else "个交易日"
+            date = lambda value: str(value).split("T")[0]
+            lines = [f"## {ticker} 连续下跌区间", "",
+                f"已用 {date(rows[0]['date'])} 至 {date(rows[-1]['date'])} 的 {len(rows)} 个真实观测计算并生成走势图。"
+                f"连续至少 {method['min_periods']} {unit}收跌的区间共有 {output['sample_count']} 段，"
+                f"其中 {output['completed_sample_count']} 段已结束。[{sid}]", "",
+                "| 首跌期标签 | 末跌期标签 | 连续期数 | 区间涨跌幅 | 状态 |", "|---|---|---:|---:|---|"]
+            lines.extend(f"| {date(row['start'])} | {date(row['end'])} | {row['periods']} | {row['return_pct']*100:.2f}% | "
+                         f"{'仍在延续' if row['ongoing'] else '已结束'} |" for row in episodes)
+            lines += ["", f"数据来源：实际行情及连续下跌计算 [{sid}]", "",
+                "区间按相邻收盘价连续下降识别，取最大且不重叠的连续区间；涨跌幅从首跌期的前一观测收盘价算起。日期沿用供应商标签，不一定是实际收盘日。", ""]
+            if method.get("latest_period_closed") is True:
+                close = str(method.get("latest_period_close")).replace("T", " ").replace("+00:00", " UTC")
+                lines.append(f"末周已收盘，交易日历对应收盘时间为 {close}；仍在延续仅表示下跌区间尚未被后续上涨或持平终止，不表示末根周线尚未收盘。[{sid}]")
+            elif method.get("latest_period_closed") is False:
+                lines.append(f"取数时末周尚未收盘，已排除 {date(method['excluded_incomplete_period'])} 对应的观测，不把它加入已收盘区间统计。[{sid}]")
+            else:
+                lines.append("来源未提供足够的周期收盘信息；末期按原始观测保留，延伸到样本末尾的区间不当作已结束样本。")
+            lines += ["", "历史区间是对已有数据的描述，不构成后续涨跌概率。"]
+            return "\n".join(lines)
     if facets and facets <= {"news", "fresh_search"}:
         for ref, record in records:
             if record["tool"] != "get_company_news":
