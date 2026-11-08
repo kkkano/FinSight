@@ -159,6 +159,21 @@ def test_public_stream_filters_split_internal_markup_without_executing_it(chunk_
     assert clean_public_text("来源twelve_data，图表已生成（chart_1234567890abcdef）。") == "来源Twelve Data，图表已生成。"
 
 
+def test_public_text_hides_internal_dataset_ids_but_keeps_citations_and_financial_facts():
+    from backend.agent_runtime.presentation import clean_public_text
+    original = "AAPL营收962.21亿美元，同比增长17.90%。[数据集 1fcdf70c3d755a3fd3，来源 Sabcdef1234]\n根据 dataset_1234abcdef 的计算，经营现金流为100亿美元。[S123abc]"
+    result = clean_public_text(original)
+    assert result == "AAPL营收962.21亿美元，同比增长17.90%。[Sabcdef1234]\n根据 研究数据 的计算，经营现金流为100亿美元。[S123abc]"
+    assert "dataset_" not in result and "1fcdf70c3d755a3fd3" not in result
+    assert clean_public_text("图表已完成（dataset_1234abcdef）。") == "图表已完成。"
+
+
+def test_dataset_presentation_does_not_rewrite_urls_or_executable_code():
+    from backend.agent_runtime.presentation import clean_public_text
+    original = "原始链接 https://example.com/dataset_abcdef1234\n```python\nload('dataset_abcdef1234')\n```"
+    assert clean_public_text(original) == original
+
+
 def test_date_only_window_contains_end_and_previous_close_baseline():
     from backend.agent_runtime.analysis import render_chart
     data = RunData("test", "test", "test", "连续下跌")

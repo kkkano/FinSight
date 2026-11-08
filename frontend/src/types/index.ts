@@ -26,9 +26,19 @@ export interface EvidenceItem {
   published_date?: string;
   title?: string;
   source?: string;
+  source_name?: string;
   url?: string;
   snippet?: string;
   confidence?: number;
+  kind?: string;
+  currency?: string;
+  unit?: string;
+  period?: string;
+  price_basis?: string;
+  dividends_included?: boolean;
+  limitations?: string[];
+  metadata?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
 }
 
 export type ResearchStance = 'bull' | 'bear' | 'neutral' | 'risk' | 'unknown';

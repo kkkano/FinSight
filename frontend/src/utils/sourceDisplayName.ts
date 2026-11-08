@@ -10,6 +10,7 @@ const SOURCE_NAMES: Record<string, string> = {
   sina: '新浪财经', baostock: 'BaoStock', eodhd: 'EODHD',
   sec: '美国证券交易委员会', sec_edgar: '美国证券交易委员会',
   sec_company_facts: 'SEC Company Facts', fred: '美联储 FRED',
+  sec_companyfacts: 'SEC Company Facts',
   reuters: '路透社', bloomberg: '彭博', company_ir: '公司投资者关系',
   market_chart: '来源未注明', unknown: '来源未注明', none: '来源未注明',
 };
@@ -70,6 +71,7 @@ export function sourceDisplayName(value?: string | null): string {
 export function sourceTitleDisplayName(title?: string | null, source?: string | null): string {
   const name = title?.trim();
   if (!name) return sourceDisplayName(source);
+  if (/^dataset_[a-zA-Z0-9_-]+$/.test(name)) return '研究数据';
   const key = name.toLowerCase();
   const toolOutput = key.endsWith(' output') ? INTERNAL_SOURCE_TITLES[key.slice(0, -7)] : undefined;
   return INTERNAL_SOURCE_TITLES[key] || SOURCE_NAMES[key] || toolOutput || name;

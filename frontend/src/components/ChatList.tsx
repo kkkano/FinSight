@@ -22,6 +22,7 @@ import styles from './chat/ChatDesign.module.css';
 import { useCitationNavigation } from '../store/citationNavigation';
 import { bindResearchCitations, citationId } from '../utils/researchCitations';
 import { sourceDisplayName, sourceTitleDisplayName } from '../utils/sourceDisplayName';
+import { hasDataSourceDetails, SourceDetails } from './source/SourceDetails';
 import { ReportView } from './report';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem, Message } from '../types/index';
@@ -50,14 +51,14 @@ const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence
     <div>
       {evidence_pool.map((ev, idx) => {
         const label = sourceTitleDisplayName(ev.title, ev.source || ev.url);
-        if (ev.url) {
+        if (ev.url && !hasDataSourceDetails(ev)) {
           return <a key={`${ev.url}-${idx}`} href={ev.url} target="_blank" rel="noopener noreferrer" className={styles.sourceLink}>
             <span className="num text-t-accent">{idx + 1}</span><span>{label}</span>
             <span className="ml-auto text-xs text-t-text3">{ev.source ? sourceDisplayName(ev.source) : ev.url.replace(/^https?:\/\/(?:www\.)?([^/]+).*$/, '$1')}
               {ev.as_of ? ` · ${ev.as_of.slice(5, 10).replace('-', '/')}` : ''}</span></a>;
         }
         return (
-          <span key={`ev-${idx}`} className={styles.sourceLink}><span className="num text-t-accent">{idx + 1}</span>{label}</span>
+          <SourceDetails key={`ev-${idx}`} source={ev} index={idx} className={styles.sourceLink} />
         );
       })}
     </div>

@@ -63,6 +63,12 @@ def clean_public_text(text: str, agent_labels: dict[str, str] | None = None) -> 
                 value = re.sub(r"(?<![A-Za-z0-9_])" + re.escape(before) + r"(?![A-Za-z0-9_])", after, value)
             value = re.sub(r"[（(]\s*chart_[a-f0-9]{8,}\s*[）)]", "", value)
             value = re.sub(r"\bchart_[a-f0-9]{8,}\b", "本轮图表", value)
+            # 数据引用只用于回读；正文保留有效来源编号，让用户能打开实际出处。
+            value = re.sub(r"\[数据集\s+(?:dataset_)?[a-f0-9]{8,}\s*[，,；;]\s*来源\s*[:：]?\s*(S[a-f0-9]+)\s*\]",
+                           lambda match: f"[{match.group(1)}]", value)
+            value = re.sub(r"[（(]\s*dataset_[a-zA-Z0-9_-]+\s*[）)]", "", value)
+            value = re.sub(r"数据集\s+(?:dataset_)?[a-f0-9]{8,}\b", "研究数据", value)
+            value = re.sub(r"\bdataset_[a-zA-Z0-9_-]+\b", "研究数据", value)
             for agent_id, label in (agent_labels or {}).items():
                 value = value.replace(agent_id, label)
             segments[offset] = value

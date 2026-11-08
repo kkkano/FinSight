@@ -19,4 +19,14 @@ describe('right panel source titles', () => {
     expect(visible).toContain('AAPL_2026_Q4：公司业绩公告');
     expect(visible).not.toMatch(/twelve_data|market_chart|get_stock/);
   });
+
+  it('retains clickable sources for research without a stock symbol', () => {
+    state.messages = [{ id: 'macro', role: 'assistant', runId: 'macro-run', content: '已核查宏观数据。', timestamp: 1,
+      evidence_pool: [{ source_id: 'Sabc', title: '美国利率数据', source: 'fred' }] }];
+    const html = renderToStaticMarkup(<RightPanel onCollapse={() => undefined} />);
+    expect(html).toContain('参考来源');
+    expect(html).toContain('data-source-id="Sabc"');
+    expect(html).toContain('aria-label="查看来源 1 详情"');
+    expect(html).not.toContain('聊到股票时');
+  });
 });
