@@ -90,9 +90,22 @@ rag-inspector-local-check.png
 
 # --- Auto-generated Reports ---
 docs/reports/
+!docs/reports/
+docs/reports/*
+!docs/reports/2026-11-07_agent_runtime_implementation.md
+!docs/reports/2026-11-07_chat_design_alignment/
+!docs/reports/2026-11-07_chat_design_alignment/**
+!docs/reports/2026-11-07_page_design_alignment/
+!docs/reports/2026-11-07_page_design_alignment/**
+!docs/reports/2026-11-07_natural_response_compute/
+!docs/reports/2026-11-07_natural_response_compute/**
+!docs/reports/2026-11-08_research_recovery/
+!docs/reports/2026-11-08_research_recovery/**
 
 # --- Local design and execution plans ---
 DESIGN.md
+# Root design contract follows this implementation branch; execution plans remain local.
+!/DESIGN.md
 docs/plans/
 
 # --- Lint / CI / Test Artifacts ---
@@ -166,3 +179,4 @@ docs/plans/
 data/subscriptions.json
 *.bak
 backend/data/*.sqlite.pre_migration.*
+data/agent_artifacts/

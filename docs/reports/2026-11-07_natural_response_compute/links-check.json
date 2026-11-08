@@ -1,0 +1,12 @@
+{
+  "overlay": ".omx/natural-docs-overlay-paths.json",
+  "target_release": "agent-20261107-8f0622c4d835",
+  "files": 129,
+  "markdown_files": 14,
+  "assets": 115,
+  "local_links": 153,
+  "report_assets": 115,
+  "archive_map": [],
+  "remove_after_archive_copy": [],
+  "errors": []
+}

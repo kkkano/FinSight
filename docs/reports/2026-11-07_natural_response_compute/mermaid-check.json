@@ -1,0 +1,76 @@
+{
+  "library": "mermaid@11",
+  "checked_at": "2026-11-07T21:04:32.907Z",
+  "graphs": [
+    {
+      "path": "README.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/README-1.svg",
+      "sha256": "86cd384b30118f6a7a5ad2120b1e068d6f6ff5022ab394fc782e1728a0613ed2"
+    },
+    {
+      "path": "docs/01_ARCHITECTURE.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-01_ARCHITECTURE-1.svg",
+      "sha256": "6de887d24519c631ac37225e3f55f3e10db87556822a699e28103c2a5b76b21d"
+    },
+    {
+      "path": "docs/01_ARCHITECTURE.md",
+      "index": 2,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-01_ARCHITECTURE-2.svg",
+      "sha256": "6ecbebbb4fbe0a0632fbbe186dbe85ad9e6198ef06213457780d8df173045b99"
+    },
+    {
+      "path": "docs/11_PRODUCTION_RUNBOOK.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-11_PRODUCTION_RUNBOOK-1.svg",
+      "sha256": "0bbf83a54cdd3999246b3709ba45d5e2682584fcb7e4bf253e843131ba3cd536"
+    },
+    {
+      "path": "docs/11_PRODUCTION_RUNBOOK.md",
+      "index": 2,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-11_PRODUCTION_RUNBOOK-2.svg",
+      "sha256": "bdc0cd00ae1498beb4bbd9b400f88c096972f0ed3264e364dfcc3af40fea7d36"
+    },
+    {
+      "path": "docs/HALLUCINATION_MITIGATION.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-HALLUCINATION_MITIGATION-1.svg",
+      "sha256": "3180446af9b305348979c4bb082e1d3367f70d24d8d5f560ba7d7aa217315724"
+    },
+    {
+      "path": "docs/LANGGRAPH_FLOW.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-LANGGRAPH_FLOW-1.svg",
+      "sha256": "6ed3bcf48042303fe11f5d6baecdc586f4e74714aae1c7eff7e3c92633137d69"
+    },
+    {
+      "path": "docs/LANGGRAPH_FLOW.md",
+      "index": 2,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-LANGGRAPH_FLOW-2.svg",
+      "sha256": "3e08e71b02248d40c76f9f5e139d267e4fb95fa267eddf06ec5ded3a321d5d55"
+    },
+    {
+      "path": "docs/REPORT_CHART_SPEC.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-REPORT_CHART_SPEC-1.svg",
+      "sha256": "9766faf5f865f5e4b1b8ac5f3f29dfc667e04e1939d31e523b0d99cadf0b28f8"
+    },
+    {
+      "path": "docs/execution-event-contract.md",
+      "index": 1,
+      "passed": true,
+      "svg": "docs/reports/2026-11-07_natural_response_compute/mermaid/docs-execution-event-contract-1.svg",
+      "sha256": "f31983103294754566f36d72189de0e4fc8ec679d9765ae375adc931daa36eb1"
+    }
+  ]
+}

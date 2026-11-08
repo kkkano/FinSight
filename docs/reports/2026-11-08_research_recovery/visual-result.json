@@ -1,0 +1,36 @@
+[
+  {
+    "view": "sidebar",
+    "phase": "before",
+    "theme": "light",
+    "passed": true
+  },
+  {
+    "view": "sidebar",
+    "phase": "after",
+    "theme": "light",
+    "passed": true
+  },
+  {
+    "view": "sidebar",
+    "phase": "before",
+    "theme": "dark",
+    "passed": true
+  },
+  {
+    "view": "sidebar",
+    "phase": "after",
+    "theme": "dark",
+    "passed": true
+  },
+  {
+    "view": "track",
+    "state": "empty",
+    "passed": true
+  },
+  {
+    "view": "track",
+    "state": "data",
+    "passed": true
+  }
+]

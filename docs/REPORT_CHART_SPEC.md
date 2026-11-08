@@ -45,6 +45,8 @@ flowchart LR
 
 `prior_artifacts` 只保留仍有有效 dataset_refs 支撑的历史图表 spec/coverage/method/limitations 等投影，最多 30 项，不复制整份 rows，不发新 artifact.ready。它用于核对“刚才图上”的覆盖和结论，不能充当新的计算或当前行情。
 
+比较统计的预览必须保留具体 `dates`；`compact_result` 从根层投影该部分，不把已有日期列表仅压成数量。`crossovers/strictly_increasing` 等已知标签在说明中使用中文，原数据字段不改；模型没有逐一读取，不等于原始统计没有提供。
+
 ## 报告与研究结果
 
 legacy 报告消费唯一 `research_result` 的任务、事实、Claim、引用和缺口；原生报告从正式 `answer`/最终 `response` 与实际引用构建，安全 `progress` 仅作过程记录。两者都不能在展示时重写事实或补造来源；私有思考不进入公开报告。

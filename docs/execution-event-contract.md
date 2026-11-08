@@ -1,6 +1,6 @@
 # Execution Event Contract
 
-更新时间：2026-11-07（当前工作树合同；主应用新发布与 after 结果待补）
+更新时间：2026-11-07。实现与发布验证范围见[本次记录](reports/2026-11-07_natural_response_compute/README.md)。
 
 ## 默认原生研究事件
 
@@ -55,7 +55,9 @@ flowchart LR
 
 终态携带 `blocks/thinking/artifacts/actions`、实际 usage、来自正式 answer 的 `price_levels` 与实际引用的来源投影。引用不复制完整 OHLC/data 大表，完整数据由 `data_ref` 回读；未通过数值/metadata 检查的段落被删除/替换，不保留逐段撤回占位。公开 delta 混入的 DSML 内部标记由流式过滤器清理，不作为工具调用。`done` 和核心图表成功不代表全部候选正文可信。
 
-历史存在已保存thinking但没有可信terminal结束时刻时，只显示“已完成”及实际调用数，不使用Date.now减消息时间冒充研究耗时。该展示修复由前端ui-20261107-9cfdc5be5e05独立补丁交付，后端8b主发布不变。
+历史存在已保存thinking但没有可信terminal结束时刻时，只显示“已完成”及实际调用数，不使用Date.now减消息时间冒充研究耗时。此规则适用于新旧消息，不依赖某个历史前端补丁版本。
+
+修正反馈限制为 4000 UTF-8 字节，优先已有可验证比较统计，不重复塞入整份长历史或错误候选。`comparison_stats` 预览单独从根层投影，真实交叉日期不能只折叠成条目数；该压缩不改变原始数据和调用预算。
 
 ### 追加要求、确认与续研
 

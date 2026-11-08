@@ -210,6 +210,6 @@ worker 的 `get_frame` 对 SEC 平行数组支持 `companyfacts` 表别名、`pe
 
 研究终态与已提交前缀支持持久读取，但正在执行的 Python task、追加要求路由、取消路由、Prediction worker、Monitor/Outcome scheduler 仍在 Web 进程内；资料缓存、额度租约和操作收据依赖持久目录。本次不声明支持 backend 多机横向扩容。本轮用户授权以未提交源码的发布 ID 与 manifest/镜像哈希追溯，Git 未提交；数据库 `0005/0006` 仍为保留数据的前向迁移，回滚须使用认识新 head 的兼容镜像。完整操作与验收证据要求见 [11_PRODUCTION_RUNBOOK.md](11_PRODUCTION_RUNBOOK.md)。
 
-当前已确认主应用版本为后端 `agent-20261107-8b809bee23e0`、前端 `ui-20261107-9cfdc5be5e05`；独立服务更新不自动替换主应用。发布快照、迁移/清理、认证和观察期证据见[发布记录](reports/2026-11-07_agent_runtime_implementation.md)，当前增量与最终版本见[本次复验](reports/2026-11-07_natural_response_compute/README.md)。
+当前主应用后端与前端均已部署 `agent-20261107-8f0622c4d835`，独立 compute 为 `python-20261107-a0b8e1d70e82`。源码/镜像身份、公网与认证边界、清理和未验项见[本次发布记录](reports/2026-11-07_natural_response_compute/README.md)；旧发布仍独立归档，不把旧探针作为当前资源证明。
 
 代码回归、真实 PostgreSQL、隔离计算、前端 fixture、真实图表与多会话答案分别验收；冻结预测算法不因研究能力修改而变化。历史 [before](reports/2026-11-07_natural_response_compute/BEFORE.md) 保持独立，不能由模型终态或图表成功改判完整回答通过。

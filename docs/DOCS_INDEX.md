@@ -10,7 +10,7 @@
 - [设计画板快照与来源](design/2026-11-06_claude_agent_chat/README.md)：七画板、canvas索引与源文件SHA-256。原型数据仅作样式演示。
 - 详细执行计划属于本地工作产物，由实施任务显式传入；本索引不链接被Git忽略的计划，也不把未提交文件称为已发布资料。
 - [2026-11-07 Agent 运行时实施与验收记录](reports/2026-11-07_agent_runtime_implementation.md)：保留后端8b/前端9c原发布、OAuth入口与当时计算容量快照，不代表后续修复全部已发布。
-- [自然回答与隔离计算复验](reports/2026-11-07_natural_response_compute/README.md)：progress/answer、一次禁工具修正、inspect/coverage/prior_artifacts、计算日志/get_frame与adaptive；compute 48f已部署healthy，主应用 after 数字结果与新发布待补。
+- [自然回答与隔离计算复验](reports/2026-11-07_natural_response_compute/README.md)：当前主应用8f/compute a0已部署；真实8题核心交付与生产worker重放、公网及401边界分别记录，受保护生产会话canary未执行。
 - [冻结的真实多会话 before](reports/2026-11-07_natural_response_compute/BEFORE.md)：42次模型调用、8个原样问题仅1个完整通过，独立于当前after。
 - [封面、看板与战绩设计对照](reports/2026-11-07_page_design_alignment/PAGES_COMPARISON.md)：逐区块实现位置、亮暗/移动截图及真实数据边界。
 - [对话、历史与单列右栏设计对照](reports/2026-11-07_chat_design_alignment/README.md)：68张布局截图和逐区块差异；布局fixtures不作为金融数据验收。

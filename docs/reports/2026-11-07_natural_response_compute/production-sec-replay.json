@@ -1,0 +1,53 @@
+{
+  "evidence_kind": "production_worker_same_input_replay",
+  "compute_release": "python-20261107-a0b8e1d70e82",
+  "source_record": ".omx/python-fix/production-sec-replay.json",
+  "original_failed_code_unmodified": true,
+  "original_sec_data_unmodified": true,
+  "results": [
+    {
+      "status": "ok",
+      "result": {
+        "rows": [
+          {
+            "period_end": "2026-07-26",
+            "revenue_usd": 96221000000.0,
+            "prev_period_end": "2026-04-26",
+            "prev_revenue_usd": 81615000000.0,
+            "change_usd": 14606000000.0,
+            "change_pct": 17.896220057587453
+          }
+        ]
+      },
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-e75c7da6900940509edfcaeb7957ad0f",
+      "code_hash": "e70fc4fa828fdfe12144252854efc788ddb4ccaa4ba80dabd32c2c3df3a1f51a",
+      "input_hash": "7af73017ad8f65a3e4f3d636bd98b90decc396bdf8f6c184aa72e105597dbba6",
+      "duration_ms": 1877,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 128
+    },
+    {
+      "status": "ok",
+      "result": {
+        "rows": [
+          {
+            "period_end": "2026-07-26",
+            "revenue_usd": 96221000000.0,
+            "prev_period_end": "2026-04-26",
+            "prev_revenue_usd": 81615000000.0,
+            "change_usd": 14606000000.0,
+            "change_pct": 17.896220057587453
+          }
+        ]
+      },
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-f7b9ad7ce035464481a6e7a531f72042",
+      "code_hash": "d3181f9471bd74dacac81f11c4628d7608bca96f791c922f8d1fa9b1b0eecbe7",
+      "input_hash": "ad4e3f070bef2deadbf3b60ed3132e910808124c8c584cd610ba5938a9f27a79",
+      "duration_ms": 1382,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 128
+    }
+  ]
+}

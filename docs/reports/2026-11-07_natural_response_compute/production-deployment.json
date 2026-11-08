@@ -1,0 +1,48 @@
+{
+  "evidence_kind": "production_deployment_projection",
+  "source_record": ".omx/deploy/design-rollout-result.json",
+  "release": "agent-20261107-8f0622c4d835",
+  "status": "deployed_healthy",
+  "completed_at_utc": "2026-11-07T22:07:06.681155+00:00",
+  "runtime_sha256": "8f0622c4d8353d1dd01dc8511708158845c6bfd489cc312921eea602b391e1e4",
+  "backend_image_sha256": "fee57e84a7d69bbd2a8a7df5ab9bcd0d00af47cc80ac6ff13b0ce3a71593110b",
+  "frontend_image_sha256": "1d748c49ce128f059bf802a2630550905e1138bcce04e84ce0cd050b9c3f2eb0",
+  "ready": true,
+  "failed_components": [],
+  "rag": {
+    "status": "ok",
+    "semantic_ready": true,
+    "lexical_ready": true,
+    "full_ready": true,
+    "index": {
+      "documents": 2304,
+      "source_documents": 76,
+      "indexable": 2228,
+      "semantic_ready": 2228,
+      "pending": 0,
+      "unprepared_long_documents": 0
+    }
+  },
+  "steps": [
+    {
+      "step": "preflight_passed",
+      "at": 1794089188.788311
+    },
+    {
+      "step": "old_backend_stopped",
+      "at": 1794089204.5696573
+    },
+    {
+      "step": "new_backend_started",
+      "at": 1794089205.4372642
+    },
+    {
+      "step": "backend_ready",
+      "at": 1794089213.9111254
+    },
+    {
+      "step": "frontend_and_watchdog_started",
+      "at": 1794089226.6808815
+    }
+  ]
+}

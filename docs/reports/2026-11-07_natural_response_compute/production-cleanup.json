@@ -1,0 +1,42 @@
+{
+  "evidence_kind": "targeted_cleanup_projection",
+  "source_records": [
+    ".omx/deploy/natural-cleanup-result.json",
+    ".omx/deploy/natural-mounts.json"
+  ],
+  "status": "targeted_cleanup_complete",
+  "kept_applications": [
+    "agent-20261107-8f0622c4d835",
+    "agent-20261107-8b809bee23e0"
+  ],
+  "kept_previous_frontend": "ui-20261107-9cfdc5be5e05",
+  "kept_compute": [
+    "python-20261107-a0b8e1d70e82",
+    "python-20261107-48f91547575b"
+  ],
+  "removed_image_tags": 14,
+  "removed_release_directories": 7,
+  "removed_upload_packages": 12,
+  "reclaimed_bytes": 5030903808,
+  "volumes_touched": false,
+  "mounts": [
+    {
+      "container": "/finsight-backend",
+      "type": "volume",
+      "target": "/app/data",
+      "named_volume": true
+    },
+    {
+      "container": "/finsight-backend",
+      "type": "volume",
+      "target": "/app/logs",
+      "named_volume": true
+    },
+    {
+      "container": "/finsight-postgres",
+      "type": "volume",
+      "target": "/var/lib/postgresql/data",
+      "named_volume": true
+    }
+  ]
+}

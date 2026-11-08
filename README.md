@@ -4,9 +4,9 @@
 
 FinSight 用真实行情、财报、新闻和可回读来源帮助用户提问、追问、比较股票、阅读研究报告与核对预测。主工作区为 Today、Dashboard、Chat、History；公开战绩与只读分享保持独立。组合管理、筛选、回测与自动交易不属于当前产品。
 
-更新时间：2026-11-07。最近已确认的主应用发布为后端 `agent-20261107-8b809bee23e0`、前端 `ui-20261107-9cfdc5be5e05`，见[原发布记录](docs/reports/2026-11-07_agent_runtime_implementation.md)。这些版本号不代表下面的新修复已经上线。
+更新时间：2026-11-08。当前主应用（后端与前端）为 `agent-20261107-8f0622c4d835`，独立 compute 为 `python-20261107-a0b8e1d70e82`，均已部署。发布身份与验证范围见[本次记录](docs/reports/2026-11-07_natural_response_compute/README.md)。已部署快照已按功能提交；本轮新闻、补查与来源修复完成代码验证，尚未部署。
 
-当前工作树已加入过程/答案分离、最多一次禁工具修正、自然文案和计算结果接线；主应用更新的真实验收与发布状态见[本次复验记录](docs/reports/2026-11-07_natural_response_compute/README.md)。独立 compute 当前上线版本为 `python-20261107-a0b8e1d70e82`，已确认 healthy，主后端未因此重启。Git 未提交。
+当前版本使用过程/答案分离、最多一次禁工具修正、自然文案和有界隔离计算。公网页面与生产 worker 同输入重放已有证据；受保护的生产研究会话因验收登录态不可用而未执行，不能把 harness 验收当作生产默认预算已验证。
 
 ## 当前能力
 
@@ -89,7 +89,7 @@ chcp 65001 > $null
 
 `/today` 是默认入口；`/dashboard/:symbol?`查看行情，`/chat`提问，`/history`回看，`/share/r/:token`只读分享，`/track-record`分开核对个人/公开记录。Chat与History要求登录，公开页面不替代个人数据认证。
 
-`/api/execute`是唯一研究SSE入口；技能接口需认证，匿名401为预期。当前github/email均已配置，公网按钮实际跳到github.com/login，后端302授权callback正确；未执行本人登录和完整OAuth授权。公司资料、技能与运行接口及登录后研究边界见实施记录。
+`/api/execute`是唯一研究SSE入口；研究与技能接口要求认证。当前公网版本、原Logo与GitHub登录入口已核对，无页面脚本错误；匿名POST研究请求返回401符合预期。完整本人OAuth与登录后的生产连续会话未验，不创建测试账号、启用内部密钥或绕过鉴权来补结果。
 
 `/livez`只表示存活，`/readyz`是发布就绪门禁，`/health`为兼容状态。上一主发布检查曾确认ready/health200、RAG2228 semantic_ready/pending0/full_ready，以及AAPL公司资料/251根日线；当时公开战绩metadata正常但0记录。当前部署和数据状态须重新取证，计算容量与成功作业独立检查。
 

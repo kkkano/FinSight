@@ -1,0 +1,13 @@
+{
+  "evidence_kind": "public_page_smoke_projection",
+  "source_record": ".omx/deploy/public-natural-smoke.json",
+  "release": "agent-20261107-8f0622c4d835",
+  "version": {
+    "build_id": "agent-20261107-8f0622c4d835"
+  },
+  "githubEntryVisible": true,
+  "originalLogoSha256": "8672cb27dc1560913d884f38618a0fcb6a2cf7a52065021257fd26bfed9d5497",
+  "pageErrors": [],
+  "fullPersonalOAuthTested": false,
+  "screenshot": "production-welcome.png"
+}

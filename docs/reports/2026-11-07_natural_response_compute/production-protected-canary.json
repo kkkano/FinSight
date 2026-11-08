@@ -1,0 +1,24 @@
+{
+  "evidence_kind": "protected_canary_not_executed",
+  "source_records": [
+    ".omx/deploy/production-natural-canary.json",
+    ".omx/deploy/production-auth-boundary.json"
+  ],
+  "status": "not_executed",
+  "reason": "authenticated_session_unavailable",
+  "internal_api_keys_configured": false,
+  "unauthenticated_execute_http_status": 401,
+  "model_calls": 0,
+  "runtime_authentication_changed": false,
+  "unauthenticated_boundary": {
+    "status_code": 401,
+    "expected": 401,
+    "detail": {
+      "detail": {
+        "code": "auth_required",
+        "message": "登录后才能使用，请先登录。"
+      }
+    },
+    "model_calls": 0
+  }
+}

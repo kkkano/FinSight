@@ -2,7 +2,7 @@
 
 更新时间：2026-11-07（主应用新修复待 after/发布；独立 compute 已更新）
 
-本文是当前唯一生产运维规范。最近已确认主应用为后端 `agent-20261107-8b809bee23e0`、前端 `ui-20261107-9cfdc5be5e05`，原发布证据保留在[实施记录](reports/2026-11-07_agent_runtime_implementation.md)。独立 compute `python-20261107-a0b8e1d70e82` 已部署且 healthy，主后端未重启；本次主应用的过程/答案和数据检查修复仍待 after 验收及新发布，见[本次记录](reports/2026-11-07_natural_response_compute/README.md)。
+本文是当前唯一生产运维规范。当前后端与前端均为 `agent-20261107-8f0622c4d835`，独立 compute 为 `python-20261107-a0b8e1d70e82`，已部署。发布与验证证据见[本次记录](reports/2026-11-07_natural_response_compute/README.md)：公网检查和匿名401边界通过，生产受保护会话canary因验收身份不可用未执行，不将其写成默认180秒流程通过。
 
 ## 1. 发布不变量
 
@@ -147,8 +147,8 @@ Git 提交发布可用精确 commit SHA；用户明确授权发布未提交实�
 
 ```bash
 docker compose -p finsight \
-  --env-file /home/ubuntu/finsight-releases/agent-20261107-8b809bee23e0/.env.server \
-  -f /home/ubuntu/finsight-releases/agent-20261107-8b809bee23e0/docker-compose.yml \
+  --env-file /home/ubuntu/finsight-releases/agent-20261107-8f0622c4d835/.env.server \
+  -f /home/ubuntu/finsight-releases/agent-20261107-8f0622c4d835/docker-compose.yml \
   --profile predictions config --quiet
 ```
 
@@ -181,7 +181,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 `prediction-watchdog` 仅按既有公开账本授权使用 `predictions` profile；保留 ledger/watchdog 文件。不能为了启动新研究开 US20 采集、补写历史预测或发送测试告警。
 
-前端可独立设置FRONTEND_IMAGE_TAG，保留后端IMAGE_TAG与运行镜像。当前后端agent-20261107-8b809bee23e0、前端ui-20261107-9cfdc5be5e05；补丁仅修无可信终态时不伪造历史耗时，17项单测通过且backend_restarted=false。分别核对主/补丁manifest，不由一端推断另一端。
+前端可独立设置 `FRONTEND_IMAGE_TAG`，并保持后端 `IMAGE_TAG` 与实际运行镜像一致。当前两端统一为 `agent-20261107-8f0622c4d835`；后续若独立打补丁，仍分别核对源码、镜像与build_id，不由一端推断另一端。
 
 ## 7. 真实 canary 与交付验收
 
@@ -192,7 +192,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 - Chat/Report 保存 run 与消息 ID，验证真实增量、终态正文、`persistence_status=saved`、刷新/重开、同 owner token 更新、同 run 幂等恢复与主动新 run 重试；旧快照和旧 epoch 不污染新消息。
 - 故障注入/清空内存/进程重启等破坏性验收仅在隔离环境；验证 checkpoint、数据库 COMMIT 失败回滚、跨 owner/session 拒绝、取消与 interrupted 不重收费。生产只读观察不等于这些故障已测。
 - 原生正文、reasoning、artifact/action blocks、数值和 metadata 修订分别检查。默认真实 reasoning 总 20k、owner/run/message 隔离、截断/时长及历史可展开均需验证；思考不进证据/报告/日志。工具 display/参数/真实输出预览/来源和 seq 穿插对应实际执行；数据与同伴消息不能授权。
-- 检查 `content.block_finished` 无正文时只更新 phase；progress 不进最终复制/历史摘要，answer 不重复。一次禁工具修正失败后保留真实限制，不出现多段撤回占位，也不靠删除必要数字把不完整回答标成通过。
+- 检查 `content.block_finished` 无正文时只更新 phase；progress 不进最终复制/历史摘要，answer 不重复。一次修正阶段可对已有资料补计算最多两轮；失败后保留真实限制，不出现多段撤回占位，也不靠删除必要数字或省略所需图表把不完整回答标成通过。
 - `inspect_dataset` 检查数值列与 column_units、实际返回行数和 8000 保守预算；图表检查 coverage/leading_missing/first_valid，已有图的 prior_artifacts 只用作有效历史投影，不重新收费画图。
 - 验证普通追问自动沿用有效记录、原 TTL 不续期、最新行情重新取证；`/api/skills` 和主/专业 `use_skill` 对应真实 manifest。SEC 表适配、共同基准、连续下跌定义及未知参数拒绝不得用 fixtures 冒充金融质量。
 - 完整报告需逐项核验主体、财期、用户要求、引用、质量与保存；legacy 的 RequestSpec/来源组/validate 节点检查只适用该路径，不能声称原生经过它。quality blocked、未支持结论或缺失须披露，不 mock quality=pass。
@@ -200,6 +200,8 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 - Monitor lease 按当前标的释放，检查实际 comment 与外部 I/O；验收所需 Prediction/Outcome/Report/usage 记录只输出脱敏 ID/计数，RLS 查询绑定真实 owner。
 
 没有支持内容或保存失败时只保留失败预览，不宣称可恢复或已回答。报告归档、publishable 与执行完成各自检查，不能只 grep `done`。
+
+当前发布的受保护生产研究 canary 记录为 `not_executed`：验收环境没有可用 Supabase 登录态，生产没有配置内部 API keys；模型调用为0。外部匿名 `POST /api/execute` 返回401是正确鉴权边界，不能据此称登录后的默认180秒会话通过。本次不创建测试账号、启用内部密钥或绕过鉴权补验收；后续应通过正常、合法的登录路径另验，见[边界证据](reports/2026-11-07_natural_response_compute/production-protected-canary.json)。
 
 ## 8. 前端与观察期
 
@@ -225,8 +227,8 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 | 服务 | 当前已确认上线版本 | 边界 |
 | --- | --- | --- |
-| 主后端 | `agent-20261107-8b809bee23e0` | 新版本以正式启动及 after 报告为准 |
-| 前端 | `ui-20261107-9cfdc5be5e05` | 前后端独立补丁需分别追溯 |
+| 主后端 | `agent-20261107-8f0622c4d835` | 已部署healthy；受保护会话canary未执行 |
+| 前端 | `agent-20261107-8f0622c4d835` | 公网build_id/原Logo/GitHub入口通过，pageErrors=0 |
 | 独立 compute | `python-20261107-a0b8e1d70e82` | 已确认 healthy；更新它未重启主后端，健康不代表任意研究任务成功 |
 
 当前运行行为遵循本文与[事件合同](execution-event-contract.md)。发布过程、候选、分类回归、真实 before/after、源码/镜像哈希和待验项集中在[本次复验记录](reports/2026-11-07_natural_response_compute/README.md)；此前迁移、公网验证和清理事实保留在[原实施报告](reports/2026-11-07_agent_runtime_implementation.md)，不作为即时资源证明。

@@ -1,0 +1,181 @@
+{
+  "evidence_kind": "selected_real_runs_core_acceptance",
+  "source_record": ".omx/acceptance-natural/FINAL_REPORT.json",
+  "core_passed": 8,
+  "core_cases": 8,
+  "model_calls_in_selected_runs": 31,
+  "reported_tokens_in_selected_runs": 188829,
+  "selected_runs": [
+    {
+      "case": 1,
+      "session": "S1",
+      "query": "AAPL最近交易日的收盘价、当日涨跌幅和日期是多少？简短回答。",
+      "run_id": "acceptance-natural-1f4f06023d-1",
+      "duration_seconds": 15.797000000005937,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 2,
+      "tool_failures": [],
+      "checkpoint_count": 2,
+      "answer_repair_attempted": false,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [],
+      "quality_reasons": []
+    },
+    {
+      "case": 2,
+      "session": "S1",
+      "query": "沿用刚才股票，用Python算最近20个交易日平均收盘价，并画最近一个月收盘价和20日均线。",
+      "run_id": "acceptance-natural-1f4f06023d-2",
+      "duration_seconds": 64.21899999999732,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 6,
+      "tool_failures": [
+        "run_analysis_code",
+        "run_analysis_code"
+      ],
+      "checkpoint_count": 8,
+      "answer_repair_attempted": false,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [
+        ".omx/acceptance-natural/fresh/acceptance-natural-1f4f06023d-2/chart_c6c33cc93acfc677.json"
+      ],
+      "quality_reasons": []
+    },
+    {
+      "case": 3,
+      "session": "S1",
+      "query": "刚才均线怎么算，周末算进去吗？",
+      "run_id": "acceptance-natural-1f4f06023d-3",
+      "duration_seconds": 11.656000000002678,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 1,
+      "tool_failures": [],
+      "checkpoint_count": 3,
+      "answer_repair_attempted": false,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [],
+      "quality_reasons": []
+    },
+    {
+      "case": 4,
+      "session": "S2",
+      "query": "NVDA最新两个已经公布的季度营收是多少、变化多少？只看财报，不分析股价或新闻。",
+      "run_id": "acceptance-natural-1f4f06023d-4",
+      "duration_seconds": 86.75,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 8,
+      "tool_failures": [
+        "inspect_dataset",
+        "run_analysis_code",
+        "run_analysis_code"
+      ],
+      "checkpoint_count": 10,
+      "answer_repair_attempted": true,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [],
+      "quality_reasons": []
+    },
+    {
+      "case": 5,
+      "session": "S2",
+      "query": "刚才营收单位是什么？能否断言下一季继续增长？",
+      "run_id": "acceptance-natural-1f4f06023d-5-retry-bd21",
+      "duration_seconds": 18.639999999999418,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 2,
+      "tool_failures": [],
+      "checkpoint_count": 4,
+      "answer_repair_attempted": false,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [],
+      "quality_reasons": []
+    },
+    {
+      "case": 6,
+      "session": "S3",
+      "query": "对比NVDA和AMD今年以来的涨跌幅，画图。",
+      "run_id": "acceptance-natural-e2e58933cf-6",
+      "duration_seconds": 96.68799999999464,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 7,
+      "tool_failures": [
+        "run_analysis_code"
+      ],
+      "checkpoint_count": 44,
+      "answer_repair_attempted": false,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [
+        ".omx/acceptance-natural/final-s3/acceptance-natural-e2e58933cf-6/chart_a4bfb4bb672a4c16.json"
+      ],
+      "quality_reasons": []
+    },
+    {
+      "case": 7,
+      "session": "S3",
+      "query": "只说刚才图能确认的结论，不推断资金流。",
+      "run_id": "acceptance-natural-e2e58933cf-7",
+      "duration_seconds": 69.07799999997951,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 3,
+      "tool_failures": [
+        "read_selection"
+      ],
+      "checkpoint_count": 42,
+      "answer_repair_attempted": true,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [],
+      "quality_reasons": []
+    },
+    {
+      "case": 8,
+      "session": "S4",
+      "query": "AAPL暗盘实时净流入是多少？拿不到就直说，不要用成交量代替资金流。",
+      "run_id": "acceptance-natural-5b2c9eb8bd-8-retry-cd46",
+      "duration_seconds": 20.218999999997322,
+      "run_status": "completed",
+      "answer_status": "answered",
+      "model_calls": 2,
+      "tool_failures": [],
+      "checkpoint_count": 4,
+      "answer_repair_attempted": true,
+      "harness_budget_seconds": 250,
+      "production_default_chat_budget_seconds": 180,
+      "within_180_seconds": true,
+      "artifacts_files": [],
+      "quality_reasons": []
+    }
+  ],
+  "notes": [
+    "本汇总每个问题只采纳一个完整run的正文与产物。旧失败、原候选和修复重放证据保留在before/after目录，不拼答案。",
+    "模型与行情/SEC数据、生产隔离worker是真实调用；会话begin/checkpoint/finish/get使用本机隔离PostgreSQL，未写生产会话库。",
+    "harness预算250秒，与生产默认chat180秒不同；逐条记录实耗，生产API默认预算canary由主代理另行验收。",
+    "非核心表述仍须审阅：算法说明把一般月份说成约20~21个交易日，而本图实际24点；实际交易日数以数据为准，不能混作本次统计。",
+    "SEC原始取数limit4包含Jul26/Apr26/Jan26/Oct25；没有同比所需去年Jul25，所以不报同比，不能据此说没有任何历史数据。",
+    "旧S3脚本把共同起点首次分离也算交叉而报5；新共享算法排除该事件，真实领先换手4次：01-06/01-13/02-05/03-19。",
+    "数据校验通过不等于每句话已被自动证明，旁支因果、覆盖范围与统计定义需要独立对照原始数据。",
+    "最终图解7正确报告4次领先换手，但仍裸露crossovers/strictly_increasing字段名；展示应统一映射。该回答称日期未完整列出，实际完整统计有4日期，只是读取的预览没有完整显示；应描述为本轮未逐一核对。",
+    "有界修正反馈按UTF8硬限4000字节，优先已验证比较统计；原长会话错误候选离线重放0真实模型调用，修正轮25249字节未超窗。"
+  ],
+  "scope": "Harness真实模型/数据及生产worker，本机隔离PostgreSQL；不是生产API默认预算canary，也不证明每句旁支结论。"
+}
