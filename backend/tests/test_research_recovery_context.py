@@ -8,7 +8,7 @@ from backend.agent_runtime.completeness import ResearchCompleteness
 from backend.agent_runtime.analysis import analyze_dataset
 from backend.agent_runtime.data import RunData
 from backend.agent_runtime.loop import AgentRuntime
-from backend.agent_runtime.service import answer_feedback
+from backend.agent_runtime.service import answer_feedback, verified_text
 from backend.services.run_context import RunContext
 from backend.tests.test_agent_runtime import FakeModel, call, finish
 from backend.tests.test_runtime_completeness import financials, run, tool
@@ -125,6 +125,18 @@ def test_context_archive_retains_financial_values_and_citations():
     assert tokens(compact) < 14000
     assert "16513000000" in str(compact) and "3320000000" in str(compact)
     assert "S123abc" in str(compact) and "dataset_sec" in str(compact)
+
+
+def test_explicit_source_footnote_can_bind_multiple_rows_of_a_table():
+    data = RunData("u", "s", "r", "INTC新闻")
+    one = data.record("search", {"query": "INTC first"}, {"url": "https://example.com/first", "text": "shares fell 30%"})
+    two = data.record("search", {"query": "INTC second"}, {"url": "https://example.com/second", "text": "shares fell 45%"})
+    table = "|报道|跌幅|\n|---|---|\n|[第一篇](https://example.com/first)|下跌30%|\n|第二篇|下跌45%|"
+    note = f"两条新闻的日期与数字来源于取得的报道。[{data.source_refs(one)[0]}][{data.source_refs(two)[0]}]"
+    answer, issues = verified_text(table + "\n\n" + note, data)
+    assert not issues and table in answer
+    _, issues = verified_text(table + "\n\n另一件事。\n\n" + note, data)
+    assert "explanation_contains_unbound_number" in issues
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():

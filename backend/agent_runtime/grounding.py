@@ -62,6 +62,20 @@ def _directional_quantities(text: str) -> tuple[str, list[str]]:
             issues.append("explanation_direction_mismatch")
         return "-" + match["number"].lstrip("-+") + match["unit"] + match["spacing"] + match["direction"]
     text = suffix.sub(suffix_normalize, text)
+    chinese_suffix = re.compile(r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*[%％])"
+        r"(?P<spacing>\s*(?:的)?\s*(?:急剧|显著|大幅|单日)?\s*)"
+        r"(?P<direction>下跌|跌幅|下滑|减少|下降|回落|亏损|上涨|涨幅|增加|增长|上升)"
+        r"(?!\s*(?:概率|风险|可能性|机会))")
+    def chinese_suffix_normalize(match):
+        number = match["number"]
+        if match["direction"] in negative:
+            if number.startswith("+"):
+                issues.append("explanation_direction_mismatch")
+            number = "-" + number.lstrip("-+")
+        elif number.startswith("-"):
+            issues.append("explanation_direction_mismatch")
+        return number + match["unit"] + match["spacing"] + match["direction"]
+    text = chinese_suffix.sub(chinese_suffix_normalize, text)
     return text, list(dict.fromkeys(issues))
 
 
@@ -450,7 +464,7 @@ def validate_paragraph(text: str, data: RunData, *, require_citations: bool = Fa
     clean = re.sub(r"[*`]", "", clean)
     clean = clean.replace("−", "-").replace("﹣", "-")
     absence = re.search(r"(?:没有|不存在|未发生|未发现|并无|暂无).{0,16}(?:事件|新闻|催化)|\bno\s+(?:material\s+)?(?:news|events?|catalysts?)\b", clean, re.I)
-    if absence and not re.search(r"本轮|返回|已读取|检索范围|未能获取", clean):
+    if absence and not re.search(r"本轮|返回|已读取|检索范围|未能获取|就现有证据|在已取得(?:的)?(?:资料|证据|报道)中", clean):
         windows = []
         for record in data.records.values():
             output = record.get("output")

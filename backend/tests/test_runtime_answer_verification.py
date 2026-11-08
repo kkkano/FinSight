@@ -557,3 +557,29 @@ def test_large_money_unit_cannot_borrow_another_tickers_source():
     sid=data.source_refs(ref)[0]
     assert validate_paragraph(f"AAPL市值4.975万亿美元。[{sid}]",data)==[]
     assert validate_paragraph(f"AAPL市值9.975万亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
+
+
+@pytest.mark.parametrize("claim", ["INTC出现近30%的急剧下跌。", "INTC出现30%的跌幅。", "INTC发生30%的单日下跌。"])
+def test_percentage_with_following_decline_word_preserves_signed_news_magnitude(claim):
+    data=RunData("u","s","r","INTC")
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":"Shares cratered nearly 30% after guidance."})
+    assert validate_paragraph(claim,data)==[]
+    assert validate_paragraph(claim.replace("下跌","上涨").replace("跌幅","涨幅"),data)==["explanation_contains_unbound_number"]
+
+
+def test_following_decline_probability_is_not_normalized_as_negative_return():
+    data=RunData("u","s","r","INTC")
+    data.record("fixture",{"ticker":"INTC"},{"source":"fixture","probability_pct":30})
+    assert validate_paragraph("INTC有30%的下跌概率。",data)==[]
+    assert validate_paragraph("INTC出现30%的急剧下跌。",data)==["explanation_contains_unbound_number"]
+
+
+@pytest.mark.parametrize("claim", [
+    "新闻库只核对了部分条目，不能排除还有其他报道；但就现有证据，未发现公司层面的硬催化。",
+    "在已取得的报道中，未发现公司层面的新增催化。",
+])
+def test_explicitly_limited_news_absence_does_not_assert_exhaustive_coverage(claim):
+    data=RunData("u","s","r","INTC")
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","coverage_window":{"exhaustive":False}})
+    assert validate_paragraph(claim,data)==[]
+    assert validate_paragraph("最近一周没有看到英特尔公司层面的新催化。",data)==["explanation_unsupported_window_absence"]

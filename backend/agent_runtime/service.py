@@ -41,9 +41,25 @@ def paragraph_issues(text: str, data, *, require_citations: bool = False) -> lis
     return list(dict.fromkeys(issues))
 
 
+def answer_paragraphs(text: str) -> list[str]:
+    """紧邻表格的显式来源脚注属于该表，不把其它段落的引用泛化给正文。"""
+    paragraphs = re.split(r"\n\s*\n", clean_public_text(text))
+    result = []
+    for paragraph in paragraphs:
+        references = re.findall(r"\[\^?S[a-fA-F0-9]+\]", paragraph)
+        stripped = re.sub(r"\[\^?S[a-fA-F0-9]+\]", "", paragraph).strip(" 。.，,；;：:")
+        source_note = bool(references) and (not stripped or bool(re.match(
+            r"^(?:来源|数据来源|上表|表中|上述|以上|[一二两三四五六七八九十]+条新闻).{0,100}(?:来自|来源|取自)", stripped)))
+        if result and source_note and len(paragraph) < 600 and re.search(r"(?m)^\s*\|.*\|\s*$", result[-1]):
+            result[-1] += "\n\n" + paragraph
+        else:
+            result.append(paragraph)
+    return result
+
+
 def answer_feedback(text: str, data, *, require_citations: bool = False) -> str | None:
     invalid = [{"paragraph": paragraph.encode("utf-8")[:300].decode("utf-8", errors="ignore"), "issues": issues}
-               for paragraph in re.split(r"\n\s*\n", clean_public_text(text))
+               for paragraph in answer_paragraphs(text)
                if (issues := paragraph_issues(paragraph, data, require_citations=require_citations))]
     if not invalid:
         return None
@@ -130,7 +146,7 @@ def _feedback_facts(text: str, data) -> list[dict]:
 def verified_text(text: str, data, *, require_citations: bool = False) -> tuple[str, list[str]]:
     """保留完整合格段；不把一个错误段拆成数字碰巧命中的伪合格结论。"""
     kept, issues = [], []
-    for paragraph in re.split(r"\n\s*\n", clean_public_text(text)):
+    for paragraph in answer_paragraphs(text):
         violations = paragraph_issues(paragraph, data, require_citations=require_citations)
         if violations:
             issues.extend(violations)
