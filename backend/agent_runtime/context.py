@@ -71,7 +71,7 @@ def evidence_preview(value: Any, *, limit: int = 4500) -> Any:
         while len(rows) > 1 and len(dumps(rows)) > limit:
             rows.pop()
         return {"articles": rows, "row_count": len(articles), "returned_rows": len(rows), "has_more": len(rows) < len(articles),
-                "coverage_window": value.get("coverage_window") if isinstance(value, dict) else None}
+                "coverage_window": value.get("coverage_window") if isinstance(value, dict) else articles[0].get("coverage_window")}
     if isinstance(value, dict):
         row_key = next((key for key in ("rows", "data", "kline_data", "bars") if isinstance(value.get(key), list)), None)
         if row_key:
