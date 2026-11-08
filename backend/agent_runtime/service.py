@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .config import resolve_model
-from .context import dumps, tokens
+from .context import dumps, tokens, evidence_preview
 from .limits import LeaseLimiter, CapacityExceeded
 from .loop import AgentRuntime
 from .model import ModelProtocolError, ModelTransport, verify_tool_capability
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 _ACTIVE: dict[tuple[str, str], AgentRuntime] = {}
 _ACTIONS: OrderedDict[tuple[str, str, str], dict] = OrderedDict()
-MAX_REPAIR_FEEDBACK_BYTES = 4_000
+MAX_REPAIR_FEEDBACK_BYTES = 10_000
 
 
 def paragraph_issues(text: str, data, *, require_citations: bool = False) -> list[str]:
@@ -47,12 +47,13 @@ def answer_feedback(text: str, data, *, require_citations: bool = False) -> str 
                if (issues := paragraph_issues(paragraph, data, require_citations=require_citations))]
     if not invalid:
         return None
-    header = ("请直接给用户一份完整答案，不写‘核对后的段落’或描述修正过程，不调用工具，也不安排下一步。只采用已取得资料中明确支持的结果，"
+    header = ("请给用户一份完整答案，不写‘核对后的段落’或描述修正过程。只采用已取得资料中明确支持的结果，"
             "保留真实引用；未计算的扩展统计、未声明的延迟/交易所/复权口径不要写成事实。"
             "交叉以comparison_stats.crossovers核验为准，共同起点的首次分离不是交叉；两个观测只支持一次相邻变化，不能写两个期间各自增长。"
             "无法核实的结论用一句自然的说明交代，不输出‘已撤回’占位，也不要补入新数字。"
             "下面的事实摘要只是实际成功工具结果的投影，每条保留自己的来源；不能把某条来源用于另一主体或指标。"
-            "缺少的计算不要再手算猜测，保留已得到的数值与不依赖该数值的解释。")
+            "缺少的增长率、利润率等可用已授权资料调用analyze_dataset或run_analysis_code核实，最多两轮；Python必须将输出赋给result。"
+            "没有计算依据时保留已得到的数值与不依赖该数值的解释，不手算猜测，不另开无关研究。")
     issues_text = "需核对的段落摘录：" + dumps(invalid[:3])
     facts = []
     candidates = _feedback_facts(text, data)
@@ -115,11 +116,8 @@ def _feedback_facts(text: str, data) -> list[dict]:
                     value = {k: v for k, v in value.items() if k not in {"code", "code_hash", "input_hash"}}
                 if key == "comparison_stats" and record.get("tool") == "analyze_dataset":
                     value = checked_comparison_stats(record)
-                if isinstance(value, list) and len(value) > 4:
-                    value = value[:2] + value[-2:]
                 projection[key] = value
-            from .diagnostics import safe_preview
-            output = safe_preview(projection, max_chars=1600)
+            output = evidence_preview(projection, limit=2600)
         elif isinstance(output, str):
             output = output[:1600]
         refs = data.source_refs(ref)
@@ -409,6 +407,16 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                         elif re.search(r"\[数据缺失\]|(?:未能|尚未|没有|无法|未)(?:取得|获取|完成)|取不到|(?:资料|数据|计算|统计|新闻|财报)[^\n。]{0,16}(?:缺失|不足|未完成|不可用)", response):
                             reasons.append({"code": "partial_tool_failure", "severity": "warn",
                                             "message": "回答中仍有未能取得的资料或未完成的计算。"})
+                    research_gaps = runtime.completeness.missing(runtime.data, runtime.executor.attempts)
+                    if research_gaps:
+                        missing = "、".join(dict.fromkeys((gap["ticker"] + " " + gap["label"]).strip() for gap in research_gaps))
+                        reasons.append({"code": "research_incomplete", "severity": "block",
+                            "message": "尚未核实：" + missing + "。", "missing_evidence": research_gaps})
+                        response += "\n\n尚未核实：" + missing + "。现有资料不足以完成这部分判断。"
+                        answer_block["content"] = runtime.root_content = response
+                        answer_block["revision"] += 1
+                        await emit("content.revised", {"block_id": answer_block["id"], "content": response,
+                            "revision": answer_block["revision"], "content_phase": "answer", "reason": "research_incomplete"})
                     hard_block = any(reason.get("severity") == "block" for reason in reasons)
                     quality = {"state": "block" if hard_block else ("warn" if reasons else "pass"), "reasons": reasons,
                                "source_count": len(runtime.data.sources), "evidence_ledger": list(runtime.data.sources.values())}
@@ -441,6 +449,7 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                              "tickers": runtime.observed_tickers or tickers,
                              "artifacts": runtime.data.artifacts, "actions": list(runtime.actions.values()),
                              "metrics": {**run_context.usage.summary(), "tool_calls": runtime.tool_count,
+                                         "research_recovery_rounds": runtime.research_recovery_rounds,
                                          "answer_repair_attempted": runtime.answer_repair_attempted}}
                     if deps.persist_run_event is not None:
                         event = await deps.persist_run_event(event)

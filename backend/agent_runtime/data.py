@@ -25,11 +25,27 @@ class DatasetRowsError(ValueError):
 _ROW_KEYS = ("rows", "bars", "data", "kline_data", "prices", "historical", "quarterly", "results", "output")
 _EARNINGS_TABLES = ("earnings_estimate", "eps_trend", "eps_revisions")
 _SEC_METRICS = ("revenue", "gross_profit", "operating_income", "net_income", "eps", "total_assets",
-                "total_liabilities", "operating_cash_flow", "capital_expenditures", "free_cash_flow")
+                "total_liabilities", "cash_and_equivalents", "long_term_debt", "operating_cash_flow", "capital_expenditures", "free_cash_flow",
+                "productive_asset_purchases", "free_cash_flow_after_productive_asset_purchases")
 _ROW_CONTEXT = ("ticker", "market", "source", "source_url", "as_of", "source_latest_filed",
                 "currency", "unit", "units", "frequency")
 _SOURCE_FIELDS = {"id", "source_id", "data_ref", "title", "url", "snippet", "summary", "source", "source_name", "published_date", "as_of",
-                  "confidence", "type", "kind", "reliability", "quality", "currency", "unit", "period", "price_basis", "dividends_included", "metadata", "meta"}
+                  "confidence", "type", "kind", "reliability", "quality", "currency", "unit", "period", "price_basis", "dividends_included", "metadata", "meta", "limitations"}
+
+
+def fact_metadata_preview(metadata: dict) -> dict:
+    """保留财务口径及差分输入，不重复嵌套的申报全文。"""
+    fields = {"unit", "concept", "period_start", "period_end", "reporting_basis", "derivation", "derived_from", "capital_expenditures_concept"}
+    result = {}
+    for metric, fact in metadata.items():
+        if not isinstance(fact, dict):
+            continue
+        item = {key: value for key, value in fact.items() if key in fields and value is not None}
+        if fact.get("derivation_inputs"):
+            item["derivation_inputs"] = [{key: source[key] for key in ("metric", "value", "unit", "period_start", "period_end") if key in source}
+                for source in fact["derivation_inputs"] if isinstance(source, dict)]
+        result[metric] = item
+    return result
 
 
 def _rows_with_context(rows: list[dict], payload: dict, table: str | None = None) -> list[dict]:
@@ -110,17 +126,20 @@ class RunData:
         for item in evidence:
             self.add_source(item, ref)
         self._extract_sources(output, tool, ref)
+        self._complete_source_metadata(ref)
         return ref
 
     def add_source(self, item: dict, ref: str) -> str:
         from .diagnostics import clean_text, safe_preview
         url = item.get("url") or item.get("link") or item.get("source_url")
         title = item.get("title") or item.get("source") or "工具证据"
-        identity = str(url or item.get("source_id") or ref) + str(item.get("published_date") or item.get("as_of") or "") + ref
+        identity = str(url or item.get("source_id") or ref) + ref
         source_id = "S" + hashlib.sha256(identity.encode()).hexdigest()[:10]
         # 引用账本只保存来源投影；完整行情/财报仍由data_ref回读，不能在每个引用里复制整张表。
         citation = {key: item[key] for key in ("source", "source_name", "published_date", "as_of", "confidence", "type", "kind",
                     "reliability", "quality", "currency", "unit", "period", "price_basis", "dividends_included") if key in item}
+        if item.get("limitations"):
+            citation["limitations"] = safe_preview(item["limitations"], max_chars=1200)
         previous = {key: value for key, value in self.sources.get(source_id, {}).items() if key in _SOURCE_FIELDS}
         for key in ("metadata", "meta"):
             if isinstance(item.get(key), dict):
@@ -153,8 +172,40 @@ class RunData:
         elif isinstance(value, list):
             for item in value[:100]:
                 self._extract_sources(item, tool, ref, depth + 1)
+        elif isinstance(value, str) and depth == 0:
+            # 搜索/公司资料的旧工具仍返回文本；真实链接也必须进入引用账本。
+            for line in value.splitlines():
+                for url in re.findall(r"https?://[^\s<>\"]+", line):
+                    self.add_source({"title": tool, "url": url.rstrip(".,，。；;）)]}"), "snippet": line}, ref)
         if depth == 0 and not any(x.get("data_ref") == ref for x in self.sources.values()):
             self.add_source({"title": tool, "source": tool, "limitations": ["来源时点以原始工具结果为准"]}, ref)
+
+    def _complete_source_metadata(self, ref: str) -> None:
+        """同一次工具的无链接摘要继承其唯一真实出处，并保留输入参数供用户核对。"""
+        record = self.records[ref]
+        entries = [self.sources[sid] for sid in self._source_links.get(ref, [])]
+        linked = [source for source in entries if source.get("url")]
+        urls = {source["url"] for source in linked}
+        output = record["output"]
+        inputs = {key: value for key, value in record["inputs"].items()
+                  if key in {"ticker", "period", "interval", "operation", "window", "frequency", "limit"}}
+        metadata = {"tool": record["tool"], "parameters": inputs}
+        if isinstance(output, dict):
+            for key in ("as_of", "observed_at", "currency", "unit", "period", "price_basis", "dividends_included"):
+                if key in output:
+                    metadata[key] = output[key]
+            if isinstance(output.get("method"), dict):
+                from .diagnostics import safe_preview
+                metadata["method"] = safe_preview({key: value for key, value in output["method"].items()
+                    if key not in {"code", "code_hash", "input_hash"}}, max_chars=1600)
+        for source in entries:
+            source["metadata"] = {**metadata, **(source.get("metadata") or {})}
+            if not source.get("url") and len(urls) == 1:
+                origin = linked[0]
+                source["url"] = origin["url"]
+                for key in ("source", "source_name", "as_of", "published_date", "currency", "unit", "price_basis", "dividends_included"):
+                    if origin.get(key) is not None and (not source.get(key) or source.get(key) == record["tool"]):
+                        source[key] = origin[key]
 
     def read(self, data_ref: str, offset: int = 0, max_chars: int = 6000) -> dict:
         if data_ref not in self.records:
@@ -291,6 +342,9 @@ class RunData:
             return False
         expiries = payload.get("record_expires_at") or {}
         records = payload.get("records") or {}
+        from .completeness import output_status
+        records = {ref: record for ref, record in records.items()
+                   if record.get("status") == "success" and output_status(record.get("output")) == "success"}
         now = time.time()
         self.record_expires_at = {ref: float(expiries.get(ref, payload["expires_at"])) for ref in records
                                   if float(expiries.get(ref, payload["expires_at"])) > now}

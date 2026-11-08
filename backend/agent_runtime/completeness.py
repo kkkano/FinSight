@@ -1,0 +1,186 @@
+"""当前问题的最低证据验收；只在研究缺口处补查，不替代模型研究方法。"""
+from __future__ import annotations
+
+import math
+import re
+from typing import Any
+
+from .context import dumps
+
+
+def output_status(output: Any) -> str:
+    from backend.graph.request_task_contract import output_is_error_like
+    if output_is_error_like(output) or (isinstance(output, dict) and (
+            output.get("error_code") or output.get("status") in {"unavailable", "error", "failed"})):
+        return "unavailable"
+    if output is None or output == "" or output == [] or output == {}:
+        return "empty"
+    if isinstance(output, str) and re.match(r"^(?:[a-z_]+\s+(?:failed|unavailable|error)|error\s*:|错误[:：]|失败[:：])", output.strip(), re.I):
+        return "unavailable"
+    if isinstance(output, dict):
+        if output.get("status") in {"empty", "no_results"}:
+            return "empty"
+        collections = [output[key] for key in ("news", "articles", "results", "rows", "kline_data")
+                       if key in output and isinstance(output[key], list)]
+        if collections and not any(collections):
+            return "empty"
+    return "success"
+
+
+_REFRESH = re.compile(r"(?:你|再|继续|重新|帮我|赶紧|去).{0,5}(?:搜|查)|(?:搜|查)(?:一下|一遍|啊)|search\s+again|look\s+it\s+up", re.I)
+_FACETS = {
+    "valuation": r"估值|市盈率|市净率|贵不贵|便宜|valuation|overvalued|undervalued|p/e|ev/ebitda",
+    "filings": r"财报|业绩|营收|利润|earnings|revenue|financial results",
+    "cash_flow": r"现金流|cash\s*flow|\bfcf\b",
+    "news": r"新闻|催化|消息|news|catalyst|为什么.{0,16}(?:暴跌|大跌|下跌|上涨|涨|跌)|(?:暴跌|下跌|上涨).{0,8}原因",
+    "price": r"(?:当前|现在|最新|最近交易日|今天).{0,12}(?:价格|报价|股价|收盘价)|查.{0,12}(?:股价|价格)|current price|latest quote",
+}
+_LABELS = {"valuation": "估值指标", "filings": "已披露财报及财期", "cash_flow": "经营与自由现金流",
+           "news": "相关新闻及原文日期", "price": "当前报价", "fresh_search": "本轮新的检索结果", "chart": "用户要求的图表"}
+_TOOLS = {"valuation": ("get_company_info",), "filings": ("get_sec_company_facts_quarterly", "get_financial_statements", "get_local_market_filings"),
+          "cash_flow": ("get_sec_company_facts_quarterly", "get_financial_statements"),
+          "news": ("get_company_news", "search", "fetch_url_content"), "price": ("get_stock_price",),
+          "fresh_search": ("search", "get_company_news", "fetch_url_content")}
+
+
+def _number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _metric(output: Any, names: tuple[str, ...]) -> bool:
+    if isinstance(output, dict):
+        for key, value in output.items():
+            if key in names and (_number(value) or isinstance(value, list) and any(_number(v) for v in value)):
+                return True
+            if isinstance(value, (dict, list)) and _metric(value, names):
+                return True
+    elif isinstance(output, list):
+        return any(_metric(value, names) for value in output)
+    return False
+
+
+def _satisfies(facet: str, record: dict, sources: list[dict]) -> bool:
+    if record.get("tool") not in _TOOLS[facet] or record.get("status") != "success":
+        return False
+    output = record.get("output")
+    if output_status(output) != "success":
+        return False
+    text = dumps(output)
+    if facet == "valuation":
+        return _metric(output, ("trailingPE", "forwardPE", "priceToBook", "priceToSalesTrailing12Months", "enterpriseToEbitda")) or bool(
+            re.search(r"(?:P/E|Price/Book|Price/Sales|EV/EBITDA|市盈率|市净率)\s*[:：]\s*[-+]?\d", text, re.I))
+    if facet in {"filings", "cash_flow"}:
+        if isinstance(output, dict) and output.get("period_ends"):
+            # 公司事实按最新财期排列；不能用旧季非空值掩盖本期缺失。
+            output = {key: value[0] if isinstance(value, list) and value else value
+                      for key, value in output.items() if key != "fact_metadata"}
+            text = dumps(output)
+        if facet == "cash_flow":
+            return (_metric(output, ("operating_cash_flow",)) and _metric(output, ("free_cash_flow", "free_cash_flow_after_productive_asset_purchases"))) or bool(
+                re.search(r"(?:Operating Cash Flow|经营.*现金流)[^\n]{0,80}\d", text, re.I) and
+                re.search(r"(?:Free Cash Flow|自由现金流)[^\n]{0,80}\d", text, re.I))
+        return bool(re.search(r"20\d{2}[-/年]|20\d{2}Q[1-4]", text)) and (
+            _metric(output, ("revenue", "net_income", "eps", "operating_income")) or bool(
+                re.search(r"(?:Total Revenue|Net Income|营收|净利润)[^\n]{0,80}\d", text, re.I)))
+    if facet in {"news", "fresh_search"}:
+        linked = [source for source in sources if source.get("url")]
+        return bool(linked) and (facet == "fresh_search" or any(
+            source.get("published_date") or source.get("as_of") for source in linked) or bool(re.search(r"20\d{2}-\d{2}-\d{2}", text)))
+    return _metric(output, ("price", "current_price", "regularMarketPrice", "close")) or bool(
+        re.search(r"(?:Price|价格|股价)\s*[:：]\s*\$?\d", text, re.I))
+
+
+class ResearchCompleteness:
+    def __init__(self, query: str, history: list[dict], ui_context: dict):
+        from backend.config.ticker_mapping import extract_tickers
+        self.refresh = bool(_REFRESH.search(query))
+        self.query = query
+        explicit = extract_tickers(query)["tickers"]
+        contextual = ""
+        for message in reversed(history):
+            if message.get("role") == "user" and not _REFRESH.fullmatch(str(message.get("content", ""))):
+                candidate = str(message.get("content", ""))
+                if extract_tickers(candidate)["tickers"] or any(re.search(pattern, candidate, re.I) for pattern in _FACETS.values()):
+                    contextual = candidate
+                    break
+        self.tickers = explicit or extract_tickers(contextual)["tickers"] or ui_context.get("tickers_override") or (
+            [ui_context["active_symbol"]] if ui_context.get("active_symbol") else [])
+        self.tickers = list(dict.fromkeys(str(t).upper() for t in self.tickers))[:6]
+        subject = query + (" " + contextual if self.refresh and not explicit else "")
+        conceptual = bool(re.search(r"什么是|如何计算|怎么算|单位是什么|什么意思|what is|how.{0,8}calculat", query, re.I))
+        self.facets = [name for name, pattern in _FACETS.items() if re.search(pattern, subject, re.I)] if self.tickers and not conceptual else []
+        if "valuation" in self.facets and "filings" not in self.facets:
+            self.facets.append("filings")
+        if self.refresh:
+            self.facets.append("fresh_search")
+        if re.search(r"画图|绘图|绘制.{0,8}(?:图|曲线)|plot\b|draw.{0,8}chart", query, re.I) and not re.search(r"(?:不|无需|不用|不要).{0,3}(?:画|绘)|do not (?:plot|draw)", query, re.I):
+            self.facets.append("chart")
+        if ui_context.get("strict_selection"):
+            self.facets = []
+
+    def missing(self, data, attempts: list[dict]) -> list[dict]:
+        from backend.config.ticker_mapping import extract_tickers
+        gaps = []
+        for ticker in self.tickers or [""]:
+            for facet in self.facets:
+                if facet == "chart":
+                    if not any(artifact.get("kind") == "chart" and (not ticker or any(
+                        str(data.records.get(data.sources.get(sid, {}).get("data_ref"), {}).get("inputs", {}).get("ticker", "")).upper() == ticker
+                        for sid in artifact.get("source_refs", []))) for artifact in data.artifacts):
+                        gaps.append({"ticker": ticker, "facet": facet, "label": _LABELS[facet]})
+                    continue
+                matching = []
+                for ref, record in data.records.items():
+                    args = record.get("inputs", {})
+                    bound = str(args.get("ticker", "")).upper() == ticker
+                    if not bound and record.get("tool") in {"search", "fetch_url_content"}:
+                        bound = ticker in extract_tickers(dumps(args))["tickers"]
+                    if not ticker:
+                        bound = True
+                    current = any(attempt.get("data_ref") == ref and attempt.get("status") == "success" for attempt in attempts)
+                    if bound and (not (self.refresh or facet == "price") or current) and _satisfies(
+                            facet, record, [data.sources[s] for s in data.source_refs(ref) if s in data.sources]):
+                        matching.append(ref)
+                if not matching:
+                    gaps.append({"ticker": ticker, "facet": facet, "label": _LABELS[facet]})
+        return gaps
+
+    def recovery_calls(self, gaps: list[dict], attempts: list[dict], available: dict, data=None) -> list[tuple[str, dict]]:
+        planned = []
+        for gap in gaps:
+            ticker, facet = gap["ticker"], gap["facet"]
+            if facet == "chart":
+                if data is None or "render_chart" not in available:
+                    continue
+                for ref, record in reversed(list(data.records.items())):
+                    output = record.get("output")
+                    if record.get("status") != "success" or not isinstance(output, dict):
+                        continue
+                    method = output.get("method") or {}
+                    if method.get("kind") != "consecutive_decline_streaks":
+                        continue
+                    if ticker and not any(str(data.records.get(data.sources.get(sid, {}).get("data_ref"), {}).get("inputs", {}).get("ticker", "")).upper() == ticker
+                                          for sid in data.source_refs(ref)):
+                        continue
+                    args = {"dataset_ref": ref, "title": f"{ticker}历史走势与连续下跌区间", "chart_type": "line_with_event_windows",
+                            "x": "date", "series": [{"field": "close", "name": "收盘价"}],
+                            "annotations": [{"start": row["start"], "end": row["end"], "label": f"连续下跌{row['periods']}期"}
+                                            for row in output.get("episodes", [])]}
+                    planned.append(("render_chart", args))
+                    break
+                continue
+            tried = {a["name"] for a in attempts if str(a.get("inputs", {}).get("ticker", "")).upper() == ticker}
+            if facet in {"fresh_search", "news"}:
+                name = "get_company_news" if ticker and facet == "news" and "get_company_news" not in tried else "search"
+                args = {"ticker": ticker} if name != "search" else {"query": f"{ticker} {self.query[:180]} latest news earnings investor relations".strip()}
+            elif facet in {"filings", "cash_flow"}:
+                name = "get_sec_company_facts_quarterly" if "get_sec_company_facts_quarterly" not in tried else "get_financial_statements"
+                if ticker.endswith((".HK", ".SS", ".SZ", ".BJ")):
+                    name = "get_local_market_filings"
+                args = {"ticker": ticker}
+            else:
+                name, args = _TOOLS[facet][0], {"ticker": ticker}
+            if name in available and (name, args) not in planned and not any(
+                    a["name"] == name and a.get("inputs") == args for a in attempts):
+                planned.append((name, args))
+        return planned[:6]

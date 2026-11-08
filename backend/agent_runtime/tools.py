@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .context import compact_result, dumps
+from .completeness import output_status
 from .diagnostics import TOOL_TITLES, display_tool, error_info, exception_code, safe_code, safe_preview, tool_summary
 
 
@@ -114,6 +115,7 @@ class ToolExecutor:
         self._started: set[str] = set()
         self.failures: list[str] = []
         self.unresolved_failures: dict[str, str] = {}
+        self.attempts: list[dict] = []
 
     async def _financial(self, spec: ToolSpec, arguments: dict):
         key = hashlib.sha256(dumps([spec.name, arguments]).encode()).hexdigest()
@@ -132,7 +134,8 @@ class ToolExecutor:
                 self.runtime.context.guard()
                 if self.runtime._closed:
                     raise asyncio.CancelledError()
-            self._cache[key] = result
+            if output_status(result) == "success":
+                self._cache[key] = result
             return result
         task = asyncio.create_task(fetch())
         self._inflight[key] = task
@@ -163,6 +166,9 @@ class ToolExecutor:
         if isinstance(data_ref, str) and data_ref in self.runtime.data.records:
             display_args["_dataset_inputs"] = self.runtime.data.records[data_ref].get("inputs", {})
         failure_key = hashlib.sha256(dumps([name, arguments]).encode()).hexdigest()
+        attempt = {"name": name, "inputs": arguments, "status": "unavailable"}
+        if spec.financial:
+            self.attempts.append(attempt)
         await self.runtime.emit("tool.started", {"tool_call_id": call_id, "name": name, "title": title,
                                 "display": display_tool(name, display_args),
                                 "inputs": safe_preview(arguments), "summary": "正在" + title}, agent_id=agent_id)
@@ -182,13 +188,17 @@ class ToolExecutor:
                 if inspect.isawaitable(output):
                     output = await output
             self.runtime.context.guard()
+            result_status = output_status(output) if spec.financial else "success"
             from backend.graph.request_task_contract import output_is_error_like
-            failure = output_is_error_like(output)
+            failure = result_status != "success" or output_is_error_like(output)
             if isinstance(output, str) and re.match(r"^(?:" + re.escape(name) + r"\s+(?:failed|unavailable|error)|error\s*:|错误[:：]|失败[:：])", output.strip(), re.IGNORECASE):
                 output = {"status": "error", "error": "tool_provider_error", "summary": "供应商未返回可用数据。"}
                 failure = True
             if isinstance(output, dict) and output.get("status") in {"error", "unavailable"}:
                 failure = True
+            if result_status == "empty":
+                output = {"status": "empty", "error": "tool_empty_result", "summary": "本次来源未返回匹配资料，需换来源补查；这不代表相关资料不存在。",
+                          "result": output}
             if failure:
                 self.failures.append(name)
                 self.unresolved_failures[failure_key] = name
@@ -204,6 +214,7 @@ class ToolExecutor:
             evidence_tool = spec.financial or name in {"search_knowledge", "read_document", "search_memory", "read_selection"}
             if evidence_tool:
                 refs = [self.runtime.data.record(name, args, output, status="unavailable" if failure else "success")]
+                attempt.update(status="unavailable" if failure else "success", data_ref=refs[0])
             else:
                 refs = [r for r in ((output.get("data_refs") or []) if isinstance(output, dict) else [])
                         if r in self.runtime.data.records]
