@@ -16,6 +16,7 @@ from backend.tools import news as news_mod
 @pytest.fixture(autouse=True)
 def _reset_gateway(monkeypatch):
     monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
+    monkeypatch.setattr(news_mod, "search", lambda _query: "未找到相关搜索结果。")
     reset_market_data_gateway()
     yield
     news_mod._YFINANCE_NEWS_DISABLED_UNTIL = 0.0
@@ -145,7 +146,8 @@ def test_get_company_news_rejects_item_without_article_url(monkeypatch):
 
     items = news_mod.get_company_news("NVDA", limit=1)
 
-    assert items == []
+    assert items["status"] == "unavailable"
+    assert "invalid_provider_data" in items["provider_failures"]
 
 
 def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypatch):
@@ -209,8 +211,9 @@ def test_get_company_news_cools_down_yfinance_after_timeout(monkeypatch):
     first = news_mod.get_company_news("NVDA", limit=1)
     second = news_mod.get_company_news("NVDA", limit=1)
 
-    assert first == []
-    assert second == []
+    assert first["status"] == second["status"] == "unavailable"
+    assert "provider_request_failed" in first["provider_failures"]
+    assert "provider_cooldown" in second["provider_failures"]
     assert attempts == ["NVDA"]
 
 
@@ -244,7 +247,7 @@ def test_get_company_news_prefers_finnhub_when_configured(monkeypatch):
     assert items[0]["source"] == "Finnhub"
 
 
-def test_get_company_news_does_not_add_third_search_provider(monkeypatch):
+def test_get_company_news_searches_after_primary_and_secondary_fail(monkeypatch):
     from backend.tools import news as news_mod
 
     class _Ticker:
@@ -281,6 +284,10 @@ def test_get_company_news_does_not_add_third_search_provider(monkeypatch):
         ],
     )
 
+    monkeypatch.setattr(news_mod, "search", lambda _query: "1. Apple AAPL supplier update\n"
+                        "Apple supply chain update\nhttps://finance.yahoo.com/news/apple-supplier-story.html")
     items = news_mod.get_company_news("AAPL", limit=1)
 
-    assert items == []
+    assert items[0]["url"] == "https://finance.yahoo.com/news/apple-supplier-story.html"
+    assert items[0]["provider"] == "web_search"
+    assert items[0]["event_quality"]["verification"] == "discovery_only"

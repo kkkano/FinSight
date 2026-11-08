@@ -29,6 +29,14 @@ class MarketDataValidationError(ValueError):
     """供应商响应不满足真实 OHLCV 合同时抛出。"""
 
 
+class MarketDataProviderError(RuntimeError):
+    """只传递稳定错误码，避免把供应商凭据或请求地址带入结果。"""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
 def _parse_bar_time(value: Any) -> datetime:
     text = str(value or "").strip()
     if not text:
@@ -355,10 +363,10 @@ def _quote_from_kline_provider(provider: KlineProvider, *, clock: Callable[[], d
     return fetch
 
 
-def _fetch_finnhub_news(symbol: str, limit: int) -> Any:
+def _fetch_finnhub_news(symbol: str, limit: int, days: int = 7) -> Any:
     from backend.tools.news import _get_finnhub_company_news
 
-    return _get_finnhub_company_news(symbol, limit)
+    return _get_finnhub_company_news(symbol, limit, days=days)
 
 
 def _fetch_yfinance_news(symbol: str, limit: int) -> Any:
@@ -602,6 +610,10 @@ class MarketDataGateway:
                     continue
                 try:
                     data, as_of = normalize(invoke(provider))
+                except MarketDataProviderError as exc:
+                    failures.append(exc.code)
+                    self._record(capability, provider_name, "failure")
+                    continue
                 except MarketDataValidationError:
                     failures.append("invalid_provider_data")
                     self._record(capability, provider_name, "failure")
@@ -642,6 +654,7 @@ class MarketDataGateway:
                     "degraded": index > 0 or quality != "trusted",
                     "error_code": None,
                     "attempted_providers": list(attempted),
+                    "provider_failures": list(failures),
                     "cached": False,
                 }
                 payload.update(success_aliases(data))
@@ -708,26 +721,34 @@ class MarketDataGateway:
             error_aliases={"data": {}, "quote": None},
         )
 
-    def get_news(self, symbol: str, *, limit: int = 5) -> dict[str, Any]:
+    def get_news(self, symbol: str, *, limit: int = 5, days: int = 7) -> dict[str, Any]:
         from backend.research.news_event_quality import prepare_news_items
 
         normalized_limit = max(1, min(int(limit), 20))
+        normalized_days = max(1, min(int(days), 365))
         def normalize(raw):
+            if raw == []:
+                raise MarketDataProviderError("provider_no_results")
             items, published = validate_news_items(raw)
-            return prepare_news_items(items, ticker=str(symbol).upper()), published
+            return prepare_news_items(items, ticker=str(symbol).upper(), max_age_hours=normalized_days * 24), published
+
+        def invoke(provider):
+            args = (str(symbol or "").strip().upper(), normalized_limit)
+            # 既有自定义 provider 的两参数合同保持兼容；Finnhub 支持实际查询窗口。
+            return provider(*args, days=normalized_days) if provider is _fetch_finnhub_news else provider(*args)
 
         result = self._request(
             capability="news",
             symbol=symbol,
-            cache_parts=(str(normalized_limit),),
-            invoke=lambda provider: provider(str(symbol or "").strip().upper(), normalized_limit),
+            cache_parts=(str(normalized_limit), str(normalized_days)),
+            invoke=invoke,
             normalize=normalize,
             success_aliases=lambda items: {"news": items},
             error_aliases={"data": [], "news": []},
         )
         # 缓存命中仍重新判断时效；合同保留首次观察时间，不假装重新采集。
         if not result.get("error_code"):
-            items = prepare_news_items(result.get("data") or [], ticker=str(symbol).upper())
+            items = prepare_news_items(result.get("data") or [], ticker=str(symbol).upper(), max_age_hours=normalized_days * 24)
             return {**result, "data": items, "news": items}
         return result
 

@@ -345,7 +345,7 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False, max_age_ho
 
     try:
         news = _get_company_news(ticker, limit=limit, fast=fast, max_age_hours=max_age_hours)
-        if isinstance(news, list):
+        if isinstance(news, (list, dict)):
             return json.dumps(news, ensure_ascii=False)
         return str(news)
     except Exception as exc:  # pragma: no cover - runtime data issues

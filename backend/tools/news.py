@@ -4,9 +4,11 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta, date
+from concurrent.futures import ThreadPoolExecutor
+from math import ceil
 from email.utils import parsedate_to_datetime
 from typing import Optional, List, Dict, Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urljoin, urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -15,9 +17,11 @@ from .yfinance_client import create_ticker
 
 from .env import ALPHA_VANTAGE_API_KEY, finnhub_client
 from .authoritative_feeds import search_authoritative_feeds
-from .http import _http_get
+from .http import _http_get, _http_get_no_retry
 from .financial_facts import search_line_is_noise
 from .search import search
+from backend.security.ssrf import is_safe_url
+from backend.services.market_data_gateway import MarketDataProviderError
 from backend.config.ticker_mapping import CN_TO_TICKER, COMPANY_MAP
 from backend.research.news_event_quality import (
     domain_matches, news_domain, news_quality_label, normalized_news_time,
@@ -384,6 +388,36 @@ def _extract_datetime_from_url(url: str) -> Optional[datetime]:
 
 
 
+def _is_finnhub_news_url(url: str) -> bool:
+    parsed = urlsplit(url)
+    return parsed.hostname == "finnhub.io" and parsed.path.rstrip("/") == "/api/news"
+
+
+def _resolve_finnhub_news_url(url: str) -> str:
+    """仅访问已校验的 Finnhub 跳转端点，不自动跟随到未知地址。"""
+    current = url
+    for _ in range(3):
+        parsed = urlsplit(current)
+        if parsed.username or parsed.password or not is_safe_url(current):
+            return ""
+        if not _is_finnhub_news_url(current):
+            return current
+        try:
+            response = _http_get_no_retry(current, allow_redirects=False, stream=True, timeout=(3, 4))
+            try:
+                if response.status_code not in (301, 302, 303, 307, 308):
+                    return ""
+                location = response.headers.get("Location")
+                if not location:
+                    return ""
+                current = urljoin(current, location)
+            finally:
+                response.close()
+        except requests.RequestException:
+            return ""
+    return ""
+
+
 def _build_news_item(
     title: str,
     source: str,
@@ -397,7 +431,8 @@ def _build_news_item(
     if not title:
         return {}
     normalized_url = (url or "").strip()
-    if "finnhub.io/api/news" in normalized_url.lower():
+    if _is_finnhub_news_url(normalized_url):
+        # 跳转由 provider 有界解析；构造函数本身不触发网络访问。
         normalized_url = ""
     published_date, published_precision = normalized_news_time(published_at)
     # Compute tags from headline + snippet for structured output
@@ -926,18 +961,25 @@ def _fast_company_news_links(ticker: str, limit: int = 5) -> List[Dict[str, Any]
     return rows[: max(1, min(limit, len(rows)))]
 
 
-def _get_finnhub_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
+def _get_finnhub_company_news(ticker: str, limit: int, days: int = 7) -> List[Dict[str, Any]]:
     if not finnhub_client:
-        return []
+        raise MarketDataProviderError("provider_not_configured")
     try:
         logger.info(f"Trying Finnhub news for {ticker}")
         to_date = date.today().strftime("%Y-%m-%d")
-        from_date = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
+        from_date = (date.today() - timedelta(days=max(1, min(int(days), 365)))).strftime("%Y-%m-%d")
         news = finnhub_client.company_news(ticker, _from=from_date, to=to_date)
         if not news:
             return []
+        candidates = [article for article in news if isinstance(article, dict)
+                      and _headline_is_useful(article.get("headline", ""), article.get("summary", ""))
+                      and _company_news_is_relevant(ticker, article.get("headline", ""), article.get("summary", ""))][:max(1, limit * 2)]
+        relay_urls = list(dict.fromkeys(str(article.get("url") or "") for article in candidates
+                                       if _is_finnhub_news_url(str(article.get("url") or ""))))
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            resolved = dict(zip(relay_urls, pool.map(_resolve_finnhub_news_url, relay_urls)))
         items = []
-        for article in news:
+        for article in candidates:
             title = article.get('headline', 'No title')
             snippet = article.get('summary') or ""
             if not _headline_is_useful(title, snippet):
@@ -947,6 +989,9 @@ def _get_finnhub_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
             source = article.get('source', 'Unknown')
             pub_time = article.get('datetime', 0)
             url = article.get('url') or ''
+            url = resolved.get(url, url)
+            if not url:
+                continue
             item = _build_news_item(
                 title=title,
                 source=source,
@@ -960,16 +1005,20 @@ def _get_finnhub_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
                 items.append(item)
             if len(items) >= limit:
                 break
+        if candidates and not items:
+            raise MarketDataProviderError("provider_links_unavailable")
         return items
+    except MarketDataProviderError:
+        raise
     except Exception as e:
-        logger.info(f"Finnhub news fetch failed: {e}")
-        return []
+        logger.info("Finnhub 新闻获取失败：%s", type(e).__name__)
+        raise MarketDataProviderError("provider_request_failed") from None
 
 
 def _get_yfinance_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
     """只调用一次 yfinance news provider，并输出可追溯的真实新闻条目。"""
     if not _yfinance_news_available():
-        return []
+        raise MarketDataProviderError("provider_cooldown")
     try:
         rows = create_ticker(ticker).news
         items: List[Dict[str, Any]] = []
@@ -997,9 +1046,9 @@ def _get_yfinance_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
                 break
         return items
     except Exception as exc:
-        logger.info("yfinance news provider failed for %s: %s", ticker, exc)
+        logger.info("yfinance 新闻获取失败：%s %s", ticker, type(exc).__name__)
         _mark_yfinance_news_unavailable(exc)
-        return []
+        raise MarketDataProviderError("provider_request_failed") from None
 
 
 def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, Any]]:
@@ -1046,15 +1095,41 @@ def _get_authoritative_company_news(ticker: str, limit: int) -> List[Dict[str, A
     return items
 
 
-def get_company_news(ticker: str, limit: int = 5, fast: bool = False, max_age_hours: int = 168) -> List[Dict[str, Any]]:
+def get_company_news(ticker: str, limit: int = 5, fast: bool = False, max_age_hours: int = 168) -> List[Dict[str, Any]] | Dict[str, Any]:
     """通过统一网关获取公司新闻；`fast` 仅为旧调用签名兼容，不生成搜索占位条目。"""
     del fast
     from backend.services.market_data_gateway import get_market_data_gateway
 
-    result = get_market_data_gateway().get_news(ticker, limit=limit)
+    hours = max(1, int(max_age_hours))
+    limit = max(1, min(int(limit), 20))
+    result = get_market_data_gateway().get_news(ticker, limit=limit, days=ceil(hours / 24))
     rows = result.get("data") if isinstance(result, dict) else None
     if not isinstance(rows, list) or result.get("error_code"):
-        return []
+        attempted = list(result.get("attempted_providers") or [])
+        failures = list(result.get("provider_failures") or [])
+        attempted.append("web_search")
+        name = next((name for name in _company_news_keywords(ticker) if name != ticker), ticker)
+        try:
+            text = search(f'{ticker} {name} latest company news past {ceil(hours / 24)} days')
+            if not text or str(text).lower().startswith("search error:"):
+                failures.append("search_request_failed")
+            else:
+                found = _build_search_news_items(str(text), limit=limit * 3, max_age_days=ceil(hours / 24))
+                found = [row for row in found if row.get("url") and _company_news_is_relevant(ticker, row.get("title", ""), row.get("snippet", ""))][:limit]
+                if found:
+                    for row in found:
+                        row.update(ticker=ticker, provider="web_search", degraded=True,
+                                   attempted_providers=attempted, provider_failures=failures)
+                    return prepare_news_items(found, ticker=ticker, max_age_hours=hours)
+                failures.append("search_no_matching_results")
+        except Exception as exc:
+            logger.info("公司新闻补查失败：%s", type(exc).__name__)
+            failures.append("search_request_failed")
+        empty = bool(failures) and all(code in {"provider_no_results", "search_no_matching_results"} for code in failures)
+        return {"status": "empty" if empty else "unavailable", "error": "news_no_matching_results" if empty else "market_data_unavailable",
+                "error_code": "news_no_matching_results" if empty else "market_data_unavailable", "data": [], "ticker": ticker,
+                "attempted_providers": attempted, "provider_failures": failures,
+                "summary": "已检索这些来源，但没有找到匹配条目。" if empty else "新闻来源未能提供可用结果；这不表示该公司没有新闻。"}
     output: List[Dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -1066,10 +1141,12 @@ def get_company_news(ticker: str, limit: int = 5, fast: bool = False, max_age_ho
                 "as_of": result.get("as_of"),
                 "quality": result.get("quality"),
                 "degraded": result.get("degraded"),
+                "attempted_providers": result.get("attempted_providers", []),
+                "provider_failures": result.get("provider_failures", []),
             }
         )
         output.append(item)
-    return prepare_news_items(output, ticker=ticker, max_age_hours=max(1, int(max_age_hours)))
+    return prepare_news_items(output, ticker=ticker, max_age_hours=hours)
 
 
 
