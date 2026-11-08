@@ -71,7 +71,7 @@ def answer_feedback(text: str, data, *, require_citations: bool = False) -> str 
             "无法核实的结论用一句自然的说明交代，不输出‘已撤回’占位，也不要补入新数字。"
             "下面的事实摘要只是实际成功工具结果的投影，每条保留自己的来源；不能把某条来源用于另一主体或指标。"
             "缺少的增长率、利润率等可用已授权资料调用analyze_dataset或run_analysis_code核实，最多两轮；Python必须将输出赋给result。"
-            "没有计算依据时保留已得到的数值与不依赖该数值的解释，不手算猜测，不另开无关研究。")
+            "没有计算依据时保留已得到的数值与不依赖该数值的解释，不手算猜测，不另开无关研究。比例保留百分数单位、比例和倍数四舍五入到两位小数，不自行转倍数、取整或计算未提供的差额。")
     issues_text = "需核对的段落摘录：" + dumps(invalid[:3])
     facts = []
     candidates = _feedback_facts(text, data)
@@ -380,7 +380,8 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                                    and block.get("agent_id") == "root"]
                     answer_block = (blocks.get(fallback_answer_id) if fallback_answer_id else
                                     text_blocks[-1] if text_blocks else None)
-                    if answer_block is not None and verified_text(answer_block["content"], runtime.data)[1]:
+                    prefer_financial_facts = bool(runtime.completeness.facets) and set(runtime.completeness.facets) <= {"filings", "cash_flow"}
+                    if answer_block is not None and (prefer_financial_facts or verified_text(answer_block["content"], runtime.data)[1]):
                         factual = checked_factual_answer(runtime)
                         if factual:
                             fact_fallback_used = True

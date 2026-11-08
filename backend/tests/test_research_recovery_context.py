@@ -278,6 +278,18 @@ def test_redaction_preserves_markdown_links_and_sentence_endings():
     assert "pa)ss" not in sensitive and "very" not in sensitive and "secret" not in sensitive
 
 
+@pytest.mark.asyncio
+async def test_financial_snapshot_uses_actual_ytd_derivation_instead_of_model_guess(monkeypatch):
+    def derived(args):
+        result = financials(args)
+        result["fact_metadata"] = {"operating_cash_flow": [{"derivation": "ytd_difference"}]}
+        return result
+    events, _ = await run(monkeypatch, "INTC最新季度营收、净利润、经营现金流和自由现金流是多少", {
+        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", derived),
+    }, turns=[call("get_sec_company_facts_quarterly", {"ticker": "INTC"}), finish("本次直接使用已披露的单季现金流。")])
+    assert events[-1]["answer_status"] == "answered"
+    assert "累计值相减" in events[-1]["response"]
+    assert "本次直接使用" not in events[-1]["response"]
 
 
 

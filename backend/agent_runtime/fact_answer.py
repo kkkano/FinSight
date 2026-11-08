@@ -43,6 +43,10 @@ def factual_answer(runtime) -> str:
         return ""
     if not facets or not facets <= {"filings", "cash_flow"} or not re.search(r"多少|数据|数值|数字|revenue|cash flow", query, re.I):
         return ""
+    if not re.search(r"最新|最近|latest|most recent", query, re.I) or re.search(r"同比|环比|增长|差额|变化|趋势|yoy|qoq|growth", query, re.I):
+        return ""
+    if re.search(r"(?:近|过去|最新).{0,3}(?:[二两三四五六七八九十]|\d+)\s*(?:季|个?季度|年|期)", query):
+        return ""
     for ref, record in records:
         output = record["output"]
         if record["tool"] != "get_sec_company_facts_quarterly" or not isinstance(output, dict):
@@ -72,6 +76,11 @@ def factual_answer(runtime) -> str:
         lines.extend(f"| {label} | {first(key):,.0f} |" for label, key in fields if _number(first(key)))
         lines += ["", f"来源：SEC 公司财报 [{sid}]", "",
                   "以上按单季口径列示。自由现金流差额是根据已取得科目计算的研究口径，不代表公司披露的非 GAAP 指标。"]
+        metadata = output.get("fact_metadata") or {}
+        differenced = [label for label, key in fields if isinstance(metadata.get(key), list) and metadata[key]
+                       and isinstance(metadata[key][0], dict) and metadata[key][0].get("derivation") == "ytd_difference"]
+        if differenced:
+            lines.append("、".join(differenced) + "的单季值由同财年累计值相减得到，保留了两份申报输入；并非直接披露的独立单季数值。")
         if alternative:
             lines.append("这里单列了扣除生产性资产购置后的差额；该购置科目不能当作仅有形固定资产资本开支，两种口径不能混用。")
         return "\n".join(lines)
