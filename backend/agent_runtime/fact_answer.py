@@ -126,23 +126,33 @@ def factual_answer(runtime) -> str:
     return ""
 
 
-def causal_fact_delivery(runtime, draft: str) -> str:
-    """保留已有引用的定性原因判断；行情数字直接取已计算的真实日线。"""
-    from .grounding import cited_sources
-    from backend.utils.quote import parse_quote_payload
+def can_compose_causal(runtime) -> bool:
     check, data, query = runtime.completeness, runtime.data, runtime.query
     if (runtime.report_title or len(check.tickers) != 1 or not set(check.facets) <= {"news", "price_cause"}
             or "price_cause" not in check.facets or check.missing(data, runtime.executor.attempts)
             or not re.search(r"暴跌|大跌|下跌|drop|fall|crash", query, re.I)
             or re.search(r"今天|今日|昨天|昨日|资金流|净流入|净流出|谁在卖|\d{4}[-/年]\d|\d+月\d+日", query)):
+        return False
+    return any(record.get("status") == "success" and record.get("tool") == "get_stock_historical_data"
+        and str(record.get("inputs", {}).get("ticker", "")).upper() == check.tickers[0]
+        and any(_number(row.get("period_return_pct")) for row in data.rows(ref)) for ref, record in data.records.items())
+
+
+def causal_fact_delivery(runtime, draft: str) -> str:
+    """保留已有引用的定性原因判断；行情数字直接取已计算的真实日线。"""
+    from .grounding import cited_sources
+    from backend.utils.quote import parse_quote_payload
+    if not can_compose_causal(runtime):
         return ""
+    check, data, query = runtime.completeness, runtime.data, runtime.query
     ticker, explanations = check.tickers[0], []
     for paragraph in re.split(r"\n\s*\n", draft):
         refs = [sid for sid in cited_sources(paragraph, data) if data.records.get(data.sources[sid].get("data_ref"), {}).get("tool")
                 in {"search", "get_company_news", "fetch_url_content"}]
         if not refs:
             continue
-        for sentence in re.split(r"(?<=[。！？；])\s*|[，,]|——", paragraph):
+        body = re.sub(r"^\s*\*\*[^*\n]+\*\*\s*[:：]\s*", "", paragraph)
+        for sentence in re.split(r"(?<=[。！？；])\s*|[，,]|——", body):
             clean = re.sub(r"\[\^?S[^\]]*\]\(https?://[^)]+\)", "", sentence)
             clean = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"\1", clean)
             clean = re.sub(r"https?://[^\s<>)）]+|\[\^?S[^\]]*\]|[*`#]", "", clean).strip()
@@ -154,7 +164,12 @@ def causal_fact_delivery(runtime, draft: str) -> str:
             if (len(clean) < 6 or re.search(r"\d|[零一二两三四五六七八九十百]+(?:倍|成|亿|万|个百分点)", numeric_check)
                     or re.search(r"不能|无法|不足以|未能|没有证据|缺乏证据|证据不足|没有资料|缺少资料|未取得|未查到|有史以来|排名", clean)
                     or re.search(r"(?:报道|显示|指出|表示|如下|以下|包括|在于)[：:]?$|(?:因素|原因|导火索)[：:]$", clean)
-                    or not re.search(r"导火索|触发|引发|归因于|主要原因|核心原因|不及预期|低于预期", clean)):
+                    or re.search(r"是否|能否|[？?]", clean)
+                    or not (re.search(r"(?:原因|导火索|诱因|触发(?:点|因素)?|核心).{0,4}(?:是|为|在于|来自).{2,}"
+                                     r"|归因于.{2,}|由.{2,}引发|.{2,}(?:不及|低于).{0,4}预期"
+                                     r"|.{2,}(?:导致|引发|触发)(?:了)?(?:下跌|回落|抛售)", clean)
+                            or getattr(runtime, "cause_summary_requested", False) and re.search(
+                                r"指引|财报|盈利|营收|利润|需求|成本|订单|评级|政策|利率|关税|监管|诉讼|停产|停工|业绩|调查|供应|预期", clean))):
                 continue
             clean = re.sub(r"^(?:也就是说|综合来看|因此|所以)[，,：:]?\s*", "", clean)
             if not clean.endswith(("。", "！", "？")):

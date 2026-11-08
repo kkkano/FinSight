@@ -96,6 +96,7 @@ class AgentRuntime:
         self.answer_repair_candidate: tuple[str, str] | None = None
         self.completeness = ResearchCompleteness(query, self.history, self.ui_context)
         self.research_recovery_rounds = 0
+        self.cause_summary_requested = False
 
     async def emit(self, event: str, payload: dict, *, agent_id: str = "root"):
         if self._closed:
@@ -473,6 +474,10 @@ class AgentRuntime:
             focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。仅使用已列出的数值，不新增相减差额、隐含EPS、年化、PEG或同行区间。比例保持百分数单位，比例与倍数按四舍五入保留两位小数，不改写成近40倍、23倍等粗略数值；不输出[S...]占位引用。财务与市场数据已汇总时，引用汇总项提供的source_refs，各原始出处会一同展示；行情倍数不是SEC披露的财务数字。"
         elif not self.report_title and re.search(r"为什么|为何|原因", self.query) and "news" in self.completeness.facets:
             focus = "用户问的是这次涨跌的原因：在400字内说明报道支持的定性触发因素、证据边界和最近行情。新闻归因用文字概括；数值仅使用本轮报价或行情的明确字段，保持其单位与精度。不复述报道里的历史投资回报、年代排名或长期涨跌倍数，不推算未查询的财报差额。"
+            from .fact_answer import can_compose_causal
+            if can_compose_causal(self):
+                self.cause_summary_requested = True
+                focus = "行情表将由程序按真实数据直接生成。现在只写有原文引用的定性原因说明，不写标题、数字、日期或表格；说明是哪项具体消息影响了预期，以及证据的边界。每段保留真实source_refs，不编造原因。"
         return [system, {"role": "user", "content": content},
                 {"role": "user", "content": "以下是本轮实际成功资料的摘要，原文仍可按引用回读。不要重复取相同数据；"
                  "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。" + focus + "\n" + dumps(facts) +
@@ -736,6 +741,11 @@ class AgentRuntime:
                     if feedback and self.context.remaining_seconds > 5:
                         self.answer_repair_attempted = repairing_answer = True
                         self.answer_repair_candidate = (block_id, final)
+                        from .fact_answer import can_compose_causal
+                        if can_compose_causal(self):
+                            self.cause_summary_requested = True
+                            messages = self.completion_context(messages[0], user_content)
+                            evidence_progress = None
                         await self.emit("content.block_finished", {"block_id": block_id,
                             "content_phase": "progress"}, agent_id=agent_id)
                         await self.emit("activity.updated", {"activity_id": "answer_check",

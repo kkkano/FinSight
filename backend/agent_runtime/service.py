@@ -73,7 +73,7 @@ def answer_feedback(text: str, data, *, require_citations: bool = False, short_c
             "缺少的增长率、利润率等可用已授权资料调用analyze_dataset或run_analysis_code核实，最多两轮；Python必须将输出赋给result。"
             "没有计算依据时保留已得到的数值与不依赖该数值的解释，不手算猜测，不另开无关研究。比例保留百分数单位、比例和倍数四舍五入到两位小数，不自行转倍数、取整或计算未提供的差额。")
     if short_cause:
-        header += "本题仅需400字内的涨跌原因短答：报道只用于定性归因，数值仅取本轮报价/行情明确字段；省去报道中的历史投资回报、年代排名与未计算差额。"
+        header = "行情价格表将由程序按真实数据直接生成。这一轮只写有原文依据的定性原因说明和证据边界，不写标题、数字、日期、表格或行情内容。说明哪项具体消息影响了市场预期，保留实际source_refs；找不到有源解释时明确说明，不能编造原因。以下是已经取得的资料。"
     issues_text = "需核对的段落摘录：" + dumps(invalid[:2])
     facts = []
     candidates = _feedback_facts(text, data)
@@ -344,8 +344,9 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                         logger.warning("沿用资料未写入新运行缓存 run_id=%s", run_id)
             if output_mode == "investment_report":
                 runtime.report_title = query[:100]
+            from .fact_answer import can_compose_causal
             runtime.answer_feedback = lambda text: answer_feedback(text, runtime.data,
-                require_citations=bool(runtime.report_title), short_cause=not runtime.report_title and "price_cause" in runtime.completeness.facets)
+                require_citations=bool(runtime.report_title), short_cause=can_compose_causal(runtime))
             _ACTIVE[(run_context.owner, run_id)] = runtime
             report = None
             try:
