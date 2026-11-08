@@ -63,7 +63,7 @@ def _directional_quantities(text: str) -> tuple[str, list[str]]:
         return "-" + match["number"].lstrip("-+") + match["unit"] + match["spacing"] + match["direction"]
     text = suffix.sub(suffix_normalize, text)
     chinese_suffix = re.compile(r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*[%％])"
-        r"(?P<spacing>\s*(?:的|这个)?\s*(?:急剧|显著|大幅|单日)?\s*)"
+        r"(?P<spacing>\s*(?:(?:的|这个)?\s*(?:急剧|显著|大幅|单日)?|[”\"']?是否(?:为|是)(?:收盘|盘中)(?:还是(?:收盘|盘中))?)\s*)"
         r"(?P<direction>暴跌|大跌|急跌|下跌|跌幅|下滑|减少|下降|回落|亏损|暴涨|大涨|上涨|涨幅|增加|增长|上升)"
         r"(?!\s*(?:概率|风险|可能性|机会))")
     def chinese_suffix_normalize(match):

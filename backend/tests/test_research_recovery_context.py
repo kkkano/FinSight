@@ -314,6 +314,12 @@ def test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries():
     assert preview["price_basis"] == "split_adjusted_close"
 
 
+def test_question_about_quoted_decline_keeps_its_negative_magnitude():
+    from backend.agent_runtime.grounding import validate_paragraph
+    data = RunData("u", "s", "r", "INTC下跌原因")
+    data.record("get_company_news", {"ticker": "INTC"}, {"source": "fixture", "text": "Shares cratered nearly 30% in a single session."})
+    assert validate_paragraph("报道未说明“近30%”是否为收盘还是盘中跌幅。", data) == []
+    assert validate_paragraph("报道未说明“近30%”是否为收盘还是盘中涨幅。", data) != []
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
