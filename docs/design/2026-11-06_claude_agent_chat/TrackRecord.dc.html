@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FinSight 预测战绩</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.fs{--bg:#ffffff;--bg2:#f6f7f9;--surface:#ffffff;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.14);--text:#0f172a;--text2:#3f4b5e;--text3:#5c6879;--accent:#3b5bdb;--accent-soft:#edf2ff;--up:#0f7a44;--up-soft:#e7f5ed;--down:#c92a2a;--down-soft:#fdeded;--amber:#a85400;--amber-soft:#fff3e2;--violet:#6741d9;--violet-soft:#f2eeff;--teal:#0b6e7f;--teal-soft:#e4f6f8;--hover:rgba(15,23,42,.045);--shadow:0 1px 2px rgba(15,23,42,.05),0 6px 20px rgba(15,23,42,.05);--base:#8a94a6;font-family:'Geist','Noto Sans SC',system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.6}
+.fs.dark{--bg:#0e1014;--bg2:#14171c;--surface:#1a1d24;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--text:#e9ebf0;--text2:#bcc2cd;--text3:#939bab;--accent:#8098ff;--accent-soft:rgba(128,152,255,.15);--up:#4cc38a;--up-soft:rgba(76,195,138,.13);--down:#ff7a7a;--down-soft:rgba(255,122,122,.13);--amber:#f2a74b;--amber-soft:rgba(242,167,75,.13);--violet:#ad91ff;--violet-soft:rgba(173,145,255,.14);--teal:#4cc9d8;--teal-soft:rgba(76,201,216,.13);--hover:rgba(255,255,255,.05);--shadow:0 1px 2px rgba(0,0,0,.35);--base:#7c8596}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.navi{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:none;color:var(--text2);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;box-sizing:border-box}
+.navi:hover{background:var(--hover);color:var(--text)}
+.navi.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+.card{background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:16px 18px;box-sizing:border-box}
+.cap{font-size:12px;color:var(--text3)}
+.seg{height:30px;padding:0 12px;border:0;border-radius:7px;background:none;color:var(--text3);font:inherit;font-size:13px;cursor:pointer}
+.seg.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+.kt{width:100%;border-collapse:collapse;font-size:13px}
+.kt th{font-weight:500;color:var(--text3);font-size:12px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.kt td{padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.kt tr:last-child td{border-bottom:0}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap}
+.cell{border-radius:10px;padding:12px 14px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+</style>
+</helmet>
+<div class="fs {{themeClass}}" style="width: 100%; min-height: 1640px; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <aside style="flex: 1 1 220px; max-width: 264px; background: var(--bg2); border-right: 1px solid var(--line); padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px">
+      <div class="mono" style="width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">F</div>
+      <span style="font-weight: 600; font-size: 15px">FinSight</span>
+    </div>
+    <nav aria-label="主导航" style="display: flex; flex-direction: column; gap: 2px">
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>对话</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>看板</button>
+      <button class="navi on"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>预测战绩</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>盯盘提醒</button>
+    </nav>
+    <div style="margin-top: auto; border-top: 1px solid var(--line); padding-top: 10px">
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>设置</button>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 28px 40px; box-sizing: border-box">
+    <div style="max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px">
+        <div style="flex: 1 1 420px; min-width: 0">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em">预测战绩</h1>
+            <span style="font-size: 11.5px; color: var(--amber); background: var(--amber-soft); padding: 2px 8px; border-radius: 10px">示例数据</span>
+          </div>
+          <p style="margin: 6px 0 0; font-size: 14px; color: var(--text2); max-width: 620px">每周对 20 只美股各做一次预测，看接下来 5 个交易日的方向和回撤。到期后自动对账，没猜中的也一条不删。</p>
+        </div>
+        <div role="group" aria-label="时间范围" style="display: flex; gap: 2px; background: var(--bg2); border-radius: 9px; padding: 3px">
+          <button class="seg">近 4 周</button><button class="seg on">近 12 周</button><button class="seg">全部</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px">
+        <div class="card">
+          <div class="cap">方向命中率</div>
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 2px">
+            <span class="mono" style="font-size: 34px; font-weight: 500; letter-spacing: -0.02em">58.3%</span>
+            <span class="mono" style="font-size: 13px; color: var(--up)">比基准高 5.8 个百分点</span>
+          </div>
+          <div style="font-size: 13px; color: var(--text2)">已结算 120 次，命中 70 次</div>
+          <div class="cap" style="margin-top: 6px">基准：每次都猜“涨”，命中 52.5%</div>
+        </div>
+        <div class="card">
+          <div class="cap">回撤预警</div>
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 2px">
+            <span class="mono" style="font-size: 34px; font-weight: 500; letter-spacing: -0.02em">9 / 12</span>
+          </div>
+          <div style="font-size: 13px; color: var(--text2)">12 次真实大跌里，提前预警了 9 次</div>
+          <div class="cap" style="margin-top: 6px">另有 6 次预警了但没跌（虚惊）</div>
+        </div>
+        <div class="card">
+          <div class="cap">等待对账</div>
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 2px">
+            <span class="mono" style="font-size: 34px; font-weight: 500; letter-spacing: -0.02em">20</span>
+            <span style="font-size: 13px; color: var(--text3)">条</span>
+          </div>
+          <div style="font-size: 13px; color: var(--text2)">本周的预测，11/13 收盘后自动对账</div>
+          <div class="cap" style="margin-top: 6px">结果出来前不计入命中率</div>
+        </div>
+      </div>
+
+      <section class="card">
+        <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 8px">
+          <span style="font-size: 14px; font-weight: 600">累计命中率，逐周</span>
+          <span class="cap">比基准高才说明预测有用</span>
+        </div>
+        <svg viewBox="0 0 720 196" width="100%" role="img" aria-label="12 周累计方向命中率：FinSight 从 50% 升至 58.3%，基准一直看多从 55% 降至 52.5%" style="display: block">
+          <g font-family="Geist Mono, monospace" font-size="10" fill="var(--text3)">
+            <line x1="40" y1="10" x2="612" y2="10" stroke="var(--line)"></line>
+            <line x1="40" y1="60" x2="612" y2="60" stroke="var(--line)"></line>
+            <line x1="40" y1="110" x2="612" y2="110" stroke="var(--line)"></line>
+            <line x1="40" y1="160" x2="612" y2="160" stroke="var(--line2)"></line>
+            <text x="32" y="13" text-anchor="end">70%</text>
+            <text x="32" y="63" text-anchor="end">60%</text>
+            <text x="32" y="113" text-anchor="end">50%</text>
+            <text x="32" y="163" text-anchor="end">40%</text>
+            <text x="40" y="180" text-anchor="middle">08/21</text>
+            <text x="248" y="180" text-anchor="middle">09/18</text>
+            <text x="456" y="180" text-anchor="middle">10/16</text>
+            <text x="612" y="180" text-anchor="middle">11/06</text>
+          </g>
+          <polyline points="40,85 92,100 144,90 196,95 248,100 300,105 352,95 404,100 456,95 508,100 560,100 612,97.5" fill="none" stroke="var(--base)" stroke-width="1.6" stroke-dasharray="5 4"></polyline>
+          <polyline points="40,110 92,85 144,95 196,75 248,80 300,70 352,60 404,65 456,75 508,70 560,65 612,68.5" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"></polyline>
+          <circle cx="612" cy="68.5" r="3.5" fill="var(--accent)"></circle>
+          <circle cx="612" cy="97.5" r="3" fill="var(--base)"></circle>
+          <text x="622" y="72" font-size="12" fill="var(--accent)" font-weight="600">FinSight 58.3%</text>
+          <text x="622" y="101" font-size="12" fill="var(--text3)">每次猜涨 52.5%</text>
+        </svg>
+      </section>
+
+      <section class="card">
+        <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 12px">
+          <span style="font-size: 14px; font-weight: 600">回撤预警的对错</span>
+          <span class="cap">“大跌”指 5 个交易日内最大回撤 ≥ 8%</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <div class="cell" style="background: var(--up-soft)">
+            <div style="font-size: 13px; color: var(--up); font-weight: 500">预警了，真跌了</div>
+            <div class="mono" style="font-size: 26px; font-weight: 500">9</div>
+            <div class="cap">提前提醒成功</div>
+          </div>
+          <div class="cell" style="background: var(--amber-soft)">
+            <div style="font-size: 13px; color: var(--amber); font-weight: 500">预警了，没跌</div>
+            <div class="mono" style="font-size: 26px; font-weight: 500">6</div>
+            <div class="cap">虚惊一场</div>
+          </div>
+          <div class="cell" style="background: var(--down-soft)">
+            <div style="font-size: 13px; color: var(--down); font-weight: 500">没预警，真跌了</div>
+            <div class="mono" style="font-size: 26px; font-weight: 500">3</div>
+            <div class="cap">漏报，最需要改进</div>
+          </div>
+          <div class="cell" style="background: var(--bg2)">
+            <div style="font-size: 13px; color: var(--text2); font-weight: 500">没预警，也没跌</div>
+            <div class="mono" style="font-size: 26px; font-weight: 500">102</div>
+            <div class="cap">正常排除</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" style="padding: 0; overflow: hidden">
+        <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 14px 18px 8px">
+          <span style="font-size: 14px; font-weight: 600">每一条预测</span>
+          <span class="cap">点开可看当时的依据和对账用的行情</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table class="kt">
+            <thead><tr><th>发布</th><th>标的</th><th>预测</th><th>信心</th><th>实际</th><th>结果</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">11/06</td><td class="mono" style="font-weight: 500">NVDA</td><td>看涨</td><td>中</td><td class="cap">11/13 对账</td><td><span class="tag" style="background: var(--bg2); color: var(--text3)">等待对账</span></td></tr>
+              <tr><td class="mono">11/06</td><td class="mono" style="font-weight: 500">TSLA</td><td>回撤预警</td><td>高</td><td class="cap">11/13 对账</td><td><span class="tag" style="background: var(--bg2); color: var(--text3)">等待对账</span></td></tr>
+              <tr><td class="mono">10/30</td><td class="mono" style="font-weight: 500">AAPL</td><td>看涨</td><td>中</td><td class="mono" style="color: var(--up)">+1.2%</td><td><span class="tag" style="background: var(--up-soft); color: var(--up)">命中</span></td></tr>
+              <tr><td class="mono">10/30</td><td class="mono" style="font-weight: 500">AMD</td><td>看跌</td><td>低</td><td class="mono" style="color: var(--up)">+2.4%</td><td><span class="tag" style="background: var(--down-soft); color: var(--down)">未命中</span></td></tr>
+              <tr><td class="mono">10/30</td><td class="mono" style="font-weight: 500">META</td><td>看涨</td><td>高</td><td class="mono" style="color: var(--up)">+3.1%</td><td><span class="tag" style="background: var(--up-soft); color: var(--up)">命中</span></td></tr>
+              <tr><td class="mono">10/30</td><td class="mono" style="font-weight: 500">AMZN</td><td>回撤预警</td><td>中</td><td><span class="mono" style="color: var(--down)">最大回撤 −9.4%</span></td><td><span class="tag" style="background: var(--up-soft); color: var(--up)">预警成功</span></td></tr>
+              <tr><td class="mono">10/30</td><td class="mono" style="font-weight: 500">GOOGL</td><td>看涨</td><td>中</td><td class="cap">当天行情缺失</td><td><span class="tag" style="background: var(--amber-soft); color: var(--amber)">无法评分，不计入</span></td></tr>
+              <tr><td class="mono">10/23</td><td class="mono" style="font-weight: 500">MSFT</td><td>横盘</td><td>中</td><td class="mono" style="color: var(--up)">+0.3%</td><td><span class="tag" style="background: var(--up-soft); color: var(--up)">命中</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding: 10px 18px; border-top: 1px solid var(--line)">
+          <button class="seg" style="color: var(--accent)">查看全部记录</button>
+        </div>
+      </section>
+
+      <section class="card" style="padding: 0">
+        <button onClick="{{toggleMethod}}" aria-expanded="{{methodOpenStr}}" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 18px; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{chevronStyle}}"><path d="m9 18 6-6-6-6"></path></svg>
+          规则是怎么定的
+          <span class="cap" style="font-weight: 400">样本、对账方式、版本</span>
+        </button>
+        <sc-if value="{{methodOpen}}" hint-placeholder-val="{{ true }}">
+          <div style="padding: 0 18px 16px 41px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--text2)">
+            <div>样本固定为 20 只美股，每周四收盘后发布，5 个交易日后用同一个行情源对账。</div>
+            <div>方向：涨跌幅在 ±1% 以内算“横盘”，超过才算“涨”或“跌”。</div>
+            <div>每条预测都记录当时用的模型。供应商没确认实际模型的 7 条单独统计，不计入上面的数字。</div>
+            <div class="mono cap">提示词 v3.2 · 策略 v1.4 · 评分规则 v2</div>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const open = this.state.method ?? true;
+    return {
+      themeClass: (this.props.dark ?? false) ? 'dark' : '',
+      methodOpen: open,
+      methodOpenStr: open ? 'true' : 'false',
+      chevronStyle: open ? 'transform: rotate(90deg); transition: transform .15s' : 'transition: transform .15s',
+      toggleMethod: () => this.setState({ method: !open })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FinSight 封面</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.fs{--bg:#ffffff;--bg2:#f6f7f9;--surface:#ffffff;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.14);--text:#0f172a;--text2:#3f4b5e;--text3:#5c6879;--accent:#3b5bdb;--accent-soft:#edf2ff;--up:#0f7a44;--up-soft:#e7f5ed;--down:#c92a2a;--amber:#a85400;--amber-soft:#fff3e2;--violet:#6741d9;--violet-soft:#f2eeff;--teal:#0b6e7f;--teal-soft:#e4f6f8;--hover:rgba(15,23,42,.045);--shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px rgba(15,23,42,.07);--gh:#1f2328;--gh-text:#ffffff;font-family:'Geist','Noto Sans SC',system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.6}
+.fs.dark{--bg:#0e1014;--bg2:#14171c;--surface:#1a1d24;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--text:#e9ebf0;--text2:#bcc2cd;--text3:#939bab;--accent:#8098ff;--accent-soft:rgba(128,152,255,.15);--up:#4cc38a;--up-soft:rgba(76,195,138,.13);--down:#ff7a7a;--amber:#f2a74b;--amber-soft:rgba(242,167,75,.13);--violet:#ad91ff;--violet-soft:rgba(173,145,255,.14);--teal:#4cc9d8;--teal-soft:rgba(76,201,216,.13);--hover:rgba(255,255,255,.05);--shadow:0 1px 2px rgba(0,0,0,.35);--gh:#f0f3f6;--gh-text:#0e1014}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:44px;border-radius:10px;font:inherit;font-size:14.5px;font-weight:500;cursor:pointer;box-sizing:border-box}
+.input{width:100%;height:44px;padding:0 12px;border:1px solid var(--line2);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:14.5px;box-sizing:border-box}
+.feat{display:flex;flex-direction:column;gap:6px}
+.ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.trow{display:grid;grid-template-columns:16px auto minmax(0,1fr) 14px;align-items:center;column-gap:8px;min-height:28px;padding:2px 6px;font-size:12.5px}
+.sum{color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--accent)}a:hover{color:var(--text)}
+</style>
+</helmet>
+<div class="fs {{themeClass}}" style="width: 100%; min-height: 960px; display: flex; flex-direction: column">
+  <header style="display: flex; align-items: center; gap: 16px; padding: 16px 32px; flex-wrap: wrap">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <div class="mono" style="width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px">F</div>
+      <span style="font-weight: 600; font-size: 16px">FinSight</span>
+    </div>
+    <nav aria-label="公开页面" style="margin-left: auto; display: flex; gap: 20px; font-size: 14px">
+      <a href="#" style="color: var(--text2); text-decoration: none">公开战绩</a>
+      <a href="#" style="color: var(--text2); text-decoration: none">更新日志</a>
+    </nav>
+  </header>
+
+  <div style="flex: 1; display: flex; align-items: center; padding: 24px 32px 48px">
+    <div style="max-width: 1180px; width: 100%; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 48px; align-items: center">
+
+      <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 28px">
+        <div>
+          <h1 style="margin: 0; font-size: 44px; line-height: 1.2; font-weight: 700; letter-spacing: -0.025em">问一句，它去查、去算、去画图，<br><span style="color: var(--accent)">再告诉你依据。</span></h1>
+          <p style="margin: 16px 0 0; font-size: 16.5px; line-height: 1.7; color: var(--text2); max-width: 560px">FinSight 是会自己找数据、写代码、画图的投资研究助手。每个结论都附来源和时间，每次预测都公开对账。</p>
+        </div>
+
+        <div style="border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); padding: 16px 18px; max-width: 600px; display: flex; flex-direction: column; gap: 10px">
+          <div style="align-self: flex-end; background: var(--bg2); border: 1px solid var(--line); border-radius: 12px 12px 4px 12px; padding: 6px 12px; font-size: 13.5px">半导体 ETF 连跌 5 周，历史上像哪次？</div>
+          <div style="display: flex; flex-direction: column">
+            <div class="trow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--amber)"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"></path></svg><span>获取周线</span><span class="sum">SOXX · 25 年</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg></div>
+            <div class="trow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--violet)"><path d="m16 18 6-6-6-6"></path><path d="m8 6-6 6 6 6"></path></svg><span>运行代码</span><span class="sum">找出连跌 ≥ 5 周的区间 → 5 段</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg></div>
+            <div class="trow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--teal)"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg><span>绘制图表</span><span class="sum">主图 + 5 张区间小图</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg></div>
+          </div>
+          <svg viewBox="0 0 560 90" width="100%" aria-hidden="true" style="display: block; border-radius: 8px; background: var(--bg2)">
+            <rect x="34" y="6" width="8" height="78" fill="var(--down)" fill-opacity="0.12"></rect>
+            <rect x="148" y="6" width="6" height="78" fill="var(--down)" fill-opacity="0.12"></rect>
+            <rect x="398" y="6" width="6" height="78" fill="var(--down)" fill-opacity="0.12"></rect>
+            <rect x="540" y="6" width="7" height="78" fill="var(--down)" fill-opacity="0.12"></rect>
+            <polyline points="10,52 24,54 36,66 44,76 60,70 90,62 120,64 146,63 152,80 170,72 200,68 240,62 280,56 320,50 360,44 396,38 400,50 410,40 440,30 470,34 500,26 520,18 536,10 544,20" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"></polyline>
+          </svg>
+          <div style="font-size: 13.5px; color: var(--text2)">过去 25 年只出现过 5 次，前 4 次都伴随系统性冲击……</div>
+        </div>
+      </div>
+
+      <section aria-label="登录" style="flex: 1 1 340px; max-width: 400px; min-width: 0; border: 1px solid var(--line2); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); padding: 28px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+        <div>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 600">登录 FinSight</h2>
+          <p style="margin: 4px 0 0; font-size: 13.5px; color: var(--text3)">登录后可以对话、保存自选和设置盯盘提醒</p>
+        </div>
+        <button class="btn" style="border: 0; background: var(--gh); color: var(--gh-text)">
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+          使用 GitHub 登录
+        </button>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text3)">
+          <span style="flex: 1; height: 1px; background: var(--line2)"></span>或用邮箱<span style="flex: 1; height: 1px; background: var(--line2)"></span>
+        </div>
+        <form style="display: flex; flex-direction: column; gap: 10px">
+          <label for="email" style="font-size: 13px; color: var(--text2)">邮箱</label>
+          <input id="email" class="input" type="email" placeholder="name@example.com">
+          <button type="submit" class="btn" style="border: 1px solid var(--line2); background: var(--surface); color: var(--text)">发送验证码</button>
+        </form>
+        <a href="#" style="display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; font-size: 13.5px; color: var(--text2); text-decoration: none; border-radius: 10px">
+          先不登录，看看行情和公开战绩
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+        </a>
+        <p style="margin: 0; font-size: 12px; color: var(--text3); text-align: center">登录即表示同意<a href="#">服务条款</a>和<a href="#">隐私政策</a></p>
+      </section>
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid var(--line); background: var(--bg2); padding: 32px">
+    <div style="max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 28px">
+      <div class="feat">
+        <div class="ico" style="background: var(--amber-soft); color: var(--amber)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></div>
+        <div style="font-size: 15px; font-weight: 600">自己找数据</div>
+        <div style="font-size: 13.5px; color: var(--text2)">行情、财报、新闻、宏观数据按需调取，每个数字都标出来源和时间，延迟数据会直说。</div>
+      </div>
+      <div class="feat">
+        <div class="ico" style="background: var(--violet-soft); color: var(--violet)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6"></path><path d="m8 6-6 6 6 6"></path></svg></div>
+        <div style="font-size: 15px; font-weight: 600">写代码、画图</div>
+        <div style="font-size: 13.5px; color: var(--text2)">历史对照、回测、估值情景，它会自己写代码算出来，再画成能看懂的图。</div>
+      </div>
+      <div class="feat">
+        <div class="ico" style="background: var(--teal-soft); color: var(--teal)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></div>
+        <div style="font-size: 15px; font-weight: 600">战绩公开</div>
+        <div style="font-size: 13.5px; color: var(--text2)">每周的预测到期自动对账，猜错的也保留，和“每次都猜涨”的基准放在一起比。</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { themeClass: (this.props.dark ?? false) ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FinSight 对话 + 标的面板</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.fs{--bg:#ffffff;--bg2:#f6f7f9;--surface:#ffffff;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.14);--text:#0f172a;--text2:#3f4b5e;--text3:#5c6879;--accent:#3b5bdb;--accent-soft:#edf2ff;--up:#0f7a44;--up-soft:#e7f5ed;--down:#c92a2a;--down-soft:#fdeded;--amber:#a85400;--amber-soft:#fff3e2;--violet:#6741d9;--violet-soft:#f2eeff;--teal:#0b6e7f;--hover:rgba(15,23,42,.045);--shadow:0 1px 2px rgba(15,23,42,.05),0 6px 20px rgba(15,23,42,.05);--candle-up:#12a05c;--candle-down:#d9363e;font-family:'Geist','Noto Sans SC',system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.6}
+.fs.dark{--bg:#0e1014;--bg2:#14171c;--surface:#1a1d24;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--text:#e9ebf0;--text2:#bcc2cd;--text3:#939bab;--accent:#8098ff;--accent-soft:rgba(128,152,255,.15);--up:#4cc38a;--up-soft:rgba(76,195,138,.13);--down:#ff7a7a;--down-soft:rgba(255,122,122,.13);--amber:#f2a74b;--amber-soft:rgba(242,167,75,.13);--violet:#ad91ff;--violet-soft:rgba(173,145,255,.14);--teal:#4cc9d8;--hover:rgba(255,255,255,.05);--shadow:0 1px 2px rgba(0,0,0,.35);--candle-up:#3fc488;--candle-down:#ff6b72}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.rail{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:0;border-radius:9px;background:none;color:var(--text3);cursor:pointer}
+.rail:hover{background:var(--hover);color:var(--text)}
+.rail.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.trow{display:grid;grid-template-columns:18px auto minmax(0,1fr) auto 16px;align-items:center;column-gap:10px;width:100%;min-height:34px;padding:4px 8px;border:0;border-radius:7px;background:none;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer;box-sizing:border-box}
+.trow:hover{background:var(--hover)}
+.sum{color:var(--text3);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{height:28px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--text3);font:inherit;font-size:12.5px;cursor:pointer}
+.seg.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+.chipt{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line2);border-radius:14px;background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;cursor:pointer}
+.chipt.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.stat dt{font-size:12px;color:var(--text3)}
+.stat dd{margin:0;font-size:13.5px}
+.abtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:0;border-radius:7px;background:none;color:var(--text3);font:inherit;font-size:12.5px;cursor:pointer}
+.abtn:hover{background:var(--hover);color:var(--text)}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;margin:0 1px;border-radius:5px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:600;line-height:1;vertical-align:2px;text-decoration:none}
+.pin{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border-radius:5px;background:var(--violet-soft);color:var(--violet);font-size:12px;font-weight:500}
+a{color:var(--accent)}a:hover{color:var(--text)}
+</style>
+</helmet>
+<div class="fs {{themeClass}}" style="width: 100%; min-height: 960px; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <nav aria-label="主导航" style="flex: 0 0 64px; background: var(--bg2); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0">
+    <div class="mono" style="width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; margin-bottom: 12px">F</div>
+    <button class="rail on" aria-label="对话"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg></button>
+    <button class="rail" aria-label="看板"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg></button>
+    <button class="rail" aria-label="预测战绩"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg></button>
+    <button class="rail" aria-label="盯盘提醒"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
+    <button class="rail" aria-label="设置" style="margin-top: auto"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></button>
+  </nav>
+
+  <main style="flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line)">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-weight: 600; font-size: 14.5px">AAPL 回调要不要加仓</span>
+        <span style="font-size: 12px; color: var(--text3)">1 轮 · 更新于 11/07 10:05</span>
+      </div>
+      <span style="font-size: 11.5px; color: var(--amber); background: var(--amber-soft); padding: 2px 8px; border-radius: 10px">示例数据</span>
+    </header>
+    <div style="flex: 1; padding: 28px 24px">
+      <div style="max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; justify-content: flex-end">
+          <div style="max-width: 80%; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; padding: 10px 14px; font-size: 14.5px">苹果这两天回调，要不要加仓？和微软比呢</div>
+        </div>
+        <article style="display: flex; flex-direction: column; gap: 12px">
+          <div style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px; color: var(--text2); font-size: 13px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+            已处理 <span class="mono">18</span> 秒 · <span class="mono">4</span> 次工具调用 · 引用 <span class="mono">3</span> 个来源
+          </div>
+          <p style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.6">可以小幅加仓，但建议等股价回到 330 美元附近再动手。</p>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.75; color: var(--text2)">这次回调发生在财报之后，基本面没有变化<a class="cite" href="#">1</a>。<span class="pin">330 美元</span> 是 8 月以来成交最密集的价位，右侧图上已经标出来了；跌到这里之前，追加的性价比不高<a class="cite" href="#">2</a>。</p>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.75; color: var(--text2)">和微软比，苹果的估值更高、增速更低<a class="cite" href="#">3</a>。如果仓位已经偏重科技，加微软比加苹果更均衡。点右侧的 <span class="mono">MSFT</span> 可以切过去看。</p>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-left: -10px">
+            <button class="abtn">复制</button>
+            <button class="abtn">重新生成</button>
+            <button class="abtn">在 330 美元设提醒</button>
+            <span style="margin-left: auto; font-size: 12px; color: var(--text3)">内容为信息整理，不构成投资建议</span>
+          </div>
+        </article>
+      </div>
+    </div>
+    <div style="padding: 0 24px 24px">
+      <form style="max-width: 680px; margin: 0 auto; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); padding: 10px 10px 8px 14px">
+        <label for="composer3" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">输入问题</label>
+        <textarea id="composer3" rows="2" placeholder="继续追问" style="width: 100%; border: 0; outline: none; resize: none; background: none; color: var(--text); font: inherit; font-size: 14.5px; padding: 2px 0; box-sizing: border-box"></textarea>
+        <div style="display: flex; align-items: center; gap: 6px">
+          <span style="margin-left: auto; font-size: 12px; color: var(--text3)">Opus 5.5</span>
+          <button type="submit" aria-label="发送" style="width: 34px; height: 34px; border-radius: 9px; border: 0; background: var(--accent); color: #ffffff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg></button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <aside aria-label="标的面板" style="flex: 1 1 360px; max-width: 420px; min-width: 0; border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line)">
+      <span style="font-size: 12px; color: var(--text3)">本次对话涉及</span>
+      <button class="chipt on"><span class="mono">AAPL</span></button>
+      <button class="chipt"><span class="mono">MSFT</span></button>
+      <button class="abtn" aria-label="收起面板" style="margin-left: auto; width: 32px; padding: 0; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+    </div>
+
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto">
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 8px">
+          <span style="font-size: 15px; font-weight: 600">苹果</span>
+          <span class="mono" style="font-size: 12.5px; color: var(--text3)">AAPL · 纳斯达克</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 2px">
+          <span class="mono" style="font-size: 28px; font-weight: 500; letter-spacing: -0.02em">342.36</span>
+          <span class="mono" style="font-size: 14px; color: var(--down)">−1.78 (−0.52%)</span>
+        </div>
+        <div style="font-size: 12px; color: var(--text3)">11/06 收盘价 · 非实时 · Twelve Data</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <div style="display: flex; gap: 2px; background: var(--bg2); border-radius: 8px; padding: 2px">
+          <button class="seg">1月</button><button class="seg on">3月</button><button class="seg">6月</button><button class="seg">1年</button>
+        </div>
+        <div style="display: flex; gap: 2px; background: var(--bg2); border-radius: 8px; padding: 2px; margin-left: auto">
+          <button class="seg on">K 线</button><button class="seg">折线</button>
+        </div>
+      </div>
+
+      <figure style="margin: 0">
+        <svg viewBox="0 0 380 236" width="100%" role="img" aria-label="AAPL 近 3 个月日 K 线，股价从约 305 美元升至 342 美元，330 美元标注为对话中提到的密集成交区" style="display: block">
+          <g font-family="Geist Mono, monospace" font-size="10" fill="var(--text3)">
+            <line x1="0" y1="10" x2="342" y2="10" stroke="var(--line)"></line>
+            <line x1="0" y1="63.3" x2="342" y2="63.3" stroke="var(--line)"></line>
+            <line x1="0" y1="116.7" x2="342" y2="116.7" stroke="var(--line)"></line>
+            <line x1="0" y1="170" x2="342" y2="170" stroke="var(--line)"></line>
+            <text x="348" y="13">360</text>
+            <text x="348" y="66">340</text>
+            <text x="348" y="120">320</text>
+            <text x="348" y="173">300</text>
+          </g>
+          <line x1="0" y1="90" x2="342" y2="90" stroke="var(--violet)" stroke-width="1" stroke-dasharray="4 3"></line>
+          <rect x="268" y="80" width="52" height="16" rx="4" fill="var(--violet)"></rect>
+          <text x="294" y="91.5" font-size="10" fill="#ffffff" text-anchor="middle" font-family="Geist Mono, monospace">330 对话</text>
+          <line x1="278.6" y1="10" x2="278.6" y2="176" stroke="var(--text3)" stroke-width="1" stroke-dasharray="2 3"></line>
+          <text x="275" y="22" font-size="10" fill="var(--text3)" text-anchor="end">财报</text>
+          <polyline points="{{maPoints}}" fill="none" stroke="var(--amber)" stroke-width="1.4" stroke-linejoin="round"></polyline>
+          <sc-for list="{{candles}}" as="c" hint-placeholder-count="36">
+            <line x1="{{c.cx}}" x2="{{c.cx}}" y1="{{c.hi}}" y2="{{c.lo}}" stroke="{{c.color}}" stroke-width="1"></line>
+            <rect x="{{c.x}}" y="{{c.top}}" width="6" height="{{c.h}}" fill="{{c.color}}"></rect>
+            <rect x="{{c.x}}" y="{{c.vy}}" width="6" height="{{c.vh}}" fill="{{c.color}}" fill-opacity="0.35"></rect>
+          </sc-for>
+          <text x="0" y="234" font-size="10" fill="var(--text3)" font-family="Geist Mono, monospace">08/06</text>
+          <text x="170" y="234" font-size="10" fill="var(--text3)" font-family="Geist Mono, monospace" text-anchor="middle">09/22</text>
+          <text x="342" y="234" font-size="10" fill="var(--text3)" font-family="Geist Mono, monospace" text-anchor="end">11/06</text>
+        </svg>
+        <figcaption style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text3); margin-top: 6px">
+          <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 2px; background: var(--amber)"></span>20 日均线</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 14px; height: 0; border-top: 1px dashed var(--violet)"></span>对话中提到的价位</span>
+          <span>下方为成交量</span>
+        </figcaption>
+      </figure>
+
+      <dl class="stat" style="margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; padding-top: 12px; border-top: 1px solid var(--line)">
+        <div><dt>今开</dt><dd class="mono">344.10</dd></div>
+        <div><dt>最高</dt><dd class="mono">345.02</dd></div>
+        <div><dt>最低</dt><dd class="mono">340.88</dd></div>
+        <div><dt>成交量</dt><dd class="mono">4,812 万</dd></div>
+        <div><dt>市值</dt><dd class="mono">4.98 万亿</dd></div>
+        <div><dt>市盈率</dt><dd class="mono">38.1x</dd></div>
+        <div><dt>3 月最高</dt><dd class="mono">355.38</dd></div>
+        <div><dt>3 月最低</dt><dd class="mono">300.57</dd></div>
+        <div><dt>股息率</dt><dd class="mono">0.32%</dd></div>
+      </dl>
+
+      <div style="padding-top: 12px; border-top: 1px solid var(--line)">
+        <div style="font-size: 12px; color: var(--text3); margin-bottom: 6px">本轮回答引用</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+          <a href="#" style="display: flex; gap: 8px; text-decoration: none; color: var(--text2)"><span class="mono" style="color: var(--accent)">1</span>Apple 10-K · FY2026<span style="margin-left: auto; color: var(--text3); font-size: 12px">10/30</span></a>
+          <a href="#" style="display: flex; gap: 8px; text-decoration: none; color: var(--text2)"><span class="mono" style="color: var(--accent)">2</span>近 3 个月日线与成交量分布<span style="margin-left: auto; color: var(--text3); font-size: 12px">11/06</span></a>
+          <a href="#" style="display: flex; gap: 8px; text-decoration: none; color: var(--text2)"><span class="mono" style="color: var(--accent)">3</span>一致预期 · AAPL / MSFT<span style="margin-left: auto; color: var(--text3); font-size: 12px">11/05</span></a>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const closes = [150,146,152,140,136,138,128,132,124,118,122,112,116,108,104,110,100,96,102,90,86,92,80,84,76,72,78,66,60,64,56,50,58,44,52,62];
+    const vols = [14,12,16,22,18,10,20,12,15,19,11,21,13,16,14,12,18,15,11,20,17,13,19,12,16,24,30,22,18,12,16,20,14,22,18,26];
+    let prev = 154;
+    const candles = closes.map((c, i) => {
+      const o = prev; prev = c;
+      const up = c < o;
+      const top = Math.min(o, c);
+      const h = Math.max(2, Math.abs(o - c));
+      const x = 4 + i * 9.4;
+      return {
+        x: x, cx: x + 3, top: top, h: h,
+        hi: top - 3 - (i % 3), lo: top + h + 3 + (i % 2) * 2,
+        color: up ? 'var(--candle-up)' : 'var(--candle-down)',
+        vy: 226 - vols[i] * 1.4, vh: vols[i] * 1.4
+      };
+    });
+    const ma = closes.map((c, i) => {
+      const s = closes.slice(Math.max(0, i - 5), i + 1);
+      const avg = s.reduce((a, b) => a + b, 0) / s.length;
+      return (7 + i * 9.4).toFixed(1) + ',' + (avg + 4).toFixed(1);
+    }).join(' ');
+    return { themeClass: (this.props.dark ?? false) ? 'dark' : '', candles: candles, maPoints: ma };
+  }
+}
+</script>
+</body>
+</html>

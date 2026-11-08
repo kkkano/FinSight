@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FinSight 对话 · 完成态</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.fs{--bg:#ffffff;--bg2:#f6f7f9;--surface:#ffffff;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.14);--text:#0f172a;--text2:#3f4b5e;--text3:#5c6879;--accent:#3b5bdb;--accent-soft:#edf2ff;--up:#0f7a44;--up-soft:#e7f5ed;--down:#c92a2a;--down-soft:#fdeded;--amber:#a85400;--amber-soft:#fff3e2;--violet:#6741d9;--violet-soft:#f2eeff;--teal:#0b6e7f;--teal-soft:#e4f6f8;--hover:rgba(15,23,42,.045);--shadow:0 1px 2px rgba(15,23,42,.05),0 6px 20px rgba(15,23,42,.05);font-family:'Geist','Noto Sans SC',system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.6}
+.fs.dark{--bg:#0e1014;--bg2:#14171c;--surface:#1a1d24;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--text:#e9ebf0;--text2:#bcc2cd;--text3:#939bab;--accent:#8098ff;--accent-soft:rgba(128,152,255,.15);--up:#4cc38a;--up-soft:rgba(76,195,138,.13);--down:#ff7a7a;--down-soft:rgba(255,122,122,.13);--amber:#f2a74b;--amber-soft:rgba(242,167,75,.13);--violet:#ad91ff;--violet-soft:rgba(173,145,255,.14);--teal:#4cc9d8;--teal-soft:rgba(76,201,216,.13);--hover:rgba(255,255,255,.05);--shadow:0 1px 2px rgba(0,0,0,.35)}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.navi{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:none;color:var(--text2);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;box-sizing:border-box}
+.navi:hover{background:var(--hover);color:var(--text)}
+.navi.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+.hist{display:block;width:100%;padding:7px 10px;border:0;border-radius:7px;background:none;color:var(--text2);font:inherit;font-size:13px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.hist:hover{background:var(--hover)}
+.hist.on{background:var(--hover);color:var(--text)}
+.trow{display:grid;grid-template-columns:18px auto minmax(0,1fr) auto 16px;align-items:center;column-gap:10px;width:100%;min-height:34px;padding:4px 8px;border:0;border-radius:7px;background:none;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer;box-sizing:border-box}
+.trow:hover{background:var(--hover)}
+.sum{color:var(--text3);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dur{color:var(--text3);font-size:12px}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;margin:0 1px;border-radius:5px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:600;line-height:1;vertical-align:2px;text-decoration:none}
+.abtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:0;border-radius:7px;background:none;color:var(--text3);font:inherit;font-size:12.5px;cursor:pointer}
+.abtn:hover{background:var(--hover);color:var(--text)}
+.ghost{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--line2);border-radius:8px;background:var(--surface);color:var(--text2);font:inherit;font-size:13px;cursor:pointer}
+.ghost:hover{color:var(--text);background:var(--hover)}
+.kt{width:100%;border-collapse:collapse;font-size:13px}
+.kt th{font-weight:500;color:var(--text3);font-size:12px;text-align:right;padding:8px 12px;border-bottom:1px solid var(--line2)}
+.kt th:first-child,.kt td:first-child{text-align:left}
+.kt td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line)}
+.kt tr:last-child td{border-bottom:0}
+.src{display:flex;align-items:baseline;gap:10px;padding:6px 8px;border-radius:7px;color:var(--text2);font-size:12.5px;text-decoration:none}
+.src:hover{background:var(--hover)}
+a{color:var(--accent)}a:hover{color:var(--text)}
+</style>
+</helmet>
+<div class="fs {{themeClass}}" style="width: 100%; min-height: 1640px; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <aside style="flex: 1 1 220px; max-width: 264px; background: var(--bg2); border-right: 1px solid var(--line); padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px">
+      <div class="mono" style="width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">F</div>
+      <span style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em">FinSight</span>
+    </div>
+    <button class="ghost" style="justify-content: center; width: 100%">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+      新对话
+    </button>
+    <nav aria-label="主导航" style="display: flex; flex-direction: column; gap: 2px">
+      <button class="navi on"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>对话</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>看板</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>预测战绩</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>盯盘提醒<span class="mono" style="margin-left: auto; font-size: 11px; color: var(--down); background: var(--down-soft); padding: 1px 6px; border-radius: 10px">2</span></button>
+    </nav>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 12px; color: var(--text3); padding: 0 10px 6px">最近对话</div>
+      <button class="hist on">NVDA 财报与估值</button>
+      <button class="hist">AAPL 与 MSFT 现金流对比</button>
+      <button class="hist">美债收益率对成长股的影响</button>
+      <button class="hist">TSLA 季度交付跟踪</button>
+      <button class="hist">本周宏观日历</button>
+    </div>
+    <div style="margin-top: auto; border-top: 1px solid var(--line); padding-top: 10px">
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>设置</button>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line)">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-weight: 600; font-size: 14.5px">NVDA 财报与估值</span>
+        <span style="font-size: 12px; color: var(--text3)">1 轮 · 更新于 20:14</span>
+      </div>
+      <span style="font-size: 11.5px; color: var(--amber); background: var(--amber-soft); padding: 2px 8px; border-radius: 10px">示例数据，仅用于展示样式</span>
+      <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap">
+        <button class="ghost"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>生成研报</button>
+        <button class="ghost"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="m16 6-4-4-4 4"></path><path d="M12 2v13"></path></svg>分享</button>
+      </div>
+    </header>
+
+    <div style="flex: 1; padding: 32px 24px 24px">
+      <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px">
+
+        <div style="display: flex; justify-content: flex-end">
+          <div style="max-width: 80%; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; padding: 10px 14px; font-size: 14.5px">英伟达这季财报怎么样？现在还值得买吗</div>
+        </div>
+
+        <article aria-label="FinSight 回答" style="display: flex; flex-direction: column; gap: 14px">
+
+          <div style="display: flex; flex-direction: column">
+            <button onClick="{{toggleProcess}}" aria-expanded="{{processOpenStr}}" style="display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; height: 32px; padding: 0 10px 0 6px; border: 0; border-radius: 8px; background: none; color: var(--text2); font: inherit; font-size: 13px; cursor: pointer">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="{{chevronStyle}}"><path d="m9 18 6-6-6-6"></path></svg>
+              <span>已处理 <span class="mono">41</span> 秒 · <span class="mono">6</span> 次工具调用 · 引用 <span class="mono">4</span> 个来源</span>
+              <span style="display: inline-flex; gap: 3px; margin-left: 2px" aria-hidden="true">
+                <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--amber)"></span>
+                <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--teal)"></span>
+                <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--accent)"></span>
+                <span style="width: 6px; height: 6px; border-radius: 3px; background: var(--violet)"></span>
+              </span>
+            </button>
+
+            <sc-if value="{{processOpen}}" hint-placeholder-val="{{ true }}">
+              <div style="margin: 4px 0 0 13px; padding-left: 14px; border-left: 1px solid var(--line2); display: flex; flex-direction: column; gap: 1px">
+
+                <button class="trow" onClick="{{toggleThinking}}" aria-expanded="{{thinkingOpenStr}}" style="align-items: start">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--text3); margin-top: 3px"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
+                  <span style="color: var(--text3)">思考</span>
+                  <sc-if value="{{thinkingOpen}}" hint-placeholder-val="{{ false }}">
+                    <span style="color: var(--text2); font-size: 13px; white-space: normal; grid-column: 3 / 6">要回答两件事：财报成色和现在的买点。先拿财报原文和一致预期做对比，再看下季指引和估值区间，最后给出分批建议，而不是一句“买”或“不买”。财报口径按 FY27 Q3，一致预期取发布前一个交易日的快照，避免拿发布后修正过的预期来比。</span>
+                  </sc-if>
+                  <sc-if value="{{thinkingClosed}}" hint-placeholder-val="{{ true }}">
+                    <span class="sum" style="grid-column: 3 / 6">要回答两件事：财报成色和现在的买点。先拿财报原文和一致预期做对比，再看下季指引和估值区间……</span>
+                  </sc-if>
+                </button>
+
+                <button class="trow">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--amber)"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"></path><path d="M16 7h6v6"></path></svg>
+                  <span>获取行情 <span class="mono" style="color: var(--text3); font-size: 12px">NVDA</span></span>
+                  <span class="sum"><span class="mono">182.40</span> · <span class="mono" style="color: var(--up)">+1.84%</span> · 盘后，延迟 15 分钟</span>
+                  <span class="dur mono">0.4s</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="成功" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg>
+                </button>
+
+                <button class="trow">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--teal)"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+                  <span>读取财报 <span class="mono" style="color: var(--text3); font-size: 12px">10-Q · FY27 Q3</span></span>
+                  <span class="sum">3 个章节 · 1.8 万字</span>
+                  <span class="dur mono">2.1s</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="成功" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg>
+                </button>
+
+                <button class="trow">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--amber)"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                  <span>一致预期 <span class="mono" style="color: var(--text3); font-size: 12px">FY27 Q3</span></span>
+                  <span class="sum">38 家机构 · 发布前一日快照</span>
+                  <span class="dur mono">0.6s</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="成功" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg>
+                </button>
+
+                <button class="trow">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                  <span>搜索新闻 <span class="mono" style="color: var(--text3); font-size: 12px">Reuters</span></span>
+                  <span class="sum" style="color: var(--down)">失败：超时 8 秒，已改用多源搜索</span>
+                  <span class="dur mono">8.0s</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="失败" style="color: var(--down)"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                </button>
+
+                <button class="trow">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent)"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                  <span>搜索新闻 <span class="mono" style="color: var(--text3); font-size: 12px">多源</span></span>
+                  <span class="sum">12 条结果，采用 4 条</span>
+                  <span class="dur mono">1.3s</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="成功" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg>
+                </button>
+
+                <button class="trow" onClick="{{toggleTool}}" aria-expanded="{{toolOpenStr}}">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--violet)"><rect width="16" height="20" x="4" y="2" rx="2"></rect><path d="M8 6h8"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path></svg>
+                  <span>估值计算 <span class="mono" style="color: var(--text3); font-size: 12px">Forward P/E</span></span>
+                  <span class="sum">3 档情景</span>
+                  <span class="dur mono">0.1s</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="成功" style="color: var(--up)"><path d="M20 6 9 17l-5-5"></path></svg>
+                </button>
+                <sc-if value="{{toolOpen}}" hint-placeholder-val="{{ true }}">
+                  <div style="margin: 2px 0 8px 36px; display: flex; flex-wrap: wrap; gap: 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px">
+                    <div style="flex: 1 1 180px; min-width: 0">
+                      <div style="font-size: 11.5px; color: var(--text3); margin-bottom: 6px">参数</div>
+                      <div class="mono" style="font-size: 12px; line-height: 1.75; color: var(--text2)">ticker: <span style="color: var(--text)">NVDA</span><br>eps_fy28: <span style="color: var(--text)">5.30</span><br>pe: <span style="color: var(--text)">[28, 34, 40]</span><br>price: <span style="color: var(--text)">182.40</span></div>
+                    </div>
+                    <div style="flex: 2 1 300px; min-width: 0; overflow-x: auto">
+                      <div style="font-size: 11.5px; color: var(--text3); margin-bottom: 6px">结果</div>
+                      <table class="kt" style="font-size: 12.5px">
+                        <thead><tr><th>情景</th><th>P/E</th><th>对应价格</th><th>相对现价</th></tr></thead>
+                        <tbody>
+                          <tr><td>悲观</td><td class="mono">28x</td><td class="mono">148.40</td><td class="mono" style="color: var(--down)">−18.6%</td></tr>
+                          <tr><td>中性</td><td class="mono">34x</td><td class="mono">180.20</td><td class="mono" style="color: var(--down)">−1.2%</td></tr>
+                          <tr><td>乐观</td><td class="mono">40x</td><td class="mono">212.00</td><td class="mono" style="color: var(--up)">+16.2%</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div class="trow" style="cursor: default; align-items: start">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--text3); margin-top: 3px"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
+                  <span style="color: var(--text3)">思考</span>
+                  <span class="sum" style="grid-column: 3 / 6">超预期主要来自数据中心；指引高于预期但幅度收窄。中性情景下上行空间有限，结论偏向分批……</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px; font-size: 14.5px; line-height: 1.75; color: var(--text)">
+            <p style="margin: 0; font-size: 16px; font-weight: 600; line-height: 1.6; letter-spacing: -0.005em">业绩和指引都高于预期，但当前价格已经计入了大部分利好。更适合分批建仓，不建议追高。</p>
+            <p style="margin: 0; color: var(--text2)">本季营收和数据中心收入都高于一致预期，毛利率维持在 73% 左右<a class="cite" href="#s1">1</a><a class="cite" href="#s2">2</a>。管理层给出的下季指引同样高于预期，但超出幅度比上一季收窄<a class="cite" href="#s4">4</a>。</p>
+
+            <div style="border: 1px solid var(--line2); border-radius: 10px; overflow: hidden">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: var(--bg2); border-bottom: 1px solid var(--line)">
+                <span style="font-size: 13px; font-weight: 600">关键数字</span>
+                <span style="font-size: 12px; color: var(--text3)">单位：亿美元</span>
+              </div>
+              <div style="overflow-x: auto">
+                <table class="kt">
+                  <thead><tr><th>指标</th><th>实际</th><th>一致预期</th><th>差异</th></tr></thead>
+                  <tbody>
+                    <tr><td>营收</td><td class="mono">612</td><td class="mono" style="color: var(--text3)">590</td><td class="mono" style="color: var(--up)">+3.7%</td></tr>
+                    <tr><td>数据中心营收</td><td class="mono">548</td><td class="mono" style="color: var(--text3)">528</td><td class="mono" style="color: var(--up)">+3.8%</td></tr>
+                    <tr><td>毛利率（GAAP）</td><td class="mono">73.1%</td><td class="mono" style="color: var(--text3)">72.6%</td><td class="mono" style="color: var(--up)">+0.5pp</td></tr>
+                    <tr><td>下季营收指引</td><td class="mono">665</td><td class="mono" style="color: var(--text3)">648</td><td class="mono" style="color: var(--up)">+2.6%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px">估值情景（按 FY28 EPS 5.30 美元）</div>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+                <div style="border: 1px solid var(--line2); border-radius: 10px; padding: 10px 12px">
+                  <div style="font-size: 12px; color: var(--text3)">悲观 · 28x</div>
+                  <div class="mono" style="font-size: 18px; font-weight: 500; margin-top: 2px">148.40</div>
+                  <div class="mono" style="font-size: 12px; color: var(--down)">−18.6%</div>
+                </div>
+                <div style="border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; background: var(--accent-soft)">
+                  <div style="font-size: 12px; color: var(--text2)">中性 · 34x</div>
+                  <div class="mono" style="font-size: 18px; font-weight: 500; margin-top: 2px">180.20</div>
+                  <div class="mono" style="font-size: 12px; color: var(--down)">−1.2%</div>
+                </div>
+                <div style="border: 1px solid var(--line2); border-radius: 10px; padding: 10px 12px">
+                  <div style="font-size: 12px; color: var(--text3)">乐观 · 40x</div>
+                  <div class="mono" style="font-size: 18px; font-weight: 500; margin-top: 2px">212.00</div>
+                  <div class="mono" style="font-size: 12px; color: var(--up)">+16.2%</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px">需要留意</div>
+              <ul style="margin: 0; padding-left: 20px; color: var(--text2)">
+                <li>大客户资本开支增速一旦放缓，数据中心收入的弹性会最先受影响<a class="cite" href="#s3">3</a></li>
+                <li>出口管制政策仍是最大的不确定性<a class="cite" href="#s3">3</a></li>
+                <li>毛利率指引区间的下沿低于本季实际，要关注产品换代期的成本<a class="cite" href="#s4">4</a></li>
+              </ul>
+            </div>
+
+            <p style="margin: 0; color: var(--text2)">如果打算建仓，可以分 3 次、每次间隔 2–4 周买入，并把悲观情景价位（约 148 美元）作为重新评估的触发点。</p>
+
+            <div style="border-top: 1px solid var(--line); padding-top: 10px">
+              <div style="font-size: 12px; color: var(--text3); padding: 0 8px 4px">来源</div>
+              <a class="src" id="s1" href="#s1"><span class="mono" style="color: var(--accent); font-size: 12px">1</span><span>NVIDIA 10-Q · FY27 Q3</span><span style="margin-left: auto; color: var(--text3); font-size: 12px">sec.gov · 11/05</span></a>
+              <a class="src" id="s2" href="#s2"><span class="mono" style="color: var(--accent); font-size: 12px">2</span><span>一致预期汇总 · 38 家机构</span><span style="margin-left: auto; color: var(--text3); font-size: 12px">发布前一日快照 · 11/04</span></a>
+              <a class="src" id="s3" href="#s3"><span class="mono" style="color: var(--accent); font-size: 12px">3</span><span>出口管制相关报道</span><span style="margin-left: auto; color: var(--text3); font-size: 12px">新闻 · 11/03</span></a>
+              <a class="src" id="s4" href="#s4"><span class="mono" style="color: var(--accent); font-size: 12px">4</span><span>业绩电话会纪要</span><span style="margin-left: auto; color: var(--text3); font-size: 12px">公司投资者关系 · 11/05</span></a>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-left: -10px">
+            <button class="abtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>复制</button>
+            <button class="abtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>重新生成</button>
+            <button class="abtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>加入盯盘</button>
+            <span style="margin-left: auto; font-size: 12px; color: var(--text3)">内容为信息整理，不构成投资建议</span>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div style="padding: 0 24px 24px">
+      <form style="max-width: 760px; margin: 0 auto; border: 1px solid var(--line2); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); padding: 10px 10px 8px 14px">
+        <label for="composer" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">输入问题</label>
+        <textarea id="composer" rows="2" placeholder="继续追问，或用 @ 指定标的" style="width: 100%; border: 0; outline: none; resize: none; background: none; color: var(--text); font: inherit; font-size: 14.5px; line-height: 1.6; padding: 2px 0; box-sizing: border-box"></textarea>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+          <button type="button" class="abtn" aria-label="添加附件"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
+          <button type="button" class="abtn" style="color: var(--accent)"><span class="mono">@</span>NVDA</button>
+          <button type="button" class="abtn">深度研究</button>
+          <span style="margin-left: auto; font-size: 12px; color: var(--text3)">Opus 5.5</span>
+          <button type="submit" aria-label="发送" style="width: 34px; height: 34px; border-radius: 9px; border: 0; background: var(--accent); color: #ffffff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg></button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"processExpanded":{"editor":"boolean","default":true},"$preview":{"width":1440,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const open = this.state.open ?? (this.props.processExpanded ?? true);
+    const thinking = this.state.thinking ?? false;
+    const tool = this.state.tool ?? true;
+    return {
+      themeClass: (this.props.dark ?? false) ? 'dark' : '',
+      processOpen: open,
+      processOpenStr: open ? 'true' : 'false',
+      chevronStyle: open ? 'transform: rotate(90deg); transition: transform .15s' : 'transition: transform .15s',
+      toggleProcess: () => this.setState({ open: !open }),
+      thinkingOpen: thinking,
+      thinkingClosed: !thinking,
+      thinkingOpenStr: thinking ? 'true' : 'false',
+      toggleThinking: () => this.setState({ thinking: !thinking }),
+      toolOpen: tool,
+      toolOpenStr: tool ? 'true' : 'false',
+      toggleTool: () => this.setState({ tool: !tool })
+    };
+  }
+}
+</script>
+</body>
+</html>

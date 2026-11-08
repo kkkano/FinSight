@@ -1,0 +1,23 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-11-06T13:00:00Z" },
+  "title": "FinSight 对话改造",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1440, "h": 1640, "title": "对话 · 完成态（过程可折叠）", "expand": "fill", "is_interactive": true },
+    "Streaming.dc.html": { "x": 1520, "y": 0, "w": 1440, "h": 1100, "title": "对话 · 流式进行中 + 子代理并行", "expand": "fill" },
+    "ChatChart.dc.html": { "x": 3040, "y": 0, "w": 1440, "h": 1900, "title": "对话 · Agent 按需写代码画图", "expand": "fill", "is_interactive": true },
+    "Dashboard.dc.html": { "x": 0, "y": 2320, "w": 1440, "h": 1380, "title": "个股看板", "expand": "fill" },
+    "RightPanel.dc.html": { "x": 1520, "y": 2320, "w": 1440, "h": 960, "title": "对话 + 右侧标的面板", "expand": "fill" },
+    "TrackRecord.dc.html": { "x": 3040, "y": 2320, "w": 1440, "h": 1640, "title": "预测战绩", "expand": "fill", "is_interactive": true },
+    "Welcome.dc.html": { "x": 0, "y": 4380, "w": 1440, "h": 960, "title": "封面 · 登录（含 GitHub）", "expand": "fill" }
+  },
+  "order": ["Main.dc.html", "Streaming.dc.html", "ChatChart.dc.html", "Dashboard.dc.html", "RightPanel.dc.html", "TrackRecord.dc.html", "Welcome.dc.html"],
+  "notes": {
+    "rowChat": { "x": 0, "y": -300, "text": "对话：过程折叠 · 单行工具 · 子代理 · 按需画图", "kind": "title1", "maxW": 4480 },
+    "rowBoards": { "x": 0, "y": 2020, "text": "看板 · 右侧面板 · 预测战绩", "kind": "title1", "maxW": 4480 },
+    "rowCover": { "x": 0, "y": 4080, "text": "封面", "kind": "title1", "maxW": 1440 }
+  },
+  "designSystems": []
+}

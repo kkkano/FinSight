@@ -1,0 +1,198 @@
+{
+  "evidence_kind": "existing_model_artifact_rendering",
+  "source_file": "E:\\FinSight\\.omx\\worktrees\\research-completeness\\.omx\\acceptance-natural\\fresh\\acceptance-natural-1f4f06023d-2\\chart_c6c33cc93acfc677.json",
+  "sha256": "aba688ddee0bd1bee777ddcad6a1fd4dfbd1119f2501f0264f440dc8ad811e33",
+  "run_id": "acceptance-natural-1f4f06023d-2",
+  "source_ids": [
+    "Se31c056145",
+    "Scb814437a2",
+    "S8fcb2a191d"
+  ],
+  "source_proof": [
+    {
+      "source_id": "Se31c056145",
+      "title": "get_stock_historical_data output",
+      "source": "get_stock_historical_data",
+      "as_of": "2026-11-06T00:00:00Z"
+    },
+    {
+      "source_id": "Scb814437a2",
+      "title": "twelve_data",
+      "source": "twelve_data",
+      "as_of": "2026-11-06T00:00:00Z"
+    },
+    {
+      "source_id": "S8fcb2a191d",
+      "title": "run_analysis_code output",
+      "source": "run_analysis_code"
+    }
+  ],
+  "point_count": 24,
+  "series": [
+    {
+      "name": "收盘价",
+      "first": 333.63,
+      "last": 342.37,
+      "points": 24
+    },
+    {
+      "name": "20日均线",
+      "first": 333.41,
+      "last": 343.38,
+      "points": 24
+    }
+  ],
+  "unit": "USD",
+  "source_values_unchanged": true,
+  "model_calls": 0,
+  "mean_check": {
+    "source_rows": 65,
+    "source_window": 20,
+    "declared_chart_decimal_places": 2,
+    "comparisons": [
+      {
+        "date": "2026-10-06",
+        "rendered": 333.41,
+        "source_mean": 333.4114996
+      },
+      {
+        "date": "2026-10-07",
+        "rendered": 334.48,
+        "source_mean": 334.4780001
+      },
+      {
+        "date": "2026-10-08",
+        "rendered": 335.17,
+        "source_mean": 335.17050009999997
+      },
+      {
+        "date": "2026-10-09",
+        "rendered": 335.39,
+        "source_mean": 335.3890011
+      },
+      {
+        "date": "2026-10-12",
+        "rendered": 335.78,
+        "source_mean": 335.78350174999997
+      },
+      {
+        "date": "2026-10-13",
+        "rendered": 336.28,
+        "source_mean": 336.28000124999994
+      },
+      {
+        "date": "2026-10-14",
+        "rendered": 336.81,
+        "source_mean": 336.80750075
+      },
+      {
+        "date": "2026-10-15",
+        "rendered": 337.06,
+        "source_mean": 337.05750075000003
+      },
+      {
+        "date": "2026-10-16",
+        "rendered": 337.42,
+        "source_mean": 337.42400025
+      },
+      {
+        "date": "2026-10-19",
+        "rendered": 337.62,
+        "source_mean": 337.62199975
+      },
+      {
+        "date": "2026-10-20",
+        "rendered": 337.61,
+        "source_mean": 337.60949975
+      },
+      {
+        "date": "2026-10-21",
+        "rendered": 337.96,
+        "source_mean": 337.9579998
+      },
+      {
+        "date": "2026-10-22",
+        "rendered": 338.57,
+        "source_mean": 338.5729993
+      },
+      {
+        "date": "2026-10-23",
+        "rendered": 338.91,
+        "source_mean": 338.90599945
+      },
+      {
+        "date": "2026-10-26",
+        "rendered": 339.18,
+        "source_mean": 339.18149994999993
+      },
+      {
+        "date": "2026-10-27",
+        "rendered": 340.07,
+        "source_mean": 340.06650095
+      },
+      {
+        "date": "2026-10-28",
+        "rendered": 340.61,
+        "source_mean": 340.60700099999997
+      },
+      {
+        "date": "2026-10-29",
+        "rendered": 341.54,
+        "source_mean": 341.53650050000005
+      },
+      {
+        "date": "2026-10-30",
+        "rendered": 342.08,
+        "source_mean": 342.0835005
+      },
+      {
+        "date": "2026-11-02",
+        "rendered": 342.36,
+        "source_mean": 342.3550005000001
+      },
+      {
+        "date": "2026-11-03",
+        "rendered": 342.27,
+        "source_mean": 342.2685
+      },
+      {
+        "date": "2026-11-04",
+        "rendered": 342.91,
+        "source_mean": 342.91050000000007
+      },
+      {
+        "date": "2026-11-05",
+        "rendered": 343.1,
+        "source_mean": 343.09800000000007
+      },
+      {
+        "date": "2026-11-06",
+        "rendered": 343.38,
+        "source_mean": 343.38449950000006
+      }
+    ],
+    "full_precision_last_mean": 343.38449950000006,
+    "chart_last_ma20": 343.38,
+    "coverage": {
+      "close": {
+        "points": 24,
+        "valid": 24,
+        "missing": 0,
+        "leading_missing": 0,
+        "first_valid": "2026-10-06",
+        "last_valid": "2026-11-06"
+      },
+      "ma20": {
+        "points": 24,
+        "valid": 24,
+        "missing": 0,
+        "leading_missing": 0,
+        "first_valid": "2026-10-06",
+        "last_valid": "2026-11-06"
+      }
+    }
+  },
+  "annotations": [],
+  "panel_boundaries": [],
+  "visible_metadata": "AAPL 最近一个月收盘价与20日均线（2026-10-06 至 2026-11-06）\n\nTwelve Data · 2026-11-06\n\n数据\n下载\n时间\t收盘价（USD）\t20日均线（USD）\n2026-10-06\t333.63\t333.41\n2026-10-07\t336.67\t334.48\n2026-10-08\t340.42\t335.17\n2026-10-09\t336.64\t335.39\n2026-10-12\t340.97\t335.78\n2026-10-13\t341.27\t336.28\n2026-10-14\t342.96\t336.81\n2026-10-15\t342\t337.06\n2026-10-16\t343.46\t337.42\n2026-10-19\t342.94\t337.62\n2026-10-20\t339.5\t337.61\n2026-10-21\t343.99\t337.96\n2026-10-22\t348.22\t338.57\n2026-10-23\t347.73\t338.91\n2026-10-26\t343.91\t339.18\n2026-10-27\t347.1\t340.07\n2026-10-28\t343.83\t340.61\n2026-10-29\t348.91\t341.54\n2026-10-30\t344.63\t342.08\n2026-11-02\t338.32\t342.36\n2026-11-03\t331.9\t342.27\n2026-11-04\t349.51\t342.91\n2026-11-05\t344.17\t343.1\n2026-11-06\t342.37\t343.38\n1 个数据来源\n\nTwelve Data · 2026-11-06\n\n查看代码和数据\n方法\tderived\n\ndf = get_frame(\"dataset_e1b14122e9d6ee768b\")\ndf = df.rename(columns=str.lower)\ndf['time'] = pd.to_datetime(df['time'])\ndf = df.sort_values('time').reset_index(drop=True)\ndf['ma20'] = df['close'].rolling(20).mean()\nlast20 = df.tail(20)\navg20 = round(float(last20['close'].mean()), 2)\nlast_row = df.iloc[-1]\ncutoff = last_row['time'] - pd.Timedelta(days=31)\nsub = df[df['time'] >= cutoff].copy()\nsub['time'] = sub['time'].dt.strftime('%Y-%m-%d')\nrows = sub[['time','close','ma20']].to_dict('records')\nrows = [{k: (round(v,2) if isinstance(v,(int,float)) else v) for k,v in r.items()} for r in rows]\nresult = {\n 'rows': rows,\n 'summary': {\n   'avg_close_last20': avg20,\n   'last20_start': last20['time'].iloc[0].strftime('%Y-%m-%d'),\n   'last20_end': last_row['time'].strftime('%Y-%m-%d'),\n   'last_close': round(float(last_row['close']),2),\n   'last_ma20': round(float(last_row['ma20']),2),\n   'chart_start': rows[0]['time'], 'chart_end': rows[-1]['time'],\n   'chart_points': len(rows),\n   'chart_missing': int(sub['close'].isna().sum() + sub['ma20'].isna().sum()),\n   'ma20_leading_missing': int(df['ma20'].isna().sum()),\n   'first_valid_ma20': df.loc[df['ma20'].notna(),'time'].iloc[0].strftime('%Y-%m-%d'),\n   'total_rows': int(len(df))\n }\n}\n\n查看数据（24 行）"
+}

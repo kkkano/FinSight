@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FinSight 个股看板</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.fs{--bg:#ffffff;--bg2:#f6f7f9;--surface:#ffffff;--line:rgba(15,23,42,.08);--line2:rgba(15,23,42,.14);--text:#0f172a;--text2:#3f4b5e;--text3:#5c6879;--accent:#3b5bdb;--accent-soft:#edf2ff;--up:#0f7a44;--up-soft:#e7f5ed;--down:#c92a2a;--down-soft:#fdeded;--amber:#a85400;--amber-soft:#fff3e2;--violet:#6741d9;--violet-soft:#f2eeff;--teal:#0b6e7f;--teal-soft:#e4f6f8;--hover:rgba(15,23,42,.045);--shadow:0 1px 2px rgba(15,23,42,.05),0 6px 20px rgba(15,23,42,.05);font-family:'Geist','Noto Sans SC',system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.6}
+.fs.dark{--bg:#0e1014;--bg2:#14171c;--surface:#1a1d24;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--text:#e9ebf0;--text2:#bcc2cd;--text3:#939bab;--accent:#8098ff;--accent-soft:rgba(128,152,255,.15);--up:#4cc38a;--up-soft:rgba(76,195,138,.13);--down:#ff7a7a;--down-soft:rgba(255,122,122,.13);--amber:#f2a74b;--amber-soft:rgba(242,167,75,.13);--violet:#ad91ff;--violet-soft:rgba(173,145,255,.14);--teal:#4cc9d8;--teal-soft:rgba(76,201,216,.13);--hover:rgba(255,255,255,.05);--shadow:0 1px 2px rgba(0,0,0,.35)}
+.mono{font-family:'Geist Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.navi{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:none;color:var(--text2);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;box-sizing:border-box}
+.navi:hover{background:var(--hover);color:var(--text)}
+.navi.on{background:var(--surface);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+.card{background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:16px 18px;box-sizing:border-box}
+.ctitle{font-size:13.5px;font-weight:600}
+.cap{font-size:12px;color:var(--text3)}
+.tab{height:36px;padding:0 4px;border:0;border-bottom:2px solid transparent;background:none;color:var(--text3);font:inherit;font-size:14px;cursor:pointer}
+.tab.on{color:var(--text);border-bottom-color:var(--accent);font-weight:500}
+.seg{height:28px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--text3);font:inherit;font-size:12.5px;cursor:pointer}
+.seg.on{background:var(--bg2);color:var(--text);font-weight:500}
+.ghost{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--line2);border-radius:8px;background:var(--surface);color:var(--text2);font:inherit;font-size:13px;cursor:pointer}
+.ghost:hover{color:var(--text);background:var(--hover)}
+.wrow{display:grid;grid-template-columns:minmax(0,1fr) 64px auto;align-items:center;gap:12px;width:100%;padding:8px 6px;border:0;border-radius:8px;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer;box-sizing:border-box}
+.wrow:hover{background:var(--hover)}
+.kt{width:100%;border-collapse:collapse;font-size:13px}
+.kt th{font-weight:500;color:var(--text3);font-size:12px;text-align:right;padding:7px 10px;border-bottom:1px solid var(--line2)}
+.kt th:first-child,.kt td:first-child{text-align:left}
+.kt td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+.kt tr:last-child td{border-bottom:0}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;font-size:11.5px;font-weight:500;white-space:nowrap}
+a{color:var(--accent)}a:hover{color:var(--text)}
+</style>
+</helmet>
+<div class="fs {{themeClass}}" style="width: 100%; min-height: 1380px; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <aside style="flex: 1 1 220px; max-width: 264px; background: var(--bg2); border-right: 1px solid var(--line); padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px">
+      <div class="mono" style="width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">F</div>
+      <span style="font-weight: 600; font-size: 15px">FinSight</span>
+    </div>
+    <nav aria-label="主导航" style="display: flex; flex-direction: column; gap: 2px">
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>对话</button>
+      <button class="navi on"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>看板</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>预测战绩</button>
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>盯盘提醒<span class="mono" style="margin-left: auto; font-size: 11px; color: var(--down); background: var(--down-soft); padding: 1px 6px; border-radius: 10px">2</span></button>
+    </nav>
+    <div style="margin-top: auto; border-top: 1px solid var(--line); padding-top: 10px">
+      <button class="navi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>设置</button>
+    </div>
+  </aside>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 24px 28px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 24px">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em">NVIDIA</h1>
+          <span class="mono" style="font-size: 13px; color: var(--text3)">NVDA · 纳斯达克</span>
+          <span style="font-size: 11.5px; color: var(--amber); background: var(--amber-soft); padding: 2px 8px; border-radius: 10px">示例数据</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+          <span class="mono" style="font-size: 34px; font-weight: 500; letter-spacing: -0.02em">182.40</span>
+          <span class="mono" style="font-size: 15px; color: var(--up)">+3.30 (+1.84%)</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3)"><span style="width: 6px; height: 6px; border-radius: 3px; background: var(--amber)"></span>盘后 · 延迟 15 分钟 · 16:42 ET</span>
+        </div>
+      </div>
+      <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap">
+        <button class="ghost" style="background: var(--accent); color: #ffffff; border-color: var(--accent)">问 AI</button>
+        <button class="ghost">加入盯盘</button>
+        <button class="ghost">设置提醒</button>
+      </div>
+    </div>
+
+    <div role="tablist" aria-label="看板分区" style="display: flex; gap: 22px; border-bottom: 1px solid var(--line); overflow-x: auto">
+      <button role="tab" aria-selected="true" class="tab on">概览</button>
+      <button role="tab" aria-selected="false" class="tab">财务</button>
+      <button role="tab" aria-selected="false" class="tab">新闻</button>
+      <button role="tab" aria-selected="false" class="tab">技术面</button>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+      <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+
+        <section class="card">
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px">
+            <span class="ctitle">股价走势</span>
+            <div style="margin-left: auto; display: flex; gap: 2px">
+              <button class="seg">1日</button><button class="seg">5日</button><button class="seg">1月</button><button class="seg on">6月</button><button class="seg">1年</button>
+            </div>
+          </div>
+          <svg viewBox="0 0 690 200" width="100%" role="img" aria-label="近 6 个月股价从约 148 美元升至 182.40 美元，财报后创新高" style="display: block">
+            <line x1="0" y1="164.3" x2="640" y2="164.3" stroke="var(--line)" stroke-width="1"></line>
+            <line x1="0" y1="112.9" x2="640" y2="112.9" stroke="var(--line)" stroke-width="1"></line>
+            <line x1="0" y1="61.4" x2="640" y2="61.4" stroke="var(--line)" stroke-width="1"></line>
+            <text x="650" y="168" font-size="11" fill="var(--text3)" font-family="Geist Mono, monospace">140</text>
+            <text x="650" y="117" font-size="11" fill="var(--text3)" font-family="Geist Mono, monospace">160</text>
+            <text x="650" y="65" font-size="11" fill="var(--text3)" font-family="Geist Mono, monospace">180</text>
+            <line x1="537.6" y1="20" x2="537.6" y2="190" stroke="var(--text3)" stroke-width="1" stroke-dasharray="3 3"></line>
+            <text x="543" y="30" font-size="11" fill="var(--text3)">财报</text>
+            <path d="M0 143.7 L25.6 133.4 L51.2 138.6 L76.8 123.1 L102.4 110.3 L128 118 L153.6 100 L179.2 87.1 L204.8 94.9 L230.4 112.9 L256 125.7 L281.6 118 L307.2 105.1 L332.8 92.3 L358.4 82 L384 71.7 L409.6 84.6 L435.2 76.9 L460.8 64 L486.4 74.3 L512 66.6 L537.6 53.7 L563.2 61.4 L588.8 69.1 L614.4 64 L640 55.3 L640 190 L0 190 Z" fill="var(--accent)" fill-opacity="0.07"></path>
+            <polyline points="0,143.7 25.6,133.4 51.2,138.6 76.8,123.1 102.4,110.3 128,118 153.6,100 179.2,87.1 204.8,94.9 230.4,112.9 256,125.7 281.6,118 307.2,105.1 332.8,92.3 358.4,82 384,71.7 409.6,84.6 435.2,76.9 460.8,64 486.4,74.3 512,66.6 537.6,53.7 563.2,61.4 588.8,69.1 614.4,64 640,55.3" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"></polyline>
+            <circle cx="640" cy="55.3" r="3.5" fill="var(--accent)"></circle>
+          </svg>
+          <div class="cap" style="margin-top: 6px">日线收盘价 · 行情来源 Yahoo Finance · 最后更新 11/06 16:00 ET</div>
+        </section>
+
+        <section class="card">
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px">
+            <span class="ctitle">关键指标</span>
+            <span class="cap">每项都标出来源和日期</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px 20px">
+            <div><div class="cap">市值</div><div class="mono" style="font-size: 17px; font-weight: 500">4.45 万亿</div><div class="cap" style="font-size: 11.5px">行情 · 11/06</div></div>
+            <div><div class="cap">市盈率（TTM）</div><div class="mono" style="font-size: 17px; font-weight: 500">52.3x</div><div class="cap" style="font-size: 11.5px">行情 · 11/06</div></div>
+            <div><div class="cap">远期市盈率</div><div class="mono" style="font-size: 17px; font-weight: 500">34.4x</div><div class="cap" style="font-size: 11.5px">一致预期 · 11/04</div></div>
+            <div><div class="cap">毛利率</div><div class="mono" style="font-size: 17px; font-weight: 500">73.1%</div><div class="cap" style="font-size: 11.5px">10-Q · FY27 Q3</div></div>
+            <div><div class="cap">营收同比</div><div class="mono" style="font-size: 17px; font-weight: 500; color: var(--up)">+38%</div><div class="cap" style="font-size: 11.5px">10-Q · FY27 Q3</div></div>
+            <div><div class="cap">自由现金流（TTM）</div><div class="mono" style="font-size: 17px; font-weight: 500">1,280 亿</div><div class="cap" style="font-size: 11.5px">10-Q · FY27 Q3</div></div>
+            <div><div class="cap">52 周区间</div><div class="mono" style="font-size: 17px; font-weight: 500">112.6 – 196.0</div><div class="cap" style="font-size: 11.5px">行情 · 11/06</div></div>
+            <div><div class="cap">下次财报</div><div style="font-size: 15px; color: var(--text3); padding-top: 2px">暂无日期</div><div class="cap" style="font-size: 11.5px">公司尚未公布</div></div>
+          </div>
+        </section>
+
+        <section class="card" style="display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px">
+            <span class="ctitle">最近一次 AI 分析</span>
+            <span class="cap">11/06 20:14 · 来自对话「NVDA 财报与估值」</span>
+          </div>
+          <p style="margin: 0; font-size: 14px; color: var(--text2); line-height: 1.7">业绩和指引都高于预期，但当前价格已经计入了大部分利好。更适合分批建仓，不建议追高；可把约 148 美元作为重新评估的触发点。</p>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px">
+            <span class="tag" style="background: var(--up-soft); color: var(--up)">分析后股价变动 +0.6%，结论仍适用</span>
+            <div style="margin-left: auto; display: flex; gap: 8px">
+              <button class="ghost">打开对话</button>
+              <button class="ghost">重新分析</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 6px">
+            <span class="ctitle">相关新闻</span>
+            <span class="cap">影响由模型逐条判断，并给出理由</span>
+          </div>
+          <div style="display: flex; flex-direction: column">
+            <a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--text)">
+              <div style="display: flex; gap: 10px; align-items: baseline"><span class="tag" style="background: var(--up-soft); color: var(--up)">利好</span><span style="font-size: 14px; font-weight: 500">英伟达上调下季营收指引，数据中心需求仍超供给</span></div>
+              <div class="cap" style="padding-left: 46px">理由：指引高于一致预期 2.6% · 公司公告 · 11/05</div>
+            </a>
+            <a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--text)">
+              <div style="display: flex; gap: 10px; align-items: baseline"><span class="tag" style="background: var(--down-soft); color: var(--down)">利空</span><span style="font-size: 14px; font-weight: 500">美国拟扩大对高端加速卡的出口限制范围</span></div>
+              <div class="cap" style="padding-left: 46px">理由：可能影响部分海外数据中心收入 · 新闻 · 11/03</div>
+            </a>
+            <a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 0; text-decoration: none; color: var(--text)">
+              <div style="display: flex; gap: 10px; align-items: baseline"><span class="tag" style="background: var(--bg2); color: var(--text3)">中性</span><span style="font-size: 14px; font-weight: 500">多家云厂商公布资本开支计划，节奏与上季基本一致</span></div>
+              <div class="cap" style="padding-left: 46px">理由：没有超出预期的变化 · 新闻 · 11/01</div>
+            </a>
+          </div>
+        </section>
+
+        <section class="card">
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 8px">
+            <span class="ctitle">同行对比</span>
+            <span class="cap">GICS 半导体行业，按市值取前 4 家</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table class="kt">
+              <thead><tr><th>公司</th><th>远期市盈率</th><th>营收同比</th><th>毛利率</th></tr></thead>
+              <tbody>
+                <tr><td><span class="mono" style="font-weight: 500">NVDA</span></td><td class="mono">34.4x</td><td class="mono" style="color: var(--up)">+38%</td><td class="mono">73.1%</td></tr>
+                <tr><td><span class="mono">AVGO</span></td><td class="mono">31.2x</td><td class="mono" style="color: var(--up)">+21%</td><td class="mono">66.4%</td></tr>
+                <tr><td><span class="mono">AMD</span></td><td class="mono">28.9x</td><td class="mono" style="color: var(--up)">+24%</td><td class="mono">52.8%</td></tr>
+                <tr><td><span class="mono">QCOM</span></td><td class="mono">15.1x</td><td class="mono" style="color: var(--up)">+6%</td><td class="mono">55.9%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+        <section class="card" style="padding: 14px 12px">
+          <div style="display: flex; align-items: center; padding: 0 6px 6px">
+            <span class="ctitle">自选</span>
+            <button class="seg" style="margin-left: auto">编辑</button>
+          </div>
+          <button class="wrow" style="background: var(--accent-soft)"><span><span class="mono" style="font-weight: 500">NVDA</span><span class="cap" style="display: block; margin-top: -2px">英伟达</span></span><svg width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"><polyline points="0,18 10,15 20,16 30,10 40,11 50,6 64,4" fill="none" stroke="var(--up)" stroke-width="1.5"></polyline></svg><span style="text-align: right"><span class="mono" style="display: block">182.40</span><span class="mono" style="font-size: 12px; color: var(--up)">+1.84%</span></span></button>
+          <button class="wrow"><span><span class="mono" style="font-weight: 500">AAPL</span><span class="cap" style="display: block; margin-top: -2px">苹果</span></span><svg width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"><polyline points="0,8 10,9 20,7 30,10 40,12 50,11 64,14" fill="none" stroke="var(--down)" stroke-width="1.5"></polyline></svg><span style="text-align: right"><span class="mono" style="display: block">231.10</span><span class="mono" style="font-size: 12px; color: var(--down)">−0.42%</span></span></button>
+          <button class="wrow"><span><span class="mono" style="font-weight: 500">MSFT</span><span class="cap" style="display: block; margin-top: -2px">微软</span></span><svg width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"><polyline points="0,14 10,13 20,15 30,12 40,11 50,10 64,9" fill="none" stroke="var(--up)" stroke-width="1.5"></polyline></svg><span style="text-align: right"><span class="mono" style="display: block">498.30</span><span class="mono" style="font-size: 12px; color: var(--up)">+0.65%</span></span></button>
+          <button class="wrow"><span><span class="mono" style="font-weight: 500">AMD</span><span class="cap" style="display: block; margin-top: -2px">超威半导体</span></span><svg width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"><polyline points="0,6 10,8 20,7 30,11 40,10 50,14 64,15" fill="none" stroke="var(--down)" stroke-width="1.5"></polyline></svg><span style="text-align: right"><span class="mono" style="display: block">241.75</span><span class="mono" style="font-size: 12px; color: var(--down)">−1.12%</span></span></button>
+          <button class="wrow"><span><span class="mono" style="font-weight: 500">TSLA</span><span class="cap" style="display: block; margin-top: -2px">特斯拉</span></span><svg width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"><polyline points="0,17 10,12 20,14 30,9 40,11 50,7 64,5" fill="none" stroke="var(--up)" stroke-width="1.5"></polyline></svg><span style="text-align: right"><span class="mono" style="display: block">402.10</span><span class="mono" style="font-size: 12px; color: var(--up)">+2.31%</span></span></button>
+        </section>
+
+        <section class="card" style="padding: 14px 16px">
+          <div style="display: flex; align-items: center; margin-bottom: 8px">
+            <span class="ctitle">盯盘动态</span>
+            <span class="cap" style="margin-left: auto">3 条规则</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <div style="display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px">
+              <span class="mono cap">11:02</span>
+              <div><div style="font-size: 13.5px"><span class="mono" style="font-weight: 500">NVDA</span> 站上 20 日均线</div><div class="cap">触发规则「突破均线」</div></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px">
+              <span class="mono cap">09:15</span>
+              <div><div style="font-size: 13.5px"><span class="mono" style="font-weight: 500">AMD</span> 盘前下跌 <span class="mono" style="color: var(--down)">3.2%</span></div><div class="cap">触发你设的「单日跌幅 &gt; 3%」提醒</div></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px">
+              <span class="cap">今天</span>
+              <div style="font-size: 13px; color: var(--text3)">TSLA、AAPL 已检查 4 次，没有变化</div>
+            </div>
+          </div>
+          <button class="ghost" style="width: 100%; justify-content: center; margin-top: 12px">管理规则</button>
+        </section>
+      </div>
+    </div>
+
+    <div class="cap" style="border-top: 1px solid var(--line); padding-top: 12px">行情来自 Yahoo Finance，延迟约 15 分钟 · 财务数据来自 SEC 文件 · 内容为信息整理，不构成投资建议</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { themeClass: (this.props.dark ?? false) ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

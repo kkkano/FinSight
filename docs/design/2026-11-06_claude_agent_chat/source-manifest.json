@@ -1,0 +1,39 @@
+{
+  "session_id": "30e9db27-85e3-4125-b57b-adaa69fe415f",
+  "artifact_url": "https://claude.ai/artifact/XGaESQcceGvooyd265AUED",
+  "source_type": "Claude design canvas source snapshot; illustrative data only",
+  "files": {
+    "canvas.json": {
+      "sha256": "5e1cf8498af31e7469bea67474bbb8c56ca330aa30397b8a0453f1e8df3c30d7",
+      "bytes": 1712
+    },
+    "Main.dc.html": {
+      "sha256": "57daf1b8217462adfe9e38223705c6abe1731b39ac1acca951c305ef75f33d18",
+      "bytes": 31924
+    },
+    "Streaming.dc.html": {
+      "sha256": "408d24349e4b49a301f8d77d323a6e95803a6b1cf129ef41c4c151e54b08811d",
+      "bytes": 16393
+    },
+    "ChatChart.dc.html": {
+      "sha256": "8e76f203fe9cb17dbb81792101f29e51f52a7fe07d320905b20adb84d5c476e8",
+      "bytes": 29168
+    },
+    "Dashboard.dc.html": {
+      "sha256": "a2912b9907865812b19175257bec9b0e8b24106402514f98e0b1279e61d4c660",
+      "bytes": 23354
+    },
+    "RightPanel.dc.html": {
+      "sha256": "2cf1d365676b9c19b74ac9f3c3ba4ce7f2f941d81106d9aa93c478caf769f51e",
+      "bytes": 19054
+    },
+    "TrackRecord.dc.html": {
+      "sha256": "d748130ef76646aea6d6bfede4a6a5fd585754c88ded7ed376cc446aaa3d68e8",
+      "bytes": 17930
+    },
+    "Welcome.dc.html": {
+      "sha256": "940461b74795daca8ffd0c7a83e159e6a870777c6933658accd8ef51361d9979",
+      "bytes": 12847
+    }
+  }
+}
