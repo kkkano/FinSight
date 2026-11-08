@@ -143,11 +143,17 @@ def causal_fact_delivery(runtime, draft: str) -> str:
         if not refs:
             continue
         for sentence in re.split(r"(?<=[。！？；])\s*|[，,]|——", paragraph):
-            clean = re.sub(r"https?://\S+|\[\^?S[^\]]*\]|[*`#]", "", sentence).strip()
+            clean = re.sub(r"\[\^?S[^\]]*\]\(https?://[^)]+\)", "", sentence)
+            clean = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"\1", clean)
+            clean = re.sub(r"https?://[^\s<>)）]+|\[\^?S[^\]]*\]|[*`#]", "", clean).strip()
+            clean = re.sub(r"[（(]\s*[)）]", "", clean).strip()
+            # 原问题没有指定日期；去掉可选月日修饰，仅提取原句中的定性触发说明。
+            # 不删年份或金额，避免把旧年事件、数值主张变成当前事实。
+            clean = re.sub(r"(?<!\d)\d{1,2}月(?:\d{1,2}日|上旬|中旬|下旬|月底|末|初|底)?", "", clean)
             numeric_check = re.sub(r"\b(?:Q[1-4]|FY\d{4})\b", "", clean)
-            if (len(clean) < 15 or re.search(r"\d|[零一二两三四五六七八九十百]+(?:倍|成|亿|万|个百分点)", numeric_check)
-                    or re.search(r"不能|无法|不足以|未能|没有证据|缺乏证据|证据不足|有史以来|排名", clean)
-                    or re.search(r"(?:报道|显示|指出|表示)[：:]?$", clean)
+            if (len(clean) < 6 or re.search(r"\d|[零一二两三四五六七八九十百]+(?:倍|成|亿|万|个百分点)", numeric_check)
+                    or re.search(r"不能|无法|不足以|未能|没有证据|缺乏证据|证据不足|没有资料|缺少资料|未取得|未查到|有史以来|排名", clean)
+                    or re.search(r"(?:报道|显示|指出|表示|如下|以下|包括|在于)[：:]?$|(?:因素|原因|导火索)[：:]$", clean)
                     or not re.search(r"导火索|触发|引发|归因于|主要原因|核心原因|不及预期|低于预期", clean)):
                 continue
             clean = re.sub(r"^(?:也就是说|综合来看|因此|所以)[，,：:]?\s*", "", clean)
