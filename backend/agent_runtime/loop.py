@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .analysis import analyze_dataset, render_chart, run_analysis_code
-from .context import compact_result, dumps, prune_messages, tokens
+from .context import compact_result, dumps, prune_messages, tokens, evidence_preview
 from .data import RunData, DatasetRowsError, fact_metadata_preview
 from .limits import LeaseLimiter, TokenReservations
 from .model import ModelProtocolError, ModelTransport
@@ -410,6 +410,31 @@ class AgentRuntime:
             "检索失败或空结果不能推出资料不存在；仍缺少的必要证据明确说明，不声称研究已全部完成。"})
         return True
 
+    def completion_context(self, system: dict, task: Any) -> list[dict]:
+        """收尾使用实际资料摘要，避免模型在已完成的回读事务里反复循环。"""
+        facts, seen = [], set()
+        for ref, record in reversed(list(self.data.records.items())):
+            if record.get("status") != "success":
+                continue
+            inputs = record.get("inputs") or {}
+            identity = (record["tool"], inputs.get("ticker"), inputs.get("dataset_ref"))
+            if identity in seen:
+                continue
+            seen.add(identity)
+            fact = {"tool": record["tool"], "data_ref": ref, "ticker": inputs.get("ticker"),
+                    "source_refs": self.data.source_refs(ref)[:6], "result": evidence_preview(record["output"], limit=2200)}
+            if tokens(facts + [fact]) > 14000:
+                continue
+            facts.append(fact)
+            if len(facts) >= 8:
+                break
+        questions = [m["content"] for m in self.history[-6:] if m.get("role") == "user"]
+        context = "近期用户问题：" + dumps(questions) + "\n本轮追加要求：" + dumps(list(self.instructions.values()))
+        content = context + "\n本轮问题：" + task if isinstance(task, str) else [{"type": "text", "text": context}, *task]
+        return [system, {"role": "user", "content": content},
+                {"role": "user", "content": "以下是本轮实际成功资料的摘要，原文仍可按引用回读。不要重复取相同数据；"
+                 "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。\n" + dumps(facts)}]
+
     async def run_agent(self, agent_id: str, role: str, task: str, refs: list[str] | None = None,
                         image_indices: list[int] | None = None) -> str:
         from backend.agents.profiles import AGENT_PROFILES
@@ -458,6 +483,8 @@ class AgentRuntime:
         final = ""
         repairing_answer = False
         repair_tool_rounds = 0
+        previous_evidence = None
+        unchanged_rounds = 0
         # 末轮仍允许有界的必要补查，不能因为上下文提前收束就跳过当前问题的最低证据。
         extra = 5 if agent_id == "root" else 0
         for turn in range(rounds + extra):
@@ -473,11 +500,19 @@ class AgentRuntime:
                 evidence_progress["content"] = "当前问题的最低证据尚缺：" + dumps(gaps) + (
                     "。对缺口实际补查，失败或空结果不代表资料不存在。" if gaps else
                     "。最低证据已取得，请使用实际数值和引用回答；不要重复加载技能、取同一报价或扫描全部申报元数据。所需派生量仍须用计算工具核实。")
+            evidence = (tuple(ref for ref, record in self.data.records.items() if record.get("status") == "success"),
+                        tuple(artifact["artifact_id"] for artifact in self.data.artifacts), tuple(sorted(self.active_skills[agent_id])))
+            unchanged_rounds = unchanged_rounds + 1 if evidence[0] and evidence == previous_evidence else 0
+            previous_evidence = evidence
             available = self.available_tools(agent_id, role)
             schemas = [spec.openai() for spec in available.values()]
             total_budget = self.context.deadline - self.context.started_monotonic
-            finishing = agent_id == "root" and (turn in {rounds - 1, rounds + extra - 1} or (turn > 0 and self.context.remaining_seconds <= min(30, max(3, total_budget * .15))))
+            finishing = agent_id == "root" and (turn in {rounds - 1, rounds + extra - 1}
+                or not repairing_answer and unchanged_rounds >= 2
+                or (turn > 0 and self.context.remaining_seconds <= min(30, max(3, total_budget * .15))))
             if finishing:
+                messages = self.completion_context(messages[0], user_content)
+                evidence_progress = None
                 completed = []
                 pending = []
                 for child_id, child_task in self.children.items():

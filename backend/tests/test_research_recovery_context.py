@@ -139,6 +139,17 @@ def test_explicit_source_footnote_can_bind_multiple_rows_of_a_table():
     assert "explanation_contains_unbound_number" in issues
 
 
+@pytest.mark.asyncio
+async def test_repeated_successful_reads_converge_to_answer_with_real_facts(monkeypatch):
+    events, model = await run(monkeypatch, "查看AAPL当前价格", {
+        "get_stock_price": tool("get_stock_price", lambda _: {"source": "fixture", "price": 42}),
+    }, turns=[call("get_stock_price", {"ticker": "AAPL"}), call("get_stock_price", {"ticker": "AAPL"}),
+              call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL价格42。")])
+    assert events[-1]["answer_status"] == "answered"
+    assert "42" in str(model.inputs[-1])
+    assert not any(message.get("tool_calls") for message in model.inputs[-1])
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")
