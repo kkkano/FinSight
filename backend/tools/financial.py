@@ -79,6 +79,8 @@ def _convert_sec_companyfacts_payload(payload: Dict[str, Any]) -> dict | None:
         [
             ("Total Assets", payload.get("total_assets") or []),
             ("Total Liabilities", payload.get("total_liabilities") or []),
+            ("Cash And Cash Equivalents", payload.get("cash_and_equivalents") or []),
+            ("Long Term Debt", payload.get("long_term_debt") or []),
         ],
     )
     cashflow_table = _build_table_payload(
@@ -86,6 +88,8 @@ def _convert_sec_companyfacts_payload(payload: Dict[str, Any]) -> dict | None:
         [
             ("Operating Cash Flow", payload.get("operating_cash_flow") or []),
             ("Free Cash Flow", payload.get("free_cash_flow") or []),
+            ("Productive Asset Purchases (includes software and intangibles)", payload.get("productive_asset_purchases") or []),
+            ("Cash Flow After Productive Asset Purchases", payload.get("free_cash_flow_after_productive_asset_purchases") or []),
         ],
     )
 

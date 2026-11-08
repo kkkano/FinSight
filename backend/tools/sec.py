@@ -208,7 +208,7 @@ def _cumulative_quarter_count(start: str, end: str) -> int:
     return 0
 
 
-def _derive_ytd_cash_flow_quarters(
+def _derive_ytd_flow_quarters(
     entries: list[dict[str, Any]], *, subject: str, metric: str, concept: str,
     source_url: str | None,
 ) -> dict[str, FinancialFact]:
@@ -266,6 +266,7 @@ def _derive_ytd_cash_flow_quarters(
             period_start=(date.fromisoformat(previous_end) + timedelta(days=1)).isoformat(),
             frequency="quarterly", filed=fact_date(current["filed"]), accession=current["accn"],
             concept=concept, form=current["form"], source_url=source_url, derivation_inputs=lineage,
+            reporting_basis="consolidated", basis_context="sec_companyfacts_entity_wide_context",
         )
     return derived
 
@@ -284,7 +285,7 @@ def _extract_companyfacts_facts(
     facts = payload.get("facts") if isinstance(payload.get("facts"), dict) else {}
     gaap = facts.get("us-gaap") if isinstance(facts.get("us-gaap"), dict) else {}
     rows_by_period: dict[str, FinancialFact] = {}
-    cash_flow_series: list[tuple[str, list[dict[str, Any]]]] = []
+    cumulative_flow_series: list[tuple[str, list[dict[str, Any]]]] = []
     direct_periods: set[str] = set()
 
     for concept in concepts:
@@ -299,7 +300,7 @@ def _extract_companyfacts_facts(
             if not isinstance(entries, list):
                 continue
             valid: dict[str, list[dict[str, Any]]] = {}
-            eligible_cash_flows: list[dict[str, Any]] = []
+            eligible_flows: list[dict[str, Any]] = []
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
@@ -309,15 +310,19 @@ def _extract_companyfacts_facts(
                 period = _parse_companyfacts_period(entry)
                 if not period or fact_number(entry.get("val")) is None:
                     continue
-                if not instant and frequency == "quarterly" and unit == "USD" and metric in {"operating_cash_flow", "capital_expenditures", "capital_expenditure", "dividends_paid", "repurchases_paid"}:
-                    eligible_cash_flows.append(entry)
+                # 可加总流量可用累计差额补单季；EPS、比率和时点余额不具备可加总性。
+                if not instant and frequency == "quarterly" and unit == "USD" and metric in {
+                    "revenue", "gross_profit", "operating_income", "net_income", "operating_cash_flow",
+                    "capital_expenditures", "capital_expenditure", "productive_asset_purchases", "dividends_paid", "repurchases_paid",
+                }:
+                    eligible_flows.append(entry)
                 if instant:
                     if entry.get("start"):
                         continue
                 elif duration_frequency(entry.get("start"), entry.get("end")) != frequency:
                     continue
                 valid.setdefault(period, []).append(entry)
-            cash_flow_series.append((concept, eligible_cash_flows))
+            cumulative_flow_series.append((concept, eligible_flows))
             direct_periods.update(valid)
             for period, candidates in valid.items():
                 if period in rows_by_period:
@@ -341,8 +346,8 @@ def _extract_companyfacts_facts(
                     reporting_basis="consolidated", basis_context="sec_companyfacts_entity_wide_context",
                 )
     # 先收齐所有标签的直接单季值；冲突的直接单季也不能借差分绕过校验。
-    for concept, entries in cash_flow_series:
-        for period, fact in _derive_ytd_cash_flow_quarters(
+    for concept, entries in cumulative_flow_series:
+        for period, fact in _derive_ytd_flow_quarters(
             entries, subject=subject, metric=metric, concept=concept, source_url=source_url,
         ).items():
             if period not in direct_periods:
@@ -796,6 +801,8 @@ _COMPANYFACTS_METRIC_MAP: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     ),
     "total_assets": (("Assets",), ("USD",)),
     "total_liabilities": (("Liabilities", "LiabilitiesCurrentAndNoncurrent"), ("USD",)),
+    "cash_and_equivalents": (("CashAndCashEquivalentsAtCarryingValue",), ("USD",)),
+    "long_term_debt": (("LongTermDebtNoncurrent", "LongTermDebt"), ("USD",)),
     "operating_cash_flow": (
         ("NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"),
         ("USD",),
@@ -804,6 +811,8 @@ _COMPANYFACTS_METRIC_MAP: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("PaymentsToAcquirePropertyPlantAndEquipment", "CapitalExpenditures"),
         ("USD",),
     ),
+    # 生产性资产还包含软件及无形资产，单独保留，不冒充狭义 PP&E 支出。
+    "productive_asset_purchases": (("PaymentsToAcquireProductiveAssets",), ("USD",)),
 }
 
 
@@ -879,7 +888,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dic
                 unit_candidates=units,
                 subject=normalized_ticker,
                 metric=field,
-                instant=field in {"total_assets", "total_liabilities"},
+                instant=field in {"total_assets", "total_liabilities", "cash_and_equivalents", "long_term_debt"},
                 source_url=_SEC_COMPANYFACTS_URL.format(cik=cik),
                 frequency=frequency,
             )
@@ -887,7 +896,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dic
 
         all_periods: set[str] = set()
         for field, series in metric_maps.items():
-            if field not in {"total_assets", "total_liabilities"}:
+            if field not in {"total_assets", "total_liabilities", "cash_and_equivalents", "long_term_debt"}:
                 all_periods.update(series.keys())
         target_periods = sorted(all_periods, key=_period_sort_key, reverse=True)
         if scope.get("period_end"):
@@ -916,6 +925,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dic
             "company_name": company.get("title"),
             "cik": cik,
             "source_latest_filed": source_latest_filed,
+            "source_url": _SEC_COMPANYFACTS_URL.format(cik=cik),
             "periods": period_labels,
             "period_ends": period_labels,
             "frequency": frequency,
@@ -931,7 +941,7 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dic
                 field: [period for period in period_labels if period not in values]
                 for field, values in metric_maps.items() if any(period not in values for period in period_labels)
             },
-            "warnings": ["年度流量采用完整财年申报区间，不以季度或累计期代替。" if frequency == "annual" else "季度流量优先采用已披露的单季区间；现金流仅允许同标签、同财年起点的相邻累计差分，并保留两项申报来源。"],
+            "warnings": ["年度流量采用完整财年申报区间，不以季度或累计期代替。" if frequency == "annual" else "季度流量优先采用已披露的单季区间；可加总的营收、利润与现金流仅允许同标签、同财年起点的相邻累计差分，并保留两项申报来源；EPS 与比率不做差分。"],
             "revenue": [metric_maps["revenue"].get(period) for period in period_labels],
             "gross_profit": [metric_maps["gross_profit"].get(period) for period in period_labels],
             "operating_income": [metric_maps["operating_income"].get(period) for period in period_labels],
@@ -939,10 +949,25 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dic
             "eps": [metric_maps["eps"].get(period) for period in period_labels],
             "total_assets": [metric_maps["total_assets"].get(period) for period in period_labels],
             "total_liabilities": [metric_maps["total_liabilities"].get(period) for period in period_labels],
+            "cash_and_equivalents": [metric_maps["cash_and_equivalents"].get(period) for period in period_labels],
+            "long_term_debt": [metric_maps["long_term_debt"].get(period) for period in period_labels],
             "operating_cash_flow": [metric_maps["operating_cash_flow"].get(period) for period in period_labels],
+            "capital_expenditures": [metric_maps["capital_expenditures"].get(period) for period in period_labels],
+            "productive_asset_purchases": [metric_maps["productive_asset_purchases"].get(period) for period in period_labels],
+            "free_cash_flow_after_productive_asset_purchases": [],
             "free_cash_flow": [],
             "error": None,
         }
+
+        # SEC 的 fy/fp 是该次申报的财年/财季，只附在最新期间，避免把比较期套成申报当年。
+        fiscal_entries = [entry for taxonomy in (payload.get("facts") or {}).values()
+            for fact in taxonomy.values() for entries in (fact.get("units") or {}).values()
+            for entry in entries if fact_date(entry.get("end")) == period_labels[0]
+            and entry.get("fy") and entry.get("fp") and entry.get("form") in {"10-Q", "10-K"}]
+        if fiscal_entries:
+            filing = max(fiscal_entries, key=lambda entry: str(entry.get("filed", "")))
+            result["latest_filing_fiscal_context"] = {"period_end": period_labels[0], "fiscal_year": filing["fy"],
+                "fiscal_period": filing["fp"], "filed": filing.get("filed"), "accession": filing.get("accn")}
 
         for idx, period in enumerate(period_labels):
             ocf = metric_maps["operating_cash_flow"].get(period)
@@ -963,6 +988,20 @@ def get_sec_company_facts_quarterly(ticker: str, limit: int = 8, time_scope: dic
                 }
                 if fcf is not None and ocf_fact and capex_fact else None
             )
+            productive = metric_facts["productive_asset_purchases"].get(period)
+            adjusted = None
+            if productive and ocf_fact and productive.period_start == ocf_fact.period_start and productive.unit == ocf_fact.unit:
+                adjusted = ocf_fact.value - abs(productive.value)
+            result["free_cash_flow_after_productive_asset_purchases"].append(adjusted)
+            result["fact_metadata"].setdefault("free_cash_flow_after_productive_asset_purchases", []).append({
+                **ocf_fact.metadata(), "metric": "free_cash_flow_after_productive_asset_purchases", "value": adjusted,
+                "derivation": "operating_cash_flow_minus_productive_asset_purchases",
+                "basis": "经营现金流减生产性资产购置支出（含软件及其他无形资产）；不是狭义 PP&E 口径，也不宣称为公司调整后指标。",
+                "derivation_inputs": [ocf_fact.metadata(), productive.metadata()],
+            } if adjusted is not None else None)
+
+        if any(value is not None for value in result["free_cash_flow_after_productive_asset_purchases"]):
+            result["warnings"].append("生产性资产购置口径包含软件及其他无形资产；相关自由现金流单独展示，不能与狭义 PP&E 口径混用。")
 
         from .financial_calculations import calculate_period_change
         selected_period = period_labels[0]

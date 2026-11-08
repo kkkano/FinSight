@@ -251,6 +251,8 @@ async def test_inspect_financial_rows_omits_large_nested_metadata_but_keeps_unit
     assert result['status'] == 'ok' and tokens(result) < 2000
     assert result['column_units']['revenue'] == ['USD']
     assert 'fact_metadata' not in result['rows'][0]
-    too_large = inspector.invoke({'data_ref': ref, 'columns': ['fact_metadata']})
-    assert too_large['error'] == 'dataset_projection_too_large'
+    metadata = inspector.invoke({'data_ref': ref, 'columns': ['fact_metadata']})
+    assert metadata['status'] == 'ok' and tokens(metadata) < 2000
+    assert metadata['rows'][0]['fact_metadata']['revenue'] == {'unit': 'USD'}
+    assert 'audit' not in str(metadata['rows'])
     await rt.close()

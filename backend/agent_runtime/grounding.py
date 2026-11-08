@@ -1,6 +1,7 @@
 """引用按实际使用绑定；数值验证不把全部来源自动授予每个段落。"""
 from __future__ import annotations
 import re
+from urllib.parse import parse_qsl, urlsplit
 from .context import dumps
 from .data import RunData
 from backend.research.grounded_quantities import validate_grounded_quantities
@@ -9,8 +10,8 @@ from backend.research.grounded_quantities import validate_grounded_quantities
 def _directional_quantities(text: str) -> tuple[str, list[str]]:
     """方向词可以表示负数的绝对幅度；不改变目标价、日期或下跌期数。"""
     pattern = re.compile(r"(?<!涨)(?P<direction>下跌|跌幅|下滑|减少|下降|回落|亏损|上涨|涨幅|增加|增长|上升|跌|涨)"
-        r"(?P<spacing>\s*(?:了|约|幅度为|幅度约|为)?\s*)(?P<symbol>[$￥¥]?)\s*"
-        r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*(?:亿|万)?(?:美元|港元|人民币|欧元|英镑|元|USD|HKD|CNY|EUR|GBP|%|％))?", re.I)
+        r"(?P<spacing>\s*(?:了|约|近|接近|大约|约为|幅度为|幅度约|为)?\s*)(?P<symbol>[$￥¥]?)\s*"
+        r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*(?:万亿|千亿|十亿|千万|百万|亿|万)?(?:美元|港元|人民币|欧元|英镑|元|USD|HKD|CNY|EUR|GBP|%|％))?", re.I)
     issues = []
     negative = {"下跌", "跌幅", "下滑", "减少", "下降", "回落", "亏损", "跌"}
     def normalize(match):
@@ -24,7 +25,44 @@ def _directional_quantities(text: str) -> tuple[str, list[str]]:
         elif number.startswith("-"):
             issues.append("explanation_direction_mismatch")
         return match["direction"] + match["spacing"] + match["symbol"] + number + (match["unit"] or "")
-    return pattern.sub(normalize, text), list(dict.fromkeys(issues))
+    text = pattern.sub(normalize, text)
+    # 英文来源的跌幅常写正的绝对幅度；只在紧邻百分数的明确方向词处补符号。
+    negative_words = r"falls?|fell|fallen|drops?|dropped|declines?|declined|plunges?|plunged|cratered|sinks?|sank|down|loss(?:es)?"
+    positive_words = r"rises?|rose|risen|gains?|gained|increases?|increased|grew|growth|up|soars?|soared"
+    english = re.compile(r"\b(?P<direction>" + negative_words + "|" + positive_words + r")\b"
+        r"(?P<spacing>\s+(?:(?:by|of|approximately|nearly|about|around|over|more\s+than)\s+)*)"
+        r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*[%％])"
+        r"(?P<continuations>(?:\s+(?:in\s+(?:19|20)\d{2}\s+)?and\s+"
+        r"(?:approximately\s+|about\s+)?\d[\d,]*(?:\.\d+)?\s*[%％]){0,2})", re.I)
+    def english_normalize(match):
+        negative_direction = bool(re.fullmatch(negative_words, match["direction"], re.I))
+        number = match["number"]
+        if negative_direction:
+            if number.startswith("+"):
+                issues.append("explanation_direction_mismatch")
+            number = "-" + number.lstrip("-+")
+        elif number.startswith("-"):
+            issues.append("explanation_direction_mismatch")
+        def coordinated_number(child):
+            value = child[1]
+            if negative_direction:
+                if value.startswith("+"):
+                    issues.append("explanation_direction_mismatch")
+                value = "-" + value.lstrip("-+")
+            elif value.startswith("-"):
+                issues.append("explanation_direction_mismatch")
+            return value + child[2]
+        continuations = re.sub(r"([-+]?\d[\d,]*(?:\.\d+)?)(\s*[%％])", coordinated_number, match["continuations"])
+        return match["direction"] + match["spacing"] + number + match["unit"] + continuations
+    text = english.sub(english_normalize, text)
+    suffix = re.compile(r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*[%％])"
+                        r"(?P<spacing>\s+)(?P<direction>plunge|decline|drop|fall|loss|sell-off)\b", re.I)
+    def suffix_normalize(match):
+        if match["number"].startswith("+"):
+            issues.append("explanation_direction_mismatch")
+        return "-" + match["number"].lstrip("-+") + match["unit"] + match["spacing"] + match["direction"]
+    text = suffix.sub(suffix_normalize, text)
+    return text, list(dict.fromkeys(issues))
 
 
 def _definition_quantities(text: str) -> str:
@@ -129,7 +167,8 @@ def _percent_values(data: RunData, refs: list[str]) -> list[float]:
     values = []
     def collect(value, kind="", percent_unit=False):
         if isinstance(value, str):
-            values.extend(float(number.replace(",", ""))/100 for number in re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*[%％]", value.replace("−", "-")))
+            signed, _ = _directional_quantities(value.replace("−", "-"))
+            values.extend(float(number.replace(",", ""))/100 for number in re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*[%％]", signed))
         elif isinstance(value, list):
             for child in value:
                 collect(child, kind, percent_unit)
@@ -365,6 +404,20 @@ def _metadata_violations(text: str, data: RunData, refs: list[str]) -> list[str]
     return []
 
 
+def _source_url_identity(url: str) -> tuple:
+    """只忽略明确跟踪参数；页面路径、身份参数和片段必须仍然相同。"""
+    parsed = urlsplit(url)
+    tracking = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+                "gclid", "fbclid", "msclkid", "mc_cid", "mc_eid", ".tsrc"}
+    def is_tracking(key, value):
+        key = key.lower()
+        return key in tracking or key == "ref" and value.lower() == "yahoofinance" or (
+            key == "tlnk" and value.startswith("yf-"))
+    query = tuple(sorted((key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+                         if not is_tracking(key, value)))
+    return parsed.scheme.lower(), parsed.netloc.lower(), parsed.path, query, parsed.fragment
+
+
 def source_urls(text: str, data: RunData) -> list[str]:
     """识别链接与其后的标点/角标，不把已知链接当作任意路径的前缀许可。"""
     known_urls = {source.get("url") for source in data.sources.values() if source.get("url")}
@@ -374,7 +427,11 @@ def source_urls(text: str, data: RunData) -> list[str]:
         matched = next((url for url in known_urls if token == url or
                         token.startswith(url) and (token[len(url):len(url)+1] in ")(（[]}`'\"，。；"
                         or all(char in boundaries for char in token[len(url):]))), None)
-        result.append(matched or token.rstrip(boundaries))
+        candidate = token.rstrip(boundaries)
+        if not matched:
+            matched = next((url for url in known_urls if _source_url_identity(url) == _source_url_identity(candidate)), None)
+        # 等价链接回绑实际保存的URL，使交付和服务端引用检查使用同一原始来源。
+        result.append(matched or candidate)
     return result
 
 

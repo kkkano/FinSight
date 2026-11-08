@@ -28,7 +28,7 @@ def quote_tool():
         lambda _: {"price": 42, "currency": "USD", "source": "fixture", "as_of": "2026-11-06"}, True)
 
 
-async def pipeline(monkeypatch, turns, tools=None, **options):
+async def pipeline(monkeypatch, turns, tools=None, query="查AAPL价格", **options):
     model = turns if isinstance(turns, FakeModel) else FakeModel(turns)
     monkeypatch.setattr(service, "resolve_model", cfg)
     monkeypatch.setattr(service, "ModelTransport", lambda _: model)
@@ -42,7 +42,7 @@ async def pipeline(monkeypatch, turns, tools=None, **options):
     context.archive_usage = archive
     deps = SimpleNamespace(schedule_report_index=lambda **_: True,
         update_session_context=lambda **_: None, persist_run_event=None)
-    events = [event async for event in service.run_agent_pipeline(deps=deps, query="查AAPL价格",
+    events = [event async for event in service.run_agent_pipeline(deps=deps, query=query,
         thread_id="verification-session", run_id=context.run_id, run_context=context, **options)]
     return events, model
 
@@ -265,7 +265,7 @@ def test_repair_feedback_projects_related_successful_results_not_other_subjects(
     sid=data.source_refs(aapl)[0]
     feedback=service.answer_feedback(f"AAPL区间涨幅999%。[{sid}]",data)
     assert "25.00%" in feedback and sid in feedback and "AMD" not in feedback
-    assert "run_analysis_code" not in feedback and "source_id" in feedback
+    assert '"tool": "run_analysis_code"' not in feedback and "source_id" in feedback
 
 
 def test_successful_python_result_can_bind_original_sources_without_exposing_code_numbers():
@@ -446,7 +446,114 @@ async def test_incomplete_chart_has_partial_state_with_real_gap(monkeypatch):
     tool=ToolSpec("get_stock_historical_data","行情",schema({"ticker":{"type":"string"}},["ticker"]),lambda _:output,True)
     events,_=await pipeline(monkeypatch,[call("get_stock_historical_data",{"ticker":"AAPL"}),
         call("render_chart",{"dataset_ref":ref,"title":"已有收盘价","chart_type":"line","x":"date","series":[{"field":"close","name":"收盘价"}]}),
-        finish("图展示已有收盘价，部分数据缺失。")],{"get_stock_historical_data":tool})
+        finish("图展示已有收盘价，部分数据缺失。")],{"get_stock_historical_data":tool}, query="AAPL历史收盘价画图")
     done=events[-1]
     assert done["answer_status"]=="partial" and done["quality"]["state"]=="warn"
     assert any(reason["code"]=="partial_chart_data" for reason in done["quality"]["reasons"])
+
+
+@pytest.mark.parametrize("amount", ["4.975 万亿美元", "4.975 trillion USD", "4,975.38301952 billion USD", "4,975,383.01952 million USD"])
+def test_explicit_large_money_units_match_actual_market_cap(amount):
+    data=RunData("u","s","r","AAPL估值")
+    data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","currency":"USD","market_cap":4_975_383_019_520})
+    assert validate_paragraph("AAPL市值约"+amount+"。",data)==[]
+    assert validate_paragraph("AAPL市值9.975万亿美元。",data)==["explanation_contains_unbound_number"]
+
+
+def test_financial_table_amount_header_scales_only_its_amount_column():
+    data=RunData("u","s","r","INTC财报")
+    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
+        "periods":["2026-09-26"],"revenue":[16_513_000_000],"net_income":[3_320_000_000],"eps":[.6]})
+    table="| 指标 | 金额（USD，百万） | 说明 |\n|---|---|---|\n| 营收 | 16,513 | 截至2026-09-26 |\n| 净利润 | 3,320 | EPS 0.60 |"
+    assert validate_paragraph(table,data)==[]
+    assert validate_paragraph(table.replace("16,513","16,999"),data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph(table.replace("EPS 0.60","EPS 16,513"),data)==["explanation_contains_unbound_number"]
+
+
+@pytest.mark.parametrize("unit,amount", [("百万美元","16,513"),("USD billions","16.513")])
+def test_common_table_unit_applies_to_amount_fields_but_not_eps_dates_or_multiples(unit, amount):
+    data=RunData("u","s","r","INTC")
+    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
+        "periods":["2026-09-26"],"revenue":[16_513_000_000],"eps":[.6],"forwardPE":12.5})
+    table=f"单位：{unit}\n\n| 财期 | 营收 | EPS | P/E倍数 |\n|---|---|---|---|\n| 2026-09-26 | {amount} | 0.60 | 12.5 |"
+    assert validate_paragraph(table,data)==[]
+    assert validate_paragraph(table.replace("0.60","16,513"),data)==["explanation_contains_unbound_number"]
+
+
+def test_amount_unit_does_not_verify_uncomputed_growth_or_margin():
+    data=RunData("u","s","r","INTC财报")
+    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
+        "revenue":[16_513_000_000,16_128_000_000],"gross_profit":[8_000_000_000]})
+    assert validate_paragraph("INTC营收165.13亿美元，环比增长2.39%。",data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph("INTC营收165.13亿美元，毛利率48.45%。",data)==["explanation_contains_unbound_number"]
+
+
+@pytest.mark.parametrize("source,claim", [
+    ("Shares cratered nearly 30% after guidance.","INTC股价下跌约30%。"),
+    ("Shares cratered nearly 30% after guidance.","INTC股价跌近30%。"),
+    ("Dell stock fell approximately 16% during the week.","DELL股价下跌16%。"),
+    ("Intel projected PC unit declines of approximately 12% in 2026.","INTC预计2026年PC出货下滑12%。"),
+    ("Intel projected PC unit declines of approximately 12% in 2026 and 10% in 2027.","INTC预计2026年PC出货下滑12%，2027年下滑10%。"),
+    ("AMD shares are up 10% today after a 17% plunge.","AMD此前下跌17%，本日上涨10%。"),
+])
+def test_english_news_direction_verifies_chinese_percent_magnitude(source,claim):
+    data=RunData("u","s","r","新闻")
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":source})
+    assert validate_paragraph(claim,data)==[]
+    assert validate_paragraph(claim.replace("下跌","上涨").replace("下滑","增长").replace("跌近","涨近"),data)
+
+
+def test_numeric_count_and_wrong_sign_do_not_substitute_for_signed_percent():
+    data=RunData("u","s","r","新闻")
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":"Shares cratered nearly 30%.","articles":30})
+    assert validate_paragraph("INTC上涨30%。",data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph("INTC下跌+30%。",data)==["explanation_direction_mismatch"]
+
+
+@pytest.mark.parametrize("source", [
+    "Units decline 12% in 2026 and +10% in 2027.",
+    "Units decline 12% in 2026 and growth of 10% in 2027.",
+])
+def test_news_percent_direction_is_not_inherited_across_explicit_reversal(source):
+    data=RunData("u","s","r","INTC")
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":source})
+    assert validate_paragraph("INTC预计2027年下滑10%。",data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph("INTC预计2027年增长10%。",data)==[]
+
+
+def test_known_tracking_parameters_do_not_make_real_article_link_unknown():
+    from backend.agent_runtime.grounding import cited_sources,source_urls
+    data=RunData("u","s","r","INTC新闻")
+    base="https://www.tikr.com/blog/intel-pc-warning"
+    saved=base+"?ref=yahoofinance&tlnk=yf-261106-example&.tsrc=rss&utm_source=yahoo"
+    ref=data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","source_url":saved,"summary":"已取得原文"})
+    assert source_urls(f"[报道]({base})。",data)==[saved]
+    assert cited_sources(f"[报道]({base})。",data)==data.source_refs(ref)
+    assert service.paragraph_issues(f"来源：[报道]({base})。",data)==[]
+
+
+@pytest.mark.parametrize("changed", ["?id=other", "?ref=another-document", "/invented", "#different-section"])
+def test_tracking_equivalence_does_not_ignore_document_identity_or_path(changed):
+    data=RunData("u","s","r","新闻")
+    base="https://www.tikr.com/blog/intel-pc-warning"
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","source_url":base+"?utm_source=yahoo"})
+    assert service.paragraph_issues(f"来源：[报道]({base+changed})。",data)==["unverified_citation"]
+
+
+def test_tracking_equivalence_keeps_original_nontracking_query_parameters():
+    from backend.agent_runtime.grounding import _source_url_identity
+    data=RunData("u","s","r","新闻")
+    base="https://example.com/article"
+    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","source_url":base+"?id=42&doc=publication&ref=original&utm_source=yahoo"})
+    assert service.paragraph_issues(f"来源：[报道]({base}?ref=original&doc=publication&id=42)。",data)==[]
+    assert service.paragraph_issues(f"来源：[报道]({base})。",data)==["unverified_citation"]
+    assert _source_url_identity(base+"?token=publication") != _source_url_identity(base)
+
+
+def test_large_money_unit_cannot_borrow_another_tickers_source():
+    data=RunData("u","s","r","AAPL估值")
+    ref=data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","currency":"USD","market_cap":4_975_383_019_520})
+    data.record("get_company_info",{"ticker":"AMD"},{"source":"fixture","currency":"USD","market_cap":9_975_383_019_520})
+    sid=data.source_refs(ref)[0]
+    assert validate_paragraph(f"AAPL市值4.975万亿美元。[{sid}]",data)==[]
+    assert validate_paragraph(f"AAPL市值9.975万亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]

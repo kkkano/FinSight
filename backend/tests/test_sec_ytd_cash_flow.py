@@ -1,4 +1,4 @@
-"""SEC 公开现金流观察值的无网络回归；衍生季度必须保留两份申报来源。"""
+"""SEC 可加总财务流量的无网络回归；衍生季度必须保留两份申报来源。"""
 from copy import deepcopy
 
 import pytest
@@ -119,6 +119,58 @@ def test_eps_is_never_derived_even_with_matching_cumulative_intervals():
     assert "2026-06-30" not in facts
 
 
+@pytest.mark.parametrize("metric,concept,annual,ytd,expected", [
+    ("revenue", "RevenueFromContractWithCustomerExcludingAssessedTax", 478_834_000_000, 364_357_000_000, 114_477_000_000),
+    ("net_income", "NetIncomeLoss", 132_175_000_000, 101_464_000_000, 30_711_000_000),
+    ("operating_income", "OperatingIncomeLoss", -20_000_000, -25_000_000, 5_000_000),
+    ("gross_profit", "GrossProfit", 190_000_000_000, 145_000_000_000, 45_000_000_000),
+])
+def test_additive_income_flows_fill_q4_from_same_fiscal_year_annual_and_nine_months(metric, concept, annual, ytd, expected):
+    rows = [
+        _entry(ytd, "2025-09-28", "2026-06-27", "2026-07-31", "0000320193-26-000020"),
+        _entry(annual, "2025-09-28", "2026-09-26", "2026-11-03", "0000320193-26-000026", form="10-K"),
+    ]
+    fact = _extract(_payload({concept: rows}), concepts=(concept,), metric=metric, subject="AAPL")["2026-09-26"]
+    assert (fact.value, fact.period_start, fact.period_end, fact.frequency) == (expected, "2026-06-28", "2026-09-26", "quarterly")
+    metadata = fact.metadata()
+    assert metadata["derivation"] == "ytd_difference"
+    assert metadata["reporting_basis"] == "consolidated"
+    assert [row["value"] for row in metadata["derivation_inputs"]] == [annual, ytd]
+    assert {row["concept"] for row in metadata["derivation_inputs"]} == {concept}
+
+
+@pytest.mark.parametrize("change", ["different_start", "different_concept", "prior_revised", "conflicting_direct"])
+def test_income_flow_q4_derivation_rejects_incompatible_or_conflicting_facts(change):
+    concept = "RevenueFromContractWithCustomerExcludingAssessedTax"
+    rows = [
+        _entry(364_357_000_000, "2025-09-28", "2026-06-27", "2026-07-31", "q3"),
+        _entry(478_834_000_000, "2025-09-28", "2026-09-26", "2026-11-03", "annual", form="10-K"),
+    ]
+    payload = _payload({concept: rows})
+    if change == "different_start":
+        rows[0]["start"] = "2025-10-01"
+    elif change == "different_concept":
+        payload = _payload({concept: [rows[1]], "Revenues": [rows[0]]})
+    elif change == "prior_revised":
+        rows.append(dict(rows[0], val=364_000_000_000, accn="q3-amended", filed="2026-08-01", form="10-Q/A"))
+    else:
+        rows.extend([
+            _entry(114_477_000_000, "2026-06-28", "2026-09-26", "2026-11-03", "annual", form="10-K"),
+            _entry(115_000_000_000, "2026-06-28", "2026-09-26", "2026-11-03", "annual", form="10-K"),
+        ])
+    assert "2026-09-26" not in _extract(payload, concepts=(concept, "Revenues"), metric="revenue", subject="AAPL")
+
+
+def test_annual_request_keeps_annual_income_flow_and_does_not_replace_it_with_q4():
+    rows = [
+        _entry(364_357_000_000, "2025-09-28", "2026-06-27", "2026-07-31", "q3"),
+        _entry(478_834_000_000, "2025-09-28", "2026-09-26", "2026-11-03", "annual", form="10-K"),
+    ]
+    fact = sec._extract_companyfacts_facts(_payload({"Revenues": rows}), concepts=("Revenues",),
+        unit_candidates=("USD",), subject="AAPL", metric="revenue", frequency="annual")["2026-09-26"]
+    assert (fact.value, fact.period_start, fact.frequency) == (478_834_000_000, "2025-09-28", "annual")
+
+
 def test_cash_flow_output_keeps_capex_basis_and_source_as_of(monkeypatch):
     monkeypatch.setenv("SEC_USER_AGENT", "FinSight test@example.com")
     monkeypatch.setattr(sec, "_load_ticker_map", lambda _: {"MA": {"cik": "0001141391", "title": "Mastercard"}})
@@ -141,3 +193,19 @@ def test_productive_assets_is_not_silently_relabelled_as_ppe():
     facts = _extract(_payload({"PaymentsToAcquireProductiveAssets": _ma_rows()}),
         concepts=sec._COMPANYFACTS_METRIC_MAP["capital_expenditures"][0], metric="capital_expenditures", subject="V")
     assert facts == {}
+
+
+def test_productive_asset_cash_flow_keeps_separate_basis_and_lineage(monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", "FinSight test@example.com")
+    monkeypatch.setattr(sec, "_load_ticker_map", lambda _: {"NVDA": {"cik": "0001045810", "title": "NVIDIA"}})
+    productive = [dict(row, val=value) for row, value in zip(_ma_rows(), (200_000_000, 500_000_000))]
+    monkeypatch.setattr(sec, "_fetch_companyfacts", lambda *_: _payload({OCF: _ma_rows(), "PaymentsToAcquireProductiveAssets": productive}))
+    result = sec.get_sec_company_facts_quarterly("NVDA")
+    assert result["capital_expenditures"][0] is None
+    assert result["free_cash_flow"][0] is None
+    assert result["productive_asset_purchases"][0] == 300_000_000
+    assert result["free_cash_flow_after_productive_asset_purchases"][0] == 3_473_000_000
+    metadata = result["fact_metadata"]["free_cash_flow_after_productive_asset_purchases"][0]
+    assert metadata["derivation_inputs"][1]["concept"] == "PaymentsToAcquireProductiveAssets"
+    assert "软件" in metadata["basis"]
+    assert result["source_url"].endswith("CIK0001045810.json")
