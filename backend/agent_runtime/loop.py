@@ -219,7 +219,7 @@ class AgentRuntime:
             lambda _a: {"skills": skill_catalog()})
         add("use_skill", "为当前研究角色应用一个已安装技能，取得方法与输出要求；最多3个，工具权限保持不变。",
             {"skill_id": string}, ["skill_id"], lambda a: self.activate_skill(agent_id, a["skill_id"]))
-        add("analyze_dataset", "确定性计算：区间收益/高低/均值用series_statistics，parameters.latest_n=2只算最近两期差额difference和变化率return_ratio；连续下跌周期用historical_drawdown_episodes（不是一般峰谷回撤），parameters.frequency=daily/weekly、min_periods是连续期数、minimum_loss是累计跌幅比例如0.05。估值用valuation_scenarios。多股票涨跌比较用indexed_comparison，parameters.other_dataset_refs传其余引用，返回合并rows/series可画图、comparison_stats用于核对领先天数和下跌天数。数值列parameters.value，日期parameters.date；不支持的参数会拒绝。",
+        add("analyze_dataset", "确定性计算：财报利润率和现金转化用financial_ratios，返回同财期的百分比与口径；区间收益/高低/均值用series_statistics，parameters.latest_n=2只算最近两期差额difference和变化率return_ratio；连续下跌周期用historical_drawdown_episodes（不是一般峰谷回撤），parameters.frequency=daily/weekly、min_periods是连续期数、minimum_loss是累计跌幅比例如0.05。估值用valuation_scenarios。多股票涨跌比较用indexed_comparison，parameters.other_dataset_refs传其余引用，返回合并rows/series可画图、comparison_stats用于核对领先天数和下跌天数。数值列parameters.value，日期parameters.date；不支持的参数会拒绝。",
             {"dataset_ref": string, "operation": string, "parameters": {"type": "object"}}, ["dataset_ref", "operation"],
             lambda a: analyze_dataset(self.data, **a))
         add("run_analysis_code", "运行Python计算，结果写result（仅print只返回调试日志，不算完成）。datasets保留原始数据包；get_frame(data_ref或datasets[data_ref], table=None)取得DataFrame。画图结果推荐result={'rows':df.to_dict('records'),'summary':摘要}，多表用render_chart.table选择。pd/np已可用；无网络或宿主文件。报错带代码行号、错误信息和logs，可调整后重试。",
@@ -384,18 +384,39 @@ class AgentRuntime:
 
     async def recover_research(self, messages: list[dict], content: str, block_id: str) -> bool:
         gaps = self.completeness.missing(self.data, self.executor.attempts)
-        if not gaps or self.research_recovery_rounds >= 2 or self.context.remaining_seconds <= 20:
+        ratio_refs = []
+        if "valuation" in self.completeness.facets:
+            seen = set()
+            for ref, record in reversed(list(self.data.records.items())):
+                ticker = record.get("inputs", {}).get("ticker")
+                if (ticker in seen or ticker not in self.completeness.tickers or record.get("status") != "success"
+                        or not isinstance(record.get("output"), dict) or record["output"].get("source") != "sec_companyfacts"):
+                    continue
+                seen.add(ticker)
+                if not any(row.get("tool") == "analyze_dataset" and row.get("inputs", {}).get("dataset_ref") == ref
+                           and row.get("inputs", {}).get("operation") == "financial_ratios" for row in self.data.records.values()):
+                    market_refs, market_tools = [], set()
+                    for market_ref, market in reversed(list(self.data.records.items())):
+                        name = market.get("tool")
+                        if (name in {"get_company_info", "get_stock_price"} and name not in market_tools
+                                and market.get("status") == "success" and market.get("inputs", {}).get("ticker") == ticker):
+                            market_refs.append(market_ref)
+                            market_tools.add(name)
+                    ratio_refs.append((ref, market_refs))
+        if not (gaps or ratio_refs) or self.research_recovery_rounds >= 2 or self.context.remaining_seconds <= 20:
             return False
         # 补查只使用当前角色已授权的只读工具；发现不扩权，不启用任何写操作。
         self.enabled_tools["root"].update({"get_financial_statements", "get_local_market_filings"} & self.base_tools.keys())
         available = self.available_tools("root", "research_lead")
         calls = self.completeness.recovery_calls(gaps, self.executor.attempts, available, self.data)
+        calls.extend(("analyze_dataset", {"dataset_ref": ref, "operation": "financial_ratios", "parameters": {"other_dataset_refs": market_refs}})
+                     for ref, market_refs in ratio_refs)
         if not calls:
             return False
         self.research_recovery_rounds += 1
         await self.emit("content.block_finished", {"block_id": block_id, "content_phase": "progress"})
         await self.emit("activity.updated", {"activity_id": "research_completeness", "title": "补查当前问题所需资料",
-            "summary": "正在核对" + "、".join(dict.fromkeys(gap["label"] for gap in gaps)) + "。"})
+            "summary": "正在核对" + "、".join(dict.fromkeys([gap["label"] for gap in gaps] + (["财务比例"] if ratio_refs else []))) + "。"})
         ids = ["recovery_" + uuid.uuid4().hex[:12] for _ in calls]
         messages.append({"role": "assistant", "content": content or None, "tool_calls": [
             {"id": cid, "type": "function", "function": {"name": name, "arguments": dumps(args)}}

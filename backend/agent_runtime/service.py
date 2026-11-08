@@ -431,6 +431,10 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                     referenced_ids = set(cited_sources(response, runtime.data))
                     for artifact in runtime.data.artifacts:
                         referenced_ids.update(artifact.get("source_refs") or [])
+                    for sid in list(referenced_ids):
+                        ref = runtime.data.sources.get(sid, {}).get("data_ref")
+                        if ref:
+                            referenced_ids.update(runtime.data.source_refs(ref))
                     referenced_sources = [source for sid, source in runtime.data.sources.items() if sid in referenced_ids]
                     if any(coverage.get("missing", 0) > 0 for artifact in runtime.data.artifacts
                            for coverage in (artifact.get("coverage") or {}).values()):

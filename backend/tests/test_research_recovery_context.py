@@ -233,6 +233,31 @@ async def test_incomplete_week_explanation_is_not_an_unfinished_tool_task(monkey
     assert events[-1]["answer_status"] == "answered" and events[-1]["quality"]["state"] == "pass"
 
 
+@pytest.mark.asyncio
+async def test_valuation_recovery_calculates_ratios_once_and_retains_market_lineage():
+    context = RunContext.create(owner="ratio-user", entry="chat", budget_seconds=90)
+    context.quota_checker = lambda _: None
+    async def emit(*_args):
+        pass
+    rt = AgentRuntime(context=context, session_id="s", query="INTC估值健康吗", model=FakeModel([]), emit=emit, tools={})
+    try:
+        market = rt.data.record("get_company_info", {"ticker": "INTC"}, {"forwardPE": 20, "source_url": "https://example.com/intc"})
+        fields = {"revenue": [100], "gross_profit": [40], "net_income": [10], "operating_cash_flow": [12], "free_cash_flow": [8]}
+        filing = rt.data.record("get_sec_company_facts_quarterly", {"ticker": "INTC"}, {
+            "source": "sec_companyfacts", "source_url": "https://www.sec.gov/Archives/intc", "currency": "USD", "frequency": "quarterly", "ticker": "INTC",
+            "period_ends": ["2026-09-26"], **fields,
+            "fact_metadata": {key: [{"unit": "USD", "subject": "INTC", "metric": key, "value": values[0],
+                "source": "sec_companyfacts", "frequency": "quarterly", "period_start": "2026-06-28", "period_end": "2026-09-26"}]
+                for key, values in fields.items()}})
+        assert await rt.recover_research([], "先核对估值和财报。", "draft")
+        computed = next(record for record in rt.data.records.values() if record.get("inputs", {}).get("operation") == "financial_ratios")
+        assert set(computed["inputs"]["dataset_refs"]) == {filing, market}
+        assert not await rt.recover_research([], "数据已齐。", "draft2")
+        assert rt.tool_count == 1
+    finally:
+        await rt.close()
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")
