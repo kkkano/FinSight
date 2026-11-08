@@ -303,6 +303,19 @@ def test_completion_context_includes_already_created_chart_status():
     assert "已实际生成" in str(summary)
 
 
+def test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries():
+    rows = [{"time": f"2026-11-{index+1:02}", "close": 100+index} for index in range(20)]
+    payload = {"data": rows, "kline_data": rows, "provider": "fixture", "metadata_noise": "x" * 10000,
+               "price_basis": "split_adjusted_close"}
+    preview = json.loads(compact_result({"result": payload}, "dataset_history"))["preview"]
+    assert preview["row_count"] == 20 and preview["rows_sampled"] is True
+    assert preview["data"][-1]["close"] == 119 and "kline_data" not in preview
+    assert preview["last_observation"] == "2026-11-20"
+    assert preview["price_basis"] == "split_adjusted_close"
+
+
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")

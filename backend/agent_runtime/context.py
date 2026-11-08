@@ -102,10 +102,18 @@ def evidence_preview(value: Any, *, limit: int = 4500) -> Any:
         if row_key:
             rows = value[row_key]
             # 完整统计和区间列表优先于长行情数组；样本只是预览，不能解释成行情缺口。
-            preview = {key: child for key, child in value.items() if key != row_key and key not in {"fact_metadata", "code", "code_hash", "input_hash"}}
-            preview.update(row_count=len(rows), returned_rows=min(len(rows), 5), has_more=len(rows) > 5,
-                           rows_sampled=len(rows) > 5)
+            aliases = {key for key in ("rows", "data", "kline_data", "bars") if isinstance(value.get(key), list) and value[key] == rows}
+            preview = {"row_count": len(rows), "returned_rows": min(len(rows), 5), "has_more": len(rows) > 5,
+                       "rows_sampled": len(rows) > 5}
             preview[row_key] = rows if len(rows) <= 5 else rows[:2] + rows[-3:]
+            date_key = next((key for key in ("time", "date", "period_end") if rows and key in rows[0]), None)
+            if date_key:
+                preview.update(first_observation=rows[0].get(date_key), last_observation=rows[-1].get(date_key))
+            for key in ("source", "source_url", "provider", "currency", "unit", "period", "interval", "price_basis", "dividends_included",
+                        "as_of", "observed_at", "asset", "quality", "status", "frequency", "method", "limitations", "summary",
+                        "comparison_stats", "columns", "column_units", "selected_columns", "degraded", "derived_fields"):
+                if key in value and key not in aliases:
+                    preview[key] = value[key]
             if len(dumps(preview)) <= limit:
                 return preview
             return safe_preview(preview, max_chars=limit)
