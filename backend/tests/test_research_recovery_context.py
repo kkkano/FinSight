@@ -389,7 +389,7 @@ async def test_cause_delivery_keeps_sourced_explanation_with_programmatic_price_
     data = RunData("u", "s", "r", query)
     ref = data.record("search", args, article)
     sid = data.source_refs(ref)[0]
-    draft = f"报道支持的触发因素：多家媒体报道，营收隐含下滑99999%，直接诱因是第四季度指引不及预期（[{sid}](https://example.com/news)）——有关数字仍需核实。"
+    draft = f"**报道支持的触发因素（媒体归因，非因果证明）**：多家媒体报道，营收隐含下滑99999%，直接诱因是第四季度指引不及预期（[{sid}](https://example.com/news)）——有关数字仍需核实。"
     events, _ = await run(monkeypatch, query, {
         "get_stock_historical_data": tool("get_stock_historical_data", lambda _: history),
         "search": tool("search", lambda _: article),
