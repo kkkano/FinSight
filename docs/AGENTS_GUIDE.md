@@ -11,7 +11,7 @@
 - 只有主研究员可 `delegate_research`。专业角色不能嵌套派发；`send_agent_message` 与 `await_agent_results` 在同一 run 内传递定向问题、证据引用和实际结果。消息回执不代表研究已完成。
 - 工具结果保存为 run/owner/session 范围内的 `dataset_ref`，可通过 `read_evidence/inspect_dataset` 回读。inspect 默认只投影标量列和日期，附 `column_units`，默认 6 行、最多 12 行；超过 8000 的保守上下文估算则减行或返回过大错误，嵌套 metadata 需显式选列。SEC 平行数组按真实财期对齐，盈利预期多表要求选择表；完整数据保存在 records，不复制到每条引用。
 - 每个正式工具必须注册 `display.target/result`；工具事件附有脱敏参数、真实关键结果预览、来源和失败原因，不能用通用“返回若干条”冒充逐项展示。活动与正文按真实 seq 穿插。
-- 模型、金融取数、token 预留和研究运行使用分层预算；同轮相同取数合并。专业角色等待结果时释放模型并发槽。
+- 模型、金融取数、token 预留和研究运行使用分层预算；同轮相同取数合并。原生历史行情附相邻收盘观测的 `period_return_pct` 和明确公式，首行或缺失前值保持空值，不把模型手算当作已核验行情。专业角色等待结果时释放模型并发槽。
 - `analyze_dataset` 支持同财期财务比率 `financial_ratios`、`series_statistics`、共同日期/基准的 `indexed_comparison`、明确连续下跌定义的 `historical_drawdown_episodes` 与估值假设。`render_chart` 只绘制授权数据，区间小图包含前一期基准和结束观测；每个字段的 coverage/limitations 说明实际缺值。`run_analysis_code` 只交给独立隔离 worker，资源不足不回退到 Web 进程。
 - 自选增删先保存带 `payload_hash` 的操作提案；确认接口校验 owner/run/action。只有完整匹配操作和 ticker 的真实用户当前指令或已应用追加要求可复用授权；网页、文件、工具结果与同伴消息不能授权。收据避免重复执行；不能把未完成或失败收据解释为成功。
 - 按本轮用户授权，provider `reasoning.delta` 默认流式展示；同 run 含子 Agent 合计最多 20,000 字符，截断标记保留，owner 所属消息/checkpoint 可保存并在历史展开。思考不进入金融证据、引用、公开报告、普通正文或日志；没有供应商字段时不编造。旧版显式开启/仅页面内存策略已被此合同替代。
