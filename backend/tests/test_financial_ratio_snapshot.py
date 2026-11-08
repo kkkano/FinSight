@@ -22,11 +22,14 @@ def payload():
         "free_cash_flow_after_productive_asset_purchases": [21_400_000_000, 48_587_000_000, 13_470_000_000],
         "total_assets": [320_272_000_000, 259_525_000_000, 145_021_000_000],
         "total_liabilities": [91_288_000_000, 76_355_000_000, 48_835_000_000],
+        "long_term_debt": [32_366_000_000, None, None],
+        "cash_and_equivalents": [22_443_000_000, None, None],
+        "capital_expenditures": [None, None, None],
     }
     source_url = "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json"
     metadata = {}
     for metric, values in metrics.items():
-        instant = metric in {"total_assets", "total_liabilities"}
+        instant = metric in {"total_assets", "total_liabilities", "long_term_debt", "cash_and_equivalents"}
         metadata[metric] = [{"subject": "NVDA", "metric": metric, "value": value, "unit": "USD",
             "source": "sec_companyfacts", "source_url": source_url, "frequency": "instant" if instant else "quarterly",
             "period_start": None if instant else start, "period_end": end, "concept": metric}
@@ -53,6 +56,9 @@ def test_latest_quarter_ratios_growth_and_lineage_use_actual_facts(payload):
     assert row["net_margin_pct"] == pytest.approx(59_688 / 96_221 * 100)
     assert row["operating_cash_flow_to_net_income_pct"] == pytest.approx(24_077 / 59_688 * 100)
     assert row["liabilities_to_assets_pct"] == pytest.approx(91_288 / 320_272 * 100)
+    assert row["net_income_less_operating_income_margin_pp"] == pytest.approx((59_688 - 63_734) / 96_221 * 100)
+    assert row["long_term_debt_less_cash_amount"] == 9_923_000_000
+    assert row["capital_expenditures_to_revenue_pct"] is None
     assert row["revenue_qoq_pct"] == pytest.approx((96_221 / 81_615 - 1) * 100)
     assert row["net_income_yoy_pct"] == pytest.approx((59_688 / 26_422 - 1) * 100)
     assert row["revenue_yoy_baseline_period_end"] == "2025-07-27"
@@ -63,6 +69,8 @@ def test_latest_quarter_ratios_growth_and_lineage_use_actual_facts(payload):
     assert [item["value"] for item in calculation["derivation_inputs"]] == [72_142_000_000, 96_221_000_000]
     assert all(item["source_url"] == payload["source_url"] for item in calculation["derivation_inputs"])
     assert data.records[ref] == original
+    assert result["financial_context"]["revenue"] == 96_221_000_000
+    assert "fact_metadata" not in result["financial_context"]
     assert set(data.source_refs(ref)).issubset(data.source_refs(result["data_refs"][0]))
     sid = data.source_refs(result["data_refs"][0])[0]
     assert validate_paragraph(f"NVDA毛利率75.0%、营业利润率66.2%、净利率62.0%、负债率28.5%。[{sid}]", data) == []
@@ -97,6 +105,19 @@ def test_declared_negative_free_cash_flow_is_kept_and_not_replaced_by_alternativ
     data, ref = record(payload)
     row = analyze_dataset(data, ref, "financial_ratios")["rows"][0]
     assert row["free_cash_flow_margin_pct"] == pytest.approx(-100_000_000 / 96_221_000_000 * 100)
+
+
+def test_declared_capex_intensity_and_cash_debt_difference_keep_their_basis(payload):
+    payload["capital_expenditures"][0] = 1_000_000_000
+    payload["fact_metadata"]["capital_expenditures"][0] = {
+        **payload["fact_metadata"]["operating_cash_flow"][0], "metric": "capital_expenditures", "value": 1_000_000_000}
+    data, ref = record(payload)
+    result = analyze_dataset(data, ref, "financial_ratios")
+    assert result["rows"][0]["capital_expenditures_to_revenue_pct"] == pytest.approx(1_000 / 96_221 * 100)
+    debt = next(item for item in result["calculations"] if item["metric"] == "long_term_debt_less_cash_amount")
+    assert debt["formula"] == "long_term_debt-cash_and_equivalents" and debt["unit"] == "USD"
+    assert "不代表总净债务" in debt["basis"]
+    assert "net_debt" not in result["rows"][0]
 
 
 def test_nonpositive_income_baselines_and_denominator_do_not_create_growth_or_cash_conversion(payload):

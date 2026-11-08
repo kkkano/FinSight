@@ -220,7 +220,7 @@ def _financial_ratios(rows: list[dict]) -> dict:
         if value is None:
             return None
         metadata = (row.get("fact_metadata") or {}).get(metric)
-        frequency = "instant" if metric in {"total_assets", "total_liabilities"} else "quarterly"
+        frequency = "instant" if metric in {"total_assets", "total_liabilities", "long_term_debt", "cash_and_equivalents"} else "quarterly"
         if isinstance(metadata, dict):
             if (metadata.get("subject") != ticker or metadata.get("unit") != currency
                     or metadata.get("frequency") != frequency or fact_date(metadata.get("period_end")) != fact_date(row["period_end"])
@@ -229,7 +229,7 @@ def _financial_ratios(rows: list[dict]) -> dict:
                 return None
         else:
             metadata = {"subject": ticker, "metric": metric, "unit": currency, "frequency": frequency,
-                        "period_start": row.get("period_start"), "period_end": row["period_end"], "source": "sec_companyfacts",
+                        "period_start": None if frequency == "instant" else row.get("period_start"), "period_end": row["period_end"], "source": "sec_companyfacts",
                         "source_url": row.get("source_url")}
         return {**metadata, "value": value}
 
@@ -240,6 +240,7 @@ def _financial_ratios(rows: list[dict]) -> dict:
         "operating_cash_flow_to_net_income_pct": ("operating_cash_flow", "net_income"),
         "free_cash_flow_margin_pct": ("free_cash_flow", "revenue"),
         "liabilities_to_assets_pct": ("total_liabilities", "total_assets"),
+        "capital_expenditures_to_revenue_pct": ("capital_expenditures", "revenue"),
     }
     result = {"ticker": ticker, "period_end": fact_date(latest["period_end"]), "currency": currency, "frequency": "quarterly"}
     calculations, gaps = [], {}
@@ -262,6 +263,30 @@ def _financial_ratios(rows: list[dict]) -> dict:
         result[metric] = value
         calculations.append({"metric": metric, "value": value, "unit": "%", "period_end": result["period_end"],
             "formula": f"{numerator_name}/{denominator_name}*100", "derivation_inputs": [numerator, denominator]})
+
+    key = "net_income_less_operating_income_margin_pp"
+    net, operating, revenue = (fact(latest, metric) for metric in ("net_income", "operating_income", "revenue"))
+    result[key] = None
+    if (all(item is not None for item in (net, operating, revenue)) and revenue["value"] > 0
+            and len({item.get("period_start") for item in (net, operating, revenue)}) == 1):
+        result[key] = fact_number((net["value"] - operating["value"]) / revenue["value"] * 100)
+        if result[key] is not None:
+            calculations.append({"metric": key, "value": result[key], "unit": "pp", "period_end": result["period_end"],
+                "formula": "(net_income-operating_income)/revenue*100", "derivation_inputs": [net, operating, revenue]})
+    if result[key] is None:
+        gaps[key] = "missing_or_incompatible_fact"
+
+    key = "long_term_debt_less_cash_amount"
+    debt, cash = fact(latest, "long_term_debt"), fact(latest, "cash_and_equivalents")
+    result[key] = None
+    if debt is not None and cash is not None and debt.get("period_start") == cash.get("period_start"):
+        result[key] = fact_number(debt["value"] - cash["value"])
+        if result[key] is not None:
+            calculations.append({"metric": key, "value": result[key], "unit": currency, "period_end": result["period_end"],
+                "formula": "long_term_debt-cash_and_equivalents", "derivation_inputs": [debt, cash],
+                "basis": "仅长期债务减现金及等价物；不含短期债务、商业票据等，不代表总净债务。"})
+    if result[key] is None:
+        gaps[key] = "missing_or_incompatible_fact"
 
     for metric in ("revenue", "net_income"):
         current = fact(latest, metric)
@@ -289,9 +314,12 @@ def _financial_ratios(rows: list[dict]) -> dict:
         return {"status": "unavailable", "error": "financial_ratios_unavailable", "metric_gaps": gaps,
                 "summary": "当前单季事实缺少可计算的同口径分子和正分母，未生成比率。"}
     return {"rows": [result], "calculations": calculations, "metric_gaps": gaps,
+            "financial_context": {key: deepcopy(value) for key, value in latest.items()
+                                  if key != "fact_metadata" and not isinstance(value, (dict, list))},
             "method": {"kind": "financial_ratios", "unit": "%", "frequency": "quarterly",
                        "growth_baseline": "相邻单季或约一年前同季度，单位、会计概念与区间长度一致且基数为正"},
-            "limitations": ["仅计算已披露单季事实；缺失比率保留空值，不推算单季年化、未来 EPS 或 PEG。"]}
+            "limitations": ["仅计算已披露单季事实；缺失比率保留空值，不推算单季年化、未来 EPS 或 PEG。",
+                            "净利与营业利润率差额不单独归因于非经营收益或税费；长期债务减现金及等价物不代表总净债务。"]}
 
 
 def comparison_crossovers(rows: list[dict], series: list[dict], date_key: str = "date") -> list[dict]:
