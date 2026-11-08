@@ -104,10 +104,29 @@ def clean_text(value: str, limit: int = 600) -> str:
     text = _CREDENTIAL.sub("[已隐藏凭据]", value)
     def clean_url(match):
         try:
-            uri = urlsplit(match.group(0))
+            raw = match.group(0)
+            trailing = ""
+            pairs = {")": "(", "]": "[", "）": "（"}
+            full_uri = urlsplit(raw)
+            private_url = (full_uri.username is not None or full_uri.password is not None or bool(full_uri.fragment)
+                or any(_PRIVATE.search(key) or key.lower() in {"key", "token", "signature"} for key, _ in parse_qsl(full_uri.query, keep_blank_values=True)))
+            if not private_url:
+                opened = {opening: 0 for opening in pairs.values()}
+                for index, char in enumerate(raw):
+                    if char in opened:
+                        opened[char] += 1
+                    elif char in pairs and opened[pairs[char]]:
+                        opened[pairs[char]] -= 1
+                    elif char in "，。；、" or char in pairs:
+                        raw, trailing = raw[:index], raw[index:]
+                        break
+                while raw and raw[-1] in ".,;":
+                    trailing = raw[-1] + trailing
+                    raw = raw[:-1]
+            uri = urlsplit(raw)
             query = [(key, "[hidden]" if _PRIVATE.search(key) or key.lower() in {"key", "token", "signature"} else val)
                      for key, val in parse_qsl(uri.query, keep_blank_values=True)]
-            return urlunsplit((uri.scheme, uri.netloc.rsplit("@", 1)[-1], uri.path, urlencode(query), ""))
+            return urlunsplit((uri.scheme, uri.netloc.rsplit("@", 1)[-1], uri.path, urlencode(query), "")) + trailing
         except ValueError:
             return "[链接]"
     text = re.sub(r"https?://[^\s<>\"]+", clean_url, text)

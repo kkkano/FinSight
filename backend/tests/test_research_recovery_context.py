@@ -11,6 +11,7 @@ from backend.agent_runtime.data import RunData
 from backend.agent_runtime.loop import AgentRuntime
 from backend.agent_runtime.model import ModelTransport
 from backend.agent_runtime.tools import history_with_returns
+from backend.agent_runtime.diagnostics import clean_text
 from backend.agent_runtime.service import answer_feedback, verified_text
 from backend.services.run_context import RunContext
 from backend.tests.test_agent_runtime import FakeModel, call, finish, cfg
@@ -266,6 +267,19 @@ def test_historical_returns_are_computed_and_do_not_bridge_missing_closes():
     assert result["data"][1]["period_return_pct"] == pytest.approx((65.76/92.07-1)*100)
     assert result["data"][2]["period_return_pct"] is None and result["data"][3]["period_return_pct"] is None
     assert "period_return_pct" not in original["data"][1]
+
+
+def test_redaction_preserves_markdown_links_and_sentence_endings():
+    text = "[原文](https://example.com/story?ref=yahoo&.tsrc=rss)。这是一句完整说明。"
+    assert clean_text(text, len(text)) == text
+    balanced = "[原文](https://example.com/Company_(group))。"
+    assert clean_text(balanced, len(balanced)) == balanced
+    sensitive = clean_text("https://user:pa)ss@example.com/file?api_key=very)secret)说明", 1000)
+    assert "pa)ss" not in sensitive and "very" not in sensitive and "secret" not in sensitive
+
+
+
+
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
