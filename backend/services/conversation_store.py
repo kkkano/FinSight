@@ -52,7 +52,7 @@ def _derive_title(messages: list[dict[str, Any]], fallback: str = "新对话") -
             continue
         content = str(item.get("content") or "").strip()
         if content:
-            return content.replace("\n", " ").strip()[:42] or fallback
+            return content.replace("\n", " ").strip()[:20] or fallback
     return fallback
 
 
@@ -192,7 +192,7 @@ def _write_thread(
     messages: list[dict[str, Any]], changes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data = changes or {}
-    title = str(data.get("title") or current.get("title") or "").strip()[:80]
+    title = str(data.get("title") or current.get("title") or "").strip()[:20]
     if not title or title == "新对话":
         title = _derive_title(messages)
     row = conn.execute(text(

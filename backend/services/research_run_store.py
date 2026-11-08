@@ -97,13 +97,30 @@ class PostgresResearchRunStore:
                 current = _locked_thread(conn, owner, row["session_id"], create=False)
                 row = self._get(conn, owner, run_id, lock=True)
                 if current and row and row["status"] == "running" and row["lease_expired"]:
+                    previous = next((m for m in _canonical_messages(conn, owner, row["session_id"])
+                                     if m.get("id") == row["assistant_message_id"]), {})
                     self._finish_locked(conn, owner, row, current, {
                         "type": "error", "code": "run_interrupted", "run_status": "interrupted",
                         "message": "生成进程已中断，已保留本次提问。请主动重新生成；恢复不会自动重复调用模型。",
                         "publishable": False, "failure_kind": "execution_error",
+                        "response": previous.get("content", "") if previous.get("runtime_snapshot") else "",
+                        "blocks": previous.get("blocks", []),
+                        "artifacts": previous.get("artifacts", []),
                     })
                     row = self._get(conn, owner, run_id)
             return row
+
+    def previous_run_id(self, session_id: str, before_run_id: str, *, user_id: str) -> str | None:
+        """只选同一用户/会话、当前运行之前的终态；读取资料不会重新执行旧任务。"""
+        with self._transaction(user_id) as (conn, owner):
+            return conn.execute(text("""
+                SELECT run_id FROM research_runs
+                WHERE user_id=:owner AND session_id=:sid
+                  AND sequence < (SELECT sequence FROM research_runs
+                                  WHERE user_id=:owner AND session_id=:sid AND run_id=:current)
+                  AND status IN ('completed','failed','interrupted')
+                ORDER BY sequence DESC LIMIT 1
+            """), {"owner": owner, "sid": session_id, "current": before_run_id}).scalar_one_or_none()
 
     def begin(
         self, *, user_id: str, run_id: str, session_id: str, query: str, fingerprint: str,
@@ -179,6 +196,47 @@ class PostgresResearchRunStore:
             ), {"owner": owner, "run_id": run_id, "worker_id": WORKER_ID, "lease": LEASE_SECONDS})
             return bool(result.rowcount)
 
+    def checkpoint(self, run_id: str, snapshot: dict[str, Any], *, user_id: str) -> dict[str, Any]:
+        """已提交前缀/水位作为同一JSON消息原子保存，不创建新表。"""
+        from backend.agent_runtime.presentation import message_blocks, message_activities
+        with self._transaction(user_id) as (conn, owner):
+            row = self._get(conn, owner, run_id)
+            if row is None:
+                raise ResearchRunConflict("run does not exist")
+            current = _locked_thread(conn, owner, row["session_id"], create=False)
+            row = self._get(conn, owner, run_id, lock=True)
+            if not current or not row or row["status"] != "running" or row["worker_id"] != WORKER_ID:
+                raise ResearchRunConflict("run no longer accepts checkpoints")
+            previous = next((m for m in _canonical_messages(conn, owner, row["session_id"])
+                             if m.get("id") == row["assistant_message_id"]), {})
+            old = previous.get("runtime_snapshot") or {}
+            if (old.get("stream_epoch") == snapshot.get("stream_epoch")
+                    and int(old.get("committed_seq", -1)) >= int(snapshot.get("committed_seq", 0))):
+                return old
+            safe_blocks = message_blocks(snapshot.get("blocks"))
+            thinking = message_activities(snapshot.get("thinking"))
+            safe = {"attempt_id": snapshot.get("attempt_id"), "stream_epoch": snapshot.get("stream_epoch"),
+                    "committed_seq": int(snapshot.get("committed_seq", 0)), "blocks": safe_blocks, "thinking": thinking}
+            message = {**previous, "id": row["assistant_message_id"], "role": "assistant",
+                       "content": str(snapshot.get("response") or previous.get("content") or "正在生成回答…"),
+                       "run_id": run_id, "reply_to": row["user_message_id"], "run_sequence": row["sequence"],
+                       "run_status": "running", "answer_status": "streaming", "isLoading": True,
+                       "publishable": False, "blocks": safe_blocks, "runtime_snapshot": safe,
+                       "artifacts": snapshot.get("artifacts", []), "thinking": thinking}
+            self._insert_message(conn, owner, row, message, finalize=True)
+            messages = _merge_messages(current["messages"], [], _canonical_messages(conn, owner, row["session_id"]))
+            _write_thread(conn, owner, row["session_id"], current, messages)
+            return safe
+
+    def get_checkpoint(self, run_id: str, *, user_id: str) -> dict[str, Any] | None:
+        with self._transaction(user_id) as (conn, owner):
+            row = self._get(conn, owner, run_id)
+            if row is None:
+                return None
+            message = next((m for m in _canonical_messages(conn, owner, row["session_id"])
+                            if m.get("id") == row["assistant_message_id"]), {})
+            return message.get("runtime_snapshot")
+
     def finish(self, run_id: str, event: dict[str, Any], *, user_id: str) -> dict[str, Any]:
         with self._transaction(user_id) as (conn, owner):
             row = self._get(conn, owner, run_id)
@@ -217,6 +275,22 @@ class PostgresResearchRunStore:
         report = payload.get("report") or payload.get("blocked_report")
         if isinstance(report, dict):
             message["report"] = report
+        # 本人消息保存限长的供应商思考；对外报告只使用正文，RLS仍由事务owner控制。
+        from backend.agent_runtime.presentation import message_blocks, message_activities
+        blocks = payload.get("blocks")
+        if isinstance(blocks, list):
+            message["blocks"] = message_blocks(blocks)
+            payload["blocks"] = message["blocks"]
+        if isinstance(payload.get("thinking"), list):
+            message["thinking"] = message_activities(payload["thinking"])
+            payload["thinking"] = message["thinking"]
+        for key in ("price_levels", "evidence_pool"):
+            if isinstance(payload.get(key), list):
+                message[key] = payload[key]
+        if isinstance(payload.get("artifacts"), list):
+            message["artifacts"] = payload["artifacts"]
+        if isinstance(payload.get("actions"), list):
+            message["actions"] = payload["actions"]
         self._insert_message(conn, owner, row, message, finalize=True)
         messages = _merge_messages(current["messages"], [], _canonical_messages(conn, owner, row["session_id"]))
         thread = _write_thread(conn, owner, row["session_id"], current, messages)

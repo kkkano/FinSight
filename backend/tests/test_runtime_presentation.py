@@ -1,0 +1,171 @@
+"""逐工具展示、本人思考限长、明确价位与准确历史区间。"""
+from copy import deepcopy
+from datetime import datetime, timezone
+import json
+import pytest
+
+from backend.agent_runtime.presentation import message_blocks, price_levels_from_blocks
+from backend.agent_runtime.tool_display import DISPLAYS, display_tool
+from backend.agent_runtime.tools import financial_tools
+from backend.agent_runtime.data import RunData
+from backend.agent_runtime.analysis import analyze_dataset
+from backend.services.market_history_view import clip_history_period
+from backend.tests.test_agent_runtime import runtime, finish
+
+
+@pytest.mark.parametrize("name", sorted(DISPLAYS))
+def test_every_registered_formatter_has_target_and_result(name):
+    args = {"ticker": "AAPL", "query": "AAPL earnings", "title": "股价走势", "role": "technical_agent", "task": "核对均线与风险",
+            "chart_type": "line", "series": [{"field": "close"}], "period": "1y", "interval": "1d"}
+    output = {"status": "ok", "rows": [{"time": "2026-01-02", "close": 100}, {"time": "2026-11-06", "close": 110}],
+              "_artifact": {"data": {"rows": [{"date": "2026-11-06", "close": 110}]}}, "summary": "已完成本次计算"}
+    assert display_tool(name, args)["target"]
+    rendered = display_tool(name, args, output)
+    assert set(rendered) == {"target", "result"}
+    assert all(isinstance(value, str) and value for value in rendered.values())
+
+
+def test_all_actual_financial_and_native_tools_require_registered_display(tmp_path):
+    tools = financial_tools()
+    rt, _ = runtime(tmp_path, [finish()], tools)
+    assert set(tools) <= DISPLAYS.keys()
+    assert set(rt.available_tools("root", "research_lead")) <= DISPLAYS.keys()
+    with pytest.raises(ValueError, match="tool_display_not_registered"):
+        display_tool("unimplemented_tool", {})
+
+
+def test_history_and_quote_rows_display_actual_values():
+    assert display_tool("get_stock_historical_data", {"ticker": "AAPL", "interval": "1d"}, {
+        "kline_data": [{"time": "2025-11-07", "close": 228.4}, {"time": "2026-11-06", "close": 231.1}]}) == {
+        "target": "AAPL · 日线 · 2025-11-07→2026-11-06", "result": "2 根K线 · 收盘 228.4→231.1"}
+    row = display_tool("get_stock_price", {"ticker": "INTC"}, "INTC Current Price: $56.28 | Change: +4.03 (+7.71%) | As of: 2026-11-06 | Currency: USD")
+    assert "56.28 USD" in row["result"] and "+7.71%" in row["result"] and "2026-11-06" in row["result"]
+
+
+@pytest.mark.asyncio
+async def test_provider_reasoning_default_and_shared_run_cap(tmp_path):
+    first = [{"choices": [{"delta": {"reasoning_content": "甲" * 15000}, "finish_reason": None}]}] + finish("主回复")
+    second = [{"choices": [{"delta": {"reasoning_content": "乙" * 15000}, "finish_reason": None}]}] + finish("专业回复")
+    rt, events = runtime(tmp_path, [first, second])
+    await rt.run_agent("root", "research_lead", "问题")
+    rt.child_roles["child"] = "technical_agent"; rt.child_tasks["child"] = "核对走势"
+    await rt.run_agent("child", "technical_agent", "核对走势")
+    deltas = [payload for kind, payload, _ in events if kind == "reasoning.delta"]
+    assert sum(len(item["delta"]) for item in deltas) == 20000
+    assert any(item["truncated"] for item in deltas)
+    assert "甲" not in rt.root_content and "乙" not in json.dumps(rt.data.snapshot())
+    await rt.close()
+
+
+def test_message_reasoning_cap_is_defended_at_persistence_boundary():
+    blocks = [{"id": str(i), "kind": "reasoning", "reasoning_kind": "provider_raw", "content": "x" * 15000} for i in range(2)]
+    original = deepcopy(blocks)
+    safe = message_blocks(blocks)
+    assert sum(len(block["content"]) for block in safe) == 20000
+    assert safe[-1]["truncated"] and blocks == original
+    assert message_blocks([{"id": "hidden", "kind": "private_internal", "content": "hidden"}]) == []
+
+
+def test_price_levels_only_come_from_explicit_validated_text_blocks():
+    assert price_levels_from_blocks([{"id": "a", "kind": "text", "content": "AAPL当前数据已有返回。"}], ["AAPL"]) == []
+    result = price_levels_from_blocks([{"id": "a", "kind": "text", "content": "AAPL支撑位约330美元。"}], ["AAPL"])
+    assert result == [{"ticker": "AAPL", "price": 330, "label": "支撑位", "source_block_id": "a"}]
+    assert price_levels_from_blocks([{"id": "a", "kind": "text", "content": "[数据缺失] 支撑位330美元。"}], ["AAPL"]) == []
+
+
+def test_one_year_is_calendar_range_not_367_trading_bars():
+    payload = {"asset": {"timezone": "America/New_York"}, "kline_data": [
+        {"time": "2025-05-01", "close": 1}, {"time": "2025-11-07", "close": 2}, {"time": "2026-11-06", "close": 3}]}
+    original = deepcopy(payload)
+    result = clip_history_period(payload, "1y", now=datetime(2026, 11, 7, 18, tzinfo=timezone.utc))
+    assert len(result["kline_data"]) == 2 and result["requested_start"] == "2025-11-07"
+    assert payload == original
+
+
+def test_multi_ticker_return_comparison_uses_common_baseline():
+    data = RunData("test", "test", "test", "比较")
+    refs = [data.record("get_stock_historical_data", {"ticker": ticker}, {"currency": "USD", "price_basis": "split_adjusted_close", "dividends_included": False,
+        "rows": [{"time": "2025-12-31", "close": start}, {"time": "2026-11-06", "close": end}]}) for ticker, start, end in [("NVDA", 100, 125), ("AMD", 200, 180)]]
+    result = analyze_dataset(data, refs[0], "indexed_comparison", {"other_dataset_refs": [refs[1]]})
+    assert result["rows"][-1]["series_1"] == 25
+    assert result["rows"][-1]["series_2"] == pytest.approx(-10)
+    assert result["method"]["baseline_date"] == "2025-12-31"
+    assert len(data.source_refs(result["data_refs"][0])) >= 2
+
+
+def test_unknown_calculation_parameters_are_rejected_not_silently_reinterpreted():
+    data = RunData("test", "test", "test", "图表")
+    ref = data.record("get_stock_historical_data", {"ticker": "AAPL"}, {"rows": [
+        {"time": "2026-01-02", "close": 100}, {"time": "2026-11-06", "close": 125}]})
+    result = analyze_dataset(data, ref, "historical_drawdown_episodes", {"field": "close", "min_drawdown_pct": 5})
+    assert result["status"] == "unavailable" and result["error"] == "analysis_parameters_invalid"
+    assert "min_drawdown_pct" in result["summary"]
+    stats = analyze_dataset(data, ref, "series_statistics")
+    assert stats["rows"][0]["return_ratio"] == .25
+    assert "25.00%" in stats["summary"]
+
+
+def test_computed_returns_can_bind_to_original_cited_source_but_not_unrelated_data():
+    from backend.agent_runtime.grounding import validate_paragraph
+    data = RunData("test", "test", "test", "比较")
+    first = data.record("get_stock_historical_data", {"ticker": "AAPL"}, {"source_url": "https://example.com/aapl", "rows": [
+        {"time": "2026-01-02", "close": 100}, {"time": "2026-11-06", "close": 125}]})
+    other = data.record("get_stock_historical_data", {"ticker": "AMD"}, {"source_url": "https://example.com/amd", "rows": [
+        {"time": "2026-01-02", "close": 100}, {"time": "2026-11-06", "close": 180}]})
+    analyze_dataset(data, first, "series_statistics")
+    analyze_dataset(data, other, "series_statistics")
+    citation = data.source_refs(first)[0]
+    assert validate_paragraph(f"AAPL区间上涨25%。[{citation}]", data) == []
+    assert "explanation_contains_unbound_number" in validate_paragraph(f"AAPL区间上涨80%。[{citation}]", data)
+
+
+def test_verified_encoded_period_is_recognized_in_derived_statistics_caption():
+    from backend.agent_runtime.grounding import validate_paragraph
+    data = RunData("test", "test", "test", "走势")
+    ref = data.record("get_stock_historical_data", {"ticker": "AAPL"}, {"period": "1y", "interval": "1d", "source_url": "https://example.com/aapl", "rows": [
+        {"time": "2025-11-07", "close": 268}, {"time": "2026-11-06", "close": 342}]})
+    calculated = analyze_dataset(data, ref, "series_statistics")["data_refs"][0]
+    citation = data.source_refs(calculated)[0]
+    assert validate_paragraph(f"这是AAPL近1年的日线收盘价。[{citation}]", data) == []
+
+
+def test_source_projection_keeps_reference_not_entire_market_table():
+    data = RunData("test", "test", "test", "走势")
+    rows = [{"date": str(i), "close": i + 1} for i in range(2000)]
+    ref = data.record("get_stock_historical_data", {"ticker": "AAPL"}, {"source": "yfinance", "source_url": "https://example.com/aapl", "kline_data": rows, "data": rows})
+    assert data.records[ref]["output"]["kline_data"] == rows
+    assert all("kline_data" not in source and "data" not in source for source in data.sources.values())
+    assert len(json.dumps(data.sources)) < 6000
+
+
+def test_metadata_claims_cannot_invent_delay_exchange_or_adjustment():
+    from backend.agent_runtime.grounding import validate_paragraph
+    data = RunData("test", "test", "test", "AAPL走势")
+    data.record("get_stock_historical_data", {"ticker": "AAPL"}, {"source": "twelve_data", "asset": {"exchange": "US"},
+        "freshness_seconds": 146880, "price_basis": None, "dividends_included": None, "rows": [{"date": "2026-11-06", "close": 342}]})
+    assert validate_paragraph("AAPL（美股，NYSE）", data) == ["explanation_exchange_unverified"]
+    assert validate_paragraph("行情延迟约1.7天。", data) == ["explanation_delivery_delay_unverified"]
+    assert validate_paragraph("用的是未调整收盘价，未计入现金分红与拆股调整。", data) == ["explanation_adjustment_unverified"]
+    assert validate_paragraph("数据的复权和股息处理口径未注明。", data) == []
+
+
+@pytest.mark.parametrize("chunk_size", [1, 2, 3, 7, 50])
+def test_public_stream_filters_split_internal_markup_without_executing_it(chunk_size):
+    from backend.agent_runtime.presentation import PublicTextFilter, clean_public_text
+    original = "图已生成。<｜DSML｜ calls>\n结果如下。"
+    parser = PublicTextFilter()
+    result = "".join(parser.feed(original[i:i+chunk_size]) for i in range(0, len(original), chunk_size)) + parser.finish()
+    assert result == "图已生成。\n结果如下。"
+    assert clean_public_text("来源twelve_data，图表已生成（chart_1234567890abcdef）。") == "来源Twelve Data，图表已生成。"
+
+
+def test_date_only_window_contains_end_and_previous_close_baseline():
+    from backend.agent_runtime.analysis import render_chart
+    data = RunData("test", "test", "test", "连续下跌")
+    rows = [{"date": f"2026-01-{day:02d}T00:00:00+00:00", "close": 100-day} for day in range(1, 7)]
+    ref = data.record("analyze_dataset", {}, {"rows": rows, "method": {"kind": "consecutive_decline_streaks"}})
+    artifact = render_chart(data, ref, "区间", "line_with_event_windows", "date", [{"field": "close"}],
+        annotations=[{"start": "2026-01-02", "end": "2026-01-06", "label": "5期"}])
+    assert artifact["spec"]["annotations"][0]["end"] == rows[-1]["date"]
+    panel = artifact["data"]["panels"][0]
+    assert panel["rows"] == rows and panel["baseline_included"] and panel["periods"] == 5
