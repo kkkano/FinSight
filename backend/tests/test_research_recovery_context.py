@@ -379,6 +379,26 @@ def test_report_completion_is_not_replaced_by_short_chat_instructions():
     assert "估值观点短问" not in summary and "在400字内" not in summary
 
 
+@pytest.mark.asyncio
+async def test_cause_delivery_keeps_sourced_explanation_with_programmatic_price_facts(monkeypatch):
+    query = "为什么英特尔突然暴跌"
+    history = history_with_returns({"source": "fixture", "source_url": "https://example.com/prices", "currency": "USD", "data": [
+        {"time": "2026-11-04", "close": 100}, {"time": "2026-11-05", "close": 80}, {"time": "2026-11-06", "close": 84}]})
+    article = {"url": "https://example.com/news", "published_date": "2026-11-06", "text": "Intel shares fell after guidance missed expectations."}
+    args = {"query": "INTC stock price move earnings guidance latest"}
+    data = RunData("u", "s", "r", query)
+    ref = data.record("search", args, article)
+    sid = data.source_refs(ref)[0]
+    draft = f"报道支持的触发因素：多家媒体报道，营收隐含下滑99999%，直接诱因是第四季度指引不及预期——有关数字仍需核实。[{sid}]"
+    events, _ = await run(monkeypatch, query, {
+        "get_stock_historical_data": tool("get_stock_historical_data", lambda _: history),
+        "search": tool("search", lambda _: article),
+    }, turns=[call("get_stock_historical_data", {"ticker": "INTC"}), call("search", args), finish(draft), finish(draft)])
+    done = events[-1]
+    assert done["answer_status"] == "answered" and done["metrics"]["fact_fallback_used"]
+    assert "指引不及预期" in done["response"] and "-20.00%" in done["response"]
+    assert "99999" not in done["response"] and "https://example.com/news" in str(done["evidence_pool"])
+    assert "多家媒体报道" not in done["response"]
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():

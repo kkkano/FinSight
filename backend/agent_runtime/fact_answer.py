@@ -124,3 +124,69 @@ def factual_answer(runtime) -> str:
             lines.append("这里单列了扣除生产性资产购置后的差额；该购置科目不能当作仅有形固定资产资本开支，两种口径不能混用。")
         return "\n".join(lines)
     return ""
+
+
+def causal_fact_delivery(runtime, draft: str) -> str:
+    """保留已有引用的定性原因判断；行情数字直接取已计算的真实日线。"""
+    from .grounding import cited_sources
+    from backend.utils.quote import parse_quote_payload
+    check, data, query = runtime.completeness, runtime.data, runtime.query
+    if (runtime.report_title or len(check.tickers) != 1 or not set(check.facets) <= {"news", "price_cause"}
+            or "price_cause" not in check.facets or check.missing(data, runtime.executor.attempts)
+            or not re.search(r"暴跌|大跌|下跌|drop|fall|crash", query, re.I)
+            or re.search(r"今天|今日|昨天|昨日|资金流|净流入|净流出|谁在卖|\d{4}[-/年]\d|\d+月\d+日", query)):
+        return ""
+    ticker, explanations = check.tickers[0], []
+    for paragraph in re.split(r"\n\s*\n", draft):
+        refs = [sid for sid in cited_sources(paragraph, data) if data.records.get(data.sources[sid].get("data_ref"), {}).get("tool")
+                in {"search", "get_company_news", "fetch_url_content"}]
+        if not refs:
+            continue
+        for sentence in re.split(r"(?<=[。！？；])\s*|[，,]|——", paragraph):
+            clean = re.sub(r"https?://\S+|\[\^?S[^\]]*\]|[*`#]", "", sentence).strip()
+            numeric_check = re.sub(r"\b(?:Q[1-4]|FY\d{4})\b", "", clean)
+            if (len(clean) < 15 or re.search(r"\d|[零一二两三四五六七八九十百]+(?:倍|成|亿|万|个百分点)", numeric_check)
+                    or re.search(r"不能|无法|不足以|未能|没有证据|缺乏证据|证据不足|有史以来|排名", clean)
+                    or re.search(r"(?:报道|显示|指出|表示)[：:]?$", clean)
+                    or not re.search(r"导火索|触发|引发|归因于|主要原因|核心原因|不及预期|低于预期", clean)):
+                continue
+            clean = re.sub(r"^(?:也就是说|综合来看|因此|所以)[，,：:]?\s*", "", clean)
+            if not clean.endswith(("。", "！", "？")):
+                clean += "。"
+            explanations.append(clean + " " + "".join(f"[{sid}]" for sid in refs))
+            if len(explanations) == 2:
+                break
+        if len(explanations) == 2:
+            break
+    if not explanations:
+        return ""
+    records = [(ref, record) for ref, record in reversed(list(data.records.items())) if record.get("status") == "success"
+               and str(record.get("inputs", {}).get("ticker", "")).upper() == ticker]
+    for ref, record in records:
+        if record.get("tool") != "get_stock_historical_data" or record.get("inputs", {}).get("interval", "1d") != "1d":
+            continue
+        rows = data.rows(ref)
+        usable = [row for row in rows if _number(row.get("period_return_pct")) and _number(row.get("close")) and (row.get("time") or row.get("date"))]
+        if not usable or not data.source_refs(ref):
+            continue
+        worst, latest = min(usable, key=lambda row: row["period_return_pct"]), usable[-1]
+        if worst["period_return_pct"] >= 0:
+            continue
+        sid = data.source_refs(ref)[0]
+        day = lambda row: str(row.get("time") or row.get("date"))[:10]
+        currency = (record["output"].get("currency") if isinstance(record["output"], dict) else None) or latest.get("currency") or "来源单位"
+        lines = ["## 原因判断（基于公开报道）", "", *explanations, "", "## 行情参照", "",
+                 f"| 位置 | 日期 | 价格（{currency}） | 相邻日线变动 |", "|---|---|---:|---:|",
+                 f"| 本次日线范围内最大回落 | {day(worst)} | {worst['close']:.2f} | {worst['period_return_pct']:.2f}% |",
+                 f"| 最近日线 | {day(latest)} | {latest['close']:.2f} | {latest['period_return_pct']:+.2f}% |", "",
+                 f"行情范围为 {day(rows[0])} 至 {day(rows[-1])}，变动按相邻返回收盘价格计算。[{sid}]"]
+        for quote_ref, quote_record in records:
+            if quote_record.get("tool") != "get_stock_price":
+                continue
+            quote = parse_quote_payload(quote_record["output"])
+            if quote and quote.get("as_of") and data.source_refs(quote_ref):
+                lines += ["", f"报价快照：{quote['price']:.2f} {quote.get('currency') or currency}，数据日期 {str(quote['as_of'])[:10]}。[{data.source_refs(quote_ref)[0]}]"]
+            break
+        lines += ["", "以上将报道中的原因判断与价格事实分开列示；价格变化本身不能识别具体卖盘或资金来源。"]
+        return "\n".join(lines)
+    return ""

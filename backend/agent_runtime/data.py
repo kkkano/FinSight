@@ -203,6 +203,13 @@ class RunData:
                     if key not in {"code", "code_hash", "input_hash"}}, max_chars=1600)
         for source in entries:
             source["metadata"] = {**metadata, **(source.get("metadata") or {})}
+            provided_source = output.get("source") or output.get("provider") if isinstance(output, dict) else None
+            if isinstance(provided_source, str) and provided_source:
+                from .diagnostics import clean_text
+                if not source.get("source_name") or source["source_name"] == record["tool"]:
+                    source["source_name"] = clean_text(provided_source, 160)
+                if not source.get("source") or source["source"] == record["tool"]:
+                    source["source"] = clean_text(provided_source, 160)
             if not source.get("url") and len(urls) == 1:
                 origin = linked[0]
                 source["url"] = origin["url"]

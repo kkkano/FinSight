@@ -57,7 +57,7 @@ def answer_paragraphs(text: str) -> list[str]:
     return result
 
 
-def answer_feedback(text: str, data, *, require_citations: bool = False) -> str | None:
+def answer_feedback(text: str, data, *, require_citations: bool = False, short_cause: bool = False) -> str | None:
     invalid = [{"paragraph": paragraph.encode("utf-8")[:900].decode("utf-8", errors="ignore"), "issues": issues}
                for paragraph in answer_paragraphs(text)
                if (issues := paragraph_issues(paragraph, data, require_citations=require_citations))]
@@ -72,6 +72,8 @@ def answer_feedback(text: str, data, *, require_citations: bool = False) -> str 
             "下面的事实摘要只是实际成功工具结果的投影，每条保留自己的来源；不能把某条来源用于另一主体或指标。"
             "缺少的增长率、利润率等可用已授权资料调用analyze_dataset或run_analysis_code核实，最多两轮；Python必须将输出赋给result。"
             "没有计算依据时保留已得到的数值与不依赖该数值的解释，不手算猜测，不另开无关研究。比例保留百分数单位、比例和倍数四舍五入到两位小数，不自行转倍数、取整或计算未提供的差额。")
+    if short_cause:
+        header += "本题仅需400字内的涨跌原因短答：报道只用于定性归因，数值仅取本轮报价/行情明确字段；省去报道中的历史投资回报、年代排名与未计算差额。"
     issues_text = "需核对的段落摘录：" + dumps(invalid[:2])
     facts = []
     candidates = _feedback_facts(text, data)
@@ -343,7 +345,7 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
             if output_mode == "investment_report":
                 runtime.report_title = query[:100]
             runtime.answer_feedback = lambda text: answer_feedback(text, runtime.data,
-                require_citations=bool(runtime.report_title))
+                require_citations=bool(runtime.report_title), short_cause=not runtime.report_title and "price_cause" in runtime.completeness.facets)
             _ACTIVE[(run_context.owner, run_id)] = runtime
             report = None
             try:
@@ -358,6 +360,10 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                             final = await runtime.run_agent("root", "research_lead", query)
                     except (ModelProtocolError, TimeoutError, CapacityExceeded) as exc:
                         factual = checked_factual_answer(runtime)
+                        if not factual and "price_cause" in runtime.completeness.facets and runtime.answer_repair_candidate:
+                            from .fact_answer import causal_fact_delivery
+                            candidate = causal_fact_delivery(runtime, runtime.answer_repair_candidate[1])
+                            factual = candidate if candidate and not verified_text(candidate, runtime.data)[1] else ""
                         if factual:
                             fact_fallback_used = True
                             fallback_answer_id, final = "root_fact_answer", factual
@@ -384,6 +390,10 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                     prefer_calculation_facts = "chart" in runtime.completeness.facets and bool(re.search(r"连续(?:至少|不少于)?\s*\d+\s*(?:周|天).*下跌", query))
                     if answer_block is not None and (prefer_financial_facts or prefer_calculation_facts or verified_text(answer_block["content"], runtime.data)[1]):
                         factual = checked_factual_answer(runtime)
+                        if not factual and "price_cause" in runtime.completeness.facets:
+                            from .fact_answer import causal_fact_delivery
+                            candidate = causal_fact_delivery(runtime, answer_block["content"])
+                            factual = candidate if candidate and not verified_text(candidate, runtime.data)[1] else ""
                         if factual:
                             fact_fallback_used = True
                             answer_block["content"] = final = factual
