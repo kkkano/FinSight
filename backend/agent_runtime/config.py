@@ -18,7 +18,7 @@ class ModelConfig:
     api_key: str = field(repr=False)
     endpoint_name: str = "agent-default"
     context_window: int = 32768
-    max_output: int = 4096
+    max_output: int = 8192
     effort: str | None = None
 
     def identity(self) -> str:
@@ -43,7 +43,7 @@ def configured_model():
         base_url=os.getenv("FINSIGHT_AGENT_API_BASE", "").rstrip("/"),
         api_key=os.getenv("FINSIGHT_AGENT_API_KEY", ""),
         context_window=max(4096, int(os.getenv("FINSIGHT_AGENT_CONTEXT_WINDOW", "32768"))),
-        max_output=max(512, int(os.getenv("FINSIGHT_AGENT_MAX_OUTPUT_TOKENS", "4096"))),
+        max_output=max(512, int(os.getenv("FINSIGHT_AGENT_MAX_OUTPUT_TOKENS", "8192"))),
     )
 
 
