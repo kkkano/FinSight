@@ -1,8 +1,10 @@
-# FinSight LangGraph 当前流程
+# FinSight LangGraph 兼容流程
 
-更新时间：2026-10-08
+更新时间：2026-11-07
 
-`backend/graph/runner.py` 是图结构唯一事实源。生产图固定为六个节点，不注册旧兼容节点、confirmation loop、alert action 或 research debate。
+默认研究运行时是 `backend/agent_runtime/` 的原生工具调用循环，见 [架构](01_ARCHITECTURE.md) 和 [Agent 指南](AGENTS_GUIDE.md)。本页只描述显式 `FINSIGHT_RESEARCH_RUNTIME=legacy` 的兼容路径；旧深入说明和设计硬约束已移至 [2026-11-07归档](archive/2026-11-07_agent-runtime-design-closeout/README.md)，不作为默认运行事实源。
+
+`backend/graph/runner.py` 是 legacy 图结构唯一事实源。该图固定为六个节点，不注册旧兼容节点、confirmation loop、alert action 或 research debate；原生运行时的操作确认由执行 API 单独处理。
 
 ```mermaid
 flowchart TD
@@ -61,6 +63,8 @@ flowchart LR
 
 ## SSE 边界
 
-所有 Chat 与 Report 执行只使用 `POST /api/execute`。`GET /api/execute/runs/{run_id}` 读取持久状态，`/events` 续传或恢复终态，`/cancel` 取消当前进程中的执行。前端不得建立第二个执行流。
+原生与 legacy 的 Chat/Report 执行均只使用 `POST /api/execute`。`GET /api/execute/runs/{run_id}` 读取持久状态，`/events` 续传或恢复终态，`/cancel` 取消当前进程中的执行。前端不得建立第二个执行流。
 
-登录请求先保存问题及助手占位，最终回复事务提交后才发送完成；`done` 分别携带内容质量、运行状态与 `persistence_status`。进程重启后的读取不会重跑付费调用；失联租约转为 `interrupted`，重新生成需要新的 run ID。详见 [执行事件合同](execution-event-contract.md)。
+登录请求先保存问题及助手占位，最终回复事务提交后才发送完成；`done` 分别携带内容质量、运行状态与 `persistence_status`。进程重启后的读取不会重跑付费调用；失联租约转为 `interrupted`，重新生成需要新的 run ID。原生路径另支持 blocks/checkpoint、追加要求、操作确认和同会话续研，详见 [执行事件合同](execution-event-contract.md)。
+
+本轮新增的 `content_phase=progress/answer`、一次禁工具修正、图表 coverage 与 prior_artifacts 属于默认原生运行时，不是在此六节点图后新增修正节点。前端对旧的无 phase 文本按 answer 兼容；不能因共享 SSE 入口就宣称 legacy 也执行了原生检查或获得相同验收结果。

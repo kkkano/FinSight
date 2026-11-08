@@ -1,5 +1,9 @@
 # 预测账本 v1：运行与验收
 
+更新时间：2026-11-07。下方固定forecast/采集/结算核心合同保持不变；新增只读范围视图由`prediction_report_view.py`按days/ticker/type和确认cohort聚合，累计曲线与频率、阈值、时点、版本、下一对账日期均取metadata，不改forecast算法或混合未知模型成绩。页面使用普通人文案，个人Prediction与公共账本仍分开，缺失/样本不足不填假数字。当前只读展示与部署状态见 [实施记录](reports/2026-11-07_agent_runtime_implementation.md)。
+
+最终发布agent-20261107-8b809bee23e0的生产28日视图HTTP200、metadata正常，但当前预测/已对账/等待均0、daily_series为空、下一对账日期null；保留真实空态，不生成示例曲线或命中率。
+
 公开页面 `/track-record`、只读 API `/api/benchmarks/us20-v1/track-record`。这两个入口不要求登录，仅展示固定公开样本，不包含用户聊天或自定义模型凭据。旧 API `/api/predictions/track-record` 仅保留为隐藏兼容入口，新客户端使用独立的 benchmark 地址。明细支持 `limit` / `offset` 翻页，汇总始终覆盖全部样本。
 
 ## 采集与评分

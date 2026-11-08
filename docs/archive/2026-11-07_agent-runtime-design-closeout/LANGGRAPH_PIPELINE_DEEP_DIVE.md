@@ -1,8 +1,10 @@
 # LangGraph Pipeline 深入说明
 
+> 历史资料：2026-11-07已归档，仅描述旧六节点/Collector合同，不是默认原生研究规范。当前事实见 [架构](../../01_ARCHITECTURE.md)、[Agent指南](../../AGENTS_GUIDE.md) 和 [显式legacy流程](../../LANGGRAPH_FLOW.md)。
+
 更新时间：2026-10-04
 
-本文补充 [`LANGGRAPH_FLOW.md`](LANGGRAPH_FLOW.md)。节点和边仍以 `backend/graph/runner.py` 为准。
+本文补充 [`LANGGRAPH_FLOW.md`](../../LANGGRAPH_FLOW.md)。节点和边仍以 `backend/graph/runner.py` 为准。
 
 ## 1. 上下文准备
 
@@ -111,7 +113,7 @@ RAG 推理通过私网 worker 执行。`embedding_identity` 必须与查询实�
 
 每个节点写 trace；collector 发送 start/done/error 事件；ResearchAnalyst 发送明确的角色事件。每个逻辑 LLM 调用记录 stage、role、layer、endpoint、latency、token 和 failure code，供应商未返回 token 时保存 `null`。
 
-SSE 的状态、降级、取消和终态遵循 [`execution-event-contract.md`](execution-event-contract.md)。前端必须按稳定错误码区分认证、行情、LLM、配额、校验和存储失败。
+SSE 的状态、降级、取消和终态遵循 [`execution-event-contract.md`](../../execution-event-contract.md)。前端必须按稳定错误码区分认证、行情、LLM、配额、校验和存储失败。
 
 ## 8. 修改检查
 

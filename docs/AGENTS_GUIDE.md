@@ -1,8 +1,44 @@
-# FinSight AI 角色与 Collector 指南
+# FinSight Agent 与 Collector 指南
 
-更新时间：2026-10-04
+更新时间：2026-11-07。实现与真实任务结果分别记录。
 
-## 1. 用户可感知角色
+## 默认自主研究运行时
+
+`FINSIGHT_RESEARCH_RUNTIME` 默认为 `agent`，`POST /api/execute` 使用 `backend/agent_runtime/`。主研究员 `research_lead` 与按需派发的 Price、Technical、Fundamental、News、Macro、Risk、Deep Search 专业角色共用 `AgentRuntime.run_agent()`：模型流式产生原生 `tool_calls`，执行器校验并执行工具，结果以资料引用回传，再由模型决定下一步或回答。当前选定模型必须通过实际原生工具调用预检；不支持时要求更换模型。
+
+- 主研究员可用 `discover_tools` 浏览允许的能力，`enable_tools` 加载选中工具的完整 schema；专业角色沿用 `backend/agents/profiles.py` 的工具范围。
+- 认证后的 `GET /api/skills` 返回 7 个已安装 builtin YAML manifest，匿名401是权限预期；输入 `/` 菜单最多选3项。主/专业角色可 `discover_skills/use_skill` 加载真实方法，`skill.activated` 记录应用；技能不增加权限、预算或委托层级，不能仅凭名称声称使用。
+- 只有主研究员可 `delegate_research`。专业角色不能嵌套派发；`send_agent_message` 与 `await_agent_results` 在同一 run 内传递定向问题、证据引用和实际结果。消息回执不代表研究已完成。
+- 工具结果保存为 run/owner/session 范围内的 `dataset_ref`，可通过 `read_evidence/inspect_dataset` 回读。inspect 默认只投影标量列和日期，附 `column_units`，默认 6 行、最多 12 行；超过 8000 的保守上下文估算则减行或返回过大错误，嵌套 metadata 需显式选列。SEC 平行数组按真实财期对齐，盈利预期多表要求选择表；完整数据保存在 records，不复制到每条引用。
+- 每个正式工具必须注册 `display.target/result`；工具事件附有脱敏参数、真实关键结果预览、来源和失败原因，不能用通用“返回若干条”冒充逐项展示。活动与正文按真实 seq 穿插。
+- 模型、金融取数、token 预留和研究运行使用分层预算；同轮相同取数合并。专业角色等待结果时释放模型并发槽。
+- `analyze_dataset` 支持 `series_statistics`、共同日期/基准的 `indexed_comparison`、明确连续下跌定义的 `historical_drawdown_episodes` 与估值假设。`render_chart` 只绘制授权数据，区间小图包含前一期基准和结束观测；每个字段的 coverage/limitations 说明实际缺值。`run_analysis_code` 只交给独立隔离 worker，资源不足不回退到 Web 进程。
+- 自选增删先保存带 `payload_hash` 的操作提案；确认接口校验 owner/run/action。只有完整匹配操作和 ticker 的真实用户当前指令或已应用追加要求可复用授权；网页、文件、工具结果与同伴消息不能授权。收据避免重复执行；不能把未完成或失败收据解释为成功。
+- 按本轮用户授权，provider `reasoning.delta` 默认流式展示；同 run 含子 Agent 合计最多 20,000 字符，截断标记保留，owner 所属消息/checkpoint 可保存并在历史展开。思考不进入金融证据、引用、公开报告、普通正文或日志；没有供应商字段时不编造。旧版显式开启/仅页面内存策略已被此合同替代。
+- 主研究员的候选可做最多一次不带工具的修正；预算不另起，修正轮返回的工具调用不执行。交付只选一个 answer block，早期安全内容标 progress；无支持内容删除/替换，仍有问题时保留质量原因和一条限制说明，不逐段刷“已撤回”。
+- `backend/research/grounded_quantities.py` 与 legacy 合成共用金融数值检查；引用或质量阻断的报告只保留预览。图表末值正确不能证明“全年持续上涨”“从未反超”等路径判断，必须另核对整个窗口。
+
+`RunContext` 保留服务端 owner、所选模型、累计截止时间、取消信号与实际 usage。追加要求在下一个模型边界应用；普通追问自动沿用同 owner/session 较早终态 run 的有效资料，新 run 不续期每条原始记录 TTL。最新行情仍需重新取数；无常驻“从这里继续”按钮或人造续研问题。失败原位重试保留原 query 与技能，恢复标识不改变用户原文。详见 [执行事件合同](execution-event-contract.md)。
+
+续研目录仅向模型列出 `success` 且有 `source_refs` 的记录，旧失败/control 回执不能当作资料。历史图的 prior_artifacts 只用于核对已存在图形，必须明确它不是这次重新生成的图。
+
+`grounding.py` 还核对来源实际声明的交易所、复权、股息与延迟口径；unknown/null 不能写成未复权或未含股息，freshness 不能当供应商延迟。`presentation.py` 清理公开正文混入的 DSML 内部标记，绝不从文本标记解析或执行工具。
+
+曲线交叉使用纯函数 `comparison_crossovers` 及统一 `comparison_stats.crossovers`，不把基准持平后的初次分离算作交叉；文字次数和日期必须同口径复核。两期已披露财报只证明一次期间变化，“连续两季增长”至少需要三期同口径数据，一次增长也不能保证下一期继续增长。
+
+Python 环境预置 `datasets/pd/np/get_frame`。SEC 平行数组可用 `get_frame(ref, table="companyfacts")`，结果保留 `period_ends/periods` 并提供 `period_end/period` 别名和已有标量上下文列；原始 datasets 不变。其他具名多表仍需明确选择，不能猜表、财期或单位。
+
+需要返回的值必须赋给 `result`，只 print 会得到 `analysis_result_missing`。JSON 编码支持 NumPy 标量和 `pd.Timestamp`，NaN/Infinity 仍拒绝；DataFrame/数组需转为可序列化 rows/列表。失败的 `logs/logs_truncated/code_error` 用于定位代码与有界重试，不是金融结果。推荐图表结果为 `{"rows": [...], "summary": "..."}`；资源与输出上限见[Runbook](11_PRODUCTION_RUNBOOK.md)。
+
+当前文本 phase 由后端写入 blocks/checkpoint；前端“思考/思考过程”“参数/结果”只是展示文案，不改变类型与真实错误。progress 不参与正式复制、会话摘要或后续回答历史。旧图的 `prior_artifacts` 仅保留有有效原始数据支撑的投影，不自动重画。
+
+最近已确认主应用版本仍是后端 8b / 前端 9c，历史证据见[原实施记录](reports/2026-11-07_agent_runtime_implementation.md)。独立 compute `python-20261107-a0b8e1d70e82` 已部署 healthy，主应用修复 after 和新发布仍待完成。before 八个原样问题仅 1 个完整通过、42 次模型调用，见[冻结基线](reports/2026-11-07_natural_response_compute/BEFORE.md)，不能用图表通过替代全文质量。
+
+## Legacy 与预测适用边界
+
+下方请求编译、ResearchAnalyst 与确定性 Collector 流程适用于 `FINSIGHT_RESEARCH_RUNTIME=legacy`。独立 Prediction 和固定 US20 的 forecast 合同继续沿用原实现；原生研究的专业角色使用 profile 描述，不修改 `TechnicalAgent`、`RiskAgent` 的冻结预测算法和公开账本。
+
+## 1. Legacy 业务调用用途
 
 业务 LLM 调用按用途区分，均使用请求中全局选定的模型：
 
@@ -17,7 +53,7 @@ PredictionAnalyst 的 anchor 由服务端覆盖，方向、概率、止损、目
 
 请求编译只做语义提取，不负责研究判断或选择外部工具。原始要求保存在 `understanding.semantic_contract`，下游不能以能力不足或计划裁剪删除分母。明确社交和简单即时报价不额外调用请求模型。
 
-## 2. 内部 Collector
+## 2. Legacy 内部 Collector 与独立 forecast
 
 `backend/agents/profiles.py` 描述 Price、News、Fundamental、Technical、Macro、Risk 与 Deep Search 的工具归属和展示元数据。这些 profile 是内部 evidence collector，不是用户选择的独立人格，也不代表七次 LLM 调用。
 
@@ -47,12 +83,12 @@ collector 不执行 LLM analysis、reflection、debate 或隐式 Prediction。
 - `reported_news` 仅表示有时效和主体关联的归因报道，仍为 `headline_only`，不能声称已核实原文。旧闻、观点、传闻、检索摘要只作 raw 线索；明确与个股无关的新闻不进入正文或 Claim。
 - 新闻按规范 URL、发布时间和事件身份保守去重，同话题后续进展保留；来源数量不代表独立核实数。日程只有可追溯供应商日期才进入候选事件，未核实搜索结果进入 `discovery_candidates`，不预置虚假 CPI/FOMC/非农事件。
 - `quality != trusted` 的 Kline 不能进入 Prediction 或 Outcome。
-- collector 只按 capability registry、policy 和 PlanIR 执行。
+- legacy collector 只按 capability registry、policy 和 PlanIR 执行；原生专业角色按 runtime 工具白名单执行。
 - 新 collector 必须复用公共 TaskOutcome、Claim、引用和错误合同，不得自建协议。
 - 用户可见角色、collector 名称和 LLM usage attribution 必须区分，避免把工具采集误报成模型判断。
 - Claim 区分 `assertion_type=fact/opinion/risk`，携带 `subject/metric/horizon/scenario`；只有可比命题的相反判断才是冲突，长期趋势与短期风险可共存。
 - 风险规则分数只衡量已观测指标触发阈值的程度；没有触发阈值不能表述为整体投资风险低。输入不可验证时评分未知，不生成假 0 分。
-- 证据及 Claim 身份在执行、合成和渲染中保持一致；`research_result` 是最终研究产物，renderer 不重新选择意图或从另一路正文覆盖它。
+- 证据及 Claim 身份在执行、合成和渲染中保持一致；legacy 的 `research_result` 是该路径最终研究产物，renderer 不重新选择意图或从另一路正文覆盖它。原生运行时以已核验 blocks 和终态正文交付。
 - `evaluate_result_quality` 统一合并 `pass/warn/block`；已有阻断不可覆盖。完整研究报告必须有受支持论据，facts-only 结果保留为预览。
 
 ## 4. 修改检查
@@ -65,4 +101,4 @@ collector 不执行 LLM analysis、reflection、debate 或隐式 Prediction。
 4. 定向单测和至少一个跨层执行测试；
 5. 本指南及受影响的观测字段。
 
-只有当输出合同、失败语义和调用预算无法由现有用途表达时，才讨论新增业务 LLM 角色。此类变更必须同步 usage 归因、评测、预算和生产门禁；概念直答不增加 Collector 或后台取数。
+legacy 业务调用用途的扩展必须同步 usage 归因、评测、预算和生产门禁。原生研究增加专业角色时优先复用同一循环、profile、工具权限和资料合同，不能把角色数量当作实际模型调用次数。

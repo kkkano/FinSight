@@ -1,24 +1,50 @@
 # 幻觉与错误事实治理
 
-更新时间：2026-10-03
+更新时间：2026-11-07
 
 FinSight 的目标不是声称“消灭幻觉”，而是把未经取证的金融事实阻挡在证据、合成和渲染边界之外，并在证据不足时明确降级。
 
 ```mermaid
 flowchart LR
-    REQUEST[任务 / 主体 / 证据义务] --> PLAN[逐项覆盖与工具参数校验]
+    REQUEST[用户问题 / 主体 / 来源要求] --> RUNTIME[默认原生循环 / 参数与权限校验]
+    RUNTIME --> TOOL[Tools / Agents]
+    REQUEST -. legacy .-> PLAN[编译任务 / 逐项覆盖]
     PLAN --> TOOL[Tools / Agents]
     TOOL --> FACT[主体 / 指标 / 财期 / 单位校验]
     FACT --> GATE{Evidence gate}
     GATE -->|valid| POOL[Evidence pool]
     GATE -->|failed / empty / timeout| DIAG[Diagnostics]
     POOL --> CLAIMS[Claim validation + conflict detection]
-    CLAIMS --> SYNTH[唯一 research_result]
+    POOL --> NATIVE[原生数值 / metadata / 图表coverage检查]
+    NATIVE --> NEED{候选需要修正}
+    NEED -->|有预算且未修正过| REPAIR[最多一次禁工具修正]
+    REPAIR --> VERIFY[最终检查 / 删除无支持内容]
+    NEED -->|直接收束| VERIFY
+    VERIFY --> BLOCKS[progress 过程 / answer 正文]
+    BLOCKS --> SCRUB
+    CLAIMS --> SYNTH[legacy research_result]
     SYNTH --> SCRUB[pass / warn / block 单调合并]
     SCRUB --> RENDER[事实 / 判断 / 引用 / 缺口]
 ```
 
 ## 防线
+
+默认原生工具结果与来源先通过身份/时间/单位规范化，正文再核验数值和metadata口径；unknown复权/股息、未声明延迟或交易所不能猜测成事实，freshness不等于供应商延迟。DSML内部标记过滤，不从文本执行工具。来源只存有界投影，完整数据经data_ref回读；provider思考保存为owner私有块，不作为金融证据。
+
+下方 planner、编译后的证据分母、Claim 冲突和唯一 research_result 分工专属于 legacy；原生使用实际授权工具、资料、数值/引用守卫和 blocks 终态。无支持的候选可删除而不生成逐段撤回占位，但质量原因与未完成义务仍需披露。守卫、没有撤回文案或三例核心图表通过，都不能证明最终回答完整可靠。
+
+### 原生回答与计算的新增检查
+
+- 主研究员最多进行一次不提供工具 schema 的答案修正，受原 run 截止时间/token/配额约束；修正不能重新取数或派发工作，模型返回额外工具调用也不执行。
+- 正式交付只选 `content_phase=answer` 的最终内容；安全的早期说明是 progress，不参与普通复制、历史摘要或正式报告。失败修正的半截输出清空，仍有问题时只在末答补一条限制说明，不把一串“已撤回”留给用户。
+- Python 执行成功不等于用户问题已经回答：`result` 必须包含需要的计算值，最终回答/图表也必须交付这些值。print-only 的 logs 不是计算数据，`analysis_result_missing` 不能记为成功。
+- `inspect_dataset` 默认给标量列及 `column_units`；未提供单位不能猜为美元或百分比。嵌套 metadata 过大时明确减行/拒绝，保留原始资料回读入口，不用截掉用户要求来适应上下文。
+- 图表的 `coverage[field]` 与 `limitations` 记录实际缺值、leading_missing 和首末有效点；对 MA20“前19点为空”等断言须核对显示窗口，不能用公式先验替代实际数据。
+- 期末收益不能推出整个路径“持续上涨”“从未反超”。此类结论需要窗口内比较、下降日和反例检查；历史图的 prior_artifacts 仅在原始引用仍有效时用于核对，不重新画一张图来掩盖旧图问题。
+- 累计涨跌曲线交叉使用统一 `comparison_stats.crossovers`：初始持平后的首次分离不算交叉，平局不重置前领先方。文字次数/日期与该结果分开核对，不能把初始化状态算作额外交叉。
+- 两个已披露季度只支持一次期间变化；“连续两季增长”需要至少三个同口径期间。已观测一次增长也不能保证下一季继续增长。
+- 暗盘/场外交易场所与盘前盘后时段不同，OHLCV 不能证明实时净资金流。对应数据不可得时应准确说明，不能替换成相近但不同的问题。
+- 中文句末分隔和裸 URL 的引用识别仍须针对真实数据回归；最新相关修复和数字结果验收见[本次记录](reports/2026-11-07_natural_response_compute/README.md)，不提前记为通过。
 
 1. 能力与工具许可：planner 只能选择注册能力，使用实际工具 schema 在调用前校验参数；显式证据义务不能被成本策略删除。
 2. 证据门：来源、时间、标的和状态不合格的结果不得进入 evidence pool。
@@ -90,3 +116,5 @@ flowchart LR
 ## 验证
 
 测试至少覆盖主体/财期/单位正确性、逐任务与标的维度覆盖、evidence/diagnostics 隔离、真实冲突与多维观点共存、质量阻断不可覆盖、引用支持论据、价格图真实数据，以及答案保存恢复。非空正文、HTTP 200 或引用条数都不能单独作为通过标准。RAG 指标与运行方法见 [`rag-evaluation-guide.md`](rag-evaluation-guide.md)。真实外部验收状态记录在本次发布归档，未执行的检查不得写为通过。
+
+本次真实多会话的冻结 before 为 8 个问题仅 1 个完整通过，42 次模型调用、254410 reported tokens，见[独立基线](reports/2026-11-07_natural_response_compute/BEFORE.md)。case6 图表数值正确仍因路径描述错误未通过；case2 Python 均值正确仍因最终答案/图表缺失未通过。这些结果不因后续代码修复或前端 fixture 通过而被覆盖，after 必须另记。

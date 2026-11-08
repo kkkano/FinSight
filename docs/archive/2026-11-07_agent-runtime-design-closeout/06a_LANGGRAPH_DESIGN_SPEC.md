@@ -1,5 +1,7 @@
 # LangGraph 生产设计规范
 
+> 历史资料：2026-11-07已归档，仅描述旧六节点/Collector合同，不是默认原生研究规范。当前事实见 [架构](../../01_ARCHITECTURE.md)、[Agent指南](../../AGENTS_GUIDE.md) 和 [显式legacy流程](../../LANGGRAPH_FLOW.md)。
+
 更新时间：2026-10-04
 
 本文记录当前分支的运行时不变量。节点与边以 `backend/graph/runner.py` 为最终事实源；本文不代表某个 commit 已部署，也不替代生产验收证据。

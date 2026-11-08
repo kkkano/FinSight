@@ -1,6 +1,10 @@
 # 统一模型选择
 
-登录用户可从聊天输入区的模型按钮或设置页选择系统内置模型、自带 OpenAI 兼容服务，并恢复系统默认。应用后，聊天、研究报告和手动个股 AI 判断统一使用同一模型、地址及推理强度。选择作用于后续 `/api/execute`、`/api/execute/resume` 和 `/api/predictions/generate` 请求；已经开始的任务与重连保留开始时的选择。
+更新时间：2026-11-07。默认原生研究由`backend/agent_runtime/config.py`解析本轮所选模型；用户显式选择优先，其次研究专属`FINSIGHT_AGENT_*`配置，再取系统目录默认。独立预测的服务端默认与冻结forecast配置保持分离。研究必需真实原生工具能力预检；不能静默替不支持工具的模型执行研究。
+
+下方系统目录、用户连接/effort与认证边界继续有效；旧LangGraph合成超时、65536输出额度、JSON合成和总预算说明只适用于相应legacy/预测调用点，不是原生循环的统一输出承诺。原生循环沿用RunContext截止时间、token预留和provider节流，默认思考owner私有20k合同见 [Agent指南](AGENTS_GUIDE.md)。
+
+登录用户可从聊天输入区模型按钮或设置页选择系统内置模型、自带OpenAI兼容服务，并恢复系统默认。选择作用于后续`/api/execute`（含新run的resume_from_run_id）与`/api/predictions/generate`；已开始任务和同run重连保留开始时选择，续传不重跑模型。
 
 ## 系统内置模型
 

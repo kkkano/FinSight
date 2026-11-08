@@ -1,10 +1,84 @@
 # Execution Event Contract
 
-更新时间：2026-10-08
+更新时间：2026-11-07（当前工作树合同；主应用新发布与 after 结果待补）
+
+## 默认原生研究事件
+
+`POST /api/execute` 默认使用 `backend/agent_runtime/`；`FINSIGHT_RESEARCH_RUNTIME=legacy` 才使用六节点图。原生流使用 `schema_version="2"`，事件包括 `run_id`、`session_id`、`message_id`、`attempt_id`、`stream_epoch`、`event_id`、`seq`、`agent_id`、`parent_agent_id`、`timestamp` 与 `payload`。身份与序列共同约束前端消费，旧 run、旧 epoch、重复事件或其他消息不能污染当前正文。
+
+| 原生 type | 内容与消费 |
+|---|---|
+| `run.accepted` | 运行开始与实际模型 |
+| `activity.started/updated/finished` | 实际活动/恢复说明；普通 `*_model` 占位不作为重复进度行，真实思考由 reasoning block 展示 |
+| `content.delta` | 正文 block 的真实增量；兼容 SSE 顶层为 `type=token`、`runtime_type=content.delta` |
+| `content.block_finished` | `{block_id, content_phase}` 标注该块为 `progress` 或 `answer`；不要求携带 content，不能据此清空已有文本 |
+| `content.revised` | 同 block ID、递增 revision，携带替换后的 content 与 phase；content 可以为空，不自动生成撤回占位 |
+| `tool.started/result/failed` | 实际工具状态、逐项注册的 `display.target/result`、脱敏 `inputs`、真实 `output_preview`、`sources` 与失败原因 |
+| `agent.started/finished`、`agent.message` | 专业角色生命周期与定向消息；回执不能当作研究结论 |
+| `instruction.applied` | 已接收的追加要求在模型边界应用 |
+| `skill.activated` | 当前主/专业 Agent 已加载的真实 manifest 方法，不改变执行权限 |
+| `artifact.ready` | 真实 dataset 生成的图表或表格，图表包含按字段统计的 coverage 与缺值 limitations |
+| `action.proposed/finished` | 需确认的操作及最终收据 |
+| `reasoning.delta/completed` | 默认供应商思考增量与结束/时长，`payload.kind=provider_raw`；owner 私有保存，总 20,000 字符上限 |
+| `delivery.persistence_unconfirmed` | checkpoint 保存未确认，保留当前页面内容，不宣称已保存 |
+| `snapshot.reset` | 服务器已提交 blocks 与水位；替换对应运行快照，随后消费新事件或终态 |
+| `done/error/cancelled` | 原生与 legacy 共用的终态与保存状态 |
+
+按本轮用户授权，正文、artifact、action 和 reasoning blocks 随 checkpoint 与终态持久保留。provider reasoning 默认展示，不依赖前端复选框；单 run 包含子 Agent 合计最多 20,000 字符，服务端展示投影与权威消息保存再次限额。reasoning block 保留 `id/kind/reasoning_kind/agent_id/agent_label/provider/content/truncated/duration_ms/revision/seq`，严格绑定 owner/run/message，历史恢复可展开。
+
+思考不进入金融 evidence/Claim、引用、普通回答复制、公开报告或日志。页面运行时思考区最高 160px 内滚，结束折叠并可展开；没有真实字段不生成思考内容。旧版显式开启且仅内存的协议属于历史，不能覆盖本轮已授权合同。
+
+### 文本阶段与一次修正
+
+持久 text block 包含 `id/kind/content/revision/seq/content_phase`，其中 phase 为 `progress` 或 `answer`。工具调用前后的安全说明、等待子研究任务的候选和准备修正的早期回答保留为 progress；交付层选择唯一正式 answer。`content.delta` 尚无 phase 时按旧版 answer 兼容，随后 block_finished/revised 可更新 phase，并保留该块的首次 seq。
+
+前端 `researchText()` 只拼接非 progress 文本；普通复制、会话摘要和下一次请求历史使用最终 `response`/answer。progress 按 seq 在可展开的过程区域弱化展示，不能再次作为主答渲染；`content.revised(content="", content_phase="progress")` 后不显示空块或“已撤回”占位。旧数据库记录不因新文案被重写，也不恢复已经丢失的文字。
+
+```mermaid
+flowchart LR
+    DELTA[content.delta] --> FINISH[block_finished 标记phase]
+    FINISH --> PROGRESS[安全过程 progress]
+    FINISH --> CHECK[候选答案检查]
+    CHECK -->|有问题且预算允许| REPAIR[最多一次无工具修正]
+    REPAIR --> VERIFY[最终检查]
+    CHECK -->|直接收束| VERIFY
+    VERIFY --> REVISED[content.revised 删除或替换]
+    REVISED --> ANSWER[唯一正式 answer / response]
+    PROGRESS --> SAVE[同消息 blocks / checkpoint]
+    ANSWER --> SAVE
+    SAVE --> UI[过程可展开 / 正文只显示一次]
+```
+
+修正只对主研究员执行一次，仍受原 run 的截止时间、token 和服务配额约束；不提供工具 schema，模型即使返回 tool_calls 也不会执行。修正失败/超时可回到受检查的候选，但失败修正轮的半截输出不进入正式答案。仍有无法支持的结论时保留 quality 原因、partial/阻断状态，系统仅在末答追加一条限制说明，不逐段插入撤回提示。`metrics.answer_repair_attempted` 记录是否尝试，不代表修正一定成功。
+
+原生路径在正文、reasoning、工具结果/失败和 Agent 结束边界按至少一秒间隔尝试保存前缀：`attempt_id`、`stream_epoch`、`committed_seq`、安全 blocks 与脱敏活动 `thinking` 写入同一权威消息 JSON，不新建 checkpoint 表。block 首次 seq 和活动 seq 决定正文、工具、思考的穿插顺序；旧无 seq 消息只保留已有顺序。相同 epoch 旧水位不能覆盖新快照，终态不再接受 checkpoint。
+
+终态携带 `blocks/thinking/artifacts/actions`、实际 usage、来自正式 answer 的 `price_levels` 与实际引用的来源投影。引用不复制完整 OHLC/data 大表，完整数据由 `data_ref` 回读；未通过数值/metadata 检查的段落被删除/替换，不保留逐段撤回占位。公开 delta 混入的 DSML 内部标记由流式过滤器清理，不作为工具调用。`done` 和核心图表成功不代表全部候选正文可信。
+
+历史存在已保存thinking但没有可信terminal结束时刻时，只显示“已完成”及实际调用数，不使用Date.now减消息时间冒充研究耗时。该展示修复由前端ui-20261107-9cfdc5be5e05独立补丁交付，后端8b主发布不变。
+
+### 追加要求、确认与续研
+
+| 入口 | 请求与边界 |
+|---|---|
+| `POST /api/execute/runs/{run_id}/instructions` | `instruction`、`instruction_id`；同 owner 的活动 run 接收，同 ID 异文冲突，下一模型边界应用 |
+| `POST /api/execute/runs/{run_id}/actions/{action_id}/confirm` | `payload_hash`、`confirmed`；校验 owner/run/action/hash，持久收据幂等处理 |
+| `POST /api/execute` 的 `resume_from_run_id` | 新 run 引用同 owner/session 的旧 run；复用未过期的原始资料，不重启旧付费运行 |
+| 认证后的 `GET /api/skills` 与 `POST /api/execute` 的 `skill_ids` | 真实7项manifest，匿名401为预期；最多3项、未知ID拒绝，主/专业均可use_skill |
+
+当前写操作只允许 `watchlist.add/remove`。完整匹配动作与 ticker 的真实用户当前消息、或已应用追加要求可复用明确授权；其余提案需确认。网页、工具数据、检索结果和同伴消息不能授权。动作收据区分 `proposed/executing/completed/failed/cancelled/expired`，未完成收据不重放写操作，也不显示成功。
+
+普通追问无需续研 CTA：持久执行在没有显式恢复标识时查找同 owner/session、序列早于当前且已终态的 run；只继承未过期记录，`record_expires_at` 保留原值，不在新快照续期。原始资料在 `FINSIGHT_ARTIFACT_DIR` 的初始 TTL 为 12 小时，过期或不可恢复时重新取证，最新行情不因继承免于重取。失败原位重试保留原 query/技能，内部恢复字段不能注入人造问题。
+
+旧图只有在全部 dataset_refs 仍有效时进入 `prior_artifacts`，保留 spec、coverage、method、limitations 等可验证投影，最多 30 项。它用于核对“刚才图中的均线/缺值/范围”等追问，不复制原图 rows，不发送新的 artifact.ready，不把旧图冒充重新计算的结果。
+
+续研 catalog 只暴露 `status=success` 且 `source_refs` 非空的资料；control 与失败回执仍可用于诊断，但不混进模型的可用资料目录。prior 图投影和当前 run 的新 artifact.ready 必须区分，不能用继承记录伪装本次成功交付。
+
+动作收据与额度租约分别由 `FINSIGHT_ACTION_STORE`、`FINSIGHT_RUNTIME_QUOTA_DB` 的 SQLite 文件跨同目录进程共享。权威消息、私有思考和运行状态仍由 PostgreSQL 保存；这些机制不代表支持多机任务恢复。
 
 ## 完成与交付状态
 
-`pipeline_stage(stage=done)` 只说明研究流程已结束，不能把前端运行提前设为 100%。最终 `done` 到达且答案已经应用后，前端才切换完成；等待期间最多 99%，显示“正在保存并交付回答”。SSE 收到最终 `done/error` 后立即结束读取，不等待 HTTP EOF。
+legacy 的 `pipeline_stage(stage=done)` 只说明流程已结束，不能把前端运行提前设为 100%。最终 `done` 到达且答案已经应用后才切换完成；保存中的用户文案为“正在保存回答…”。原生界面使用实际活动，不制造固定阶段百分比。SSE 收到最终 `done/error` 后立即结束读取，不等待 HTTP EOF。
 
 若流程已结束但流未收尾，前端只读同一 `run_id` 的持久终态，校验 session/user message 身份后恢复服务器正文，不发起第二次研究。恢复后关闭网络流不代表用户取消，不调用业务取消接口。聊天回复占位丢失时，仅当对应问题、owner、run、控制器和运行状态仍一致才允许恢复正文；删除、清空、换账号或新的运行接管后不能复活旧回复。
 
@@ -12,17 +86,17 @@
 
 本契约约束后端执行事件、SSE 序列化和前端消费。事件是可观测事实，不是前端模拟动画。
 
-内容完成度由验证节点产出 `content_contract_version=research_content.v2` 与 `content_status`，同时兼容 `answer_status`。状态为 `answered/partial/unavailable/blocked/clarification_required`；来源 `pass/warn/block` 和 `publishable` 独立。前端当前合同直接使用服务端内容判定，只有缺少该版本字段的旧报告才做展示兼容推断。
+legacy 内容完成度由验证节点产出 `content_contract_version=research_content.v2` 与 `content_status`，同时兼容 `answer_status`。状态为 `answered/partial/unavailable/blocked/clarification_required`；来源 `pass/warn/block` 和 `publishable` 独立。原生路径使用终态 `answer_status`、quality 和已核验 blocks，不冒充已经经过 legacy 逐需求验证节点。前端直接使用服务端判定，缺少版本字段的旧报告只做展示兼容推断。
 
-普通研究180秒、报告300秒，模型预检、语义抽取、取数内的模型抽取和分析共享同一截止时间；语义报告模式按本轮原始起点调整预算。到期停止新增模型调用，已完成步骤用确定性投影保留事实及缺项，终态 `error` 携带 `run_deadline_exceeded`、`response`、`task_results` 和 `publishable=false`。投影最多3秒、终态保存最多2秒；保存失败如实标为 `persistence_status=failed`，不能宣称可恢复。
+普通研究180秒、报告300秒，模型预检与研究共享 `RunContext` 截止时间。原生到期保留已流出正文及 blocks/artifacts，并保存失败或取消预览。以下语义抽取、逐任务投影和阶段预算属于 legacy：语义报告模式按本轮原始起点调整预算，到期停止新增模型调用，已完成步骤用确定性投影保留事实及缺项；终态 `error` 携带 `run_deadline_exceeded`、`response`、`task_results` 和 `publishable=false`。投影最多3秒、终态保存最多2秒；保存失败如实标为 `persistence_status=failed`，不能宣称可恢复。
 
 请求理解、限流等待及一次结构修复共用阶段截止时间，默认不超过60秒及进入阶段时整轮余量的三分之一。语义未确认时，原始要求仍是完成度分母，不能用备用估值任务代替营收、同比等要求。没有已核验事实的超时保留明确说明，不能将空白正文保存为已回答。
 
-## 阶段
+## Legacy 阶段
 
 `planning`、`executing`、`synthesizing`、`rendering`、`persistence`、`done`、`cancelled`。`done` 完成阶段与终态事件在持久化回调返回后交付；不能在浏览器仍未拿到可恢复答案时提前宣称已保存。
 
-## 用户级事件
+## Legacy 用户级事件
 
 | type | 作用 |
 |---|---|
@@ -37,7 +111,7 @@
 | `quality_blocked` | 内容质量未通过，保留可展示预览及原因 |
 | `done/error/cancelled` | 运行终态；内容质量和保存状态使用独立字段 |
 
-`llm_*`、`tool_*`、`cache_*`、`data_source`、`api_call` 等细节只在 raw/dev 模式保留。
+legacy 的 `llm_*`、`tool_*`、`cache_*`、`data_source`、`api_call` 等细节只在 raw/dev 模式保留；原生的用户活动与安全工具摘要按上表消费。
 
 ## 基础 payload
 
@@ -132,7 +206,7 @@ owner 只来自已验证身份。模型预检后，服务器先保存问题、�
 
 会话快照写入采用事务合并，权威消息优先。客户端可提交 `expected_version`，过期时返回 HTTP 409 `conversation_version_conflict`，随后读取最新版本；不传版本的旧客户端也不能用旧快照抹去服务器回复。
 
-## `plan_ready`
+## Legacy `plan_ready`
 
 ```json
 {
@@ -162,7 +236,7 @@ owner 只来自已验证身份。模型预检后，服务器先保存问题、�
 
 `GET /api/execute/runs/{run_id}` 返回 `{run_id,session_id,status,user_message_id,assistant_message_id,created_at,updated_at,completed_at,result}`。`result` 在 running 时为 null，结束后为完整终态事件；不返回 worker ID 或私有请求上下文。
 
-`GET /api/execute/runs/{run_id}/events?after_seq=N` 优先读取内存事件；缓冲过期或进程重启后，从 PostgreSQL 返回完整终态，标注 `recovered=true` 并给出大于 cursor 的 seq。恢复不重新执行研究。运行每 25 秒续期，90 秒租约失联且被读取后转为 `interrupted` 并保存可重试说明。
+`GET /api/execute/runs/{run_id}/events?after_seq=N` 优先读取内存事件；缓冲过期或进程重启后，从 PostgreSQL 读取已提交 checkpoint 或终态。原生有 blocks 时先发送 `snapshot.reset`，终态标注 `recovered=true` 并给出大于 cursor 的 seq。恢复不重新执行研究。运行每 25 秒续期，90 秒租约失联且被读取后转为 `interrupted`，保留已提交正文与 blocks 并保存可重试说明。
 
 数据库完全不可写时，临时预览无法承诺跨进程恢复；前端提示保留当前内容，不能显示“已保存”。取消/中断时已流出的正文仍作为失败预览保存。执行 task 与取消路由仍在单个 backend 进程，终态持久化不代表已实现分布式任务调度。
 
@@ -176,4 +250,4 @@ owner 只来自已验证身份。模型预检后，服务器先保存问题、�
 - 刷新后遇到服务器占位，按 run ID 查询状态或续传，不再次 POST 新研究；同 owner 的 token 刷新不能切走当前会话。
 - 前端附加图表标记是展示补充，不能通过迟到整份快照覆盖服务端权威正文；永久图表依赖服务器 artifact 或明确的 view metadata。
 
-事件生产主要位于 `backend/graph/event_bus.py`、`backend/graph/execution/`、`backend/graph/nodes/` 和 `backend/services/execution_service.py`；前端消费位于 execution store/adapter。修改事件必须同时更新两端类型和测试。
+原生事件生产位于 `backend/agent_runtime/loop.py`、`tools.py`、`service.py`，回放与保存适配位于 `backend/api/execution_router.py`、`backend/services/research_run_store.py`。legacy 事件仍由 `backend/graph/event_bus.py`、`backend/graph/execution/`、`backend/graph/nodes/` 和 `backend/services/execution_service.py` 生产。前端原生 blocks 消费位于 `frontend/src/store/researchStream.ts`、`hooks/useChatStream.ts` 和 `types/runtime.ts`；修改事件必须同时更新两端类型和测试。

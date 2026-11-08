@@ -1,24 +1,36 @@
 # FinSight 当前文档索引
 
-更新时间：2026-10-04
+更新时间：2026-11-07
 
 本页只索引当前有效的事实文档。历史计划、阶段报告、QA 证据、ADR 和被替代说明统一位于 [`archive/`](archive/)；设计提案位于 [`design/`](design/)，两者都不作为运行时事实源。
+
+## 设计资料与本轮实施
+
+- [自主研究与对话目标设计合同](../DESIGN.md)：Claude 七画板的视觉方向、真实状态、thinking 分层、模型准入与操作确认；实现状态以代码及下方验收记录为准。
+- [设计画板快照与来源](design/2026-11-06_claude_agent_chat/README.md)：七画板、canvas索引与源文件SHA-256。原型数据仅作样式演示。
+- 详细执行计划属于本地工作产物，由实施任务显式传入；本索引不链接被Git忽略的计划，也不把未提交文件称为已发布资料。
+- [2026-11-07 Agent 运行时实施与验收记录](reports/2026-11-07_agent_runtime_implementation.md)：保留后端8b/前端9c原发布、OAuth入口与当时计算容量快照，不代表后续修复全部已发布。
+- [自然回答与隔离计算复验](reports/2026-11-07_natural_response_compute/README.md)：progress/answer、一次禁工具修正、inspect/coverage/prior_artifacts、计算日志/get_frame与adaptive；compute 48f已部署healthy，主应用 after 数字结果与新发布待补。
+- [冻结的真实多会话 before](reports/2026-11-07_natural_response_compute/BEFORE.md)：42次模型调用、8个原样问题仅1个完整通过，独立于当前after。
+- [封面、看板与战绩设计对照](reports/2026-11-07_page_design_alignment/PAGES_COMPARISON.md)：逐区块实现位置、亮暗/移动截图及真实数据边界。
+- [对话、历史与单列右栏设计对照](reports/2026-11-07_chat_design_alignment/README.md)：68张布局截图和逐区块差异；布局fixtures不作为金融数据验收。
+- [真实图表渲染验收](reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md)：三例真实模型产物逐点/悬停核验，SOXX区间端点与前一期基准重绘；核心图表通过不代表候选全文可靠。
+- [结果、过程与图标验收](reports/2026-11-07_chat_design_alignment/RESULT_PROCESS_ICONS.md)：三种前端fixture视口与真实case6 artifact数值核对分开记录；不冒充后端多会话验收。
 
 ## 建议阅读顺序
 
 1. [`../README.md`](../README.md)：产品能力、快速启动、当前路由、系统与部署拓扑。
 2. [`01_ARCHITECTURE.md`](01_ARCHITECTURE.md)：代码边界、数据边界和主运行时。
-3. [`LANGGRAPH_FLOW.md`](LANGGRAPH_FLOW.md)：当前 LangGraph 节点与分支。
-4. [`LANGGRAPH_PIPELINE_DEEP_DIVE.md`](LANGGRAPH_PIPELINE_DEEP_DIVE.md)：统一请求编译、逐任务覆盖、类型化 DAG、共享取数、研究结果与保存恢复。
-5. [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)：两个业务 LLM 角色、内部 Collector 与公共质量合同。
-6. [`05_RAG_ARCHITECTURE.md`](05_RAG_ARCHITECTURE.md)：PostgreSQL/pgvector、私网推理 worker、向量身份与词法降级。
+3. [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)：默认主/专业角色、真实技能、私有思考、资料TTL与权限，以及独立预测边界。
+4. [`execution-event-contract.md`](execution-event-contract.md)：progress/answer与seq穿插、一次修正、工具展示、blocks/思考/终态保存和恢复。
+5. [`05_RAG_ARCHITECTURE.md`](05_RAG_ARCHITECTURE.md)：按需知识工具、词法/托管API、可选私网worker、向量身份与真实迁移/回读证据。
+6. [`LANGGRAPH_FLOW.md`](LANGGRAPH_FLOW.md)：仅显式legacy六节点兼容路径，不是默认主链。
 7. [`11_PRODUCTION_RUNBOOK.md`](11_PRODUCTION_RUNBOOK.md)：部署、验证、冒烟和回滚。
 
 ## 契约与专项规范
 
 | 文档 | 作用 |
 |---|---|
-| [`06a_LANGGRAPH_DESIGN_SPEC.md`](06a_LANGGRAPH_DESIGN_SPEC.md) | 当前六节点 LangGraph 设计约束与变更门禁 |
 | [`execution-event-contract.md`](execution-event-contract.md) | 后端事件、质量/保存状态、消息 ID、持久运行恢复与前端消费边界 |
 | [`REPORT_CHART_SPEC.md`](REPORT_CHART_SPEC.md) | 报告图表与 `chart_ref` 合同 |
 | [`HALLUCINATION_MITIGATION.md`](HALLUCINATION_MITIGATION.md) | 证据、引用和降级治理 |
@@ -27,6 +39,8 @@
 | [`PREDICTION_TRACK_RECORD.md`](PREDICTION_TRACK_RECORD.md) | 固定 US20 公开预测账本、冻结口径、结算与独立告警 |
 
 ## 本次基座重构
+
+[2026-11-07 Agent runtime/设计收口归档](archive/2026-11-07_agent-runtime-design-closeout/README.md) 保存被现行规范替代的旧LangGraph深入说明与生产设计硬约束；默认研究规范集中在架构、Agent、执行事件和RAG文档，不将归档当作当前权限或模型循环规则。
 
 [`archive/2026-10-03-foundation-refactor/README.md`](archive/2026-10-03-foundation-refactor/README.md) 收录本次计划、实施记录和脱敏发布验收。当前规范已反映统一请求/证据/研究结果、单调质量门禁、服务器终态和独立 RAG 推理；是否已经完成真实 PostgreSQL、线上 canary 与真实 worker 推理，以该归档的实际证据为准。
 
