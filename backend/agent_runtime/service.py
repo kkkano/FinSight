@@ -58,7 +58,7 @@ def answer_paragraphs(text: str) -> list[str]:
 
 
 def answer_feedback(text: str, data, *, require_citations: bool = False) -> str | None:
-    invalid = [{"paragraph": paragraph.encode("utf-8")[:300].decode("utf-8", errors="ignore"), "issues": issues}
+    invalid = [{"paragraph": paragraph.encode("utf-8")[:900].decode("utf-8", errors="ignore"), "issues": issues}
                for paragraph in answer_paragraphs(text)
                if (issues := paragraph_issues(paragraph, data, require_citations=require_citations))]
     if not invalid:
@@ -72,7 +72,7 @@ def answer_feedback(text: str, data, *, require_citations: bool = False) -> str 
             "下面的事实摘要只是实际成功工具结果的投影，每条保留自己的来源；不能把某条来源用于另一主体或指标。"
             "缺少的增长率、利润率等可用已授权资料调用analyze_dataset或run_analysis_code核实，最多两轮；Python必须将输出赋给result。"
             "没有计算依据时保留已得到的数值与不依赖该数值的解释，不手算猜测，不另开无关研究。比例保留百分数单位、比例和倍数四舍五入到两位小数，不自行转倍数、取整或计算未提供的差额。")
-    issues_text = "需核对的段落摘录：" + dumps(invalid[:3])
+    issues_text = "需核对的段落摘录：" + dumps(invalid[:2])
     facts = []
     candidates = _feedback_facts(text, data)
     candidates.sort(key=lambda fact: 0 if isinstance(fact.get("result"),dict) and fact["result"].get("comparison_stats")

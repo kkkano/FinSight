@@ -322,6 +322,16 @@ def test_question_about_quoted_decline_keeps_its_negative_magnitude():
     assert validate_paragraph("报道未说明“近30%”是否为收盘还是盘中涨幅。", data) != []
 
 
+
+
+def test_repair_feedback_keeps_the_actual_error_beyond_a_short_chinese_prefix():
+    data = RunData("u", "s", "r", "AAPL估值")
+    data.record("get_company_info", {"ticker": "AAPL"}, {"source": "fixture", "forwardPE": 32.41})
+    paragraph = "需要结合公司经营与财务表现作出判断。" * 7 + "AAPL远期市盈率999999倍。"
+    feedback = answer_feedback(paragraph, data)
+    assert feedback and "999999" in feedback and "32.41" in feedback
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")
