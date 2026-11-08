@@ -419,6 +419,7 @@ class AgentRuntime:
         messages = [{"role": "system", "content": SYSTEM + "\n角色职责：" + mandate +
                      "\n当前日期：" + datetime.now(timezone.utc).isoformat() + "\n用户界面上下文：" + dumps(selected_context) +
                      "\n已安装的技能目录（需要时use_skill加载方法）：" + dumps(skill_catalog())}]
+        system_base = messages[0]["content"].split("\n已安装的技能目录", 1)[0]
         for skill_id in validate_skill_ids(self.ui_context.get("skill_ids")):
             guidance = await self.activate_skill(agent_id, skill_id)
             messages[0]["content"] += "\n用户选择的研究方法：" + dumps(guidance)
@@ -445,10 +446,12 @@ class AgentRuntime:
                 {"type": "image_url", "image_url": {"url": image["data_url"]}}
                 for image in selected_images]
         messages.append({"role": "user", "content": user_content})
+        evidence_progress = None
         if agent_id == "root" and self.completeness.facets:
-            messages.append({"role": "user", "content": "当前问题的最低证据目标：" + dumps(self.completeness.missing(self.data, self.executor.attempts)) +
+            evidence_progress = {"role": "user", "content": "当前问题的最低证据目标：" + dumps(self.completeness.missing(self.data, self.executor.attempts)) +
                 "。先取得能回答问题的真实字段，不能以公司简介、财报日历、空新闻或旧失败充当完成。"
-                "首源失败要用search换源；用户要求重新检索时必须有本轮新尝试。"})
+                "首源失败要用search换源；用户要求重新检索时必须有本轮新尝试。"}
+            messages.append(evidence_progress)
         rounds = min(20, max(1, int(os.getenv("FINSIGHT_AGENT_MAX_TURNS", "12"))))
         if isinstance(self.ui_context.get("budget_override"), int):
             rounds = min(rounds, max(2, self.ui_context["budget_override"] * 2))
@@ -462,6 +465,14 @@ class AgentRuntime:
                 break
             self.context.guard()
             await self._drain(messages, agent_id)
+            if self.active_skills[agent_id]:
+                messages[0]["content"] = system_base + "\n已应用的研究方法（不必再次use_skill）：" + dumps([
+                    skill_guidance(skill) for skill in sorted(self.active_skills[agent_id])])
+            if evidence_progress is not None:
+                gaps = self.completeness.missing(self.data, self.executor.attempts)
+                evidence_progress["content"] = "当前问题的最低证据尚缺：" + dumps(gaps) + (
+                    "。对缺口实际补查，失败或空结果不代表资料不存在。" if gaps else
+                    "。最低证据已取得，请使用实际数值和引用回答；不要重复加载技能、取同一报价或扫描全部申报元数据。所需派生量仍须用计算工具核实。")
             available = self.available_tools(agent_id, role)
             schemas = [spec.openai() for spec in available.values()]
             total_budget = self.context.deadline - self.context.started_monotonic
@@ -536,7 +547,8 @@ class AgentRuntime:
                     async with asyncio.timeout(self.context.timeout(90)):
                         self.stages[agent_id] = "model_response"
                         network_started = True
-                        async for chunk in self.model.stream(compact, schemas, timeout=self.context.timeout(90)):
+                        async for chunk in self.model.stream(compact, schemas, tool_choice="none" if not schemas else None,
+                                                             timeout=self.context.timeout(90)):
                             self.context.guard()
                             if chunk.get("runtime_retry"):
                                 await self.emit("activity.updated", {"activity_id": agent_id + "_model_retry",
