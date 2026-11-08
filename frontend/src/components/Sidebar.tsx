@@ -9,13 +9,15 @@ import {
   MessageSquare,
   Sun,
   Settings,
+  ChevronDown,
+  ChevronRight,
   X,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardStore } from '../store/dashboardStore';
-import { useStore } from '../store/useStore';
+import { useStore, type ConversationSummary } from '../store/useStore';
 import { useWatchlist } from '../hooks/useWatchlist';
-import { groupConversations } from '../utils/conversationHistory';
+import { cleanConversationTitle, conversationTimeHint, groupConversations, recentConversationView } from '../utils/conversationHistory';
 import { ConversationDeleteDialog } from './chat/ConversationDeleteDialog';
 
 interface SidebarProps {
@@ -30,6 +32,17 @@ interface SidebarProps {
   onMobileOpen?: () => void;
   onMobileClose?: () => void;
 }
+
+const RECENT_COLLAPSED_KEY = 'finsight.sidebar.recentCollapsed';
+
+const readRecentCollapsed = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(RECENT_COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 const readStoredDashboardSymbol = (): string => {
   if (typeof window === 'undefined') return '';
@@ -60,7 +73,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { activeAsset: lastDashboardAsset } = useDashboardStore();
   const { watchlist } = useWatchlist();
   const [deleting, setDeleting] = useState<{ sessionId: string; title: string } | null>(null);
+  const [recentCollapsed, setRecentCollapsed] = useState(readRecentCollapsed);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({ '7天内': true, '更早': true });
   const groups = groupConversations(conversationSummaries);
+  const recent = recentConversationView(groups, sessionId, collapsedGroups);
 
   const compactMobile = !isMobileOpen;
   const activeKey = currentView ?? (
@@ -73,6 +89,34 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 
   const closeMobile = () => onMobileClose?.();
+
+  const toggleRecent = () => {
+    const collapsed = !recentCollapsed;
+    setRecentCollapsed(collapsed);
+    try {
+      window.localStorage.setItem(RECENT_COLLAPSED_KEY, String(collapsed));
+    } catch {
+      // 浏览器禁用存储时，本次会话仍可折叠。
+    }
+  };
+
+  const renderConversation = (conversation: ConversationSummary) => {
+    const group = groups.find((item) => item.items.some((entry) => entry.sessionId === conversation.sessionId));
+    const timeHint = group ? conversationTimeHint(conversation, group) : null;
+    const active = conversation.sessionId === sessionId;
+    return <div role="listitem" key={conversation.sessionId} data-testid="conversation-item"
+      data-session-id={conversation.sessionId} data-active={active ? 'true' : 'false'}
+      className={'group flex min-h-9 items-center rounded-[7px] ' + (active ? 'bg-t-surface shadow-sm' : 'hover:bg-t-hover')}>
+      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-[7px] text-left text-[13px] text-t-text2"
+        title={conversation.title} aria-current={active ? 'page' : undefined}
+        onClick={() => { selectConversation(conversation.sessionId); closeMobile(); }}>
+        <span className="min-w-0 flex-1 truncate">{cleanConversationTitle(conversation.title)}</span>
+        {timeHint && <span className="shrink-0 text-2xs text-t-text3">{timeHint}</span>}
+      </button>
+      <button type="button" className="mr-1 rounded-md p-2 text-t-text3 opacity-0 hover:text-fin-danger group-hover:opacity-100 focus:opacity-100 max-lg:opacity-100"
+        aria-label="删除会话" title="删除会话" data-testid="conversation-delete" onClick={() => setDeleting(conversation)}><Trash2 size={14} /></button>
+    </div>;
+  };
 
   const openDashboard = () => {
     if (!onDashboardClick) return;
@@ -158,17 +202,28 @@ const Sidebar: React.FC<SidebarProps> = ({
           <NavItem icon={<Target size={16} />} label="战绩" active={activeKey === 'track-record'} compact={compactMobile} testId="sidebar-nav-track-record" onClick={() => { if (onTrackRecordClick) onTrackRecordClick(); else navigate('/track-record'); closeMobile(); }} />
 
           {groups.length > 0 && <div className={compactMobile ? 'mt-4 min-h-0 flex-1 overflow-y-auto max-lg:hidden' : 'mt-4 min-h-0 flex-1 overflow-y-auto'} data-testid="conversation-rail">
-            <div className="px-3 pb-2 text-xs text-t-text3">最近对话</div>
-            <div role="list" aria-label="会话列表">
-              {groups.map((group) => <div key={group.label}><p className="px-2.5 pb-1 pt-3 text-xs text-t-text3">{group.label}</p>{group.items.map((conversation) => <div role="listitem" key={conversation.sessionId} data-testid="conversation-item"
-                data-session-id={conversation.sessionId} data-active={conversation.sessionId === sessionId ? 'true' : 'false'}
-                className={'group flex min-h-9 items-center rounded-[7px] ' + (conversation.sessionId === sessionId ? 'bg-t-surface shadow-sm' : 'hover:bg-t-hover')}>
-                <button type="button" className="min-w-0 flex-1 truncate px-2.5 py-[7px] text-left text-[13px] text-t-text2"
-                  title={conversation.title} onClick={() => { selectConversation(conversation.sessionId); closeMobile(); }}>{conversation.title || '新对话'}</button>
-                <button type="button" className="mr-1 rounded-md p-2 text-t-text3 opacity-0 hover:text-fin-danger group-hover:opacity-100 focus:opacity-100 max-lg:opacity-100"
-                  aria-label="删除会话" title="删除会话" data-testid="conversation-delete" onClick={() => setDeleting(conversation)}><Trash2 size={14} /></button>
-              </div>)}</div>)}
-            </div>
+            <button type="button" onClick={toggleRecent} aria-expanded={!recentCollapsed}
+              className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-xs text-t-text3 hover:bg-t-hover hover:text-t-text">
+              {recentCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}最近对话
+            </button>
+            {!recentCollapsed && <>
+              <div role="list" aria-label="会话列表">
+                {recent.groups.map((group) => <div key={group.label}>
+                  <button type="button" aria-expanded={!collapsedGroups[group.label]}
+                    onClick={() => setCollapsedGroups((current) => ({ ...current, [group.label]: !current[group.label] }))}
+                    className="flex w-full items-center gap-1.5 rounded-md px-2.5 pb-1 pt-3 text-left text-xs text-t-text3 hover:text-t-text">
+                    {collapsedGroups[group.label] ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                    <span>{group.label}</span><span className="ml-auto tabular-nums">· {group.count}</span>
+                  </button>
+                  {!collapsedGroups[group.label] && group.items.map(renderConversation)}
+                </div>)}
+                {recent.pinnedConversation && <div className="mt-2 border-t border-t-border pt-2">{renderConversation(recent.pinnedConversation)}</div>}
+              </div>
+              {recent.totalCount > 8 && <button type="button" onClick={() => { onHistoryClick?.(); closeMobile(); }}
+                className="mt-2 w-full rounded-md px-2.5 py-2 text-left text-xs text-t-text3 hover:bg-t-hover hover:text-t-text">
+                查看全部 {recent.totalCount} 条 →
+              </button>}
+            </>}
           </div>}
           <div className="mt-auto border-t border-t-border pt-2">
             {onSettingsClick && <NavItem icon={<Settings size={16} />} label="设置" active={false} compact={compactMobile} testId="sidebar-nav-settings" onClick={() => { onSettingsClick(); closeMobile(); }} />}
