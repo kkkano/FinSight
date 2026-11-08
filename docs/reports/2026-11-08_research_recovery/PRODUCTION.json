@@ -1,0 +1,120 @@
+{
+  "release": "agent-20261108-365a20081c6b",
+  "source_commit": "ddee6360d504ae686b941640bfb141ac64a10393",
+  "runtime_sha256": "365a20081c6bc59dbbd7e9cc7245a915f8c587fb781e21b2888246acfa79abe4",
+  "deployed_healthy": true,
+  "runtime_integrity": {
+    "release": "agent-20261108-365a20081c6b",
+    "source_commit": "ddee6360d504ae686b941640bfb141ac64a10393",
+    "active_path": "/home/ubuntu/finsight-releases/agent-20261108-365a20081c6b",
+    "source": {
+      "checked": 25,
+      "mismatches": []
+    },
+    "ready": true,
+    "rag_full_ready": true,
+    "version": {
+      "build_id": "agent-20261108-365a20081c6b"
+    },
+    "containers": {
+      "finsight-backend": {
+        "image": "finsight-backend:agent-20261108-365a20081c6b",
+        "image_id": "sha256:1fade3f45414c3b6b096ca99344b8a553b4ba578d3c453c81f5d382af4df4f5e",
+        "started_at": "2026-11-08T18:45:55.270505918Z"
+      },
+      "finsight-frontend": {
+        "image": "finsight-frontend:agent-20261108-365a20081c6b",
+        "image_id": "sha256:0fef9e1306d90d9a61e2bdd003d08747144156d8b93232aab9450d2334186b6a",
+        "started_at": "2026-11-08T18:46:14.872122004Z"
+      }
+    }
+  },
+  "public_ui": {
+    "version": {
+      "build_id": "agent-20261108-365a20081c6b"
+    },
+    "githubEntryVisible": true,
+    "originalLogoSha256": "8672cb27dc1560913d884f38618a0fcb6a2cf7a52065021257fd26bfed9d5497",
+    "pageErrors": [],
+    "fullPersonalOAuthTested": false
+  },
+  "production_component_checks": {
+    "scope": "生产容器内真实模型和供应商的临时研究调用；不是HTTP/登录用户验收。",
+    "business_database_written": false,
+    "results": [
+      {
+        "query": "为什么英特尔突然暴跌？结合实际行情与新闻判断，不把猜测写成事实。",
+        "run_id": "release-canary-a8d0453f24e84208aa2386518154aa3c",
+        "seconds": 56.79,
+        "tool_calls": [
+          "get_stock_price",
+          "get_company_news",
+          "get_stock_historical_data",
+          "get_company_info",
+          "search"
+        ],
+        "answer_status": "answered",
+        "quality": "pass",
+        "reasons": [],
+        "response": "## 原因判断（基于公开报道）\n\n是公司给出的下一季度指引偏弱：虽然刚公布的季度业绩本身不差。 [S746fc2de52]\n但指引隐含整体收入环比回落、盈利水平明显低于刚过去的季度。 [S746fc2de52]\n\n## 行情参照\n\n| 位置 | 日期 | 价格（USD） | 相邻日线变动 |\n|---|---|---:|---:|\n| 本次日线范围内最大回落 | 2026-10-30 | 65.76 | -28.58% |\n| 最近日线 | 2026-11-06 | 56.28 | +7.71% |\n\n行情范围为 2026-08-10 至 2026-11-06，变动按相邻返回收盘价格计算。[S681ee2d7c2]\n\n报价快照：56.28 USD，数据日期 2026-11-06。[Sad810da4c5]\n\n以上将报道中的原因判断与价格事实分开列示；价格变化本身不能识别具体卖盘或资金来源。",
+        "error_code": null,
+        "artifacts": []
+      },
+      {
+        "query": "INTC最新已公布季度营收、净利润、经营现金流及自由现金流是多少？说明财期和口径。",
+        "run_id": "release-canary-e8ef2784a67f481d8bb2a38cadffc038",
+        "seconds": 17.82,
+        "tool_calls": [
+          "get_sec_company_facts_quarterly",
+          "get_company_news"
+        ],
+        "answer_status": "answered",
+        "quality": "pass",
+        "reasons": [],
+        "response": "## INTC 最新已披露季度：截至 2026-09-26\n\n| 项目 | 金额（USD） |\n|---|---:|\n| 营收 | 16,513,000,000 |\n| 净利润 | 3,320,000,000 |\n| 经营现金流 | 5,082,000,000 |\n| 资本开支 | 4,024,000,000 |\n| 自由现金流（经营现金流减资本开支） | 1,058,000,000 |\n\n来源：SEC 公司财报 [S52546f865c]\n\n以上按单季口径列示。自由现金流差额是根据已取得科目计算的研究口径，不代表公司披露的非 GAAP 指标。\n经营现金流、资本开支的单季值由同财年累计值相减得到，保留了两份申报输入；并非直接披露的独立单季数值。",
+        "error_code": null,
+        "artifacts": []
+      },
+      {
+        "query": "SOXX近25年连续至少5周下跌出现过哪些阶段？取真实周线计算并画图，说明未完成周处理。",
+        "run_id": "release-canary-795d144939d64541b1d825e700d2d7e0",
+        "seconds": 101.5,
+        "tool_calls": [
+          "get_stock_historical_data",
+          "get_stock_price",
+          "get_current_datetime",
+          "get_stock_historical_data",
+          "get_stock_historical_data",
+          "get_current_datetime",
+          "inspect_dataset",
+          "read_evidence",
+          "analyze_dataset",
+          "render_chart"
+        ],
+        "answer_status": "answered",
+        "quality": "pass",
+        "reasons": [],
+        "response": "## SOXX 连续下跌区间\n\n已用 2001-07-09 至 2026-11-02 的 1322 个真实观测计算并生成走势图。连续至少 5 周收跌的区间共有 9 段，其中 8 段已结束。[Sbec458f992]\n\n| 首跌期标签 | 末跌期标签 | 连续期数 | 区间涨跌幅 | 状态 |\n|---|---|---:|---:|---|\n| 2002-05-20 | 2002-06-17 | 5 | -30.41% | 已结束 |\n| 2002-08-19 | 2002-09-30 | 7 | -34.15% | 已结束 |\n| 2008-06-02 | 2008-07-07 | 6 | -18.02% | 已结束 |\n| 2008-09-22 | 2008-10-20 | 5 | -32.88% | 已结束 |\n| 2018-09-24 | 2018-10-22 | 5 | -17.08% | 已结束 |\n| 2020-02-17 | 2020-03-16 | 5 | -33.46% | 已结束 |\n| 2022-03-28 | 2022-04-25 | 5 | -17.42% | 已结束 |\n| 2025-02-24 | 2025-03-31 | 6 | -29.62% | 已结束 |\n| 2026-10-05 | 2026-11-02 | 5 | -30.45% | 仍在延续 |\n\n数据来源：实际行情及连续下跌计算 [Sbec458f992]\n\n区间按相邻收盘价连续下降识别，取最大且不重叠的连续区间；涨跌幅从首跌期的前一观测收盘价算起。日期沿用供应商标签，不一定是实际收盘日。\n\n末周已收盘，交易日历对应收盘时间为 2026-11-06 21:00:00 UTC；仍在延续仅表示下跌区间尚未被后续上涨或持平终止，不表示末根周线尚未收盘。[Sbec458f992]\n\n历史区间是对已有数据的描述，不构成后续涨跌概率。",
+        "error_code": null,
+        "artifacts": [
+          {
+            "title": "SOXX历史走势与连续下跌区间",
+            "kind": "chart",
+            "points": 1322,
+            "annotations": 9,
+            "coverage": {
+              "close": {
+                "points": 1322,
+                "valid": 1322,
+                "missing": 0,
+                "leading_missing": 0,
+                "first_valid": "2001-07-09T00:00:00+00:00",
+                "last_valid": "2026-11-02T00:00:00+00:00"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
