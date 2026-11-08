@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from typing import Any
 
 
@@ -49,7 +50,15 @@ def evidence_preview(value: Any, *, limit: int = 4500) -> Any:
         preview["market_context"] = [{key: child for key, child in item.items() if key != "data_ref"}
                                      for item in value.get("market_context", [])]
         preview["method"] = safe_preview(value.get("method", {}), max_chars=1400)
-        return preview
+        def linked_by_bundle(item):
+            if isinstance(item, dict):
+                return {key: linked_by_bundle(child) for key, child in item.items() if key not in {"source_url", "url", "data_ref", "source_refs"}}
+            if isinstance(item, list):
+                return [linked_by_bundle(child) for child in item]
+            if isinstance(item, str):
+                return re.sub(r"https?://[^\s<>]+", "[原文见汇总引用]", item)
+            return item
+        return linked_by_bundle(preview)
     if isinstance(value, dict) and value.get("period_ends") and isinstance(value.get("revenue"), list):
         from .data import _companyfacts_rows, fact_metadata_preview
         rows = _companyfacts_rows(value)

@@ -724,6 +724,9 @@ class AgentRuntime:
                                      "。尚未取得的任务结果不能视为已完成。"})
                     continue
                 if agent_id == "root" and not repairing_answer and await self.recover_research(messages, final, block_id):
+                    if "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
+                        force_compact_answer = any(record.get("status") == "success" and
+                            record.get("inputs", {}).get("operation") == "financial_ratios" for record in self.data.records.values())
                     continue
                 if agent_id == "root" and self.answer_feedback and not self.answer_repair_attempted:
                     feedback = self.answer_feedback(final)
