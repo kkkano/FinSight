@@ -436,7 +436,7 @@ class AgentRuntime:
         facts, seen = [], set()
         fact_budget = max(1000, min(14000, self.model.config.context_window - self.model.config.max_output - tokens(system) - tokens(task) - 6000))
         bundles = {}
-        if "valuation" in self.completeness.facets:
+        if not self.report_title and "valuation" in self.completeness.facets:
             for ref, record in reversed(list(self.data.records.items())):
                 if record.get("status") == "success" and record.get("inputs", {}).get("operation") == "financial_ratios":
                     primary = self.data.records.get(record["inputs"].get("dataset_ref"), {})
@@ -449,7 +449,7 @@ class AgentRuntime:
             ticker = str(inputs.get("ticker") or "").upper()
             if ticker in bundles and record["tool"] in {"get_company_info", "get_stock_price", "get_sec_company_facts_quarterly"}:
                 continue
-            if inputs.get("operation") == "financial_ratios" and ref not in bundles.values():
+            if bundles and inputs.get("operation") == "financial_ratios" and ref not in bundles.values():
                 continue
             identity = (record["tool"], inputs.get("ticker"), inputs.get("dataset_ref"))
             if identity in seen:
@@ -469,10 +469,10 @@ class AgentRuntime:
         context = "近期用户问题：" + dumps(questions) + "\n本轮追加要求：" + dumps(list(self.instructions.values()))
         content = context + "\n本轮问题：" + task if isinstance(task, str) else [{"type": "text", "text": context}, *task]
         focus = ""
-        if "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
+        if not self.report_title and "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
             focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。仅使用已列出的数值，不新增相减差额、隐含EPS、年化、PEG或同行区间。比例保持百分数单位，比例与倍数按四舍五入保留两位小数，不改写成近40倍、23倍等粗略数值；不输出[S...]占位引用。财务与市场数据已汇总时，引用汇总项提供的source_refs，各原始出处会一同展示；行情倍数不是SEC披露的财务数字。"
-        elif re.search(r"为什么|为何|原因", self.query) and "news" in self.completeness.facets:
-            focus = "用户问的是这次涨跌的原因：优先说明报道直接支持的触发因素，并用已取得行情校准时间和幅度。区分报道归因与已核实行情，控制在约600字，不扩展未经计算的历史统计。"
+        elif not self.report_title and re.search(r"为什么|为何|原因", self.query) and "news" in self.completeness.facets:
+            focus = "用户问的是这次涨跌的原因：在400字内说明报道支持的定性触发因素、证据边界和最近行情。新闻归因用文字概括；数值仅使用本轮报价或行情的明确字段，保持其单位与精度。不复述报道里的历史投资回报、年代排名或长期涨跌倍数，不推算未查询的财报差额。"
         return [system, {"role": "user", "content": content},
                 {"role": "user", "content": "以下是本轮实际成功资料的摘要，原文仍可按引用回读。不要重复取相同数据；"
                  "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。" + focus + "\n" + dumps(facts) +
@@ -727,7 +727,7 @@ class AgentRuntime:
                                      "。尚未取得的任务结果不能视为已完成。"})
                     continue
                 if agent_id == "root" and not repairing_answer and await self.recover_research(messages, final, block_id):
-                    if "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
+                    if not self.report_title and "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
                         force_compact_answer = any(record.get("status") == "success" and
                             record.get("inputs", {}).get("operation") == "financial_ratios" for record in self.data.records.values())
                     continue

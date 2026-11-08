@@ -34,13 +34,15 @@ _FACETS = {
     "cash_flow": r"现金流|cash\s*flow|\bfcf\b",
     "news": r"新闻|催化|消息|news|catalyst|为什么.{0,16}(?:暴跌|大跌|下跌|上涨|涨|跌)|(?:暴跌|下跌|上涨).{0,8}原因",
     "price": r"(?:当前|现在|最新|最近交易日|今天).{0,12}(?:价格|报价|股价|收盘价)|查.{0,12}(?:股价|价格)|current price|latest quote",
+    "price_cause": r"(?:为什么|为何|why).{0,24}(?:暴跌|大跌|下跌|上涨|涨|跌|drop|fall|crash|rise|rally)|(?:暴跌|下跌|上涨).{0,8}原因",
 }
 _LABELS = {"valuation": "估值指标", "filings": "已披露财报及财期", "cash_flow": "经营与自由现金流",
-           "news": "相关新闻及原文日期", "price": "当前报价", "fresh_search": "本轮新的检索结果", "chart": "用户要求的图表"}
+           "news": "相关新闻及原文日期", "price": "当前报价", "fresh_search": "本轮新的检索结果", "chart": "用户要求的图表",
+           "price_cause": "本次涨跌的针对性检索"}
 _TOOLS = {"valuation": ("get_company_info",), "filings": ("get_sec_company_facts_quarterly", "get_financial_statements", "get_local_market_filings"),
           "cash_flow": ("get_sec_company_facts_quarterly", "get_financial_statements"),
           "news": ("get_company_news", "search", "fetch_url_content"), "price": ("get_stock_price",),
-          "fresh_search": ("search", "get_company_news", "fetch_url_content")}
+          "fresh_search": ("search", "get_company_news", "fetch_url_content"), "price_cause": ("search", "fetch_url_content")}
 
 
 def _number(value: Any) -> bool:
@@ -82,9 +84,9 @@ def _satisfies(facet: str, record: dict, sources: list[dict]) -> bool:
         return bool(re.search(r"20\d{2}[-/年]|20\d{2}Q[1-4]", text)) and (
             _metric(output, ("revenue", "net_income", "eps", "operating_income")) or bool(
                 re.search(r"(?:Total Revenue|Net Income|营收|净利润)[^\n]{0,80}\d", text, re.I)))
-    if facet in {"news", "fresh_search"}:
+    if facet in {"news", "fresh_search", "price_cause"}:
         linked = [source for source in sources if source.get("url")]
-        return bool(linked) and (facet == "fresh_search" or any(
+        return bool(linked) and (facet in {"fresh_search", "price_cause"} or any(
             source.get("published_date") or source.get("as_of") for source in linked) or bool(re.search(r"20\d{2}-\d{2}-\d{2}", text)))
     return _metric(output, ("price", "current_price", "regularMarketPrice", "close")) or bool(
         re.search(r"(?:Price|价格|股价)\s*[:：]\s*\$?\d", text, re.I))
@@ -138,7 +140,7 @@ class ResearchCompleteness:
                     if not ticker:
                         bound = True
                     current = any(attempt.get("data_ref") == ref and attempt.get("status") == "success" for attempt in attempts)
-                    if bound and (not (self.refresh or facet == "price") or current) and _satisfies(
+                    if bound and (not (self.refresh or facet in {"price", "price_cause"}) or current) and _satisfies(
                             facet, record, [data.sources[s] for s in data.source_refs(ref) if s in data.sources]):
                         matching.append(ref)
                 if not matching:
@@ -180,7 +182,9 @@ class ResearchCompleteness:
                                 break
                 continue
             tried = {a["name"] for a in attempts if str(a.get("inputs", {}).get("ticker", "")).upper() == ticker}
-            if facet in {"fresh_search", "news"}:
+            if facet == "price_cause":
+                name, args = "search", {"query": f"{ticker} stock price move earnings guidance latest"}
+            elif facet in {"fresh_search", "news"}:
                 name = "get_company_news" if ticker and facet == "news" and "get_company_news" not in tried else "search"
                 args = {"ticker": ticker} if name != "search" else {"query": f"{ticker} {self.query[:180]} latest news earnings investor relations".strip()}
             elif facet in {"filings", "cash_flow"}:

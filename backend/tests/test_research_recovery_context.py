@@ -356,6 +356,31 @@ def test_repair_feedback_keeps_the_actual_error_beyond_a_short_chinese_prefix():
     assert feedback and "999999" in feedback and "32.41" in feedback
 
 
+def test_price_cause_requires_targeted_search_beyond_generic_company_news():
+    data = RunData("u", "s", "r", "为什么英特尔突然暴跌")
+    data.record("get_company_news", {"ticker": "INTC"}, [{"title": "Intel commentary", "url": "https://example.com/intel", "published_date": "2026-11-06"}])
+    check = ResearchCompleteness("为什么英特尔突然暴跌", [], {})
+    gaps = check.missing(data, [])
+    assert [gap["facet"] for gap in gaps] == ["price_cause"]
+    calls = check.recovery_calls(gaps, [], {"search": object()}, data)
+    assert calls == [("search", {"query": "INTC stock price move earnings guidance latest"})]
+    ref = data.record("search", calls[0][1], "Intel guidance\nhttps://example.com/earnings\nShares fell after guidance.")
+    attempts = [{"name": "search", "inputs": calls[0][1], "status": "success", "data_ref": ref}]
+    assert not check.missing(data, attempts)
+
+
+def test_report_completion_is_not_replaced_by_short_chat_instructions():
+    context = RunContext.create(owner="report-user", entry="chat", budget_seconds=90)
+    async def emit(*_args):
+        pass
+    rt = AgentRuntime(context=context, session_id="s", query="INTC深度报告，解释估值和为什么暴跌", model=FakeModel([]), emit=emit, tools={})
+    rt.report_title = "INTC深度报告"
+    summary = str(rt.completion_context({"role": "system", "content": "规则"}, rt.query))
+    assert "估值观点短问" not in summary and "在400字内" not in summary
+
+
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")
