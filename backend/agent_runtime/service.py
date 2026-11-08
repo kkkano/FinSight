@@ -49,7 +49,7 @@ def answer_paragraphs(text: str) -> list[str]:
         references = re.findall(r"\[\^?S[a-fA-F0-9]+\]", paragraph)
         stripped = re.sub(r"\[\^?S[a-fA-F0-9]+\]", "", paragraph).strip(" 。.，,；;：:")
         source_note = bool(references) and (not stripped or bool(re.match(
-            r"^(?:来源|数据来源|上表|表中|上述|以上|[一二两三四五六七八九十]+条新闻).{0,100}(?:来自|来源|取自)", stripped)))
+            r"^(?:数据)?来源\s*[:：]|^(?:上表|表中|上述|以上|[一二两三四五六七八九十]+条新闻).{0,100}(?:来自|来源|取自)", paragraph)))
         if result and source_note and len(paragraph) < 600 and re.search(r"(?m)^\s*\|.*\|\s*$", result[-1]):
             result[-1] += "\n\n" + paragraph
         else:
