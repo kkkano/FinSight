@@ -66,13 +66,22 @@ def evidence_preview(value: Any, *, limit: int = 4500) -> Any:
         rows = [{"title": clean_text(str(row.get("title") or row.get("headline")), 240),
                  "url": clean_text(str(row.get("url") or ""), 1200),
                  "published_at": row.get("published_date") or row.get("published_at"),
-                 "source": row.get("source"), "snippet": clean_text(str(row.get("snippet") or row.get("summary") or ""), 320)}
+                 "source": row.get("source"), "snippet": clean_text(str(row.get("snippet") or row.get("summary") or ""), 1200)}
                 for row in articles[:10]]
         while len(rows) > 1 and len(dumps(rows)) > limit:
             rows.pop()
         return {"articles": rows, "row_count": len(articles), "returned_rows": len(rows), "has_more": len(rows) < len(articles),
                 "coverage_window": value.get("coverage_window") if isinstance(value, dict) else articles[0].get("coverage_window")}
     if isinstance(value, dict):
+        if isinstance(value.get("episodes"), list):
+            rows = value.get("rows") or []
+            return {"episodes": value["episodes"][:30], "episodes_has_more": len(value["episodes"]) > 30,
+                    "sample_count": value.get("sample_count"), "completed_sample_count": value.get("completed_sample_count"),
+                    "method": safe_preview({key: child for key, child in (value.get("method") or {}).items()
+                        if key not in {"code", "code_hash", "input_hash"}}, max_chars=1800),
+                    "rows": rows[:1] + rows[-1:] if len(rows) > 1 else rows,
+                    "row_count": len(rows), "rows_sampled": len(rows) > 2, "has_more": len(rows) > 2,
+                    "limitations": value.get("limitations", [])}
         row_key = next((key for key in ("rows", "data", "kline_data", "bars") if isinstance(value.get(key), list)), None)
         if row_key:
             rows = value[row_key]

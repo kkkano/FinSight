@@ -79,10 +79,29 @@ def analyze_dataset(data: RunData, dataset_ref: str, operation: str, parameters:
         series = series[~series.index.duplicated(keep="last")]
         frequency = parameters.get("frequency", "weekly")
         labels = {stamp: stamp for stamp in series.index}
+        period_completion = {"latest_period_closed": None, "excluded_incomplete_period": None}
         if frequency == "weekly":
             observations = series.index.to_series().resample("W-FRI").max()
             series = series.resample("W-FRI").last()
             labels = observations.to_dict()
+            original = data.records[dataset_ref].get("output") or {}
+            asset = original.get("asset") or {} if isinstance(original, dict) else {}
+            observed = original.get("observed_at") if isinstance(original, dict) else None
+            calendar_name = asset.get("calendar_name")
+            if calendar_name and observed and not series.empty:
+                import pandas_market_calendars as mcal
+                last_label = labels[series.index[-1]]
+                start = last_label.date() - pd.Timedelta(days=last_label.weekday())
+                schedule = mcal.get_calendar(calendar_name).schedule(start_date=start, end_date=start + pd.Timedelta(days=6))
+                if not schedule.empty:
+                    close = schedule.iloc[-1]["market_close"]
+                    clock = pd.to_datetime(observed, utc=True)
+                    closed = bool(clock >= close)
+                    period_completion.update(latest_period_closed=closed, latest_period_label=last_label.isoformat(),
+                                             latest_period_close=close.isoformat(), observed_at=str(observed))
+                    if not closed:
+                        period_completion["excluded_incomplete_period"] = last_label.isoformat()
+                        series = series.iloc[:-1]
         elif frequency != "daily":
             raise ValueError("analysis_frequency_unsupported")
         minimum = max(1, min(52, int(parameters.get("min_periods", 5))))
@@ -111,7 +130,10 @@ def analyze_dataset(data: RunData, dataset_ref: str, operation: str, parameters:
                              "definition": "相邻收盘价连续下跌的最大区间，并非所有超过阈值的峰谷回撤", "minimum_loss_unit": "ratio",
                              "return_start": "first declining period's previous close",
                              "overlap": "maximal non-overlapping consecutive streaks",
-                             "period_label": "last_observation", "missing_periods": int(series.isna().sum())},
+                             "period_label": "last_observation", "missing_periods": int(series.isna().sum()),
+                             "period_label_note": "日期沿用供应商观测标签，不一定是该周收盘日；周线可能以周一标记。",
+                             "ongoing_definition": "连续下跌区间延伸到样本末尾，尚无后续上涨或持平使其结束；不表示末根周线未收盘。",
+                             **period_completion},
                   "limitations": ["历史类比不构成未来概率；最新未完成周期需按数据来源核验。"]}
     elif operation == "valuation_scenarios":
         eps = float(parameters["eps"])

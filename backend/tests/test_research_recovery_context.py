@@ -1,5 +1,6 @@
 """真实验收暴露的预览、末轮补查和来源投影回归。"""
 import json
+import httpx
 
 import pytest
 
@@ -8,9 +9,10 @@ from backend.agent_runtime.completeness import ResearchCompleteness
 from backend.agent_runtime.analysis import analyze_dataset
 from backend.agent_runtime.data import RunData
 from backend.agent_runtime.loop import AgentRuntime
+from backend.agent_runtime.model import ModelTransport
 from backend.agent_runtime.service import answer_feedback, verified_text
 from backend.services.run_context import RunContext
-from backend.tests.test_agent_runtime import FakeModel, call, finish
+from backend.tests.test_agent_runtime import FakeModel, call, finish, cfg
 from backend.tests.test_runtime_completeness import financials, run, tool
 
 
@@ -76,7 +78,7 @@ def test_complete_episode_list_precedes_sampled_price_rows():
     preview = json.loads(compact_result({"result": result, "data_refs": ["dataset_input"]}, "dataset_input"))["preview"]
     assert preview["episodes"] == episodes
     assert preview["sample_count"] == 9 and preview["row_count"] == 1300
-    assert preview["rows_sampled"] and len(preview["rows"]) == 5
+    assert preview["rows_sampled"] and len(preview["rows"]) == 2
 
 
 def test_explicit_chart_cannot_pass_with_computed_table_only():
@@ -90,6 +92,31 @@ def test_explicit_chart_cannot_pass_with_computed_table_only():
     calls = check.recovery_calls(gaps, [], {"render_chart": object()}, data)
     assert calls[0][0] == "render_chart"
     assert calls[0][1]["annotations"][0]["start"] == "2026-01-02T00:00:00+00:00"
+
+
+def test_missing_streak_chart_recovers_computation_before_rendering():
+    data = RunData("u", "s", "r", "SOXX连续下跌画图")
+    ref = data.record("get_stock_historical_data", {"ticker": "SOXX", "interval": "1wk"}, {
+        "source": "fixture", "rows": [{"date": "2026-01-05", "close": 20}]})
+    check = ResearchCompleteness("SOXX近25年连续至少5周下跌，画图", [], {})
+    calls = check.recovery_calls(check.missing(data, []), [], {"render_chart": object(), "analyze_dataset": object()}, data)
+    assert calls == [("analyze_dataset", {"dataset_ref": ref, "operation": "historical_drawdown_episodes", "parameters": {"frequency": "weekly", "min_periods": 5}})]
+
+
+@pytest.mark.parametrize("observed,closed,count", [("2026-11-04T20:00:00Z", False, 0), ("2026-11-08T12:00:00Z", True, 1)])
+def test_weekly_completion_uses_exchange_close_and_keeps_streak_status_separate(observed, closed, count):
+    data = RunData("u", "s", "r", "SOXX周线")
+    dates = ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26", "2026-11-02"]
+    ref = data.record("get_stock_historical_data", {"ticker": "SOXX", "interval": "1wk"}, {
+        "source": "fixture", "observed_at": observed, "asset": {"calendar_name": "NYSE"},
+        "rows": [{"date": day, "close": 210-index*10} for index, day in enumerate(dates)]})
+    result = analyze_dataset(data, ref, "historical_drawdown_episodes", {"frequency": "weekly", "min_periods": 5})
+    output = data.records[result["data_refs"][0]]["output"]
+    assert output["method"]["latest_period_closed"] is closed
+    assert output["sample_count"] == count
+    if closed:
+        assert output["episodes"][0]["ongoing"] is True
+        assert output["method"]["latest_period_close"].startswith("2026-11-06")
 
 
 def test_latest_completed_transaction_can_be_archived_after_long_followup():
@@ -150,6 +177,14 @@ async def test_repeated_successful_reads_converge_to_answer_with_real_facts(monk
     assert not any(message.get("tool_calls") for message in model.inputs[-1])
 
 
+
+
+
+
+
+
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")
@@ -173,3 +208,5 @@ def test_feedback_keeps_latest_financial_numbers_instead_of_metadata():
     feedback = answer_feedback("INTC最新季度营收999999亿美元。", data)
     assert feedback and "16513000000" in feedback and "3320000000" in feedback
     assert "申报元数据" not in feedback
+
+

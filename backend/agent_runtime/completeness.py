@@ -152,6 +152,7 @@ class ResearchCompleteness:
             if facet == "chart":
                 if data is None or "render_chart" not in available:
                     continue
+                chart_planned = False
                 for ref, record in reversed(list(data.records.items())):
                     output = record.get("output")
                     if record.get("status") != "success" or not isinstance(output, dict):
@@ -167,7 +168,16 @@ class ResearchCompleteness:
                             "annotations": [{"start": row["start"], "end": row["end"], "label": f"连续下跌{row['periods']}期"}
                                             for row in output.get("episodes", [])]}
                     planned.append(("render_chart", args))
+                    chart_planned = True
                     break
+                if not chart_planned and "analyze_dataset" in available:
+                    streak = re.search(r"连续(?:至少|不少于)?\s*(\d+)\s*(周|天)", self.query)
+                    if streak:
+                        for ref, record in reversed(list(data.records.items())):
+                            if record.get("tool") == "get_stock_historical_data" and record.get("status") == "success" and record.get("inputs", {}).get("ticker") == ticker:
+                                planned.append(("analyze_dataset", {"dataset_ref": ref, "operation": "historical_drawdown_episodes",
+                                    "parameters": {"frequency": "weekly" if streak[2] == "周" else "daily", "min_periods": int(streak[1])}}))
+                                break
                 continue
             tried = {a["name"] for a in attempts if str(a.get("inputs", {}).get("ticker", "")).upper() == ticker}
             if facet in {"fresh_search", "news"}:
