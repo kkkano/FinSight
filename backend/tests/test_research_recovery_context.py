@@ -177,8 +177,27 @@ async def test_repeated_successful_reads_converge_to_answer_with_real_facts(monk
     assert not any(message.get("tool_calls") for message in model.inputs[-1])
 
 
+@pytest.mark.asyncio
+async def test_final_transport_explicitly_disables_tools_without_schemas():
+    async def handler(request):
+        payload = json.loads(request.content)
+        assert payload["tool_choice"] == "none" and "tools" not in payload
+        return httpx.Response(200, text='data: {"choices":[{"delta":{"content":"完整答案"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = [chunk async for chunk in ModelTransport(cfg(), client=client).stream([], [], tool_choice="none")]
+    assert result[0]["choices"][0]["finish_reason"] == "stop"
 
 
+@pytest.mark.asyncio
+async def test_output_length_recovery_uses_existing_facts_without_replaying_tools(monkeypatch):
+    monkeypatch.setenv("FINSIGHT_AGENT_MAX_TURNS", "2")
+    truncated = [{"choices": [{"delta": {"content": "尚未写完的解释"}, "finish_reason": "length"}]}]
+    events, model = await run(monkeypatch, "AAPL当前价格", {
+        "get_stock_price": tool("get_stock_price", lambda _: {"source": "fixture", "price": 42}),
+    }, turns=[call("get_stock_price", {"ticker": "AAPL"}), truncated, finish("AAPL价格42。")])
+    assert events[-1]["answer_status"] == "answered" and events[-1]["metrics"]["tool_calls"] == 1
+    assert "尚未写完" not in events[-1]["response"]
+    assert len(model.inputs) == 3
 
 
 

@@ -413,6 +413,7 @@ class AgentRuntime:
     def completion_context(self, system: dict, task: Any) -> list[dict]:
         """收尾使用实际资料摘要，避免模型在已完成的回读事务里反复循环。"""
         facts, seen = [], set()
+        fact_budget = max(1000, min(14000, self.model.config.context_window - self.model.config.max_output - tokens(system) - tokens(task) - 6000))
         for ref, record in reversed(list(self.data.records.items())):
             if record.get("status") != "success":
                 continue
@@ -423,7 +424,7 @@ class AgentRuntime:
             seen.add(identity)
             fact = {"tool": record["tool"], "data_ref": ref, "ticker": inputs.get("ticker"),
                     "source_refs": self.data.source_refs(ref)[:6], "result": evidence_preview(record["output"], limit=2200)}
-            if tokens(facts + [fact]) > 14000:
+            if tokens(facts + [fact]) > fact_budget:
                 continue
             facts.append(fact)
             if len(facts) >= 8:
@@ -485,10 +486,12 @@ class AgentRuntime:
         repair_tool_rounds = 0
         previous_evidence = None
         unchanged_rounds = 0
+        output_recovery_used = False
+        force_compact_answer = False
         # 末轮仍允许有界的必要补查，不能因为上下文提前收束就跳过当前问题的最低证据。
         extra = 5 if agent_id == "root" else 0
         for turn in range(rounds + extra):
-            if turn >= rounds + self.research_recovery_rounds and not repairing_answer:
+            if turn >= rounds + self.research_recovery_rounds and not (repairing_answer or force_compact_answer):
                 break
             self.context.guard()
             await self._drain(messages, agent_id)
@@ -508,6 +511,7 @@ class AgentRuntime:
             schemas = [spec.openai() for spec in available.values()]
             total_budget = self.context.deadline - self.context.started_monotonic
             finishing = agent_id == "root" and (turn in {rounds - 1, rounds + extra - 1}
+                or force_compact_answer
                 or not repairing_answer and unchanged_rounds >= 2
                 or (turn > 0 and self.context.remaining_seconds <= min(30, max(3, total_budget * .15))))
             if finishing:
@@ -523,6 +527,7 @@ class AgentRuntime:
                 messages.append({"role": "user", "content": "本轮资源即将用完，请根据已取得的资料直接给出回答，说明尚未核实部分，不再调用工具或安排下一步。"
                     + ("专业研究结果：" + dumps(completed) + "；尚未完成：" + dumps(pending) if self.children else "")})
                 schemas = []
+                force_compact_answer = False
             if repairing_answer:
                 # 核验允许对已取得资料补计算；不恢复供应商取数、委派或写操作。
                 repair_names = {"read_evidence", "inspect_dataset", "analyze_dataset", "run_analysis_code", "render_chart"}
@@ -537,7 +542,9 @@ class AgentRuntime:
                     raise
                 # 工具schema占用挤压正文时，保留证据直接收束，不把普通研究变成无解释的崩溃。
                 finishing, schemas = True, []
-                messages.append({"role": "user", "content": "请根据已有证据直接回答本轮问题，清楚说明缺失，不再调用工具。"})
+                messages = self.completion_context(messages[0], user_content)
+                evidence_progress = None
+                messages.append({"role": "user", "content": "请根据已有证据简短回答本轮问题，清楚说明缺失，不再调用工具。"})
                 compact = prune_messages(messages, schemas, context_window=self.model.config.context_window,
                                          output_reserve=self.model.config.max_output)
             if compact != messages:
@@ -631,9 +638,10 @@ class AgentRuntime:
                     if agent_id == "root":
                         self.root_content += tail
                         await self.emit("content.delta", {"block_id": block_id, "delta": tail})
-                if finish not in {"stop", "tool_calls"}:
+                recover_output = finish == "length" and agent_id == "root" and not output_recovery_used and bool(evidence[0]) and self.context.remaining_seconds > 15
+                if finish not in {"stop", "tool_calls"} and not recover_output:
                     raise ModelProtocolError("model_incomplete_stream")
-                status = "success"
+                status = "error" if recover_output else "success"
             finally:
                 prompt = int((usage or {}).get("prompt_tokens", 0))
                 completion = int((usage or {}).get("completion_tokens", 0))
@@ -652,6 +660,12 @@ class AgentRuntime:
                         "kind": "provider_raw", "delta": "", "provider": self.model.config.endpoint_name,
                         "duration_ms": int(((reasoning_finished or time.monotonic()) - reasoning_started) * 1000),
                         "truncated": block_reasoning_truncated}, agent_id=agent_id)
+            if recover_output:
+                output_recovery_used = force_compact_answer = True
+                await self.emit("content.block_finished", {"block_id": block_id, "content_phase": "progress"}, agent_id=agent_id)
+                await self.emit("activity.updated", {"activity_id": "answer_length_recovery", "title": "整理完整回答",
+                    "summary": "模型回复被截断，正在用已核实资料重新生成简短完整答案。"})
+                continue
             final = content
             await self.emit("content.block_finished", {"block_id": block_id,
                 "content_phase": "progress" if calls else "answer"}, agent_id=agent_id)

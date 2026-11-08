@@ -35,6 +35,8 @@ class ModelTransport:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice or "auto"
+        elif tool_choice is not None:
+            payload["tool_choice"] = tool_choice
         client = self.client or httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=min(15, timeout)),
                                                  follow_redirects=False)
         try:
