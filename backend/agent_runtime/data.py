@@ -191,6 +191,9 @@ class RunData:
                   if key in {"ticker", "period", "interval", "operation", "window", "frequency", "limit"}}
         metadata = {"tool": record["tool"], "parameters": inputs}
         if isinstance(output, dict):
+            if output.get("derived_fields"):
+                from .diagnostics import safe_preview
+                metadata["derived_fields"] = safe_preview(output["derived_fields"], max_chars=1200)
             for key in ("as_of", "observed_at", "currency", "unit", "period", "price_basis", "dividends_included"):
                 if key in output:
                     metadata[key] = output[key]

@@ -10,6 +10,7 @@ from backend.agent_runtime.analysis import analyze_dataset
 from backend.agent_runtime.data import RunData
 from backend.agent_runtime.loop import AgentRuntime
 from backend.agent_runtime.model import ModelTransport
+from backend.agent_runtime.tools import history_with_returns
 from backend.agent_runtime.service import answer_feedback, verified_text
 from backend.services.run_context import RunContext
 from backend.tests.test_agent_runtime import FakeModel, call, finish, cfg
@@ -256,6 +257,15 @@ async def test_valuation_recovery_calculates_ratios_once_and_retains_market_line
         assert rt.tool_count == 1
     finally:
         await rt.close()
+
+
+def test_historical_returns_are_computed_and_do_not_bridge_missing_closes():
+    original = {"data": [{"time": "2026-10-29", "close": 92.07}, {"time": "2026-10-30", "close": 65.76},
+                         {"time": "2026-11-02", "close": None}, {"time": "2026-11-03", "close": 60.55}]}
+    result = history_with_returns(original)
+    assert result["data"][1]["period_return_pct"] == pytest.approx((65.76/92.07-1)*100)
+    assert result["data"][2]["period_return_pct"] is None and result["data"][3]["period_return_pct"] is None
+    assert "period_return_pct" not in original["data"][1]
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():

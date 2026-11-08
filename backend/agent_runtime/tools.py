@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import inspect
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -41,6 +42,28 @@ class ToolSpec:
 
 def schema(properties: dict, required: list[str]) -> dict:
     return {"type": "object", "properties": properties, "required": required, "additionalProperties": False}
+
+
+def history_with_returns(output):
+    """给相邻真实收盘观测附明确百分比，避免把模型手算当作行情证据。"""
+    if not isinstance(output, dict):
+        return output
+    result = dict(output)
+    for key in ("data", "kline_data", "rows", "bars"):
+        points = output.get(key)
+        if not isinstance(points, list) or not all(isinstance(row, dict) for row in points):
+            continue
+        rows, previous = [], None
+        for point in points:
+            close = point.get("close")
+            valid = type(close) in {int, float} and math.isfinite(close)
+            change = (close / previous - 1) * 100 if valid and previous is not None and previous > 0 else None
+            rows.append({**point, "period_return_pct": change})
+            previous = close if valid else None
+        result[key] = rows
+    result["derived_fields"] = {"period_return_pct": {"formula": "(close/previous_returned_close-1)*100", "unit": "percent",
+        "basis": "相邻返回观测；首行或前收盘缺失时为空，不跨缺失值补算。"}}
+    return result
 
 
 def financial_tools() -> dict[str, ToolSpec]:
@@ -85,7 +108,7 @@ def financial_tools() -> dict[str, ToolSpec]:
                 return {"status": "unavailable", "error": "ytd_baseline_unavailable", "summary": "缺少年初前最后一个交易日收盘价，无法准确计算年初至今涨跌幅。"}
             output = {**output, "period": "ytd", "data": selected, "kline_data": selected,
                       "baseline_date": date_key(prior[-1]), "baseline_method": "previous_year_last_available_close"}
-        return output
+        return history_with_returns(output)
     tools["get_stock_historical_data"] = ToolSpec("get_stock_historical_data", "读取统一行情网关的真实历史OHLC，支持max历史和日/周/月周期；原始来源/时间/缺失必须保留。",
         schema({"ticker": {"type": "string"}, "period": {"type": "string", "enum": ["1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "10y", "max"]},
                 "interval": {"type": "string", "enum": ["1d", "1wk", "1mo"]}}, ["ticker"]), historical, financial=True)
