@@ -43,6 +43,13 @@ def evidence_preview(value: Any, *, limit: int = 4500) -> Any:
     from .diagnostics import safe_preview, clean_text
     if isinstance(value, str):
         return clean_text(value, limit)
+    if isinstance(value, dict) and "financial_context" in value and "calculations" in value:
+        # 估值汇总保留同一财期的实际数字、已算比率和市场出处，避免拆散后错引来源。
+        preview = {key: value[key] for key in ("summary", "rows", "financial_context", "metric_gaps") if key in value}
+        preview["market_context"] = [{key: child for key, child in item.items() if key != "data_ref"}
+                                     for item in value.get("market_context", [])]
+        preview["method"] = safe_preview(value.get("method", {}), max_chars=1400)
+        return preview
     if isinstance(value, dict) and value.get("period_ends") and isinstance(value.get("revenue"), list):
         from .data import _companyfacts_rows, fact_metadata_preview
         rows = _companyfacts_rows(value)

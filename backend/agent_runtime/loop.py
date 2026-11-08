@@ -435,16 +435,31 @@ class AgentRuntime:
         """收尾使用实际资料摘要，避免模型在已完成的回读事务里反复循环。"""
         facts, seen = [], set()
         fact_budget = max(1000, min(14000, self.model.config.context_window - self.model.config.max_output - tokens(system) - tokens(task) - 6000))
+        bundles = {}
+        if "valuation" in self.completeness.facets:
+            for ref, record in reversed(list(self.data.records.items())):
+                if record.get("status") == "success" and record.get("inputs", {}).get("operation") == "financial_ratios":
+                    primary = self.data.records.get(record["inputs"].get("dataset_ref"), {})
+                    ticker = str(primary.get("inputs", {}).get("ticker") or "").upper()
+                    bundles.setdefault(ticker, ref)
         for ref, record in reversed(list(self.data.records.items())):
             if record.get("status") != "success":
                 continue
             inputs = record.get("inputs") or {}
+            ticker = str(inputs.get("ticker") or "").upper()
+            if ticker in bundles and record["tool"] in {"get_company_info", "get_stock_price", "get_sec_company_facts_quarterly"}:
+                continue
+            if inputs.get("operation") == "financial_ratios" and ref not in bundles.values():
+                continue
             identity = (record["tool"], inputs.get("ticker"), inputs.get("dataset_ref"))
             if identity in seen:
                 continue
             seen.add(identity)
+            refs = self.data.source_refs(ref)
+            if ref in bundles.values():
+                refs = [sid for sid in refs if self.data.sources.get(sid, {}).get("data_ref") == ref][:1]
             fact = {"tool": record["tool"], "data_ref": ref, "ticker": inputs.get("ticker"),
-                    "source_refs": self.data.source_refs(ref)[:6], "result": evidence_preview(record["output"], limit=2200)}
+                    "source_refs": refs[:6], "result": evidence_preview(record["output"], limit=2200)}
             if tokens(facts + [fact]) > fact_budget:
                 continue
             facts.append(fact)
@@ -455,7 +470,7 @@ class AgentRuntime:
         content = context + "\n本轮问题：" + task if isinstance(task, str) else [{"type": "text", "text": context}, *task]
         focus = ""
         if "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
-            focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。不要扩展推算隐含EPS、年化现金流、PEG或未查询的同行估值区间；每个数值段引用对应资料，不能用财报来源代替行情来源。"
+            focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。不要扩展推算隐含EPS、年化现金流、PEG或未查询的同行估值区间。财务与市场数据已汇总时，引用汇总项提供的source_refs，各原始出处会一同展示；行情倍数不是SEC披露的财务数字。"
         elif re.search(r"为什么|为何|原因", self.query) and "news" in self.completeness.facets:
             focus = "用户问的是这次涨跌的原因：优先说明报道直接支持的触发因素，并用已取得行情校准时间和幅度。区分报道归因与已核实行情，控制在约600字，不扩展未经计算的历史统计。"
         return [system, {"role": "user", "content": content},
