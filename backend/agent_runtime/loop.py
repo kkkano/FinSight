@@ -432,9 +432,14 @@ class AgentRuntime:
         questions = [m["content"] for m in self.history[-6:] if m.get("role") == "user"]
         context = "近期用户问题：" + dumps(questions) + "\n本轮追加要求：" + dumps(list(self.instructions.values()))
         content = context + "\n本轮问题：" + task if isinstance(task, str) else [{"type": "text", "text": context}, *task]
+        focus = ""
+        if "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
+            focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。不要扩展推算隐含EPS、年化现金流、PEG或未查询的同行估值区间；每个数值段引用对应资料，不能用财报来源代替行情来源。"
+        elif re.search(r"为什么|为何|原因", self.query) and "news" in self.completeness.facets:
+            focus = "用户问的是这次涨跌的原因：优先说明报道直接支持的触发因素，并用已取得行情校准时间和幅度。区分报道归因与已核实行情，控制在约600字，不扩展未经计算的历史统计。"
         return [system, {"role": "user", "content": content},
                 {"role": "user", "content": "以下是本轮实际成功资料的摘要，原文仍可按引用回读。不要重复取相同数据；"
-                 "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。\n" + dumps(facts)}]
+                 "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。" + focus + "\n" + dumps(facts)}]
 
     async def run_agent(self, agent_id: str, role: str, task: str, refs: list[str] | None = None,
                         image_indices: list[int] | None = None) -> str:
