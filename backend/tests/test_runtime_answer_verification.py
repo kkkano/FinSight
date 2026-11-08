@@ -641,3 +641,36 @@ def test_iso_timestamp_is_not_an_arithmetic_expression_with_trillion_unit():
     data=RunData("u","s","r","AAPL")
     data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","as_of":"2026-11-08T14:28:22Z"})
     assert validate_paragraph("AAPL资料取于2026-11-08T14:28:22Z。",data)==[]
+
+
+def scoped_financial_ratios():
+    data=RunData("u","s","r","NVDA估值")
+    primary=data.record("get_sec_company_facts_quarterly",{"ticker":"NVDA"},{"source":"fixture","currency":"USD","revenue":1000,"gross_profit":700})
+    profile=data.record("get_company_info",{"ticker":"NVDA"},{"source":"fixture","currency":"USD","trailingPE":23.6,"marketCap":4_507_000_000_000})
+    quote=data.record("get_stock_price",{"ticker":"NVDA"},{"source":"fixture","currency":"USD","price":186.64,"change_percent":"2.78%"})
+    result=data.record("analyze_dataset",{"operation":"financial_ratios","dataset_ref":primary,"dataset_refs":[primary,profile,quote]},
+        {"rows":[{"gross_margin_pct":70}],"calculations":[{"value":70,"unit":"%"}],"method":{"kind":"financial_ratios"},
+         "market_context":[{"output":data.records[profile]["output"]},{"output":data.records[quote]["output"]}]})
+    return data,primary,result,quote
+
+
+def test_primary_sec_reference_authorizes_financial_ratio_projection_without_market_data():
+    data,primary,_,_=scoped_financial_ratios()
+    sid=data.source_refs(primary)[0]
+    assert validate_paragraph(f"NVDA毛利率70%。[{sid}]",data)==[]
+    assert validate_paragraph(f"NVDA股价186.64美元。[{sid}]",data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph(f"NVDA市值4.507万亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph(f"NVDA涨幅2.78%。[{sid}]",data)==["explanation_contains_unbound_number"]
+
+
+def test_aggregate_financial_ratio_reference_authorizes_declared_market_parents():
+    data,_,result,_=scoped_financial_ratios()
+    sid=data.source_refs(result)[0]
+    assert validate_paragraph(f"NVDA毛利率70%，市值4.507万亿美元，股价186.64美元，TTM市盈率23.6倍。[{sid}]",data)==[]
+
+
+def test_other_multi_input_computations_still_need_all_declared_inputs():
+    data,primary,_,quote=scoped_financial_ratios()
+    data.record("run_analysis_code",{"dataset_refs":[primary,quote]},{"custom_return_pct":99})
+    sid=data.source_refs(primary)[0]
+    assert validate_paragraph(f"NVDA收益率99%。[{sid}]",data)==["explanation_contains_unbound_number"]

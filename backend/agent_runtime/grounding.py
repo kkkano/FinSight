@@ -179,6 +179,24 @@ _FINANCIAL_RATIO_FIELDS = {"gross_margin", "operating_margin", "net_margin", "fc
                            "liabilities_to_assets", "liab_to_assets", "fcf_yield", "fcf_yield_on_mcap"}
 
 
+def _authorized_record_output(ref: str, record: dict, authorized: set[str]):
+    """单季比率只依赖主 SEC 输入；市场旁证仍需完整引用，不能随比率一起授权。"""
+    if record.get("status") != "success":
+        return None
+    output = record.get("output")
+    if ref in authorized:
+        return output
+    inputs = record.get("inputs") or {}
+    parents = inputs.get("dataset_refs") or ([inputs["dataset_ref"]] if inputs.get("dataset_ref") else [])
+    if record.get("tool") in {"analyze_dataset", "run_analysis_code"} and parents and all(parent in authorized for parent in parents):
+        return output
+    if (record.get("tool") == "analyze_dataset" and inputs.get("operation") == "financial_ratios"
+            and inputs.get("dataset_ref") in authorized and isinstance(output, dict)
+            and (output.get("method") or {}).get("kind") == "financial_ratios"):
+        return {key: output[key] for key in ("rows", "calculations", "financial_context", "method", "metric_gaps", "limitations") if key in output}
+    return None
+
+
 def _percent_values(data: RunData, refs: list[str]) -> list[float]:
     """百分数只匹配明确百分比/变化比例字段；样本数不能碰巧充当涨幅。"""
     authorized = _referenced_records(refs, data) if refs else set(data.records)
@@ -215,12 +233,9 @@ def _percent_values(data: RunData, refs: list[str]) -> list[float]:
                 else:
                     collect(child, kind, percent_unit, .01 if key in {"ratios_pct", "ratios_percent"} else ratio_scale)
     for ref, record in data.records.items():
-        if record.get("status") != "success":
-            continue
-        inputs = record.get("inputs") or {}
-        parents = inputs.get("dataset_refs") or ([inputs["dataset_ref"]] if inputs.get("dataset_ref") else [])
-        if ref in authorized or (record.get("tool") in {"analyze_dataset", "run_analysis_code"} and parents and all(parent in authorized for parent in parents)):
-            collect(record.get("output"))
+        output = _authorized_record_output(ref, record, authorized)
+        if output is not None:
+            collect(output)
     return values
 
 
@@ -548,13 +563,13 @@ def validate_paragraph(text: str, data: RunData, *, require_citations: bool = Fa
             for child in value:
                 collect_currency(child)
     recorded_refs = set()
-    def append_record(ref):
+    def append_record(ref, grounded_output=None):
         record = data.records.get(ref, {})
         if ref in recorded_refs or record.get("status") != "success":
             return
         recorded_refs.add(ref)
-        collect_currency(record["output"])
-        grounded_output = record["output"]
+        grounded_output = record["output"] if grounded_output is None else grounded_output
+        collect_currency(grounded_output)
         if isinstance(grounded_output, dict) and isinstance(grounded_output.get("method"), dict):
             grounded_output = {**grounded_output, "method": {key: value for key, value in grounded_output["method"].items()
                                if key not in {"code", "code_hash", "input_hash"}}}
@@ -578,10 +593,9 @@ def validate_paragraph(text: str, data: RunData, *, require_citations: bool = Fa
         for computed_ref, record in data.records.items():
             if record.get("tool") not in {"analyze_dataset", "run_analysis_code"} or record.get("status") != "success":
                 continue
-            inputs = record.get("inputs") or {}
-            parents = inputs.get("dataset_refs") or ([inputs["dataset_ref"]] if inputs.get("dataset_ref") else [])
-            if parents and all(parent in authorized for parent in parents):
-                append_record(computed_ref)
+            output = _authorized_record_output(computed_ref, record, authorized)
+            if output is not None:
+                append_record(computed_ref, output)
     raw.extend(dumps(coverage) for _, _, coverage in chart_coverages(data, refs))
     if not raw:
         # 概念解释和明确假设已在上方处理；无来源的事实数字不能当作已核验结论交付。
