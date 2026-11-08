@@ -1,22 +1,9 @@
 import { useDashboardSnapshot } from '../../hooks/useDashboardData';
-import { SourceBadge } from '../ui/SourceBadge';
-
-interface DashboardSourceBadgeProps {
-  metaKey: string;
-  fallbackSource?: string;
-  className?: string;
-}
-
-/** 统一从 Dashboard 数据契约读取来源；没有 meta 的旧字段只展示已知 provider，不伪造日期。 */
-export function DashboardSourceBadge({ metaKey, fallbackSource, className }: DashboardSourceBadgeProps) {
-  const meta = useDashboardSnapshot()?.meta?.[metaKey];
-
-  return (
-    <SourceBadge
-      source={meta?.provider ?? fallbackSource}
-      asOf={meta?.as_of}
-      degraded={meta?.fallback_used || ['error', 'missing', 'empty'].includes(meta?.status ?? '')}
-      className={className}
-    />
-  );
+import { sourceDisplayName } from '../../utils/sourceDisplayName';
+interface DashboardSourceBadgeProps { metaKey: string; fallbackSource?: string; className?: string }
+export function DashboardSourceBadge({metaKey,fallbackSource,className}:DashboardSourceBadgeProps){
+  const meta=useDashboardSnapshot()?.meta?.[metaKey];
+  const source=sourceDisplayName(meta?.provider||fallbackSource);
+  const date=meta?.as_of?meta.as_of.slice(0,10):'日期未注明';
+  return <span className={`design-caption ${className||''}`} title={meta?.fallback_reason||undefined}>{source} · <span className="num">{date}</span>{meta?.status&&['error','missing','empty'].includes(meta.status)?' · 数据暂无':''}</span>;
 }

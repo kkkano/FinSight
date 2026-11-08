@@ -200,7 +200,7 @@ function PredictionCard({ item, onDashboard, onAsk, onHistory }: {
       <p className="mt-3 max-w-[76ch] break-words text-sm leading-7 text-t-text2">{prediction.thesis || '这条研究判断没有提供文字依据。'}</p>
       <div className="mt-4 grid gap-2 border-t border-t-divider pt-3 text-xs text-t-text3 sm:grid-cols-3">
         <div>来源：{prediction.source_type === 'ai' ? 'AI 研究判断' : '人工研究记录'}</div>
-        <div>证据：{prediction.evidence_provider || '未提供'}</div>
+        <div>数据来源：{prediction.evidence_provider || '未提供'}</div>
         <div>数据截至：{formatDateTime(prediction.evidence_as_of)}</div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -368,11 +368,11 @@ export function TodayPage() {
           ) : recentPredictions.length === 0 ? (
             <div className="mt-3 rounded-xl border border-dashed border-t-border bg-t-surface px-5 py-8 text-center" data-testid="today-predictions-empty">
               <p className="text-sm text-t-text2">还没有待复盘的研究判断</p>
-              <p className="mt-1 text-xs text-t-text3">可以先在对话中提出一个具体问题，再回到这里记录证据变化。</p>
+              <p className="mt-1 text-xs text-t-text3">可以先在对话中提出一个具体问题，再回到这里看看信息有什么变化。</p>
               <button type="button" onClick={() => navigate('/chat')} className="mt-4 inline-flex min-h-9 items-center gap-1.5 rounded-md bg-t-accent px-3 text-xs text-white">开始提问 <ArrowRight size={13} /></button>
             </div>
           ) : (
-            <div className="mt-3 space-y-3">{recentPredictions.map((item) => <PredictionCard key={item.prediction.prediction_id} item={item} onDashboard={() => navigate(buildPredictionDashboardUrl(item.prediction.symbol, item.prediction.prediction_id))} onAsk={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${item.prediction.symbol} 这条研究判断，说明最新公开证据、反方证据和失效条件`)}&context_symbol=${encodeURIComponent(item.prediction.symbol)}`)} onHistory={() => navigate('/history')} />)}</div>
+            <div className="mt-3 space-y-3">{recentPredictions.map((item) => <PredictionCard key={item.prediction.prediction_id} item={item} onDashboard={() => navigate(buildPredictionDashboardUrl(item.prediction.symbol, item.prediction.prediction_id))} onAsk={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${item.prediction.symbol} 这条研究判断，说明最新公开信息、支持相反结论的依据和失效条件`)}&context_symbol=${encodeURIComponent(item.prediction.symbol)}`)} onHistory={() => navigate('/history')} />)}</div>
           )}
         </div>
 
@@ -380,7 +380,7 @@ export function TodayPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-t-text">待追问</h2>
-              <p className="mt-1 text-xs text-t-text3">这些研究判断还没有最终复盘，适合补一轮公开证据。</p>
+              <p className="mt-1 text-xs text-t-text3">这些判断还没有最终结果，可以看看最新公开信息。</p>
             </div>
             <MessageCircleQuestion size={16} className="text-t-accent" />
           </div>
@@ -392,10 +392,10 @@ export function TodayPage() {
                 {followUps.map(({ prediction, outcome }) => {
                   const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
                   return (
-                    <button key={prediction.prediction_id} type="button" onClick={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${prediction.symbol} 的${DIRECTION_LABELS[prediction.direction]}研究判断，说明最新公开证据、反方证据和失效条件`)}&context_symbol=${encodeURIComponent(prediction.symbol)}`)} className="w-full border-b border-t-border pb-3 text-left last:border-b-0 last:pb-0 hover:text-t-accent" data-testid="today-followup-item">
+                    <button key={prediction.prediction_id} type="button" onClick={() => navigate(`/chat?prompt=${encodeURIComponent(`请复盘 ${prediction.symbol} 的${DIRECTION_LABELS[prediction.direction]}研究判断，说明最新公开信息、支持相反结论的依据和失效条件`)}&context_symbol=${encodeURIComponent(prediction.symbol)}`)} className="w-full border-b border-t-border pb-3 text-left last:border-b-0 last:pb-0 hover:text-t-accent" data-testid="today-followup-item">
                       <div className="flex items-center justify-between gap-2"><span className="font-mono text-xs font-semibold text-t-text">{prediction.symbol}</span><StatusBadge status={status} /></div>
                       <div className="mt-1 line-clamp-2 text-xs leading-5 text-t-text2">复盘这条研究判断是否仍有足够依据</div>
-                      <div className="mt-1 text-2xs text-t-text3">证据截至 {formatDateTime(prediction.evidence_as_of)}</div>
+                      <div className="mt-1 text-2xs text-t-text3">数据截至 {formatDateTime(prediction.evidence_as_of)}</div>
                     </button>
                   );
                 })}

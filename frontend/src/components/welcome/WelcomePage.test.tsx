@@ -30,16 +30,17 @@ describe('WelcomePage', () => {
 
     expect(markup).not.toContain('--bb-');
     expect(markup).not.toContain('linear-gradient(135deg');
-    expect(markup).toContain('bg-t-bg');
-    expect(markup).toContain('text-t-accent');
+    expect(markup).toContain('welcome-page');
+    expect(markup).toContain('welcome-title');
   });
 
   it('offers authenticated login and read-only market access', () => {
     const text = renderWelcomeText('/welcome?from=/chat');
 
-    expect(text.indexOf('浏览只读行情')).toBeGreaterThanOrEqual(0);
-    expect(text.indexOf('邮箱')).toBeGreaterThanOrEqual(0);
-    expect(text).toContain('发送验证码');
+    expect(text).toContain('看看行情和公开战绩');
+    expect(text).toContain('正在加载登录方式');
+    expect(text).not.toContain('使用 GitHub 登录');
+    expect(text).toContain('示意');
   });
 
   it('does not advertise removed product surfaces', () => {

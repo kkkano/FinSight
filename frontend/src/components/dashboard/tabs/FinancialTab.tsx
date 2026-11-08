@@ -31,7 +31,7 @@ export function FinancialTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="border-y border-t-border py-2 text-2xs text-t-text3">
-        财务事实 · 来自结构化财报与行情供应商，不是 AI 评分
+        财务数据 · 来自财报和行情数据，不是 AI 评分
       </div>
 
       {/* Row 1: Income table full width */}

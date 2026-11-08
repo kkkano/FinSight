@@ -1,317 +1,46 @@
-﻿/**
- * Dashboard v2 - TradingKey-style financial terminal layout.
- *
- * Structure:
- *   Watchlist (aside) | StockHeader
- *                      | MetricsBar
- *                      | DashboardTabs -> [Tab panels]
- */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, RefreshCw, Sun, Moon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { DashboardContext, useDashboardData } from '../hooks/useDashboardData';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { useDashboardStore } from '../store/dashboardStore';
-import { Watchlist } from '../components/dashboard/Watchlist';
-import { StockHeader } from '../components/dashboard/StockHeader';
-import { CNMarketNotice } from '../components/dashboard/CNMarketNotice';
-import { MetricsBar } from '../components/dashboard/MetricsBar';
-import { DashboardTabs } from '../components/dashboard/DashboardTabs';
-import { DataSourceTrace } from '../components/dashboard/DataSourceTrace';
 import { useStore } from '../store/useStore';
-import { useToast } from '../components/ui';
-import { useMarketQuotes } from '../hooks/useMarketQuotes';
+import { StockHeader } from '../components/dashboard/StockHeader';
+import { DashboardPriceChart } from '../components/dashboard/DashboardPriceChart';
+import { MetricsBar } from '../components/dashboard/MetricsBar';
+import { DashboardWatchlistCard } from '../components/dashboard/DashboardWatchlistCard';
+import { LatestResearchCard } from '../components/dashboard/LatestResearchCard';
+import { MonitorActivityFeed } from '../components/dashboard/MonitorActivityFeed';
+import { OverviewTab } from '../components/dashboard/tabs/OverviewTab';
+import { FinancialTab } from '../components/dashboard/tabs/FinancialTab';
+import { TechnicalTab } from '../components/dashboard/tabs/TechnicalTab';
+import { NewsTab } from '../components/dashboard/tabs/NewsTab';
 import { getPredictionIdFromSearch } from '../components/chatChartIntent';
 import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
 import { usePredictionOverlay } from '../hooks/usePredictionOverlay';
 import { useChatHandoff } from '../hooks/useChatHandoff';
-import { usePredictionGeneration } from '../hooks/usePredictionGeneration';
-import { usePredictionEligibility } from '../hooks/usePredictionEligibility';
-import { PredictionTrack } from '../components/dashboard/PredictionTrack';
-import { MonitorActivityFeed } from '../components/dashboard/MonitorActivityFeed';
+interface DashboardProps {initialSymbol?:string;onBackToChat?:()=>void;onSymbolChange?:(symbol:string)=>void}
+export function Dashboard({initialSymbol,onBackToChat,onSymbolChange}:DashboardProps){
+ const {activeAsset,setActiveAsset}=useDashboardStore();const {watchlist}=useWatchlist();const {theme,setTheme,authIdentity,sessionId}=useStore();
+ const [searchParams,setSearchParams]=useSearchParams();const [selectedSymbol,setSelectedSymbol]=useState(()=>initialSymbol||activeAsset?.symbol||watchlist[0]?.symbol||'');const [symbolDraft,setSymbolDraft]=useState('');
+ const currentSymbol=(initialSymbol||selectedSymbol).trim().toUpperCase();const handoff=useChatHandoff();const client=useQueryClient();
+ const {refetch,dashboardData,asset:loadedAsset,isLoading,error}=useDashboardData(currentSymbol);
+ const pageAsset=useMemo(()=>({symbol:currentSymbol,display_name:loadedAsset?.display_name||currentSymbol,type:loadedAsset?.type||'equity' as const}),[currentSymbol,loadedAsset]);
+ const prediction=usePredictionOverlay(currentSymbol,getPredictionIdFromSearch(searchParams.toString()),Boolean(authIdentity?.userId),0);
+ const activeTab=['financial','news','technical'].includes(searchParams.get('tab')||'')?searchParams.get('tab')!:'overview';
+ useEffect(()=>{if(currentSymbol)setActiveAsset(pageAsset);},[currentSymbol,pageAsset,setActiveAsset]);
+ const select=(symbol:string)=>{const value=symbol.trim().toUpperCase();if(!value)return;setSelectedSymbol(value);setActiveAsset({symbol:value,display_name:value,type:'equity'});onSymbolChange?.(value);};
+ const ask=()=>{if(currentSymbol)handoff({draft:buildDashboardAskAiDraft(currentSymbol,activeTab),activeSymbol:currentSymbol,sourceView:'dashboard',sourceTab:activeTab});};
+ const refresh=()=>{void refetch(currentSymbol);void client.invalidateQueries({queryKey:['dashboard-kline',currentSymbol]});void client.invalidateQueries({queryKey:['dashboard-quote',currentSymbol]});};
+ if(!currentSymbol)return <main className="dashboard-page items-center justify-center"><section className="design-card w-full max-w-md"><h1 className="text-lg font-semibold">选择一只股票，查看真实数据</h1><p className="design-caption mt-2">输入股票代码，或从自选列表选择。</p><form className="mt-4 flex gap-2" onSubmit={event=>{event.preventDefault();select(symbolDraft);}}><input aria-label="股票代码" className="min-w-0 flex-1 rounded-lg border border-t-border bg-t-bg px-3 py-2" value={symbolDraft} onChange={event=>setSymbolDraft(event.target.value)} placeholder="股票代码，如 AAPL"/><button type="submit" className="design-ghost">查看</button></form></section></main>;
+ return <DashboardContext.Provider value={{asset:pageAsset,data:dashboardData}}><main className="dashboard-page" id="main-content">
 
-interface DashboardProps {
-  initialSymbol?: string;
-  onBackToChat?: () => void;
-  onSymbolChange?: (symbol: string) => void;
+   {error&&<p role="alert" className="rounded-lg bg-t-down/10 px-3 py-2 text-sm text-t-down">数据暂时无法读取。<button type="button" className="ml-2 underline" onClick={refresh}>重试</button></p>}
+   <StockHeader ticker={currentSymbol} displayName={pageAsset.display_name} assetType={pageAsset.type} snapshot={dashboardData?.snapshot||{}} charts={dashboardData?.charts||{}} valuation={dashboardData?.valuation} loading={isLoading&&!dashboardData} onResearch={ask} controls={<>{onBackToChat&&<button type="button" data-testid="dashboard-back-chat" onClick={onBackToChat} aria-label="返回对话" title="返回对话" className="design-ghost !px-2 max-sm:hidden"><ArrowLeft size={14}/></button>}<button type="button" aria-label="刷新数据" title="刷新数据" className="design-ghost !px-2" disabled={isLoading} onClick={refresh}><RefreshCw size={15} className={isLoading?'animate-spin':''}/></button><button type="button" aria-label="切换主题" title="切换主题" className="design-ghost !px-2" onClick={()=>setTheme(theme==='dark'?'light':'dark')}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}</button></>}/>
+   <nav className="dashboard-tabs" aria-label="看板内容">{[{key:'overview',label:'概览'},{key:'financial',label:'财务'},{key:'news',label:'新闻'},{key:'technical',label:'技术面'}].map(tab=><button type="button" key={tab.key} className={`dashboard-tab ${tab.key===activeTab?'on':''}`} data-testid={`dashboard-tab-${tab.key}`} aria-current={tab.key===activeTab?'page':undefined} onClick={()=>setSearchParams(previous=>{const next=new URLSearchParams(previous);if(tab.key==='overview')next.delete('tab');else next.set('tab',tab.key);return next;},{replace:true})}>{tab.label}</button>)}</nav>
+   <div className="dashboard-columns"><div className="dashboard-main">{activeTab==='overview'?<><DashboardPriceChart/><MetricsBar valuation={dashboardData?.valuation} snapshot={dashboardData?.snapshot} ticker={currentSymbol} loading={isLoading&&!dashboardData}/><LatestResearchCard ticker={currentSymbol} onResearch={ask}/><OverviewTab/></>:activeTab==='financial'?<FinancialTab/>:activeTab==='news'?<NewsTab/>:<TechnicalTab predictionOverlay={prediction.overlay}/>}</div><aside className="dashboard-side" aria-label="自选与盯盘"><DashboardWatchlistCard activeSymbol={currentSymbol} onSelect={select}/><MonitorActivityFeed sessionId={sessionId} symbol={currentSymbol} compact/></aside></div>
+   <footer className="design-caption border-t border-t-divider pt-3">行情、财务和新闻的来源及时间见各项标注。内容为信息整理，不构成投资建议。</footer>
+ </main></DashboardContext.Provider>;
 }
-
-const formatClock = (): string =>
-  new Date().toLocaleTimeString('zh-CN', {
-    hour12: false,
-    timeZone: 'Asia/Shanghai',
-  });
-
-export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: DashboardProps) {
-  const { activeAsset, setActiveAsset } = useDashboardStore();
-  const { watchlist } = useWatchlist();
-  const { theme, setTheme, authIdentity, sessionId } = useStore();
-  const { quotes: marketQuotes } = useMarketQuotes();
-  const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  const lastErrorRef = useRef<string | null>(null);
-  const predictionId = getPredictionIdFromSearch(searchParams.toString());
-  const handoffToChat = useChatHandoff();
-
-  const [clock, setClock] = useState<string>(formatClock());
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(
-    () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
-  );
-  const currentSymbol = (initialSymbol || selectedSymbol).trim().toUpperCase();
-  const [predictionRefreshKey, setPredictionRefreshKey] = useState(0);
-  const authenticated = Boolean(authIdentity?.userId);
-  const prediction = usePredictionOverlay(
-    currentSymbol,
-    predictionId,
-    authenticated,
-    predictionRefreshKey,
-  );
-  const predictionEligibility = usePredictionEligibility(currentSymbol);
-  const predictionGeneration = usePredictionGeneration(currentSymbol, () => {
-    setPredictionRefreshKey((value) => value + 1);
-  });
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(formatClock()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const { refetch, dashboardData, asset: loadedAsset, isLoading, error } = useDashboardData(currentSymbol);
-  const pageAsset = useMemo(() => ({
-    symbol: currentSymbol,
-    display_name: loadedAsset?.display_name || currentSymbol,
-    type: loadedAsset?.type || 'equity' as const,
-  }), [currentSymbol, loadedAsset]);
-  useEffect(() => {
-    if (currentSymbol) setActiveAsset(pageAsset);
-  }, [currentSymbol, pageAsset, setActiveAsset]);
-
-  useEffect(() => {
-    if (!error) {
-      lastErrorRef.current = null;
-      return;
-    }
-    if (lastErrorRef.current === error) {
-      return;
-    }
-    lastErrorRef.current = error;
-    toast({
-      type: 'error',
-      title: '加载失败',
-      message: error,
-    });
-  }, [error, toast]);
-
-  const handleSymbolChange = (symbol: string) => {
-    setSelectedSymbol(symbol);
-    setActiveAsset({
-      symbol,
-      display_name: symbol,
-      type: 'equity',
-    });
-    onSymbolChange?.(symbol);
-  };
-
-  const handleRefresh = () => {
-    void refetch(currentSymbol);
-    predictionEligibility.refresh();
-    void predictionGeneration.resume();
-    setPredictionRefreshKey((value) => value + 1);
-  };
-
-  const handleAskAi = () => {
-    const symbol = currentSymbol;
-    if (!symbol) return;
-    setActiveAsset(pageAsset);
-    handoffToChat({
-      draft: buildDashboardAskAiDraft(symbol, searchParams.get('tab')),
-      activeSymbol: symbol,
-      sourceView: 'dashboard',
-      sourceTab: searchParams.get('tab') || 'overview',
-    });
-  };
-
-  const snapshot = dashboardData?.snapshot ?? {};
-  const charts = dashboardData?.charts ?? {};
-  const valuation = dashboardData?.valuation ?? null;
-  const isTerminalStyle = theme === 'dark';
-
-  const tickerTapeItems = useMemo(() => {
-    const list = marketQuotes
-      .filter((item) => typeof item.price === 'number')
-      .map((item) => {
-        const pct = typeof item.changePct === 'number' ? item.changePct : 0;
-        const sign = pct >= 0 ? '+' : '';
-        return {
-          key: item.label,
-          label: item.label,
-          text: `${item.label} ${typeof item.price === 'number' ? item.price.toFixed(2) : '--'} ${sign}${pct.toFixed(2)}%`,
-          up: pct >= 0,
-        };
-      });
-
-    if (list.length > 0) return list;
-
-    return [
-      { key: 'AAPL', label: 'AAPL', text: 'AAPL --', up: true },
-      { key: 'NVDA', label: 'NVDA', text: 'NVDA --', up: true },
-      { key: 'TSLA', label: 'TSLA', text: 'TSLA --', up: false },
-      { key: 'MSFT', label: 'MSFT', text: 'MSFT --', up: true },
-    ];
-  }, [marketQuotes]);
-
-  if (!currentSymbol) {
-    return (
-      <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
-        <aside className="w-[220px] shrink-0 border-r border-fin-border bg-fin-card flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]">
-          <Watchlist activeSymbol="" onSymbolSelect={handleSymbolChange} />
-        </aside>
-        <main className="flex-1 min-w-0 min-h-0 flex flex-col items-center justify-center bg-fin-bg">
-          <div className="text-center max-w-md px-6">
-            <div className="text-4xl mb-4">📳</div>
-            <h2 className="text-lg font-semibold text-fin-text mb-2">选择一只股票开始分析</h2>
-            <p className="text-sm text-fin-muted mb-6">
-              在左侧自选列表中点击一只股票，或在上方搜索栏输入代码（如 AAPL、TSLA、GOOGL）。
-            </p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  return (
-    <DashboardContext.Provider value={{ asset: pageAsset, data: dashboardData }}>
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-t-bg text-t-text">
-      {isTerminalStyle && (
-        <div className="min-h-9 shrink-0 border-b border-t-divider bg-t-surface px-4 py-2 flex items-center justify-between gap-3 text-xs">
-          <div className="flex min-w-0 items-center gap-3 text-t-text3">
-            <span className="font-medium text-t-text2">行情工作区</span>
-            <span className="max-sm:hidden">日线快照</span>
-          </div>
-          <div className="shrink-0 text-t-text3 tabular-nums">
-            <span>{clock}</span>
-            <span className="ml-2">UTC+8</span>
-          </div>
-        </div>
-      )}
-
-      <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
-        <aside className="w-[220px] shrink-0 border-r border-t-divider bg-t-surface flex flex-col max-lg:w-full max-lg:h-[180px] max-lg:border-r-0 max-lg:border-b max-sm:h-[140px]">
-          <Watchlist activeSymbol={currentSymbol} onSymbolSelect={handleSymbolChange} />
-        </aside>
-
-        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto bg-t-bg">
-          <header className="min-h-[52px] border-b border-t-divider bg-t-surface flex items-center justify-between gap-3 px-6 py-2 shrink-0 max-lg:px-4">
-            <div className="flex items-center gap-3 min-w-0">
-              {onBackToChat && (
-                <button
-                  type="button"
-                  data-testid="dashboard-back-chat"
-                  onClick={onBackToChat}
-                  className="inline-flex min-h-9 items-center gap-1.5 px-2 rounded-md text-sm shrink-0 text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text"
-                >
-                  <ArrowLeft size={15} /> 对话
-                </button>
-              )}
-
-              {isLoading && <span className="text-xs text-fin-muted animate-pulse shrink-0">加载中...</span>}
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <DataSourceTrace meta={dashboardData?.meta} />
-
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className="p-2 rounded-md text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text disabled:opacity-50"
-                title="刷新数据"
-                aria-label="刷新数据"
-              >
-                <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="p-2 rounded-md text-t-text2 transition-colors hover:bg-t-hover hover:text-t-text"
-                title="切换主题"
-                aria-label="切换主题"
-              >
-                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-              </button>
-            </div>
-          </header>
-
-          {error && (
-            <div className="mx-5 mt-4 p-2 bg-fin-danger/10 border border-fin-danger/30 rounded-lg text-fin-danger text-sm flex items-center gap-2 shrink-0 max-lg:mx-3">
-              <span className="font-medium">加载失败:</span>
-              <span className="truncate flex-1">{error}</span>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                className="text-fin-danger font-medium underline hover:no-underline whitespace-nowrap"
-              >
-                重试
-              </button>
-            </div>
-          )}
-
-          <StockHeader
-            ticker={currentSymbol}
-            displayName={pageAsset.display_name}
-            assetType={pageAsset.type}
-            snapshot={snapshot}
-            charts={charts}
-            valuation={valuation}
-            loading={isLoading && !dashboardData}
-          />
-
-          <CNMarketNotice ticker={currentSymbol} />
-
-          <MetricsBar
-            valuation={valuation}
-            snapshot={snapshot}
-            ticker={currentSymbol}
-            loading={isLoading && !dashboardData}
-          />
-
-          <PredictionTrack
-            authenticated={authenticated}
-            eligibility={predictionEligibility}
-            loadState={prediction}
-            generationPhase={predictionGeneration.phase}
-            generationRun={predictionGeneration.run}
-            generationFailure={predictionGeneration.failure}
-            isGenerating={predictionGeneration.isGenerating}
-            onGenerate={() => { void predictionGeneration.generate(); }}
-            onAsk={handleAskAi}
-          />
-
-          <MonitorActivityFeed
-            sessionId={sessionId}
-            symbol={currentSymbol}
-          />
-
-          <DashboardTabs predictionOverlay={prediction.overlay} />
-
-          {isTerminalStyle && (
-            <div className="h-9 shrink-0 border-t border-t-divider bg-t-surface overflow-hidden flex items-center">
-              <div className="flex w-max items-center gap-8 px-4 text-xs tabular-nums text-t-text2" style={{ animation: 'finsight-marquee 36s linear infinite' }}>
-                {[...tickerTapeItems, ...tickerTapeItems].map((item, idx) => (
-                  <span key={`${item.key}-${idx}`} className="whitespace-nowrap">
-                    <span className="text-t-text3 mr-1">{item.label}</span>
-                    <span className={item.up ? 'text-t-up' : 'text-t-down'}>{item.text.replace(`${item.label} `, '')}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
-    </div>
-    </DashboardContext.Provider>
-  );
-}
-
 export default Dashboard;

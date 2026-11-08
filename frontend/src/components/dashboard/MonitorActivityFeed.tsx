@@ -60,9 +60,10 @@ const LEVELS = {
 type MonitorActivityFeedProps = {
   sessionId: string | null | undefined;
   symbol: string;
+  compact?: boolean;
 };
 
-export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedProps) {
+export function MonitorActivityFeed({ sessionId, symbol, compact = false }: MonitorActivityFeedProps) {
   const navigate = useNavigate();
   const { comments, error, isAvailable, unavailable, workState } = useMonitorCommentFeed(sessionId, symbol);
   const leaseStatus = useMonitorLease(symbol);
@@ -105,6 +106,8 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
       return next;
     });
   };
+
+  if (compact) return <section className="design-card" data-testid="monitor-activity-feed" aria-label="盯盘动态"><div className="dashboard-card-title"><h2>盯盘动态</h2><span className="design-caption">美东时间</span></div><p className="design-caption mb-3">{statusText.replace('租约连接失败','连接未建立').replace('确定性触发','价格或新闻变化')}</p>{comments.length?<div>{comments.slice(0,8).map(comment=><div key={comment.id} className="grid grid-cols-[44px_minmax(0,1fr)] gap-2.5 border-b border-t-divider py-2.5 last:border-0"><time className="num text-[11.5px] text-t-text3">{new Intl.DateTimeFormat('zh-CN',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(comment.ts))}</time><div className="text-[13px] leading-6 text-t-text2">{comment.level==='error'?'盯盘更新失败，等待下次更新。':comment.text}{comment.chart_url&&<button type="button" onClick={()=>navigate(comment.chart_url!)} className="block text-xs text-t-accent">查看相关记录 →</button>}</div></div>)}</div>:<p className="design-empty !px-0">{isAvailable?'这里还没有盯盘动态，价格或新闻有变化时会更新。':'登录后可查看自己的盯盘动态。'}</p>}</section>;
 
   return (
     <section
@@ -160,7 +163,7 @@ export function MonitorActivityFeed({ sessionId, symbol }: MonitorActivityFeedPr
                 <level.Icon size={17} aria-label={level.label} />
               </span>
               <div className="min-w-0">
-                <p className="break-words text-sm leading-6 text-t-text2">{isError ? '实时点评生成失败，本次未产生新判断。' : item.comment.text}</p>
+                <p className="break-words text-sm leading-6 text-t-text2">{isError ? '实时点评生成失败，没有新的判断。' : item.comment.text}</p>
                 {isError && (
                   <details className="mt-1 text-xs text-t-text3">
                     <summary className="cursor-pointer py-1 hover:text-t-text2">错误详情</summary>

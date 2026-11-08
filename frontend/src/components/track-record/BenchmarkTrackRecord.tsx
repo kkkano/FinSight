@@ -1,265 +1,149 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, ExternalLink, Info, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import type { TrackRecordFilters } from '../../api/domains/trackRecord';
-import type { PredictionGroup, PredictionRecord, PredictionTrackRecord, PredictionType } from '../../types/predictions';
-import {
-  EARLY_SAMPLE_SIZE, agentLabel, directionLabel, formatDelta, formatEtTime,
-  formatHitRate, formatRatio, predictionLabel, sortGroups, sortRecentRecords, statusLabel,
-} from '../../pages/trackRecord';
+import type { PredictionGroup, PredictionRecord, PredictionTrackRecord } from '../../types/predictions';
+import { directionLabel, formatEtTime, formatRatio, predictionLabel, sortGroups, sortRecentRecords, statusLabel } from '../../pages/trackRecord';
+import { sourceDisplayName } from '../../utils/sourceDisplayName';
+import EChart from '../charts/EChart';
+import { useStore } from '../../store/useStore';
+import { useSearchParams } from 'react-router-dom';
+import { chartTokens } from '../dashboard/visualTokens';
 
-const controlClass = 'min-h-10 rounded-md border border-t-border bg-t-surface px-3 text-sm text-t-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent disabled:opacity-40';
-const sectionClass = 'border-t border-t-divider py-5';
+const groupKey = (group: PredictionGroup) => [group.actual_model, group.prompt_version, group.strategy_version, group.scorer_version].join('|');
 const recordStatuses = ['pending', 'settled', 'awaiting_data', 'failed', 'missed', 'abstained', 'queued', 'running', 'interrupted', 'invalid'];
-
-function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return <div className="min-w-0">
-    <dt className="text-xs leading-5 text-t-text3">{label}</dt>
-    <dd className="mt-1 text-xl font-semibold tabular-nums text-t-text">{value}</dd>
-    {detail ? <dd className="mt-1 text-xs leading-5 text-t-text2">{detail}</dd> : null}
-  </div>;
+const dateOnly = (value?: string | null) => value ? value.slice(0, 10) : '暂无';
+function pendingText(value: string): string {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return value.slice(0, 10) < today ? `等待 ${formatEtTime(value)} 的行情完成对账` : `${formatEtTime(value)} 收盘后自动对账`;
 }
+function outcomeLabel(record: PredictionRecord): string {
+  if (record.status === 'settled' && record.outcome) {
+    if (record.prediction_type === 'direction') return record.outcome.hit ? '猜中' : '没猜中';
+    return record.event_occurs ? record.outcome.actual_event ? '预警成功' : '虚惊一场' : record.outcome.actual_event ? '漏报' : '正常排除';
+  }
+  if (['pending', 'awaiting_data', 'queued', 'running'].includes(record.status)) return '等待对账';
+  return '无法评分（不计入）';
+}
+function confidence(record: PredictionRecord): string {
+  const value = record.confidence;
+  if (typeof value === 'number' && Number.isFinite(value)) return `${(value <= 1 ? value * 100 : value).toFixed(0)}%`;
+  if (typeof value === 'string') return ({ high: '高', medium: '中', low: '低' } as Record<string, string>)[value] || value;
+  return '未提供';
+}
+function deltaText(group?: PredictionGroup): string {
+  if (!group || !group.n || group.delta == null) return '尚无可比较的对账结果';
+  const amount = Math.abs(group.delta * 100).toFixed(1);
+  return group.delta === 0 ? '和每次都猜涨相比：持平' : `和每次都猜涨比：${group.delta > 0 ? '高' : '低'} ${amount} 个百分点`;
+}
+function versionLabel(value?: string | null): string { return (value || '未提供').replace(/us20/gi, '固定样本').replace(/technical/gi, '方向').replace(/risk/gi, '回撤').replace(/\bP0\b/g, '起点').replace(/\bP5\b/g, '终点'); }
+function modelName(group: PredictionGroup): string { return versionLabel(group.actual_model); }
 
-function GroupResult({ group }: { group: PredictionGroup }) {
-  return <article className="min-w-0 rounded-lg border border-t-border px-4 py-4" data-testid="prediction-model-group" data-confirmed={group.model_confirmed}>
-    <h4 className="break-words text-sm font-semibold text-t-text">{group.actual_model || '未知模型'}</h4>
-    <p className={`mt-1 text-xs ${group.model_confirmed ? 'text-t-text3' : 'text-t-warning'}`}>{group.model_confirmed ? '供应商已确认模型' : '模型身份未确认'}</p>
-    {group.n > 0 ? <>
-      <dl className="mt-4 grid grid-cols-2 gap-4">
-        <Metric label="AI 命中率" value={formatHitRate(group.hit_rate, group.n)} detail={`${group.hits} / ${group.n} 命中`} />
-        <Metric label="同样本基准" value={formatHitRate(group.baseline_hit_rate, group.n)} detail={`${group.baseline_hits} / ${group.n} 命中`} />
-      </dl>
-      <div className="mt-4 space-y-1 border-t border-t-divider pt-3 text-sm">
-        <p className={group.delta !== null && group.delta < 0 ? 'text-t-down' : 'text-t-text'} data-testid="prediction-baseline-delta">AI − 基准：{formatDelta(group.delta, group.n)}</p>
-        <p className="text-xs text-t-text3">已结算 n = {group.n}{group.n < EARLY_SAMPLE_SIZE ? ' · 样本不足' : ''}</p>
-      </div>
-      {group.prediction_type === 'drawdown' ? <details className="mt-3 text-sm">
-        <summary className="cursor-pointer text-t-text2">预警与漏报明细</summary>
-        <p className="mt-3 text-xs leading-5 text-t-text3">实际事件发生率：{formatRatio((group.tp + group.fn) / group.n)}（{group.tp + group.fn} / {group.n}）</p>
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-xs" aria-label="风险混淆计数">
-          {[
-            ['TP · 正确预警', group.tp], ['FP · 误报', group.fp],
-            ['TN · 正确排除', group.tn], ['FN · 漏报', group.fn],
-          ].map(([label, count]) => <div key={label}><dt className="text-t-text3">{label}</dt><dd className="mt-1 text-base font-medium tabular-nums text-t-text">{count}</dd></div>)}
-        </dl>
-      </details> : null}
-    </> : <p className="mt-4 text-sm text-t-text2">等待首批结算</p>}
-    <details className="mt-4 border-t border-t-divider pt-3 text-xs">
-      <summary className="cursor-pointer text-t-text2">版本与评分来源</summary>
-      <dl className="mt-3 space-y-2 break-words leading-5 text-t-text3">
-        <div><dt>Agent</dt><dd className="text-t-text2">{agentLabel(group.agent)}</dd></div>
-        <div><dt>提示版本</dt><dd className="text-t-text2">{group.prompt_version || '--'}</dd></div>
-        <div><dt>策略版本</dt><dd className="text-t-text2">{group.strategy_version || '--'}</dd></div>
-        <div><dt>评分版本</dt><dd className="text-t-text2">{group.scorer_version || '--'}</dd></div>
-      </dl>
-    </details>
+export function BenchmarkRecordDetail({ record, source }: { record: PredictionRecord; source: string }) {
+  return <article data-testid="benchmark-record-detail" className="grid gap-4 py-4 text-sm md:grid-cols-2">
+    <section><h3 className="font-semibold text-t-text">当时的判断</h3><p className="mt-2 text-t-text2">{predictionLabel(record)} · {confidence(record)}</p><p className="mt-2 whitespace-pre-wrap leading-7 text-t-text2">{record.reason || '当时未留下可用的判断依据。'}</p><p className="design-caption mt-2">发布于 {formatEtTime(record.issued_at)}</p></section>
+    <section><h3 className="font-semibold text-t-text">实际对账行情</h3>{record.outcome && record.status === 'settled' ? <dl className="mt-2 grid grid-cols-2 gap-3">
+      <div><dt className="design-caption">起点价</dt><dd className="num">{record.outcome.p0.toFixed(2)}</dd></div><div><dt className="design-caption">终点价</dt><dd className="num">{record.outcome.p5.toFixed(2)}</dd></div>
+      <div><dt className="design-caption">实际涨跌</dt><dd className="num">{formatRatio(record.outcome.return_pct)}</dd></div><div><dt className="design-caption">期间最大回撤</dt><dd className="num">{formatRatio(record.outcome.max_drawdown)}</dd></div>
+    </dl> : <p className="mt-2 leading-6 text-t-text3">{record.status === 'pending' ? pendingText(record.window_end) : statusLabel(record.status)}</p>}
+      <p className="design-caption mt-3">{sourceDisplayName(record.outcome?.source || source)} · {record.outcome ? formatEtTime(record.outcome.settled_at) : '尚未完成对账'}</p><p className="design-caption mt-2">使用的模型：{versionLabel(record.actual_model)} · {record.model_confirmed ? '实际模型已确认' : '实际模型尚未确认，单独统计'}</p>
+      {record.error_code && <p className="mt-2 text-xs text-t-text3">这条记录未取得可评分结果，保留原判断供核对。</p>}
+      {record.settlement_bars?.length ? <details className="mt-3"><summary className="cursor-pointer text-xs text-t-accent">查看逐日对账行情</summary><div className="mt-2 overflow-x-auto"><table className="design-table"><thead><tr><th>日期</th><th>开盘</th><th>收盘</th></tr></thead><tbody>{record.settlement_bars.slice(0,10).map((bar,index)=><tr key={index}><td className="num">{String(bar.date||bar.time||bar.Date||'暂无')}</td><td className="num">{String(bar.open??bar.Open??'暂无')}</td><td className="num">{String(bar.close??bar.Close??'暂无')}</td></tr>)}</tbody></table></div></details> : null}
+    </section>
   </article>;
 }
 
-function TaskResults({ type, data }: { type: PredictionType; data: PredictionTrackRecord }) {
-  const groups = sortGroups(data.groups.filter((group) => group.prediction_type === type));
-  const confirmed = groups.filter((group) => group.model_confirmed);
-  const unconfirmed = groups.filter((group) => !group.model_confirmed);
-  const isRisk = type === 'drawdown';
-  return <section className={sectionClass} aria-labelledby={`${type}-results-title`} data-testid={`${type}-results`}>
-    <h2 id={`${type}-results-title`} className="text-base font-semibold text-t-text">{isRisk ? '5 日回撤事件 · Risk' : '5 日方向 · Technical'}</h2>
-    <p className="mt-2 text-xs leading-5 text-t-text2">{isRisk
-      ? `最大回撤 ≥ ${formatRatio(data.metadata.drawdown_threshold)} 为发生。基准：始终不发生。`
-      : `上涨 > +${formatRatio(data.metadata.direction_threshold)}，下跌 < −${formatRatio(data.metadata.direction_threshold)}，其余为横盘。基准：永远看多。`}</p>
-    {!groups.length ? <p className="mt-4 flex items-center gap-2 text-sm text-t-text2"><Clock3 size={16} />等待首批结算</p> : null}
-    <div className="mt-4 grid gap-3">{confirmed.map((group) => <GroupResult key={[group.actual_model, group.prompt_version, group.strategy_version, group.scorer_version].join('|')} group={group} />)}</div>
-    {unconfirmed.length ? <div className="mt-5 space-y-3" data-testid={`${type}-unconfirmed-models`}>
-      <h3 className="text-sm font-medium text-t-text">模型身份未确认 · 单独统计</h3>
-      <p className="text-xs leading-5 text-t-text3">供应商未确认实际模型名称，以下记录不并入已确认模型。</p>
-      {unconfirmed.map((group) => <GroupResult key={[group.actual_model, group.prompt_version, group.strategy_version, group.scorer_version].join('|')} group={group} />)}
-    </div> : null}
+function CumulativeChart({ data, group }: { data: PredictionTrackRecord; group?: PredictionGroup }) {
+  const dark = useStore((state) => state.theme === 'dark');
+  const directionGroups = data.groups.filter((item) => item.prediction_type === 'direction' && item.model_confirmed);
+  const rows = (data.daily_series || []).filter((row) => row.n > 0 && row.hit_rate != null && row.baseline_hit_rate != null)
+    .filter((row) => !row.actual_model ? directionGroups.length <= 1 : group && row.actual_model === group.actual_model && row.prompt_version === group.prompt_version && row.strategy_version === group.strategy_version && row.scorer_version === group.scorer_version);
+  const colors=chartTokens();
+  const option = useMemo(() => ({ animation: false, color: [colors.accent, colors.text], grid: { left: 42, right: 115, top: 10, bottom: 30 }, tooltip: { trigger: 'axis', valueFormatter: (value: number) => `${value.toFixed(1)}%` },
+    legend: { show: false, top: 0, textStyle: { color: colors.text, fontSize: 11 } },
+    xAxis: { type: 'category', data: rows.map((row) => row.date), boundaryGap: false, axisLabel: { color: colors.text, fontFamily: 'JetBrains Mono Variable', fontSize: 10 }, axisLine: { lineStyle: { color: colors.border } }, axisTick: { show: false } },
+    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%', color: colors.text, fontSize: 10 }, splitLine: { lineStyle: { color: colors.line } } },
+    series: [{ name: '预测命中率', type: 'line', data: rows.map((row) => row.hit_rate! * 100), symbol: 'none', endLabel: { show: true, formatter: (params: { value: number }) => `FinSight ${params.value.toFixed(1)}%`, color: colors.accent, fontSize: 12, fontFamily: 'JetBrains Mono Variable' }, labelLayout: { moveOverlap: 'shiftY' }, lineStyle: { width: 2.2, color: colors.accent } }, { name: '每次都猜涨', type: 'line', data: rows.map((row) => row.baseline_hit_rate! * 100), symbol: 'none', endLabel: { show: true, formatter: (params: { value: number }) => `每次猜涨 ${params.value.toFixed(1)}%`, color: colors.text, fontSize: 11, fontFamily: 'JetBrains Mono Variable' }, labelLayout: { moveOverlap: 'shiftY' }, lineStyle: { width: 1.6, type: 'dashed', color: colors.text } }] }), [rows, dark]);
+  return <section className="design-card"><div className="mb-2 flex flex-wrap items-baseline gap-2"><h2 className="text-sm font-semibold">累计方向命中率</h2><span className="design-caption">按真实对账日累计，与每次都猜涨比较</span></div>
+    {rows.length ? <EChart option={option} style={{ height: 226 }} /> : <div className="design-empty">暂时没有累计曲线，数据齐全后会显示。</div>}
   </section>;
 }
 
-function RecordOutcome({ record }: { record: PredictionRecord }) {
-  const outcome = record.outcome;
-  if (!outcome || record.status !== 'settled') return <>
-    <p className="text-sm text-t-text2">{statusLabel(record.status)}</p>
-    <p className="mt-2 text-sm leading-6 text-t-text3">{record.status === 'awaiting_data' || record.status === 'invalid'
-      ? '保留原窗口，等待同源行情核验。'
-      : record.status === 'pending' ? '尚未产生已核验结果，不计为命中或未命中。' : '此次机会未形成可评分结果，仍保留在覆盖记录中。'}</p>
-  </>;
-  return <div className="space-y-3 text-sm">
-    <p className={`font-medium ${outcome.hit ? 'text-t-up' : 'text-t-down'}`}>已结算 · {outcome.hit ? '命中' : '未命中'}</p>
-    <p className="text-t-text">{record.prediction_type === 'direction'
-      ? `实际${directionLabel(outcome.actual_direction)} · 收益 ${formatRatio(outcome.return_pct)}`
-      : `实际${outcome.actual_event ? '发生' : '未发生'} · 最大回撤 ${formatRatio(outcome.max_drawdown)}`}</p>
-    <p className="text-t-text2">同样本基准：{outcome.baseline_hit ? '命中' : '未命中'}</p>
-    <dl className="grid grid-cols-2 gap-4">
-      <Metric label="P0 · 首个时段开盘" value={outcome.p0.toFixed(2)} />
-      <Metric label="P5 · 第 5 日收盘" value={outcome.p5.toFixed(2)} />
-    </dl>
-  </div>;
-}
-
-export function BenchmarkRecordDetail({ record, source }: { record: PredictionRecord; source: string }) {
-  return <article className="min-w-0" data-testid="benchmark-record-detail">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="text-lg font-semibold text-t-text">{record.ticker}</h3>
-      <span className="text-xs text-t-text2">{statusLabel(record.status)}</span>
-    </div>
-    <p className="mt-1 text-xs leading-5 text-t-text3">{agentLabel(record.agent)} · {record.prediction_type === 'direction' ? '5 日方向' : '5 日回撤事件'} · 批次 {record.batch_date}</p>
-    <section className={sectionClass}>
-      <h4 className="text-sm font-semibold text-t-text">预先判断</h4>
-      <p className="mt-2 text-base font-medium text-t-text">{predictionLabel(record)}</p>
-      <p className="mt-3 break-words text-sm leading-6 text-t-text2">{record.reason || '未形成有效预测依据'}</p>
-      {record.error_code ? <p className="mt-3 break-all text-xs leading-5 text-t-down">失败 / 数据原因：{record.error_code}</p> : null}
-    </section>
-    <section className={sectionClass}>
-      <h4 className="mb-3 text-sm font-semibold text-t-text">实际结果</h4>
-      <RecordOutcome record={record} />
-    </section>
-    <section className={sectionClass}>
-      <h4 className="text-sm font-semibold text-t-text">生成、行情与模型来源</h4>
-      <dl className="mt-3 space-y-3 break-words text-sm">
-        {[
-          ['预测发布', record.issued_at ? formatEtTime(record.issued_at) : '--'],
-          ['评估窗口', `${formatEtTime(record.window_start)} → ${formatEtTime(record.window_end)}`],
-          ['结算时间', record.outcome ? formatEtTime(record.outcome.settled_at) : '--'],
-          ['行情来源', record.outcome?.source || source],
-          ['实际模型', record.actual_model || '--'],
-          ['模型身份', record.model_confirmed ? '供应商已确认' : '未确认，单独统计'],
-          ['提示版本', record.prompt_version || '--'],
-        ].map(([label, value]) => <div key={label}><dt className="text-xs text-t-text3">{label}</dt><dd className="mt-1 text-t-text2">{value}</dd></div>)}
-      </dl>
-      <details className="mt-4 text-sm">
-        <summary className="cursor-pointer text-t-text2">输入证据</summary>
-        <p className="mt-2 break-all text-xs leading-5 text-t-text3">{record.evidence_refs.length ? record.evidence_refs.join('、') : '无有效输入证据'}</p>
-      </details>
-    </section>
-  </article>;
-}
-
-export function TrackRecordContent({ data, loading = false, pageError = false, onPageChange }: {
-  data: PredictionTrackRecord; loading?: boolean; pageError?: boolean; onPageChange?: (offset: number) => void;
+export function TrackRecordContent({ data, loading = false, pageError = false, onPageChange, filterControls }: {
+  data: PredictionTrackRecord; loading?: boolean; pageError?: boolean; onPageChange?: (offset: number) => void; filterControls?: ReactNode;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const recordListRef = useRef<HTMLElement>(null);
-  const selectRecord = (id: string | null) => {
-    setSelectedId(id);
-    contentRef.current?.scrollIntoView({ block: 'start' });
-  };
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [directionKey, setDirectionKey] = useState('');
+  const [riskKey, setRiskKey] = useState('');
+  const directions = sortGroups(data.groups.filter((item) => item.prediction_type === 'direction' && item.model_confirmed));
+  const risks = sortGroups(data.groups.filter((item) => item.prediction_type === 'drawdown' && item.model_confirmed));
+  const direction = directions.find((item) => groupKey(item) === directionKey) || directions[0];
+  const risk = risks.find((item) => groupKey(item) === riskKey) || risks[0];
+  const unconfirmed = data.groups.filter((item) => !item.model_confirmed);
+  const { metadata, summary, coverage, pagination } = data;
+  const horizon = metadata.horizon_sessions;
   const records = sortRecentRecords(data.records);
-  const selected = records.find((record) => record.id === selectedId);
-  const { summary, coverage, metadata, universe, pagination } = data;
-  const offset = pagination?.offset ?? 0;
-  const limit = pagination?.limit ?? 50;
+  const waiting = metadata.next_settlement_date || records.filter((record) => record.status === 'pending').map((record) => record.window_end).sort()[0];
   const total = pagination?.total ?? summary.opportunities;
-  const coverageRatio = coverage.expected > 0 ? Math.min(1, coverage.accepted / coverage.expected) : 0;
-  if (selected) return <div ref={contentRef}>
-    <button type="button" onClick={() => selectRecord(null)} className="mb-4 inline-flex min-h-10 items-center gap-2 text-sm text-t-text2 hover:text-t-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent"><ArrowLeft size={16} />返回战绩</button>
-    <BenchmarkRecordDetail record={selected} source={metadata.source} />
-  </div>;
-  return <div ref={contentRef} data-testid="benchmark-track-record-content">
-    <button type="button" onClick={() => recordListRef.current?.scrollIntoView({ block: 'start' })} className="mb-4 inline-flex min-h-10 items-center gap-2 rounded-md bg-t-hover px-3 text-sm text-t-text2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent">机会与预测明细 <ChevronRight size={16} /></button>
-    <p className={`text-sm font-medium ${data.enabled ? 'text-t-accent' : 'text-t-text2'}`}>{data.enabled ? '固定采集已启用' : '固定采集尚未启用'}</p>
-    <p className="mt-1 text-xs leading-5 text-t-text3">{universe.tickers.length} 只美股 · 每日 {universe.tickers.length * 2} 个机会 · {metadata.horizon_sessions} 个交易日</p>
-    {!data.enabled ? <p className="mt-3 text-sm leading-6 text-t-text2">采集关闭期间不会产生新预测。已有记录继续保留；战绩只在取得真实结果后展示。</p> : null}
-    <dl className="grid grid-cols-2 gap-x-5 gap-y-5 py-5" aria-label="累计样本概览">
-      <Metric label="已结算 · 成熟样本" value={String(summary.settled)} detail="仅已结算记录进入命中率分母" />
-      <Metric label="待结算" value={String(summary.pending)} detail={`另有 ${summary.awaiting_data} 条等待行情`} />
-      <Metric label="已接受 / 全部机会" value={`${summary.predictions} / ${summary.opportunities}`} />
-      <Metric label="累计批次 / 股票" value={`${summary.batch_count} / ${summary.stock_count}`} />
-    </dl>
-    <section className={sectionClass} data-testid="prediction-coverage">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h2 className="text-sm font-semibold text-t-text">最近批次覆盖</h2><p className="mt-1 text-xs leading-5 text-t-text3">{coverage.batch_date ? `${coverage.batch_date} · 美东交易日` : '尚无采集批次'}</p></div>
-        <p className="text-lg font-semibold tabular-nums text-t-text">{coverage.accepted} / {coverage.expected}</p>
-      </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded bg-t-hover" role="progressbar" aria-label="最近批次预测覆盖" aria-valuemin={0} aria-valuemax={coverage.expected || 40} aria-valuenow={coverage.accepted}><div className="h-full bg-t-accent" style={{ width: `${coverageRatio * 100}%` }} /></div>
-      <p className="mt-3 text-xs leading-5 text-t-text2">已尝试 {coverage.attempts} 次 · 最近进展 {formatEtTime(coverage.last_update)}</p>
-      <p className="mt-2 text-xs leading-5 text-t-text3">累计：预测失败 {summary.failed} · 错过登记 {summary.missed} · 主动弃权 {summary.abstained}</p>
-      {Object.keys(coverage.counts).length ? <p className="mt-2 text-xs leading-5 text-t-text3">最近批次：{Object.entries(coverage.counts).map(([status, count]) => `${statusLabel(status)} ${count}`).join(' · ')}</p> : null}
-    </section>
-    <div className="flex items-start gap-2 border-t border-t-divider py-4 text-xs leading-5 text-t-text2" role="note">
-      <Info size={16} className="mt-0.5 shrink-0 text-t-text3" />
-      <div>
-        {!summary.settled ? <p className="mb-2 text-sm font-medium text-t-text">等待首批结算。需自然经过 5 个交易日并取得完整行情。</p> : null}
-        <p>每组少于 {EARLY_SAMPLE_SIZE} 条成熟记录标记“样本不足”，并非显著性检验。滚动 5 日窗口存在重叠，记录并非独立样本。</p>
-        <p className="mt-2">以下汇总为全部公开历史，明细筛选与翻页不改变统计。未命中、失败及低于基准的结果同样保留，不代表投资收益。</p>
-      </div>
+  const offset = pagination?.offset ?? 0;
+  const groupPicker = (groups: PredictionGroup[], value: PredictionGroup | undefined, change: (value: string) => void) => groups.length > 1 ? <label className="design-caption mt-2 block">分别查看模型版本<select className="mt-1 w-full rounded-md border border-t-border bg-t-surface p-1 text-xs" value={value ? groupKey(value) : ''} onChange={(event) => change(event.target.value)}>{groups.map((item) => <option key={groupKey(item)} value={groupKey(item)}>{modelName(item)} · {versionLabel(item.strategy_version)} · {versionLabel(item.scorer_version)}</option>)}</select></label> : value ? <p className="design-caption mt-2">使用的模型：{modelName(value)}</p> : null;
+  return <div className="flex flex-col gap-5" data-testid="benchmark-track-record-content">
+    {!data.enabled && <p className="design-caption" role="status">自动预测尚未开启，已有记录仍可查看。</p>}
+    <div className="track-record-metrics">
+      <section className="design-card" data-testid="direction-results"><div className="design-caption">方向命中率</div><div className="track-record-number num">{direction?.n ? formatRatio(direction.hit_rate) : '暂无'}</div><p className="text-[13px] text-t-text2">{direction?.n ? `${direction.n} 次已对账中猜中 ${direction.hits} 次` : '等待首批对账'}</p>{direction&&metadata.min_sample_size!=null&&direction.n>0&&direction.n<metadata.min_sample_size&&<p className="design-caption">记录还太少，结论不可靠</p>}<p className="design-caption mt-1.5">基准：每次都猜涨，猜中 {direction?.n ? formatRatio(direction.baseline_hit_rate) : '暂无'}</p><p className={`mt-1 text-xs ${direction?.delta != null && direction.delta > 0 ? 'text-t-accent' : 'text-t-text3'}`} data-testid="prediction-baseline-delta">{deltaText(direction)}</p>{groupPicker(directions,direction,setDirectionKey)}</section>
+      <section className="design-card" data-testid="drawdown-results"><div className="design-caption">大跌预警</div><div className="track-record-number num">{risk?.n && risk.tp + risk.fn > 0 ? `${risk.tp} / ${risk.tp + risk.fn}` : '暂无'}</div><p className="text-[13px] text-t-text2">{risk?.n ? risk.tp + risk.fn > 0 ? `${risk.tp + risk.fn} 次真实大跌里，提前预警了 ${risk.tp} 次` : `已对账 ${risk.n} 次，尚无实际大跌样本` : '等待行情数据和对账结果'}</p><p className="design-caption mt-1.5">{risk?.n ? `另有 ${risk.fp} 次预警了但没跌（虚惊一场）` : '暂时无法判断预警效果'}</p>{groupPicker(risks,risk,setRiskKey)}</section>
+      <section className="design-card"><div className="design-caption">等待对账</div><div className="track-record-number num">{summary.pending + summary.awaiting_data}<span className="ml-2 text-[13px] text-t-text3">条</span></div><p className="text-[13px] text-t-text2">{waiting ? pendingText(waiting) : '暂未提供下次对账时间'}</p><p className="design-caption mt-1.5">结果出来前不计入命中率</p></section>
     </div>
-    <TaskResults type="direction" data={data} />
-    <TaskResults type="drawdown" data={data} />
-    <section ref={recordListRef} className={sectionClass} aria-labelledby="prediction-records-title" aria-busy={loading}>
-      <h2 id="prediction-records-title" className="text-base font-semibold text-t-text">机会与预测明细</h2>
-      <p className="mt-2 text-xs leading-5 text-t-text3">原判断、实际结果与生成来源 · 按批次日期倒序</p>
-      {pageError ? <p role="status" className="mt-3 text-sm leading-6 text-t-down">读取失败，仍显示上次成功加载的记录。请刷新重试。</p> : null}
-      {!records.length ? <p className="py-6 text-sm leading-6 text-t-text2">{summary.opportunities ? '当前筛选下暂无记录。' : '尚无前瞻预测记录。真实战绩将从首次采集开始累积。'}</p> : <div className="mt-3 divide-y divide-t-divider">
-        {records.map((record) => <button type="button" key={record.id} onClick={() => selectRecord(record.id)} className="block w-full px-1 py-4 text-left hover:bg-t-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent" data-testid="prediction-record-row">
-          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold text-t-text">{record.ticker} · {record.prediction_type === 'direction' ? '5 日方向' : '5 日回撤'}</span><span className="text-xs text-t-text2">{record.status === 'settled' && record.outcome ? record.outcome.hit ? '已结算 · 命中' : '已结算 · 未命中' : statusLabel(record.status)}</span></div>
-          <p className="mt-2 text-sm text-t-text">{predictionLabel(record)}</p>
-          <p className="mt-1 break-words text-xs leading-5 text-t-text3">{record.batch_date} · {record.actual_model || '未知模型'}</p>
-        </button>)}
-      </div>}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-t-text3" data-testid="prediction-page-range" aria-live="polite">{records.length ? `第 ${offset + 1}–${offset + records.length} 条，共 ${total} 条` : `共 ${total} 条记录`}</p>
-        <nav className="flex gap-2" aria-label="预测明细分页">
-          <button type="button" title="上一页" aria-label="上一页预测明细" className={controlClass} disabled={loading || offset === 0 || !onPageChange} onClick={() => onPageChange?.(Math.max(0, offset - limit))}><ChevronLeft size={16} /></button>
-          <button type="button" title="下一页" aria-label="下一页预测明细" className={controlClass} disabled={loading || !pagination?.has_more || !onPageChange} onClick={() => onPageChange?.(offset + limit)}><ChevronRight size={16} /></button>
-        </nav>
-      </div>
+    <CumulativeChart data={data} group={direction} />
+    <section className="design-card"><div className="mb-3 flex flex-wrap items-baseline gap-2"><h2 className="text-sm font-semibold">大跌预警的对错</h2><span className="design-caption">大跌指 {horizon} 个交易日内最大回撤 ≥ {formatRatio(metadata.drawdown_threshold)}</span></div><div className="track-record-cells">{[
+      { label: '预警了，真跌了', count: risk?.tp, detail: '提前提醒成功', color: 'var(--fin-success)', background: 'color-mix(in srgb, var(--fin-success) 10%, transparent)' },
+      { label: '预警了，没跌（虚惊一场）', count: risk?.fp, detail: '预警未发生', color: 'var(--t-amber)', background: 'var(--t-amber-soft)' },
+      { label: '没预警，真跌了（漏报）', count: risk?.fn, detail: '最需要改进的部分', color: 'var(--fin-danger)', background: 'color-mix(in srgb, var(--fin-danger) 10%, transparent)' },
+      { label: '没预警，也没跌', count: risk?.tn, detail: '正常排除', color: 'var(--t-text-2)', background: 'var(--t-bg-2)' },
+    ].map((cell) => <div className="track-record-cell" key={cell.label} style={{ background: cell.background }}><strong style={{ color: cell.color }}>{cell.label}</strong><div className="num">{cell.count ?? '暂无'}</div><p className="design-caption">{cell.detail}</p></div>)}</div></section>
+    <section className="design-card !p-0 overflow-hidden" aria-busy={loading}><div className="px-[18px] pb-2 pt-3.5"><h2 className="text-sm font-semibold">每一条预测</h2><p className="design-caption mt-1">点开可看当时的依据和对账用的行情</p>{filterControls && <div className="mt-3">{filterControls}</div>}</div>
+      {pageError && <p role="status" className="px-[18px] py-2 text-sm text-t-down">读取失败，仍显示上次成功加载的记录。</p>}
+      {records.length ? <div className="overflow-x-auto"><table className="design-table"><thead><tr><th>发布日</th><th>标的</th><th>预测</th><th>信心</th><th>实际</th><th>结果</th></tr></thead><tbody>{records.map((record) => <RecordRow key={record.id} record={record} expanded={expanded === record.id} onToggle={() => setExpanded(expanded === record.id ? null : record.id)} source={metadata.source} />)}</tbody></table></div> : <div className="design-empty">{summary.opportunities ? '当前筛选下暂无记录。' : '还没有预测记录，首次发布后会在这里更新。'}</div>}
+      <div className="flex items-center justify-between gap-3 border-t border-t-divider px-[18px] py-2.5"><p className="design-caption" data-testid="prediction-page-range">{records.length ? `第 ${offset+1}–${offset+records.length} 条，共 ${total} 条` : `共 ${total} 条记录`}</p><nav className="flex gap-1" aria-label="预测明细分页"><button type="button" className="design-ghost" aria-label="上一页预测明细" disabled={loading || offset === 0 || !onPageChange} onClick={() => onPageChange?.(Math.max(0,offset-(pagination?.limit||50)))}><ChevronLeft size={15}/></button><button type="button" className="design-ghost" aria-label="下一页预测明细" disabled={loading || !pagination?.has_more || !onPageChange} onClick={() => onPageChange?.(offset+(pagination?.limit||50))}><ChevronRight size={15}/></button></nav></div>
     </section>
-    <details className={sectionClass}>
-      <summary className="cursor-pointer text-sm font-medium text-t-text">评分口径与固定样本池</summary>
-      <div className="mt-3 space-y-3 text-xs leading-5 text-t-text2">
-        <p>P0 为预定首个常规交易时段开盘价；P5 为包含起始日在内第 5 个交易日的收盘价。方向收益 = P5 / P0 − 1；阈值相等归为横盘。</p>
-        <p>回撤使用 P0 与随后 5 个收盘价构成的序列，计算相对此前运行高点的最大降幅；不用日内最低价或期末跌幅代替。现金分红不计入收益。</p>
-        <p>方向与回撤分别用完全相同的已结算记录对照基准，不合并排名。提示、策略或实际模型变化后分组展示，旧版本保留。</p>
-        <p>每日美东 08:45 开始、09:20 截止登记；每只股票 2 个机会。失败、弃权与错过登记均保留，不能事后补写。</p>
-        <p className="break-words">固定样本池 · {universe.version}：{universe.tickers.join('、')}</p>
-        <p className="break-words">行情来源：{metadata.source}</p>
-      </div>
-    </details>
+    <details className="design-card !p-0"><summary className="flex cursor-pointer items-center gap-2 px-[18px] py-3.5 text-sm font-semibold"><ChevronDown size={15}/>规则是怎么定的<span className="design-caption font-normal">样本、对账方式、版本</span></summary><div className="space-y-3 px-[18px] pb-4 text-[13px] leading-7 text-t-text2">
+      <p>{metadata.frequency === 'trading_day' ? '每个交易日' : '按发布计划'}对 {data.universe.tickers.length} 只美股发布预测，用 {horizon} 个交易日的实际行情对账。{metadata.collection_start_et && metadata.collection_deadline_et ? `美东 ${metadata.collection_start_et} 开始，${metadata.collection_deadline_et} 截止发布。` : ''}</p>
+      <p>方向预测：{horizon} 个交易日后涨还是跌。涨幅超过 {formatRatio(metadata.direction_threshold)} 算上涨，跌幅超过相同阈值算下跌，其余为横盘。</p><p>起点价为发布后第一个交易日的开盘价，终点价为第 {horizon} 个交易日收盘价。涨跌幅用终点价除以起点价后减一计算；现金分红不计入。最大回撤比较起点价与随后收盘价相对此前高点的降幅。</p>
+      <p>滚动评价窗口可能重叠，记录并非独立样本。{metadata.min_sample_size != null ? `同一模型版本少于 ${metadata.min_sample_size} 条已对账记录时，记录还太少，结论不可靠。` : '记录太少时，不能据此推断未来表现。'}不同模型和版本分别显示，不挑选较高成绩。</p>
+      <p>最近发布日：{coverage.batch_date || '暂无'}。实际发布 {coverage.accepted} 条，应发布 {coverage.expected} 条。累计发布失败 {summary.failed} 条；当天没按时发布 {summary.missed} 条，不计入命中率；模型选择不预测 {summary.abstained} 条。</p>
+      {unconfirmed.length > 0 && <section data-testid="direction-unconfirmed-models"><h3 className="font-medium">模型未确认的记录，单独统计</h3>{unconfirmed.map((group) => <p key={`${group.prediction_type}:${groupKey(group)}`}>{modelName(group)} · {group.prediction_type === 'direction' ? '方向预测' : '大跌预警'} · 已对账 {group.n} 次，猜中 {group.hits} 次</p>)}</section>}
+      <div className="space-y-2">{sortGroups(data.groups).map((group) => <div key={`${group.prediction_type}:${groupKey(group)}`} data-testid="prediction-model-group" data-confirmed={group.model_confirmed}><p>使用的模型：{modelName(group)} · {group.model_confirmed ? '实际模型已确认' : '实际模型尚未确认，单独统计'} · {group.prediction_type === 'direction' ? '方向预测' : '大跌预警'}</p><p className="num design-caption">提示词 {versionLabel(group.prompt_version)} · 策略 {versionLabel(group.strategy_version)} · 评分规则 {versionLabel(group.scorer_version)}</p></div>)}</div>
+      <p>交易日历版本：{versionLabel(metadata.calendar_version)}；当前评分规则：{versionLabel(metadata.scorer_version)}。</p><p>固定样本：{data.universe.tickers.join('、') || '暂无'}。样本版本：{versionLabel(data.universe.version)}。行情来源：{sourceDisplayName(metadata.source)}。</p>
+    </div></details>
   </div>;
+}
+function RecordRow({ record, expanded, onToggle, source }: { record: PredictionRecord; expanded: boolean; onToggle: () => void; source: string }) {
+  const settled = record.status === 'settled' && record.outcome;
+  const result = outcomeLabel(record);
+  const success = settled && record.outcome?.hit;
+  return <><tr data-testid="prediction-record-row"><td className="num">{dateOnly(record.batch_date)}</td><td className="num font-medium"><button type="button" className="inline-flex items-center gap-1 text-t-accent" aria-expanded={expanded} onClick={onToggle}>{record.ticker}<ChevronDown size={13}/></button></td><td>{predictionLabel(record)}</td><td className="num">{confidence(record)}</td><td className={settled ? 'num' : 'design-caption'}>{settled ? record.prediction_type === 'direction' ? `${directionLabel(record.outcome!.actual_direction)} ${formatRatio(record.outcome!.return_pct)}` : `最大回撤 ${formatRatio(record.outcome!.max_drawdown)}` : record.status === 'pending' ? `${dateOnly(record.window_end)} 对账` : '暂无评分'}</td><td><span className="design-tag" style={settled ? { color: success ? 'var(--fin-success)' : 'var(--fin-danger)', background: success ? 'color-mix(in srgb, var(--fin-success) 10%, transparent)' : 'color-mix(in srgb, var(--fin-danger) 10%, transparent)' } : undefined}>{result}</span></td></tr>{expanded && <tr><td colSpan={6} className="!whitespace-normal bg-t-bg"><BenchmarkRecordDetail record={record} source={source}/></td></tr>}</>;
 }
 
 export function BenchmarkTrackRecordView({ shareLink = false }: { shareLink?: boolean }) {
-  const [filters, setFilters] = useState<TrackRecordFilters>({});
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState<TrackRecordFilters>(() => ({ ticker: searchParams.get('ticker') || undefined }));
+  const [days, setDays] = useState<number | undefined>(84);
   const [offset, setOffset] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<{ key: string; data: PredictionTrackRecord } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const { ticker, status, prediction_type: type } = filters;
-  const queryKey = JSON.stringify([ticker, status, type]);
-  const data = result?.key === queryKey ? result.data : null;
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(false);
-    apiClient.getPredictionTrackRecord(20, offset, controller.signal, { ticker, status, prediction_type: type }).then((response) => {
-      if (!controller.signal.aborted) setResult({ key: queryKey, data: response });
-    }).catch(() => {
-      if (!controller.signal.aborted) setError(true);
-    }).finally(() => {
-      if (!controller.signal.aborted) setLoading(false);
-    });
-    return () => controller.abort();
-  }, [ticker, status, type, offset, queryKey, refresh]);
-  const changeFilters = (next: TrackRecordFilters) => { setFilters(next); setOffset(0); };
-  return <div className="min-w-0" data-testid="us20-track-record">
-    <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
-      <div><h2 className="text-base font-semibold text-t-text">US20 固定样本基准</h2><p className="mt-1 text-xs leading-5 text-t-text3">独立公开账本，不与我的判断混算。</p></div>
-      <div className="flex gap-2">
-        {shareLink ? <a href="/track-record" target="_blank" rel="noopener noreferrer" title="打开公开分享页" aria-label="打开公开分享页" className={`${controlClass} inline-flex items-center`}><ExternalLink size={16} /></a> : null}
-        <button type="button" title="刷新战绩" aria-label="刷新战绩" className={controlClass} disabled={loading} onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
-      </div>
-    </div>
-    <div className="grid grid-cols-2 gap-3 border-b border-t-divider pb-5">
-      <label className="min-w-0 text-xs text-t-text3">标的<select aria-label="US20 标的筛选" className={`${controlClass} mt-1 w-full`} value={ticker || ''} onChange={(event) => changeFilters({ ...filters, ticker: event.target.value || undefined })}><option value="">全部 20 只</option>{result?.data.universe.tickers.map((symbol) => <option key={symbol} value={symbol}>{symbol}</option>)}</select></label>
-      <label className="min-w-0 text-xs text-t-text3">状态<select aria-label="US20 状态筛选" className={`${controlClass} mt-1 w-full`} value={status || ''} onChange={(event) => changeFilters({ ...filters, status: event.target.value || undefined })}><option value="">全部状态</option>{recordStatuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
-      <label className="col-span-2 min-w-0 text-xs text-t-text3">任务<select aria-label="US20 任务筛选" className={`${controlClass} mt-1 w-full`} value={type || ''} onChange={(event) => changeFilters({ ...filters, prediction_type: event.target.value as PredictionType || undefined })}><option value="">方向与回撤</option><option value="direction">5 日方向</option><option value="drawdown">5 日回撤事件</option></select></label>
-      <p className="col-span-2 text-xs leading-5 text-t-text3">筛选仅作用于明细；模型战绩与覆盖率包含全部历史。</p>
-    </div>
-    {error ? <p role="alert" className="py-4 text-sm leading-6 text-t-down">战绩数据暂时无法读取，请刷新重试。{data ? '保留上次成功加载的数据。' : ''}</p> : null}
-    {loading && !data ? <p role="status" className="flex items-center gap-2 py-8 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取公开预测账本…</p> : null}
-    {data ? <div className="pt-5"><TrackRecordContent data={data} loading={loading} pageError={error} onPageChange={(nextOffset) => { setOffset(nextOffset); setRefresh((value) => value + 1); }} /></div> : null}
+  const queryKey=JSON.stringify([ticker,status,type,days]);
+  const data=result?.key===queryKey?result.data:null;
+  useEffect(() => { const controller=new AbortController();setLoading(true);setError(false);
+    apiClient.getPredictionTrackRecord(20,offset,controller.signal,{ticker,status,prediction_type:type,days}).then((value)=>{if(!controller.signal.aborted)setResult({key:queryKey,data:value});}).catch(()=>{if(!controller.signal.aborted)setError(true);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    return()=>controller.abort();
+  },[ticker,status,type,days,offset,queryKey,refresh]);
+  const changeFilters=(next:TrackRecordFilters)=>{setFilters(next);setOffset(0);};
+  const controls=<div className="flex flex-wrap gap-3"><label className="design-caption">标的 <select aria-label="标的筛选" className="design-ghost" value={ticker||''} onChange={(event)=>changeFilters({...filters,ticker:event.target.value||undefined})}><option value="">全部标的</option>{result?.data.universe.tickers.map((symbol)=><option key={symbol}>{symbol}</option>)}</select></label><label className="design-caption">状态 <select aria-label="状态筛选" className="design-ghost" value={status||''} onChange={(event)=>changeFilters({...filters,status:event.target.value||undefined})}><option value="">全部状态</option>{recordStatuses.map((value)=><option key={value} value={value}>{statusLabel(value)}</option>)}</select></label><label className="design-caption">预测 <select aria-label="预测类型筛选" className="design-ghost" value={type||''} onChange={(event)=>changeFilters({...filters,prediction_type:event.target.value as 'direction'|'drawdown'||undefined})}><option value="">全部预测</option><option value="direction">方向预测</option><option value="drawdown">大跌预警</option></select></label></div>;
+  return <div className="flex flex-col gap-5" data-testid="us20-track-record"><header className="track-record-header"><div className="min-w-0 flex-1"><h1>预测战绩</h1><p>{data ? `${data.metadata.frequency === 'trading_day' ? '每个交易日' : '按发布计划'}对 ${data.universe.tickers.length} 只美股发布预测，${data.metadata.horizon_sessions} 个交易日后核对方向和回撤。猜错的也保留。` : '记录发布时的判断，等待实际行情到期对账，猜错的也保留。'}</p></div><div className="flex items-center gap-2"><div className="design-segments" role="group" aria-label="时间范围">{[{label:'近4周',value:28},{label:'近12周',value:84},{label:'全部',value:undefined}].map((item)=><button type="button" key={item.label} className={`design-segment ${days===item.value?'on':''}`} onClick={()=>{setDays(item.value);setOffset(0);}}>{item.label}</button>)}</div><button type="button" className="design-ghost !px-2" aria-label="刷新战绩" disabled={loading} onClick={()=>setRefresh(v=>v+1)}><RefreshCw size={15} className={loading?'animate-spin':''}/></button>{shareLink&&<a href="/track-record" className="design-caption">查看公开战绩</a>}</div></header>
+    {error&&!data&&<p role="alert" className="design-card text-sm text-t-down">战绩暂时无法读取，请点击刷新重试。</p>}{loading&&!data&&<div className="design-empty" role="status">正在加载预测记录…</div>}
+    {data&&<TrackRecordContent data={data} loading={loading} pageError={error} filterControls={controls} onPageChange={setOffset}/>}
   </div>;
 }

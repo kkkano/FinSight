@@ -1,106 +1,18 @@
-/**
- * MetricsBar - Horizontal key-indicator strip for the v2 dashboard.
- *
- * Shows 7 valuation metrics in a compact row:
- * Market Cap / PE / PB / EPS / Dividend Yield / 52-Week Range / Beta
- *
- * Gracefully degrades to "--" when data is null or missing.
- */
 import type { ValuationData, SnapshotData } from '../../types/dashboard';
 import { formatMoney, formatMarketCapForMarket, formatDividendYield } from '../../utils/format';
-import { Stat } from '../ui';
-
-// --- Props ---
-
-interface MetricsBarProps {
-  valuation?: ValuationData | null;
-  snapshot?: SnapshotData | null;
-  ticker?: string | null;
-  loading?: boolean;
+import { DashboardSourceBadge } from './DashboardSourceBadge';
+interface MetricsBarProps {valuation?:ValuationData|null;snapshot?:SnapshotData|null;ticker?:string|null;loading?:boolean}
+const valid=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value);
+export function MetricsBar({valuation,snapshot,ticker,loading}:MetricsBarProps){
+  const v=valuation||{};const s=snapshot||{};
+  const metrics=[{label:'总市值',raw:v.market_cap,value:formatMarketCapForMarket(v.market_cap,ticker,v.market_cap_currency),meta:'valuation'},
+    {label:'市盈率',raw:v.trailing_pe,value:valid(v.trailing_pe)?v.trailing_pe.toFixed(1):'',meta:'valuation'},
+    {label:'市净率',raw:v.price_to_book,value:valid(v.price_to_book)?v.price_to_book.toFixed(1):'',meta:'valuation'},
+    {label:'每股收益',raw:s.eps,value:formatMoney(s.eps,s.financial_currency),meta:'financials'},
+    {label:'股息率',raw:v.dividend_yield,value:formatDividendYield(v.dividend_yield),meta:'valuation'},
+    {label:'市场敏感度',raw:v.beta,value:valid(v.beta)?v.beta.toFixed(2):'',meta:'valuation'},
+    {label:'52周最低',raw:v.week52_low,value:formatMoney(v.week52_low,v.currency),meta:'valuation'},
+    {label:'52周最高',raw:v.week52_high,value:formatMoney(v.week52_high,v.currency),meta:'valuation'}];
+  return <section className="design-card" aria-label="关键指标"><h2 className="dashboard-card-title">关键指标</h2><dl className="dashboard-metrics">{metrics.map(item=><div key={item.label} className="dashboard-metric"><dt>{item.label}</dt>{loading?<dd className="t-skeleton h-6 w-16"/>:<dd className="num">{valid(item.raw)?item.value:'暂无'}</dd>}<small><DashboardSourceBadge metaKey={item.meta}/>{!loading&&!valid(item.raw)&&<span className="block">来源未返回该指标</span>}</small></div>)}</dl></section>;
 }
-
-// --- Helpers ---
-
-/** Format a ratio (PE, PB, etc.) to 1 decimal */
-const fmtRatio = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  return v.toFixed(1);
-};
-
-/** Format a price (52-week range) */
-const fmtPrice = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  return v.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-};
-
-// --- Metric Definition ---
-
-interface MetricDef {
-  label: string;
-  value: string;
-}
-
-function buildMetrics(
-  valuation: ValuationData | null | undefined,
-  snapshot: SnapshotData | null | undefined,
-  ticker: string | null | undefined,
-): MetricDef[] {
-  const v = valuation ?? {};
-  const s = snapshot ?? {};
-
-  const w52Low = fmtPrice(v.week52_low);
-  const w52High = fmtPrice(v.week52_high);
-  // 范围只在最前面加一次币种前缀，避免 "¥1 - ¥2" 冗余
-  const rangeStr =
-    w52Low === '--' && w52High === '--' ? '--' : `${formatMoney(v.week52_low, v.currency)} - ${formatMoney(v.week52_high, v.currency)}`;
-
-  return [
-    { label: '总市值', value: formatMarketCapForMarket(v.market_cap, ticker, v.market_cap_currency) },
-    { label: 'P/E', value: fmtRatio(v.trailing_pe) },
-    { label: 'P/B', value: fmtRatio(v.price_to_book) },
-    { label: 'EPS', value: formatMoney(s.eps, s.financial_currency) },
-    { label: '股息率', value: formatDividendYield(v.dividend_yield) },
-    { label: '52周范围', value: rangeStr },
-    { label: 'Beta', value: fmtRatio(v.beta) },
-  ];
-}
-
-// --- Component ---
-
-export function MetricsBar({ valuation, snapshot, ticker, loading }: MetricsBarProps) {
-  if (loading) {
-    return (
-      <div className="flex items-stretch gap-0 border-b border-fin-border bg-fin-card overflow-x-auto scrollbar-hide">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex-1 min-w-[100px] px-4 py-2.5 border-r border-fin-border last:border-r-0"
-          >
-            <div className="h-3 w-12 bg-fin-border rounded animate-pulse mb-1.5" />
-            <div className="h-5 w-16 bg-fin-border rounded animate-pulse" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const metrics = buildMetrics(valuation, snapshot, ticker);
-
-  return (
-    <div className="flex items-stretch gap-0 border-b border-fin-border bg-fin-card overflow-x-auto scrollbar-hide">
-      {metrics.map((m) => (
-        <div
-          key={m.label}
-          className="flex-1 min-w-[100px] px-4 py-2.5 border-r border-fin-border last:border-r-0"
-        >
-          <Stat label={m.label} value={m.value} className="whitespace-nowrap [&_.num]:text-sm" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default MetricsBar;

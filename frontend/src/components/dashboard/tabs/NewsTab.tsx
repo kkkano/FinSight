@@ -207,7 +207,7 @@ export function NewsTab() {
             </>
           ) : (
             <span>
-              {sourceUnavailable ? '新闻来源暂不可用，当前没有可核验的报道' : '暂无匹配的新闻'}
+              {sourceUnavailable ? '新闻来源暂时不可用，还没有可供查看的报道' : '暂无匹配的新闻'}
               {newsTagFilter !== '全部' && ` (${newsTagFilter})`}
               {newsTimeRange !== '30d' && ` · ${newsTimeRange}内`}
             </span>

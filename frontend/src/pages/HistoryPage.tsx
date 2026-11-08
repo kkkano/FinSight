@@ -20,8 +20,10 @@ import { useReportDetail, useReportHistory } from '../hooks/useReportHistory';
 import { formatPercentagePoints, formatRatioPercent } from './historyFormatting';
 import { getEffectivePredictionStatus, getPredictionDirectionPresentation } from '../utils/predictionPresentation';
 import { buildPredictionDashboardUrl } from '../components/chatChartIntent';
+import { ConversationHistoryPanel } from '../components/chat/ConversationHistoryPanel';
+import { sourceDisplayName } from '../utils/sourceDisplayName';
 
-type HistoryTab = 'predictions' | 'reports';
+type HistoryTab = 'conversations' | 'predictions' | 'reports';
 
 const DIRECTION_CLASSES = {
   long: 'bg-t-up/10 text-t-up',
@@ -157,7 +159,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
 
       <p className="mt-5 max-w-3xl break-words text-[15px] leading-7 text-t-text">{prediction.thesis}</p>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-t-text2">{getPredictionDirectionPresentation(prediction.direction, status).description}</p>
-      <p className="mt-2 text-xs leading-5 text-t-text3">{getPredictionDirectionPresentation(prediction.direction, status).historical ? '本条判断已结束，展示原判断与复盘结果。' : '未结算的条件假设，需结合入场与失效条件核对。'}</p>
+      <p className="mt-2 text-xs leading-5 text-t-text3">{getPredictionDirectionPresentation(prediction.direction, status).historical ? '这条预测已结束，可查看当时的判断和复盘结果。' : '结果还没出来，请结合入场条件和失效条件来看。'}</p>
 
       <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-4 border-y border-t-divider py-5 sm:grid-cols-5">
         {levels.map(([label, value]) => (
@@ -181,8 +183,8 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
         <section>
           <h3 className="text-sm font-semibold text-t-text">数据与模型</h3>
           <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">行情来源</dt><dd className="min-w-0 break-words text-right text-t-text2">{prediction.evidence_provider || run?.market_provider || '--'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">证据时间</dt><dd className="min-w-0 text-right text-t-text2">{formatDateTime(prediction.evidence_as_of || run?.market_as_of)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">行情来源</dt><dd className="min-w-0 break-words text-right text-t-text2">{sourceDisplayName(prediction.evidence_provider || run?.market_provider)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">数据时间</dt><dd className="min-w-0 text-right text-t-text2">{formatDateTime(prediction.evidence_as_of || run?.market_as_of)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">模型</dt><dd className="min-w-0 break-words text-right text-t-text2">{run?.llm_provider && run.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</dd></div>
             <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">提示词版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{prediction.prompt_version}</dd></div>
           </dl>
@@ -374,7 +376,7 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
 export function HistoryPage() {
   const [searchParams] = useSearchParams();
   const reportId = searchParams.get('report')?.trim() || null;
-  const [tab, setTab] = useState<HistoryTab>(reportId ? 'reports' : 'predictions');
+  const [tab, setTab] = useState<HistoryTab>(reportId ? 'reports' : searchParams.get('view') === 'predictions' ? 'predictions' : 'conversations');
 
   useEffect(() => {
     if (reportId) setTab('reports');
@@ -391,6 +393,9 @@ export function HistoryPage() {
             </div>
           </div>
           <div className="inline-flex rounded-md bg-t-bg p-1" role="tablist" aria-label="历史视图">
+            <button type="button" role="tab" aria-selected={tab === 'conversations'} onClick={() => setTab('conversations')}
+              className={`inline-flex min-h-9 items-center gap-2 rounded px-3 text-sm ${tab === 'conversations' ? 'bg-t-hover font-medium text-t-text' : 'text-t-text2'}`}>
+              <MessageSquare size={15} />对话</button>
             <button
               type="button"
               role="tab"
@@ -414,11 +419,11 @@ export function HistoryPage() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mb-3 flex shrink-0 items-center gap-2 text-xs text-t-text2">
+        {tab !== 'conversations' && <div className="mb-3 flex shrink-0 items-center gap-2 text-xs text-t-text2">
           {tab === 'predictions' ? <Database size={14} /> : <CalendarClock size={14} />}
           {tab === 'predictions' ? '最近 90 天' : '最近生成'}
-        </div>
-        {tab === 'predictions' ? <PredictionHistoryPanel /> : <ReportsHistoryPanel initialReportId={reportId} />}
+        </div>}
+        {tab === 'conversations' ? <ConversationHistoryPanel /> : tab === 'predictions' ? <PredictionHistoryPanel /> : <ReportsHistoryPanel initialReportId={reportId} />}
       </div>
     </main>
   );

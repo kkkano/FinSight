@@ -17,9 +17,9 @@ vi.mock('../hooks/usePredictionHistory', () => ({
   usePredictionRun: () => ({ llm_provider: 'StepFun', llm_model: 'step-5-preview' }),
 }));
 
-function renderHistory() {
+function renderHistory(path = '/history') {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/history']}>
+    <MemoryRouter initialEntries={[path]}>
       <HistoryPage />
     </MemoryRouter>,
   );
@@ -38,8 +38,8 @@ describe('History 页面', () => {
     expect(html).toContain('历史记录');
     expect(html).toContain('AI 判断');
     expect(html).toContain('研究报告');
-    expect(html).toContain('最近 90 天');
-    expect(html).toContain('暂无 AI 判断记录');
+    expect(html).toContain('搜索对话');
+    expect(html).toContain('全部状态');
     expect(html).not.toContain('0.0%');
   });
 
@@ -81,7 +81,7 @@ describe('History 页面', () => {
       by_direction: {},
     };
 
-    const html = renderHistory();
+    const html = renderHistory('/history?view=predictions');
 
     expect(html).toContain('-2.0%');
     expect(html).not.toContain('-200.1%');

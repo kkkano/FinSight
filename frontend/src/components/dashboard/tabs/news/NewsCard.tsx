@@ -40,7 +40,7 @@ const IMPACT_LABELS: Record<string, string> = {
 
 // Source reliability tier
 function getReliabilityTier(score: number): { label: string; className: string } {
-  if (score >= 0.9) return { label: '权威', className: 'text-fin-success' };
+  if (score >= 0.9) return { label: '可信度高', className: 'text-fin-success' };
   if (score >= 0.75) return { label: '可靠', className: 'text-fin-warning' };
   return { label: '', className: 'text-fin-muted' };
 }
