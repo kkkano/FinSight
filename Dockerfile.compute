@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+# 用户代码镜像：不含业务代码、鉴权密钥或 Docker 客户端。
+FROM python:3.11-slim AS job
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    FINSIGHT_ANALYSIS_CONTAINER=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 HOME=/tmp
+WORKDIR /opt/analysis
+COPY requirements-compute.txt /tmp/requirements-compute.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-compute.txt \
+    && mkdir -p /input \
+    && chmod 0555 /input
+COPY backend/analysis_worker/protocol.py backend/analysis_worker/runner.py backend/analysis_worker/data_access.py ./
+USER 65532:65532
+ENTRYPOINT ["python", "-I", "/opt/analysis/runner.py"]
+
+# 私网调度器：只有该进程能够访问 Docker daemon；不执行用户 Python。
+FROM python:3.11-slim AS dispatcher
+RUN apt-get update && apt-get install -y --no-install-recommends docker-cli \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir fastapi==0.122.0 uvicorn==0.38.0
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY backend/analysis_worker/__init__.py backend/analysis_worker/protocol.py \
+     backend/analysis_worker/dispatcher.py backend/analysis_worker/app.py ./backend/analysis_worker/
+CMD ["python", "-m", "uvicorn", "backend.analysis_worker.app:app", "--host", "0.0.0.0", "--port", "8020", "--workers", "1", "--no-access-log"]
