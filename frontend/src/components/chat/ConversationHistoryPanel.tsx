@@ -32,7 +32,7 @@ export function ConversationHistoryPanel() {
       </select>
     </div>
     {!groups.length && <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-sm text-t-text3"><MessageSquare size={24} />
-      {query || ticker || status ? '没有匹配的对话。' : '暂无历史对话，提出一个问题开始研究。'}</div>}
+      {query || ticker || status ? '没找到相关对话，换个关键词试试。' : '还没有对话。问个问题试试？'}</div>}
     {groups.map((group) => <section key={group.label} className="mb-6">
       <h2 className="mb-2 px-2.5 text-xs text-t-text3">{group.label}</h2>
       {group.items.map((item) => <article key={item.sessionId} className="group flex items-center gap-3 rounded-lg px-2.5 py-3 hover:bg-t-hover" data-testid="history-conversation">

@@ -70,7 +70,7 @@ export function WelcomePage() {
     const params = new URLSearchParams(location.search);
     if (params.get('auth_callback') !== 'github') return;
     if (params.has('error') || new URLSearchParams(location.hash.slice(1)).has('error')) {
-      if (!oauthErrorShown.current) toast({ type: 'error', title: 'GitHub 登录未完成', message: '授权被取消或链接已过期，请重试。' });
+      if (!oauthErrorShown.current) toast({ type: 'error', title: 'GitHub 登录未完成', message: '授权被取消，或者链接过期了，再试一次就好。' });
       oauthErrorShown.current = true;
       return;
     }
@@ -102,7 +102,7 @@ export function WelcomePage() {
       } });
       if (error) throw error;
     } catch (error) {
-      toast({ type: 'error', title: 'GitHub 登录未完成', message: error instanceof Error ? error.message : '请稍后重试' });
+      toast({ type: 'error', title: 'GitHub 登录未完成', message: error instanceof Error ? error.message : '登录没成功，稍后再试一次。' });
       setGithubPending(false);
     }
   };
@@ -115,7 +115,7 @@ export function WelcomePage() {
     }
     const client = getSupabaseClient();
     if (!client) {
-      toast({ type: 'error', title: '登录服务还没有配置好。' });
+      toast({ type: 'error', title: '登录暂时不可用', message: '行情和战绩可以先看，稍后再试登录。' });
       return;
     }
     setSending(true);
@@ -131,7 +131,7 @@ export function WelcomePage() {
       toast({
         type: 'error',
         title: '发送失败',
-        message: error instanceof Error ? error.message : '请稍后重试',
+        message: error instanceof Error ? error.message : '验证码没发出去，稍后再试一次。',
       });
     } finally {
       setSending(false);
@@ -158,7 +158,7 @@ export function WelcomePage() {
       toast({
         type: 'error',
         title: '验证码无效',
-        message: error instanceof Error ? error.message : '请检查后重试',
+        message: error instanceof Error ? error.message : '请核对邮箱里的验证码，再试一次。',
       });
     } finally {
       setVerifying(false);
@@ -166,8 +166,8 @@ export function WelcomePage() {
   };
 
   const frequencyText = predictionProtocol?.metadata.frequency === 'trading_day'
-    ? `每个交易日对 ${predictionProtocol.universe.tickers.length} 只美股发布预测，到期自动对账。${predictionProtocol.enabled ? '猜错的也保留，并与每次都猜涨的基准比较。' : '自动预测尚未开启，已有记录仍可查看。'}`
-    : '更新频率暂时无法确认；已发布记录的实际结果会保留在公开战绩里。';
+    ? `每个交易日给 ${predictionProtocol.universe.tickers.length} 只美股下判断，到期自动对答案。${predictionProtocol.enabled ? '猜错的一条不删，还拿去和“永远猜涨”比。' : '自动预测暂停中，以前的记录照常可查。'}`
+    : '更新节奏还没定，已经发布的预测照样会对答案。';
 
   return (
     <main className="welcome-page">
@@ -179,35 +179,35 @@ export function WelcomePage() {
       </header>
       <div className="welcome-stage"><div className="welcome-columns">
         <section className="welcome-intro" aria-label="投资研究助手">
-          <div><h1 className="welcome-title">问一句，它去查、去算、去画图，<br /><span>再讲清楚为什么。</span></h1>
-            <p className="welcome-description">FinSight 是会自己找数据、计算和画图的投资研究助手。会标明数据来源和时间，资料不够时也会告诉你。</p></div>
+          <div><h1 className="welcome-title">你只管问，<br /><span>剩下的交给 FinSight。</span></h1>
+            <p className="welcome-description">它会自己查行情、翻财报、写代码算账、画图给你看。每个数字都标着出处，数据不够就直说。</p></div>
           <div className="welcome-demo" aria-label="研究过程示意">
             <div className="flex items-center justify-between gap-3"><span className="design-tag" style={{ color: 'var(--t-amber)', background: 'var(--t-amber-soft)' }}>示意</span><div className="welcome-demo-question">半导体 ETF 连跌 5 周，历史上像哪次？</div></div>
             <div>{[
-              { Icon: Search, title: '获取周线', text: '查看历史行情和更新时间', color: 'var(--t-amber)' },
-              { Icon: Code2, title: '计算区间', text: '找出符合条件的历史区间', color: 'var(--t-violet)' },
-              { Icon: ChartNoAxesCombined, title: '绘制图表', text: '把走势和历史区间放在一起看', color: 'var(--t-teal)' },
+              { Icon: Search, title: '拉取周线', text: 'SOXX 近 25 年', color: 'var(--t-amber)' },
+              { Icon: Code2, title: '跑一段代码', text: '筛出所有连跌 ≥5 周的时段', color: 'var(--t-violet)' },
+              { Icon: ChartNoAxesCombined, title: '画图', text: '把这几段叠在一起对比', color: 'var(--t-teal)' },
             ].map(({ Icon, title, text, color }) => <div className="welcome-demo-row" key={title}><Icon size={13} style={{ color }} /><span>{title}</span><span className="detail">{text}</span><Check size={12} className="text-t-text3" /></div>)}</div>
             <svg viewBox="0 0 560 90" width="100%" aria-hidden="true" className="rounded-lg" style={{ background: 'var(--t-bg-2)' }}><rect x="34" y="6" width="8" height="78" fill="var(--t-down)" fillOpacity=".12" /><rect x="148" y="6" width="6" height="78" fill="var(--t-down)" fillOpacity=".12" /><rect x="398" y="6" width="6" height="78" fill="var(--t-down)" fillOpacity=".12" /><polyline points="10,52 24,54 36,66 44,76 60,70 90,62 120,64 146,63 152,80 170,72 200,68 240,62 280,56 320,50 360,44 396,38 400,50 410,40 440,30 470,34 500,26 520,18 536,10 544,20" fill="none" stroke="rgb(var(--t-accent))" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-            <p className="text-[13.5px] text-t-text2">先定位历史区间，再比较量价和后续表现。结论要看具体数据。</p>
+            <p className="text-[13.5px] text-t-text2">找到了几段相似的下跌。下一步看：那几次后来怎么走，这次又差在哪。</p>
           </div>
         </section>
         <section className="welcome-login" aria-label="登录">
-          <div><h2>登录 FinSight</h2><p>登录后可以对话、保存自选和查看研究记录</p></div>
+          <div><h2>登录 FinSight</h2><p>登录后，对话、自选和研究记录都会帮你存好。</p></div>
           {authIdentity?.userId ? <><p className="truncate">{authIdentity.email || '已登录'}</p><Button className="welcome-button" onClick={() => enterAuthenticated(authIdentity.userId, authIdentity.email)}>继续使用 <ArrowRight size={15} /></Button></> : <>
             {providers?.status === 'ok' && providers.github && supabaseReady && <><button type="button" className="welcome-button github-button" onClick={() => void signInWithGithub()} disabled={githubPending}><Github size={18} />{githubPending ? '正在前往 GitHub…' : '使用 GitHub 登录'}</button>{providers.email && <div className="email-divider">或用邮箱</div>}</>}
             {providers?.status === 'ok' && providers.email && supabaseReady ? <form className="flex flex-col gap-2.5" onSubmit={(event) => { event.preventDefault(); void (codeSent ? verifyCode() : sendCode()); }}>
               <Input label="邮箱" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" autoComplete="email" />
               {!codeSent ? <Button type="submit" variant="secondary" className="welcome-button" disabled={sending}><Mail size={14} />{sending ? '发送中' : '发送验证码'}</Button> : <><Input label="验证码" value={otpCode} onChange={(event) => setOtpCode(event.target.value)} autoComplete="one-time-code" /><Button type="submit" className="welcome-button" disabled={verifying || !otpCode.trim()}>{verifying ? '验证中' : '验证并登录'}</Button><button type="button" className="text-xs text-t-text3" disabled={sending} onClick={() => void sendCode()}>重新发送验证码</button></>}
-            </form> : !providers ? <p role="status">正在加载登录方式…</p> : !providers.github ? <p role="status">登录服务暂时不可用，可以先浏览公开行情。</p> : null}
+            </form> : !providers ? <p role="status">正在加载登录方式…</p> : !providers.github ? <p role="status">登录暂时出了点问题，行情和战绩可以先看。</p> : null}
           </>}
-          <button type="button" className="flex min-h-10 items-center justify-center gap-1.5 rounded-[10px] text-[13.5px] text-t-text2 hover:bg-t-hover" onClick={enterReadOnly}>先不登录，看看行情和公开战绩 <ArrowRight size={14} /></button>
+          <button type="button" className="flex min-h-10 items-center justify-center gap-1.5 rounded-[10px] text-[13.5px] text-t-text2 hover:bg-t-hover" onClick={enterReadOnly}>先逛逛，行情和战绩不用登录也能看 <ArrowRight size={14} /></button>
         </section>
       </div></div>
       <section className="welcome-features" aria-label="研究能力"><div className="welcome-feature-grid">
-        {[{ Icon: Search, title: '自己找数据', text: '需要时查行情、财报、新闻和宏观数据，并标明来源、时间和数据延迟。', color: 'amber' },
-          { Icon: Code2, title: '写代码、画图', text: '根据数据做历史对照、区间统计和估值分析，再画成图。计算服务不可用时会告诉你。', color: 'violet' },
-          { Icon: Target, title: '战绩公开', text: frequencyText, color: 'teal' }].map(({ Icon, title, text, color }) => <div className="welcome-feature" key={title}><div className="icon" style={{ color: `var(--t-${color})`, background: `var(--t-${color}-soft)` }}><Icon size={18} /></div><h2>{title}</h2><p>{text}</p></div>)}
+        {[{ Icon: Search, title: '要什么，查什么', text: '行情、财报、新闻、宏观数据都能查。每个数字都写明来自哪里、截至什么时候，是延迟数据也会标出来。', color: 'amber' },
+          { Icon: Code2, title: '自己算，自己画', text: '“历史上像哪次？”“现在贵不贵？”它会写代码把账算清楚，再画成一眼能看懂的图。', color: 'violet' },
+          { Icon: Target, title: '预测，敢对答案', text: frequencyText, color: 'teal' }].map(({ Icon, title, text, color }) => <div className="welcome-feature" key={title}><div className="icon" style={{ color: `var(--t-${color})`, background: `var(--t-${color}-soft)` }}><Icon size={18} /></div><h2>{title}</h2><p>{text}</p></div>)}
       </div></section>
     </main>
   );

@@ -121,12 +121,12 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
   const run = usePredictionRun(prediction?.run_id);
 
   if (!prediction) {
-    return <div className="flex min-h-56 items-center justify-center px-6 text-center text-sm text-t-text2 lg:h-full">选择一条 AI 判断查看详情</div>;
+    return <div className="flex min-h-56 items-center justify-center px-6 text-center text-sm text-t-text2 lg:h-full">点左边任意一条，查看当时怎么判断的、后来怎么走的。</div>;
   }
 
   const status = getEffectivePredictionStatus(prediction.status, outcome?.status);
   const levels = [
-    ['锚点', prediction.anchor.price],
+    ['判断时的价格', prediction.anchor.price],
     ['入场', prediction.entry],
     ['止损', prediction.stop],
     ['目标 1', prediction.target1],
@@ -159,7 +159,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
 
       <p className="mt-5 max-w-3xl break-words text-[15px] leading-7 text-t-text">{prediction.thesis}</p>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-t-text2">{getPredictionDirectionPresentation(prediction.direction, status).description}</p>
-      <p className="mt-2 text-xs leading-5 text-t-text3">{getPredictionDirectionPresentation(prediction.direction, status).historical ? '这条预测已结束，可查看当时的判断和复盘结果。' : '结果还没出来，请结合入场条件和失效条件来看。'}</p>
+      <p className="mt-2 text-xs leading-5 text-t-text3">{getPredictionDirectionPresentation(prediction.direction, status).historical ? '已结束，下面是当时的判断和后来的结果。' : '还在进行中，先对照入场和失效条件来看。'}</p>
 
       <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-4 border-y border-t-divider py-5 sm:grid-cols-5">
         {levels.map(([label, value]) => (
@@ -175,9 +175,9 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
           <h3 className="text-sm font-semibold text-t-text">判断结果</h3>
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between gap-4"><dt className="text-t-text3">结果</dt><dd className="text-right text-t-text2">{OUTCOME_LABELS[status] || status}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">锚点后变动</dt><dd className={`text-right font-medium tabular-nums ${typeof outcome?.pct_since_anchor === 'number' && outcome.pct_since_anchor !== 0 ? outcome.pct_since_anchor > 0 ? 'text-t-up' : 'text-t-down' : 'text-t-text2'}`}>{formatPercentagePoints(outcome?.pct_since_anchor)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-t-text3">评估至</dt><dd className="text-right text-t-text2">{formatDateTime(outcome?.evaluated_through)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">评估版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{outcome?.algorithm_version || '--'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-t-text3">判断后的涨跌</dt><dd className={`text-right font-medium tabular-nums ${typeof outcome?.pct_since_anchor === 'number' && outcome.pct_since_anchor !== 0 ? outcome.pct_since_anchor > 0 ? 'text-t-up' : 'text-t-down' : 'text-t-text2'}`}>{formatPercentagePoints(outcome?.pct_since_anchor)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-t-text3">统计截至</dt><dd className="text-right text-t-text2">{formatDateTime(outcome?.evaluated_through)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">评分规则版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{outcome?.algorithm_version || '--'}</dd></div>
           </dl>
         </section>
         <section>
@@ -186,7 +186,7 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
             <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">行情来源</dt><dd className="min-w-0 break-words text-right text-t-text2">{sourceDisplayName(prediction.evidence_provider || run?.market_provider)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">数据时间</dt><dd className="min-w-0 text-right text-t-text2">{formatDateTime(prediction.evidence_as_of || run?.market_as_of)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">模型</dt><dd className="min-w-0 break-words text-right text-t-text2">{run?.llm_provider && run.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">提示词版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{prediction.prompt_version}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="shrink-0 text-t-text3">判断方法版本</dt><dd className="min-w-0 break-words text-right text-t-text2">{prediction.prompt_version}</dd></div>
           </dl>
         </section>
       </div>
@@ -229,10 +229,11 @@ function PredictionHistoryPanel() {
 
   return (
     <div className="flex shrink-0 flex-col gap-5 lg:min-h-0 lg:flex-1">
+      <p className="text-sm leading-6 text-t-text2">这些是对话中给出的个股判断，和「战绩」里的定时预测分开统计。</p>
       <div className="grid shrink-0 grid-cols-2 gap-x-4 border-b border-t-divider pb-4 sm:grid-cols-4">
         <StatCell label="90 天 AI 判断" value={predictionStats ? String(predictionStats.predictions) : '--'} />
         <StatCell label="已结算" value={predictionStats ? String(predictionStats.resolved) : '--'} />
-        <StatCell label="命中率" value={formatRatioPercent(predictionStats?.hit_rate)} detail={predictionStats ? predictionStats.resolved ? `${predictionStats.hits} 命中 · ${predictionStats.misses} 未命中` : '暂无已结算样本' : undefined} />
+        <StatCell label="命中率" value={formatRatioPercent(predictionStats?.hit_rate)} detail={predictionStats ? predictionStats.resolved ? `${predictionStats.hits} 命中 · ${predictionStats.misses} 未命中` : '还没有结束的判断，暂时算不出命中率。' : undefined} />
         <StatCell label="已失效" value={predictionStats ? String(predictionStats.invalidated) : '--'} />
       </div>
 
@@ -246,11 +247,11 @@ function PredictionHistoryPanel() {
       <div className="grid bg-t-surface lg:min-h-0 lg:flex-1 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)]">
         <div className="overflow-y-auto border-t-divider max-lg:max-h-80 max-lg:border-b lg:min-h-0 lg:border-r">
           {loading ? (
-            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取判断记录...</div>
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在加载…</div>
           ) : items.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-t-text2">
               <Target size={24} className="text-t-text3" />
-              暂无 AI 判断记录
+              还没有 AI 判断记录。
             </div>
           ) : items.map((item) => (
             <PredictionListItem
@@ -280,8 +281,8 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
   const report = detailQuery.data?.report ?? null;
   const error = listQuery.error ?? detailQuery.error;
   const errorMessage = isAxiosError(error)
-    ? typeof error.response?.data?.detail === 'string' ? error.response.data.detail : '报告读取失败，请稍后重试。'
-    : error instanceof Error ? error.message : '报告读取失败';
+    ? typeof error.response?.data?.detail === 'string' ? error.response.data.detail : '报告没加载出来，稍后再试一次。'
+    : error instanceof Error ? error.message : '报告没加载出来，稍后再试一次。';
   const loadingList = listQuery.isLoading;
   const loadingReport = detailQuery.isLoading;
   const refresh = () => {
@@ -314,11 +315,11 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
       <div className="grid bg-t-surface lg:min-h-0 lg:flex-1 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)]">
         <div className="overflow-y-auto border-t-divider max-lg:max-h-80 max-lg:border-b lg:min-h-0 lg:border-r">
           {loadingList ? (
-            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取报告记录...</div>
+            <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在加载…</div>
           ) : items.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-t-text2">
               <FileText size={24} className="text-t-text3" />
-              暂无研究报告
+              还没有研究报告。
             </div>
           ) : items.map((item) => (
             <button
@@ -341,7 +342,7 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
 
         <div key={effectiveId ?? 'empty'} className="min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {loadingReport ? (
-            <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取报告...</div>
+            <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在加载…</div>
           ) : report ? (
             <div className="mx-auto max-w-5xl px-5 py-6 sm:px-7">
               <div className="mb-5 flex flex-wrap items-center justify-end gap-2 border-b border-t-divider pb-4">
@@ -365,7 +366,7 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
               <ReportView report={report} readOnly />
             </div>
           ) : (
-            <div className="flex min-h-56 items-center justify-center text-sm text-t-text2">选择一份报告查看详情</div>
+            <div className="flex min-h-56 items-center justify-center text-sm text-t-text2">点左边任意一份报告查看内容。</div>
           )}
         </div>
       </div>

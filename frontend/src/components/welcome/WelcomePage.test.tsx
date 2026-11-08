@@ -37,7 +37,7 @@ describe('WelcomePage', () => {
   it('offers authenticated login and read-only market access', () => {
     const text = renderWelcomeText('/welcome?from=/chat');
 
-    expect(text).toContain('看看行情和公开战绩');
+    expect(text).toContain('先逛逛，行情和战绩不用登录也能看');
     expect(text).toContain('正在加载登录方式');
     expect(text).not.toContain('使用 GitHub 登录');
     expect(text).toContain('示意');

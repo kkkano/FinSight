@@ -31,7 +31,7 @@ describe('prediction track record presentation', () => {
     expect(formatHitRate(0, 0)).toBe('等待首批对账');
     expect(formatHitRate(1, 0)).toBe('等待首批对账');
     expect(formatDelta(0, 0)).toBe('等待首批对账');
-    expect(formatHitRate(null, 3)).toBe('暂无');
+    expect(formatHitRate(null, 3)).toBe('缺少数据，无法计算');
     expect(formatHitRate(0, 3)).toBe('0.0%');
   });
 
@@ -47,16 +47,53 @@ describe('prediction track record presentation', () => {
     const data = makeTrackRecordFixture();
     const markup = renderToStaticMarkup(<TrackRecordContent data={data} />);
     expect(markup).toContain('低 50.0 个百分点');
-    expect(markup).toContain('每次都猜涨');
+    expect(markup).toContain('永远猜涨');
     expect(markup).toContain('direction-unconfirmed-models');
-    expect(markup).toContain('模型未确认的记录，单独统计');
-    expect(markup).toContain('预警了，真跌了');
-    expect(markup).toContain('预警了，没跌（虚惊一场）');
-    expect(markup).toContain('没预警，也没跌');
-    expect(markup).toContain('没预警，真跌了（漏报）');
+    expect(markup).toContain('供应商没确认实际用的哪个模型，这些记录单独统计');
+    expect(markup).toContain('预警后确实大跌');
+    expect(markup).toContain('预警了，但没跌');
+    expect(markup).toContain('没预警，也确实没跌');
+    expect(markup).toContain('没预警却大跌，最该改进');
     expect(markup).toContain('记录太少');
     expect(markup).toContain('窗口可能重叠');
     expect(markup.match(/data-testid="prediction-record-row"/g)).toHaveLength(40);
+  });
+
+  it.each([makeEmptyTrackRecordFixture, makePendingTrackRecordFixture])('hides the warning counts until warnings have settled', (makeFixture) => {
+    const markup = renderToStaticMarkup(<TrackRecordContent data={makeFixture()} />);
+    expect(markup).toContain('还没有到期的预警。第一批对完答案后，这里会显示四种情况各有几次。');
+    expect(markup).not.toContain('class="track-record-cells"');
+  });
+
+  it('does not turn direction settlements into warning samples', () => {
+    const data = makeTrackRecordFixture();
+    data.groups = data.groups.filter((group) => group.prediction_type === 'direction');
+    const markup = renderToStaticMarkup(<TrackRecordContent data={data} />);
+    expect(markup).toContain('还没有到期的预警。');
+    expect(markup).not.toContain('class="track-record-cells"');
+  });
+
+  it('shows zero warning outcomes as zero once warning samples exist', () => {
+    const data = makeTrackRecordFixture();
+    data.groups = data.groups.map((group) => group.prediction_type === 'drawdown'
+      ? { ...group, n: 3, tp: 0, fp: 0, fn: 0, tn: 3 }
+      : group);
+    const markup = renderToStaticMarkup(<TrackRecordContent data={data} />);
+    const cells = [...markup.matchAll(/class="track-record-cell".*?<strong[^>]*>(.*?)<\/strong><div class="num">(.*?)<\/div><p class="design-caption">(.*?)<\/p>/g)]
+      .map((match) => match.slice(1));
+    expect(cells).toEqual([
+      ['报对了', '0', '预警后确实大跌'],
+      ['虚惊', '0', '预警了，但没跌'],
+      ['漏报', '0', '没预警却大跌，最该改进'],
+      ['正确放过', '3', '没预警，也确实没跌'],
+    ]);
+    expect(markup).not.toContain('还没有到期的预警。');
+  });
+
+  it.each([[0.125, '比“永远猜涨”高 12.5 个百分点'], [0, '和“永远猜涨”打平']] as const)('explains positive and tied baseline differences', (delta, expected) => {
+    const data = makeTrackRecordFixture();
+    data.groups = data.groups.map((group) => group.prediction_type === 'direction' && group.model_confirmed ? { ...group, delta } : group);
+    expect(renderToStaticMarkup(<TrackRecordContent data={data} />)).toContain(expected);
   });
 
   it('keeps failed opportunities alongside settled records and treats negative risk predictions as valid', () => {
@@ -67,9 +104,9 @@ describe('prediction track record presentation', () => {
     expect(sorted.filter((record) => record.status === 'settled')).toHaveLength(10);
     expect(predictionLabel(records[3])).toBe('未发出大跌预警');
     expect(predictionLabel(records[37])).toBe('尚无判断');
-    expect(statusLabel('queued')).toBe('待采集');
-    expect(statusLabel('running')).toBe('采集中');
-    expect(statusLabel('interrupted')).toBe('已中断');
+    expect(statusLabel('queued')).toBe('等待生成判断');
+    expect(statusLabel('running')).toBe('正在生成判断');
+    expect(statusLabel('interrupted')).toBe('已中断，无法评分');
   });
 
   it('only renders declared public fields instead of dumping private payload metadata', () => {
@@ -94,7 +131,7 @@ describe('prediction track record presentation', () => {
     const data = makeTrackRecordFixture();
     const markup = renderToStaticMarkup(<BenchmarkRecordDetail record={data.records[0]} source={data.metadata.source} />);
     expect(markup).toContain('当时的判断');
-    expect(markup).toContain('实际对账行情');
+    expect(markup).toContain('后来怎么走的');
     expect(markup).toContain('100.00');
     expect(markup).toContain('103.00');
     expect(markup).toContain('fixture-model-a');
@@ -109,6 +146,6 @@ describe('prediction track record presentation', () => {
     expect(pending).not.toContain('0.0%');
     const failed = renderToStaticMarkup(<BenchmarkRecordDetail record={data.records[36]} source={data.metadata.source} />);
     expect(failed).not.toContain('fixture_timeout');
-    expect(failed).toContain('未取得可评分结果');
+    expect(failed).toContain('这条没法评分（比如缺行情）');
   });
 });

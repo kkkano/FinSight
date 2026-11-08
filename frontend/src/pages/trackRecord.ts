@@ -3,7 +3,7 @@ import type { PredictionDirection, PredictionGroup, PredictionRecord } from '../
 export const EARLY_SAMPLE_SIZE = 30;
 
 export function formatRatio(value: number | null, digits = 1): string {
-  return value === null || !Number.isFinite(value) ? '暂无' : `${(value * 100).toFixed(digits)}%`;
+  return value === null || !Number.isFinite(value) ? '缺少数据，无法计算' : `${(value * 100).toFixed(digits)}%`;
 }
 
 export function formatHitRate(value: number | null, n: number): string {
@@ -12,16 +12,16 @@ export function formatHitRate(value: number | null, n: number): string {
 
 export function formatDelta(value: number | null, n: number): string {
   if (n <= 0) return '等待首批对账';
-  if (value === null || !Number.isFinite(value)) return '暂无';
+  if (value === null || !Number.isFinite(value)) return '缺少比较数据';
   return `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)} 个百分点`;
 }
 
 export function formatEtTime(value: string | null): string {
-  if (!value) return '暂无';
+  if (!value) return '未提供时间';
   // 对账窗口的日期字段是交易日，不是UTC午夜；不能转换成美东前一天。
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.replaceAll('-', '/');
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '暂无';
+  if (!Number.isFinite(date.getTime())) return '未提供时间';
   return `${new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'America/New_York', dateStyle: 'short', timeStyle: 'short',
   }).format(date)} ET`;
@@ -37,10 +37,10 @@ export function agentLabel(agent: string): string {
 
 export function statusLabel(status: string): string {
   return ({
-    registered: '待采集', scheduled: '待采集', queued: '待采集', collecting: '采集中', running: '采集中',
-    pending: '等待对账', settled: '已对账', awaiting_data: '等待行情后对账',
+    registered: '等待生成判断', scheduled: '等待生成判断', queued: '等待生成判断', collecting: '正在生成判断', running: '正在生成判断',
+    pending: '等待对账', settled: '已对账', awaiting_data: '缺行情，等待对账',
     failed: '发布失败，不计入', missed: '当天没按时发布，不计入', abstained: '模型这次选择不预测',
-    interrupted: '已中断', invalid: '数据异常',
+    interrupted: '已中断，无法评分', invalid: '数据异常，无法评分',
   } as Record<string, string>)[status] || '其他状态';
 }
 
