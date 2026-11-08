@@ -292,6 +292,15 @@ async def test_financial_snapshot_uses_actual_ytd_derivation_instead_of_model_gu
     assert "本次直接使用" not in events[-1]["response"]
 
 
+def test_completion_context_includes_already_created_chart_status():
+    context = RunContext.create(owner="chart-user", entry="chat", budget_seconds=90)
+    async def emit(*_args):
+        pass
+    rt = AgentRuntime(context=context, session_id="s", query="SOXX画图", model=FakeModel([]), emit=emit, tools={})
+    rt.data.artifacts.append({"kind": "chart", "title": "SOXX周线", "coverage": {"close": {"points": 1322}}, "source_refs": []})
+    summary = rt.completion_context({"role": "system", "content": "规则"}, "SOXX画图")
+    assert "SOXX周线" in str(summary) and "1322" in str(summary)
+    assert "已实际生成" in str(summary)
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():

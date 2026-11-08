@@ -470,12 +470,15 @@ class AgentRuntime:
         content = context + "\n本轮问题：" + task if isinstance(task, str) else [{"type": "text", "text": context}, *task]
         focus = ""
         if "valuation" in self.completeness.facets and not re.search(r"计算|推算|年化|利润率|PEG|calculate", self.query, re.I):
-            focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。不要扩展推算隐含EPS、年化现金流、PEG或未查询的同行估值区间。财务与市场数据已汇总时，引用汇总项提供的source_refs，各原始出处会一同展示；行情倍数不是SEC披露的财务数字。"
+            focus = "这是一条估值观点短问：用已取得的估值倍数和财报给出结论、依据、风险，控制在约600字。仅使用已列出的数值，不新增相减差额、隐含EPS、年化、PEG或同行区间。比例保持百分数单位，比例与倍数按四舍五入保留两位小数，不改写成近40倍、23倍等粗略数值；不输出[S...]占位引用。财务与市场数据已汇总时，引用汇总项提供的source_refs，各原始出处会一同展示；行情倍数不是SEC披露的财务数字。"
         elif re.search(r"为什么|为何|原因", self.query) and "news" in self.completeness.facets:
             focus = "用户问的是这次涨跌的原因：优先说明报道直接支持的触发因素，并用已取得行情校准时间和幅度。区分报道归因与已核实行情，控制在约600字，不扩展未经计算的历史统计。"
         return [system, {"role": "user", "content": content},
                 {"role": "user", "content": "以下是本轮实际成功资料的摘要，原文仍可按引用回读。不要重复取相同数据；"
-                 "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。" + focus + "\n" + dumps(facts)}]
+                 "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。" + focus + "\n" + dumps(facts) +
+                 "\n已实际生成、会随回答展示的图表：" + dumps([{"title": artifact.get("title"), "kind": artifact.get("kind"),
+                    "source_refs": artifact.get("source_refs", [])[:4], "coverage": artifact.get("coverage", {})}
+                    for artifact in self.data.artifacts[-3:]]) + "。这里列出的图已经生成，不要误称图卡未返回。"}]
 
     async def run_agent(self, agent_id: str, role: str, task: str, refs: list[str] | None = None,
                         image_indices: list[int] | None = None) -> str:
