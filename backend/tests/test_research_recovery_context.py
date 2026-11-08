@@ -223,6 +223,16 @@ async def test_factual_fallback_does_not_replace_valuation_judgment(monkeypatch)
     assert not events[-1]["metrics"]["fact_fallback_used"]
 
 
+@pytest.mark.asyncio
+async def test_incomplete_week_explanation_is_not_an_unfinished_tool_task(monkeypatch):
+    events, _ = await run(monkeypatch, "AAPL当前价格", {
+        "get_company_news": tool("get_company_news", lambda _: {"status": "unavailable", "error": "tool_timeout"}),
+        "get_stock_price": tool("get_stock_price", lambda _: {"source": "fixture", "price": 42}),
+    }, turns=[call("get_company_news", {"ticker": "AAPL"}), call("get_stock_price", {"ticker": "AAPL"}),
+              finish("AAPL价格42。\n\n未完成周的处理：未完成周期不计入已经结束的历史样本。")])
+    assert events[-1]["answer_status"] == "answered" and events[-1]["quality"]["state"] == "pass"
+
+
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
     data = RunData("u", "s", "r", "INTC新闻")
     ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")

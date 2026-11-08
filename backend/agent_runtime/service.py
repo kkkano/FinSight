@@ -444,7 +444,8 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                         if not usable:
                             reasons.append({"code": "no_verified_evidence", "severity": "block",
                                             "message": "本轮没有取得可核验的研究数据。"})
-                        elif re.search(r"\[数据缺失\]|(?:未能|尚未|没有|无法|未)(?:取得|获取|完成)|取不到|(?:资料|数据|计算|统计|新闻|财报)[^\n。]{0,16}(?:缺失|不足|未完成|不可用)", response):
+                        elif re.search(r"\[数据缺失\]|(?:未能|尚未|没有|无法|未)(?:取得|获取|完成)|取不到|(?:资料|数据|计算|统计|新闻|财报)[^\n。]{0,16}(?:缺失|不足|未完成|不可用)",
+                                       re.sub(r"未完成(?:周期|周|月|交易日)", "尚未收盘的周期", response)):
                             reasons.append({"code": "partial_tool_failure", "severity": "warn",
                                             "message": "回答中仍有未能取得的资料或未完成的计算。"})
                     research_gaps = runtime.completeness.missing(runtime.data, runtime.executor.attempts)
