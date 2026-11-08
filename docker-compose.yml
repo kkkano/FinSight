@@ -46,10 +46,12 @@ services:
         APT_MIRROR: ${APT_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian}
         APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian-security}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
-        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
-        TORCH_WHEEL_URL: ${TORCH_WHEEL_URL:-}
     container_name: finsight-backend
     restart: unless-stopped
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-768m}
+    memswap_limit: ${BACKEND_MEMORY_SWAP_LIMIT:-1024m}
+    cpus: ${BACKEND_CPUS:-1.0}
+    pids_limit: 256
     env_file:
       - .env.server          # real secrets on the server (NOT committed)
     environment:
@@ -62,11 +64,11 @@ services:
       # never be promoted to process-wide HTTP_PROXY / HTTPS_PROXY values.
       YFINANCE_PROXY:               ${YFINANCE_PROXY:-}
       SEARCH_PROXY:                 ${SEARCH_PROXY:-}
-      NO_PROXY:                     ${NO_PROXY:-host.docker.internal,localhost,127.0.0.1}
-      no_proxy:                     ${no_proxy:-host.docker.internal,localhost,127.0.0.1}
-      # HuggingFace mirror (bypasses GFW, used by BGE-M3 / reranker model downloads)
-      HF_ENDPOINT:                  https://hf-mirror.com
-      RAG_WORKER_URL:               http://rag-inference:8010
+      NO_PROXY:                     ${NO_PROXY:-host.docker.internal,localhost,127.0.0.1,postgres,backend,rag-inference,compute-dispatcher}
+      no_proxy:                     ${no_proxy:-host.docker.internal,localhost,127.0.0.1,postgres,backend,rag-inference,compute-dispatcher}
+      # 默认词法检索；托管API或自建worker须显式配置。
+      RAG_EMBEDDING:                ${RAG_EMBEDDING:-lexical}
+      RAG_WORKER_URL:               ${RAG_WORKER_URL:-}
       RAG_RERANKER:                 ${RAG_RERANKER:-none}
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
@@ -79,7 +81,6 @@ services:
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
-      - model_cache:/app/.cache
     # Linux 容器访问宿主机上的 OpenAI-compatible 代理时使用该稳定别名，
     # 避免经公网 IP 回源产生 hairpin NAT 连接抖动。
     extra_hosts:
@@ -94,19 +95,28 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 180s     # BGE-M3/reranker CPU cold start can exceed one minute
+      start_period: 180s     # 容纳数据库与服务就绪检查；API不加载本地模型
     networks:
       - finsight-net
 
   # ── Frontend (Nginx + React SPA) ────────────────────────────────────────────
   rag-inference:
-    image: finsight-backend:${IMAGE_TAG:-local}
-    build: *backend-build
+    profiles: ["local-ml"]
+    image: finsight-rag:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile.rag
+      args:
+        APT_MIRROR: ${APT_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian-security}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
+        TORCH_WHEEL_URL: ${TORCH_WHEEL_URL:-}
     container_name: finsight-rag-inference
     restart: "on-failure:3"
     command: ["python", "-m", "uvicorn", "backend.rag.worker:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1"]
     environment:
-      RAG_WORKER_TOKEN: ${RAG_WORKER_TOKEN:?RAG_WORKER_TOKEN is required}
+      RAG_WORKER_TOKEN: ${RAG_WORKER_TOKEN:-}
       RAG_RERANKER: ${RAG_RERANKER:-none}
       HF_ENDPOINT: https://hf-mirror.com
       BGE_M3_DEVICE: cpu
@@ -129,6 +139,63 @@ services:
     networks:
       - finsight-net
 
+  # 可选独立计算：job 服务只负责构建镜像；实际任务由私网 dispatcher 创建。
+  # 使用单实例与唯一 worker id；生产宜连接专用计算宿主的 Docker daemon。
+  compute-job-image:
+    profiles: ["compute"]
+    image: finsight-compute-job:${COMPUTE_IMAGE_TAG:-${IMAGE_TAG:-local}}
+    build:
+      context: .
+      dockerfile: Dockerfile.compute
+      target: job
+    entrypoint: ["python", "-c", "pass"]
+    network_mode: none
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 16
+    mem_limit: 64m
+    restart: "no"
+
+  compute-dispatcher:
+    profiles: ["compute"]
+    image: finsight-compute-dispatcher:${COMPUTE_IMAGE_TAG:-${IMAGE_TAG:-local}}
+    build:
+      context: .
+      dockerfile: Dockerfile.compute
+      target: dispatcher
+    restart: "on-failure:3"
+    environment:
+      FINSIGHT_ANALYSIS_ENABLED: "1"
+      FINSIGHT_ANALYSIS_WORKER_TOKEN: ${FINSIGHT_ANALYSIS_WORKER_TOKEN:-}
+      FINSIGHT_ANALYSIS_JOB_IMAGE: finsight-compute-job:${COMPUTE_IMAGE_TAG:-${IMAGE_TAG:-local}}
+      FINSIGHT_ANALYSIS_WORKER_ID: finsight-compose
+      FINSIGHT_ANALYSIS_JOB_MEMORY_MB: ${FINSIGHT_ANALYSIS_JOB_MEMORY_MB:-512}
+      FINSIGHT_ANALYSIS_MEMORY_RESERVE_MB: ${FINSIGHT_ANALYSIS_MEMORY_RESERVE_MB:-256}
+      FINSIGHT_ANALYSIS_ADAPTIVE_MEMORY: ${FINSIGHT_ANALYSIS_ADAPTIVE_MEMORY:-false}
+      FINSIGHT_ANALYSIS_MIN_JOB_MEMORY_MB: ${FINSIGHT_ANALYSIS_MIN_JOB_MEMORY_MB:-128}
+    # socket 只交给无用户代码执行能力的私网调度器，绝不传入 job 容器。
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    depends_on:
+      compute-job-image:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8020/health',timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - finsight-net
+
   frontend:
     image: finsight-frontend:${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-local}}
     build:
@@ -140,11 +207,12 @@ services:
         # an explicitly separate API host.
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
         # Version the Service Worker URL with the immutable deployment image tag.
-        FRONTEND_BUILD_ID: ${IMAGE_TAG:-local}
+        FRONTEND_BUILD_ID: ${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-local}}
         # Optional Supabase auth (Magic Link)
         # Must point to the same Supabase project as backend SUPABASE_* runtime env.
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
+        VITE_GITHUB_AUTH_ENABLED: ${VITE_GITHUB_AUTH_ENABLED:-false}
         # SSE 读取与对话历史调参（合理默认，按需在 .env 覆盖）
         VITE_SSE_READ_TIMEOUT_MS: ${VITE_SSE_READ_TIMEOUT_MS:-30000}
         VITE_CHAT_HISTORY_MAX_MESSAGES: ${VITE_CHAT_HISTORY_MAX_MESSAGES:-12}

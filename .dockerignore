@@ -24,6 +24,7 @@ tests/retrieval_eval/reports/
 
 # Data & secrets
 .omx/
+**/.omx/
 .env
 .env.*
 data/
@@ -39,6 +40,8 @@ user_config_*.json
 # Node / Frontend (handled by frontend/Dockerfile)
 frontend/node_modules/
 frontend/dist/
+frontend/test-results/
+docs/archive/
 
 # ML model cache (mounted as volume at runtime)
 .cache/

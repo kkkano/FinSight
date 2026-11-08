@@ -1,0 +1,4 @@
+# 本地/CI 聚焦测试，不安装本地向量模型。
+-r requirements-runtime.txt
+pytest>=7.0
+pytest-asyncio>=0.21.0

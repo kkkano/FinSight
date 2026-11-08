@@ -1,0 +1,3 @@
+# 离线评估的额外依赖，不进入生产 API 镜像。
+-r requirements-dev.txt
+ragas>=0.2.0
