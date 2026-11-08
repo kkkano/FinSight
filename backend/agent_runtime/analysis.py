@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+from copy import deepcopy
 from typing import Any
 
 import httpx
@@ -17,7 +18,7 @@ def analyze_dataset(data: RunData, dataset_ref: str, operation: str, parameters:
     parameters = parameters or {}
     if dataset_ref not in data.records:
         raise ValueError("dataset_not_found_in_this_run")
-    supported = ["series_statistics", "historical_drawdown_episodes", "valuation_scenarios", "indexed_comparison"]
+    supported = ["series_statistics", "historical_drawdown_episodes", "valuation_scenarios", "indexed_comparison", "financial_ratios"]
     if operation not in supported:
         return {"status": "unavailable", "error": "analysis_operation_unsupported",
                 "summary": "当前确定性分析不支持该操作，请从 supported_operations 选择。",
@@ -27,6 +28,7 @@ def analyze_dataset(data: RunData, dataset_ref: str, operation: str, parameters:
         "historical_drawdown_episodes": {"frequency", "min_periods", "minimum_loss", "value", "date", "table"},
         "valuation_scenarios": {"eps", "multiples", "currency"},
         "indexed_comparison": {"value", "date", "table", "other_dataset_refs"},
+        "financial_ratios": {"table", "other_dataset_refs"},
     }
     unknown = set(parameters) - parameter_names[operation]
     if unknown:
@@ -152,6 +154,25 @@ def analyze_dataset(data: RunData, dataset_ref: str, operation: str, parameters:
         output = {"rows": scenarios, "method": {"formula": "EPS × PE", "kind": "assumption",
                                                 "currency": parameters.get("currency", "unknown")},
                   "limitations": ["情景倍数为假设，不是已实现价格。"]}
+    elif operation == "financial_ratios":
+        output = _financial_ratios(rows)
+        if output.get("status") == "unavailable":
+            return output
+        other_refs = parameters.get("other_dataset_refs") or []
+        if (not isinstance(other_refs, list) or len(other_refs) > 4 or any(not isinstance(ref, str) for ref in other_refs)
+                or len(set(other_refs)) != len(other_refs) or dataset_ref in other_refs):
+            return {"status": "unavailable", "error": "financial_market_context_invalid",
+                    "summary": "附加资料必须是不同的本轮报价或公司信息引用。"}
+        market_context = []
+        for other_ref in other_refs:
+            record = data.records.get(other_ref, {})
+            if (record.get("status") != "success" or record.get("tool") not in {"get_company_info", "get_stock_price"}
+                    or str(record.get("inputs", {}).get("ticker", "")).upper() != str(output["rows"][0]["ticker"]).upper()):
+                return {"status": "unavailable", "error": "financial_market_context_invalid",
+                        "summary": "附加资料只能引用同一标的已成功取得的报价或公司信息。"}
+            market_context.append({"tool": record["tool"], "data_ref": other_ref, "output": deepcopy(record["output"])})
+        if market_context:
+            output["market_context"] = market_context
     elif operation == "indexed_comparison":
         other_refs = parameters.get("other_dataset_refs") or []
         if other_refs:
@@ -171,9 +192,106 @@ def analyze_dataset(data: RunData, dataset_ref: str, operation: str, parameters:
         output = {"rows": valid.to_dict("records"), "method": {"base": 100, "field": value, "date_field": date_key,
                                                               "table": parameters.get("table"), "input_order": "preserved"},
                   "limitations": ["跨标的比较应使用相同时间、币种与复权口径。"]}
-    ref = data.record("analyze_dataset", {"dataset_ref": dataset_ref, "operation": operation, **parameters}, output)
+    inputs = {"dataset_ref": dataset_ref, "operation": operation, **parameters}
+    if operation == "financial_ratios":
+        inputs["dataset_refs"] = [dataset_ref, *(parameters.get("other_dataset_refs") or [])]
+    ref = data.record("analyze_dataset", inputs, output)
     return {"status": "ok", "data_refs": [ref], "summary": str(output.get("sample_count", len(output["rows"]))) + " 个分析结果",
             **output}
+
+
+def _financial_ratios(rows: list[dict]) -> dict:
+    """仅对同主体、同财期、同货币的 SEC 单季事实计算，不年化或预测。"""
+    from backend.tools.financial_facts import fact_date, fact_number, duration_frequency
+    from backend.tools.financial_calculations import calculate_period_change
+
+    periods = [row for row in rows if fact_date(row.get("period_end"))]
+    if not periods or any(row.get("source") != "sec_companyfacts" or row.get("frequency") != "quarterly" for row in periods):
+        return {"status": "unavailable", "error": "financial_quarterly_facts_required",
+                "summary": "这项比率计算需要带真实财期和币种的 SEC 单季事实。"}
+    latest = max(periods, key=lambda row: fact_date(row["period_end"]))
+    ticker, currency = latest.get("ticker"), latest.get("currency")
+    if not ticker or not currency or any(row.get("ticker") != ticker or row.get("currency") != currency for row in periods):
+        return {"status": "unavailable", "error": "financial_fact_context_mismatch",
+                "summary": "财报主体或币种不一致，不能合并计算比率。"}
+
+    def fact(row, metric):
+        value = fact_number(row.get(metric))
+        if value is None:
+            return None
+        metadata = (row.get("fact_metadata") or {}).get(metric)
+        frequency = "instant" if metric in {"total_assets", "total_liabilities"} else "quarterly"
+        if isinstance(metadata, dict):
+            if (metadata.get("subject") != ticker or metadata.get("unit") != currency
+                    or metadata.get("frequency") != frequency or fact_date(metadata.get("period_end")) != fact_date(row["period_end"])
+                    or fact_number(metadata.get("value")) != value
+                    or metadata.get("period_start") and (frequency == "instant" or duration_frequency(metadata["period_start"], metadata["period_end"]) != "quarterly")):
+                return None
+        else:
+            metadata = {"subject": ticker, "metric": metric, "unit": currency, "frequency": frequency,
+                        "period_start": row.get("period_start"), "period_end": row["period_end"], "source": "sec_companyfacts",
+                        "source_url": row.get("source_url")}
+        return {**metadata, "value": value}
+
+    formulas = {
+        "gross_margin_pct": ("gross_profit", "revenue"),
+        "operating_margin_pct": ("operating_income", "revenue"),
+        "net_margin_pct": ("net_income", "revenue"),
+        "operating_cash_flow_to_net_income_pct": ("operating_cash_flow", "net_income"),
+        "free_cash_flow_margin_pct": ("free_cash_flow", "revenue"),
+        "liabilities_to_assets_pct": ("total_liabilities", "total_assets"),
+    }
+    result = {"ticker": ticker, "period_end": fact_date(latest["period_end"]), "currency": currency, "frequency": "quarterly"}
+    calculations, gaps = [], {}
+    for metric, (numerator_name, denominator_name) in formulas.items():
+        numerator, denominator = fact(latest, numerator_name), fact(latest, denominator_name)
+        result[metric] = None
+        if numerator is None or denominator is None:
+            gaps[metric] = "missing_or_incompatible_fact"
+            continue
+        if denominator["value"] <= 0:
+            gaps[metric] = "non_positive_denominator"
+            continue
+        if numerator.get("period_start") != denominator.get("period_start"):
+            gaps[metric] = "period_start_mismatch"
+            continue
+        value = fact_number(numerator["value"] / denominator["value"] * 100)
+        if value is None:
+            gaps[metric] = "non_finite_ratio"
+            continue
+        result[metric] = value
+        calculations.append({"metric": metric, "value": value, "unit": "%", "period_end": result["period_end"],
+            "formula": f"{numerator_name}/{denominator_name}*100", "derivation_inputs": [numerator, denominator]})
+
+    for metric in ("revenue", "net_income"):
+        current = fact(latest, metric)
+        for suffix, baseline in (("qoq", "previous_period"), ("yoy", "year_ago")):
+            key = f"{metric}_{suffix}_pct"
+            result[key] = None
+            candidates = []
+            if current is not None:
+                for previous_row in periods:
+                    if previous_row["period_end"] >= latest["period_end"]:
+                        continue
+                    previous = fact(previous_row, metric)
+                    if previous is not None and (change := calculate_period_change(current, previous, operation="growth_rate", baseline=baseline)) is not None:
+                        candidates.append(change)
+            if len(candidates) != 1:
+                gaps[key] = "comparable_positive_baseline_unavailable" if not candidates else "ambiguous_baseline"
+                continue
+            change = candidates[0]
+            result[key] = change["value"] * 100
+            result[f"{metric}_{suffix}_baseline_period_end"] = change["derivation_inputs"][1]["period_end"]
+            calculations.append({**change, "metric": key, "value": result[key], "unit": "%",
+                                 "formula": "(current/previous-1)*100"})
+
+    if not calculations:
+        return {"status": "unavailable", "error": "financial_ratios_unavailable", "metric_gaps": gaps,
+                "summary": "当前单季事实缺少可计算的同口径分子和正分母，未生成比率。"}
+    return {"rows": [result], "calculations": calculations, "metric_gaps": gaps,
+            "method": {"kind": "financial_ratios", "unit": "%", "frequency": "quarterly",
+                       "growth_baseline": "相邻单季或约一年前同季度，单位、会计概念与区间长度一致且基数为正"},
+            "limitations": ["仅计算已披露单季事实；缺失比率保留空值，不推算单季年化、未来 EPS 或 PEG。"]}
 
 
 def comparison_crossovers(rows: list[dict], series: list[dict], date_key: str = "date") -> list[dict]:
