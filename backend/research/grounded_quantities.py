@@ -44,7 +44,7 @@ def _table_amount_scales(text: str) -> list[tuple[int, int, float]]:
             columns = []
             for cell in cells:
                 explicit = scale_pattern.search(cell)
-                amount_column = bool(re.search(monetary, cell, re.I)) and not re.search(nonmonetary, cell, re.I)
+                amount_column = bool(re.search(monetary, cell, re.I) or currency.search(cell)) and not re.search(nonmonetary, cell, re.I)
                 columns.append(_scale(explicit[0] if explicit else common) if amount_column else 1)
         else:
             position = offset
@@ -56,17 +56,46 @@ def _table_amount_scales(text: str) -> list[tuple[int, int, float]]:
     return ranges
 
 
+def _expression_amount_scales(text: str) -> dict[int, tuple[float, bool]]:
+    """加减金额式尾部单位作用于各金额；减号是运算符，结果本身的负号仍保留。"""
+    number = r"\d[\d,]*(?:\.\d+)?"
+    pattern = re.compile(r"(?<![A-Za-z0-9])(?P<operands>[-+]?" + number +
+        r"(?:[ \t]*[+−－-][ \t]*" + number + r"){1,4})"
+        r"(?:[ \t]*[=≈][ \t]*(?P<result>[-+]?" + number + r"))?"
+        r"[ \t]*(?:[（(][ \t]*)?(?P<unit>" + _UNIT_PATTERN + r")(?![A-Za-z0-9])", re.I)
+    contexts = {}
+    for expression in pattern.finditer(text):
+        scale = _scale(expression["unit"])
+        if scale == .01:
+            continue
+        for index, match in enumerate(_NUMERIC_PATTERN.finditer(expression["operands"])):
+            contexts[expression.start("operands") + match.start(1)] = (scale, index > 0)
+        if expression["result"]:
+            contexts[expression.start("result")] = (scale, False)
+    return contexts
+
+
+def _quantity_value(match, table_scales, expression_scales) -> tuple[float, float]:
+    expression = expression_scales.get(match.start(1))
+    scale = _scale(match[2]) if match[2] else expression[0] if expression else next(
+        (scale for start, end, scale in table_scales if start <= match.start(1) < end), 1)
+    value = float(match[1].replace(",", ""))
+    if expression and expression[1]:
+        value = abs(value)
+    return value * scale, scale
+
+
 def validate_grounded_quantities(text: str, grounding: str) -> None:
-    available = [float(match.group(1).replace(",", "")) * _scale(match.group(2)) for match in _NUMERIC_PATTERN.finditer(grounding)]
+    grounding_tables, grounding_expressions = _table_amount_scales(grounding), _expression_amount_scales(grounding)
+    available = [_quantity_value(match, grounding_tables, grounding_expressions)[0] for match in _NUMERIC_PATTERN.finditer(grounding)]
     enumeration_spans = [match.span(1) for match in re.finditer(r"(?m)^\s*(?:[-*]\s*)?(\d+)[.)、](?:\s|[^\d])", text)]
     table_scales = _table_amount_scales(text)
+    expression_scales = _expression_amount_scales(text)
     for match in _NUMERIC_PATTERN.finditer(text):
         if any(start <= match.start(1) < end for start, end in enumeration_spans):
             continue
         token = match.group(1).replace(",", "")
-        scale = _scale(match.group(2)) if match.group(2) else next(
-            (scale for start, end, scale in table_scales if start <= match.start(1) < end), 1)
-        requested = float(token) * scale
+        requested, scale = _quantity_value(match, table_scales, expression_scales)
         places = len(token.split(".", 1)[1]) if "." in token else 0
         tolerance = max(1e-9, 0.5 * 10 ** (-places) * scale)
         if not any(abs(requested - value) <= tolerance for value in available):

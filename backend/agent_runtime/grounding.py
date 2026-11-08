@@ -13,7 +13,7 @@ def _directional_quantities(text: str) -> tuple[str, list[str]]:
         r"(?P<spacing>\s*(?:了|约|近|接近|大约|约为|幅度为|幅度约|为)?\s*)(?P<symbol>[$￥¥]?)\s*"
         r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*(?:万亿|千亿|十亿|千万|百万|亿|万)?(?:美元|港元|人民币|欧元|英镑|元|USD|HKD|CNY|EUR|GBP|%|％))?", re.I)
     issues = []
-    negative = {"下跌", "跌幅", "下滑", "减少", "下降", "回落", "亏损", "跌"}
+    negative = {"下跌", "跌幅", "下滑", "减少", "下降", "回落", "亏损", "跌", "暴跌", "大跌", "急跌"}
     def normalize(match):
         if not match["symbol"] and not match["unit"]:
             return match[0]
@@ -63,8 +63,8 @@ def _directional_quantities(text: str) -> tuple[str, list[str]]:
         return "-" + match["number"].lstrip("-+") + match["unit"] + match["spacing"] + match["direction"]
     text = suffix.sub(suffix_normalize, text)
     chinese_suffix = re.compile(r"(?P<number>[-+]?\d[\d,]*(?:\.\d+)?)(?P<unit>\s*[%％])"
-        r"(?P<spacing>\s*(?:的)?\s*(?:急剧|显著|大幅|单日)?\s*)"
-        r"(?P<direction>下跌|跌幅|下滑|减少|下降|回落|亏损|上涨|涨幅|增加|增长|上升)"
+        r"(?P<spacing>\s*(?:的|这个)?\s*(?:急剧|显著|大幅|单日)?\s*)"
+        r"(?P<direction>暴跌|大跌|急跌|下跌|跌幅|下滑|减少|下降|回落|亏损|暴涨|大涨|上涨|涨幅|增加|增长|上升)"
         r"(?!\s*(?:概率|风险|可能性|机会))")
     def chinese_suffix_normalize(match):
         number = match["number"]
@@ -175,17 +175,21 @@ def _coverage_violations(text: str, data: RunData, refs: list[str]) -> list[str]
     return []
 
 
+_FINANCIAL_RATIO_FIELDS = {"gross_margin", "operating_margin", "net_margin", "fcf_margin",
+                           "liabilities_to_assets", "liab_to_assets", "fcf_yield", "fcf_yield_on_mcap"}
+
+
 def _percent_values(data: RunData, refs: list[str]) -> list[float]:
     """百分数只匹配明确百分比/变化比例字段；样本数不能碰巧充当涨幅。"""
     authorized = _referenced_records(refs, data) if refs else set(data.records)
     values = []
-    def collect(value, kind="", percent_unit=False):
+    def collect(value, kind="", percent_unit=False, ratio_scale=None):
         if isinstance(value, str):
             signed, _ = _directional_quantities(value.replace("−", "-"))
             values.extend(float(number.replace(",", ""))/100 for number in re.findall(r"([-+]?\d[\d,]*(?:\.\d+)?)\s*[%％]", signed))
         elif isinstance(value, list):
             for child in value:
-                collect(child, kind, percent_unit)
+                collect(child, kind, percent_unit, ratio_scale)
         elif isinstance(value, dict):
             kind = (value.get("method") or {}).get("kind", kind) if isinstance(value.get("method"), dict) else kind
             unit = value.get("unit") or value.get("units")
@@ -204,10 +208,12 @@ def _percent_values(data: RunData, refs: list[str]) -> list[float]:
                         values.append(float(child))
                     elif key.endswith(("_pct", "_percent")) or key == "value" and percent_unit:
                         values.append(float(child)/100)
+                    elif key in _FINANCIAL_RATIO_FIELDS:
+                        values.append(float(child) * (ratio_scale if ratio_scale is not None else .01 if percent_unit else 1))
                 elif key == "value" and percent_unit and isinstance(child, str) and re.fullmatch(r"[-+]?\d+(?:\.\d+)?", child):
                     values.append(float(child)/100)
                 else:
-                    collect(child, kind, percent_unit)
+                    collect(child, kind, percent_unit, .01 if key in {"ratios_pct", "ratios_percent"} else ratio_scale)
     for ref, record in data.records.items():
         if record.get("status") != "success":
             continue
@@ -216,6 +222,23 @@ def _percent_values(data: RunData, refs: list[str]) -> list[float]:
         if ref in authorized or (record.get("tool") in {"analyze_dataset", "run_analysis_code"} and parents and all(parent in authorized for parent in parents)):
             collect(record.get("output"))
     return values
+
+
+def _scaled_money_notes(value) -> list[str]:
+    """计算字段明确声明了币种和倍率时补等值单位，不猜只写 USD 的字段其实用了十亿。"""
+    notes = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            match = re.search(r"(?:^|_)(usd|hkd|cny|eur|gbp)_(mn|bn|tn|100mn)$", key, re.I)
+            if match and type(child) in {int, float}:
+                unit = {"mn": "M", "bn": "B", "tn": "T", "100mn": "亿"}[match[2].lower()]
+                notes.append(f"{child} {unit} {match[1].upper()}")
+            elif isinstance(child, (dict, list)):
+                notes.extend(_scaled_money_notes(child))
+    elif isinstance(value, list):
+        for child in value:
+            notes.extend(_scaled_money_notes(child))
+    return notes
 
 
 def checked_comparison_stats(record: dict) -> dict:
@@ -524,37 +547,41 @@ def validate_paragraph(text: str, data: RunData, *, require_citations: bool = Fa
         elif isinstance(value, list):
             for child in value:
                 collect_currency(child)
+    recorded_refs = set()
+    def append_record(ref):
+        record = data.records.get(ref, {})
+        if ref in recorded_refs or record.get("status") != "success":
+            return
+        recorded_refs.add(ref)
+        collect_currency(record["output"])
+        grounded_output = record["output"]
+        if isinstance(grounded_output, dict) and isinstance(grounded_output.get("method"), dict):
+            grounded_output = {**grounded_output, "method": {key: value for key, value in grounded_output["method"].items()
+                               if key not in {"code", "code_hash", "input_hash"}}}
+        normalized = re.sub(r"(?<=\d)T(?=\d)", " ", dumps(grounded_output))
+        normalized = re.sub(r"(?<=\d)Z\b", " UTC", normalized)
+        raw.append(normalized)
+        raw.extend(_scaled_money_notes(grounded_output))
+        raw.extend(period_notes(ref))
     for source in selected:
         meta = source.get("metadata") or source.get("meta") or {}
         if meta.get("subject_binding") == "unverified":
             return ["unverified_subject_reference"]
-        ref = source.get("data_ref")
-        record = data.records.get(ref, {})
-        if record.get("status") == "success":
-            collect_currency(record["output"])
-            grounded_output = record["output"]
-            if isinstance(grounded_output, dict) and isinstance(grounded_output.get("method"), dict):
-                grounded_output = {**grounded_output, "method": {key: value for key, value in grounded_output["method"].items()
-                                   if key not in {"code", "code_hash", "input_hash"}}}
-            normalized = re.sub(r"(?<=\d)T(?=\d)", " ", dumps(grounded_output))
-            normalized = re.sub(r"(?<=\d)Z\b", " UTC", normalized)
-            raw.append(normalized)
-            raw.extend(period_notes(ref))
+        append_record(source.get("data_ref"))
     if refs:
         # 正文可以引用原始行情来源；已由确定性工具算出的派生量仍需完整绑定这些来源。
         # 只纳入有实际计算记录且所有输入均被当前段落引用的结果，不把其它标的计算结果混入。
         authorized = _referenced_records(refs, data)
+        # 真实计算引用包含其声明的输入；否则计算段落回述输入金额会被误判为无依据。
+        for parent_ref in authorized:
+            append_record(parent_ref)
         for computed_ref, record in data.records.items():
             if record.get("tool") not in {"analyze_dataset", "run_analysis_code"} or record.get("status") != "success":
                 continue
             inputs = record.get("inputs") or {}
             parents = inputs.get("dataset_refs") or ([inputs["dataset_ref"]] if inputs.get("dataset_ref") else [])
             if parents and all(parent in authorized for parent in parents):
-                output = record.get("output")
-                if isinstance(output, dict) and isinstance(output.get("method"), dict):
-                    output = {**output, "method": {key: value for key, value in output["method"].items()
-                        if key not in {"code", "code_hash", "input_hash"}}}
-                raw.append(dumps(output))
+                append_record(computed_ref)
     raw.extend(dumps(coverage) for _, _, coverage in chart_coverages(data, refs))
     if not raw:
         # 概念解释和明确假设已在上方处理；无来源的事实数字不能当作已核验结论交付。

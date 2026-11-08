@@ -559,12 +559,12 @@ def test_large_money_unit_cannot_borrow_another_tickers_source():
     assert validate_paragraph(f"AAPL市值9.975万亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
 
 
-@pytest.mark.parametrize("claim", ["INTC出现近30%的急剧下跌。", "INTC出现30%的跌幅。", "INTC发生30%的单日下跌。"])
+@pytest.mark.parametrize("claim", ["INTC出现近30%的急剧下跌。", "INTC出现30%的跌幅。", "INTC发生30%的单日下跌。", "INTC单日出现近30%暴跌。"])
 def test_percentage_with_following_decline_word_preserves_signed_news_magnitude(claim):
     data=RunData("u","s","r","INTC")
     data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":"Shares cratered nearly 30% after guidance."})
     assert validate_paragraph(claim,data)==[]
-    assert validate_paragraph(claim.replace("下跌","上涨").replace("跌幅","涨幅"),data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph(claim.replace("下跌","上涨").replace("跌幅","涨幅").replace("暴跌","暴涨"),data)==["explanation_contains_unbound_number"]
 
 
 def test_following_decline_probability_is_not_normalized_as_negative_return():
@@ -583,3 +583,61 @@ def test_explicitly_limited_news_absence_does_not_assert_exhaustive_coverage(cla
     data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","coverage_window":{"exhaustive":False}})
     assert validate_paragraph(claim,data)==[]
     assert validate_paragraph("最近一周没有看到英特尔公司层面的新催化。",data)==["explanation_unsupported_window_absence"]
+
+
+@pytest.mark.parametrize("expression", ["5,082 − 4,024 = 1,058 百万美元", "5,082-4,024=1,058（百万美元）", "5,082 -4,024 = 1,058 million USD"])
+def test_additive_money_formula_shares_trailing_unit_without_recomputing_result(expression):
+    data=RunData("u","s","r","INTC财报")
+    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
+        "operating_cash_flow":[5_082_000_000],"capital_expenditures":[4_024_000_000],"free_cash_flow":[1_058_000_000]})
+    assert validate_paragraph("INTC自由现金流："+expression+"。",data)==[]
+    assert validate_paragraph("INTC自由现金流："+expression.replace("1,058","1,059")+"。",data)==["explanation_contains_unbound_number"]
+
+
+def test_negative_money_formula_result_and_multiplication_factor_keep_their_units():
+    data=RunData("u","s","r","INTC")
+    data.record("fixture",{"ticker":"INTC"},{"source":"fixture","currency":"USD","ocf":-100_000_000,"capex":20_000_000,"fcf":-120_000_000})
+    assert validate_paragraph("INTC自由现金流：-100 − 20 = -120 百万美元。",data)==[]
+    assert validate_paragraph("INTC自由现金流：-100 − 20 = 120 百万美元。",data)==["explanation_contains_unbound_number"]
+    assert validate_paragraph("INTC自由现金流：100 × 20 = 2,000 百万美元。",data)==["explanation_contains_unbound_number"]
+
+
+def test_computed_source_can_restate_declared_inputs_but_not_unrelated_amounts():
+    data=RunData("u","s","r","AAPL财报")
+    original=data.record("get_sec_company_facts_quarterly",{"ticker":"AAPL"},{"source":"fixture","currency":"USD",
+        "operating_cash_flow":[28_101_000_000],"capital_expenditures":[2_242_000_000]})
+    computed=data.record("run_analysis_code",{"dataset_refs":[original]},{"check_ocf_minus_capex":25_859_000_000})
+    data.record("get_sec_company_facts_quarterly",{"ticker":"AMD"},{"source":"fixture","currency":"USD","operating_cash_flow":[99_000_000_000]})
+    sid=data.source_refs(computed)[0]
+    assert validate_paragraph(f"AAPL经营现金流281.01亿美元，资本支出22.42亿美元，差额258.59亿美元。[{sid}]",data)==[]
+    assert validate_paragraph(f"AAPL经营现金流990亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
+
+
+@pytest.mark.parametrize("output", [
+    {"gross_margin":.7498,"operating_margin":.6624,"net_margin":.6203,"liab_to_assets":.285},
+    {"ratios_pct":{"gross_margin":74.98,"operating_margin":66.24,"net_margin":62.03,"liab_to_assets":28.5}},
+])
+def test_successful_financial_ratio_fields_and_explicit_percent_container_support_percent_text(output):
+    data=RunData("u","s","r","NVDA")
+    data.record("run_analysis_code",{},output)
+    assert validate_paragraph("NVDA毛利率75.0%、营业利润率66.2%、净利率62.0%、资产负债率28.5%。",data)==[]
+    assert validate_paragraph("NVDA毛利率99%。",data)==["explanation_contains_unbound_number"]
+
+
+def test_numeric_ratio_without_known_percentage_role_does_not_verify_margin():
+    data=RunData("u","s","r","NVDA")
+    data.record("run_analysis_code",{},{"quality_score":.75,"observations":75,"ratios_pct":{"observations":75}})
+    assert validate_paragraph("NVDA毛利率75%。",data)==["explanation_contains_unbound_number"]
+
+
+def test_explicit_scaled_usd_fields_are_amounts_without_guessing_unlabelled_scale():
+    data=RunData("u","s","r","NVDA")
+    data.record("run_analysis_code",{},{"currency":"USD","annualized_revenue_usd_bn":384.88,"implied_ttm_revenue_usd":302.88})
+    assert validate_paragraph("NVDA单季营收年化3848.8亿美元。",data)==[]
+    assert validate_paragraph("NVDA隐含TTM营收3028.8亿美元。",data)==["explanation_contains_unbound_number"]
+
+
+def test_iso_timestamp_is_not_an_arithmetic_expression_with_trillion_unit():
+    data=RunData("u","s","r","AAPL")
+    data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","as_of":"2026-11-08T14:28:22Z"})
+    assert validate_paragraph("AAPL资料取于2026-11-08T14:28:22Z。",data)==[]
