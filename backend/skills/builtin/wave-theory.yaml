@@ -1,7 +1,7 @@
 name: wave-theory
 display_name: 波浪理论
 category: technical
-description: Analyze trend structure with Elliott Wave Theory, an explicit interpretation lens.
+description: 以艾略特波浪理论解读走势结构，区分主数浪、替代方案与失效条件。
 preferred_agents:
   - technical_agent
 preferred_tools:

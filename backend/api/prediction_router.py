@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 
 from backend.services.prediction_runner import enabled
 from backend.services.prediction_store import get_prediction_store
+from backend.services.prediction_report_view import track_record_view
 
 router = APIRouter(prefix="/api/benchmarks", tags=["Public benchmarks"])
 
@@ -16,8 +17,9 @@ def track_record(
     ticker: Annotated[str | None, Query(max_length=16, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")] = None,
     status: Literal["queued", "running", "pending", "settled", "awaiting_data", "failed", "missed", "abstained", "interrupted", "invalid"] | None = None,
     prediction_type: Literal["direction", "drawdown"] | None = None,
+    days: int | None = Query(default=None, ge=1, le=3660),
 ):
-    return get_prediction_store().public_report(
+    return track_record_view(get_prediction_store(),
         enabled=enabled(), limit=limit, offset=offset,
-        ticker=ticker.upper() if ticker else None, status=status, prediction_type=prediction_type,
+        ticker=ticker.upper() if ticker else None, status=status, prediction_type=prediction_type, days=days,
     )

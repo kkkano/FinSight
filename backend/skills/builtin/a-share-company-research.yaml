@@ -1,5 +1,7 @@
 name: a-share-company-research
-description: Research A-share companies with trusted market data, exchange filings, company news, and risk context.
+display_name: A股公司研究
+category: framework
+description: 结合可信行情、交易所公告、公司新闻与风险背景研究 A 股公司。
 required_facets:
   market: CN
   primary_task:

@@ -1,7 +1,7 @@
 name: growth-quality
 display_name: 成长质量
 category: fundamental
-description: Evaluate a company through the lens of growth durability and earnings quality.
+description: 从增长持续性、盈利质量与资本效率评估公司的成长质量。
 preferred_agents:
   - fundamental_agent
   - risk_agent

@@ -79,6 +79,24 @@ async def test_model(request: Request):
     if selected.effort:
         body["reasoning_effort"] = selected.effort
     started = time.monotonic()
+    if request.query_params.get("tools") == "1":
+        from backend.agent_runtime.config import ModelConfig
+        from backend.agent_runtime.model import ModelTransport, ModelProtocolError, verify_tool_capability
+        from backend.agent_runtime.limits import LeaseLimiter, CapacityExceeded
+        try:
+            transport = ModelTransport(ModelConfig(selected.model, selected.base_url, selected.api_key, selected.endpoint_name))
+            async with LeaseLimiter().slot("model", str(user["user_id"]), 2, timeout=10, ttl=80):
+                verified = await verify_tool_capability(transport, timeout=65)
+            return {"success": True, "model": selected.model, "native_tool_calls": True,
+                    "streaming_tool_calls": True, "capability_status": "supported",
+                    "latency_ms": round((time.monotonic() - started) * 1000),
+                    "message": "原生工具调用和流式协议验证通过"}
+        except (ModelProtocolError, TimeoutError, CapacityExceeded) as exc:
+            unsupported = getattr(exc, "code", "") == "model_tool_calling_unsupported"
+            return {"success": False, "model": selected.model, "native_tool_calls": False if unsupported else None,
+                    "capability_status": "unsupported" if unsupported else "temporary_error",
+                    "latency_ms": round((time.monotonic() - started) * 1000),
+                    "message": "此模型不支持原生工具调用，请更换模型" if unsupported else "工具能力暂时无法验证，请稍后重试"}
     try:
         async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
             response = await asyncio.wait_for(client.post(

@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 
-from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
+from backend.api.concurrency import ConcurrencyLimiter, is_generation_path, is_execution_path
 from backend.config.settings import security_settings
 from backend.security.supabase_auth import resolve_request_user
 from backend.security.api_keys import configured_api_keys, request_api_key, is_internal_api_key_authorized
@@ -124,8 +124,10 @@ def _is_allowlisted_path(path: str) -> bool:
 
 
 def _is_public_read_path(path: str) -> bool:
+    if path.startswith("/api/stock/company/"):
+        return True
     if path in {"/api/models", "/api/models/capabilities", "/api/capabilities", "/api/predictions/track-record",
-                "/api/benchmarks/us20-v1/track-record", "/api/client-recovery"}:
+                "/api/benchmarks/us20-v1/track-record", "/api/client-recovery", "/api/auth/providers"}:
         return True
     defaults = (
         "/api/stock/price/*,/api/stock/news/*,/api/stock/kline/*,"
@@ -267,7 +269,7 @@ async def security_gate(request: Request, call_next):
         user = resolve_request_user(request)
         anonymous_generation_blocked = (
             user is None
-            and is_generation_path(request.url.path)
+            and is_execution_path(request.url.path)
             and not _anonymous_generation_allowed()
         )
         if user is None and (security_settings().supabase_auth_required or anonymous_generation_blocked):

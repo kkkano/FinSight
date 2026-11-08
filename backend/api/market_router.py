@@ -31,6 +31,11 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     """可信 quote、news、financials 与 Kline 数据网关。"""
     router = APIRouter(tags=["Market"])
 
+    @router.get("/api/stock/company/{ticker}")
+    async def get_company_profile(ticker: str):
+        from backend.services.company_profile import company_profile
+        return await company_profile(_validate_ticker_or_400(ticker))
+
     @router.get("/api/stock/price/{ticker}", response_model=StockDataResponse)
     def get_price(ticker: str):
         normalized = _validate_ticker_or_400(ticker)
@@ -86,6 +91,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 period=period,
                 interval=interval,
             )
+            from backend.services.market_history_view import clip_history_period
+            result = clip_history_period(result, period)
             return {"ticker": normalized, "data": result, "cached": bool(result.get("cached"))}
         except Exception as exc:
             deps.logger.warning("[Market] kline unavailable ticker=%s error_type=%s", normalized, type(exc).__name__)

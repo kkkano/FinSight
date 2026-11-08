@@ -98,7 +98,9 @@ class TestGenerationPathMatcher:
         from backend.api.concurrency import is_generation_path
 
         assert is_generation_path("/api/execute") is True
-        assert is_generation_path("/api/execute/runs/run-1/cancel") is True
+        assert is_generation_path("/api/execute/runs/run-1/cancel") is False
+        assert is_generation_path("/api/execute/runs/run-1/events") is False
+        assert is_generation_path("/api/execute/runs/run-1/instructions") is False
         assert is_generation_path("/api/predictions/generate") is True
 
     def test_cheap_paths_not_matched(self):
@@ -109,3 +111,10 @@ class TestGenerationPathMatcher:
         assert is_generation_path("/health") is False
         assert is_generation_path("/api/reports/index") is False
         assert is_generation_path("/api/predictions/history") is False
+
+    def test_controls_remain_authenticated(self):
+        from backend.api.concurrency import is_execution_path
+        assert is_execution_path("/api/execute/runs/run-1/cancel")
+        assert is_execution_path("/api/execute/runs/run-1/events")
+        assert is_execution_path("/api/execute/runs/run-1/instructions")
+        assert not is_execution_path("/api/predictions/history")

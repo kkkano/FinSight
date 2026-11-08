@@ -65,8 +65,10 @@ def events(response):
     return [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
 
 
-@pytest.fixture
-def delivery_client(monkeypatch):
+@pytest.fixture(params=["legacy", "agent"])
+def delivery_client(monkeypatch, request):
+    # 两种运行时共享相同的权威交付/幂等合同；本测试不接外部模型。
+    monkeypatch.setenv("FINSIGHT_RESEARCH_RUNTIME", request.param)
     store = MemoryRunStore()
     calls = {"graph": 0, "preflight": 0}
     monkeypatch.setattr(execution_router, "get_research_run_store", lambda: store)
@@ -87,6 +89,13 @@ def delivery_client(monkeypatch):
 
     monkeypatch.setattr(execution_router, "ensure_model_available", preflight)
     monkeypatch.setattr(execution_router, "run_graph_pipeline", pipeline)
+    from backend.agent_runtime import service as agent_service
+    async def agent_preflight(_context):
+        return await execution_router.ensure_model_available()
+    def agent_pipeline(**kwargs):
+        return execution_router.run_graph_pipeline(**kwargs)
+    monkeypatch.setattr(agent_service, "preflight", agent_preflight)
+    monkeypatch.setattr(agent_service, "run_agent_pipeline", agent_pipeline)
     app = FastAPI()
 
     @app.middleware("http")
@@ -183,7 +192,9 @@ def test_failed_preflight_is_durable_and_recovery_never_calls_model_again(delive
 
     monkeypatch.setattr(execution_router, "ensure_model_available", unavailable)
     failed = client.post("/api/execute", json=request_body())
-    assert failed.status_code == 503 and calls["graph"] == 0
+    import os
+    assert failed.status_code == (200 if os.getenv("FINSIGHT_RESEARCH_RUNTIME") == "agent" else 503)
+    assert calls["graph"] == 0
     row = store.rows[("user-a", "delivery-run")]
     assert row["status"] == "failed" and row["final_payload"]["error_code"] == "model_unavailable"
     replay = events(client.post("/api/execute", json=request_body()))[-1]

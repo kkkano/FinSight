@@ -1,5 +1,7 @@
 name: earnings-impact-investigator
-description: Investigate how an earnings event can affect stock price through fundamentals, expectations, market reaction, news, and risk.
+display_name: 财报影响
+category: event
+description: 从基本面、市场预期、价格反应、新闻与风险分析财报对股价的影响。
 required_facets:
   primary_task: impact_analysis
   event_type: earnings

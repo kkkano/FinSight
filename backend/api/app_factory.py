@@ -83,10 +83,15 @@ def _rag_probe_key() -> tuple[str, ...]:
         str(os.getenv("FINSIGHT_RUNTIME_PROFILE") or "").strip().lower(),
         str(os.getenv("APP_MODE") or "").strip().lower(),
         str(os.getenv("RAG_V2_BACKEND") or "auto").strip().lower(),
-        str(os.getenv("RAG_EMBEDDING") or "bge-m3").strip().lower(),
+        str(os.getenv("RAG_EMBEDDING") or "lexical").strip().lower(),
         str(os.getenv("RAG_V2_VECTOR_DIM") or "").strip(),
-        str(os.getenv("RAG_RERANKER") or "bge-reranker").strip().lower(),
+        str(os.getenv("RAG_RERANKER") or "none").strip().lower(),
         str(os.getenv("RAG_WORKER_URL") or ""),
+        str(os.getenv("RAG_EMBEDDING_API_URL") or ""),
+        str(os.getenv("RAG_EMBEDDING_MODEL") or ""),
+        str(os.getenv("RAG_EMBEDDING_MODEL_VERSION") or ""),
+        str(os.getenv("RAG_EMBEDDING_DIM") or ""),
+        "configured" if os.getenv("RAG_EMBEDDING_API_KEY") else "missing",
     )
 
 
@@ -136,13 +141,34 @@ def _rag_health_uncached() -> dict[str, object]:
         from backend.rag.reranker import get_reranker_service
 
         service = get_rag_service()
+        provider = str(os.getenv("RAG_EMBEDDING") or "lexical").strip().lower()
+        if provider in {"lexical", "remote_api"}:
+            # 健康读取不能为观测额外调用托管模型；沿真实检索的最后成功身份报告。
+            health = service._embedder.worker_health()
+            semantic_ready = bool(health.get("inference_verified") and health.get("status") == "ok")
+            identity = str(health.get("embedding_identity") or "") or None
+            index = service.index_status(identity)
+            lexical_ready = service.backend_name == "postgres"
+            reranker_disabled = str(os.getenv("RAG_RERANKER") or "none").strip().lower() == "none"
+            reranker_status = "disabled" if reranker_disabled else get_reranker_service().health()["status"]
+            return {
+                "status": ("ok" if provider == "lexical" or semantic_ready else "degraded") if lexical_ready else "error",
+                "backend": service.backend_name, "backend_requested": os.getenv("RAG_V2_BACKEND", "postgres"),
+                "embedding": service.embedding_model, "semantic_ready": semantic_ready,
+                "lexical_ready": lexical_ready, "index": index,
+                "reranker": reranker_status,
+                "full_ready": bool(semantic_ready and index["pending"] == 0 and reranker_status in {"ok", "disabled"}),
+                "reason": ("lexical_mode" if provider == "lexical" else
+                           (None if semantic_ready else "semantic_retrieval_unverified_using_lexical")),
+                **({} if lexical_ready else {"error_code": "rag_backend_not_persistent"}),
+            }
         if str(os.getenv("RAG_WORKER_URL") or "").strip():
             health = service._embedder.worker_health()
             semantic_ready = bool(health.get("inference_verified") and health.get("status") == "ok")
             lexical_ready = service.backend_name == "postgres"
             identity = f"bge-m3:{health.get('model_version')}:1024" if semantic_ready else None
             index = service.index_status(identity)
-            full_ready = semantic_ready and health.get("reranker") == "ok" and index["pending"] == 0
+            full_ready = semantic_ready and health.get("reranker") in {"ok", "disabled"} and index["pending"] == 0
             return {"status": "ok" if semantic_ready else ("degraded" if lexical_ready else "error"),
                     "backend": service.backend_name, "backend_requested": os.getenv("RAG_V2_BACKEND", "postgres"),
                     "embedding": service.embedding_model, "semantic_ready": semantic_ready,
@@ -289,6 +315,8 @@ def _cors_allow_credentials() -> bool:
 
 
 def create_app() -> FastAPI:
+    from backend.api.skill_router import create_skill_router
+    from backend.api.auth_provider_router import router as auth_provider_router
     app = FastAPI(
         title="FinSight API",
         description="可信行情、AI Prediction 与证据化研究 API",
@@ -396,6 +424,8 @@ def create_app() -> FastAPI:
         report_router,
     ):
         app.include_router(router)
+    app.include_router(create_skill_router())
+    app.include_router(auth_provider_router)
     return app
 
 

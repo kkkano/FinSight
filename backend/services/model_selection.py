@@ -123,10 +123,17 @@ def model_selection_scope(selected: SelectedModel | None):
 
 
 def default_model_id() -> str:
+    if os.getenv("FINSIGHT_AGENT_MODEL", "").strip():
+        return SERVER_DEFAULT_MODEL_ID
     return STEP_MODEL_ID if os.getenv("STEPFUN_API_KEY", "").strip() else SERVER_DEFAULT_MODEL_ID
 
 
 def resolve_default_model() -> SelectedModel:
+    from backend.agent_runtime.config import configured_model
+    configured = configured_model()
+    if configured is not None:
+        return SelectedModel("system", configured.model, configured.base_url, configured.api_key,
+                             configured.endpoint_name)
     if default_model_id() == STEP_MODEL_ID:
         return SelectedModel("system", STEP_MODEL, STEP_BASE_URL, os.environ["STEPFUN_API_KEY"].strip(),
                              "system-stepfun", model_capabilities(STEP_MODEL)["default_effort"])
@@ -159,16 +166,21 @@ def redact_model_secrets(text: str) -> str:
 
 
 def model_capabilities(model: str, base_url: str = "") -> dict[str, Any]:
+    from backend.agent_runtime.config import configured_model
+    configured = configured_model()
+    vision = bool(configured and model.strip() == configured.model
+                  and (not base_url or base_url.rstrip("/") == configured.base_url.rstrip("/"))
+                  and os.getenv("FINSIGHT_AGENT_VISION", "false").lower() in {"1", "true", "yes"})
     # Model-specific official capability, never infer arbitrary effort levels.
     if model.strip() == STEP_MODEL:
         return {
-            "provider": "stepfun", "label": "Step 5 Preview",
+            "provider": "stepfun", "label": "Step 5 Preview", "vision": vision,
             "icon_url": "/model-icons/stepfun.png",
             "effort_options": ["low", "medium", "high"],
             "default_effort": "medium", "docs_url": STEP_DOCS,
         }
     return {
-        "provider": "custom", "label": model.strip() or "自定义模型",
+        "provider": "custom", "label": model.strip() or "自定义模型", "vision": vision,
         "icon_url": None, "effort_options": [], "default_effort": None, "docs_url": None,
     }
 

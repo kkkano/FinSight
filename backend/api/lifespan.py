@@ -36,6 +36,9 @@ async def lifespan(_app: FastAPI):
         from backend.api.app_factory import _is_production_runtime, warm_rag_readiness_probe
 
         if _is_production_runtime():
+            if _env_bool("RAG_STARTUP_VERIFY", False):
+                from backend.rag.readiness import verify_hosted_retrieval_startup
+                await asyncio.to_thread(verify_hosted_retrieval_startup)
             await asyncio.to_thread(warm_rag_readiness_probe)
         else:
             logger.info("[RAG] non-production profile; skip model/database readiness warm-up")

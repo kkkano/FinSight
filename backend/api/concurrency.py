@@ -29,7 +29,13 @@ GENERATION_PATH_PREFIXES: tuple[str, ...] = (
 
 def is_generation_path(path: str) -> bool:
     """判断请求路径是否属于昂贵的生成端点。"""
-    return path.rstrip("/") == "/api/predictions/generate" or any(path.startswith(prefix) for prefix in GENERATION_PATH_PREFIXES)
+    return path.split("?", 1)[0].rstrip("/") in {"/api/execute", "/api/execute/resume", "/api/predictions/generate"}
+
+
+def is_execution_path(path: str) -> bool:
+    """研究读取/控制仍需认证，但不能占用生成名额阻止停止和重连。"""
+    normalized = path.split("?", 1)[0].rstrip("/")
+    return normalized == "/api/predictions/generate" or any(normalized == prefix or normalized.startswith(prefix + "/") for prefix in GENERATION_PATH_PREFIXES)
 
 
 class ConcurrencyLimiter:

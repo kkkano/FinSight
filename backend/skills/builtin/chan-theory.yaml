@@ -1,7 +1,7 @@
 name: chan-theory
 display_name: 缠论
 category: technical
-description: Analyze price structure with Chan Theory (笔/线段/中枢/级别), an explicit interpretation lens.
+description: 以缠论的笔、线段、中枢和级别解读价格结构，并说明判断前提。
 preferred_agents:
   - technical_agent
 preferred_tools:

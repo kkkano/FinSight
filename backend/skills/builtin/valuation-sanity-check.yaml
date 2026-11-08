@@ -1,5 +1,7 @@
 name: valuation-sanity-check
-description: Check whether current valuation is aligned with growth, profitability, and market risk.
+display_name: 估值合理性
+category: fundamental
+description: 核对当前估值是否与增长、盈利能力及市场风险相匹配。
 required_facets:
   primary_task: valuation_analysis
   target_metric: valuation

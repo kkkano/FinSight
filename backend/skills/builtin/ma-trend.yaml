@@ -1,7 +1,7 @@
 name: ma-trend
 display_name: 均线趋势
 category: technical
-description: Analyze trend via the moving-average system (MA alignment, crossovers, dynamic support/resistance).
+description: 通过均线排列、交叉及动态支撑阻力分析趋势。
 preferred_agents:
   - technical_agent
 preferred_tools:
