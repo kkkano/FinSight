@@ -65,7 +65,9 @@ def answer_feedback(text: str, data, *, require_citations: bool = False) -> str 
         return None
     header = ("请给用户一份完整答案，不写‘核对后的段落’或描述修正过程。只采用已取得资料中明确支持的结果，"
             "保留真实引用；未计算的扩展统计、未声明的延迟/交易所/复权口径不要写成事实。"
+            "新闻只是返回条目，不能据此断言整个时间窗口没有新事件、利好或利空；缺失说明限定为本轮已取得的资料。"
             "交叉以comparison_stats.crossovers核验为准，共同起点的首次分离不是交叉；两个观测只支持一次相邻变化，不能写两个期间各自增长。"
+            "连续下跌的ongoing表示区间尚未结束，末周是否收盘以latest_period_closed和交易日历收盘时间为准；周一日期标签不等于周收盘日。"
             "无法核实的结论用一句自然的说明交代，不输出‘已撤回’占位，也不要补入新数字。"
             "下面的事实摘要只是实际成功工具结果的投影，每条保留自己的来源；不能把某条来源用于另一主体或指标。"
             "缺少的增长率、利润率等可用已授权资料调用analyze_dataset或run_analysis_code核实，最多两轮；Python必须将输出赋给result。"
@@ -134,8 +136,8 @@ def _feedback_facts(text: str, data) -> list[dict]:
                     value = checked_comparison_stats(record)
                 projection[key] = value
             output = evidence_preview(projection, limit=2600)
-        elif isinstance(output, str):
-            output = output[:1600]
+        elif isinstance(output, (str, list)):
+            output = evidence_preview(output, limit=2600)
         refs = data.source_refs(ref)
         facts.append({"tool": record["tool"], "data_ref": ref, "subjects": sorted(bindings[ref]),
             "result": output, "sources": [{"source_id": sid, **{k: data.sources[sid].get(k) for k in ("title", "url", "source", "as_of")}}
@@ -153,6 +155,12 @@ def verified_text(text: str, data, *, require_citations: bool = False) -> tuple[
         else:
             kept.append(paragraph)
     return "\n\n".join(kept).strip(), list(dict.fromkeys(issues))
+
+
+def checked_factual_answer(runtime) -> str:
+    from .fact_answer import factual_answer
+    candidate = factual_answer(runtime)
+    return candidate if candidate and not verified_text(candidate, runtime.data)[1] else ""
 
 
 async def preflight(context=None) -> dict:
@@ -344,16 +352,24 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                         owner_max=1, timeout=1, ttl=run_context.remaining_seconds + 30):
                     await emit("run.accepted", {"status": "running", "model": runtime.model.config.model})
                     fallback_answer_id = None
+                    fact_fallback_used = False
                     try:
                         async with asyncio.timeout(run_context.remaining_seconds):
                             final = await runtime.run_agent("root", "research_lead", query)
                     except (ModelProtocolError, TimeoutError, CapacityExceeded) as exc:
-                        if runtime.answer_repair_candidate is None:
-                            raise
-                        fallback_answer_id, final = runtime.answer_repair_candidate
-                        await emit("activity.finished", {"activity_id": "answer_check", "status": "failed",
-                            "title": "回答核对未完成", "summary": "保留已核实的结果，其余部分暂时无法确认。",
-                            "error_code": exception_code(exc)})
+                        factual = checked_factual_answer(runtime)
+                        if factual:
+                            fact_fallback_used = True
+                            fallback_answer_id, final = "root_fact_answer", factual
+                            await emit("content.delta", {"block_id": fallback_answer_id, "delta": factual})
+                            await emit("content.block_finished", {"block_id": fallback_answer_id, "content_phase": "answer"})
+                        else:
+                            if runtime.answer_repair_candidate is None:
+                                raise
+                            fallback_answer_id, final = runtime.answer_repair_candidate
+                            await emit("activity.finished", {"activity_id": "answer_check", "status": "failed",
+                                "title": "回答核对未完成", "summary": "保留已核实的结果，其余部分暂时无法确认。",
+                                "error_code": exception_code(exc)})
                     await runtime.close(notify=True)
                     if not final.strip() and runtime.answer_repair_candidate is not None:
                         fallback_answer_id, final = runtime.answer_repair_candidate
@@ -364,6 +380,14 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                                    and block.get("agent_id") == "root"]
                     answer_block = (blocks.get(fallback_answer_id) if fallback_answer_id else
                                     text_blocks[-1] if text_blocks else None)
+                    if answer_block is not None and verified_text(answer_block["content"], runtime.data)[1]:
+                        factual = checked_factual_answer(runtime)
+                        if factual:
+                            fact_fallback_used = True
+                            answer_block["content"] = final = factual
+                            answer_block["revision"] += 1
+                            await emit("content.revised", {"block_id": answer_block["id"], "content": factual,
+                                "revision": answer_block["revision"], "content_phase": "answer", "reason": "verified_fact_delivery"})
                     response = ""
                     for block in list(blocks.values()):
                         if block.get("kind") != "text":
@@ -466,6 +490,7 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                              "artifacts": runtime.data.artifacts, "actions": list(runtime.actions.values()),
                              "metrics": {**run_context.usage.summary(), "tool_calls": runtime.tool_count,
                                          "research_recovery_rounds": runtime.research_recovery_rounds,
+                                         "fact_fallback_used": fact_fallback_used,
                                          "answer_repair_attempted": runtime.answer_repair_attempted}}
                     if deps.persist_run_event is not None:
                         event = await deps.persist_run_event(event)

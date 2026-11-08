@@ -200,8 +200,27 @@ async def test_output_length_recovery_uses_existing_facts_without_replaying_tool
     assert len(model.inputs) == 3
 
 
+@pytest.mark.asyncio
+async def test_complete_financial_facts_survive_bad_model_rewording(monkeypatch):
+    events, _ = await run(monkeypatch, "INTC最新季度营收、净利润、经营现金流和自由现金流是多少", {
+        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", financials),
+    }, turns=[call("get_sec_company_facts_quarterly", {"ticker": "INTC"}),
+              finish("INTC营收999999美元。"), finish("INTC营收999999美元。")])
+    done = events[-1]
+    assert done["answer_status"] == "answered" and done["metrics"]["fact_fallback_used"]
+    assert "| 营收 | 100 |" in done["response"] and "| 净利润 | 10 |" in done["response"]
+    assert "999999" not in done["response"] and "2026-06-30" in done["response"]
 
 
+@pytest.mark.asyncio
+async def test_factual_fallback_does_not_replace_valuation_judgment(monkeypatch):
+    events, _ = await run(monkeypatch, "INTC估值健康吗", {
+        "get_company_info": tool("get_company_info", lambda _: "Forward P/E: 20.0"),
+        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", financials),
+    }, turns=[call("get_company_info", {"ticker": "INTC"}), call("get_sec_company_facts_quarterly", {"ticker": "INTC"}),
+              finish("INTC估值99999倍。"), finish("INTC估值99999倍。")])
+    assert events[-1]["answer_status"] == "partial"
+    assert not events[-1]["metrics"]["fact_fallback_used"]
 
 
 def test_search_text_links_and_provider_metadata_are_clickable_sources():
@@ -229,3 +248,12 @@ def test_feedback_keeps_latest_financial_numbers_instead_of_metadata():
     assert "申报元数据" not in feedback
 
 
+def test_news_repair_feedback_keeps_the_actual_cause_in_long_summary():
+    data = RunData("u", "s", "r", "INTC新闻")
+    snippet = "Intel market background. " * 17 + "Shares fell nearly 30% after disappointing fourth-quarter guidance."
+    data.record("get_company_news", {"ticker": "INTC"}, [{
+        "title": "Intel outlook", "url": "https://example.com/intel", "snippet": snippet,
+        "published_at": "2026-11-06", "metadata": {"audit": "x" * 20000}}])
+    feedback = answer_feedback("INTC股价上涨999%。", data)
+    assert feedback and "disappointing fourth-quarter guidance" in feedback
+    assert "https://example.com/intel" in feedback
