@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Embedding service: bge-m3 with hash-based fallback.
+"""轻量词法检索为默认；托管 API 和私网 BGE worker 按需启用。
 
 Provides dense (1024-dim) + sparse (lexical weights) embeddings via
 ``BAAI/bge-m3`` when *FlagEmbedding* is installed. Falls back to the
@@ -8,7 +8,7 @@ legacy SHA-1 hash embedding for CI / lightweight dev environments.
 Environment variables
 ---------------------
 RAG_EMBEDDING
-    ``bge-m3`` (default) or ``hash`` to force the hash fallback.
+    ``lexical`` (default), ``remote_api``, ``bge-m3`` or test-only ``hash``.
 BGE_M3_DEVICE
     ``cpu`` (default), ``cuda``, ``mps``, etc.
 BGE_M3_MAX_LENGTH
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_TOKEN_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]+")
+_TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u4e00-\u9fff]+")
 
 _BGE_M3_DIM = 1024
 _HASH_DIM_DEFAULT = 96
@@ -67,7 +67,23 @@ def _tokenize(text: str) -> list[str]:
     """Simple regex tokeniser shared by hash-embedding and sparse helpers."""
     if not text:
         return []
-    return [token.lower() for token in _TOKEN_RE.findall(text)]
+    tokens: list[str] = []
+    for token in _TOKEN_RE.findall(text):
+        if token[0] >= "\u4e00" and len(token) > 1:
+            tokens.extend(token[index:index + 2] for index in range(len(token) - 1))
+        else:
+            tokens.append(token.lower())
+    return tokens
+
+
+def lexical_search_text(text: str) -> str:
+    """轻量中英文词法索引文本；原始文档内容不变。"""
+    return " ".join(_tokenize(text))
+
+
+def lexical_tsquery(text: str) -> str:
+    """仅由字母数字/CJK词元组成的OR查询，不能注入tsquery操作符。"""
+    return " | ".join(dict.fromkeys(_tokenize(text)))
 
 
 # ---------------------------------------------------------------------------
@@ -235,19 +251,43 @@ class EmbeddingService:
     """Unified embedding interface with automatic fallback."""
 
     def __init__(self, *, force_backend: str | None = None) -> None:
-        backend = (force_backend or os.getenv("RAG_EMBEDDING", "bge-m3")).strip().lower()
+        backend = (force_backend or os.getenv("RAG_EMBEDDING", "lexical")).strip().lower()
+        if backend not in {"lexical", "remote_api", "bge-m3", "self_hosted", "hash"}:
+            raise ValueError("unsupported RAG_EMBEDDING provider")
         self._requested_backend = backend
-        self._use_bge = backend != "hash"
+        self._use_bge = backend in {"bge-m3", "self_hosted"}
+        self._lexical_dim = int(os.getenv("RAG_EMBEDDING_DIM", "1024"))
+        self._api_model = os.getenv("RAG_EMBEDDING_MODEL", "").strip()
+        self._api_failure: str | None = None
+        self._last_identity: str | None = None
         self._bge_available: bool | None = None
         self._hash_dim = int(os.getenv("RAG_HASH_DIM", str(_HASH_DIM_DEFAULT)))
         self._worker_url = str(os.getenv("RAG_WORKER_URL") or "").strip().rstrip("/") if self._use_bge else ""
         self._worker_available = False
         self._worker_version = "unknown"
-        if not self._use_bge:
+        if backend == "hash":
             _log_hash_fallback(reason="configured_hash_backend", requested_backend=backend)
 
     @property
+    def is_lexical(self) -> bool:
+        return self._requested_backend == "lexical"
+
+    @property
+    def last_identity(self) -> str | None:
+        return self._last_identity
+
+    def align_lexical_dimension(self, dimension: int) -> None:
+        """词法模式不生成向量，沿用已有列维度而不触发模型加载。"""
+        if not self.is_lexical or dimension < 1:
+            raise ValueError("lexical_dimension_invalid")
+        self._lexical_dim = dimension
+
+    @property
     def model_name(self) -> str:
+        if self.is_lexical:
+            return "lexical"
+        if self._requested_backend == "remote_api":
+            return self._api_model or "unavailable"
         if self._worker_url:
             return "bge-m3" if self._worker_available else "unavailable"
         if self._use_bge and self._check_bge():
@@ -266,6 +306,10 @@ class EmbeddingService:
     @property
     def fallback_reason(self) -> str | None:
         """hash 降级时返回人类可读原因，否则 None。"""
+        if self.is_lexical:
+            return None
+        if self._requested_backend == "remote_api":
+            return self._api_failure
         if self._worker_url:
             return None if self._worker_available else "embedding_worker_unavailable"
         if self.is_hash_fallback:
@@ -277,6 +321,8 @@ class EmbeddingService:
 
     @property
     def dim(self) -> int:
+        if self._requested_backend in {"lexical", "remote_api"}:
+            return self._lexical_dim
         if self._worker_url:
             return _BGE_M3_DIM
         if self._use_bge and self._check_bge():
@@ -307,6 +353,24 @@ class EmbeddingService:
         text_list = list(texts)
         if not text_list:
             return EmbeddingResult(dense=[], sparse=[], model_name=self.model_name, dim=self.dim)
+
+        if self.is_lexical:
+            raise EmbeddingUnavailable("embedding_disabled_lexical_mode")
+        if self._requested_backend == "hash" and _is_production_env():
+            raise EmbeddingUnavailable("hash_embeddings_are_test_only")
+        if self._requested_backend == "remote_api":
+            from backend.rag.api_provider import HTTPEmbeddingProvider, ProviderUnavailable
+            try:
+                provider = HTTPEmbeddingProvider.from_env()
+                dense, model, version = provider.encode(text_list)
+                self._api_model, self._api_failure = model, None
+                result = EmbeddingResult(dense=dense, sparse=[_hash_sparse(text) for text in text_list],
+                                         model_name=model, dim=provider.dimension, model_version=version)
+                self._last_identity = embedding_identity(result)
+                return result
+            except ProviderUnavailable as exc:
+                self._api_failure = str(exc)
+                raise EmbeddingUnavailable(str(exc)) from None
 
         if self._worker_url:
             return self._encode_remote(text_list)
@@ -363,6 +427,15 @@ class EmbeddingService:
             raise EmbeddingUnavailable("embedding_worker_unavailable") from exc
 
     def worker_health(self) -> dict[str, Any]:
+        if self.is_lexical:
+            return {"status": "ok", "provider": "lexical", "inference_verified": False,
+                    "semantic_ready": False, "lexical_ready": True}
+        if self._requested_backend == "remote_api":
+            verified = bool(self._last_identity and not self._api_failure)
+            return {"status": "ok" if verified else ("degraded" if self._api_failure else "configured"),
+                    "provider": "remote_api", "model_name": self._api_model,
+                    "inference_verified": verified, "embedding_identity": self._last_identity,
+                    "lexical_ready": True, "reason": self._api_failure}
         import httpx
         try:
             with httpx.Client(timeout=3, trust_env=False) as client:

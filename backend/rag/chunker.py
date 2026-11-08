@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 DocType = Literal["filing", "transcript", "news", "research", "web_page", "table"]
 
 _SHORT_DOC_THRESHOLD = 2000  # docs shorter than this are not chunked
+INDEX_CHUNK_MAX_BYTES = 6000
+INDEX_CHUNK_STRATEGY = "utf8-6000-v1"
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +35,33 @@ class ChunkResult:
     """Output of ``chunk_document``."""
     chunks: list[str]
     metadata: list[dict[str, str | int | None]] = field(default_factory=list)
+
+
+def chunk_for_index(content: str) -> ChunkResult:
+    """按 UTF-8 字节预算无损分块；保留空白与位置，禁止对超长表格放行整篇。"""
+    encoded = content.encode("utf-8")
+    chunks, metadata = [], []
+    start, char_start = 0, 0
+    while start < len(encoded):
+        end = min(start + INDEX_CHUNK_MAX_BYTES, len(encoded))
+        while end < len(encoded) and encoded[end] & 0xC0 == 0x80:
+            end -= 1
+        chunk = encoded[start:end].decode("utf-8")
+        if end < len(encoded):
+            boundaries = [chunk.rfind(separator) + len(separator) for separator in ("\n\n", "\n", ". ", "。", "；", " ")
+                          if separator in chunk]
+            boundary = max(boundaries, default=0)
+            if boundary >= len(chunk) * 0.75:
+                chunk = chunk[:boundary]
+                end = start + len(chunk.encode("utf-8"))
+        chunks.append(chunk)
+        metadata.append({"chunk_index": len(chunks) - 1, "char_start": char_start,
+                         "char_end": char_start + len(chunk), "byte_start": start, "byte_end": end,
+                         "chunk_strategy_version": INDEX_CHUNK_STRATEGY})
+        start, char_start = end, char_start + len(chunk)
+    for row in metadata:
+        row["total_chunks"] = len(chunks)
+    return ChunkResult(chunks=chunks, metadata=metadata)
 
 
 # ---------------------------------------------------------------------------
@@ -320,4 +349,7 @@ __all__ = [
     "ChunkResult",
     "DocType",
     "chunk_document",
+    "chunk_for_index",
+    "INDEX_CHUNK_MAX_BYTES",
+    "INDEX_CHUNK_STRATEGY",
 ]

@@ -69,6 +69,8 @@ async def _warmup():
 
 @asynccontextmanager
 async def lifespan(_app):
+    if not os.getenv("RAG_WORKER_TOKEN", "").strip():
+        raise RuntimeError("RAG_WORKER_TOKEN is required for the local-ml worker")
     task = asyncio.create_task(_warmup())
     yield
     task.cancel()

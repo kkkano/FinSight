@@ -4,12 +4,15 @@ from __future__ import annotations
 from backend.utils.env import env_bool as _env_bool
 
 import json
+import hashlib
 import logging
 import os
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextvars import copy_context
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 
@@ -22,8 +25,11 @@ from backend.rag.embedder import (
     EmbeddingUnavailable,
     embedding_identity,
     _hash_sparse,
+    lexical_search_text,
+    lexical_tsquery,
 )
 from backend.rag.layering import collection_details, enrich_metadata
+from backend.rag.chunker import INDEX_CHUNK_MAX_BYTES, INDEX_CHUNK_STRATEGY, chunk_for_index
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +215,9 @@ def _vector_dim_mismatch_message(*, store_dim: int, vector_dim: int, embedder_di
 
 
 def _resolve_embedder_for_vector_dim(*, expected_dim: int, current: EmbeddingService, allow_auto_switch: bool) -> EmbeddingService:
+    if getattr(current, "is_lexical", False):
+        current.align_lexical_dimension(expected_dim)
+        return current
     if current.dim == expected_dim:
         return current
     if not allow_auto_switch:
@@ -274,6 +283,61 @@ class RAGDocument:
     parent_run_id: Optional[str] = None
 
 
+def _source_document(metadata: dict[str, Any]) -> bool:
+    return metadata.get("index_state") == "source_document"
+
+
+def _expand_index_documents(docs: Iterable[RAGDocument]) -> list[RAGDocument]:
+    """长文原样保留，只有有界子块进入向量空间；子块继承原有权限与出处。"""
+    expanded = []
+    for doc in docs:
+        if not isinstance(doc, RAGDocument):
+            expanded.append(doc)
+            continue
+        if len((doc.content or "").encode("utf-8")) <= INDEX_CHUNK_MAX_BYTES:
+            if _source_document(doc.metadata):
+                metadata = {key: value for key, value in doc.metadata.items()
+                            if key not in {"source_content_sha256", "chunk_strategy_version", "chunk_count"}}
+                doc = replace(doc, metadata={**metadata, "index_state": "lexical_only"})
+            expanded.append(doc)
+            continue
+        digest = hashlib.sha256(doc.content.encode("utf-8")).hexdigest()
+        split = chunk_for_index(doc.content)
+        source_meta = {**doc.metadata, "index_state": "source_document",
+                       "source_content_sha256": digest, "chunk_strategy_version": INDEX_CHUNK_STRATEGY,
+                       "chunk_count": len(split.chunks)}
+        expanded.append(replace(doc, metadata=source_meta))
+        for index, (content, bounds) in enumerate(zip(split.chunks, split.metadata)):
+            child_id = f"{doc.source_id}:chunk:{digest[:24]}:{index}"
+            fingerprint = hashlib.sha256(f"{doc.source_id}:{digest}:{INDEX_CHUNK_STRATEGY}:{index}".encode()).hexdigest()
+            child_meta = {**doc.metadata, **bounds, "parent_source_id": doc.source_id,
+                          "parent_content_sha256": digest, "source_doc_id": doc.metadata.get("source_doc_id") or doc.source_id,
+                          "index_state": "lexical_only", "embedding_identity": None,
+                          "chunk_id": child_id, "doc_fingerprint": fingerprint}
+            expanded.append(replace(doc, source_id=child_id, content=content, metadata=child_meta,
+                                    doc_fingerprint=fingerprint))
+    return expanded
+
+
+def _document_from_payload(payload: dict[str, Any]) -> RAGDocument:
+    return RAGDocument(**{item.name: payload[item.name] for item in fields(RAGDocument) if item.name in payload})
+
+
+def _preparation_report(originals: list[dict[str, Any]], expanded: list[RAGDocument]) -> dict[str, Any]:
+    sources = [doc for doc in expanded if _source_document(doc.metadata)]
+    chunks = [doc for doc in expanded if not _source_document(doc.metadata) and doc.metadata.get("parent_source_id")]
+    previous = {(row["collection"], row["source_id"]): row for row in originals}
+    return {"prepared_sources": len(sources), "created_chunks": len(chunks),
+            "source_updates": [{"collection": doc.collection, "source_id": doc.source_id,
+                "content_sha256": doc.metadata["source_content_sha256"],
+                "previous_metadata": previous[(doc.collection, doc.source_id)]["metadata"],
+                "metadata": doc.metadata, "clear_embedding": True,
+                "chunk_source_ids": [child.source_id for child in chunks
+                                     if child.collection == doc.collection and child.metadata["parent_source_id"] == doc.source_id]}
+                for doc in sources],
+            "chunk_inserts": [_normalized_doc_payload(doc) for doc in chunks]}
+
+
 def _normalized_doc_payload(doc: RAGDocument) -> dict[str, Any]:
     collection = (doc.collection or "").strip()
     details = collection_details(collection)
@@ -296,7 +360,7 @@ def _normalized_doc_payload(doc: RAGDocument) -> dict[str, Any]:
         "entity_key": metadata.get("entity_key"),
         "scope": (doc.scope or "ephemeral").strip() or "ephemeral",
         "source_id": (doc.source_id or "").strip(),
-        "content": (doc.content or "").strip(),
+        "content": (doc.content or "") if (_source_document(metadata) or metadata.get("parent_source_id")) else (doc.content or "").strip(),
         "title": (doc.title or "").strip() or None,
         "url": (doc.url or "").strip() or None,
         "source": (doc.source or "unknown").strip() or "unknown",
@@ -419,10 +483,10 @@ class _InMemoryHybridStore:
         self._vector_dim = vector_dim
         self._rrf_k = rrf_k
         self._embedder = embedder or get_embedding_service()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._docs: dict[tuple[str, str], dict[str, Any]] = {}
 
-    def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:
+    def ingest_documents(self, docs: Iterable[RAGDocument], *, embed: bool = True) -> dict[str, Any]:
         indexed = 0
         skipped = 0
         pending: list[tuple[tuple[str, str], dict[str, Any], str]] = []
@@ -441,21 +505,31 @@ class _InMemoryHybridStore:
             pending.append((key, payload, content))
 
         if pending:
-            contents = [item[2] for item in pending]
+            eligible = [index for index, (_, payload, _) in enumerate(pending) if not _source_document(payload["metadata"])]
+            contents = [pending[index][2] for index in eligible]
             try:
-                embed_result = self._embedder.encode(contents)
+                embed_result = self._embedder.encode(contents) if embed and contents else None
             except EmbeddingUnavailable:
                 embed_result = None
+            vectors = {index: embed_result.dense[position] for position, index in enumerate(eligible)} if embed_result else {}
             with self._lock:
                 for index, (key, payload, _content) in enumerate(pending):
-                    payload["embedding"] = embed_result.dense[index] if embed_result else None
-                    payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
+                    is_source = _source_document(payload["metadata"])
+                    payload["embedding"] = vectors.get(index)
+                    if not is_source:
+                        payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
                     previous = self._docs.get(key)
-                    if not embed_result and previous and previous["content"] == payload["content"]:
+                    if not is_source and not embed_result and previous and previous["content"] == payload["content"]:
                         payload["embedding"] = previous.get("embedding")
                         payload["metadata"]["embedding_identity"] = previous["metadata"].get("embedding_identity")
-                    payload["metadata"]["index_state"] = "semantic_ready" if payload["embedding"] and payload["metadata"].get("embedding_identity") else "lexical_only"
-                    payload["sparse"] = _hash_sparse(_content)
+                    payload["metadata"]["index_state"] = "source_document" if is_source else ("semantic_ready" if payload["embedding"] and payload["metadata"].get("embedding_identity") else "lexical_only")
+                    payload["sparse"] = _hash_sparse("") if is_source else _hash_sparse(_content)
+                    if not payload["metadata"].get("parent_source_id"):
+                        for old in self._docs.values():
+                            if (old["collection"] == payload["collection"] and old["metadata"].get("parent_source_id") == payload["source_id"]
+                                    and old["metadata"].get("parent_content_sha256") != payload["metadata"].get("source_content_sha256")
+                                    and (not old.get("expires_at") or old["expires_at"] > _utc_now())):
+                                old["expires_at"] = _utc_now()
                     self._docs[key] = payload
                     indexed += 1
 
@@ -464,16 +538,42 @@ class _InMemoryHybridStore:
     def index_status(self, identity: str | None = None) -> dict[str, Any]:
         with self._lock:
             rows = [row for row in self._docs.values() if not row.get("expires_at") or row["expires_at"] > _utc_now()]
-            ready = sum(bool(row.get("embedding") and row["metadata"].get("embedding_identity")
-                             and (identity is None or row["metadata"]["embedding_identity"] == identity)) for row in rows)
-        return {"documents": len(rows), "semantic_ready": ready, "pending": len(rows) - ready}
+            indexable = [row for row in rows if not _source_document(row["metadata"])]
+            ready = sum(bool(len(row["content"].encode("utf-8")) <= INDEX_CHUNK_MAX_BYTES and row.get("embedding") and row["metadata"].get("embedding_identity")
+                             and (identity is None or row["metadata"]["embedding_identity"] == identity)) for row in indexable)
+            unprepared = sum(len(row["content"].encode("utf-8")) > INDEX_CHUNK_MAX_BYTES for row in indexable)
+        return {"documents": len(rows), "source_documents": len(rows) - len(indexable), "indexable": len(indexable),
+                "semantic_ready": ready, "pending": len(indexable) - ready, "unprepared_long_documents": unprepared}
+
+    def prepare_long_documents(self, *, batch_size: int = 16, collection: str | None = None) -> dict[str, Any]:
+        with self._lock:
+            originals = [dict(row) for row in self._docs.values()
+                         if (collection is None or row["collection"] == collection)
+                         and (not row.get("expires_at") or row["expires_at"] > _utc_now())
+                         and not _source_document(row["metadata"])
+                         and len(row["content"].encode("utf-8")) > INDEX_CHUNK_MAX_BYTES][:max(1, min(64, batch_size))]
+            expanded = _expand_index_documents(_document_from_payload(row) for row in originals)
+            for doc in expanded:
+                if _source_document(doc.metadata):
+                    current = self._docs[(doc.collection, doc.source_id)]
+                    current.update(metadata=dict(doc.metadata), embedding=None, sparse=_hash_sparse(""))
+            self.ingest_documents([doc for doc in expanded if not _source_document(doc.metadata)], embed=False)
+            return _preparation_report(originals, expanded)
 
     def reindex_pending(self, *, batch_size: int = 8, collection: str | None = None) -> dict[str, Any]:
+        with self._lock:
+            if any((collection is None or row["collection"] == collection)
+                   and (not row.get("expires_at") or row["expires_at"] > _utc_now())
+                   and not _source_document(row["metadata"])
+                   and len(row["content"].encode("utf-8")) > INDEX_CHUNK_MAX_BYTES for row in self._docs.values()):
+                raise ValueError("rag_long_documents_require_preparation")
         identity = embedding_identity(self._embedder.encode(["FinSight index identity"]))
         with self._lock:
             rows = [(key, dict(row)) for key, row in self._docs.items()
                     if (collection is None or row["collection"] == collection)
                     and (not row.get("expires_at") or row["expires_at"] > _utc_now())
+                    and not _source_document(row["metadata"])
+                    and len(row["content"].encode("utf-8")) <= INDEX_CHUNK_MAX_BYTES
                     and (not row.get("embedding") or row["metadata"].get("embedding_identity") != identity)][:max(1, min(8, batch_size))]
         if not rows:
             return {"updated": 0, **self.index_status(identity)}
@@ -482,7 +582,8 @@ class _InMemoryHybridStore:
         with self._lock:
             for index, (key, original) in enumerate(rows):
                 current = self._docs.get(key)
-                if not current or current["content"] != original["content"]:
+                if (not current or current["content"] != original["content"] or _source_document(current["metadata"])
+                        or (current.get("expires_at") and current["expires_at"] <= _utc_now())):
                     continue
                 current["embedding"] = result.dense[index]
                 current["metadata"].update(embedding_identity=embedding_identity(result), index_state="semantic_ready")
@@ -494,6 +595,8 @@ class _InMemoryHybridStore:
         with self._lock:
             for payload in self._docs.values():
                 if payload.get("collection") != collection:
+                    continue
+                if _source_document(payload["metadata"]):
                     continue
                 expires_at = payload.get("expires_at")
                 if isinstance(expires_at, datetime) and expires_at <= now:
@@ -597,6 +700,15 @@ class _InMemoryHybridStore:
             top_k=max(1, int(top_k)),
         )
         return _merge_search_hits(groups, top_k=max(1, int(top_k)))
+
+    def read_document(self, *, collection: str, source_id: str) -> dict[str, Any] | None:
+        """只读取指定collection中的未过期记录，调用方负责授予collection作用域。"""
+        now = _utc_now()
+        with self._lock:
+            record = self._docs.get((collection, source_id))
+            if not record or (record.get("expires_at") and record["expires_at"] <= now):
+                return None
+            return {key: value for key, value in record.items() if key not in {"embedding", "sparse"}}
 
     def delete_collections(self, *, collections: Iterable[str]) -> int:
         normalized = set(_normalize_collections(collections))
@@ -718,7 +830,7 @@ class _PostgresHybridStore:
                     model_name=self._embedder.model_name,
                 )
             )
-    def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:
+    def ingest_documents(self, docs: Iterable[RAGDocument], *, embed: bool = True, connection=None) -> dict[str, Any]:
         self._ensure_schema()
         indexed = 0
         skipped = 0
@@ -731,7 +843,7 @@ class _PostgresHybridStore:
             ) VALUES (
                 :collection, :layer, :entity_scope, :entity_key, :scope, :source_id, :content, :title, :url, :source,
                 :ingest_source, :promotion_status, :doc_fingerprint, :parent_collection, :parent_run_id, CAST(:metadata AS jsonb),
-                CAST(:embedding AS vector), to_tsvector('simple', :content), :created_at, :expires_at
+                CAST(:embedding AS vector), to_tsvector('simple', :lexical_text), :created_at, :expires_at
             )
             ON CONFLICT (collection, source_id)
             DO UPDATE SET
@@ -748,12 +860,14 @@ class _PostgresHybridStore:
                 doc_fingerprint = EXCLUDED.doc_fingerprint,
                 parent_collection = EXCLUDED.parent_collection,
                 parent_run_id = EXCLUDED.parent_run_id,
-                metadata = CASE WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
+                metadata = CASE WHEN EXCLUDED.metadata->>'index_state' = 'source_document' THEN EXCLUDED.metadata
+                    WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
                     THEN EXCLUDED.metadata || jsonb_build_object('embedding_identity', rag_documents_v2.metadata->'embedding_identity',
                         'index_state', CASE WHEN rag_documents_v2.embedding IS NOT NULL AND rag_documents_v2.metadata->>'embedding_identity' IS NOT NULL
                             THEN 'semantic_ready' ELSE 'lexical_only' END)
                     ELSE EXCLUDED.metadata END,
-                embedding = CASE WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
+                embedding = CASE WHEN EXCLUDED.metadata->>'index_state' = 'source_document' THEN NULL
+                    WHEN EXCLUDED.embedding IS NULL AND rag_documents_v2.content = EXCLUDED.content
                     THEN rag_documents_v2.embedding ELSE EXCLUDED.embedding END,
                 search_vector = EXCLUDED.search_vector,
                 created_at = EXCLUDED.created_at,
@@ -772,9 +886,10 @@ class _PostgresHybridStore:
             pending.append(payload)
 
         if pending:
-            contents = [payload["content"] for payload in pending]
+            eligible = [index for index, payload in enumerate(pending) if not _source_document(payload["metadata"])]
+            contents = [pending[index]["content"] for index in eligible]
             try:
-                embed_result = self._embedder.encode(contents)
+                embed_result = self._embedder.encode(contents) if embed and contents else None
             except EmbeddingUnavailable:
                 embed_result = None
             if embed_result is not None and int(embed_result.dim or 0) != int(self._vector_dim):
@@ -786,10 +901,21 @@ class _PostgresHybridStore:
                         model_name=str(embed_result.model_name or self._embedder.model_name),
                     )
                 )
-            with self._engine.begin() as conn:
+            vectors = {index: embed_result.dense[position] for position, index in enumerate(eligible)} if embed_result else {}
+            with (self._engine.begin() if connection is None else nullcontext(connection)) as conn:
                 for index, payload in enumerate(pending):
-                    payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
-                    payload["metadata"]["index_state"] = "semantic_ready" if embed_result else "lexical_only"
+                    is_source = _source_document(payload["metadata"])
+                    if not is_source:
+                        payload["metadata"]["embedding_identity"] = embedding_identity(embed_result) if embed_result else None
+                        payload["metadata"]["index_state"] = "semantic_ready" if embed_result else "lexical_only"
+                    if not payload["metadata"].get("parent_source_id"):
+                        conn.execute(text("""
+                            UPDATE rag_documents_v2 SET expires_at=now()
+                            WHERE collection=:collection AND metadata->>'parent_source_id'=:source_id
+                              AND metadata->>'parent_content_sha256' IS DISTINCT FROM :digest
+                              AND (expires_at IS NULL OR expires_at > now())
+                        """), {"collection": payload["collection"], "source_id": payload["source_id"],
+                               "digest": payload["metadata"].get("source_content_sha256")})
                     conn.execute(
                         sql,
                         {
@@ -800,6 +926,7 @@ class _PostgresHybridStore:
                             "scope": payload["scope"],
                             "source_id": payload["source_id"],
                             "content": payload["content"],
+                            "lexical_text": "" if is_source else lexical_search_text(payload["content"]),
                             "title": payload["title"],
                             "url": payload["url"],
                             "source": payload["source"],
@@ -809,7 +936,7 @@ class _PostgresHybridStore:
                             "parent_collection": payload["parent_collection"],
                             "parent_run_id": payload["parent_run_id"],
                             "metadata": json.dumps(payload["metadata"], ensure_ascii=False),
-                            "embedding": _vector_literal(embed_result.dense[index]) if embed_result else None,
+                            "embedding": _vector_literal(vectors[index]) if index in vectors else None,
                             "created_at": payload["created_at"],
                             "expires_at": payload["expires_at"],
                         },
@@ -820,25 +947,69 @@ class _PostgresHybridStore:
     def index_status(self, identity: str | None = None) -> dict[str, Any]:
         self._ensure_schema()
         with self._engine.connect() as connection:
-            total, ready = connection.execute(text("""
-                SELECT count(*), count(*) FILTER (WHERE embedding IS NOT NULL
+            total, sources, ready, unprepared = connection.execute(text("""
+                SELECT count(*), count(*) FILTER (WHERE metadata->>'index_state'='source_document'),
+                    count(*) FILTER (WHERE embedding IS NOT NULL
+                    AND metadata->>'index_state' IS DISTINCT FROM 'source_document'
+                    AND octet_length(content)<=:max_bytes
                     AND metadata->>'embedding_identity' IS NOT NULL
-                    AND (CAST(:identity AS text) IS NULL OR metadata->>'embedding_identity'=:identity))
+                    AND (CAST(:identity AS text) IS NULL OR metadata->>'embedding_identity'=:identity)),
+                    count(*) FILTER (WHERE metadata->>'index_state' IS DISTINCT FROM 'source_document'
+                        AND octet_length(content)>:max_bytes)
                 FROM rag_documents_v2 WHERE expires_at IS NULL OR expires_at > now()
-            """), {"identity": identity}).one()
-        return {"documents": total, "semantic_ready": ready, "pending": total - ready}
+            """), {"identity": identity, "max_bytes": INDEX_CHUNK_MAX_BYTES}).one()
+        return {"documents": total, "source_documents": sources, "indexable": total - sources,
+                "semantic_ready": ready, "pending": total - sources - ready, "unprepared_long_documents": unprepared}
+
+    def prepare_long_documents(self, *, batch_size: int = 16, collection: str | None = None) -> dict[str, Any]:
+        self._ensure_schema()
+        # 无网络推理，锁住本批原文并在同一事务内准备子块，禁止覆盖并发改文。
+        with self._engine.begin() as connection:
+            originals = [dict(row) for row in connection.execute(text("""
+                SELECT * FROM rag_documents_v2
+                WHERE (expires_at IS NULL OR expires_at>now())
+                  AND (CAST(:collection AS text) IS NULL OR collection=:collection)
+                  AND metadata->>'index_state' IS DISTINCT FROM 'source_document'
+                  AND octet_length(content)>:max_bytes
+                ORDER BY collection,source_id LIMIT :limit FOR UPDATE
+            """), {"collection": collection, "max_bytes": INDEX_CHUNK_MAX_BYTES,
+                   "limit": max(1, min(64, batch_size))}).mappings()]
+            expanded = _expand_index_documents(_document_from_payload(row) for row in originals)
+            for doc in expanded:
+                if _source_document(doc.metadata):
+                    connection.execute(text("""
+                        UPDATE rag_documents_v2 SET metadata=CAST(:metadata AS jsonb), embedding=NULL
+                        WHERE collection=:collection AND source_id=:source_id
+                    """), {"collection": doc.collection, "source_id": doc.source_id,
+                           "metadata": json.dumps(doc.metadata, ensure_ascii=False)})
+            self.ingest_documents([doc for doc in expanded if not _source_document(doc.metadata)],
+                                  embed=False, connection=connection)
+            return _preparation_report(originals, expanded)
 
     def reindex_pending(self, *, batch_size: int = 8, collection: str | None = None) -> dict[str, Any]:
         self._ensure_schema()
+        with self._engine.connect() as connection:
+            unprepared = connection.execute(text("""
+                SELECT EXISTS (SELECT 1 FROM rag_documents_v2
+                    WHERE (expires_at IS NULL OR expires_at>now())
+                      AND (CAST(:collection AS text) IS NULL OR collection=:collection)
+                      AND metadata->>'index_state' IS DISTINCT FROM 'source_document'
+                      AND octet_length(content)>:max_bytes)
+            """), {"collection": collection, "max_bytes": INDEX_CHUNK_MAX_BYTES}).scalar()
+        if unprepared:
+            raise ValueError("rag_long_documents_require_preparation")
         identity = embedding_identity(self._embedder.encode(["FinSight index identity"]))
         with self._engine.connect() as connection:
             rows = connection.execute(text("""
                 SELECT collection,source_id,content FROM rag_documents_v2
                 WHERE (expires_at IS NULL OR expires_at > now())
                     AND (CAST(:collection AS text) IS NULL OR collection=:collection)
+                    AND metadata->>'index_state' IS DISTINCT FROM 'source_document'
+                    AND octet_length(content)<=:max_bytes
                     AND (embedding IS NULL OR metadata->>'embedding_identity' IS DISTINCT FROM :identity)
                 ORDER BY created_at,collection,source_id LIMIT :limit
-            """), {"collection": collection, "identity": identity, "limit": max(1, min(8, batch_size))}).mappings().all()
+            """), {"collection": collection, "identity": identity, "limit": max(1, min(8, batch_size)),
+                   "max_bytes": INDEX_CHUNK_MAX_BYTES}).mappings().all()
         if not rows:
             return {"updated": 0, **self.index_status(identity)}
         # 推理在事务外；条件更新保护补索引期间被重新摄取的正文。
@@ -851,6 +1022,8 @@ class _PostgresHybridStore:
                     UPDATE rag_documents_v2 SET embedding=CAST(:embedding AS vector),
                         metadata=metadata || CAST(:metadata AS jsonb)
                     WHERE collection=:collection AND source_id=:source_id AND content=:content
+                        AND (expires_at IS NULL OR expires_at > now())
+                        AND metadata->>'index_state' IS DISTINCT FROM 'source_document'
                         AND (embedding IS NULL OR metadata->>'embedding_identity' IS DISTINCT FROM :identity)
                 """), {**dict(row), "embedding": _vector_literal(result.dense[index]),
                          "identity": embedding_identity(result), "metadata": json.dumps({
@@ -889,6 +1062,7 @@ class _PostgresHybridStore:
                 FROM rag_documents_v2
                 WHERE collection = :collection
                   AND (expires_at IS NULL OR expires_at > now())
+                  AND metadata->>'index_state' IS DISTINCT FROM 'source_document'
             ),
             dense AS (
                 SELECT
@@ -905,11 +1079,12 @@ class _PostgresHybridStore:
                 SELECT
                     source_id,
                     row_number() OVER (
-                        ORDER BY ts_rank_cd(search_vector, plainto_tsquery('simple', :query)) DESC
+                        ORDER BY ts_rank_cd(search_vector, to_tsquery('simple', :lexical_query)) DESC
                     ) AS sparse_rank,
-                    ts_rank_cd(search_vector, plainto_tsquery('simple', :query)) AS sparse_score
+                    ts_rank_cd(search_vector, to_tsquery('simple', :lexical_query)) AS sparse_score
                 FROM live_docs
-                WHERE search_vector @@ plainto_tsquery('simple', :query)
+                WHERE search_vector @@ to_tsquery('simple', :lexical_query)
+                   OR (CAST(:legacy_chinese_pattern AS text) IS NOT NULL AND content LIKE :legacy_chinese_pattern)
                 ORDER BY sparse_score DESC
                 LIMIT :candidate_k
             ),
@@ -962,6 +1137,9 @@ class _PostgresHybridStore:
                 {
                     "collection": collection,
                     "query": query_text,
+                    "lexical_query": lexical_tsquery(query_text),
+                    "legacy_chinese_pattern": ("%" + query_text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+                    if re.search(r"[\u4e00-\u9fff]", query_text) and len(query_text) <= 80 else None,
                     "query_embedding": q_emb,
                     "embedding_identity": identity,
                     "candidate_k": candidate_k,
@@ -1010,6 +1188,21 @@ class _PostgresHybridStore:
                     }
                 )
             return hits
+
+    def read_document(self, *, collection: str, source_id: str) -> dict[str, Any] | None:
+        """参数化精确回读；过期与访问范围不能由文档ID绕过。"""
+        self._ensure_schema()
+        query = text("""
+            SELECT collection,source_id,content,title,url,source,scope,layer,entity_scope,entity_key,
+                   metadata,created_at,expires_at
+            FROM rag_documents_v2
+            WHERE collection=:collection AND source_id=:source_id
+              AND (expires_at IS NULL OR expires_at > now())
+            LIMIT 1
+        """)
+        with self._engine.connect() as connection:
+            row = connection.execute(query, {"collection": collection, "source_id": source_id}).mappings().first()
+        return _decorate_search_hit(dict(row)) if row else None
 
     def hybrid_search_many(self, query: str, *, collections: Iterable[str], top_k: int) -> list[dict[str, Any]]:
         normalized = _normalize_collections(collections)
@@ -1215,13 +1408,20 @@ class HybridRAGService:
         )
 
     def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:
-        return self._store.ingest_documents(docs)
+        return self._store.ingest_documents(_expand_index_documents(docs))
 
     def index_status(self, identity: str | None = None) -> dict[str, Any]:
         return self._store.index_status(identity)
 
     def reindex_pending(self, *, batch_size: int = 8, collection: str | None = None) -> dict[str, Any]:
         return self._store.reindex_pending(batch_size=batch_size, collection=collection)
+
+    def prepare_long_documents(self, *, batch_size: int = 16, collection: str | None = None) -> dict[str, Any]:
+        return self._store.prepare_long_documents(batch_size=batch_size, collection=collection)
+
+    def read_document(self, *, collection: str, source_id: str) -> dict[str, Any] | None:
+        result = self._store.read_document(collection=collection, source_id=source_id)
+        return _decorate_search_hit(result) if result else None
 
     def hybrid_search(self, query: str, *, collection: str, top_k: int = 6) -> list[dict[str, Any]]:
         hits = self._store.hybrid_search(query, collection=collection, top_k=max(1, int(top_k)))

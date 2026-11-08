@@ -1,0 +1,7 @@
+# 显式 self_hosted 模式的额外依赖；CPU torch由Dockerfile.rag预安装。
+-r requirements-runtime.txt
+chromadb>=0.4.0
+transformers>=4.44.0,<5.0.0
+sentence-transformers==5.2.2
+FlagEmbedding==1.3.5
+sentencepiece>=0.2.0

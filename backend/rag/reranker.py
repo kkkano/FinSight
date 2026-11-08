@@ -14,6 +14,7 @@ RAG_RERANKER_MAX_LENGTH
 from __future__ import annotations
 
 import logging
+import hashlib
 import os
 import threading
 from typing import Any, Sequence
@@ -21,10 +22,29 @@ from typing import Any, Sequence
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TOP_N = 8
+_REMOTE_MAX_DOCUMENTS = 32
+_REMOTE_MAX_CHARACTERS = 120000
+
+
+def _remote_candidates(query: str, documents: list[dict[str, Any]], content_key: str) -> list[dict[str, Any]]:
+    """按原检索顺序选择预算内的整条候选，查询也占用字符预算，不截断正文。"""
+    selected = []
+    used = len(query)
+    for document in documents:
+        length = len(str(document.get(content_key) or ""))
+        if used + length > _REMOTE_MAX_CHARACTERS:
+            continue
+        selected.append(document)
+        used += length
+        if len(selected) == _REMOTE_MAX_DOCUMENTS:
+            break
+    return selected
 
 
 def _is_production_env() -> bool:
     values = [
+        os.getenv("FINSIGHT_RUNTIME_PROFILE", ""),
+        os.getenv("APP_MODE", ""),
         os.getenv("APP_ENV", ""),
         os.getenv("ENV", ""),
         os.getenv("NODE_ENV", ""),
@@ -93,10 +113,13 @@ class RerankerService:
     """Cross-Encoder reranking service with graceful fallback."""
 
     def __init__(self, *, force_backend: str | None = None) -> None:
-        backend = (force_backend or os.getenv("RAG_RERANKER", "bge-reranker")).strip().lower()
+        backend = (force_backend or os.getenv("RAG_RERANKER", "none")).strip().lower()
+        if backend not in {"none", "remote_api", "bge-reranker"}:
+            raise ValueError("unsupported RAG_RERANKER provider")
         self._requested_backend = backend
         self._enabled = backend != "none"
         self._available: bool | None = None
+        self._last_status = "unverified"
         self._worker_url = str(os.getenv("RAG_WORKER_URL") or "").strip().rstrip("/")
         if not self._enabled:
             _log_reranker_degraded(
@@ -108,8 +131,14 @@ class RerankerService:
     def is_enabled(self) -> bool:
         return self._enabled and self._check_available()
 
+    def health(self) -> dict[str, str]:
+        """只读最后调用状态，不为健康检查额外调用模型。"""
+        return {"status": self._last_status if self._enabled else "disabled", "provider": self._requested_backend}
+
     def _check_available(self) -> bool:
         """Lazy check whether sentence_transformers CrossEncoder is importable."""
+        if self._requested_backend == "remote_api":
+            return True
         if self._worker_url:
             return self._enabled
         if self._available is not None:
@@ -147,6 +176,15 @@ class RerankerService:
             return doc_list[:top_n]
 
         try:
+            if self._requested_backend == "remote_api":
+                from backend.rag.api_provider import HTTPRerankProvider
+                candidates = _remote_candidates(query, doc_list, content_key)
+                if not candidates:
+                    raise ValueError("rerank_candidate_budget_exceeded")
+                ranked = HTTPRerankProvider.from_env().rank(
+                    query, [str(doc.get(content_key) or "") for doc in candidates], top_n)
+                self._last_status = "ok"
+                return [{**candidates[index], "rerank_score": score} for index, score in ranked]
             pairs = [(query, str(doc.get(content_key) or "")) for doc in doc_list]
             if self._worker_url:
                 import httpx
@@ -161,36 +199,52 @@ class RerankerService:
             else:
                 scores = _get_reranker().predict(pairs)
             ranked = sorted(zip(doc_list, scores), key=lambda item: item[1], reverse=True)
+            self._last_status = "ok"
             return [{**doc, "rerank_score": score} for doc, score in ranked[:top_n]]
         except Exception as exc:
+            self._last_status = "degraded"
             _log_reranker_degraded(
                 reason="rerank_inference_error",
-                detail=str(exc),
+                detail=type(exc).__name__,
                 requested_backend=self._requested_backend,
             )
             return doc_list[:top_n]
 
 
 _reranker_service: RerankerService | None = None
+_reranker_service_config: str | None = None
 _reranker_svc_lock = threading.Lock()
+
+
+def _configured_service_key() -> str:
+    backend = os.getenv("RAG_RERANKER", "none").strip().lower()
+    names = (("RAG_RERANK_API_URL", "RAG_RERANK_MODEL", "RAG_RERANK_API_KEY", "RAG_RERANK_TIMEOUT_SECONDS")
+             if backend == "remote_api" else
+             ("RAG_WORKER_URL", "RAG_WORKER_TOKEN", "RAG_WORKER_TIMEOUT_SECONDS", "RAG_RERANKER_MAX_LENGTH")
+             if backend == "bge-reranker" else ())
+    # 配置变化后不能沿用旧模型的成功状态；签名不保留或输出密钥原文。
+    return hashlib.sha256("\0".join([backend, *(os.getenv(name, "") for name in names)]).encode()).hexdigest()
 
 
 def get_reranker_service() -> RerankerService:
     """Return the module-level RerankerService singleton."""
-    global _reranker_service
-    if _reranker_service is not None:
+    global _reranker_service, _reranker_service_config
+    config = _configured_service_key()
+    if _reranker_service is not None and _reranker_service_config == config:
         return _reranker_service
     with _reranker_svc_lock:
-        if _reranker_service is None:
+        if _reranker_service is None or _reranker_service_config != config:
             _reranker_service = RerankerService()
+            _reranker_service_config = config
     return _reranker_service
 
 
 def reset_reranker_service() -> None:
     """Reset singleton (for testing)."""
-    global _reranker_service
+    global _reranker_service, _reranker_service_config
     with _reranker_svc_lock:
         _reranker_service = None
+        _reranker_service_config = None
 
 
 __all__ = [

@@ -274,7 +274,7 @@ def test_postgres_service_auto_aligns_embedder_to_existing_store_dim(monkeypatch
 
     assert service.backend_name == "postgres"
     assert service.vector_dim == 96
-    assert service.embedding_model == "hash"
+    assert service.embedding_model == "lexical"
 
 
 def test_postgres_service_raises_clear_error_when_explicit_embedder_conflicts(monkeypatch):
