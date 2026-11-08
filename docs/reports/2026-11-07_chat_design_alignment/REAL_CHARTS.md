@@ -58,3 +58,15 @@ SHA-256：`00d119dac35fe2fb3e8403c55ecdf3c3ed19e98552e68fb72736d41427a9cf0d`
 - 来源去重为 1 个 Twelve Data 数据来源，显示日期 2026-11-06；计算方法不计额外来源。只加载图和 datasets 的来源/历史数据，不加载 terminal 长正文，没有新增模型或生产调用。
 
 该项真实渲染复验通过；它证明图表和数学输入的一致性，不替代旁支语言或其他 after 问题的完整性验收。
+
+## 最终 S3 涨跌幅比较图
+
+当前最终 S3 产物为 `final-s3/acceptance-natural-e2e58933cf-6/chart_a4bfb4bb672a4c16.json`，SHA-256：`629faa7babadb8661b0cbc7de88bc6a762e4ee041ff859397d257bc61703d849`。
+
+- [图表](real-chart-final-nvda-amd.png) · [数据与方法](real-chart-final-nvda-amd-data.png) · [实例数值/交叉统计/Source proof](real-chart-final-nvda-amd.json)
+- 215点双序列逐点等于原 artifact，单位为 %，末值 NVDA=0.07506702412867217、AMD=109.67501354127754，没有重复乘100，原文件SHA不变。
+- 从原序列独立检查领先方变化，与 `comparison_stats.crossovers` 一致：4次，日期2026-01-06、01-13、02-05、03-19；初始共同基准的首次分离不计，未使用旧5次统计补图。
+- 图保持原spec的两条价格涨跌曲线，没有人工增加交叉标记。数据来源去重为1个Twelve Data，日期友好显示2026-11-06。
+- 只读取新图与同目录datasets来源/统计，没有加载候选terminal长文，没有新增模型或生产请求。
+
+该真实渲染用例通过。最终八题核心结果与250秒harness/生产180秒预算的区别，见[核心验收与限制](../2026-11-07_natural_response_compute/README.md)。

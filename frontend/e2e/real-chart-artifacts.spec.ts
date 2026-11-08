@@ -18,6 +18,8 @@ const cases: Array<{ name: string; run: string; file: string; points: number; se
     directory: '.omx/acceptance-natural/acceptance-natural-9e7eb3eff2-6-retry-34ae', sourceFile: 'datasets' },
   { name: 'fresh-aapl-ma20', run: 'acceptance-natural-1f4f06023d-2', file: 'chart_c6c33cc93acfc677.json', points: 24, series: 2,
     directory: '.omx/acceptance-natural/fresh/acceptance-natural-1f4f06023d-2', sourceFile: 'datasets' },
+  { name: 'final-nvda-amd', run: 'acceptance-natural-e2e58933cf-6', file: 'chart_a4bfb4bb672a4c16.json', points: 215, series: 2,
+    directory: '.omx/acceptance-natural/final-s3/acceptance-natural-e2e58933cf-6', sourceFile: 'datasets' },
 ];
 
 for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) => {
@@ -121,6 +123,22 @@ for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) =>
     expect(rendered[0].unit).toBe('%');
     expect(rendered[0].series[1].data.at(-1)).toBe(109.67501354127754);
   }
+  let comparisonCheck: Record<string, unknown> | undefined;
+  if (item.name === 'final-nvda-amd') {
+    let prior: number | undefined;
+    const dates: string[] = [];
+    for (const row of rows) {
+      const sign = Math.sign(Number(row.series_1) - Number(row.series_2));
+      if (!sign) continue;
+      if (prior !== undefined && sign !== prior) dates.push(String(row.date));
+      prior = sign;
+    }
+    expect(dates).toEqual(['2026-01-06', '2026-01-13', '2026-02-05', '2026-03-19']);
+    const stats = sourceData.records[artifact.dataset_refs![0]].output.comparison_stats;
+    expect(stats.crossovers).toEqual([{ left: 'NVDA', right: 'AMD', count: 4, dates, dates_truncated: false }]);
+    comparisonCheck = { crossovers: stats.crossovers, lead_days: stats.lead_days,
+      independent_crossover_dates: dates, strictly_increasing: stats.strictly_increasing };
+  }
   let meanCheck: Record<string, unknown> | undefined;
   if (item.name === 'fresh-aapl-ma20') {
     const ref = (artifact.method?.input_refs as string[])[0];
@@ -210,6 +228,6 @@ for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) =>
   writeFileSync(join(output, `${prefix}.json`), JSON.stringify({ evidence_kind: 'existing_model_artifact_rendering', source_file: path, sha256, run_id: item.run,
     source_ids: sources.map((source) => source.source_id), source_proof: sources, point_count: rows.length,
     series: rendered[0].series.map((series: { name: string; data: number[] }) => ({ name: series.name, first: series.data[0], last: series.data.at(-1), points: series.data.length })),
-    unit: rendered[0].unit, source_values_unchanged: true, model_calls: executions, mean_check: meanCheck, annotations: rendered[0].areas,
+    unit: rendered[0].unit, source_values_unchanged: true, model_calls: executions, mean_check: meanCheck, comparison_check: comparisonCheck, annotations: rendered[0].areas,
     panel_boundaries: panelBoundaries, visible_metadata: visibleData.slice(-6000) }, null, 2), 'utf8');
 });
