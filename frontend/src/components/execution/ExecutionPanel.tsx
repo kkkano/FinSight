@@ -9,7 +9,6 @@ import { formatExecutionDuration, summarizeExecutionMetrics } from './executionM
 import { ExecutionStats } from './ExecutionStats';
 import { GroupedTimeline } from './GroupedTimeline';
 import { ParallelWaterfall } from './ParallelWaterfall';
-import { PipelineStageBar } from './PipelineStageBar';
 import { executionSubjectLabel, isTimelineError, summarizeTimelineEvent } from './timelineUtils';
 
 function CollapsibleDetails({ details }: { details: Record<string, unknown> }) {
@@ -121,7 +120,7 @@ export function ExecutionPanel({ runId, compact = false, collapsible = false, on
   const latestMessage = run.timeline.filter((event) => event.userMessage?.trim()).at(-1)?.userMessage;
   const currentMessage = run.status === 'running'
     ? latestMessage || run.currentStep || '正在准备研究'
-    : run.status === 'done' ? '本轮研究已完成' : run.status === 'error' ? '本轮研究未完成' : '本轮研究已取消';
+    : run.status === 'done' ? '研究已完成' : run.status === 'error' ? '研究未完成' : '研究已取消';
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -138,7 +137,6 @@ export function ExecutionPanel({ runId, compact = false, collapsible = false, on
         </div>
       </div>
       <p className="break-words text-sm font-medium text-t-text">{run.tickers.join(', ') || run.query}</p>
-      <PipelineStageBar stages={run.pipelineStages} currentStage={run.pipelineCurrentStage} />
       <p className="break-words text-sm leading-relaxed text-t-text2">{currentMessage}</p>
 
       {errors.length > 0 && (

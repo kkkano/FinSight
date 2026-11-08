@@ -39,7 +39,7 @@ export function PersonalPredictionDetail({ item }: { item: PredictionHistoryItem
     </div>
     <p className="mt-2 text-sm font-medium text-t-text">{prediction.source_type === 'manual' ? direction.label.replace(/^AI /, '手动 ') : direction.label}</p>
     <p className="mt-1 text-xs leading-5 text-t-text3">{direction.description}</p>
-    <p className="mt-3 text-xs leading-5 text-t-text3">生成于 {formatPersonalTime(prediction.created_at)} · {prediction.anchor.timeframe === '1d' ? '日线证据' : prediction.anchor.timeframe}</p>
+    <p className="mt-3 text-xs leading-5 text-t-text3">生成于 {formatPersonalTime(prediction.created_at)} · {prediction.anchor.timeframe === '1d' ? '日线数据' : prediction.anchor.timeframe}</p>
     <p className="mt-1 text-xs leading-5 text-t-text3">有效范围为所列入场、目标与失效条件，未定义固定持有天数。</p>
     {ended ? <p className="mt-3 text-sm leading-6 text-t-text2">这条判断已结束，保留原结论用于复盘，不代表当前观点。</p> : null}
     <section className="mt-5 border-t border-t-divider py-5">
@@ -70,9 +70,9 @@ export function PersonalPredictionDetail({ item }: { item: PredictionHistoryItem
       <dl className="mt-3 space-y-3 break-words text-sm">
         {[
           ['模型', loading ? '正在读取…' : run?.llm_model || '--'],
-          ['供应商', run?.llm_provider || '--'],
-          ['证据行情', prediction.evidence_provider || run?.market_provider || '--'],
-          ['证据时间', formatPersonalTime(prediction.evidence_as_of || run?.market_as_of)],
+          ['模型服务', run?.llm_provider || '--'],
+          ['行情来源', prediction.evidence_provider || run?.market_provider || '--'],
+          ['数据时间', formatPersonalTime(prediction.evidence_as_of || run?.market_as_of)],
           ['提示版本', prediction.prompt_version],
           ['评估版本', outcome?.algorithm_version || '--'],
           ['生成来源', prediction.source_type === 'ai' ? 'AI 判断' : '手动判断'],
@@ -90,7 +90,7 @@ export function PersonalPredictionDetail({ item }: { item: PredictionHistoryItem
   </article>;
 }
 
-function PersonalTrackRecordView({ symbol }: { symbol?: string }) {
+export function PersonalTrackRecordView({ symbol }: { symbol?: string }) {
   const [scope, setScope] = useState<'current' | 'all'>(symbol ? 'current' : 'all');
   const [direction, setDirection] = useState<DirectionFilter>('');
   const [offset, setOffset] = useState(0);

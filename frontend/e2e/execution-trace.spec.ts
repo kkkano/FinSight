@@ -10,17 +10,11 @@ const fulfillJson = async (route: any, payload: unknown) => {
   });
 };
 
-// 专家执行详情固定收纳在右侧「过程」页签，不再出现在页面底部。
+// 研究活动保留在所属对话内，标的面板不重复提供执行页签。
 const openExecutionPanel = async (page: any) => {
-  const expand = page.getByTestId('context-panel-expand');
-  if (await expand.isVisible()) await expand.click();
-  await page.getByTestId('context-tab-execution').click();
-  const details = page.getByTestId('execution-details');
-  await expect(details).toBeVisible();
-  if (!(await details.evaluate((element: HTMLDetailsElement) => element.open))) {
-    await details.locator('summary').first().click();
-  }
-  await expect(details).toHaveAttribute('open', '');
+  const summary = page.getByLabel('研究过程').getByRole('button').first();
+  await expect(summary).toBeVisible();
+  if (await summary.getAttribute('aria-expanded') !== 'true') await summary.click();
 };
 
 const buildDashboardPayload = (symbol = 'AAPL') => ({
@@ -70,6 +64,8 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('fs_dashboard_news_mode_v1', JSON.stringify('market'));
   }, E2E_SESSION_ID);
   await installAuthenticatedSession(page);
+  await page.route('**/api/models', (route) => fulfillJson(route, { models: [{ id: 'system:server-default', model: 'test-model',
+    label: '验收模型', provider: 'system', available: true, native_tool_calls: true, effort_options: [] }], default_model_id: 'system:server-default' }));
 
   await page.route('**/api/dashboard**', async (route) => {
     const url = new URL(route.request().url());
@@ -119,7 +115,7 @@ test('原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示',
   await expect(page.getByText('Console', { exact: true })).toBeVisible();
 });
 
-test('右侧过程页签展示专家执行面板并消费计划/决策事件', async ({ page }) => {
+test('所属对话展示真实Agent活动，不把内部计划字段当作用户过程', async ({ page }) => {
   await page.route('**/api/execute', async (route) => {
     const frames = [
       { type: 'pipeline_stage', stage: 'planning', status: 'start', message: 'Planner started' },
@@ -172,10 +168,9 @@ test('右侧过程页签展示专家执行面板并消费计划/决策事件', a
   await page.getByTestId('chat-send-btn').click();
   await openExecutionPanel(page);
 
-  await expect(page.getByText('计划摘要')).toBeVisible();
-  await expect(page.getByText('决策说明', { exact: true })).toBeVisible();
-  await expect(page.getByText('分组时间线')).toBeVisible();
-  await expect(page.getByText('Agent 成功：1')).toBeVisible();
+  await expect(page.locator('.tool-activity-row').filter({ hasText: '新闻分析师' })).toBeVisible();
+  await expect(page.getByText('计划摘要')).toHaveCount(0);
+  await expect(page.getByTestId('context-tab-execution')).toHaveCount(0);
 });
 
 test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) => {
@@ -218,8 +213,7 @@ test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) =>
   await page.goto('/chat');
   await page.locator('#chat-input').fill('分析 AAPL 新闻');
   await page.getByTestId('chat-send-btn').click();
-  await openExecutionPanel(page);
-
-  await expect(page.getByText('Planner selection summary')).toBeVisible();
-  await expect(page.getByText('Planner selected one agent.')).toBeVisible();
+  await expect(page.getByText('ok', { exact: true })).toBeVisible();
+  await expect(page.getByText('Planner selection summary')).toHaveCount(0);
+  await expect(page.getByText('Planner selected one agent.')).toHaveCount(0);
 });

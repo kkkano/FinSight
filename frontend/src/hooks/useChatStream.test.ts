@@ -181,4 +181,165 @@ describe('chat retry and recovery', () => {
     expect(useStore.getState().messages.at(-1)).toMatchObject({ content: 'Current recovered answer', report: oldReport, isLoading: false });
     expect(useStore.getState().messages.at(-1)?.error).toBeUndefined();
   });
+  it('preserves body and blocks but marks persistence_failed delivery as failed', async () => {
+    const blocks = [{ id: 'answer', kind: 'text', content: '已生成但未保存', revision: 0 }];
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(oldReport, [], { success: false, run_status: 'persistence_failed',
+        persistence_status: 'failed', answer_status: 'partial', response: '已生成但未保存', blocks });
+    });
+    await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
+    const answer = useStore.getState().messages.at(-1)!;
+    expect(answer).toMatchObject({ content: '已生成但未保存', blocks, isLoading: false,
+      runStatus: 'persistence_failed', error: '回答已生成，但未保存成功。', canRetry: true });
+    expect(answer.thinking?.at(-1)?.stage).toBe('error');
+    expect(answer.report).toBeUndefined();
+  });
+
+  it('uses an error envelope response and artifact blocks without losing the received result', async () => {
+    const blocks = [{ id: 'answer', kind: 'text', content: '部分研究结果', revision: 0 }];
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onError?.('来源请求失败', { response: '部分研究结果', blocks, run_status: 'failed' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '部分研究结果', blocks,
+      isLoading: false, runStatus: 'failed', error: '来源请求失败' });
+  });
+
+  it('shows the safe failure reason and next action instead of the generic run message', async () => {
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onError?.('本轮研究未完成，已保留可用内容。', { run_status: 'failed', error_code: 'model_timeout',
+        reason: '模型在生成研究结论时超时。', recovery_action: '可从已有资料继续研究。' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '模型在生成研究结论时超时。 可从已有资料继续研究。',
+      error: '模型在生成研究结论时超时。 可从已有资料继续研究。', isLoading: false, runStatus: 'failed' });
+  });
+
+  it('maps old error codes when an authoritative failed delivery has only a generic message', async () => {
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(undefined, [], { run_status: 'failed', response: '已取得部分资料',
+        error_code: 'agent_turn_budget_exhausted', message: '本轮研究未完成，已保留可用内容。', persistence_status: 'ephemeral' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '已取得部分资料', runStatus: 'failed',
+      error: '这次研究已达到步骤上限，还没完成。', isLoading: false });
+  });
+
+  it('finishes completed research with evidence gaps without labelling it an execution error', async () => {
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(undefined, [], { success: true, run_status: 'completed', answer_status: 'partial',
+        quality: { reasons: [{ code: 'partial_tool_failure', message: '盈利预期数据未取得。' }] },
+        response: '已有行情结论；盈利预期缺失。', persistence_status: 'ephemeral' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
+    const answer = useStore.getState().messages.at(-1)!;
+    expect(answer).toMatchObject({ runStatus: 'completed', answerStatus: 'partial', isLoading: false, canRetry: true });
+    expect(answer.error).toBeUndefined();
+    expect(answer.thinking?.at(-1)).toMatchObject({ stage: 'done', message: '盈利预期数据未取得。', result: { status: 'partial' } });
+  });
+
+  it.each(['error', 'request-rejected'])('restores the assistant slot on %s when the current user turn remains', async (mode) => {
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      useStore.setState((state) => ({ messages: state.messages.filter((message) => message.role === 'user') }));
+      if (mode === 'request-rejected') throw new Error('request failed');
+      callbacks.onError?.('模型服务连接中断。', { error_code: 'model_connection_error' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('继续上一轮研究');
+    const messages = useStore.getState().messages;
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({ role: 'assistant', isLoading: false, runStatus: 'failed', replyTo: messages[0].id });
+    expect(messages[1].error).toBeTruthy();
+    expect(useStore.getState().isChatLoading).toBe(false);
+  });
+
+  it('sends explicit recovery metadata only for a failed turn retry, never for an ordinary follow-up', async () => {
+    const session = useStore.getState().sessionId;
+    const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(undefined, [], { response: '补充研究结果', persistence_status: 'ephemeral' });
+    });
+    await useChatStream(session).send('研究 AAPL');
+    const failed = useStore.getState().messages.at(-1)!;
+    useStore.getState().updateMessage(failed.id, { runStatus: 'failed', error: '模型响应超时。' });
+    await useChatStream(session).retry(failed.id);
+    expect(sent.mock.calls[1][0].resume_from_run_id).toBe(failed.runId);
+    expect(sent.mock.calls[1][0].query).toBe('研究 AAPL');
+    expect(useStore.getState().messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    await useChatStream(session).send('那现金流呢');
+    expect(sent.mock.calls[2][0].resume_from_run_id).toBeUndefined();
+    expect(sent.mock.calls[2][0].query).toBe('那现金流呢');
+  });
+
+  it('keeps chosen skill IDs on retry and does not carry them into the next question', async () => {
+    const session = useStore.getState().sessionId;
+    const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(undefined, [], { response: '研究结果', persistence_status: 'ephemeral' });
+    });
+    await useChatStream(session).send('分析 AAPL 成长质量', { skillIds: ['growth-quality', 'growth-quality', 'ma-trend'] });
+    const answer = useStore.getState().messages.at(-1)!;
+    expect(sent.mock.calls[0][0].skill_ids).toEqual(['growth-quality', 'ma-trend']);
+    await useChatStream(session).retry(answer.id);
+    expect(sent.mock.calls[1][0].skill_ids).toEqual(['growth-quality', 'ma-trend']);
+    expect(sent.mock.calls[1][0].resume_from_run_id).toBeUndefined();
+    await useChatStream(session).send('解释市盈率');
+    expect(sent.mock.calls[2][0].skill_ids).toBeUndefined();
+  });
+
+  it('requests supplied reasoning by default and retains it in the owning message blocks', async () => {
+    const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (request, callbacks) => {
+      callbacks.onRuntimeEvent?.({ type: 'reasoning.delta', run_id: request.run_id, session_id: request.session_id, seq: 1,
+        payload: { kind: 'provider_raw', block_id: 'root_reasoning_1', delta: '核对价格与资料时点。', agent_id: 'root' } });
+      callbacks.onDone?.(undefined, [], { response: '已完成核查。', persistence_status: 'ephemeral' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('分析 AAPL');
+    expect(sent.mock.calls[0][0].show_provider_reasoning).toBe(true);
+    expect(useStore.getState().messages.at(-1)?.blocks).toContainEqual(expect.objectContaining({ kind: 'reasoning', reasoning_kind: 'provider_raw',
+      id: 'root_reasoning_1', content: '核对价格与资料时点。' }));
+  });
+  it('keeps progress out of the final answer and the next request history', async () => {
+    const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (request, callbacks) => {
+      const emit = (seq: number, type: string, payload: Record<string, unknown>) => callbacks.onRuntimeEvent?.({
+        seq, type, payload, run_id: request.run_id, session_id: request.session_id,
+      });
+      emit(1, 'content.delta', { block_id: 'intro', delta: '我先查看现金流。' });
+      emit(2, 'content.block_finished', { block_id: 'intro', content_phase: 'progress' });
+      emit(3, 'content.delta', { block_id: 'final', delta: '正式结论。' });
+      emit(4, 'content.block_finished', { block_id: 'final', content_phase: 'answer' });
+      callbacks.onDone?.(undefined, [], { response: '正式结论。', persistence_status: 'ephemeral' });
+    });
+    const session = useStore.getState().sessionId;
+    await useChatStream(session).send('分析 AAPL');
+    const answer = useStore.getState().messages.at(-1)!;
+    expect(answer.content).toBe('正式结论。');
+    expect(answer.blocks?.[0]).toMatchObject({ content: '我先查看现金流。', content_phase: 'progress' });
+    await useChatStream(session).send('再看收入');
+    expect(sent.mock.calls[1][0].history?.filter((message) => message.role === 'assistant')).toEqual([{ role: 'assistant', content: '正式结论。' }]);
+  });
+
+  it.each(['/', '/growth-quality', '研究 AAPL /成长'])('does not send an unresolved skill command %s as a user question', async (query) => {
+    const sent = vi.spyOn(apiClient, 'sendMessageStream');
+    await useChatStream(useStore.getState().sessionId).send(query);
+    expect(sent).not.toHaveBeenCalled();
+    expect(useStore.getState().messages).toHaveLength(0);
+  });
+
+  it('sends PNG bytes only in the current request and never persists them in message snapshots', async () => {
+    const image = { data_url: 'data:image/png;base64,TEST-TRANSIENT-IMAGE', name: '参考.png' };
+    const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(undefined, [], { response: '图像分析结果', persistence_status: 'ephemeral' });
+    });
+    const session = useStore.getState().sessionId;
+    await useChatStream(session).send('分析这张图', { images: [image] });
+    expect(sent.mock.calls[0][0].images).toEqual([image]);
+    const answer = useStore.getState().messages.at(-1)!;
+    expect(answer.requestSnapshot?.hasTransientImages).toBe(true);
+    expect(JSON.stringify(useStore.getState().messages)).not.toContain('TEST-TRANSIENT-IMAGE');
+    expect(JSON.stringify(answer.requestSnapshot)).not.toContain('data:image/');
+    await useChatStream(session).retry(answer.id);
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(useStore.getState().draft).toBe('分析这张图');
+    await useChatStream(session).send('下一轮纯文本');
+    expect(sent.mock.calls[1][0].images).toBeUndefined();
+    expect(sent.mock.calls[1][0].history?.every((item) => !item.content.includes('data:image/'))).toBe(true);
+  });
+
 });

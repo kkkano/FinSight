@@ -307,7 +307,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
             )}
             {reportHints.has_conflict && (
               <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-                存在证据冲突，请重点复核
+                不同来源存在矛盾，请重点核对
               </span>
             )}
             {Array.isArray(reportHints.conflict_agents) && reportHints.conflict_agents.length > 0 && (

@@ -90,7 +90,7 @@ export const getReportPresentation = (report: ReportIR) => {
     summary: unavailable
       ? answerStatus === 'blocked' ? '当前结果未通过质量检查，无法给出总体判断。'
         : quality?.has_supported_content === false ? '当前没有足够的已验证内容支持总体判断。'
-          : '现有证据不足以形成总体判断，已获取的事实与来源见下文。'
+          : '资料还不足以给出整体判断，可先参考下方的信息和来源。'
       : summary || String(structuredOverall),
     answerStatus,
     answerLabel,

@@ -15,11 +15,11 @@ export function ExecutionStats({ run }: ExecutionStatsProps) {
       <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-xs" data-testid="execution-statistics">
         <div>
           <dt className="text-t-text2">LLM 调用</dt>
-          <dd className="num mt-1 text-base font-medium text-t-text" title={stats.llmCalls === null ? '本轮未采集调用计数' : undefined}>{stats.llmCalls ?? '—'}</dd>
+          <dd className="num mt-1 text-base font-medium text-t-text" title={stats.llmCalls === null ? '没有记录调用次数' : undefined}>{stats.llmCalls ?? '—'}</dd>
         </div>
         <div>
           <dt className="text-t-text2">工具步骤</dt>
-          <dd className="num mt-1 text-base font-medium text-t-text" title={stats.toolCalls === null ? '本轮未采集工具步骤' : '含缓存命中及跳过的取数步骤'}>{stats.toolCalls ?? '—'}</dd>
+          <dd className="num mt-1 text-base font-medium text-t-text" title={stats.toolCalls === null ? '没有记录工具步骤' : '含缓存命中及跳过的取数步骤'}>{stats.toolCalls ?? '—'}</dd>
         </div>
         <div>
           <dt className="text-t-text2">已完成步骤</dt>

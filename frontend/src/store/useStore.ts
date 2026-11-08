@@ -1,3 +1,4 @@
+import { publicResearchBlocks, useRuntimeMemory } from './researchStream';
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
 import { apiClient } from '../api/client';
@@ -6,7 +7,7 @@ import { useModelSelectionStore } from './modelSelection';
 import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
 import type { PendingChatHandoffContext } from '../types/chatHandoff';
-import type { RightPanelTab } from '../components/right-panel/types';
+import { extractTickers } from '../utils/ticker';
 
 type Theme = 'dark' | 'light';
 export type ColorConvention = 'intl' | 'cn';
@@ -19,6 +20,9 @@ export interface AuthIdentity {
 }
 
 export interface ConversationSummary {
+  tickers?: string[];
+  runStatus?: string;
+  answerStatus?: string;
   sessionId: string;
   title: string;
   lastMessagePreview: string;
@@ -280,11 +284,6 @@ interface AppState {
   setRequestMetrics: (metrics: Partial<{ llmTotalCalls: number; toolTotalCalls: number; updatedAt: string | null }>) => void;
   // 右侧面板全局可见性 - 供快捷键切换
   showRightPanel: boolean;
-  rightPanelTab: RightPanelTab;
-  rightPanelExpanded: boolean;
-  setRightPanelTab: (tab: RightPanelTab) => void;
-  setRightPanelExpanded: (expanded: boolean) => void;
-  openRightPanel: (tab: RightPanelTab, expanded?: boolean) => void;
   setShowRightPanel: (show: boolean) => void;
   toggleRightPanel: () => void;
 }
@@ -444,7 +443,10 @@ const normalizeConversationSummaries = (raw: string | null): ConversationSummary
     return parsed
       .map((item) => ({
         sessionId: String(item?.sessionId || '').trim(),
-        title: String(item?.title || '').trim() || zh.chat.newConversation,
+        title: String(item?.title || '').trim().slice(0, 20) || zh.chat.newConversation,
+        tickers: Array.isArray(item?.tickers) ? item.tickers : [],
+        runStatus: item?.runStatus,
+        answerStatus: item?.answerStatus,
         lastMessagePreview: String(item?.lastMessagePreview || '').trim(),
         messageCount: Math.max(0, Number(item?.messageCount || 0)),
         createdAt: Number(item?.createdAt || Date.now()),
@@ -471,10 +473,14 @@ const buildConversationSummary = (
   const previewSource = latest?.content || previous?.lastMessagePreview || '';
   const createdAt = previous?.createdAt || visibleMessages[0]?.timestamp || Date.now();
   const updatedAt = latest?.timestamp || previous?.updatedAt || Date.now();
+  const lastAnswer = [...messages].reverse().find((message) => message.role === 'assistant' && message.id !== WELCOME_MESSAGE.id);
 
   return {
     sessionId,
-    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || zh.chat.newConversation,
+    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 20) || zh.chat.newConversation,
+    tickers: [...new Set(messages.filter((message) => message.role === 'user').flatMap((message) => extractTickers(message.content)))],
+    runStatus: lastAnswer?.isLoading ? 'running' : lastAnswer?.runStatus || (lastAnswer?.error ? 'failed' : undefined),
+    answerStatus: lastAnswer?.answerStatus,
     lastMessagePreview: previewSource.replace(/\s+/g, ' ').trim().slice(0, 90),
     messageCount: nonWelcome.length,
     createdAt,
@@ -603,6 +609,12 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
       content,
       timestamp: typeof row.timestamp === 'number' ? row.timestamp : Date.now(),
       runId: typeof row.run_id === 'string' ? row.run_id : undefined,
+      blocks: Array.isArray(row.blocks) ? publicResearchBlocks(row.blocks) : undefined,
+      thinking: Array.isArray(row.thinking) ? row.thinking : undefined,
+      evidence_pool: Array.isArray(row.evidence_pool) ? row.evidence_pool : undefined,
+      priceLevels: Array.isArray(row.price_levels) ? row.price_levels : undefined,
+      runStatus: typeof row.run_status === 'string' ? row.run_status : undefined,
+      answerStatus: typeof row.answer_status === 'string' ? row.answer_status : undefined,
       replyTo: typeof row.reply_to === 'string' ? row.reply_to : undefined,
       isLoading: row.isLoading === true || row.answer_status === 'running',
       canRetry: row.canRetry === true,
@@ -661,8 +673,7 @@ const hydrateMessagesFromBackend = (sessionId: string): void => {
       }
 
       const localById = new Map(state.messages.map((message) => [message.id, message]));
-      const recovered = restored.map((message) => ({ ...localById.get(message.id), ...message,
-        isLoading: false, error: undefined, canRetry: false }));
+      const recovered = restored.map((message) => ({ ...localById.get(message.id), ...message, error: message.error }));
       persistMessages(recovered, sid, { syncBackend: false });
       useStore.setState({
         messages: recovered,
@@ -703,6 +714,11 @@ const recoverPendingRun = (sessionId: string): void => {
           const completed = result?.type === 'done' && run.status === 'completed';
           useStore.getState().updateMessageInSession(sessionId, pending.id, {
             id: run.assistant_message_id || pending.id, content, isLoading: false,
+            runStatus: run.status, answerStatus: message?.answer_status || result?.answer_status,
+            blocks: publicResearchBlocks(message?.blocks || result?.blocks || []),
+            thinking: message?.thinking || result?.thinking,
+            evidence_pool: message?.evidence_pool || result?.evidence_pool,
+            priceLevels: message?.price_levels || result?.price_levels,
             report: message?.report || result?.report || result?.blocked_report,
             error: completed ? undefined : String(message?.error || content),
             canRetry: !completed || message?.canRetry === true || result?.quality_blocked === true,
@@ -871,8 +887,6 @@ export const useStore = create<AppState>((set) => ({
   },
   // 右侧市场与执行面板默认收起，按需展开。
   showRightPanel: false,
-  rightPanelTab: 'chart',
-  rightPanelExpanded: false,
 
   addMessage: (message) =>
     set((state) => {
@@ -1402,6 +1416,7 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setAuthIdentity: (identity) => {
+    useRuntimeMemory.getState().beginOwner(identity?.userId || null);
     set((state) => {
       const normalizedIdentity = identity?.userId
         ? { userId: String(identity.userId).trim(), email: identity.email }
@@ -1582,11 +1597,7 @@ export const useStore = create<AppState>((set) => ({
     })),
 
   setShowRightPanel: (show) =>
-    set((state) => ({ showRightPanel: show, rightPanelExpanded: show && state.rightPanelExpanded })),
-
-  setRightPanelTab: (rightPanelTab) => set({ rightPanelTab }),
-  setRightPanelExpanded: (rightPanelExpanded) => set({ rightPanelExpanded }),
-  openRightPanel: (rightPanelTab, rightPanelExpanded = false) => set({ showRightPanel: true, rightPanelTab, rightPanelExpanded }),
+    set({ showRightPanel: show }),
 
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),

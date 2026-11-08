@@ -63,7 +63,7 @@ describe('EvidenceLedgerPanel', () => {
     const html = renderToStaticMarkup(<EvidenceLedgerPanel ledger={null} />);
     const text = html.replace(/\s+/g, ' ');
 
-    expect(text).toContain('暂无证据账本');
+    expect(text).toContain('暂无来源记录');
     expect(html).not.toContain('{');
     expect(html).not.toContain('"claims"');
   });

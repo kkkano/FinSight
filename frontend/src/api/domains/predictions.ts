@@ -30,7 +30,7 @@ const FAILURE_MESSAGES: Record<string, string> = {
   llm_timeout: 'AI 分析超过时间预算，请稍后重试。',
   llm_authentication_failed: 'AI 服务认证配置异常，请联系管理员。',
   llm_quota_exceeded: 'AI 调用额度已用完，请稍后再试。',
-  llm_policy_rejected: '本次请求被 AI 安全策略拒绝。',
+  llm_policy_rejected: 'AI 安全策略拒绝了这个请求。',
   prediction_validation_failed: 'AI 返回内容未通过 Prediction 合同校验。',
   prediction_not_found: '未找到这条 AI 判断。',
   prediction_run_not_found: '未找到这次生成任务。',

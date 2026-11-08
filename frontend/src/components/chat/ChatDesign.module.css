@@ -1,0 +1,52 @@
+.message { width: 100%; max-width: 760px; margin: 0 auto 28px; }
+.messageWide { max-width: 920px; }
+.user { display: flex; justify-content: flex-end; }
+.userBubble { max-width: 80%; border: 1px solid var(--t-line); border-radius: 14px 14px 4px 14px; background: var(--t-bg-2); padding: 10px 14px; font-size: 14.5px; line-height: 1.6; }
+.answer { display: flex; flex-direction: column; gap: 14px; font-size: 14.5px; line-height: 1.75; }
+.answer > div,.answer > section { width: 100%; max-width: 760px; align-self: center; }
+.answer > :global(.research-artifact) { width: 100%; max-width: 920px; align-self: center; }
+.answer > :global(.prose) { margin: 0; }
+.answer :global(.turn-activity) { margin: 0; }
+.answer :global(.prose p) { margin-top: 0; margin-bottom: 14px; }
+.answer :global(.prose p:last-child) { margin-bottom: 0; }
+.activityRows { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 0 13px; padding-left: 14px; border-left: 1px solid var(--t-line-2); }
+.activityRows :global(.tool-activity-row) { display: grid; grid-template-columns: 18px auto minmax(0,1fr) auto 16px; align-items: center; column-gap: 10px; min-height: 34px; padding: 4px 8px; border-radius: 7px; font-size: 13px; }
+.activityRows :global(.tool-activity-name) { max-width: 190px; }
+.activityRows :global(.tool-activity-summary) { font-size: 12.5px; }
+.activityRows :global(.tool-activity-details) { margin: 2px 0 8px 36px; padding: 12px 14px; border: 1px solid var(--t-line); border-radius: 10px; background: var(--t-bg-2); white-space: normal; max-height: 360px; }
+.nested { margin: 0 0 4px 26px; padding-left: 12px; border-left: 1px dashed var(--t-line-2); }
+.detailTable { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.75; }
+.detailTable th { color: var(--t-text-3); font-weight: 400; text-align: left; padding: 3px 10px 3px 0; vertical-align: top; }
+.detailTable td { padding: 3px 0; overflow-wrap: anywhere; }
+.toolPreview { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; }
+.detailTable th { width: 36%; }
+.reasoning { font-size: 13px; line-height: 1.6; color: var(--t-text-2); }
+.reasoningToggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; min-height: 32px; font-size: 13px; text-align: left; color: var(--t-text-3); }
+.reasoningText { border-left: 2px solid var(--t-line-2); padding: 0 12px; margin: 5px 0 0 13px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reasoningPreview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.progressText { border-left: 1px solid var(--t-line-2); padding-left: 14px; color: var(--t-text-3); font-size: 13px; line-height: 1.6; }
+.progressText p { margin: 0; }
+.composerOuter { padding: 0 24px 24px; background: var(--t-bg); }
+.composer { position: relative; max-width: 760px; margin: 0 auto; border: 1px solid var(--t-line-2); border-radius: 14px; background: var(--t-surface); box-shadow: var(--t-shadow-card); padding: 10px 10px 8px 14px; }
+.composer textarea { display: block; width: 100%; padding: 2px 0; min-height: 48px; max-height: 160px; resize: none; border: 0; outline: none; background: transparent; color: var(--t-text); font: inherit; font-size: 14.5px; line-height: 1.6; }
+.composerToolbar { display: flex; align-items: center; gap: 6px; min-height: 34px; }
+.composerAction { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--t-text-3); font-size: 12.5px; }
+.composerAction:hover { background: var(--t-hover); color: var(--t-text); }
+.composerModel { margin-left: auto; min-width: 0; }
+.composerSend { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; color: white; background: rgb(var(--t-accent)); }
+.composerSend:disabled { opacity: .45; cursor: not-allowed; }
+.composerStop { color: var(--t-bg); background: var(--t-text); }
+.composerFootnote { max-width: 760px; margin: 8px auto 0; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: var(--t-text-3); font-size: 12px; }
+.sourceList { padding-top: 10px; border-top: 1px solid var(--t-line); }
+.sourceLink { display: flex; align-items: baseline; gap: 10px; padding: 6px 8px; border-radius: 7px; color: var(--t-text-2); text-decoration: none; font-size: 12.5px; }
+.sourceLink:hover { background: var(--t-hover); }
+.citation { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px; margin: 0 1px; border-radius: 5px; background: var(--t-accent-soft); color: rgb(var(--t-accent)); font-size: 11px; font-weight: 600; line-height: 1; vertical-align: 2px; text-decoration: none; }
+.highlight { outline: 2px solid rgb(var(--t-accent)); background: var(--t-accent-soft); }
+.artifact { border: 1px solid var(--t-line-2); border-radius: 12px; background: var(--t-surface); overflow: hidden; margin: 0; }
+.artifact :global(.research-artifact-header) { padding: 12px 16px; border-bottom: 1px solid var(--t-line); gap: 8px 16px; }
+.artifactTitle { font-size: 13.5px; font-weight: 600; }
+.artifactSubtitle { margin-top: 3px; font-size: 12px; font-weight: 400; color: var(--t-text-3); }
+.artifactPanels { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 10px; padding: 8px 16px 14px; }
+@media(max-width:639px) { .artifact :global(.research-artifact-header) { flex-wrap: wrap; } .artifactTitle { flex-basis: 100%; } }
+@media(max-width:639px) { .composerOuter { padding: 0 16px 16px; } .userBubble { max-width: 90%; } .activityRows { margin-left: 5px; padding-left: 8px; } .activityRows :global(.tool-activity-row) { grid-template-columns: 16px auto minmax(0,1fr) auto 14px; gap: 6px; } .activityRows :global(.tool-activity-name) { max-width: 110px; font-size: 12px; } .activityRows :global(.tool-activity-summary) { display: block; font-size: 12px; } .activityRows :global(.tool-activity-details) { margin-left: 16px; } .composerFootnote { font-size: 11px; } }
+@media(pointer:coarse) { .composerAction,.composerSend,.reasoningToggle,.activityRows :global(.tool-activity-row) { min-height: 44px; } .composerSend { min-width: 44px; } }

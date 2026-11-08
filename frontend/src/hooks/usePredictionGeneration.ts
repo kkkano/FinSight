@@ -122,7 +122,7 @@ export function usePredictionGeneration(
     rememberRun(run);
     if (!TERMINAL_STATUSES.has(run.status)) {
       setState({ phase: 'timed_out', run, failure: {
-        code: 'prediction_status_timeout', message: '暂未取得运行终态，可刷新继续查看本次任务。', status: null,
+        code: 'prediction_status_timeout', message: '还没收到最终结果，可以刷新查看进度。', status: null,
       } });
     } else if (run.status === 'succeeded' && run.prediction_id) {
       setState({ phase: 'succeeded', run, failure: null });

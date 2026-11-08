@@ -59,12 +59,12 @@ describe('ModelSettings', () => {
     expect(markup).toContain('type="password"');
     expect(markup).toContain('当前页面内存');
     expect(markup).toContain('刷新页面后需重新填写并测试');
-    expect(markup).toContain('推理强度：供应商默认');
+    expect(markup).toContain('推理强度：模型默认');
     expect(markup).not.toContain('aria-label="推理强度"');
     expect(markup).toContain('系统提示词');
-    expect(markup).toContain('RAG 检索上下文');
-    expect(markup).toContain('付费数据源');
-    expect(markup).toContain('对应的外部服务');
+    expect(markup).toContain('检索到的相关资料');
+    expect(markup).toContain('付费数据');
+    expect(markup).toContain('由该外部服务处理');
     expect(markup).not.toContain('checked=""');
   });
 

@@ -41,7 +41,7 @@ async function setup(page: Page, authenticated = true) {
     if (pathname === '/api/models/test') {
       catalogHeaders.push(route.request().headers()['x-finsight-model']);
       testedModels.push(route.request().postDataJSON());
-      return fulfillJson(route, { success: true, model: 'custom-model', latency_ms: 12, message: 'ok' });
+      return fulfillJson(route, { success: true, model: 'custom-model', latency_ms: 12, message: 'ok', native_tool_calls: true, streaming_tool_calls: true, capability_status: 'supported' });
     }
     if (pathname === '/api/predictions/generate') {
       const header = route.request().headers()['x-finsight-model'];
@@ -110,7 +110,7 @@ async function applyCustomModel(page: Page) {
   await page.getByLabel('API Key', { exact: true }).fill(customKey);
   await expect(page.getByRole('button', { name: '测试连接', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '测试连接', exact: true }).click();
-  await expect(page.getByText(/连接成功/)).toBeVisible();
+  await expect(page.getByText(/原生工具调用测试通过/)).toBeVisible();
   await expect(page.getByRole('button', { name: '应用模型', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: '我已了解并同意将上述内容发送到填写的外部服务' }).check();
   await page.getByRole('button', { name: '应用模型', exact: true }).click();
@@ -166,7 +166,7 @@ test('custom model validates, requires testing, keeps a key-free preference on r
 
   await applyCustomModel(page);
   await expect(page.getByLabel('推理强度')).toHaveCount(0);
-  await expect(page.getByText('推理强度：供应商默认', { exact: true })).toBeVisible();
+  await expect(page.getByText('推理强度：模型默认', { exact: true })).toBeVisible();
   await sendChat(page, '你好');
   const custom = { source: 'custom', base_url: 'https://api.example.com/v1', model: 'custom-model', api_key: customKey };
   expect(requests.testedModels.at(-1)).toEqual(custom);
@@ -231,7 +231,7 @@ test('custom context consent resets when destination credentials change and defa
   }
   await expect(page.getByRole('button', { name: '测试连接', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '测试连接', exact: true }).click();
-  await expect(page.getByText(/连接成功/)).toBeVisible();
+  await expect(page.getByText(/原生工具调用测试通过/)).toBeVisible();
   await expect(page.getByRole('button', { name: '应用模型', exact: true })).toBeDisabled();
   await consent.check();
   await page.getByRole('button', { name: '应用模型', exact: true }).click();
@@ -257,7 +257,7 @@ test('logout clears the applied custom selection and credentials', async ({ page
 
 test('connection-test rate limits remain a recoverable form message', async ({ page }) => {
   await setup(page);
-  await page.route('**/api/models/test', (route) => route.fulfill({
+  await page.route('**/api/models/test*', (route) => route.fulfill({
     status: 429, contentType: 'application/json', headers: { 'Retry-After': '30' },
     body: JSON.stringify({ detail: 'Test-only user rate limit' }),
   }));

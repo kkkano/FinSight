@@ -47,7 +47,7 @@ describe('execution metrics', () => {
     sample.tokenUsage.llmCalls = 0;
     expect(summarizeExecutionMetrics(sample).llmCalls).toBe(0);
     const html = renderToStaticMarkup(<ExecutionStats run={run()} />);
-    expect(html).toContain('本轮未采集调用计数');
+    expect(html).toContain('没有记录调用次数');
     expect(html).toContain('>—</dd>');
     expect(html).not.toContain('md:grid-cols-4');
   });
@@ -72,7 +72,7 @@ describe('execution metrics', () => {
       expect(html).toContain('最耗时');
       expect(html).toContain('69.67s');
       expect(html).toContain('行情供应商连接中断');
-      expect(html).toContain('本轮研究未完成');
+      expect(html).toContain('研究未完成');
       const detailsTag = html.match(/<details[^>]*data-testid="execution-details"[^>]*>/)?.[0];
       expect(detailsTag).toBeTruthy();
       expect(detailsTag).not.toContain('open=');

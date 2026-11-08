@@ -59,120 +59,92 @@ async function setup(page: Page, authenticated = true, ended = false) {
   return { privateRequests, ledgerRequests };
 }
 
-test('战绩在当前工作区右侧打开，账本独立且可查看明细', async ({ page }, testInfo) => {
+test('战绩进入独立页面，公开账本可筛选和查看明细', async ({ page }, testInfo) => {
   const requests = await setup(page, true, true);
   await page.goto('/dashboard/AAPL');
   await page.getByTestId('sidebar-nav-track-record').click();
-  await expect(page).toHaveURL(/\/dashboard\/AAPL$/);
-  const drawer = page.getByRole('dialog', { name: '研究侧栏', exact: true });
-  await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('tab', { name: '我的判断', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await drawer.getByTestId('personal-record-row').click();
-  await expect(drawer.getByTestId('personal-record-detail')).toContainText('原判断：回落假设');
-  await expect(drawer.getByTestId('personal-record-detail')).toContainText('不代表当前观点');
-  await drawer.getByRole('tab', { name: 'US20 基准', exact: true }).click();
-  await expect(drawer.getByTestId('direction-results')).toContainText('25.0%');
-  const tickerFilter = drawer.getByLabel('US20 标的筛选');
-  await tickerFilter.selectOption('AAPL');
+  await expect(page).toHaveURL(/\/track-record$/);
+  await expect(page.getByTestId('direction-results')).toContainText('25.0%');
+  await page.getByLabel('标的筛选', { exact: true }).selectOption('AAPL');
   await expect.poll(() => requests.ledgerRequests.at(-1)?.searchParams.get('ticker')).toBe('AAPL');
-  await drawer.getByTestId('prediction-record-row').first().click();
-  await expect(drawer.getByTestId('benchmark-record-detail')).toContainText('实际结果');
+  await page.getByTestId('prediction-record-row').first().getByRole('button').click();
+  await expect(page.getByTestId('benchmark-record-detail')).toContainText('实际对账行情');
   await page.screenshot({ path: testInfo.outputPath('workspace-track-record.png') });
-  await page.keyboard.press('Escape');
-  await expect(drawer).not.toBeVisible();
-  await expect(page.getByTestId('sidebar-nav-track-record')).toBeFocused();
 });
 
-test('手机战绩全屏且匿名不读取个人记录', async ({ page }, testInfo) => {
+test('手机公开战绩不读取个人记录', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const requests = await setup(page, false);
-  await page.goto('/today');
-  await page.getByTestId('sidebar-nav-track-record').click();
-  const drawer = page.getByRole('dialog', { name: '研究侧栏', exact: true });
-  await expect(drawer.getByRole('tab', { name: 'US20 基准', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(drawer.getByTestId('us20-track-record')).toContainText('固定采集尚未启用');
-  expect((await drawer.boundingBox())?.width).toBe(390);
-  await drawer.getByRole('tab', { name: '我的判断', exact: true }).click();
-  await expect(drawer.getByTestId('personal-track-record-login')).toBeVisible();
+  await page.goto('/track-record');
+  await expect(page.getByTestId('us20-track-record')).toContainText('预测采集尚未开启');
   expect(requests.privateRequests).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-track-mobile.png') });
 });
 
-test('当前技术状态与AI回落假设写清楚各自口径', async ({ page }, testInfo) => {
+test('技术页保留真实指标和已验证预测图层', async ({ page }, testInfo) => {
   await setup(page);
-  await page.goto('/dashboard/AAPL');
-  const judgment = page.getByTestId('prediction-track');
-  await expect(judgment).toContainText('AI 回落假设');
-  await expect(judgment).toContainText('满足入场条件后');
-  await expect(judgment).toContainText('未声明固定天数');
+  await page.goto('/dashboard/AAPL?tab=technical');
   await expect(page.getByText('指标多数偏多', { exact: true })).toBeVisible();
   await expect(page.getByText('日线均线与动量指标的当前状态统计，不是未来涨跌预测。')).toBeVisible();
   await expect(page.getByText(/RSI 89\.9 处于超买区/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('workspace-judgment-meaning.png') });
 });
 
-test('已结束的AI判断默认收进历史，展开保留依据', async ({ page }) => {
+test('个股个人记录与公开基准保持独立', async ({ page }) => {
   await setup(page, true, true);
-  await page.goto('/dashboard/AAPL');
-  const judgment = page.getByTestId('prediction-track');
-  await expect(judgment).toContainText('最近已结束判断');
-  await expect(judgment).toContainText('当前没有新的有效 AI 判断');
-  await expect(judgment.getByText(prediction.thesis, { exact: true })).not.toBeVisible();
-  await judgment.getByText('历史判断与价位', { exact: true }).click();
-  await expect(judgment.getByText(prediction.thesis, { exact: true })).toBeVisible();
+  await page.goto('/track-record?ticker=AAPL&scope=personal');
+  await expect(page.getByRole('heading', { name: 'AAPL预测记录' })).toBeVisible();
+  await expect(page.getByTestId('personal-track-record')).toBeVisible();
+  await expect(page.getByTestId('benchmark-track-record-content')).toHaveCount(0);
 });
 
-test('侧栏图表比例稳定，周期可切换，嵌套弹窗关闭不误关抽屉', async ({ page }, testInfo) => {
+test('标的面板单列展示236px图，周期与图型可切换，窄屏可关闭', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await setup(page);
   await page.goto('/dashboard/AAPL');
   await page.getByTestId('context-panel-expand').click();
   const panel = page.getByTestId('context-panel');
-  await expect(panel.getByRole('button', { name: '3 月', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  const chart = panel.getByTestId('context-chart-surface').locator('.echarts-for-react');
+  await expect(panel.getByRole('button', { name: '3月', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const chart = panel.getByTestId('context-chart-surface');
   await expect(chart.locator('canvas, svg').first()).toBeVisible();
-  const box = await chart.boundingBox();
-  expect(box?.height).toBeGreaterThan(200);
-  expect(box?.height).toBeLessThan(341);
-  await panel.getByRole('button', { name: '1 月', exact: true }).click();
-  await expect(panel.getByRole('button', { name: '1 月', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await panel.getByRole('button', { name: '展开详情', exact: true }).click();
+  await expect(chart).toHaveCSS('height', '236px');
+  await panel.getByRole('button', { name: '1月', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '1月', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await panel.getByRole('button', { name: '折线', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '折线', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('tab')).toHaveCount(0);
+  await page.setViewportSize({ width: 1100, height: 960 });
   const drawer = page.getByRole('dialog', { name: '研究侧栏', exact: true });
-  expect((await drawer.boundingBox())?.width).toBe(640);
-  await drawer.getByRole('button', { name: '1 年', exact: true }).click();
-  await drawer.getByRole('button', { name: '放大行情图', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'AAPL 行情', exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'AAPL 行情', exact: true })).not.toBeVisible();
   await expect(drawer).toBeVisible();
+  expect((await drawer.boundingBox())?.width).toBe(420);
   await page.screenshot({ path: testInfo.outputPath('workspace-chart-drawer.png') });
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
 });
 
-test('进度摘要统计不挤压，详细瀑布折叠且识别最慢步骤', async ({ page }, testInfo) => {
+test('实际工具过程保留在所属对话，不占用标的面板', async ({ page }, testInfo) => {
   await setup(page);
-  await page.goto('/dashboard/AAPL');
+  await page.goto('/chat');
   await page.evaluate(async () => {
-    const modulePath = '/src/store/executionStore.ts';
-    const { useExecutionStore } = await import(modulePath);
-    const startedAt = new Date(Date.now() - 82000).toISOString();
-    const timestamp = new Date().toISOString();
-    useExecutionStore.setState({ activeRuns: [{ runId: 'fixture-run', query: '模拟验收分析', tickers: ['AAPL'], source: 'fixture', outputMode: 'chat',
-      status: 'running', progress: 75, currentStep: '正在合成判断', startedAt, completedAt: null, report: null, error: null, fallbackReasons: [], streamedContent: '',
-      agentStatuses: { technical: { name: 'technical', status: 'done' } }, selectedAgents: ['technical'], skippedAgents: [], decisionNotes: [],
-      planSteps: [{ id: 'price', kind: 'tool', name: 'get_stock_price' }],
-      timeline: [{ id: 's', eventType: 'step_start', stage: 'executing', stepId: 'price', kind: 'tool', name: 'get_stock_price', timestamp: startedAt },
-        { id: 'e', eventType: 'step_done', stage: 'executing', stepId: 'price', kind: 'tool', name: 'get_stock_price', timestamp, durationMs: 69670, status: 'done' }],
-    }] });
+    const { useStore } = await import('/src/store/useStore.ts');
+    const timestamp = Date.now();
+    useStore.setState({ currentTicker: 'AAPL', messages: [
+      { id: 'fixture-user', role: 'user', content: '分析 AAPL', timestamp },
+      { id: 'fixture-answer', role: 'assistant', content: '已核对行情。', timestamp, runId: 'fixture-run', runStatus: 'completed',
+        thinking: [
+          { stage: 'tool_start', timestamp: new Date(timestamp).toISOString(), result: { name: 'get_stock_price', tool_call_id: 'price', seq: 1 } },
+          { stage: 'tool_end', timestamp: new Date(timestamp + 1200).toISOString(), result: { name: 'get_stock_price', tool_call_id: 'price', duration_ms: 1200,
+            display: { target: 'AAPL', result: '已取得收盘价' }, seq: 2 } },
+        ] },
+    ] });
   });
+  await page.getByRole('button', { name: /已处理.*1 次工具调用/ }).click();
+  await expect(page.locator('.tool-activity-row')).toContainText('获取行情');
   await page.getByTestId('context-panel-expand').click();
-  await page.getByTestId('context-tab-execution').click();
   const panel = page.getByTestId('context-panel');
-  await expect(panel).toContainText('get_stock_price');
-  await expect(panel).toContainText('最耗时');
-  await expect(panel.getByText('并行执行瀑布', { exact: true })).not.toBeVisible();
-  await panel.getByText('执行详情', { exact: true }).click();
-  await expect(panel.getByText('并行执行瀑布', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('tab')).toHaveCount(0);
+  await expect(panel.getByText('执行详情', { exact: true })).toHaveCount(0);
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-progress.png') });
 });

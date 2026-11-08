@@ -9,6 +9,14 @@ export type ModelTestSelection =
   | (Omit<Extract<ModelSelection, { source: 'custom' }>, 'context_acknowledged'> & { context_acknowledged?: boolean });
 
 export interface ModelCapabilities {
+  vision?: boolean | null;
+  native_tool_calls?: boolean | null;
+  supports_tools?: boolean | null;
+  streaming?: boolean | null;
+  streaming_tool_calls?: boolean | null;
+  context_window?: number | null;
+  reasoning_output_kind?: string;
+  capability_status?: 'supported' | 'unsupported' | 'unknown' | 'temporary_error';
   provider: string;
   label: string;
   icon_url: string | null;
@@ -141,7 +149,7 @@ export function validateCustomModelSelection(
     return invalidUrl;
   }
   if (!/^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$/.test(selection.model.trim())) {
-    return '请输入有效的模型 ID，使用供应商提供的英文名称（最多 200 个字符）。';
+    return '请输入正确的英文模型名称（最多 200 个字符）。';
   }
   if (!selection.api_key.trim()) return '请输入自定义模型的 API Key。';
   if (selection.api_key.length > 4096 || /[^\x20-\x7e]/.test(selection.api_key)) {

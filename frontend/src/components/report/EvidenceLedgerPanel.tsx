@@ -43,7 +43,7 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
       <summary className="px-4 py-3 cursor-pointer hover:bg-fin-hover transition-colors flex items-center gap-2">
         <ChevronDown size={16} className="text-fin-muted group-open:rotate-180 transition-transform" />
         <FileSearch size={15} className="text-fin-primary" />
-        <span className="text-sm font-semibold text-fin-text">证据账本</span>
+        <span className="text-sm font-semibold text-fin-text">来源与依据</span>
         <span className="ml-auto text-2xs text-fin-muted">
           {ledger ? `${claims.length} claims · ${sources.length} sources` : 'missing'}
         </span>
@@ -52,7 +52,7 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
       {!ledger ? (
         <div className="px-4 pb-4">
           <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary px-3 py-3 text-xs text-fin-muted">
-            暂无证据账本
+            暂无来源记录
           </div>
         </div>
       ) : (

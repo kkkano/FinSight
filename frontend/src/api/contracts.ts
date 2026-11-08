@@ -1,6 +1,7 @@
 ﻿// 确保 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
 import type { RawSSEEvent, ReportIR, ThinkingStep } from '../types/index';
+import type { RuntimeEvent, ChatImageInput } from '../types/runtime';
 import type { SelectionItem } from '../types/dashboard';
 
 /**
@@ -23,6 +24,10 @@ export interface ChatOptions {
 }
 
 export interface SendMessageBody {
+  skill_ids?: string[];
+  images?: ChatImageInput[];
+  show_provider_reasoning?: boolean;
+  resume_from_run_id?: string;
   query: string;
   run_id?: string;
   client_user_message_id?: string;
@@ -63,6 +68,10 @@ export interface ReportIndexItem {
  * Execute request — POST /api/execute
  */
 export interface ExecuteRequest {
+  skill_ids?: string[];
+  images?: ChatImageInput[];
+  show_provider_reasoning?: boolean;
+  resume_from_run_id?: string;
   query: string;
   client_user_message_id?: string;
   client_assistant_message_id?: string;
@@ -94,11 +103,12 @@ export interface ExecutionRunRecord {
  * SSE event callbacks shared between sendMessageStream & executeAgent.
  */
 export interface SSECallbacks {
+  onRuntimeEvent?: (event: RuntimeEvent) => void;
   onToken?: (token: string) => void;
   onToolStart?: (name: string) => void;
   onToolEnd?: () => void;
   onDone?: (report?: ReportIR, thinking?: ThinkingStep[], meta?: any) => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, meta?: Record<string, unknown>) => void;
   onThinking?: (step: any) => void;
   onRawEvent?: (event: RawSSEEvent) => void;
 }

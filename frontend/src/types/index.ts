@@ -1,6 +1,7 @@
 ﻿export type Role = 'user' | 'assistant' | 'system';
 
 import type { ChatContext } from '../api/contracts';
+import type { ResearchBlock, ResearchPriceLevel } from './runtime';
 
 export type Intent = 'chat' | 'report' | 'alert' | 'followup' | 'clarify' | 'any';
 export type TraceViewMode = 'user' | 'expert' | 'dev';
@@ -20,6 +21,9 @@ export interface ThinkingStep {
 
 // Evidence item for citations/sources
 export interface EvidenceItem {
+  source_id?: string;
+  as_of?: string;
+  published_date?: string;
   title?: string;
   source?: string;
   url?: string;
@@ -140,11 +144,18 @@ export interface QueryCoverage {
 export interface ChatRequestSnapshot {
   query: string;
   outputMode: 'chat' | 'investment_report';
+  resumeFromRunId?: string;
+  hasTransientImages?: boolean;
+  skillIds?: string[];
   context?: ChatContext;
   history: Array<{ role: string; content: string }>;
 }
 
 export interface Message {
+  priceLevels?: ResearchPriceLevel[];
+  blocks?: ResearchBlock[];
+  runStatus?: string;
+  answerStatus?: string;
   runId?: string;
   replyTo?: string;
   requestSnapshot?: ChatRequestSnapshot;

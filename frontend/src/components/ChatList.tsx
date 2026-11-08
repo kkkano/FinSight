@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2, ChartNoAxesCombined } from 'lucide-react';
+import { Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2, ChartNoAxesCombined } from 'lucide-react';
 import { normalizeMarkdown } from '../utils/markdown';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
@@ -12,10 +12,19 @@ import {
   parseSmartChartBlocks,
   resolveRealPriceChartRequest,
 } from './SmartChart';
-import { ThinkingProcess } from './execution/ThinkingProcess';
+import { ActivityRows, TurnActivity } from './chat/TurnActivity';
+import { ResearchArtifactView } from './chat/ResearchArtifactView';
+import { ActionConfirmationCard } from './chat/ActionConfirmationCard';
+import { researchText } from '../store/researchStream';
+import { ReasoningBlock } from './chat/ReasoningBlock';
+import { buildMessageTimeline } from './chat/messageTimeline';
+import styles from './chat/ChatDesign.module.css';
+import { useCitationNavigation } from '../store/citationNavigation';
+import { bindResearchCitations, citationId } from '../utils/researchCitations';
+import { sourceDisplayName, sourceTitleDisplayName } from '../utils/sourceDisplayName';
 import { ReportView } from './report';
 import { useStore } from '../store/useStore';
-import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
+import type { ChartType, ThinkingStep, ReportIR, EvidenceItem, Message } from '../types/index';
 import { useToast } from './ui/Toast';
 import {
   MESSAGE_ACTION_LABELS,
@@ -24,11 +33,6 @@ import {
 } from './chatMessageActions';
 import { useChatStream } from '../hooks/useChatStream';
 import { zh } from '../locales/zh';
-import { useExecutionStore } from '../store/executionStore';
-import type { ExecutionRun, PipelineStage } from '../types/execution';
-import { getAgentDisplayName } from '../utils/userMessageMapper';
-import { StageStepper, type StageStepperProps, type StageStatus } from './execution/StageStepper';
-import { AgentWorkLog } from './execution/AgentWorkLog';
 import { EmptyState } from './ui/EmptyState';
 import { extractTickers } from '../utils/ticker';
 import { parseChartMarkers } from '../utils/chartIntent';
@@ -38,19 +42,22 @@ import { ReportArchiveLink } from './common/ReportArchiveLink';
 
 // ── Shared sub-components ──
 
+const MessageEvidenceContext = React.createContext<{ sources: EvidenceItem[]; runId?: string }>({ sources: [] });
+
 const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence_pool }) => (
-  <div className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2">
-    <div className="text-[11px] text-fin-muted mb-2">{zh.chat.source} ({evidence_pool.length})</div>
-    <div className="flex flex-wrap gap-2">
+  <div className={styles.sourceList}>
+    <div className="px-2 pb-1 text-xs text-t-text3">{zh.chat.source}</div>
+    <div>
       {evidence_pool.map((ev, idx) => {
-        const label = ev.title || ev.source || ev.url || `${zh.chat.source} ${idx + 1}`;
+        const label = sourceTitleDisplayName(ev.title, ev.source || ev.url);
         if (ev.url) {
-          return <SourceLink key={`${ev.url}-${idx}`} href={ev.url} label={label} />;
+          return <a key={`${ev.url}-${idx}`} href={ev.url} target="_blank" rel="noopener noreferrer" className={styles.sourceLink}>
+            <span className="num text-t-accent">{idx + 1}</span><span>{label}</span>
+            <span className="ml-auto text-xs text-t-text3">{ev.source ? sourceDisplayName(ev.source) : ev.url.replace(/^https?:\/\/(?:www\.)?([^/]+).*$/, '$1')}
+              {ev.as_of ? ` · ${ev.as_of.slice(5, 10).replace('-', '/')}` : ''}</span></a>;
         }
         return (
-          <span key={`ev-${idx}`} className="px-2 py-1 rounded-full border border-fin-border/70 bg-fin-panel text-[11px] text-fin-text">
-            {label}
-          </span>
+          <span key={`ev-${idx}`} className={styles.sourceLink}><span className="num text-t-accent">{idx + 1}</span>{label}</span>
         );
       })}
     </div>
@@ -61,7 +68,7 @@ const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; a
   data_origin, fallback_used, as_of, tried_sources,
 }) => {
   if (!data_origin && !fallback_used) return null;
-  const sourceLabel = data_origin || 'LLM';
+  const sourceLabel = sourceDisplayName(data_origin || 'LLM');
   return (
     <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
       <span className={`px-2 py-0.5 rounded-full border ${fallback_used ? 'border-amber-400/70 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-200' : 'border-fin-border/60 bg-fin-bg/60'}`}>
@@ -69,120 +76,45 @@ const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; a
       </span>
       {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">{zh.chat.asOf}: {as_of}</span>}
       {tried_sources && tried_sources.length > 0 && (
-        <span className="text-2xs text-fin-muted/70">{zh.chat.triedSources}: {tried_sources.join(' → ')}</span>
+        <span className="text-2xs text-fin-muted/70">{zh.chat.triedSources}: {tried_sources.map(sourceDisplayName).join(' → ')}</span>
       )}
     </div>
   );
 };
 
-type MessagePayload = {
-  id: string;
-  role: string;
-  content: string;
-  isLoading?: boolean;
-  report?: ReportIR;
-  evidence_pool?: EvidenceItem[];
-  data_origin?: string;
-  fallback_used?: boolean;
-  as_of?: string | null;
-  tried_sources?: string[];
-  thinking?: ThinkingStep[];
-};
+type MessagePayload = Message;
 
-const CHAT_PIPELINE_STAGES: Array<{
-  key: string;
-  label: string;
-  pipelineStage?: PipelineStage;
-}> = [
-  { key: 'understand', label: '理解' },
-  { key: 'plan', label: '计划', pipelineStage: 'planning' },
-  { key: 'execute', label: '执行', pipelineStage: 'executing' },
-  { key: 'synthesize', label: '综合', pipelineStage: 'synthesizing' },
-  { key: 'render', label: '撰写', pipelineStage: 'rendering' },
-];
-
-function countCompletedPlanSteps(run: ExecutionRun): { completed: number; total: number } {
-  const planSteps = run.planSteps ?? [];
-  const total = planSteps.length;
-  if (total === 0) return { completed: 0, total: 0 };
-
-  const terminalEventTypes = new Set(['step_done', 'step_error', 'step_skipped']);
-  const terminalEvents = run.timeline.filter((event) => terminalEventTypes.has(event.eventType));
-  const terminalStepIds = new Set(
-    terminalEvents.map((event) => event.stepId).filter((stepId): stepId is string => Boolean(stepId)),
-  );
-  const matched = new Set<string>();
-
-  for (const step of planSteps) {
-    const agent = run.agentStatuses[step.name];
-    const agentFinished = agent && ['done', 'error', 'skipped'].includes(agent.status);
-    const stepAgentFinished = Object.values(run.agentStatuses).some(
-      (candidate) => candidate.stepId === step.id && ['done', 'error', 'skipped'].includes(candidate.status),
-    );
-    if (terminalStepIds.has(step.id) || agentFinished || stepAgentFinished) matched.add(step.id);
-  }
-
-  const unmatchedTerminalEvents = terminalEvents.filter(
-    (event) => !event.stepId || !planSteps.some((step) => step.id === event.stepId),
-  ).length;
-  return {
-    completed: Math.min(total, matched.size + unmatchedTerminalEvents),
-    total,
-  };
-}
-
-function toStageStatus(run: ExecutionRun, pipelineStage: PipelineStage): StageStatus {
-  const status = run.pipelineStages?.[pipelineStage]?.status;
-  if (status === 'done') return 'done';
-  if (status === 'running') return 'active';
-  if (status === 'error') return 'error';
-  return 'pending';
-}
-
-function buildChatStages(run: ExecutionRun | undefined, isChatLoading: boolean): StageStepperProps['stages'] {
-  if (!run) {
-    return CHAT_PIPELINE_STAGES.map((stage, index) => ({
-      key: stage.key,
-      label: stage.label,
-      status: index === 0 && isChatLoading ? 'active' : 'pending',
-    }));
-  }
-
-  const executionCount = countCompletedPlanSteps(run);
-  const pipelineDone = run.pipelineCurrentStage === 'done' || run.status === 'done';
-  const stages = CHAT_PIPELINE_STAGES.map((stage, index) => {
-    let status: StageStatus = index === 0 ? 'done' : toStageStatus(run, stage.pipelineStage!);
-    if (pipelineDone) status = 'done';
-    return {
-      key: stage.key,
-      label: stage.label,
-      status,
-      detail: stage.pipelineStage === 'executing' && executionCount.total > 0
-        ? `${executionCount.completed}/${executionCount.total}`
-        : undefined,
-    };
-  });
-
-  const activeIndex = stages.findIndex((stage) => stage.status === 'active' || stage.status === 'error');
-  if (activeIndex > 0) {
-    for (let index = 0; index < activeIndex; index += 1) {
-      if (stages[index].status === 'pending') stages[index].status = 'done';
-    }
-  } else if (activeIndex < 0 && run.status === 'running') {
-    stages[1].status = 'active';
-  }
-  return stages;
-}
-
-function getCurrentAction(run: ExecutionRun | undefined, fallback?: string | null): string | undefined {
-  if (!run) return fallback || undefined;
-  const latestAction = [...run.timeline].reverse().find((event) =>
-    ['step_start', 'agent_start', 'agent_step', 'tool_start'].includes(event.eventType),
-  );
-  const action = latestAction?.userMessage || latestAction?.message;
-  const agent = latestAction?.agent || latestAction?.name;
-  if (action && agent) return `${getAgentDisplayName(agent)} · ${action}`;
-  return action || run.currentStep || fallback || undefined;
+function MessageBlocks({ msg, onRetry }: { msg: MessagePayload; onRetry: () => void }) {
+  const blocks = msg.blocks ?? [];
+  const textMatches = researchText(blocks) === msg.content;
+  const [expanded, setExpanded] = useState(Boolean(msg.isLoading));
+  useEffect(() => { setExpanded(Boolean(msg.isLoading)); }, [msg.isLoading]);
+  const timeline = buildMessageTimeline(blocks, msg.thinking ?? [], Boolean(msg.isLoading));
+  const hasProgress = blocks.some((block) => block.kind === 'text' && block.content_phase === 'progress' && block.content.trim());
+  const lastSeq = timeline.at(-1)?.seq;
+  return <>
+    <TurnActivity thinking={msg.thinking} isLoading={msg.isLoading} startedAt={msg.timestamp} error={msg.error} runStatus={msg.runStatus}
+      summaryOnly expanded={expanded} onExpandedChange={setExpanded} hasProgress={hasProgress} />
+    {timeline.map((item) => {
+      if (item.kind === 'activity') return expanded ? <ActivityRows key={`activity:${item.rows[0].id}`} rows={item.rows} /> : null;
+      const block = item.block;
+      if (block.kind === 'text') {
+        if (block.content_phase === 'progress') return expanded && block.content.trim()
+          ? <div key={block.id} data-block-id={block.id} data-testid="research-progress" className={styles.progressText} aria-label="过程说明">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <SourceLink href={href || ''} label={children} /> }}>
+              {normalizeMarkdown(bindResearchCitations(block.content, msg.evidence_pool ?? []))}
+            </ReactMarkdown>
+          </div> : null;
+        return textMatches && !msg.report ? <div key={block.id} data-block-id={block.id}><MessageWithChart content={block.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} /></div> : null;
+      }
+      if (block.kind === 'artifact') return <ResearchArtifactView key={block.id} artifact={block.artifact} sources={msg.evidence_pool} />;
+      if (block.kind === 'action') return <ActionConfirmationCard key={block.id} action={block.action} runId={msg.runId} />;
+      return <ReasoningBlock key={block.id} block={block} live={Boolean(msg.isLoading && item.seq === lastSeq)} />;
+    })}
+    {msg.report ? <><ReportView report={msg.report} /><ReportArchiveLink reportId={msg.report.report_id} /></>
+      : !textMatches && msg.content ? <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} /> : null}
+    {msg.isLoading && !msg.content && !blocks.length && <div className="py-2"><LoadingDots /></div>}
+  </>;
 }
 
 const AssistantContent: React.FC<{
@@ -191,36 +123,22 @@ const AssistantContent: React.FC<{
   onDelete: () => void;
   actionsInline?: boolean;
 }> = ({ msg, onRetry, onDelete, actionsInline }) => (
-  <>
-    {msg.isLoading ? (
-      msg.content ? (
-        <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
-      ) : (
-        <div className="py-4 flex items-center justify-start">
-          <LoadingDots />
-        </div>
-      )
-    ) : msg.report ? (
-      <>
-        <ReportView report={msg.report} />
-        <ReportArchiveLink reportId={msg.report.report_id} />
-      </>
-    ) : (
-      <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} />
-    )}
+  <MessageEvidenceContext.Provider value={{ sources: msg.evidence_pool ?? [], runId: msg.runId }}>
+    <MessageBlocks msg={msg} onRetry={onRetry} />
     {msg.evidence_pool && msg.evidence_pool.length > 0 && (
       <EvidenceSection evidence_pool={msg.evidence_pool} />
     )}
+    {msg.error && msg.content.trim() !== msg.error.trim() && <p role="alert" className="mt-3 border-l-2 border-fin-danger/50 pl-3 text-sm text-fin-danger">{msg.error}</p>}
     <DataOriginTag
       data_origin={msg.data_origin}
       fallback_used={msg.fallback_used}
       as_of={msg.as_of}
       tried_sources={msg.tried_sources}
     />
-    {msg.thinking && msg.thinking.length > 0 && (
-      <ThinkingProcess thinking={msg.thinking} />
-    )}
-    <MessageActions
+    {!msg.isLoading && msg.error && <button type="button"
+      className="mt-3 min-h-10 rounded-lg border border-t-border px-3 text-sm text-t-text2 hover:border-t-accent/40"
+      onClick={onRetry}>重新研究</button>}
+    {!msg.isLoading && <MessageActions
       messageId={msg.id}
       content={msg.content}
       thinking={msg.thinking}
@@ -228,68 +146,11 @@ const AssistantContent: React.FC<{
       onRetry={onRetry}
       onDelete={onDelete}
       inline={actionsInline}
-    />
-  </>
+    />}
+  </MessageEvidenceContext.Provider>
 );
 
-// ── Avatar ──
-
-const Avatar: React.FC<{ role: string; size?: number }> = ({ role, size = 32 }) => {
-  const iconSize = Math.round(size * 0.5);
-  return (
-    <div
-      className={clsx(
-        "flex-shrink-0 rounded-full flex items-center justify-center",
-        role === 'user' ? "bg-fin-primary text-white" : "bg-fin-panel border border-fin-border text-fin-primary"
-      )}
-      style={{ width: size, height: size }}
-    >
-      {role === 'user' ? <User size={iconSize} /> : <Bot size={iconSize} />}
-    </div>
-  );
-};
-
-// ── Bubble Message (original layout) ──
-
-const areMessagePropsEqual = (
-  prev: { msg: MessagePayload },
-  next: { msg: MessagePayload },
-): boolean => prev.msg === next.msg;
-// FE-03a：msg 在 store 中按不可变模式更新——内容变则引用变，历史消息引用稳定 → memo 命中。
-// onRetry/onDelete 是内联箭头（引用不稳定）但行为只依赖 msg.id，故比较器有意忽略。
-
-const BubbleMessageImpl: React.FC<{
-  msg: MessagePayload;
-  onRetry: () => void;
-  onDelete: () => void;
-}> = ({ msg, onRetry, onDelete }) => (
-  <div className={clsx("flex w-full animate-slide-up", msg.role === 'user' ? "justify-end" : "justify-start")}>
-    <div className={clsx(
-      "flex",
-      msg.role === 'user'
-        ? "max-w-[85%] md:max-w-[72%] lg:max-w-[60%] flex-row-reverse"
-        : "max-w-[97%] lg:max-w-[90%] xl:max-w-[82%] flex-row"
-    )}>
-      <div className="mx-2"><Avatar role={msg.role} /></div>
-      <div className={clsx(
-        "p-3.5 rounded-lg text-sm leading-relaxed",
-        msg.role === 'user'
-          ? "bg-t-elevated border border-t-border/60 text-t-text"
-          : "bg-t-card border border-t-border text-t-text relative overflow-visible"
-      )}>
-        {msg.role === 'user' ? (
-          msg.content
-        ) : (
-          <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} />
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-// ── Flat Message (ChatGPT-style layout) ──
-
-const BubbleMessage = React.memo(BubbleMessageImpl, areMessagePropsEqual);
+const areMessagePropsEqual = (prev: { msg: MessagePayload }, next: { msg: MessagePayload }): boolean => prev.msg === next.msg;
 
 const FlatMessageImpl: React.FC<{
   msg: MessagePayload;
@@ -300,25 +161,21 @@ const FlatMessageImpl: React.FC<{
   if (isUser) {
     // TERMINAL：用户消息 = 右对齐轻色块，无头像
     return (
-      <div className="group/msg animate-slide-up py-3 px-4 md:px-6">
-        <div className="max-w-[48rem] mx-auto flex justify-end">
-          <div className="max-w-[72%] rounded-lg bg-t-elevated border border-t-border/60 px-3.5 py-2.5 text-sm leading-relaxed text-t-text">
+      <div className={`chat-message group/msg ${styles.message}`}>
+        <div className={styles.user}>
+          <div className={styles.userBubble}>
             <p className="whitespace-pre-wrap m-0">{msg.content}</p>
           </div>
         </div>
       </div>
     );
   }
-  // TERMINAL：AI 回答 = 无框文档流，左侧橙色竖线贯穿 + 等宽元信息行
+  // 助手回答采用无框阅读流，过程与产物保留在所属消息中。
   return (
-    <div className="group/msg animate-slide-up py-3 px-4 md:px-6">
-      <div className="max-w-[48rem] mx-auto">
-        <div className="relative pl-4 border-l-2 border-t-accent/70">
-          <div className="mb-1.5 flex items-center gap-2 text-2xs font-mono text-t-text3">
-            <span className="font-semibold text-t-accent">FS▎</span>
-            <span>FinSight</span>
-          </div>
-          <div className="text-[14.5px] leading-7 text-t-text relative overflow-visible">
+    <div className={`chat-message group/msg ${styles.message} ${msg.blocks?.some((block) => block.kind === 'artifact') ? styles.messageWide : ''}`}>
+      <div>
+        <div className="relative">
+          <div className={styles.answer}>
             <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
           </div>
         </div>
@@ -329,170 +186,34 @@ const FlatMessageImpl: React.FC<{
 
 // ── Main ChatList ──
 
+const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual);
+
 export const ChatList: React.FC = () => {
-  const {
-    messages,
-    isChatLoading,
-    statusMessage,
-    statusSince,
-    currentStep,
-    removeMessage,
-    sessionId,
-    chatStyle,
-  } = useStore();
-  const activeRuns = useExecutionStore((state) => state.activeRuns);
-  const recentRuns = useExecutionStore((state) => state.recentRuns);
+  const messages = useStore((state) => state.messages);
+  const visibleMessages = messages.some((message) => message.role === 'user') ? messages.filter((message) => message.id !== 'welcome') : messages;
+  const sessionId = useStore((state) => state.sessionId);
+  const removeMessage = useStore((state) => state.removeMessage);
   const chatStream = useChatStream(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [showRecentExecutionSummary, setShowRecentExecutionSummary] = useState(false);
-  const isFlat = chatStyle === 'flat';
-  const activeChatRun = useMemo(
-    () => [...activeRuns].reverse().find((run) => run.source === 'chat'),
-    [activeRuns],
-  );
-  const recentChatRun = useMemo(
-    () => recentRuns.find((run) => run.source === 'chat'),
-    [recentRuns],
-  );
-  const previousRecentRunIdRef = useRef(recentChatRun?.runId);
-  const displayChatRun = activeChatRun ?? (showRecentExecutionSummary ? recentChatRun : undefined);
-  const executionStages = useMemo(
-    () => buildChatStages(displayChatRun, isChatLoading),
-    [displayChatRun, isChatLoading],
-  );
-  const currentAction = useMemo(
-    () => getCurrentAction(activeChatRun, currentStep || statusMessage),
-    [activeChatRun, currentStep, statusMessage],
-  );
-  const showExecutionBanner = isChatLoading
-    || statusMessage === zh.chat.stopped
-    || currentStep === zh.chat.stoppedLabel
-    || showRecentExecutionSummary;
-
-  // FE-02：滚动停靠检测——只有用户停靠在底部时才自动跟随，向上回看不再被拽回
-  const PIN_THRESHOLD_PX = 80;
-  const isPinnedRef = useRef(true);
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-
+  const pinned = useRef(true);
+  const [showJump, setShowJump] = useState(false);
   const handleScroll = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const pinned = distance < PIN_THRESHOLD_PX;
-    isPinnedRef.current = pinned;
-    setShowJumpToLatest((prev) => (prev === !pinned ? prev : !pinned));
+    const element = containerRef.current;
+    if (!element) return;
+    pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+    setShowJump(!pinned.current);
   }, []);
-
-  const jumpToLatest = useCallback(() => {
-    const el = containerRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    isPinnedRef.current = true;
-    setShowJumpToLatest(false);
-  }, []);
-
   useEffect(() => {
-    if (!isPinnedRef.current) return;
-    const container = containerRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight });
-  }, [messages, isChatLoading, showExecutionBanner]);
-
-  useEffect(() => {
-    const recentRunId = recentChatRun?.runId;
-    if (activeChatRun) {
-      setShowRecentExecutionSummary(false);
-      previousRecentRunIdRef.current = recentRunId;
-      return;
-    }
-    if (!recentRunId || previousRecentRunIdRef.current === recentRunId) return;
-    previousRecentRunIdRef.current = recentRunId;
-    setShowRecentExecutionSummary(true);
-    const timer = window.setTimeout(() => setShowRecentExecutionSummary(false), 3000);
-    return () => window.clearTimeout(timer);
-  }, [activeChatRun, recentChatRun?.runId]);
-
-  useEffect(() => {
-    const runStartedAt = displayChatRun ? Date.parse(displayChatRun.startedAt) : Number.NaN;
-    const startedAt = Number.isFinite(runStartedAt) ? runStartedAt : statusSince;
-    if (!startedAt) {
-      setElapsedMs(0);
-      return;
-    }
-    const timer = setInterval(() => {
-      setElapsedMs(Math.max(0, Date.now() - startedAt));
-    }, 1000);
-    setElapsedMs(Math.max(0, Date.now() - startedAt));
-    return () => clearInterval(timer);
-  }, [displayChatRun, statusSince]);
-
-  const renderMessages = () => {
-    const items = messages.map((msg) =>
-      isFlat ? (
-        <FlatMessage
-          key={msg.id}
-          msg={msg}
-          onRetry={() => void chatStream.retry(msg.id)}
-          onDelete={() => removeMessage(msg.id)}
-        />
-      ) : (
-        <BubbleMessage
-          key={msg.id}
-          msg={msg}
-          onRetry={() => void chatStream.retry(msg.id)}
-          onDelete={() => removeMessage(msg.id)}
-        />
-      )
-    );
-
-    if (isFlat) {
-      return <>{items}</>;
-    }
-    return items;
-  };
-
-  return (
-    <div
-      id="chat-scroll-container"
-      ref={containerRef}
-      onScroll={handleScroll}
-      className={clsx("flex-1 overflow-y-auto", isFlat ? "p-0" : "p-4 md:p-6 lg:p-8 space-y-6")}
-    >
-      {renderMessages()}
-
-      {showJumpToLatest && (
-        <button
-          type="button"
-          onClick={jumpToLatest}
-          aria-label={zh.chat.backToLatest}
-          className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full border border-fin-border bg-fin-card px-3 py-1.5 text-xs text-fin-text shadow-lg hover:border-fin-primary/60 transition-colors"
-        >
-          ↓ {zh.chat.backToLatest}
-        </button>
-      )}
-
-      {showExecutionBanner && (
-        <div role="status" aria-live="polite" className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
-          <div className={clsx(
-            "min-w-[300px] max-w-[48rem]",
-            isFlat ? "mx-auto w-full" : "ml-12 w-full max-w-[440px]"
-          )}>
-            <StageStepper
-              stages={executionStages}
-              elapsedMs={elapsedMs}
-              currentAction={displayChatRun?.status === 'running'
-                ? (statusMessage === zh.chat.stopped ? zh.chat.stoppedResult : currentAction)
-                : undefined}
-            />
-            {displayChatRun && <AgentWorkLog run={displayChatRun} />}
-          </div>
-        </div>
-      )}
-
-      <div ref={messagesEndRef} />
-    </div>
-  );
+    if (pinned.current && containerRef.current) containerRef.current.scrollTo({ top: containerRef.current.scrollHeight });
+  }, [messages]);
+  useEffect(() => { pinned.current = true; setShowJump(false); }, [sessionId]);
+  return <div id="chat-scroll-container" ref={containerRef} onScroll={handleScroll} className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-8 sm:px-6">
+    {visibleMessages.map((msg) => <FlatMessage key={msg.id} msg={msg}
+      onRetry={() => void chatStream.retry(msg.id)} onDelete={() => removeMessage(msg.id)} />)}
+    {showJump && <button type="button" className="sticky bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-t-border bg-t-surface px-4 py-2 text-xs shadow-sm"
+      onClick={() => { pinned.current = true; setShowJump(false); containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' }); }}
+      aria-label={zh.chat.backToLatest}>↓ {zh.chat.backToLatest}</button>}
+  </div>;
 };
 
 // ── MessageWithChart ──
@@ -500,6 +221,7 @@ export const ChatList: React.FC = () => {
 const EMPTY_SMART_CHART_BLOCKS: ReturnType<typeof parseSmartChartBlocks> = [];
 
 const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRetry: () => void }> = ({ content, isStreaming, onRetry }) => {
+  const evidence = React.useContext(MessageEvidenceContext);
   const [chartData, setChartData] = useState<Array<{
     ticker: string;
     chartType: ChartType;
@@ -550,7 +272,7 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
     setChartData(nextData);
   }, [content, isStreaming]);
 
-  const textContent = getRenderableMessageContent(content, Boolean(isStreaming));
+  const textContent = bindResearchCitations(getRenderableMessageContent(content, Boolean(isStreaming)), evidence.sources);
 
   return (
     <div className="prose prose-invert prose-sm max-w-none prose-terminal">
@@ -615,6 +337,9 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
 // ── SourceLink ──
 
 const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, label }) => {
+  const evidence = React.useContext(MessageEvidenceContext);
+  const sourceIndex = evidence.sources.findIndex((source, index) => source.url === href
+    || href === `#research-source-${encodeURIComponent(citationId(source, index))}`);
   const urlMeta = useMemo(() => {
     try {
       const url = new URL(href);
@@ -634,6 +359,15 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
     stringLabel && stringLabel !== href
       ? stringLabel
       : urlMeta.domain || zh.chat.sourceLink;
+
+  if (sourceIndex >= 0) return <a href={href} className={styles.citation}
+    title={sourceTitleDisplayName(evidence.sources[sourceIndex].title, evidence.sources[sourceIndex].source || displayText)} aria-label={`查看引用 ${sourceIndex + 1}`}
+    onClick={(event) => {
+      event.preventDefault();
+      useStore.getState().setShowRightPanel(true);
+      useCitationNavigation.getState().select({ sessionId: useStore.getState().sessionId, runId: evidence.runId,
+        sourceId: citationId(evidence.sources[sourceIndex], sourceIndex) });
+    }}>{sourceIndex + 1}</a>;
 
   return (
     <a
@@ -774,5 +508,3 @@ const LoadingDots: React.FC = () => {
     </div>
   );
 };
-
-const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual);

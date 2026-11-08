@@ -4,8 +4,26 @@ import { buildAuthHeaders, ensureStreamResponseOk } from '../http';
 import { parseSSEStream, withStreamGuards } from '../sse';
 import type { StreamOpts } from '../sse';
 import type * as Contracts from '../contracts';
+import type { ResearchSkill } from '../../types/runtime';
 
 export const chatApi = {
+  async getResearchSkills(signal?: AbortSignal): Promise<ResearchSkill[]> {
+    const response = await api.get<{ skills: ResearchSkill[] }>('/api/skills', { signal });
+    if (!Array.isArray(response.data.skills)) throw new Error('技能目录格式无效，请稍后重试。');
+    return response.data.skills;
+  },
+  async confirmRunAction(runId: string, actionId: string, payloadHash: string, confirmed: boolean): Promise<{ status: 'completed' | 'cancelled' | 'expired' }> {
+    const response = await api.post('/api/execute/runs/' + encodeURIComponent(runId) + '/actions/' + encodeURIComponent(actionId) + '/confirm', {
+      payload_hash: payloadHash, confirmed,
+    });
+    return response.data;
+  },
+  async sendRunInstruction(runId: string, instruction: string, instructionId: string): Promise<{ status: string; instruction_id: string }> {
+    const response = await api.post('/api/execute/runs/' + encodeURIComponent(runId) + '/instructions', {
+      instruction, instruction_id: instructionId,
+    });
+    return response.data;
+  },
   async getExecutionRun(runId: string, signal?: AbortSignal): Promise<Contracts.ExecutionRunRecord> {
     const response = await api.get(`/api/execute/runs/${encodeURIComponent(runId)}`, { signal });
     return response.data;

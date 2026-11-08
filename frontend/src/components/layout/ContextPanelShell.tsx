@@ -10,10 +10,8 @@ export type ContextPanelShellProps = {
   onExpand: () => void;
   onCollapse: () => void;
   onResizeStart: (event: MouseEvent) => void;
-  autoSwitchExecution?: boolean;
-  detailExpanded?: boolean;
-  onToggleExpanded?: () => void;
   symbol?: string;
+  showCollapsedToggle?: boolean;
 };
 
 export function ContextPanelShell({
@@ -23,13 +21,11 @@ export function ContextPanelShell({
   onExpand,
   onCollapse,
   onResizeStart,
-  autoSwitchExecution = true,
-  detailExpanded = false,
-  onToggleExpanded,
   symbol,
+  showCollapsedToggle = true,
 }: ContextPanelShellProps) {
   const isNarrow = useIsMobileLayout('xl');
-  const floating = isMobile || isNarrow || detailExpanded;
+  const floating = isMobile || isNarrow;
   const dialogRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!isExpanded || !floating) return;
@@ -52,6 +48,7 @@ export function ContextPanelShell({
   }, [floating, isExpanded, onCollapse]);
 
   if (!isExpanded) {
+    if (!showCollapsedToggle) return null;
     return (
       <button
         type="button"
@@ -87,17 +84,14 @@ export function ContextPanelShell({
         aria-label={floating ? '研究侧栏' : '研究摘要'}
         className={
           floating
-            ? `fixed bottom-0 right-0 top-0 z-50 min-h-0 border-l border-t-border bg-t-surface shadow-xl ${isMobile ? 'w-full' : 'w-[640px] max-w-[calc(100vw-32px)]'}`
+            ? `fixed bottom-0 right-0 top-0 z-50 min-h-0 border-l border-t-border bg-t-surface shadow-xl ${isMobile ? 'w-full' : 'w-[420px] max-w-[calc(100vw-32px)]'}`
             : 'h-full min-h-0 shrink-0 border-l border-t-divider bg-t-surface'
         }
         style={!floating ? { width: panelWidth } : undefined}
       >
         <RightPanel
           onCollapse={onCollapse}
-          autoSwitchExecution={autoSwitchExecution}
           className="h-full"
-          detailExpanded={floating}
-          onToggleExpanded={!isMobile && !isNarrow ? onToggleExpanded : undefined}
           symbol={symbol}
         />
       </aside>

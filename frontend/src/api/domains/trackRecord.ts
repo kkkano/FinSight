@@ -5,6 +5,7 @@ export interface TrackRecordFilters {
   ticker?: string;
   status?: string;
   prediction_type?: 'direction' | 'drawdown';
+  days?: number;
 }
 
 export const trackRecordApi = {
@@ -13,6 +14,7 @@ export const trackRecordApi = {
     if (filters.ticker) params.set('ticker', filters.ticker);
     if (filters.status) params.set('status', filters.status);
     if (filters.prediction_type) params.set('prediction_type', filters.prediction_type);
+    if (filters.days) params.set('days', String(filters.days));
     const response = await fetch(`${buildApiUrl('/api/benchmarks/us20-v1/track-record')}?${params}`, {
       headers: { Accept: 'application/json' }, credentials: 'omit', signal,
     });

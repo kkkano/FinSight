@@ -1,5 +1,6 @@
 import type { RawEventType } from '../types/index';
 import type { SSECallbacks } from './contracts';
+import { normalizeRuntimeEvent } from '../store/researchStream';
 
 /**
  * P1-2: SSE 读超时（毫秒）。超过该时长未收到任何数据帧（包括后端心跳）
@@ -53,11 +54,12 @@ export function withStreamGuards(
       sawDone = true;
       callbacks.onDone?.(report, thinking, meta);
     },
-    onError: (error) => {
+    onError: (error, meta) => {
       if (sawDone || sawError) return;
       clear();
       sawError = true;
-      callbacks.onError?.(error);
+      if (meta === undefined) callbacks.onError?.(error);
+      else callbacks.onError?.(error, meta);
     },
     clear,
     finish: (message = '连接中断，内容可能不完整，请重试') => {
@@ -110,7 +112,6 @@ export async function parseSSEStream(
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let eventCounter = 0;
-  let terminalReceived = false;
 
   /**
    * P1-2: 带超时的 read。超过 readTimeoutMs 未收到任何数据（含心跳帧）
@@ -164,8 +165,25 @@ export async function parseSSEStream(
 
         const rawJson = line.slice(6);
         try {
-          const data = JSON.parse(rawJson);
+          let data = JSON.parse(rawJson);
           opts.onEnvelope?.(data);
+          const runtime = normalizeRuntimeEvent(data);
+          if (runtime) {
+            callbacks.onRuntimeEvent?.(runtime);
+            if (!callbacks.onRuntimeEvent && runtime.type === 'content.delta') onToken?.(String(runtime.payload.delta ?? ''));
+            // 每份正文只分发一次；原始推理不进入开发日志或持久thinking数组。
+            if (/^(content[.]|reasoning[.]|artifact[.]|snapshot[.])/.test(runtime.type)) continue;
+            const legacyType: Record<string, string> = {
+              'tool.started': 'tool_start', 'tool.result': 'tool_end', 'tool.failed': 'step_error',
+              'agent.started': 'agent_start', 'agent.finished': 'agent_done', 'agent.failed': 'agent_error',
+              'run.completed': 'done', 'run.failed': 'error', 'run.cancelled': 'cancelled',
+            };
+            data = { ...data, ...runtime.payload, runtime_type: runtime.type,
+              type: legacyType[runtime.type] || runtime.type };
+            if (runtime.type.startsWith('activity.') || runtime.type.startsWith('skill.')) {
+              data = { ...data, type: 'trace', visibility: 'user', stage: runtime.type };
+            }
+          }
 
           // 跳过后端 keep-alive / heartbeat 心跳帧（仅用于保持 Cloudflare Tunnel 连接）
           if (data.type === 'heartbeat' || data.type === 'keep-alive') continue;
@@ -257,13 +275,16 @@ export async function parseSSEStream(
               runId: typeof data.run_id === 'string' ? data.run_id : undefined,
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
+          } else if (data.type === 'cancelled') {
+            onThinking?.({ stage: 'cancelled', eventType: 'trace', message: '已停止，保留已生成内容',
+              result: data, timestamp: data.timestamp || new Date().toISOString(), runId: data.run_id, sessionId: data.session_id });
+            onDone?.(data.report, data.thinking, { ...data, run_status: 'cancelled', answer_status: 'partial' });
+            return;
           } else if (data.type === 'done') {
-            terminalReceived = true;
             onDone?.(data.report, data.thinking, data);
             return;
           } else if (data.type === 'error') {
-            terminalReceived = true;
-            onError?.(data.message);
+            onError?.(data.message || data.error || '研究没有完成', data);
             return;
           } else if (
             ['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)
@@ -301,7 +322,8 @@ export async function parseSSEStream(
       }
     }
   } finally {
-    if (terminalReceived) await reader.cancel().catch(() => undefined);
+    // 重连前关闭弃用的订阅，避免继续占用旧SSE连接；run生命期由服务端管理。
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

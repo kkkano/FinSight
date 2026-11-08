@@ -34,6 +34,7 @@ export function ModelSettings() {
   const [reload, setReload] = useState(0);
   const [testing, setTesting] = useState(false);
   const [testedSignature, setTestedSignature] = useState<string | null>(null);
+  const [probeCapabilities, setProbeCapabilities] = useState<Partial<ModelCapabilities>>({});
   const [status, setStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [contextAcknowledged, setContextAcknowledged] = useState(false);
 
@@ -46,6 +47,7 @@ export function ModelSettings() {
     setCustomEffort(draft?.effort || '');
     setContextAcknowledged(false);
     setTestedSignature(null);
+    setProbeCapabilities({});
   }, [selection, pendingCustom]);
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export function ModelSettings() {
     setCustom((previous) => ({ ...previous, api_key: '' }));
     setContextAcknowledged(false);
     setTestedSignature(null);
+    setProbeCapabilities({});
     setStatus(null);
     setTesting(false);
   }, [authUserId]);
@@ -132,6 +135,7 @@ export function ModelSettings() {
 
   const resetTest = () => {
     setTestedSignature(null);
+    setProbeCapabilities({});
     setStatus(null);
   };
 
@@ -157,16 +161,20 @@ export function ModelSettings() {
     setTesting(true);
     const version = ++testVersion.current;
     setTestedSignature(null);
+    setProbeCapabilities({});
     setStatus(null);
     try {
-      const result = await apiClient.testModel(candidate);
+      const result = await apiClient.testModel(candidate, { tools: true });
       if (version !== testVersion.current) return;
-      if (result.success) setTestedSignature(signature);
-      setStatus({
-        success: result.success,
-        message: result.success
-          ? `连接成功 · ${Math.round(result.latency_ms)} ms，可应用此模型。`
-          : result.message || '连接测试失败，请检查配置后重试。',
+      const supported = result.success && result.native_tool_calls === true;
+      const proven = { native_tool_calls: result.native_tool_calls ?? null,
+        streaming_tool_calls: result.streaming_tool_calls ?? null,
+        capability_status: result.capability_status ?? (supported ? 'supported' as const : 'unknown' as const) };
+      setProbeCapabilities(proven);
+      if (supported) setTestedSignature(signature);
+      setStatus({ success: supported,
+        message: supported ? `原生工具调用测试通过 · ${Math.round(result.latency_ms)} ms，可应用此模型。`
+          : result.message || '未通过原生工具调用测试，请更换模型或检查端点配置。',
       });
     } catch (error) {
       if (version !== testVersion.current) return;
@@ -185,10 +193,11 @@ export function ModelSettings() {
     if (!candidate || !selectedCapabilities || !isAuthenticated) return;
     if (candidate.source === 'custom' && (!customReady || !contextAcknowledged)) return;
     if (candidate.source === 'system' && !systemModel?.available) return;
-    applySelection(candidate.source === 'custom' ? { ...candidate, context_acknowledged: true } : candidate, selectedCapabilities);
+    applySelection(candidate.source === 'custom' ? { ...candidate, context_acknowledged: true } : candidate, { ...selectedCapabilities, ...probeCapabilities });
     if (candidate.source === 'system') {
       setCustom((previous) => ({ ...previous, api_key: '' }));
       setTestedSignature(null);
+      setProbeCapabilities({});
       setContextAcknowledged(false);
     }
     setStatus({ success: true, message: '已应用，聊天、报告和个股 AI 判断将统一使用此模型。' });
@@ -273,7 +282,7 @@ export function ModelSettings() {
           <p className="text-xs text-fin-muted">支持公共 HTTPS API 地址，使用默认端口或 443。</p>
           <Input label="模型 ID" id="custom-model-id" value={custom.model}
             onChange={(event) => updateCustom('model', event.target.value)} disabled={testing || !isAuthenticated}
-            placeholder="供应商提供的模型名称" maxLength={200} autoComplete="off" spellCheck={false} />
+            placeholder="模型的英文名称" maxLength={200} autoComplete="off" spellCheck={false} />
           <Input label="API Key" id="custom-model-api-key" type="password" value={custom.api_key}
             onChange={(event) => updateCustom('api_key', event.target.value)} disabled={testing || !isAuthenticated}
             placeholder="输入你自己的 API Key" maxLength={4096} autoComplete="new-password" spellCheck={false} />
@@ -281,7 +290,7 @@ export function ModelSettings() {
             密钥仅保存在当前页面内存中；测试和使用时会发送至 FinSight 后端以调用你的服务。刷新页面后需重新填写并测试。
           </p>
           <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-fin-text-secondary">
-            <p>应用后，FinSight 会把你的请求、系统提示词、RAG 检索上下文及可能来自付费数据源的内容发送到上方 API 地址对应的外部服务，由该服务处理。连接测试仅发送固定测试消息。</p>
+            <p>应用后，FinSight 会将你的问题、附图、系统提示词和检索到的相关资料（可能包括付费数据）发送到上方 API 地址，由该外部服务处理。连接测试只发送固定测试消息。</p>
             <label className="flex items-start gap-2">
               <input type="checkbox" checked={contextAcknowledged} disabled={testing || !isAuthenticated}
                 onChange={(event) => setContextAcknowledged(event.target.checked)} className="mt-0.5 accent-fin-primary" />
@@ -319,11 +328,11 @@ export function ModelSettings() {
                 else setCustomEffort(event.target.value);
                 resetTest();
               }}>
-              {!selectedCapabilities?.default_effort ? <option value="">供应商默认</option> : null}
+              {!selectedCapabilities?.default_effort ? <option value="">模型默认</option> : null}
               {effortOptions.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
-        ) : <p className="text-xs text-fin-muted">推理强度：供应商默认</p>
+        ) : <p className="text-xs text-fin-muted">推理强度：模型默认</p>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -341,6 +350,7 @@ export function ModelSettings() {
           setCustom((previous) => ({ ...previous, api_key: '' }));
           setContextAcknowledged(false);
           setTestedSignature(null);
+          setProbeCapabilities({});
           setSource('system');
           setStatus({ success: true, message: `已恢复默认模型${catalog.find((model) => model.id === defaultModelId)?.label ? `：${catalog.find((model) => model.id === defaultModelId)?.label}` : ''}。` });
         }}>恢复默认模型</Button>

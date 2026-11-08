@@ -10,9 +10,10 @@ export const modelsApi = {
       params: { model, base_url: baseUrl }, timeout: 15_000,
     })).data;
   },
-  async testModel(selection: ModelTestSelection): Promise<{
+  async testModel(selection: ModelTestSelection, options: { tools?: boolean } = {}): Promise<{
     success: boolean; model: string; latency_ms: number; message: string;
+    native_tool_calls?: boolean; streaming_tool_calls?: boolean; capability_status?: 'supported' | 'unsupported' | 'temporary_error';
   }> {
-    return (await api.post('/api/models/test', selection, { timeout: 65_000 })).data;
+    return (await api.post('/api/models/test' + (options.tools ? '?tools=1' : ''), selection, { timeout: 65_000 })).data;
   },
 };

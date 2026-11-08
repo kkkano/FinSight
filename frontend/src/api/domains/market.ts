@@ -1,7 +1,28 @@
 import { api } from '../http';
 import type * as Contracts from '../contracts';
 
+export interface CompanyProfile {
+  ticker: string;
+  status: 'ok' | 'unavailable';
+  name: string | null;
+  name_zh: string | null;
+  exchange: string | null;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  dividend_yield: number | null;
+  currency: string | null;
+  source: string;
+  source_url?: string;
+  as_of: string | null;
+  observed_at?: string;
+  reason?: string;
+}
+
 export const marketApi = {
+  async fetchCompanyProfile(ticker: string, signal?: AbortSignal): Promise<CompanyProfile> {
+    const response = await api.get<CompanyProfile>(`/api/stock/company/${encodeURIComponent(ticker)}`, { signal });
+    return response.data;
+  },
   async getWatchlist(signal?: AbortSignal): Promise<{
     items: Array<{ ticker: string; note: string; added_at: string }>;
   }> {

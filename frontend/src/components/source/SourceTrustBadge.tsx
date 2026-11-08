@@ -26,7 +26,7 @@ const BADGE_STYLES: Record<SourceTrustKind, string> = {
 
 const BADGE_TITLES: Record<SourceTrustKind, string> = {
   snapshot: '来自快照或规则计算数据',
-  'agent-backed': '来自 Agent 执行或 Agent 证据合同',
+  'agent-backed': '来自研究助手的分析',
   'report-backed': '来自研究报告或报告回放',
   degraded: '当前来源存在降级、回退或错误',
 };

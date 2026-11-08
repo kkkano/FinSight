@@ -64,7 +64,7 @@ export function WorkspaceShell({
   const navigate = useNavigate();
 
   const isMobile = useIsMobileLayout();
-  const { theme, setTheme, showRightPanel, setShowRightPanel, rightPanelExpanded, setRightPanelExpanded, openRightPanel } = useStore();
+  const { theme, setTheme, showRightPanel, setShowRightPanel } = useStore();
   const activeSymbol = useDashboardStore((state) => state.activeAsset?.symbol);
   const currentTicker = useStore((state) => state.currentTicker);
   const { quotes: marketQuotes } = useMarketQuotes();
@@ -154,14 +154,12 @@ export function WorkspaceShell({
 
   const expandPanel = useCallback(() => setShowRightPanel(true), [setShowRightPanel]);
   const collapsePanel = useCallback(() => setShowRightPanel(false), [setShowRightPanel]);
-  const togglePanelDetails = useCallback(() => setRightPanelExpanded(!useStore.getState().rightPanelExpanded), [setRightPanelExpanded]);
   const contextPanelProps = {
     panelWidth,
     isExpanded: showRightPanel,
     onExpand: expandPanel,
     onCollapse: collapsePanel,
     onResizeStart: handleResizeStart,
-    autoSwitchExecution: true,
   };
 
   return (
@@ -172,39 +170,27 @@ export function WorkspaceShell({
         onChatClick={() => { navigateToChat(); setIsSidebarOpen(false); }}
         onHistoryClick={() => { navigateToHistory(); setIsSidebarOpen(false); }}
         onTodayClick={() => { navigateToToday(); setIsSidebarOpen(false); }}
-        onTrackRecordClick={() => { openRightPanel('track-record', true); setIsSidebarOpen(false); }}
+        onTrackRecordClick={() => { navigate('/track-record'); setIsSidebarOpen(false); }}
         currentView={view}
         isMobileOpen={isSidebarOpen}
         onMobileOpen={() => setIsSidebarOpen(true)}
         onMobileClose={() => setIsSidebarOpen(false)}
       />
 
-      <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden max-md:ml-14">
+      <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden max-lg:ml-14">
         <ApplicationUpdateBanner />
-        <div className="mx-3 mt-3 shrink-0">
-          <AiDisclaimer variant="banner" />
-        </div>
-        <ExecutionBanner />
+        {view === 'today' && <div className="mx-3 mt-3 shrink-0"><AiDisclaimer variant="banner" /></div>}
+        {view === 'today' && <ExecutionBanner />}
         {workspaceHealth && workspaceHealth.state !== 'ok' ? (
-          <div
-            data-testid="workspace-health-banner"
-            className={[
-              'mx-3 mt-3 shrink-0 rounded-lg border px-3 py-2 text-xs flex items-start gap-2',
-              ['dry_run', 'retrieval_limited'].includes(workspaceHealth.state)
-                ? 'border-fin-warning/40 bg-fin-warning/10 text-fin-warning'
-                : 'border-fin-danger/40 bg-fin-danger/10 text-fin-danger',
-            ].join(' ')}
-          >
-            {workspaceHealth.state !== 'unreachable' ? (
-              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            ) : (
-              <WifiOff size={14} className="mt-0.5 shrink-0" />
-            )}
-            <div className="min-w-0">
-              <div className="font-semibold">{workspaceHealth.title}</div>
-              <div className="mt-0.5 text-fin-text-secondary">{workspaceHealth.message}</div>
-            </div>
-          </div>
+          <details data-testid="workspace-health-banner" open={workspaceHealth.state === 'unreachable'}
+            className={'mx-3 mt-2 shrink-0 rounded-lg border px-3 py-1.5 text-xs ' + (workspaceHealth.state === 'unreachable'
+              ? 'border-fin-danger/30 text-fin-danger' : 'border-t-border text-t-text3')}>
+            <summary className="flex min-h-7 cursor-pointer items-center gap-2">
+              {workspaceHealth.state === 'unreachable' ? <WifiOff size={13} /> : <AlertTriangle size={13} />}
+              <span>{workspaceHealth.title}</span>
+            </summary>
+            <p className="pb-1 pt-1 text-t-text2">{workspaceHealth.message}</p>
+          </details>
         ) : null}
 
         <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -237,9 +223,8 @@ export function WorkspaceShell({
             />
           )}
           </div>
-          <ContextPanelShell {...contextPanelProps} isMobile={isMobile}
-            detailExpanded={rightPanelExpanded} onToggleExpanded={togglePanelDetails}
-            symbol={dashboardSymbol || (view === 'chat' ? currentTicker || activeSymbol : activeSymbol) || undefined} />
+          <ContextPanelShell {...contextPanelProps} isMobile={isMobile} showCollapsedToggle={view !== 'chat'}
+            symbol={(view === 'chat' ? currentTicker : dashboardSymbol || activeSymbol) || undefined} />
         </div>
       </div>
 

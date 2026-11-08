@@ -29,10 +29,10 @@ export const AgentStatusBar: React.FC<AgentStatusBarProps> = ({
       </div>
       <div className="flex items-center gap-2">
         <span className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-300 text-[9px]">
-          本次 LLM: {requestMetrics?.llmTotalCalls ?? 0}
+          模型调用: {requestMetrics?.llmTotalCalls ?? 0}
         </span>
         <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-300 text-[9px]">
-          本次 Tool: {requestMetrics?.toolTotalCalls ?? 0}
+          工具调用: {requestMetrics?.toolTotalCalls ?? 0}
         </span>
         {Object.entries(agentStatuses)
           .filter(([, s]) => s.status === 'running')

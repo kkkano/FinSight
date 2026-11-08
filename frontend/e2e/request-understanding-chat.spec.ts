@@ -121,7 +121,7 @@ test('chat conversations can be created, restored, and deleted from the rail', a
   const firstSessionId = await firstItem.getAttribute('data-session-id');
   expect(firstSessionId).toBeTruthy();
 
-  await page.getByTestId('conversation-rail').locator('button[aria-label="新建对话"]').click();
+  await page.getByTestId('sidebar').locator('button[aria-label="新建对话"]').click();
 
   const secondQuery = '第二轮：微软新闻';
   await page.locator('#chat-input').fill(secondQuery);
@@ -152,10 +152,9 @@ test('user trace view shows concrete backend understanding summaries', async ({ 
   await page.locator('#chat-input').fill(query);
   await page.getByTestId('chat-send-btn').click();
 
-  await page.getByRole('button', { name: /分析过程/ }).click();
-  await expect(page.getByText('理解意图')).toBeVisible();
-  await page.getByRole('button', { name: /理解意图/ }).click();
-  await expect(page.getByText(`拆解完成：${query}；识别公司、宏观和组合子任务`)).toBeVisible();
+  await page.getByRole('button', { name: /已处理/ }).click();
+  await expect(page.getByText('理解问题', { exact: true })).toBeVisible();
+  await expect(page.getByText(`拆解完成：${query}；识别公司、宏观和组合子任务`, { exact: true })).toBeVisible();
 });
 
 test('running chat streams can be stopped from the input control', async ({ page }) => {

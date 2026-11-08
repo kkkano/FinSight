@@ -51,6 +51,10 @@ export interface PredictionRecord {
     settled_at: string;
   };
   error_code: string | null;
+  confidence?: number | string | null;
+  strategy_version?: string;
+  scorer_version?: string;
+  settlement_bars?: Array<Record<string, unknown>>;
 }
 
 export interface PredictionTrackRecord {
@@ -92,5 +96,18 @@ export interface PredictionTrackRecord {
     horizon_sessions: number;
     direction_threshold: number;
     drawdown_threshold: number;
+    frequency?: string;
+    min_sample_size?: number;
+    direction_baseline?: string;
+    collection_start_et?: string;
+    collection_deadline_et?: string;
+    prediction_types_per_symbol?: number;
+    expected_symbols?: number;
+    next_settlement_date?: string | null;
+    calendar_version?: string;
+    scorer_version?: string;
+    scorer_versions?: string[];
+    strategy_versions?: string[];
   };
+  daily_series?: Array<{ date: string; n: number; hits: number; baseline_hits: number; hit_rate: number | null; baseline_hit_rate: number | null; actual_model?: string; prompt_version?: string; strategy_version?: string; scorer_version?: string }>;
 }

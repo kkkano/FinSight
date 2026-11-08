@@ -18,10 +18,10 @@ export function Stat({ label, value, change, changeText, className = '' }: StatP
   const isUp = hasChange && (change as number) >= 0;
   return (
     <div className={className}>
-      <div className="text-2xs uppercase tracking-wider text-t-text3">{label}</div>
-      <div className="num text-lg text-t-text">{value}</div>
+      <div className="text-xs text-t-text3">{label}</div>
+      <div className="stat-value num text-lg text-t-text">{value}</div>
       {hasChange && (
-        <div className={`num text-xs ${isUp ? 'text-t-up' : 'text-t-down'}`}>
+        <div className={`stat-change num text-xs ${isUp ? 'text-t-up' : 'text-t-down'}`}>
           {isUp ? '▲' : '▼'} {changeText ?? `${Math.abs(change as number).toFixed(2)}%`}
         </div>
       )}

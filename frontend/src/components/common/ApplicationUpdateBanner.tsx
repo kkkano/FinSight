@@ -43,7 +43,7 @@ export function ApplicationUpdateBanner() {
   const blocked = loading || Boolean(draft.trim());
   return (
     <div role="status" className="mx-3 mt-3 flex shrink-0 items-center justify-between gap-3 rounded-lg bg-fin-primary/10 px-3 py-2 text-sm text-fin-text">
-      <span>{loading ? '新版本已就绪，本次回答结束后即可更新。'
+      <span>{loading ? '新版本已就绪，回答结束后即可更新。'
         : draft.trim() ? '新版本已就绪，请先发送或保存当前输入。' : '新版本已就绪，刷新后使用最新修复。'}</span>
       <button type="button" disabled={blocked} onClick={() => window.location.reload()}
         className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-fin-primary hover:bg-fin-primary/10 disabled:opacity-50">

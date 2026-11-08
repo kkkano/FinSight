@@ -29,11 +29,11 @@ export function SourceBadge({ source, asOf, degraded, synthetic, className = '' 
   }
   if (!source && !asOf) return null;
   return (
-    <span className={`inline-flex items-center gap-1 text-2xs font-mono text-t-text3 ${className}`.trim()}>
+    <span className={`inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-t-text3 ${className}`.trim()}>
       {degraded && <span className="text-t-warning" title="主数据源不可用，已降级">⚠</span>}
-      {source}
-      {source && asOf ? ' · ' : ''}
-      {asOf ? String(asOf).slice(0, 10) : ''}
+      {source && <span>{source}</span>}
+      {source && asOf && <span aria-hidden="true">·</span>}
+      {asOf && <span className="whitespace-nowrap tabular-nums">{String(asOf).slice(0, 10)}</span>}
     </span>
   );
 }
