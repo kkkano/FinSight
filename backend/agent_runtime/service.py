@@ -388,7 +388,8 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                                     text_blocks[-1] if text_blocks else None)
                     prefer_financial_facts = bool(runtime.completeness.facets) and set(runtime.completeness.facets) <= {"filings", "cash_flow"}
                     prefer_calculation_facts = "chart" in runtime.completeness.facets and bool(re.search(r"连续(?:至少|不少于)?\s*\d+\s*(?:周|天).*下跌", query))
-                    if answer_block is not None and (prefer_financial_facts or prefer_calculation_facts or verified_text(answer_block["content"], runtime.data)[1]):
+                    prefer_causal_facts = "price_cause" in runtime.completeness.facets
+                    if answer_block is not None and (prefer_financial_facts or prefer_calculation_facts or prefer_causal_facts or verified_text(answer_block["content"], runtime.data)[1]):
                         factual = checked_factual_answer(runtime)
                         if not factual and "price_cause" in runtime.completeness.facets:
                             from .fact_answer import causal_fact_delivery
