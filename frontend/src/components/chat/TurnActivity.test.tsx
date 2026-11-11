@@ -7,6 +7,30 @@ const step = (eventType: string, result: Record<string, unknown>): ThinkingStep 
   eventType: eventType as ThinkingStep['eventType'], stage: eventType, result, timestamp: '2026-11-06T10:00:00Z',
 });
 describe('turn activity projection', () => {
+  it('provides useful details for an old model capability event with no payload', () => {
+    const row = buildTurnActivities([step('activity.started', { activity_id: 'model_capability', title: '正在验证模型工具能力' })], true)[0];
+    expect(renderToStaticMarkup(<ActivityRow row={row} />)).toContain('正在确认所选模型能否调用研究工具');
+  });
+
+  it('shows article titles and summaries rather than dumping nested provider metadata', () => {
+    const row = buildTurnActivities([step('tool.result', { name: 'get_company_news', inputs: {}, output_preview: [
+      { headline: '公司公布合作进展', url: 'https://example.com/news', source: 'Yahoo', published_at: '2026-11-09',
+        summary: '这是一条相关报道摘要。', event_quality: { ingest_channel: 'provider_feed' } },
+    ] })], false)[0];
+    const html = renderToStaticMarkup(<ActivityRow row={row} />);
+    expect(html).toContain('公司公布合作进展');
+    expect(html).toContain('这是一条相关报道摘要。');
+    expect(html).not.toContain('provider_feed');
+    expect(html).not.toContain('font-medium">参数');
+  });
+  it('does not restart a terminal historical timer when an old loading flag survives', () => {
+    const html = renderToStaticMarkup(<TurnActivity isLoading startedAt={Date.parse('2026-01-01T00:00:00Z')}
+      runStatus="interrupted" />);
+    expect(html).toContain('未完成');
+    expect(html).not.toContain('正在处理你的问题');
+    expect(html).not.toContain('animate-spin');
+    expect(html).not.toMatch(/\d+ 秒/);
+  });
   it('does not turn reopening history into an ever-growing research duration', () => {
     const html = renderToStaticMarkup(<TurnActivity thinking={[
       step('tool_end', { tool_call_id: 'saved', name: 'get_stock_price', status: 'ok', duration_ms: 300 }),

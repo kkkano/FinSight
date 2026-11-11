@@ -602,11 +602,15 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
     const row = item as Record<string, unknown>;
     const role = String(row.role || '').trim();
     const content = String(row.content || '').trim();
-    if ((role !== 'user' && role !== 'assistant') || !content) continue;
+    if ((role !== 'user' && role !== 'assistant') || (!content && role === 'user')) continue;
+    // 历史快照不是实时运行凭据；先停下旧计时，再按run接口确认真实状态。
+    const pending = role === 'assistant' && (row.isLoading === true || row.answer_status === 'running'
+      || row.run_status === 'running' || (!content && !row.report));
+    const placeholder = !content || /^正在生成回答[.…\s]*$/.test(content);
     out.push({
       id: String(row.id || '') || `srv-${Date.now()}-${out.length}`,
       role: role as Message['role'],
-      content,
+      content: pending && placeholder ? zh.chat.savedAnswerInterrupted : content,
       timestamp: typeof row.timestamp === 'number' ? row.timestamp : Date.now(),
       runId: typeof row.run_id === 'string' ? row.run_id : undefined,
       blocks: Array.isArray(row.blocks) ? publicResearchBlocks(row.blocks) : undefined,
@@ -616,10 +620,11 @@ const deserializeBackendMessages = (raw: unknown): Message[] => {
       runStatus: typeof row.run_status === 'string' ? row.run_status : undefined,
       answerStatus: typeof row.answer_status === 'string' ? row.answer_status : undefined,
       replyTo: typeof row.reply_to === 'string' ? row.reply_to : undefined,
-      isLoading: row.isLoading === true || row.answer_status === 'running',
-      canRetry: row.canRetry === true,
+      isLoading: false,
+      canRetry: pending || row.canRetry === true,
       report: row.report && typeof row.report === 'object' ? row.report as Message['report'] : undefined,
       ...(row.error ? { error: String(row.error), canRetry: row.canRetry === true } : {}),
+      ...(pending ? { error: zh.chat.savedAnswerInterrupted, canRetry: true } : {}),
     });
   }
   return out;
@@ -669,7 +674,7 @@ const hydrateMessagesFromBackend = (sessionId: string): void => {
           restored = [...restored.slice(0, index), ...restored.slice(index + 1)];
         }
         if (index < 0 || answer?.role !== 'assistant'
-          || answer.content === zh.chat.savedAnswerInterrupted || answer.content === zh.chat.missingSavedAnswer) return;
+          || (!answer.runId && (answer.content === zh.chat.savedAnswerInterrupted || answer.content === zh.chat.missingSavedAnswer))) return;
       }
 
       const localById = new Map(state.messages.map((message) => [message.id, message]));
@@ -691,10 +696,9 @@ const hydrateMessagesFromBackend = (sessionId: string): void => {
 const recoverPendingRun = (sessionId: string): void => {
   const initial = useStore.getState();
   if (initial.sessionId !== sessionId || initial.chatLoadingBySession[sessionId] || !initial.authIdentity) return;
-  const pending = [...initial.messages].reverse().find((message) => message.role === 'assistant'
+  const pendingMessages = [...initial.messages].reverse().filter((message) => message.role === 'assistant'
     && message.runId && (message.error === zh.chat.savedAnswerInterrupted || message.isLoading));
-  if (!pending?.runId) return;
-  const runId = pending.runId;
+  if (!pendingMessages.length) return;
   const owner = initial.authIdentity.userId;
   const controller = new AbortController();
   initial.setSessionLoading(sessionId, true);
@@ -703,41 +707,58 @@ const recoverPendingRun = (sessionId: string): void => {
   const stillOwned = () => useStore.getState().authIdentity?.userId === owner && !controller.signal.aborted;
   void (async () => {
     try {
-      while (stillOwned()) {
-        const run = await apiClient.getExecutionRun(runId, controller.signal);
-        if (!stillOwned()) return;
-        const result = run.result;
-        if (run.status !== 'running') {
-          const message = result?.assistant_message;
-          const content = typeof message?.content === 'string' ? message.content
-            : typeof result?.response === 'string' ? result.response : zh.chat.savedAnswerInterrupted;
-          const completed = result?.type === 'done' && run.status === 'completed';
-          useStore.getState().updateMessageInSession(sessionId, pending.id, {
-            id: run.assistant_message_id || pending.id, content, isLoading: false,
-            runStatus: run.status, answerStatus: message?.answer_status || result?.answer_status,
-            blocks: publicResearchBlocks(message?.blocks || result?.blocks || []),
-            thinking: message?.thinking || result?.thinking,
-            evidence_pool: message?.evidence_pool || result?.evidence_pool,
-            priceLevels: message?.price_levels || result?.price_levels,
-            report: message?.report || result?.report || result?.blocked_report,
-            error: completed ? undefined : String(message?.error || content),
-            canRetry: !completed || message?.canRetry === true || result?.quality_blocked === true,
+      for (const pending of pendingMessages) {
+        const runId = pending.runId!;
+        const recoveryStartedAt = Date.now();
+        try {
+          while (stillOwned()) {
+            const run = await apiClient.getExecutionRun(runId, controller.signal);
+            if (!stillOwned()) return;
+            const result = run.result;
+            if (run.status !== 'running') {
+              const message = result?.assistant_message;
+              const content = typeof message?.content === 'string' ? message.content
+                : typeof result?.response === 'string' ? result.response : zh.chat.savedAnswerInterrupted;
+              const completed = result?.type === 'done' && run.status === 'completed';
+              useStore.getState().updateMessageInSession(sessionId, pending.id, {
+                id: run.assistant_message_id || pending.id, content, isLoading: false,
+                timestamp: typeof run.created_at === 'number' && run.created_at > 0 ? run.created_at * 1000 : pending.timestamp,
+                runStatus: run.status, answerStatus: message?.answer_status || result?.answer_status,
+                blocks: publicResearchBlocks(message?.blocks || result?.blocks || []),
+                thinking: message?.thinking || result?.thinking,
+                evidence_pool: message?.evidence_pool || result?.evidence_pool,
+                priceLevels: message?.price_levels || result?.price_levels,
+                report: message?.report || result?.report || result?.blocked_report,
+                error: completed ? undefined : String(message?.error || content),
+                canRetry: !completed || message?.canRetry === true || result?.quality_blocked === true,
+              }, { syncBackend: false });
+              break;
+            }
+            const runStartedAt = typeof run.created_at === 'number' && run.created_at > 0 ? run.created_at * 1000 : recoveryStartedAt;
+            useStore.getState().updateMessageInSession(sessionId, pending.id, {
+              isLoading: true, runStatus: 'running', error: undefined, canRetry: false,
+              timestamp: runStartedAt,
+            }, { syncBackend: false });
+            await new Promise<void>((resolve) => {
+              const timer = setTimeout(() => { controller.signal.removeEventListener('abort', stop); resolve(); }, 1500);
+              const stop = () => { clearTimeout(timer); resolve(); };
+              controller.signal.addEventListener('abort', stop, { once: true });
+            });
+          }
+        } catch {
+          if (stillOwned()) useStore.getState().updateMessageInSession(sessionId, pending.id, {
+            isLoading: false, error: zh.chat.savedAnswerInterrupted, canRetry: true,
+            runStatus: 'interrupted',
           }, { syncBackend: false });
-          return;
         }
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(() => { controller.signal.removeEventListener('abort', stop); resolve(); }, 1500);
-          const stop = () => { clearTimeout(timer); resolve(); };
-          controller.signal.addEventListener('abort', stop, { once: true });
-        });
+        if (!stillOwned()) return;
       }
-    } catch {
-      // 网络暂不可用时保留已有正文和重试入口，下一次打开继续恢复同一 run。
     } finally {
       const current = useStore.getState();
       if (current.authIdentity?.userId === owner && current.abortControllersBySession[sessionId] === controller) {
         current.setSessionLoading(sessionId, false);
         current.setSessionAbortController(sessionId, null);
+        if (current.sessionId === sessionId) current.setStatus(null);
       }
     }
   })();

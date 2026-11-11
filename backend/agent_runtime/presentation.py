@@ -10,6 +10,23 @@ from .diagnostics import clean_text, safe_preview
 MAX_PROVIDER_REASONING_CHARS = 20_000
 
 
+def repair_has_complete_ending(text: str) -> bool:
+    """修正长答须以完整句子或完整Markdown块结束，不能用半句覆盖原稿。"""
+    value = text.strip()
+    if not value or value.count("```") % 2:
+        return False
+    last = value.splitlines()[-1].strip()
+    if re.match(r"^#{1,6}\s", last):
+        return False
+    if len(value) < 200:
+        return True
+    if last.endswith("```") or last.startswith("|") and last.endswith("|"):
+        return True
+    if re.search(r"\]\([^\n)]+\)$|https?://\S+$|\[(?:S[a-fA-F0-9]+|\d+)\]$", last):
+        return True
+    return bool(re.search(r'''[。！？.!?；;][”’"'）)\]*_]*$''', last))
+
+
 class PublicTextFilter:
     """过滤供应商混入正文的内部工具标记；不解析或执行其中的指令。"""
     prefixes = ("<｜DSML｜", "</｜DSML｜", "<|DSML|", "</|DSML|")

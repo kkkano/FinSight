@@ -9,6 +9,10 @@ def _number(value):
     return type(value) in {int, float} and math.isfinite(value)
 
 
+def news_source_list_requested(query: str) -> bool:
+    return bool(re.search(r"(?:只|仅).{0,12}(?:列出|标题|链接|原文)|(?:only|just).{0,16}(?:headlines|links)|(?:headlines|links).{0,8}only", query, re.I))
+
+
 def factual_answer(runtime) -> str:
     check, data, query = runtime.completeness, runtime.data, runtime.query
     if runtime.report_title or len(check.tickers) != 1 or check.missing(data, runtime.executor.attempts):
@@ -58,7 +62,8 @@ def factual_answer(runtime) -> str:
                 lines.append("来源未提供足够的周期收盘信息；末期按原始观测保留，延伸到样本末尾的区间不当作已结束样本。")
             lines += ["", "历史区间是对已有数据的描述，不构成后续涨跌概率。"]
             return "\n".join(lines)
-    if facets and facets <= {"news", "fresh_search"}:
+    # 原文索引只响应明确的链接/标题列表请求；新闻解读不能因局部核验被替换为供应商摘录。
+    if facets and facets <= {"news", "fresh_search"} and news_source_list_requested(query):
         for ref, record in records:
             if record["tool"] != "get_company_news":
                 continue
@@ -128,7 +133,7 @@ def factual_answer(runtime) -> str:
 
 def can_compose_causal(runtime) -> bool:
     check, data, query = runtime.completeness, runtime.data, runtime.query
-    if (runtime.report_title or len(check.tickers) != 1 or not set(check.facets) <= {"news", "price_cause"}
+    if (runtime.report_title or len(check.tickers) != 1 or not set(check.facets) <= {"news", "price_cause", "chart"}
             or "price_cause" not in check.facets or check.missing(data, runtime.executor.attempts)
             or not re.search(r"暴跌|大跌|下跌|drop|fall|crash", query, re.I)
             or re.search(r"今天|今日|昨天|昨日|资金流|净流入|净流出|谁在卖|\d{4}[-/年]\d|\d+月\d+日", query)):
@@ -145,6 +150,11 @@ def causal_fact_delivery(runtime, draft: str) -> str:
     if not can_compose_causal(runtime):
         return ""
     check, data, query = runtime.completeness, runtime.data, runtime.query
+    def source_notation(match):
+        refs = re.findall(r"S[a-fA-F0-9]+", match[1])
+        return " ".join(f"[{sid}]" for sid in refs) if all(sid in data.sources for sid in refs) else match[0]
+    draft = re.sub(r"(?:[（(]\s*)?source_refs\s*[:：]\s*(S[a-fA-F0-9]+(?:\s*[,，]\s*S[a-fA-F0-9]+)*)(?:\s*[)）])?",
+        source_notation, draft)
     ticker, explanations = check.tickers[0], []
     for paragraph in re.split(r"\n\s*\n", draft):
         refs = [sid for sid in cited_sources(paragraph, data) if data.records.get(data.sources[sid].get("data_ref"), {}).get("tool")
@@ -165,6 +175,7 @@ def causal_fact_delivery(runtime, draft: str) -> str:
                     or re.search(r"不能|无法|不足以|未能|没有证据|缺乏证据|证据不足|没有资料|缺少资料|未取得|未查到|有史以来|排名", clean)
                     or re.search(r"(?:报道|显示|指出|表示|如下|以下|包括|在于)[：:]?$|(?:因素|原因|导火索)[：:]$", clean)
                     or re.search(r"是否|能否|[？?]", clean)
+                    or re.search(r"(?:时|之际|期间)[。.!！]?$", clean)
                     or not (re.search(r"(?:原因|导火索|诱因|触发(?:点|因素)?|核心).{0,4}(?:是|为|在于|来自).{2,}"
                                      r"|归因于.{2,}|由.{2,}引发|.{2,}(?:不及|低于).{0,4}预期"
                                      r"|.{2,}(?:导致|引发|触发)(?:了)?(?:下跌|回落|抛售)", clean)

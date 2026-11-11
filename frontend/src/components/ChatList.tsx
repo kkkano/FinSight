@@ -22,7 +22,7 @@ import styles from './chat/ChatDesign.module.css';
 import { useCitationNavigation } from '../store/citationNavigation';
 import { bindResearchCitations, citationId } from '../utils/researchCitations';
 import { sourceDisplayName, sourceTitleDisplayName } from '../utils/sourceDisplayName';
-import { hasDataSourceDetails, SourceDetails } from './source/SourceDetails';
+import { EvidenceSources } from './source/EvidenceSources';
 import { ReportView } from './report';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem, Message } from '../types/index';
@@ -44,26 +44,6 @@ import { ReportArchiveLink } from './common/ReportArchiveLink';
 // ── Shared sub-components ──
 
 const MessageEvidenceContext = React.createContext<{ sources: EvidenceItem[]; runId?: string }>({ sources: [] });
-
-const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence_pool }) => (
-  <div className={styles.sourceList}>
-    <div className="px-2 pb-1 text-xs text-t-text3">{zh.chat.source}</div>
-    <div>
-      {evidence_pool.map((ev, idx) => {
-        const label = sourceTitleDisplayName(ev.title, ev.source || ev.url);
-        if (ev.url && !hasDataSourceDetails(ev)) {
-          return <a key={`${ev.url}-${idx}`} href={ev.url} target="_blank" rel="noopener noreferrer" className={styles.sourceLink}>
-            <span className="num text-t-accent">{idx + 1}</span><span>{label}</span>
-            <span className="ml-auto text-xs text-t-text3">{ev.source ? sourceDisplayName(ev.source) : ev.url.replace(/^https?:\/\/(?:www\.)?([^/]+).*$/, '$1')}
-              {ev.as_of ? ` · ${ev.as_of.slice(5, 10).replace('-', '/')}` : ''}</span></a>;
-        }
-        return (
-          <SourceDetails key={`ev-${idx}`} source={ev} index={idx} className={styles.sourceLink} />
-        );
-      })}
-    </div>
-  </div>
-);
 
 const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; as_of?: string | null; tried_sources?: string[] }> = ({
   data_origin, fallback_used, as_of, tried_sources,
@@ -127,7 +107,7 @@ const AssistantContent: React.FC<{
   <MessageEvidenceContext.Provider value={{ sources: msg.evidence_pool ?? [], runId: msg.runId }}>
     <MessageBlocks msg={msg} onRetry={onRetry} />
     {msg.evidence_pool && msg.evidence_pool.length > 0 && (
-      <EvidenceSection evidence_pool={msg.evidence_pool} />
+      <EvidenceSources sources={msg.evidence_pool} />
     )}
     {msg.error && msg.content.trim() !== msg.error.trim() && <p role="alert" className="mt-3 border-l-2 border-fin-danger/50 pl-3 text-sm text-fin-danger">{msg.error}</p>}
     <DataOriginTag
@@ -361,7 +341,8 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
       ? stringLabel
       : urlMeta.domain || zh.chat.sourceLink;
 
-  if (sourceIndex >= 0) return <a href={href} className={styles.citation}
+  const isCitation = href.startsWith('#research-source-') || /^\[?(?:\d+|S[a-f0-9]+)\]?$/i.test(stringLabel.trim());
+  if (sourceIndex >= 0 && isCitation) return <a href={href} className={styles.citation}
     title={sourceTitleDisplayName(evidence.sources[sourceIndex].title, evidence.sources[sourceIndex].source || displayText)} aria-label={`查看引用 ${sourceIndex + 1}`}
     onClick={(event) => {
       event.preventDefault();
@@ -369,6 +350,8 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
       useCitationNavigation.getState().select({ sessionId: useStore.getState().sessionId, runId: evidence.runId,
         sourceId: citationId(evidence.sources[sourceIndex], sourceIndex) });
     }}>{sourceIndex + 1}</a>;
+
+  if (sourceIndex >= 0) return <a href={href} target="_blank" rel="noopener noreferrer" className={styles.articleLink}>{label || displayText}</a>;
 
   return (
     <a

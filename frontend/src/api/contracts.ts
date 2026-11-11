@@ -96,6 +96,9 @@ export interface ExecutionRunRecord {
   status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'persistence_failed';
   user_message_id: string;
   assistant_message_id: string;
+  created_at?: number;
+  updated_at?: number;
+  completed_at?: number;
   result: Record<string, any> | null;
 }
 

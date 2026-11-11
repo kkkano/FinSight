@@ -424,23 +424,31 @@ def _request_ui_context(request: ExecuteRequest, user_id: str) -> dict[str, Any]
 
 async def _native_pipeline_with_preflight(**kwargs):
     """先建立SSE并回执，冷启动能力验证不再造成数十秒无响应。"""
-    from backend.agent_runtime.service import preflight, run_agent_pipeline
+    from backend.agent_runtime.service import cached_model_capability, preflight, run_agent_pipeline
     context = kwargs["run_context"]
     base = {"schema_version": "2", "run_id": kwargs["run_id"], "session_id": kwargs["thread_id"]}
-    yield {**base, "type": "activity.started", "payload": {"activity_id": "model_capability", "title": "正在验证模型工具能力"}}
+    initial_seq = 0
     with run_context_scope(context):
-        try:
-            await preflight(context)
-        except HTTPException as exc:
-            context.finish("failed")
-            detail = exc.detail if isinstance(exc.detail, dict) else {}
-            yield {**base, "type": "error", "success": False, "publishable": False,
-                   "run_status": "failed", "error_code": detail.get("code", "model_preflight_failed"),
-                   "message": detail.get("message", "模型能力未通过验证。"), "metrics": context.usage.summary()}
-            await context.archive_usage()
-            return
-    yield {**base, "type": "activity.finished", "payload": {"activity_id": "model_capability", "status": "completed", "title": "模型工具能力已验证"}}
-    async for event in run_agent_pipeline(**kwargs, initial_seq=2):
+        if not cached_model_capability():
+            yield {**base, "seq": 1, "type": "activity.started", "payload": {"activity_id": "model_capability",
+                "title": "正在验证模型工具能力", "summary": "正在确认所选模型能否调用研究工具。验证成功后会复用结果，继续回答。"}}
+            try:
+                await preflight(context)
+            except HTTPException as exc:
+                context.finish("failed")
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                yield {**base, "seq": 2, "type": "activity.failed", "payload": {"activity_id": "model_capability",
+                    "title": "模型工具能力验证未完成", "reason": detail.get("message", "暂时无法确认模型工具能力。"),
+                    "error_code": detail.get("code", "model_preflight_failed")}}
+                yield {**base, "seq": 3, "type": "error", "success": False, "publishable": False,
+                       "run_status": "failed", "error_code": detail.get("code", "model_preflight_failed"),
+                       "message": detail.get("message", "模型能力未通过验证。"), "metrics": context.usage.summary()}
+                await context.archive_usage()
+                return
+            initial_seq = 2
+            yield {**base, "seq": 2, "type": "activity.finished", "payload": {"activity_id": "model_capability",
+                "status": "completed", "title": "模型工具能力已验证", "summary": "所选模型已通过原生工具调用和流式响应检查，正在继续研究。"}}
+    async for event in run_agent_pipeline(**kwargs, initial_seq=initial_seq):
         yield event
 
 

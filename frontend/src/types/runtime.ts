@@ -86,7 +86,8 @@ export interface ResearchAction {
 }
 
 export type ResearchBlock = ResearchBlockPosition & (
-  | { id: string; kind: 'text'; content: string; revision: number; content_phase?: 'progress' | 'answer' }
+  | { id: string; kind: 'text'; content: string; revision: number; content_phase?: 'progress' | 'answer';
+      finish_reason?: string; completion_status?: 'complete' | 'tool_pending' | 'incomplete' }
   | { id: string; kind: 'reasoning'; content: string; provider?: string; revision: number;
       reasoning_kind?: string; truncated?: boolean; duration_ms?: number }
   | { id: string; kind: 'artifact'; artifact: ResearchArtifact; revision: number }

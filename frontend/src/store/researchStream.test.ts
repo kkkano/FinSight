@@ -8,6 +8,15 @@ const event = (seq: number, delta: string, extras: Partial<RuntimeEvent> = {}): 
 });
 
 describe('research stream identity and recovery', () => {
+  it('preserves incomplete repair metadata without promoting it to the answer', () => {
+    let state = applyResearchEvent(emptyResearchStream('run-a'), event(1, '指数层面的估'));
+    state = applyResearchEvent(state, event(2, '', { type: 'content.block_finished', payload: {
+      block_id: 'answer', content_phase: 'progress', finish_reason: 'stop', completion_status: 'incomplete',
+    } }));
+    expect(state.blocks[0]).toMatchObject({ finish_reason: 'stop', completion_status: 'incomplete', content_phase: 'progress' });
+    expect(researchText(state.blocks)).toBe('');
+    expect(publicResearchBlocks(state.blocks)[0]).toMatchObject({ completion_status: 'incomplete' });
+  });
   it('applies a repeated delta once and rejects a foreign run', () => {
     const first = applyResearchEvent(emptyResearchStream('run-a'), event(1, '财报'));
     expect(applyResearchEvent(first, event(1, '财报'))).toBe(first);

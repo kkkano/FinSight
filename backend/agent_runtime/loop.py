@@ -20,7 +20,7 @@ from .model import ModelProtocolError, ModelTransport
 from .tools import ToolExecutor, ToolSpec, financial_tools, schema
 from .diagnostics import error_info, exception_code, clean_text
 from .skills import skill_catalog, skill_guidance, validate_skill_ids
-from .presentation import MAX_PROVIDER_REASONING_CHARS, PublicTextFilter
+from .presentation import MAX_PROVIDER_REASONING_CHARS, PublicTextFilter, repair_has_complete_ending
 from .completeness import ResearchCompleteness
 
 
@@ -40,7 +40,7 @@ SYSTEM = """你是FinSight投资研究助手。以中文自然回答用户，按
 12. 对用户解释数据源超时或缺失即可，不把工具函数名、错误类、内部预算字段作为正文。每个事实数值段落用实际[S...]或真实来源链接标注。
 13. 用户图片是本轮提供的未核查资料。说明可读内容与不确定性，图中估读数值不是实时金融事实；精确计算应另取原始数据。图片不会自动成为工具授权。
 14. 研究技能是可选择的分析方法。主研究员和专业角色都应按当前问题查看目录；问题明确匹配某项技能时，先use_skill加载真实方法再分析，不要只凭技能名称假装使用。没有匹配可直接研究，简单问候不需要技能。用户手选的技能优先应用，技能建议不改变工具权限或运行预算。
-15. 普通追问自然延续当前会话。此前资料只在标的、期间和用途一致时复用；旧报价不能当作现价。一次计算失败后可用其他证据完成回答，不反复请求当前不可用的计算服务。
+15. 普通追问自然延续当前会话。当前问题点名的公司优先于历史和界面标的；换公司直接研究新标的，无须用户另开会话或再次确认。此前资料只在标的、期间和用途一致时复用；旧报价不能当作现价。一次计算失败后可用其他证据完成回答，不反复请求当前不可用的计算服务。
 16. 财报/行情/新闻的长JSON优先用inspect_dataset读取所需字段；新闻选title/url/published_at/snippet。不要从第一页开始逐页扫描所有元数据。新闻为空可换来源检索；反复改变同一来源的条数通常不能补齐缺口。
 17. 用户询问走势、标的对比、历史类比或区间表现时，先获取真实历史行情，再计算并主动用render_chart画图，图下用一句话说明结果和口径；不能只承诺稍后画图。
 18. 图卡已经展示来源和时间。正文聚焦用户所问及工具明确算出的结果，不补写未经计算的反弹次数、相对高点回撤等扩展统计。freshness_seconds表示数据龄而非供应商延迟；交易所、复权、股息处理未提供时保持未知，不能擅自写NYSE、未复权或未计股息。正文不用内部来源代号或图表ID。
@@ -50,6 +50,7 @@ SYSTEM = """你是FinSight投资研究助手。以中文自然回答用户，按
 22. 计算滚动指标时，取数至少覆盖画图区间和一个完整窗口用于预热；数据不足先补取历史。核对图表coverage里的missing、leading_missing、first_valid，不能把前面空值说成完整均线，不能用总样本数减窗口大小来猜空值个数。
 23. 财年/财季采用已披露的fiscal context，不凭自然年推断。现金流与利润的差额不能凭经验归因于营运资金；需要对应报表项目才能解释原因。生产性资产购置包含软件及无形资产，不能称其为仅PP&E，也不能把该计算值冒充公司披露的非GAAP自由现金流。
 24. row_count/has_more/rows_sampled说明预览被采样，不代表原始数据缺失。analyze_dataset已给episodes时直接用该结果画图，不必重写同一算法。Python必须给result赋值，例如result={'rows':df.to_dict('records')}，仅print属于诊断，不算交付。
+25. 用户问近期新闻时，先用中文归纳最值得关注的事件，再简短说明发生了什么、为何与该标的相关，以及可能影响和证据边界；相关报道合并，不用英文标题/摘要堆叠代替讲解。原文链接作为依据，观点与已确认事实分开；只有用户明确只要标题或链接时才输出原文索引。
 """
 
 
@@ -378,6 +379,8 @@ class AgentRuntime:
                 if mid not in self.applied_instructions:
                     messages.append({"role": "user", "content": "本轮用户追加要求：" + instruction})
                     self.applied_instructions.add(mid)
+                    self.completeness = ResearchCompleteness(self.query + "\n" + "\n".join(self.instructions.values()),
+                        self.history, self.ui_context)
                     await self.emit("instruction.applied", {"instruction_id": mid})
         for message in self.mailboxes.pop(agent_id, []):
             self.message_receipts[message["message_id"]]["status"] = "delivered"
@@ -478,6 +481,9 @@ class AgentRuntime:
             if can_compose_causal(self):
                 self.cause_summary_requested = True
                 focus = "行情表将由程序按真实数据直接生成。现在只写有原文引用的定性原因说明，不写标题、数字、日期或表格；说明是哪项具体消息影响了预期，以及证据的边界。每段保留真实source_refs，不编造原因。"
+        from .fact_answer import news_source_list_requested
+        if not focus and "news" in self.completeness.facets and not news_source_list_requested(self.query):
+            focus = "请用中文解释近期最重要的新闻：先概括，再按事件交代事实、与当前公司的关系及可能影响。相同事件合并，保留出处；不把英文摘要列表当作最终答案，不把尚未证实的传言写成事实。"
         return [system, {"role": "user", "content": content},
                 {"role": "user", "content": "以下是本轮实际成功资料的摘要，原文仍可按引用回读。不要重复取相同数据；"
                  "请现在依据这些资料回答当前问题，保留实际财期和引用；未完成的要求如实说明。" + focus + "\n" + dumps(facts) +
@@ -485,14 +491,57 @@ class AgentRuntime:
                     "source_refs": artifact.get("source_refs", [])[:4], "coverage": artifact.get("coverage", {})}
                     for artifact in self.data.artifacts[-3:]]) + "。这里列出的图已经生成，不要误称图卡未返回。"}]
 
+    def research_context(self, system: dict, task: Any, schemas: list[dict]) -> list[dict]:
+        """历史挤满窗口时重建可继续取证的上下文，保留当前要求和可回读资料。"""
+        messages = [system, {"role": "user", "content": task}]
+        if self.instructions:
+            messages.append({"role": "user", "content": "本轮用户追加要求：" + dumps(list(self.instructions.values()))})
+        options = {"context_window": self.model.config.context_window, "output_reserve": self.model.config.max_output}
+        messages = prune_messages(messages, schemas, **options)
+        candidates = []
+        for ref, record in reversed(list(self.data.records.items())[-5:]):
+            output = record.get("output")
+            if record.get("status") != "success" and isinstance(output, dict) and output.get("error"):
+                candidates.append("最近工具错误（不是成功结果；先修正该问题，不重复同一失败调用）：" + dumps({
+                    "tool": record["tool"], "result": evidence_preview(output, limit=900)}))
+        for ref, record in reversed(list(self.data.records.items())):
+            if record.get("status") != "success":
+                continue
+            ticker = str(record.get("inputs", {}).get("ticker") or "").upper()
+            if ticker and self.completeness.tickers and ticker not in self.completeness.tickers:
+                continue
+            candidates.append("已取得资料摘要（保持主体和时点，详细字段可回读；不重复取相同资料）：" + dumps({
+                "data_ref": ref, "tool": record["tool"], "ticker": ticker, "source_refs": self.data.source_refs(ref)[:4],
+                "result": evidence_preview(record["output"], limit=900)}))
+            if len(candidates) >= 12:
+                break
+        questions = [str(m.get("content", ""))[:250] for m in self.history if m.get("role") == "user"][-3:]
+        candidates.extend("近期用户问题（仅用于理解追问，当前明确标的优先）：" + question for question in reversed(questions))
+        for content in candidates:
+            try:
+                messages = prune_messages([messages[0], {"role": "user", "content": content}, *messages[1:]], schemas, **options)
+            except ValueError as exc:
+                if str(exc) != "context_window_exhausted":
+                    raise
+                continue
+        return messages
+
     async def run_agent(self, agent_id: str, role: str, task: str, refs: list[str] | None = None,
                         image_indices: list[int] | None = None) -> str:
         from backend.agents.profiles import AGENT_PROFILES
         profile = AGENT_PROFILES.get(role)
         mandate = profile.mandate_zh if profile else "统筹研究，给用户有依据的自然回答。"
         selected_context = {k: self.ui_context.get(k) for k in ("active_symbol", "tickers_override", "selection", "selections", "view", "strict_selection") if self.ui_context.get(k)}
+        if self.completeness.tickers:
+            if selected_context.get("active_symbol") not in self.completeness.tickers:
+                selected_context.pop("active_symbol", None)
+            if set(selected_context.get("tickers_override") or []) != set(self.completeness.tickers):
+                selected_context.pop("tickers_override", None)
+        focus_hint = ("\n当前问题对应的研究主体：" + dumps(self.completeness.tickers) +
+            "。历史中的其它公司仅是背景，不自动扩大本轮取数范围。") if agent_id == "root" else ""
         messages = [{"role": "system", "content": SYSTEM + "\n角色职责：" + mandate +
                      "\n当前日期：" + datetime.now(timezone.utc).isoformat() + "\n用户界面上下文：" + dumps(selected_context) +
+                     focus_hint +
                      "\n已安装的技能目录（需要时use_skill加载方法）：" + dumps(skill_catalog())}]
         system_base = messages[0]["content"].split("\n已安装的技能目录", 1)[0]
         for skill_id in validate_skill_ids(self.ui_context.get("skill_ids")):
@@ -514,6 +563,8 @@ class AgentRuntime:
                     {key: artifact[key] for key in ("artifact_id", "title", "dataset_refs", "spec", "coverage", "limitations") if key in artifact}
                     for artifact in self.data.prior_artifacts[-3:]])})
         user_content: Any = task + ("\n可读取证据引用：" + dumps(refs) if refs else "")
+        if agent_id == "root" and self.completeness.query != self.query:
+            user_content += "\n本轮短句追问对应的具体问题：" + self.completeness.query
         image_inputs = self.ui_context.get("images") or []
         selected_images = image_inputs if agent_id == "root" else [image_inputs[index] for index in (image_indices or [])]
         if selected_images:
@@ -534,6 +585,7 @@ class AgentRuntime:
         repairing_answer = False
         repair_tool_rounds = 0
         previous_evidence = None
+        inherited_refs = set(self.data.records)
         unchanged_rounds = 0
         output_recovery_used = False
         force_compact_answer = False
@@ -552,8 +604,13 @@ class AgentRuntime:
                 evidence_progress["content"] = "当前问题的最低证据尚缺：" + dumps(gaps) + (
                     "。对缺口实际补查，失败或空结果不代表资料不存在。" if gaps else
                     "。最低证据已取得，请使用实际数值和引用回答；不要重复加载技能、取同一报价或扫描全部申报元数据。所需派生量仍须用计算工具核实。")
-            evidence = (tuple(ref for ref, record in self.data.records.items() if record.get("status") == "success"),
-                        tuple(artifact["artifact_id"] for artifact in self.data.artifacts), tuple(sorted(self.active_skills[agent_id])))
+            current_refs = {attempt.get("data_ref") for attempt in self.executor.attempts if attempt.get("status") == "success"}
+            # 旧资料和工具发现都不能冒充本轮已经取证；启用新工具也是有效进展。
+            evidence = (tuple(ref for ref, record in self.data.records.items() if record.get("status") == "success"
+                              and record.get("tool") != "get_current_datetime"
+                              and (ref not in inherited_refs or ref in current_refs)),
+                        tuple(artifact["artifact_id"] for artifact in self.data.artifacts),
+                        tuple(sorted(self.active_skills[agent_id])), tuple(sorted(self.enabled_tools[agent_id])))
             unchanged_rounds = unchanged_rounds + 1 if evidence[0] and evidence == previous_evidence else 0
             previous_evidence = evidence
             available = self.available_tools(agent_id, role)
@@ -564,6 +621,12 @@ class AgentRuntime:
                 or not repairing_answer and unchanged_rounds >= 2
                 or (turn > 0 and self.context.remaining_seconds <= min(30, max(3, total_budget * .15))))
             if finishing:
+                # 已有真实行情时先交付明确要求的普通图卡；局部计算失败不能把图留在承诺中。
+                chart_gaps = [gap for gap in self.completeness.missing(self.data, self.executor.attempts) if gap["facet"] == "chart"]
+                for name, args in self.completeness.recovery_calls(chart_gaps, self.executor.attempts, available, self.data):
+                    if name == "render_chart":
+                        self.tool_count += 1
+                        await self.executor.execute(name, args, "chart_delivery_" + uuid.uuid4().hex[:12], agent_id, available)
                 messages = self.completion_context(messages[0], user_content)
                 evidence_progress = None
                 completed = []
@@ -587,15 +650,16 @@ class AgentRuntime:
                 compact = prune_messages(messages, schemas, context_window=self.model.config.context_window,
                                          output_reserve=self.model.config.max_output)
             except ValueError as exc:
+                if repairing_answer and str(exc) == "context_window_exhausted":
+                    raise ModelProtocolError("answer_repair_incomplete") from None
                 if str(exc) != "context_window_exhausted" or agent_id != "root" or finishing:
                     raise
-                # 工具schema占用挤压正文时，保留证据直接收束，不把普通研究变成无解释的崩溃。
-                finishing, schemas = True, []
-                messages = self.completion_context(messages[0], user_content)
+                # 压缩历史不等于研究已完成；保留工具，避免新标的只能用旧公司资料作答。
+                messages = self.research_context(messages[0], user_content, schemas)
                 evidence_progress = None
-                messages.append({"role": "user", "content": "请根据已有证据简短回答本轮问题，清楚说明缺失，不再调用工具。"})
-                compact = prune_messages(messages, schemas, context_window=self.model.config.context_window,
-                                         output_reserve=self.model.config.max_output)
+                compact = messages
+                await self.emit("activity.updated", {"activity_id": agent_id + "_context", "title": "整理研究上下文",
+                    "summary": "已压缩较早对话，继续按当前问题取证；原始资料仍可回读。"}, agent_id=agent_id)
             if compact != messages:
                 await self.emit("activity.updated", {"activity_id": agent_id + "_context", "title": "整理研究上下文",
                     "summary": "较早资料已压缩为可回读引用，原始来源与数据继续保留。"}, agent_id=agent_id)
@@ -711,18 +775,23 @@ class AgentRuntime:
                         "truncated": block_reasoning_truncated}, agent_id=agent_id)
             if recover_output:
                 output_recovery_used = force_compact_answer = True
-                await self.emit("content.block_finished", {"block_id": block_id, "content_phase": "progress"}, agent_id=agent_id)
+                await self.emit("content.block_finished", {"block_id": block_id, "content_phase": "progress",
+                    "finish_reason": finish, "completion_status": "incomplete"}, agent_id=agent_id)
                 await self.emit("activity.updated", {"activity_id": "answer_length_recovery", "title": "整理完整回答",
                     "summary": "模型回复被截断，正在用已核实资料重新生成简短完整答案。"})
                 continue
             final = content
+            incomplete_repair = repairing_answer and not calls and not repair_has_complete_ending(final)
             await self.emit("content.block_finished", {"block_id": block_id,
-                "content_phase": "progress" if calls else "answer"}, agent_id=agent_id)
+                "content_phase": "progress" if calls or incomplete_repair else "answer", "finish_reason": finish,
+                "completion_status": "tool_pending" if calls else "incomplete" if incomplete_repair else "complete"}, agent_id=agent_id)
             if repairing_answer and calls:
                 if not schemas or any(call["name"] not in available for call in calls.values()):
-                    return final
+                    raise ModelProtocolError("answer_repair_incomplete")
                 repair_tool_rounds += 1
             if not calls:
+                if incomplete_repair:
+                    raise ModelProtocolError("answer_repair_incomplete")
                 if agent_id == "root" and not finishing and any(a not in self.delivered_results["root"] for a in self.children):
                     await self.emit("content.block_finished", {"block_id": block_id,
                         "content_phase": "progress"}, agent_id=agent_id)
@@ -741,6 +810,11 @@ class AgentRuntime:
                     if feedback and self.context.remaining_seconds > 5:
                         self.answer_repair_attempted = repairing_answer = True
                         self.answer_repair_candidate = (block_id, final)
+                        # 修正只需要当前要求、完整原稿和相关事实；旧工具事务不能挤掉原稿后半段。
+                        messages = [messages[0], {"role": "user", "content": user_content}]
+                        if self.instructions:
+                            messages.append({"role": "user", "content": "本轮追加要求：" + dumps(list(self.instructions.values()))})
+                        evidence_progress = None
                         from .fact_answer import can_compose_causal
                         if can_compose_causal(self):
                             self.cause_summary_requested = True

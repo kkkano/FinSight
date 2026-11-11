@@ -45,7 +45,7 @@ def test_large_reasoning_schemas_and_results_archive_old_transactions_without_lo
     tools = [{"type": "function", "function": {"name": "fetch_url_content", "description": "tool schema " * 250,
               "parameters": {"type": "object", "properties": {"url": {"type": "string"}}}}}]
     before, tools_before = deepcopy(messages), deepcopy(tools)
-    context_window, output_reserve = 36000, 4096
+    context_window, output_reserve = 12000, 4096
     budget = context_window - output_reserve - max(1024, context_window // 20)
     assert tokens(messages) + tokens(tools) > budget
 
@@ -69,7 +69,7 @@ def test_archive_retains_readback_for_compact_single_ref_and_grouped_tool_result
     messages[2]["content"] = dumps({"truncated": True, "data_ref": "dataset_singular", "preview": "snapshot " * 1000})
     latest = deepcopy(messages[-2:])
 
-    compact = prune_messages(messages, [], context_window=21000, output_reserve=2048)
+    compact = prune_messages(messages, [], context_window=7000, output_reserve=2048)
 
     assert_complete_tool_pairs(compact)
     assert compact[-2:] == latest

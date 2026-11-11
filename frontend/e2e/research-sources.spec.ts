@@ -1,10 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
-
-const output = resolve('../docs/reports/2026-11-08_research_recovery');
-mkdirSync(output, { recursive: true });
 
 async function prepare(page: Page, dark: boolean) {
   await page.addInitScript(({ dark, session }) => {
@@ -43,10 +38,12 @@ async function prepare(page: Page, dark: boolean) {
           source: 'company_ir', url: 'https://example.com/investor-update', as_of: '2026-11-06' }], runStatus: 'completed' },
     ] });
   });
+  await page.getByTestId('answer-sources').locator('summary').first().click();
+  for (const group of await page.getByTestId('source-group').all()) await group.locator('summary').first().click();
 }
 
 for (const dark of [false, true]) {
-  test(`source details and original article ${dark ? 'dark' : 'light'}`, async ({ page }) => {
+  test(`source details and original article ${dark ? 'dark' : 'light'}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await prepare(page, dark);
     expect(await page.locator('body').ariaSnapshot()).toContain('查看来源 1 详情');
@@ -68,7 +65,7 @@ for (const dark of [false, true]) {
     await expect(page.locator('body')).not.toContainText('dataset_');
     await expect(page.locator('body')).not.toContainText('get_technical_snapshot');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: resolve(output, `sources-${dark ? 'dark' : 'light'}.png`), animations: 'disabled' });
+    await page.screenshot({ path: testInfo.outputPath(`sources-${dark ? 'dark' : 'light'}.png`), animations: 'disabled' });
     await page.evaluate(async () => {
       const path = '/src/store/useStore.ts';
       const { useStore } = await import(/* @vite-ignore */ path);

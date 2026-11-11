@@ -203,7 +203,7 @@ def test_context_pruning_keeps_call_result_pairs_and_user_correction():
         messages.extend([{"role":"assistant","content":None,"tool_calls":[{"id":str(i),"function":{"name":"get","arguments":"{}"},"type":"function"}]},
                          {"role":"tool","tool_call_id":str(i),"content":json.dumps({"data_refs":["dataset_"+str(i)],"data":"资料"*1000},ensure_ascii=False)}])
     messages.append({"role":"user","content":"更正：只看HKD财报"})
-    compact=prune_messages(messages,[],context_window=60000,output_reserve=4096)
+    compact=prune_messages(messages,[],context_window=30000,output_reserve=4096)
     assert len(compact)==len(messages)
     assert compact[-1]["content"]=="更正：只看HKD财报"
     assert all(compact[i+1]["tool_call_id"]==compact[i]["tool_calls"][0]["id"] for i in range(1,17,2))

@@ -111,16 +111,21 @@ _CAPABILITIES: dict[str, tuple[float, dict]] = {}
 _LOCKS: dict[str, asyncio.Lock] = {}
 
 
+def cached_tool_capability(config: ModelConfig) -> dict | None:
+    cached = _CAPABILITIES.get(config.identity())
+    return dict(cached[1]) if cached and cached[0] > time.monotonic() else None
+
+
 async def verify_tool_capability(transport: ModelTransport, *, timeout: float = 60) -> dict:
     key = transport.config.identity()
-    cached = _CAPABILITIES.get(key)
-    if cached and cached[0] > time.monotonic():
-        return dict(cached[1])
+    cached = cached_tool_capability(transport.config)
+    if cached:
+        return cached
     lock = _LOCKS.setdefault(key, asyncio.Lock())
     async with lock:
-        cached = _CAPABILITIES.get(key)
-        if cached and cached[0] > time.monotonic():
-            return dict(cached[1])
+        cached = cached_tool_capability(transport.config)
+        if cached:
+            return cached
         schema = {"type": "function", "function": {"name": "capability_probe",
                   "description": "Synthetic no-op. No data access or side effects.",
                   "parameters": {"type": "object", "properties": {"value": {"type": "integer"}},

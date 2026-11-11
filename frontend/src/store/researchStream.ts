@@ -93,8 +93,12 @@ export function applyResearchEvent(state: ResearchStreamState, event: RuntimeEve
     if (previous && revision < previous.revision) return next;
     const delta = stringValue(payload.delta ?? payload.content ?? payload.text);
     const phase = payload.content_phase ?? event.content_phase;
+    const completion = payload.completion_status;
     block = { id: blockId, kind: 'text', revision,
       content_phase: phase === 'progress' || phase === 'answer' ? phase : previous?.kind === 'text' ? previous.content_phase : undefined,
+      finish_reason: stringValue(payload.finish_reason) || (previous?.kind === 'text' ? previous.finish_reason : undefined),
+      completion_status: completion === 'complete' || completion === 'tool_pending' || completion === 'incomplete'
+        ? completion : previous?.kind === 'text' ? previous.completion_status : undefined,
       content: event.type === 'content.block_finished' ? previous?.kind === 'text' ? previous.content : ''
         : event.type === 'content.revised' ? delta : (previous?.kind === 'text' ? previous.content : '') + delta };
   } else if (event.type.startsWith('reasoning.')) {

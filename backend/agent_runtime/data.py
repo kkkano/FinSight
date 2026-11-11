@@ -132,7 +132,6 @@ class RunData:
     def add_source(self, item: dict, ref: str) -> str:
         from .diagnostics import clean_text, safe_preview
         url = item.get("url") or item.get("link") or item.get("source_url")
-        title = item.get("title") or item.get("source") or "工具证据"
         identity = str(url or item.get("source_id") or ref) + ref
         source_id = "S" + hashlib.sha256(identity.encode()).hexdigest()[:10]
         # 引用账本只保存来源投影；完整行情/财报仍由data_ref回读，不能在每个引用里复制整张表。
@@ -141,6 +140,7 @@ class RunData:
         if item.get("limitations"):
             citation["limitations"] = safe_preview(item["limitations"], max_chars=1200)
         previous = {key: value for key, value in self.sources.get(source_id, {}).items() if key in _SOURCE_FIELDS}
+        title = item.get("title") or item.get("headline") or previous.get("title") or item.get("source") or "工具证据"
         for key in ("metadata", "meta"):
             if isinstance(item.get(key), dict):
                 previous_meta = previous.get(key) if isinstance(previous.get(key), dict) else {}

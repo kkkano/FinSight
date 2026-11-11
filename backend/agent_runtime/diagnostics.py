@@ -45,6 +45,7 @@ _ERRORS = {
     "model_timeout": ("模型响应超时了。", "可以稍后重试，或先聚焦一个问题。"),
     "model_connection_error": ("模型连接中断了。", "稍后再试。"),
     "model_incomplete_stream": ("回答还没完成，连接就中断了。", "已有内容会保留，可以重试。"),
+    "answer_repair_incomplete": ("修正后的回答没有完整结束，已保留原稿中通过核验的完整内容。", "可以重新核对尚未确认的部分。"),
     "model_stream_error": ("模型生成回答时出错了。", "稍后再试。"),
     "agent_turn_budget_exhausted": ("这次研究已达到调用上限。", "已查到的数据会保留，可以继续问没解决的部分。"),
     "run_token_budget_exhausted": ("这次研究的模型额度用完了。", "可以继续问没解决的部分。"),

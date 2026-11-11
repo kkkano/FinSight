@@ -215,6 +215,50 @@ describe('useStore conversation lifecycle', () => {
     expect(apiClient.createConversation).not.toHaveBeenCalled();
   });
 
+  it('reconciles every stale backend loading slot instead of leaving older timers running', async () => {
+    const sid = 'public:test-user:stale-loading';
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid, conversation: {
+      messages: [{ id: 'u', role: 'user', content: '为什么英特尔暴跌', timestamp: 1000 },
+        { id: 'a-old', role: 'assistant', content: '正在生成回答...', timestamp: 1001,
+          run_id: 'old-run', answer_status: 'running', isLoading: true },
+        { id: 'a-latest', role: 'assistant', content: '', timestamp: 1002,
+          run_id: 'latest-run', answer_status: 'running', isLoading: true }],
+    } });
+    const getRun = vi.spyOn(apiClient, 'getExecutionRun').mockImplementation(async (runId) => ({
+      run_id: runId, session_id: sid, user_message_id: 'u',
+      assistant_message_id: runId === 'old-run' ? 'a-old' : 'a-latest',
+      status: 'completed', created_at: 1794200000,
+      result: { type: 'done', response: `已恢复 ${runId}`, answer_status: 'answered' },
+    }));
+    useStore.getState().setSessionId(sid);
+    await vi.waitFor(() => {
+      expect(getRun).toHaveBeenCalledTimes(2);
+      const messages = useStore.getState().messages.filter((message) => message.role === 'assistant');
+      expect(messages).toHaveLength(2);
+      expect(messages.every((message) => !message.isLoading && message.content.startsWith('已恢复'))).toBe(true);
+      expect(messages.every((message) => message.timestamp === 1794200000000)).toBe(true);
+      expect(useStore.getState().chatLoadingBySession[sid]).toBe(false);
+    });
+  });
+
+  it('keeps failed history recovery retryable without reviving the persisted spinner', async () => {
+    const sid = 'public:test-user:recovery-network';
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid, conversation: {
+      messages: [{ id: 'u', role: 'user', content: 'INTC', timestamp: 1000 },
+        { id: 'a', role: 'assistant', content: '正在生成回答...', timestamp: 1001,
+          run_id: 'lost-run', answer_status: 'running', isLoading: true }],
+    } });
+    const getRun = vi.spyOn(apiClient, 'getExecutionRun').mockRejectedValue(new Error('network'));
+    useStore.getState().setSessionId(sid);
+    await vi.waitFor(() => {
+      expect(getRun).toHaveBeenCalledOnce();
+      expect(useStore.getState().messages.at(-1)).toMatchObject({
+        isLoading: false, canRetry: true, error: zh.chat.savedAnswerInterrupted,
+      });
+      expect(useStore.getState().chatLoadingBySession[sid]).toBe(false);
+    });
+  });
+
   it('does not replace newly sent messages with late backend recovery', async () => {
     const sid = useStore.getState().sessionId;
     useStore.getState().addMessage({ id: 'research-user', role: 'user', content: 'INTC research', timestamp: 1 });

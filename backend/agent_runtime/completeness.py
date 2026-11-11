@@ -27,7 +27,9 @@ def output_status(output: Any) -> str:
     return "success"
 
 
-_REFRESH = re.compile(r"(?:你|再|继续|重新|帮我|赶紧|去).{0,5}(?:搜|查)|(?:搜|查)(?:一下|一遍|啊)|search\s+again|look\s+it\s+up", re.I)
+_REFRESH = re.compile(r"(?:你|再|继续|重新|帮我|赶紧|去).{0,5}(?:搜|查)|(?:搜|查)(?:一下|一遍|啊)|"
+                      r"(?:现在|重新|再|继续).{0,3}(?:获取|取数|取)|search\s+again|look\s+it\s+up|"
+                      r"(?:re-?fetch|fetch\s+again)", re.I)
 _FACETS = {
     "valuation": r"估值|市盈率|市净率|贵不贵|便宜|valuation|overvalued|undervalued|p/e|ev/ebitda",
     "filings": r"财报|业绩|营收|利润|earnings|revenue|financial results",
@@ -98,24 +100,38 @@ class ResearchCompleteness:
         self.refresh = bool(_REFRESH.search(query))
         self.query = query
         explicit = extract_tickers(query)["tickers"]
-        contextual = ""
+        historical_tickers = []
         for message in reversed(history):
             if message.get("role") == "user" and not _REFRESH.fullmatch(str(message.get("content", ""))):
                 candidate = str(message.get("content", ""))
-                if extract_tickers(candidate)["tickers"] or any(re.search(pattern, candidate, re.I) for pattern in _FACETS.values()):
-                    contextual = candidate
+                candidate_tickers = extract_tickers(candidate)["tickers"]
+                if candidate_tickers:
+                    historical_tickers = candidate_tickers
                     break
-        self.tickers = explicit or extract_tickers(contextual)["tickers"] or ui_context.get("tickers_override") or (
+        self.tickers = explicit or historical_tickers or ui_context.get("tickers_override") or (
             [ui_context["active_symbol"]] if ui_context.get("active_symbol") else [])
         self.tickers = list(dict.fromkeys(str(t).upper() for t in self.tickers))[:6]
-        subject = query + (" " + contextual if self.refresh and not explicit else "")
+        # 短句补取沿用最近一次同主体的具体问题；不让更早公司的财报要求污染新标的。
+        if self.refresh:
+            for message in reversed(history):
+                if message.get("role") != "user":
+                    continue
+                candidate = str(message.get("content", ""))
+                candidate_tickers = extract_tickers(candidate)["tickers"]
+                if candidate_tickers and set(candidate_tickers) != set(self.tickers):
+                    break
+                has_facet = any(re.search(pattern, candidate, re.I) for pattern in _FACETS.values())
+                if has_facet or candidate_tickers and not _REFRESH.search(candidate):
+                    self.query = query + " " + candidate
+                    break
+        subject = self.query
         conceptual = bool(re.search(r"什么是|如何计算|怎么算|单位是什么|什么意思|what is|how.{0,8}calculat", query, re.I))
         self.facets = [name for name, pattern in _FACETS.items() if re.search(pattern, subject, re.I)] if self.tickers and not conceptual else []
         if "valuation" in self.facets and "filings" not in self.facets:
             self.facets.append("filings")
         if self.refresh:
             self.facets.append("fresh_search")
-        if re.search(r"画图|绘图|绘制.{0,8}(?:图|曲线)|plot\b|draw.{0,8}chart", query, re.I) and not re.search(r"(?:不|无需|不用|不要).{0,3}(?:画|绘)|do not (?:plot|draw)", query, re.I):
+        if re.search(r"画(?:个|一?[张幅个])?图|绘图|绘制.{0,8}(?:图|曲线)|plot\b|draw.{0,8}chart", query, re.I) and not re.search(r"(?:不|无需|不用|不要).{0,3}(?:画|绘)|do not (?:plot|draw)", query, re.I):
             self.facets.append("chart")
         if ui_context.get("strict_selection"):
             self.facets = []
@@ -179,7 +195,22 @@ class ResearchCompleteness:
                             if record.get("tool") == "get_stock_historical_data" and record.get("status") == "success" and record.get("inputs", {}).get("ticker") == ticker:
                                 planned.append(("analyze_dataset", {"dataset_ref": ref, "operation": "historical_drawdown_episodes",
                                     "parameters": {"frequency": "weekly" if streak[2] == "周" else "daily", "min_periods": int(streak[1])}}))
+                                chart_planned = True
                                 break
+                # 普通价格走势图可直接使用真实OHLC；不能因为额外Python统计失败而丢掉可交付的图。
+                specialized = re.search(r"均线|移动平均|指标|比较|对比|相比|连续|回归|相关|\b(?:MA\d*|RSI|MACD|Python|compare|correlation)\b", self.query, re.I)
+                if not chart_planned and not specialized and "render_chart" in available:
+                    for ref, record in reversed(list(data.records.items())):
+                        if (record.get("status") != "success" or record.get("tool") != "get_stock_historical_data"
+                                or str(record.get("inputs", {}).get("ticker", "")).upper() != ticker):
+                            continue
+                        rows = data.rows(ref)
+                        x = next((key for key in ("time", "date", "timestamp") if rows and rows[0].get(key)), None)
+                        if not x or not any(_number(row.get("close")) for row in rows):
+                            continue
+                        planned.append(("render_chart", {"dataset_ref": ref, "title": f"{ticker}价格走势",
+                            "chart_type": "line", "x": x, "series": [{"field": "close", "name": "收盘价"}]}))
+                        break
                 continue
             tried = {a["name"] for a in attempts if str(a.get("inputs", {}).get("ticker", "")).upper() == ticker}
             if facet == "price_cause":

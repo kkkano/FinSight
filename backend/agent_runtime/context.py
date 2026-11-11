@@ -2,14 +2,29 @@
 from __future__ import annotations
 
 import copy
+import base64
 import json
+import math
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 
 def dumps(value: Any) -> str:
     from backend.graph.json_utils import json_dumps_safe
     return json_dumps_safe(value, ensure_ascii=False)
+
+
+@lru_cache(maxsize=1)
+def _tokenizer():
+    """词表随应用交付；请求路径只读本地资源，不联网下载或写全局缓存。"""
+    import tiktoken
+    path = Path(__file__).with_name("assets") / "cl100k_base.tiktoken"
+    ranks = {base64.b64decode(token): int(rank) for token, rank in
+             (line.split() for line in path.read_bytes().splitlines() if line)}
+    return tiktoken.Encoding(name="finsight_cl100k", mergeable_ranks=ranks, special_tokens={},
+        pat_str=r"'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}++|\p{N}{1,3}+| ?[^\s\p{L}\p{N}]++[\r\n]*+|\s++$|\s*[\r\n]|\s+(?!\S)|\s")
 
 
 def tokens(value: Any) -> int:
@@ -35,8 +50,9 @@ def tokens(value: Any) -> int:
             return [projection(child) for child in item]
         return item
     text = value if isinstance(value, str) else dumps(projection(value))
-    # 不在请求路径下载tokenizer资产。UTF-8字节数是保守的token上界，实际usage另行结算。
-    return max(1, len(text.encode("utf-8")) + image_budget)
+    # cl100k用于跨供应商估算；额外预留30%词表/协议差异，按供应商usage结算真实用量。
+    # UTF-8字节不是token，按字节预算会反复丢弃中文对话和刚完成的工具结果。
+    return max(1, math.ceil(len(_tokenizer().encode_ordinary(text)) * 1.3) + image_budget)
 
 
 def evidence_preview(value: Any, *, limit: int = 4500) -> Any:
@@ -162,8 +178,11 @@ def prune_messages(messages: list[dict], tools: list[dict], *, context_window: i
     if size <= target:
         return result
     protected_users = [i for i, message in enumerate(result) if message.get("role") == "user"][-2:]
+    protected_answers = [i for i, message in enumerate(result)
+                         if message.get("role") == "assistant" and not message.get("tool_calls")][-1:]
     for i, message in enumerate(result):
-        if message.get("role") not in {"user", "assistant"} or i in protected_users:
+        # 最近完整回答可能正处于核验阶段，不能把其尾部当作旧历史裁掉。
+        if message.get("role") not in {"user", "assistant"} or i in protected_users or i in protected_answers:
             continue
         content = message.get("content")
         if isinstance(content, str) and len(content) > 1400:

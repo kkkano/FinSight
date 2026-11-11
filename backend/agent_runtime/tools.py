@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .context import compact_result, dumps
+from .context import compact_result, dumps, evidence_preview
 from .completeness import output_status
 from .diagnostics import TOOL_TITLES, display_tool, error_info, exception_code, safe_code, safe_preview, tool_summary
 
@@ -273,6 +273,11 @@ class ToolExecutor:
             sources = [safe_preview({"source_id": sid, **{key: self.runtime.data.sources[sid].get(key)
                 for key in ("title", "url", "source", "as_of")}}) for sid in source_refs[:8] if sid in self.runtime.data.sources]
             preview_output = output.get("result") if name == "run_analysis_code" and not failure and isinstance(output, dict) and "result" in output else output
+            if name == "read_evidence" and not failure and isinstance(output, dict):
+                record = self.runtime.data.records.get(args.get("data_ref"), {})
+                preview_output = {key: output[key] for key in ("offset", "total_chars", "next_offset", "has_more") if key in output}
+                # 交给模型的原始片段保持不变；界面只投影同一资料的有界摘要，避免序列化包裹挤占阅读区。
+                preview_output["preview"] = evidence_preview(record.get("output"), limit=3200)
             await self.runtime.emit("tool.failed" if failure else "tool.result", {
                 "tool_call_id": call_id, "name": name, "title": title, "status": result["status"], "data_refs": refs,
                 "inputs": safe_preview(args), "output_preview": safe_preview(preview_output), "source_refs": source_refs,

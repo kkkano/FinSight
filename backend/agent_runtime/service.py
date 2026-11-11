@@ -18,7 +18,7 @@ from .config import resolve_model
 from .context import dumps, tokens, evidence_preview
 from .limits import LeaseLimiter, CapacityExceeded
 from .loop import AgentRuntime
-from .model import ModelProtocolError, ModelTransport, verify_tool_capability
+from .model import ModelProtocolError, ModelTransport, verify_tool_capability, cached_tool_capability
 from .grounding import cited_sources, source_urls, chart_coverages, checked_comparison_stats, validate_paragraph
 from .diagnostics import error_info, exception_code
 from .presentation import message_blocks, message_activities, price_levels_from_blocks, clean_public_text
@@ -57,13 +57,23 @@ def answer_paragraphs(text: str) -> list[str]:
     return result
 
 
+def _repair_excerpt(paragraph: str) -> dict:
+    if len(paragraph) <= 1600:
+        return {"paragraph": paragraph}
+    prefix = paragraph[:1400]
+    boundaries = [match.end() for match in re.finditer(r"[。！？.!?](?:\s|$)|[。！？]|\n", prefix)]
+    excerpt = prefix[:boundaries[-1]].rstrip() if boundaries else ""
+    return {"paragraph": excerpt + "\n[诊断摘录；完整段落见上一条原稿，不得把本摘录当作完整答案。]", "truncated": True}
+
+
 def answer_feedback(text: str, data, *, require_citations: bool = False, short_cause: bool = False) -> str | None:
-    invalid = [{"paragraph": paragraph.encode("utf-8")[:900].decode("utf-8", errors="ignore"), "issues": issues}
+    invalid = [{**_repair_excerpt(paragraph), "issues": issues}
                for paragraph in answer_paragraphs(text)
                if (issues := paragraph_issues(paragraph, data, require_citations=require_citations))]
     if not invalid:
         return None
     header = ("请给用户一份完整答案，不写‘核对后的段落’或描述修正过程。只采用已取得资料中明确支持的结果，"
+            "完整原稿在上一条回答中；诊断摘录只用于定位问题，不能照抄半句，长答最后一句必须完整结束。"
             "保留真实引用；未计算的扩展统计、未声明的延迟/交易所/复权口径不要写成事实。"
             "新闻只是返回条目，不能据此断言整个时间窗口没有新事件、利好或利空；缺失说明限定为本轮已取得的资料。"
             "交叉以comparison_stats.crossovers核验为准，共同起点的首次分离不是交叉；两个观测只支持一次相邻变化，不能写两个期间各自增长。"
@@ -147,15 +157,27 @@ def _feedback_facts(text: str, data) -> list[dict]:
     return facts
 
 
-def verified_text(text: str, data, *, require_citations: bool = False) -> tuple[str, list[str]]:
+def verified_text(text: str, data, *, require_citations: bool = False, explain_omissions: bool = False) -> tuple[str, list[str]]:
     """保留完整合格段；不把一个错误段拆成数字碰巧命中的伪合格结论。"""
     kept, issues = [], []
+    section_heading = section_has_content = section_omitted = False
+    gap = "本节的数值或来源尚未核实，暂时无法给出可靠结论。"
     for paragraph in answer_paragraphs(text):
+        heading = bool(re.fullmatch(r"\s*#{1,6}\s+[^\n]+", paragraph))
+        if heading:
+            if explain_omissions and section_heading and section_omitted and not section_has_content:
+                kept.append(gap)
+            section_heading, section_has_content, section_omitted = True, False, False
         violations = paragraph_issues(paragraph, data, require_citations=require_citations)
         if violations:
             issues.extend(violations)
+            section_omitted = True
         else:
             kept.append(paragraph)
+            if paragraph.strip() and not heading:
+                section_has_content = True
+    if explain_omissions and section_heading and section_omitted and not section_has_content:
+        kept.append(gap)
     return "\n\n".join(kept).strip(), list(dict.fromkeys(issues))
 
 
@@ -165,12 +187,22 @@ def checked_factual_answer(runtime) -> str:
     return candidate if candidate and not verified_text(candidate, runtime.data)[1] else ""
 
 
+def cached_model_capability() -> dict | None:
+    try:
+        return cached_tool_capability(resolve_model())
+    except RuntimeError:
+        return None
+
+
 async def preflight(context=None) -> dict:
     from fastapi import HTTPException
     try:
         model = resolve_model()
         if not model.model or not model.base_url.startswith("https://") or not model.api_key:
             raise ModelProtocolError("model_configuration_missing")
+        cached = cached_tool_capability(model)
+        if cached:
+            return cached
         async with LeaseLimiter().slot("model", context.owner if context else "model-test",
                                        max(1, int(os.getenv("FINSIGHT_AGENT_MODEL_CONCURRENCY", "2"))),
                                        timeout=context.timeout(15) if context else 15, ttl=80):
@@ -282,6 +314,9 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
             block["content"] += payload["delta"]
         elif kind == "content.block_finished" and payload.get("block_id") in blocks:
             blocks[payload["block_id"]]["content_phase"] = payload.get("content_phase", "progress")
+            for key in ("finish_reason", "completion_status"):
+                if key in payload:
+                    blocks[payload["block_id"]][key] = payload[key]
         elif kind.startswith("reasoning."):
             block = blocks.setdefault(payload["block_id"], {"id": payload["block_id"], "kind": "reasoning", "content": "", "revision": 0,
                 "reasoning_kind": payload.get("kind", "provider_raw"), "seq": outgoing["seq"],
@@ -409,7 +444,7 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                         is_answer = block is answer_block
                         block["content_phase"] = "answer" if is_answer else "progress"
                         revised, violations = verified_text(block["content"], runtime.data,
-                            require_citations=bool(runtime.report_title) and is_answer)
+                            require_citations=bool(runtime.report_title) and is_answer, explain_omissions=is_answer)
                         if fallback_answer_id and block is not answer_block and block.get("seq", 0) > answer_block.get("seq", 0):
                             # 失败校正轮的半截输出不是可交付答案，不能混进正文。
                             revised = ""
@@ -439,8 +474,8 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                     if runtime.answer_repair_attempted and fallback_answer_id is None:
                         await emit("activity.finished", {"activity_id": "answer_check", "status": "completed",
                             "title": "回答核对完成", "summary": "已保留与资料一致的结果。"})
-                    tickers = list(dict.fromkeys(str(record["inputs"]["ticker"]).upper() for record in runtime.data.records.values()
-                        if record.get("inputs", {}).get("ticker")))
+                    # 当前问题的主体独立于继承的资料；只有search取证时也不能退回旧界面标的。
+                    tickers = runtime.completeness.tickers or runtime.observed_tickers
                     price_levels = price_levels_from_blocks([answer_block], tickers)
                     referenced_ids = set(cited_sources(response, runtime.data))
                     for artifact in runtime.data.artifacts:
@@ -484,7 +519,7 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                     blocked = (hard_block or report_quality.get("state") in {"block", "blocked"}
                                or report_quality.get("publishable") is False)
                     state = {"query": query, "thread_id": thread_id,
-                             "subject": {"tickers": (ui_context or {}).get("tickers_override", [])},
+                             "subject": {"tickers": tickers},
                              "artifacts": {"draft_markdown": response, "evidence_pool": list(runtime.data.sources.values()),
                                            "step_results": runtime.data.results, "artifacts": runtime.data.artifacts}}
                     if report is not None and not blocked:
@@ -504,8 +539,8 @@ async def run_agent_pipeline(*, deps, query: str, thread_id: str, run_id: str,
                              "quality_blocked": blocked, "blocks": message_blocks(list(blocks.values())),
                              "thinking": message_activities(thinking), "price_levels": price_levels,
                              "evidence_pool": referenced_sources,
-                             "current_focus": runtime.observed_tickers[-1] if runtime.observed_tickers else (ui_context or {}).get("active_symbol"),
-                             "tickers": runtime.observed_tickers or tickers,
+                             "current_focus": tickers[0] if tickers else None,
+                             "tickers": tickers,
                              "artifacts": runtime.data.artifacts, "actions": list(runtime.actions.values()),
                              "metrics": {**run_context.usage.summary(), "tool_calls": runtime.tool_count,
                                          "research_recovery_rounds": runtime.research_recovery_rounds,

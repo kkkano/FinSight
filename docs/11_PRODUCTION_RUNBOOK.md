@@ -1,8 +1,8 @@
 # FinSight 生产发布 Runbook
 
-更新时间：2026-11-07（主应用新修复待 after/发布；独立 compute 已更新）
+更新时间：2026-11-10 UTC（回答核验截断修复已部署）
 
-本文是当前唯一生产运维规范。当前后端与前端均为 `agent-20261108-365a20081c6b`，代码基线 `ddee6360`；独立 compute 为 `python-20261107-a0b8e1d70e82`，已部署。发布与验证证据见[本次记录](reports/2026-11-08_research_recovery/LIVE_RESEARCH.md)。公开、内部组件及受保护HTTP检查必须明确区分。
+本文是当前唯一生产运维规范。当前前后端均为 `agent-20261110-2a5de207900b`，代码基线 `4c0deafb` 加未提交修复，运行内容 SHA-256 `2a5de207900baa850bb19fbaf0092ea54ec5bd0fd9294a96d8b2c4c92b980ea9`。独立 compute 仍为 `python-20261107-a0b8e1d70e82`。本次见[回答核验截断验收](archive/2026-11-10_answer_completion/README.md)，此前展示修复见[新闻与来源记录](archive/2026-11-10_news_presentation/README.md)。
 
 ## 1. 发布不变量
 
