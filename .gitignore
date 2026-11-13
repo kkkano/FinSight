@@ -192,3 +192,7 @@ docs/plans/*
 tests/agent_eval/fixtures/
 tests/agent_eval/requests/
 tests/agent_eval/results/acceptance_live/
+
+# 本轮CI受控截图，历史证据保持原字节
+!docs/reports/2026-11-13_ci_e2e/
+!docs/reports/2026-11-13_ci_e2e/**

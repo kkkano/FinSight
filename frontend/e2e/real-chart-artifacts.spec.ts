@@ -8,7 +8,9 @@ import type { ResearchArtifact } from '../src/types/runtime';
 import type { EvidenceItem } from '../src/types';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
-const output = join(repository, 'docs/reports/2026-11-07_chat_design_alignment');
+const output = process.env.PLAYWRIGHT_ARTIFACT_DIR || join(repository, 'tmp/r261113/real-chart-artifacts');
+const fixtureRoot = join(repository, 'frontend/e2e/contract_fixtures/real_charts');
+const fixtureManifest = JSON.parse(readFileSync(join(fixtureRoot, 'manifest.json'), 'utf8'));
 mkdirSync(output, { recursive: true });
 const cases: Array<{ name: string; run: string; file: string; points: number; series: number; directory?: string; sourceFile?: 'datasets' }> = [
   { name: 'aapl', run: 'chart-live-1-422aa35c1e', file: 'chart_03247108da4cf744.json', points: 251, series: 1 },
@@ -23,15 +25,19 @@ const cases: Array<{ name: string; run: string; file: string; points: number; se
 ];
 
 for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) => {
-  const directory = item.directory ? join(repository, item.directory) : join(repository, '.omx/live-charts', item.run);
+  const directory = join(fixtureRoot, item.name);
+  const proof = fixtureManifest.cases[item.name];
   const originalPath = join(directory, item.file);
   const path = item.name === 'soxx' && process.env.FINSIGHT_RENDER_SOXX_ARTIFACT || originalPath;
   const bytes = readFileSync(path);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const artifact = JSON.parse(bytes.toString('utf8')) as ResearchArtifact;
+  expect(createHash('sha256').update(readFileSync(originalPath)).digest('hex')).toBe(proof.artifact_sha256);
   const originalArtifact = JSON.parse(readFileSync(originalPath, 'utf8')) as ResearchArtifact;
   // 不读取最终回答正文到页面；仅投影该图实际引用的来源身份/标题/链接/时间。
-  const sourceData = JSON.parse(readFileSync(join(directory, item.sourceFile === 'datasets' ? 'datasets.json' : 'terminal.json'), 'utf8'));
+  const ledgerBytes = readFileSync(join(directory, proof.ledger_file));
+  expect(createHash('sha256').update(ledgerBytes).digest('hex')).toBe(proof.ledger_sha256);
+  const sourceData = JSON.parse(ledgerBytes.toString('utf8'));
   const ledger = (item.sourceFile === 'datasets'
     ? Array.isArray(sourceData.sources) ? sourceData.sources : Object.entries(sourceData.sources).map(([id, value]) => ({ source_id: id, ...value as Record<string, unknown> }))
     : sourceData.evidence_pool) as Array<Record<string, unknown>>;
@@ -49,6 +55,11 @@ for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) =>
     localStorage.setItem('finsight-session-id', sessionId);
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
   }, E2E_SESSION_ID);
+  // 所有外部请求在浏览器边界阻断；图表仅使用冻结原件。
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    return url.hostname === '127.0.0.1' || url.hostname === 'localhost' ? route.fallback() : route.abort();
+  });
   await installAuthenticatedSession(page);
   let executions = 0;
   await page.route('**/api/**', (route) => {
@@ -96,7 +107,7 @@ for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) =>
   await page.screenshot({ path: join(output, `${prefix}.png`), fullPage: false });
 
   const rendered = await page.evaluate(async () => {
-    const source = await (await fetch('/src/components/charts/EChart.tsx')).text();
+    const source = await (await fetch('/src/components/charts/EChartRuntime.tsx')).text();
     const match = [...source.matchAll(/from\s*["']([^"']+)["']/g)].map((item) => item[1]).find((path) => /\/echarts(?:\.js|\/)/.test(path));
     if (!match) throw new Error('无法定位当前渲染器使用的 ECharts 模块。');
     const echarts = await import(match);
@@ -225,7 +236,7 @@ for (const item of cases) test(`real artifact ${item.name}`, async ({ page }) =>
   expect(stored).toEqual(artifact);
   expect(createHash('sha256').update(readFileSync(path)).digest('hex')).toBe(sha256);
   expect(executions).toBe(0);
-  writeFileSync(join(output, `${prefix}.json`), JSON.stringify({ evidence_kind: 'existing_model_artifact_rendering', source_file: path, sha256, run_id: item.run,
+  writeFileSync(join(output, `${prefix}.json`), JSON.stringify({ evidence_kind: 'existing_model_artifact_rendering', source_file: path, original_source_file: proof.artifact_original_path, sha256, run_id: item.run, frozen: true, live_market_validation: false,
     source_ids: sources.map((source) => source.source_id), source_proof: sources, point_count: rows.length,
     series: rendered[0].series.map((series: { name: string; data: number[] }) => ({ name: series.name, first: series.data[0], last: series.data.at(-1), points: series.data.length })),
     unit: rendered[0].unit, source_values_unchanged: true, model_calls: executions, mean_check: meanCheck, comparison_check: comparisonCheck, annotations: rendered[0].areas,

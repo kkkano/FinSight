@@ -3,10 +3,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
+import { E2E_SESSION_ID, E2E_USER_ID, installAuthenticatedSession } from './helpers/auth';
 import type { ResearchArtifact } from '../src/types/runtime';
 
-const output = fileURLToPath(new URL('../../docs/reports/2026-11-07_chat_design_alignment/', import.meta.url));
+const output = fileURLToPath(new URL('../../docs/reports/2026-11-13_ci_e2e/', import.meta.url));
 mkdirSync(output, { recursive: true });
 const progress = '先看价格，再计算这段时间的变化。';
 const finalLead = '这是界面验收示例的最终回答。';
@@ -69,10 +69,11 @@ for (const variant of [{ name: 'light', dark: false, width: 1440 }, { name: 'dar
     let fixtureRequests = 0;
     let frames: Array<Record<string, unknown>> = [];
     await page.setViewportSize({ width: variant.width, height: 960 });
-    await page.addInitScript(({ dark, sessionId }) => {
+    await page.addInitScript(({ dark, sessionId, userId }) => {
       localStorage.clear(); localStorage.setItem('finsight-theme', dark ? 'dark' : 'light');
+      localStorage.setItem(`finsight-research-preferences:${userId}`, JSON.stringify({ showProviderReasoning: true }));
       localStorage.setItem('finsight-session-id', sessionId); sessionStorage.setItem('finsight-welcome-gate-passed', '1');
-    }, { dark: variant.dark, sessionId: E2E_SESSION_ID });
+    }, { dark: variant.dark, sessionId: E2E_SESSION_ID, userId: E2E_USER_ID });
     await installAuthenticatedSession(page);
     await page.route('**/api/**', (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -96,7 +97,7 @@ for (const variant of [{ name: 'light', dark: false, width: 1440 }, { name: 'dar
     await expect(page.getByTestId('chat-stop-btn')).toHaveCount(0);
     await expect(page.getByTestId('research-progress')).toHaveCount(0);
     await expect(page.getByText('这段旧候选应被删除。', { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel('研究过程', { exact: true })).toContainText('已完成，部分信息待确认');
+    await expect(page.getByLabel('研究过程', { exact: true })).toContainText('已有部分结果，但资料还不完整');
     await page.getByLabel('研究过程', { exact: true }).getByRole('button').first().click();
     const progressBlock = page.getByTestId('research-progress');
     await expect(progressBlock).toHaveText(progress);
@@ -105,7 +106,8 @@ for (const variant of [{ name: 'light', dark: false, width: 1440 }, { name: 'dar
     const answerStyle = await page.getByText(finalLead, { exact: true }).evaluate((node) => ({ color: getComputedStyle(node).color, fontSize: getComputedStyle(node).fontSize }));
     expect(Number.parseFloat(progressStyle.fontSize)).toBeLessThan(Number.parseFloat(answerStyle.fontSize));
     expect(progressStyle.color).not.toBe(answerStyle.color);
-    expect(progressStyle.border).toBe('1px');
+    expect(progressStyle.border).toBe('0px');
+    await expect(progressBlock.locator('..')).toHaveCSS('border-left-width', '1px');
     await expect(page.getByText(finalLead, { exact: true })).toHaveCount(1);
     await expect(page.getByTestId('reasoning-block').getByRole('button')).toContainText('思考过程');
 
@@ -135,7 +137,7 @@ for (const variant of [{ name: 'light', dark: false, width: 1440 }, { name: 'dar
     await agent.click(); await expect(page.locator('.tool-activity-row').filter({ hasText: '读取文档' })).toBeVisible(); await agent.click();
 
     const chartData = await page.evaluate(async () => {
-      const source = await (await fetch('/src/components/charts/EChart.tsx')).text();
+      const source = await (await fetch('/src/components/charts/EChartRuntime.tsx')).text();
       const path = [...source.matchAll(/from\s*["']([^"']+)["']/g)].map((match) => match[1]).find((path) => /\/echarts(?:\.js|\/)/.test(path))!;
       const echarts = await import(path); const element = document.querySelector('.research-artifact .echarts-for-react')!;
       return echarts.getInstanceByDom(element).getOption().series[0].data;
@@ -148,6 +150,7 @@ for (const variant of [{ name: 'light', dark: false, width: 1440 }, { name: 'dar
       expect(titleBox.width).toBeGreaterThan(chartBox.width * .75);
     }
     await expect(page.getByLabel('查看引用 1')).toHaveCount(1);
+    await page.getByRole('region', { name: '回答来源' }).locator('summary').first().click();
     await expect(page.locator('a[href="https://example.com/ui-price-proof"]').filter({ visible: true })).toHaveCount(1);
     const visible = await page.locator('#chat-scroll-container').innerText();
     expect(visible).not.toMatch(/已撤回|本次供应商|思考供应商|显示.*供应商/);

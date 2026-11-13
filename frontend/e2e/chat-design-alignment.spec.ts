@@ -2,10 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { E2E_SESSION_ID, installAuthenticatedSession } from './helpers/auth';
+import { E2E_SESSION_ID, E2E_USER_ID, installAuthenticatedSession } from './helpers/auth';
 import { renderDesignReference } from './helpers/designReference';
 
-const output = fileURLToPath(new URL('../../docs/reports/2026-11-07_chat_design_alignment/', import.meta.url));
+const output = fileURLToPath(new URL('../../docs/reports/2026-11-13_ci_e2e/', import.meta.url));
 mkdirSync(output, { recursive: true });
 const bars = Array.from({ length: 260 }, (_, index) => ({ time: new Date(Date.UTC(2026, 10, 6) - (259 - index) * 86400000).toISOString().slice(0, 10),
   open: 150 + index * .18, close: 151 + index * .18 + Math.sin(index / 6) * 3,
@@ -13,10 +13,11 @@ const bars = Array.from({ length: 260 }, (_, index) => ({ time: new Date(Date.UT
 
 async function prepare(page: Page, dark: boolean) {
   const controls = { marketFailure: false };
-  await page.addInitScript(({ sessionId, dark }) => {
+  await page.addInitScript(({ sessionId, userId, dark }) => {
     localStorage.clear();
     localStorage.setItem('finsight-theme', dark ? 'dark' : 'light');
     localStorage.setItem('finsight-session-id', sessionId);
+    localStorage.setItem(`finsight-research-preferences:${userId}`, JSON.stringify({ showProviderReasoning: true }));
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
     const originalFetch = window.fetch.bind(window);
     window.fetch = async (input, init) => {
@@ -37,7 +38,7 @@ async function prepare(page: Page, dark: boolean) {
         const emit = (event: Record<string, unknown>) => controller.enqueue(encoder.encode('data: ' + JSON.stringify({ schema_version: 2,
           run_id: request.run_id, session_id: request.session_id, seq: ++seq, ...event }) + '\n\n'));
         emit({ type: 'reasoning.delta', payload: { block_id: 'root_reasoning_1', kind: 'provider_raw', delta: reasoning, agent_id: 'root', agent_label: '主研究员' } });
-        setTimeout(() => {
+        (window as typeof window & { completeDesignStream: () => void }).completeDesignStream = () => {
           emit({ type: 'content.delta', payload: { block_id: 'intro', delta: intro } });
           emit({ type: 'tool.started', payload: { tool_call_id: 'quote', name: 'get_stock_price', inputs: { ticker: 'AAPL' }, display: { target: 'AAPL', result: '' } } });
           emit({ type: 'tool.result', payload: { tool_call_id: 'quote', name: 'get_stock_price', duration_ms: 420,
@@ -53,11 +54,11 @@ async function prepare(page: Page, dark: boolean) {
               { id: 'design-chart', kind: 'artifact', artifact, revision: 0, seq: 6 },
             ] });
           controller.close();
-        }, 1800);
+        };
       } });
       return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'X-Run-Id': request.run_id } });
     };
-  }, { sessionId: E2E_SESSION_ID, dark });
+  }, { sessionId: E2E_SESSION_ID, userId: E2E_USER_ID, dark });
   await installAuthenticatedSession(page);
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -96,15 +97,23 @@ for (const dark of [false, true]) for (const narrow of [false, true]) {
     await page.getByRole('button', { name: '收起面板', exact: true }).click();
     await page.locator('#chat-input').fill('分析 AAPL 的价格与盈利质量，并画图');
     await page.getByTestId('chat-send-btn').click();
+    const processToggle = page.getByLabel('研究过程', { exact: true }).getByRole('button').first();
+    await expect(processToggle).toBeVisible();
+    if (await processToggle.getAttribute('aria-expanded') === 'false') await processToggle.click();
+    const reasoningToggle = page.getByTestId('reasoning-block').getByRole('button');
+    await expect(reasoningToggle).toBeVisible();
+    if (await reasoningToggle.getAttribute('aria-expanded') === 'false') await reasoningToggle.click();
     await expect(page.getByTestId('reasoning-content')).toBeVisible();
-    expect((await page.getByTestId('reasoning-content').boundingBox())!.height).toBeLessThanOrEqual(160);
+    await expect(page.getByTestId('reasoning-content')).toHaveText('先核对本轮实际取得的价格、盈利质量和资料时点，再区分事实与尚未验证的假设。\n'.repeat(18));
+    expect((await page.getByTestId('reasoning-content').boundingBox())!.height).toBeLessThanOrEqual(320);
     await screenshot('streaming');
+    await page.evaluate(() => (window as typeof window & { completeDesignStream: () => void }).completeDesignStream());
     await expect(page.getByText('现有资料支持分批观察，暂不追高。', { exact: true })).toBeVisible();
     await expect(page.getByTestId('chat-stop-btn')).toHaveCount(0);
     await expect(page.getByTestId('reasoning-content')).toHaveCount(0);
     await page.locator('#chat-scroll-container').evaluate((node) => { node.scrollTop = 0; });
     await screenshot('main');
-    await page.getByRole('button', { name: /已处理.*1 次工具调用/ }).click();
+    await page.getByLabel('研究过程', { exact: true }).getByRole('button').first().click();
     const intro = page.getByText('我会先核对近期价格，再看支撑与盈利质量。', { exact: true });
     const tool = page.locator('.tool-activity-row').filter({ hasText: '获取行情' });
     expect(await intro.evaluate((node, other) => Boolean(node.compareDocumentPosition(other as Node) & Node.DOCUMENT_POSITION_FOLLOWING), await tool.elementHandle())).toBe(true);

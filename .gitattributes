@@ -49,3 +49,7 @@ tests/agent_eval/contract_fixtures/052a9c0b9c84a9985f0acec5dc5865c517a5a524922e2
 tests/agent_eval/contract_fixtures/07b132683b4cf975a9338cc7272f7eed8a00b47daa6c3740eef6961259910aea.json -text -diff
 tests/agent_eval/contract_fixtures/0a7521e9fd35fc9d4b2c4810ce009d0df3890bcc512f23ed17d39fee10162207.json -text -diff
 tests/agent_eval/contract_fixtures/379e7c4c72cfbb34210c6ca58145e5ac44c3972b3724f92c810eb895490325a3.json -text -diff
+
+# 图表原件与来源账本按完整原字节核验，不在Git中转码。
+frontend/e2e/contract_fixtures/real_charts/**/*.json -text -diff
+docs/reports/2026-11-13_ci_e2e/*.json -text whitespace=cr-at-eol

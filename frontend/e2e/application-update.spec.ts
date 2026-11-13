@@ -28,7 +28,7 @@ test('新版本提示不打断生成，也不让刷新丢失尚未发送的输�
     useStore.getState().setLoading(true);
   });
   await expect(refresh).toBeDisabled();
-  await expect(page.getByText('新版本已就绪，本次回答结束后即可更新。')).toBeVisible();
+  await expect(page.getByText('新版本已就绪，回答结束后即可更新。')).toBeVisible();
   await page.evaluate(async () => {
     const path = '/src/store/useStore.ts';
     const { useStore } = await import(path);

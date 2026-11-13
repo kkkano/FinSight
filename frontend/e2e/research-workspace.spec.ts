@@ -68,7 +68,7 @@ test('战绩进入独立页面，公开账本可筛选和查看明细', async ({
   await page.getByLabel('标的筛选', { exact: true }).selectOption('AAPL');
   await expect.poll(() => requests.ledgerRequests.at(-1)?.searchParams.get('ticker')).toBe('AAPL');
   await page.getByTestId('prediction-record-row').first().getByRole('button').click();
-  await expect(page.getByTestId('benchmark-record-detail')).toContainText('实际对账行情');
+  await expect(page.getByTestId('benchmark-record-detail')).toContainText('后来怎么走的');
   await page.screenshot({ path: testInfo.outputPath('workspace-track-record.png') });
 });
 
@@ -76,7 +76,7 @@ test('手机公开战绩不读取个人记录', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const requests = await setup(page, false);
   await page.goto('/track-record');
-  await expect(page.getByTestId('us20-track-record')).toContainText('预测采集尚未开启');
+  await expect(page.getByTestId('us20-track-record')).toContainText('自动预测暂停中，以前的记录照常可查。');
   expect(requests.privateRequests).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-track-mobile.png') });
@@ -139,7 +139,7 @@ test('实际工具过程保留在所属对话，不占用标的面板', async ({
         ] },
     ] });
   });
-  await page.getByRole('button', { name: /已处理.*1 次工具调用/ }).click();
+  await page.getByLabel('研究过程', { exact: true }).getByRole('button').first().click();
   await expect(page.locator('.tool-activity-row')).toContainText('获取行情');
   await page.getByTestId('context-panel-expand').click();
   const panel = page.getByTestId('context-panel');

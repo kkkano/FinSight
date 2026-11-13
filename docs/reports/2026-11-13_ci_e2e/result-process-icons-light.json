@@ -1,0 +1,537 @@
+{
+  "evidence_kind": "frontend_event_fixture",
+  "not_live_backend_validation": true,
+  "real_model_calls": 0,
+  "mocked_execute_requests": 1,
+  "viewport": {
+    "width": 1440,
+    "height": 960
+  },
+  "theme": "light",
+  "final_answer_occurrences": 1,
+  "final_content": "这是界面验收示例的最终回答。\n\n新闻查询超时，信息还不完整。图表的数据和来源已列出。[Sa1b2c3d4e5]",
+  "progress_separate": true,
+  "progress_style": {
+    "color": "rgb(92, 104, 121)",
+    "fontSize": "13px",
+    "border": "0px"
+  },
+  "answer_style": {
+    "color": "rgb(63, 75, 94)",
+    "fontSize": "14.5px"
+  },
+  "source_proof": [
+    {
+      "source_id": "Sa1b2c3d4e5",
+      "title": "价格资料（前端验收示例）",
+      "source": "前端验收数据",
+      "url": "https://example.com/ui-price-proof",
+      "as_of": "2026-11-07"
+    }
+  ],
+  "icons": [
+    {
+      "action": "获取行情",
+      "icon": "lucide-trending-up",
+      "token": "var(--t-amber)",
+      "color": "rgb(168, 84, 0)",
+      "text": "获取行情\nAAPL\n103 USD · 验收示例\n0.4s"
+    },
+    {
+      "action": "分析数据",
+      "icon": "lucide-calculator",
+      "token": "var(--t-violet)",
+      "color": "rgb(103, 65, 217)",
+      "text": "分析数据\n示例价格\n3 点 · 区间 +3%\n0.2s"
+    },
+    {
+      "action": "绘制图表",
+      "icon": "lucide-chart-no-axes-combined",
+      "token": "var(--t-teal)",
+      "color": "rgb(11, 110, 127)",
+      "text": "绘制图表\n示例价格\n折线 · 1 组数据 · 3 点\n0.1s"
+    },
+    {
+      "action": "基本面分析师",
+      "icon": "lucide-users",
+      "token": "rgb(var(--t-accent))",
+      "color": "rgb(59, 91, 219)",
+      "text": "基本面分析师\n检查现金流资料\n0.8s"
+    }
+  ],
+  "failed_tool": {
+    "name": "search",
+    "reason": "新闻服务连接超时。",
+    "success_icon": false
+  },
+  "chart_input_sha256": "c9a0668de1b754c2f8cb837435c799ce88da8200f130a1d8ab109c970e4e34c1",
+  "chart_rendered_values": [
+    100,
+    104,
+    103
+  ],
+  "chart_values_unchanged": true,
+  "frames": [
+    {
+      "schema_version": 2,
+      "type": "reasoning.delta",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 1,
+      "payload": {
+        "block_id": "thought",
+        "kind": "provider_raw",
+        "delta": "先了解问题，再看能拿到哪些资料。",
+        "agent_label": "主研究员"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "content.delta",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 2,
+      "payload": {
+        "block_id": "progress",
+        "delta": "先看价格，再计算这段时间的变化。"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "content.block_finished",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 3,
+      "payload": {
+        "block_id": "progress",
+        "content_phase": "progress"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "content.delta",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 4,
+      "payload": {
+        "block_id": "old",
+        "delta": "这段旧候选应被删除。"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "content.revised",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 5,
+      "payload": {
+        "block_id": "old",
+        "content": "",
+        "revision": 1,
+        "content_phase": "progress"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.started",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 6,
+      "payload": {
+        "tool_call_id": "quote",
+        "name": "get_stock_price",
+        "inputs": {
+          "ticker": "AAPL"
+        },
+        "display": {
+          "target": "AAPL",
+          "result": ""
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.result",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 7,
+      "payload": {
+        "tool_call_id": "quote",
+        "name": "get_stock_price",
+        "status": "ok",
+        "duration_ms": 420,
+        "output_preview": {
+          "price": 103,
+          "currency": "USD"
+        },
+        "display": {
+          "target": "AAPL",
+          "result": "103 USD · 验收示例"
+        },
+        "sources": [
+          {
+            "source_id": "Sa1b2c3d4e5",
+            "title": "价格资料（前端验收示例）",
+            "source": "前端验收数据",
+            "url": "https://example.com/ui-price-proof",
+            "as_of": "2026-11-07"
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "agent.started",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 8,
+      "payload": {
+        "agent_id": "agent_a1b2c3",
+        "role": "fundamental_agent",
+        "task": "检查现金流资料"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.started",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 9,
+      "payload": {
+        "tool_call_id": "read",
+        "name": "read_document",
+        "agent_id": "agent_a1b2c3",
+        "inputs": {
+          "document_id": "fixture-financials"
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.result",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 10,
+      "payload": {
+        "tool_call_id": "read",
+        "name": "read_document",
+        "agent_id": "agent_a1b2c3",
+        "status": "ok",
+        "duration_ms": 600,
+        "display": {
+          "target": "现金流样例",
+          "result": "2 条记录"
+        },
+        "output_preview": {
+          "result_count": 2
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "agent.finished",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 11,
+      "payload": {
+        "agent_id": "agent_a1b2c3",
+        "role": "fundamental_agent",
+        "status": "completed",
+        "duration_ms": 800,
+        "summary": "资料已整理好。"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.started",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 12,
+      "payload": {
+        "tool_call_id": "calculate",
+        "name": "analyze_dataset",
+        "inputs": {
+          "operation": "indexed_comparison"
+        },
+        "display": {
+          "target": "示例价格",
+          "result": ""
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.result",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 13,
+      "payload": {
+        "tool_call_id": "calculate",
+        "name": "analyze_dataset",
+        "status": "ok",
+        "duration_ms": 180,
+        "display": {
+          "target": "示例价格",
+          "result": "3 点 · 区间 +3%"
+        },
+        "output_preview": {
+          "start": 100,
+          "end": 103,
+          "change_percent": 3
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.started",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 14,
+      "payload": {
+        "tool_call_id": "news",
+        "name": "search",
+        "inputs": {
+          "query": "AAPL 新闻"
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.failed",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 15,
+      "payload": {
+        "tool_call_id": "news",
+        "name": "search",
+        "status": "unavailable",
+        "duration_ms": 2000,
+        "reason": "新闻服务连接超时。",
+        "error_code": "source_timeout",
+        "recovery_action": "可以稍后重试新闻查询。",
+        "display": {
+          "target": "AAPL 新闻",
+          "result": "连接超时"
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.started",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 16,
+      "payload": {
+        "tool_call_id": "chart",
+        "name": "render_chart",
+        "display": {
+          "target": "示例价格",
+          "result": ""
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "tool.result",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 17,
+      "payload": {
+        "tool_call_id": "chart",
+        "name": "render_chart",
+        "status": "ok",
+        "duration_ms": 120,
+        "display": {
+          "target": "示例价格",
+          "result": "折线 · 1 组数据 · 3 点"
+        },
+        "sources": [
+          {
+            "source_id": "Sa1b2c3d4e5",
+            "title": "价格资料（前端验收示例）",
+            "source": "前端验收数据",
+            "url": "https://example.com/ui-price-proof",
+            "as_of": "2026-11-07"
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "content.delta",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 18,
+      "payload": {
+        "block_id": "answer",
+        "delta": "这是界面验收示例的最终回答。\n\n新闻查询超时，信息还不完整。图表的数据和来源已列出。[Sa1b2c3d4e5]"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "content.block_finished",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 19,
+      "payload": {
+        "block_id": "answer",
+        "content_phase": "answer"
+      }
+    },
+    {
+      "schema_version": 2,
+      "type": "artifact.ready",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 20,
+      "payload": {
+        "artifact": {
+          "artifact_id": "ui-result-chart",
+          "kind": "chart",
+          "title": "价格序列（前端验收示例）",
+          "source_refs": [
+            "Sa1b2c3d4e5"
+          ],
+          "spec": {
+            "chart_type": "line",
+            "x": "date",
+            "series": [
+              {
+                "field": "close",
+                "name": "示例价格",
+                "unit": "USD"
+              }
+            ]
+          },
+          "data": {
+            "rows": [
+              {
+                "date": "2026-11-04",
+                "close": 100
+              },
+              {
+                "date": "2026-11-05",
+                "close": 104
+              },
+              {
+                "date": "2026-11-06",
+                "close": 103
+              }
+            ]
+          },
+          "method": {
+            "description": "仅用于前端事件与显示验收，不是真实行情或后端研究结果。"
+          }
+        }
+      }
+    },
+    {
+      "type": "done",
+      "run_id": "7d3ae2e7-cb98-456b-b3f5-b82b2f4def77",
+      "session_id": "public:e2e-user:default",
+      "seq": 21,
+      "response": "这是界面验收示例的最终回答。\n\n新闻查询超时，信息还不完整。图表的数据和来源已列出。[Sa1b2c3d4e5]",
+      "success": true,
+      "run_status": "completed",
+      "answer_status": "partial",
+      "persistence_status": "ephemeral",
+      "quality": {
+        "reasons": [
+          {
+            "code": "partial_tool_failure",
+            "message": "新闻查询超时，相关信息还不完整。"
+          }
+        ]
+      },
+      "evidence_pool": [
+        {
+          "source_id": "Sa1b2c3d4e5",
+          "title": "价格资料（前端验收示例）",
+          "source": "前端验收数据",
+          "url": "https://example.com/ui-price-proof",
+          "as_of": "2026-11-07"
+        }
+      ],
+      "blocks": [
+        {
+          "id": "thought",
+          "kind": "reasoning",
+          "reasoning_kind": "provider_raw",
+          "content": "先了解问题，再看能拿到哪些资料。",
+          "revision": 0,
+          "seq": 1,
+          "duration_ms": 500,
+          "agent_label": "主研究员"
+        },
+        {
+          "id": "progress",
+          "kind": "text",
+          "content": "先看价格，再计算这段时间的变化。",
+          "content_phase": "progress",
+          "revision": 0,
+          "seq": 2
+        },
+        {
+          "id": "old",
+          "kind": "text",
+          "content": "",
+          "content_phase": "progress",
+          "revision": 1,
+          "seq": 4
+        },
+        {
+          "id": "ui-result-chart",
+          "kind": "artifact",
+          "artifact": {
+            "artifact_id": "ui-result-chart",
+            "kind": "chart",
+            "title": "价格序列（前端验收示例）",
+            "source_refs": [
+              "Sa1b2c3d4e5"
+            ],
+            "spec": {
+              "chart_type": "line",
+              "x": "date",
+              "series": [
+                {
+                  "field": "close",
+                  "name": "示例价格",
+                  "unit": "USD"
+                }
+              ]
+            },
+            "data": {
+              "rows": [
+                {
+                  "date": "2026-11-04",
+                  "close": 100
+                },
+                {
+                  "date": "2026-11-05",
+                  "close": 104
+                },
+                {
+                  "date": "2026-11-06",
+                  "close": 103
+                }
+              ]
+            },
+            "method": {
+              "description": "仅用于前端事件与显示验收，不是真实行情或后端研究结果。"
+            }
+          },
+          "revision": 0,
+          "seq": 20
+        },
+        {
+          "id": "answer",
+          "kind": "text",
+          "content": "这是界面验收示例的最终回答。\n\n新闻查询超时，信息还不完整。图表的数据和来源已列出。[Sa1b2c3d4e5]",
+          "content_phase": "answer",
+          "revision": 0,
+          "seq": 18
+        }
+      ]
+    }
+  ]
+}

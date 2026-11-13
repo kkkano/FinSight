@@ -163,9 +163,6 @@ const AssistantContent: React.FC<{
       as_of={msg.as_of}
       tried_sources={msg.tried_sources}
     />
-    {!msg.isLoading && msg.error && <button type="button"
-      className="mt-3 min-h-10 rounded-lg border border-t-border px-3 text-sm text-t-text2 hover:border-t-accent/40"
-      onClick={onRetry}>重新研究</button>}
     {!msg.isLoading && <MessageActions
       messageId={msg.id}
       content={msg.content}

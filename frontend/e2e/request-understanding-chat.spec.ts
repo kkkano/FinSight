@@ -141,6 +141,7 @@ test('chat conversations can be created, restored, and deleted from the rail', a
     .locator(`[data-testid="conversation-item"][data-session-id="${firstSessionId}"]`)
     .getByTestId('conversation-delete')
     .click({ force: true });
+  await page.getByRole('dialog', { name: '删除对话确认' }).getByRole('button', { name: '删除对话', exact: true }).click();
   await expect(page.locator(`[data-testid="conversation-item"][data-session-id="${firstSessionId}"]`)).toHaveCount(0);
 });
 
@@ -154,7 +155,7 @@ test('user trace view shows concrete backend understanding summaries', async ({ 
 
   await page.getByRole('button', { name: /已处理/ }).click();
   await expect(page.getByText('理解问题', { exact: true })).toBeVisible();
-  await expect(page.getByText(`拆解完成：${query}；识别公司、宏观和组合子任务`, { exact: true })).toBeVisible();
+  await expect(page.locator('.tool-activity-summary').getByText(`拆解完成：${query}；识别公司、宏观和组合子任务`, { exact: true })).toBeVisible();
 });
 
 test('running chat streams can be stopped from the input control', async ({ page }) => {
@@ -174,5 +175,5 @@ test('running chat streams can be stopped from the input control', async ({ page
   await expect(page.getByTestId('chat-stop-btn')).toBeVisible();
   await page.getByTestId('chat-stop-btn').click();
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
-  await expect(page.locator('#chat-scroll-container').getByText('已停止生成，保留已完成的结果。')).toBeVisible();
+  await expect(page.getByLabel('研究过程', { exact: true }).getByRole('button').first()).toContainText('已停止，保留已生成内容');
 });

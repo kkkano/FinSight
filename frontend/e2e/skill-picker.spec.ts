@@ -78,8 +78,8 @@ test('selects real catalogue skills before sending and exposes readable speciali
   expect(state.requests[0].resume_from_run_id).toBeUndefined();
   await expect(page.getByLabel('已选技能')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '从这里继续' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '重新研究' })).toHaveCount(0);
-  await page.getByRole('button', { name: /已完成，部分信息待确认/ }).click();
+  await expect(page.getByRole('button', { name: '重新研究' })).toHaveCount(1);
+  await page.getByRole('button', { name: /已有部分结果，但资料还不完整/ }).click();
   await expect(page.getByText('成长质量', { exact: true })).toBeVisible();
   await page.locator('.tool-activity-row').filter({ hasText: '基本面分析师' }).click();
   await expect(page.locator('.tool-activity-row').filter({ hasText: '获取盈利预期' })).toBeVisible();

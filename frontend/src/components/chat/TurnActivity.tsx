@@ -89,9 +89,10 @@ export function ActivityRow({ row, children }: { row: Activity; children?: React
             : row.status === 'error' ? <CircleAlert size={13} className="text-t-error" /> : <Square size={11} className="text-t-text3" />}
     </summary>
     <div className="tool-activity-details space-y-3">
-      {row.summary && row.summary !== detail.task && row.summary !== failure && <p>{row.summary}</p>}
+      {row.summary && row.summary !== detail.task && row.summary !== failure && row.summary !== detail.reason && <p>{row.summary}</p>}
       {detail.task && <div><p className="mb-1 font-medium">研究任务</p><DetailValue value={detail.task} /></div>}
       {failure && <div className="text-fin-danger"><p className="mb-1 font-medium">失败原因</p><p>{failure}</p>
+        {detail.reason && detail.reason !== failure && <p className="mt-1 whitespace-pre-wrap break-words">{detail.reason}</p>}
         {detail.error_code && <p className="mt-1 text-xs text-t-text3">错误代码：{detail.error_code}</p>}</div>}
       {detail.recovery_action && <div><p className="mb-1 font-medium">建议</p><p>{detail.recovery_action}</p></div>}
       {(hasDetail(detail.inputs) || hasDetail(detail.output_preview) || Boolean(detail.display?.key_facts?.length)) && <div className={styles.toolPreview}>

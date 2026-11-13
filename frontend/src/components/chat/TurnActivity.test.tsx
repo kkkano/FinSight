@@ -136,6 +136,8 @@ describe('turn activity projection', () => {
     for (const content of ['参数', 'AAPL', '结果', '结果数量', '来源', '1.3s',
       '供应商没有返回该季度的盈利预期。', '可尝试其他财务来源。', 'estimates_unavailable']) expect(markup).toContain(content);
     expect(markup).toContain('href="https://example.com/estimates"');
+    const detailsMarkup = markup.slice(markup.indexOf('class="tool-activity-details'));
+    expect(detailsMarkup.split('供应商没有返回该季度的盈利预期。')).toHaveLength(2);
     expect(markup).not.toContain('耗时：');
     expect(markup).not.toMatch(/private-input|private-output|<pre/);
   });

@@ -1,0 +1,128 @@
+{
+  "evidence_kind": "existing_model_artifact_rendering",
+  "frozen": true,
+  "live_market_validation": false,
+  "cases": {
+    "aapl": {
+      "artifact_file": "chart_03247108da4cf744.json",
+      "artifact_original_path": ".omx/live-charts/chart-live-1-422aa35c1e/chart_03247108da4cf744.json",
+      "artifact_sha256": "84521c53c4b49e8963c0c0cf377d93923c0b93a2842f1749f68ed66b806ff496",
+      "ledger_file": "sources.json",
+      "ledger_original_path": ".omx/live-charts/chart-live-1-422aa35c1e/terminal.json",
+      "ledger_original_sha256": "69e02df49181277c9bf63addc65a363a0f14b869928b80f4be2ed42784c65900",
+      "ledger_sha256": "81e0f8c289ef3b868baa49d8569687003e4c83603d13c808a84059a0a77fc113",
+      "ledger_projection": "完整 evidence_pool，排除终态正文与运行会话身份",
+      "source_refs": [
+        "Sc6cd347876",
+        "Se805a29ee7"
+      ],
+      "dataset_refs": [
+        "dataset_2130f4b68a3f50c5bd"
+      ],
+      "input_refs": []
+    },
+    "nvda-amd": {
+      "artifact_file": "chart_e77f91d52e0d05f7.json",
+      "artifact_original_path": ".omx/live-charts/chart-live-2-c8a888012d/chart_e77f91d52e0d05f7.json",
+      "artifact_sha256": "8d54be0f41075b8067c7e8970f3597198480227b30e0ec6abc419d06aceb1b2e",
+      "ledger_file": "sources.json",
+      "ledger_original_path": ".omx/live-charts/chart-live-2-c8a888012d/terminal.json",
+      "ledger_original_sha256": "fe730dba87c0cffa300806d4db62b08cb4e7981f4702fe16f1735b35162c36d9",
+      "ledger_sha256": "6df3e13b348dbff8f1ee64f6aa3d5c023633b14f4aa5d0d245850a6b9d3a8a91",
+      "ledger_projection": "完整 evidence_pool，排除终态正文与运行会话身份",
+      "source_refs": [
+        "S8274a2c728",
+        "S11a9390ad8",
+        "S007f1852ae",
+        "Sf9689b5183",
+        "Sd29b4e16a1"
+      ],
+      "dataset_refs": [
+        "dataset_b0446c6050cb001a76"
+      ],
+      "input_refs": []
+    },
+    "soxx": {
+      "artifact_file": "chart_8a38b87d63d3cd14.json",
+      "artifact_original_path": ".omx/live-charts/chart-live-3-7a3ce61cd7/chart_8a38b87d63d3cd14.json",
+      "artifact_sha256": "3663c6dd133f6e3cf4f2e896f578cee72be78e886b5c87c073cc7f24f7ac55a0",
+      "ledger_file": "sources.json",
+      "ledger_original_path": ".omx/live-charts/chart-live-3-7a3ce61cd7/terminal.json",
+      "ledger_original_sha256": "4f085cefaee34fb820e0bbb3134a76ef1ed1d560a610563e234026880f59b55c",
+      "ledger_sha256": "6fbecefcbbff2f59bd8370af606852dd8fdec4edd95f34163dfe53552e35e920",
+      "ledger_projection": "完整 evidence_pool，排除终态正文与运行会话身份",
+      "source_refs": [
+        "S46ac8a004a",
+        "Sc58228f1fa",
+        "Scb9e6efa82"
+      ],
+      "dataset_refs": [
+        "dataset_73bba4c204fcac1f9a"
+      ],
+      "input_refs": []
+    },
+    "natural-nvda-amd": {
+      "artifact_file": "chart_1f82f920da2e5fc3.json",
+      "artifact_original_path": ".omx/acceptance-natural/acceptance-natural-9e7eb3eff2-6-retry-34ae/chart_1f82f920da2e5fc3.json",
+      "artifact_sha256": "fd845dc701fa83644480089a38f584c9805c5d7088a605f4465fe0971c7ab6c4",
+      "ledger_file": "datasets.json",
+      "ledger_original_path": ".omx/acceptance-natural/acceptance-natural-9e7eb3eff2-6-retry-34ae/datasets.json",
+      "ledger_original_sha256": "3bfcb86caaacd70d57a805151dc2f57e7805143d3541212d798835db9d698374",
+      "ledger_sha256": "3bfcb86caaacd70d57a805151dc2f57e7805143d3541212d798835db9d698374",
+      "ledger_projection": "完整原始 datasets 文件",
+      "source_refs": [
+        "S827d2463b1",
+        "S5fe946c411",
+        "Scebe82e191",
+        "S678af414eb",
+        "S794ee15bd2"
+      ],
+      "dataset_refs": [
+        "dataset_cd3a4b3fbbe26be153"
+      ],
+      "input_refs": []
+    },
+    "fresh-aapl-ma20": {
+      "artifact_file": "chart_c6c33cc93acfc677.json",
+      "artifact_original_path": ".omx/acceptance-natural/fresh/acceptance-natural-1f4f06023d-2/chart_c6c33cc93acfc677.json",
+      "artifact_sha256": "aba688ddee0bd1bee777ddcad6a1fd4dfbd1119f2501f0264f440dc8ad811e33",
+      "ledger_file": "datasets.json",
+      "ledger_original_path": ".omx/acceptance-natural/fresh/acceptance-natural-1f4f06023d-2/datasets.json",
+      "ledger_original_sha256": "240b24b063086d6ccefb6f852d56194263f507b32a013f0283a7d3f33b77fea7",
+      "ledger_sha256": "240b24b063086d6ccefb6f852d56194263f507b32a013f0283a7d3f33b77fea7",
+      "ledger_projection": "完整原始 datasets 文件",
+      "source_refs": [
+        "S8fcb2a191d",
+        "Se31c056145",
+        "Scb814437a2"
+      ],
+      "dataset_refs": [
+        "dataset_aeb0a8b9e6433d3c8e"
+      ],
+      "input_refs": [
+        "dataset_e1b14122e9d6ee768b"
+      ]
+    },
+    "final-nvda-amd": {
+      "artifact_file": "chart_a4bfb4bb672a4c16.json",
+      "artifact_original_path": ".omx/acceptance-natural/final-s3/acceptance-natural-e2e58933cf-6/chart_a4bfb4bb672a4c16.json",
+      "artifact_sha256": "629faa7babadb8661b0cbc7de88bc6a762e4ee041ff859397d257bc61703d849",
+      "ledger_file": "datasets.json",
+      "ledger_original_path": ".omx/acceptance-natural/final-s3/acceptance-natural-e2e58933cf-6/datasets.json",
+      "ledger_original_sha256": "73eefedd2d34aafd01c4abf8d21604716aca70d50ed45e9c0f0baeab7e5ceeef",
+      "ledger_sha256": "73eefedd2d34aafd01c4abf8d21604716aca70d50ed45e9c0f0baeab7e5ceeef",
+      "ledger_projection": "完整原始 datasets 文件",
+      "source_refs": [
+        "Sbb521e1546",
+        "Se524f25e46",
+        "Sd1553b5657",
+        "S93999ed92a",
+        "S08b1498fae"
+      ],
+      "dataset_refs": [
+        "dataset_7f16031b8d25e76769"
+      ],
+      "input_refs": []
+    }
+  }
+}

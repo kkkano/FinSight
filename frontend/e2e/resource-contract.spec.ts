@@ -50,14 +50,14 @@ test('Today and Dashboard share watchlist mutations without restoring an old pag
   });
   await page.goto('/today');
   await expect(page.getByTestId('today-watchlist-empty')).toBeVisible();
-  await page.getByTestId('sidebar-nav-dashboard').click();
+  await page.goto('/dashboard/AAPL');
   await page.getByRole('button', { name: '添加自选', exact: true }).click();
-  await page.getByRole('textbox', { name: '输入股票代码' }).fill('MSFT');
-  await page.getByRole('button', { name: '确认添加', exact: true }).click();
+  await page.getByRole('textbox', { name: '股票代码', exact: true }).fill('MSFT');
+  await page.getByRole('button', { name: '添加', exact: true }).click();
   await expect(page.getByRole('button', { name: '从自选列表中删除 MSFT' })).toBeVisible();
   await page.getByTestId('sidebar-nav-today').click();
   await expect(page.getByTestId('today-watchlist-card')).toContainText('MSFT');
-  await page.getByTestId('sidebar-nav-dashboard').click();
+  await page.goto('/dashboard/AAPL');
   await page.getByRole('button', { name: '从自选列表中删除 MSFT' }).click();
   await page.getByTestId('sidebar-nav-today').click();
   await expect(page.getByTestId('today-watchlist-empty')).toBeVisible();
@@ -118,9 +118,10 @@ test('new route owns the subject while dashboard data is pending or unavailable'
   });
   await page.goto('/dashboard/NVDA');
   await expect(page.getByRole('main')).toContainText('NVDA');
-  await expect(page.getByRole('region', { name: 'NVDA AI 动态' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'NVDA', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: '盯盘动态' })).toBeVisible();
   await expect(page.getByRole('main')).not.toContainText('Apple');
-  await page.getByRole('button', { name: '追问', exact: true }).click();
+  await page.locator('header').getByRole('button', { name: '问 AI', exact: true }).click();
   await expect(page.getByRole('textbox', { name: '输入聊天消息' })).toHaveValue(/NVDA/);
 });
 

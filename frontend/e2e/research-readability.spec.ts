@@ -83,7 +83,7 @@ for (const [width, height, theme] of [[1440, 1000, 'dark'], [768, 1024, 'light']
   test(`历史详情清晰且可滚动 ${width} ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     await installFixtures(page, theme);
-    await page.goto('/history');
+    await page.goto('/history?view=predictions');
     const detail = page.getByTestId('prediction-history-detail');
     await expect(detail).toContainText('-2.0%');
     await expect(detail).not.toContainText('-200.1%');
@@ -104,15 +104,16 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await installFixtures(page, 'dark');
     await page.goto('/dashboard/AAPL');
-    const panel = page.getByTestId('prediction-track');
-    await panel.getByText('历史判断与价位', { exact: true }).click();
-    await expect(panel).toContainText('极度超买区');
-    expect(await panel.getByTestId('prediction-thesis').evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14);
-    await panel.getByText('证据与模型来源').click();
-    await expect(panel).toContainText('step-5-preview');
     const feed = page.getByTestId('monitor-activity-feed');
+    await expect(feed.locator('details')).not.toHaveAttribute('open', '');
     await feed.getByText('错误详情').click();
     await expect(feed.getByText('实时点评生成失败: InternalServerError', { exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.goto('/history?view=predictions');
+    const panel = page.getByTestId('prediction-history-detail');
+    await expect(panel).toContainText('极度超买区');
+    expect(await panel.getByText(prediction.thesis, { exact: true }).evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14);
+    await expect(panel).toContainText('step-5-preview');
     await expectNoHorizontalOverflow(page);
     await panel.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${width}.png`) });
@@ -160,7 +161,7 @@ for (const width of [1440, 390]) {
 
 test('历史空状态不显示虚构命中率', async ({ page }) => {
   await installFixtures(page, 'light', true);
-  await page.goto('/history');
+  await page.goto('/history?view=predictions');
   await expect(page.getByText('暂无 AI 判断记录')).toBeVisible();
   await expect(page.getByText('暂无已结算样本')).toBeVisible();
   await expectNoHorizontalOverflow(page);
