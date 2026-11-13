@@ -180,3 +180,15 @@ data/subscriptions.json
 *.bak
 backend/data/*.sqlite.pre_migration.*
 data/agent_artifacts/
+
+# 2026-11-13 用户授权：版本化唯一当前计划和本轮文档审查。
+!docs/plans/
+docs/plans/*
+!docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md
+!docs/reports/2026-11-13_documentation_refresh/
+!docs/reports/2026-11-13_documentation_refresh/**
+
+# 评测原始资料/独立评分请求/真实账号采集属于本机运行产物；代码、清单与安全报告版本化。
+tests/agent_eval/fixtures/
+tests/agent_eval/requests/
+tests/agent_eval/results/acceptance_live/

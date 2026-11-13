@@ -38,7 +38,7 @@ services:
 
   # ── Backend (FastAPI) ───────────────────────────────────────────────────────
   backend:
-    image: finsight-backend:${IMAGE_TAG:-local}
+    image: finsight-backend:${BACKEND_IMAGE_TAG:-${IMAGE_TAG:-local}}
     build: &backend-build
       context: .
       dockerfile: Dockerfile
