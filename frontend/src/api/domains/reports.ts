@@ -11,7 +11,7 @@ export const reportsApi = {
     await api.delete(`/api/reports/${encodeURIComponent(reportId)}/share`);
   },
 
-  async getSharedReport(token: string): Promise<{ report: Contracts.ReportIR }> {
+  async getSharedReport(token: string): Promise<{ report: Contracts.ReportIR; published_at?: string | null }> {
     const response = await api.get(`/api/reports/shared/${encodeURIComponent(token)}`);
     return response.data;
   },

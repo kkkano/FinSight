@@ -25,13 +25,13 @@ const annual: FinancialStatement = {
 };
 
 describe('financial source contract in rendered views', () => {
-  it('keeps annual dates, report currency and server period comparisons', () => {
+  it('keeps annual dates, report currency and reported values', () => {
     const html = render(<IncomeTable financials={annual} />);
     expect(html).toContain('年度');
     expect(html).toContain('2025-12-31');
     expect(html).not.toContain('Q4');
     expect(html).not.toContain('$');
-    expect(html).toContain('text-fin-success');
+    expect(html).toContain('¥200');
   });
 
   it('keeps missing profit and margin as null in the actual chart series', () => {

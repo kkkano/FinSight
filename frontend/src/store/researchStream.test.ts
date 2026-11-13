@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyResearchEvent, emptyResearchStream, normalizeRuntimeEvent, publicResearchBlocks, researchFailureMessage, researchQualityMessage, researchText } from './researchStream';
+import { answerForReview, applyResearchEvent, emptyResearchStream, normalizeRuntimeEvent, publicResearchBlocks, researchFailureMessage, researchQualityMessage, researchText } from './researchStream';
 import type { RuntimeEvent } from '../types/runtime';
 
 const event = (seq: number, delta: string, extras: Partial<RuntimeEvent> = {}): RuntimeEvent => ({
@@ -8,6 +8,56 @@ const event = (seq: number, delta: string, extras: Partial<RuntimeEvent> = {}): 
 });
 
 describe('research stream identity and recovery', () => {
+  const review = { status: 'completed', review_id: 'review-1', verdict: 'revise',
+    findings: [{ quote: '价格 10.25', issue: '数字不符', evidence: '报价为 10.5', suggestion: '按报价修订' }],
+    coverage: [{ requirement: '走势图', met: false }] };
+
+  it('replays review events once without changing any answer characters or regressing a completed review', () => {
+    const original = '价格 10.25；\n原始 h_value 与空格  保留。';
+    let state = applyResearchEvent(emptyResearchStream('run-a'), event(1, original));
+    const answerBlock = state.blocks[0];
+    state = applyResearchEvent(state, event(2, '', { type: 'review.started', payload: { status: 'running', review_id: 'review-1' } }));
+    const finished = event(3, '', { type: 'review.finished', payload: review });
+    state = applyResearchEvent(state, finished);
+    expect(applyResearchEvent(state, finished)).toBe(state);
+    state = applyResearchEvent(state, { ...finished, seq: 4 });
+    state = applyResearchEvent(state, event(5, '', { type: 'review.started', payload: { status: 'running', review_id: 'review-1' } }));
+    expect(state.blocks).toHaveLength(2);
+    expect(state.blocks[0]).toBe(answerBlock);
+    expect(state.blocks[1]).toMatchObject({ kind: 'review', review, revision: 1 });
+    expect(researchText(state.blocks)).toBe(original);
+    const restored = applyResearchEvent(state, event(6, '', { type: 'snapshot.reset', stream_epoch: 'epoch-b',
+      payload: { committed_seq: 6, blocks: state.blocks } }));
+    expect(restored.blocks).toEqual(state.blocks);
+    expect(researchText(restored.blocks)).toBe(original);
+  });
+
+  it('keeps both report versions and their review link while selecting the current answer', () => {
+    let state = applyResearchEvent(emptyResearchStream('run-a'), event(1, '价格 10.25'));
+    state = applyResearchEvent(state, event(2, '', { type: 'review.finished', payload: review }));
+    state = applyResearchEvent(state, event(3, '', { type: 'content.revised', payload: {
+      block_id: 'revised-answer', text: '价格 10.5', revision: 1, content_phase: 'answer', revision_of: ['answer'], review_id: 'review-1',
+    } }));
+    expect(state.blocks[0]).toMatchObject({ content: '价格 10.25', revision: 0 });
+    expect(state.blocks[2]).toMatchObject({ content: '价格 10.5', revision_of: ['answer'], review_id: 'review-1' });
+    expect(researchText(state.blocks)).toBe('价格 10.5');
+    expect(answerForReview(state.blocks, 'review-1', '价格 10.5')).toBe('价格 10.25');
+    state = applyResearchEvent(state, event(4, '', { type: 'review.finished', payload: {
+      ...review, review_id: 'review-2', supersedes_review_id: 'review-1', verdict: 'pass', findings: [], coverage: [],
+    } }));
+    expect(state.blocks.filter((block) => block.kind === 'review')).toHaveLength(2);
+    expect(publicResearchBlocks(state.blocks)).toEqual(state.blocks);
+  });
+
+  it('does not accept malformed completed reviews as verified results', () => {
+    const state = applyResearchEvent(emptyResearchStream('run-a'), event(1, '原文'));
+    const malformed = applyResearchEvent(state, event(2, '', { type: 'review.finished', payload: {
+      ...review, coverage: [{ requirement: '走势图', met: 'true' }],
+    } }));
+    expect(malformed.blocks).toEqual(state.blocks);
+    expect(researchText(malformed.blocks)).toBe('原文');
+  });
+
   it('preserves incomplete repair metadata without promoting it to the answer', () => {
     let state = applyResearchEvent(emptyResearchStream('run-a'), event(1, '指数层面的估'));
     state = applyResearchEvent(state, event(2, '', { type: 'content.block_finished', payload: {
@@ -84,13 +134,13 @@ describe('research stream identity and recovery', () => {
     expect(normalizeRuntimeEvent({ type: 'token', content: 'legacy' })).toBeNull();
   });
 
-  it('preserves a specific terminal message and explains known codes in old generic errors', () => {
+  it('uses structured codes instead of parsing or exposing terminal prose', () => {
     expect(researchFailureMessage({ error_code: 'model_timeout', message: '等待模型生成结论超过本轮时限。' }))
-      .toBe('等待模型生成结论超过本轮时限。');
+      .toBe('模型响应超时，研究已中断。 请稍后重试。');
     expect(researchFailureMessage({ error_code: 'model_timeout', message: '本轮研究未完成，已保留可用内容。' }))
-      .toBe('模型响应超时，研究已中断。');
-    expect(researchFailureMessage({ reason: '盈利预期服务未返回数据。', error_code: 'model_timeout', recovery_action: '稍后重试。' }))
-      .toBe('盈利预期服务未返回数据。 稍后重试。');
+      .toBe('模型响应超时，研究已中断。 请稍后重试。');
+    expect(researchFailureMessage({ reason: 'internal service error', error_code: 'tool_provider_error' }))
+      .toBe('数据源没有返回可用结果。 请稍后重试。');
   });
 
   it('keeps report evidence failures in the completed research explanation', () => {

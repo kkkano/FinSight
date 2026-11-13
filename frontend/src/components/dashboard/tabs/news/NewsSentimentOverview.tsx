@@ -81,15 +81,15 @@ const SENTIMENT_LABELS: Record<SentimentType, string> = {
 };
 
 const SENTIMENT_TONE: Record<SentimentType, string> = {
-  bullish: 'text-fin-success',
+  bullish: 'text-t-up',
   neutral: 'text-fin-muted',
-  bearish: 'text-fin-danger',
+  bearish: 'text-t-down',
 };
 
 const SENTIMENT_DOT: Record<SentimentType, string> = {
-  bullish: 'bg-fin-success',
+  bullish: 'bg-t-up',
   neutral: 'bg-fin-muted',
-  bearish: 'bg-fin-danger',
+  bearish: 'bg-t-down',
 };
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -327,8 +327,8 @@ const trendIcon = (direction: TrendDirection) => {
 };
 
 const trendTone = (direction: TrendDirection): string => {
-  if (direction === 'up') return 'text-fin-success';
-  if (direction === 'down') return 'text-fin-danger';
+  if (direction === 'up') return 'text-t-up';
+  if (direction === 'down') return 'text-t-down';
   return 'text-fin-muted';
 };
 
@@ -458,7 +458,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
   const theme = useChartTheme();
   const stats = useMemo(() => computeOverviewStats(news, timeRange), [news, timeRange]);
   const scoreTone =
-    stats.score > 10 ? 'text-fin-success' : stats.score < -10 ? 'text-fin-danger' : 'text-fin-muted';
+    stats.score > 10 ? 'text-t-up' : stats.score < -10 ? 'text-t-down' : 'text-fin-muted';
 
   return (
     <section className="space-y-3">
@@ -544,9 +544,9 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
             <span className="text-xs text-fin-muted">平均可靠性</span>
           </div>
           <div className="mt-2 grid grid-cols-3 gap-1 text-2xs">
-            <span className="text-fin-success">多 {stats.bullishPct}%</span>
+            <span className="text-t-up">多 {stats.bullishPct}%</span>
             <span className="text-fin-muted">中 {stats.neutralPct}%</span>
-            <span className="text-fin-danger">空 {stats.bearishPct}%</span>
+            <span className="text-t-down">空 {stats.bearishPct}%</span>
           </div>
         </div>
       </div>

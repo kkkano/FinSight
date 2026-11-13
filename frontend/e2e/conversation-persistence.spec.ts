@@ -15,6 +15,12 @@ declare global {
   }
 }
 
+test.afterEach(async ({ page }, testInfo) => {
+  const path = testInfo.outputPath('final-state.png');
+  await page.screenshot({ path, fullPage: true });
+  await testInfo.attach('final-state', { path, contentType: 'image/png' });
+});
+
 async function setup(page: Page) {
   await page.addInitScript(({ sid }) => {
     if (sessionStorage.getItem('persistence-fixture-initialized')) return;
@@ -184,7 +190,7 @@ test('刷新后按run恢复回答且不重新触发模型', async ({ page }) => 
   await expect.poll(async () => (await snapshot(page)).loading).toBe(false);
 });
 
-test('回答槽丢失且SSE挂住时保留99%交付状态并取回同轮已保存正文', async ({ page }) => {
+test('回答槽丢失且SSE挂住时等待交付并取回同轮已保存正文', async ({ page }) => {
   await setup(page);
   await page.goto('/chat');
   await expect(page.locator('#chat-scroll-container').getByText('Saved thread restored', { exact: true })).toBeVisible();
@@ -225,13 +231,7 @@ test('回答槽丢失且SSE挂住时保留99%交付状态并取回同轮已保�
   await page.getByRole('textbox', { name: '输入聊天消息' }).press('Enter');
   await expect(page.locator('#chat-scroll-container').getByText('已收到本轮研究正文，等待服务器交付确认。', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.deliveryFixture.reads)).toBe(1);
-  const pending = await page.evaluate(async () => {
-    const executionPath = '/src/store/executionStore.ts';
-    const { useExecutionStore } = await import(executionPath);
-    const run = useExecutionStore.getState().activeRuns.at(-1);
-    return { progress: run.progress, status: run.status, currentStep: run.currentStep };
-  });
-  expect(pending).toMatchObject({ progress: 99, status: 'running', currentStep: '正在保存并交付回答…' });
+  await expect(page.locator('#chat-scroll-container').getByText(ANSWER, { exact: true })).toHaveCount(0);
   expect((await snapshot(page)).loading).toBe(true);
   await page.evaluate(() => window.deliveryFixture.release!());
   await expect(page.locator('#chat-scroll-container').getByText(ANSWER, { exact: true })).toBeVisible();

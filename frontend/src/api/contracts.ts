@@ -1,8 +1,9 @@
 ﻿// 确保 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
 import type { RawSSEEvent, ReportIR, ThinkingStep } from '../types/index';
-import type { RuntimeEvent, ChatImageInput } from '../types/runtime';
+import type { RuntimeEvent, ChatImageInput, ReviewRevisionRequest } from '../types/runtime';
 import type { SelectionItem } from '../types/dashboard';
+import type { DashboardResearchContext } from '../types/chatHandoff';
 
 /**
  * Chat Context - 临时上下文（不入库，仅本次请求生效）
@@ -14,6 +15,11 @@ export interface ChatContext {
   source_tab?: string;
   selection?: SelectionItem;
   selections?: SelectionItem[];
+  selected_metric?: DashboardResearchContext['selectedMetric'];
+  time_range?: DashboardResearchContext['timeRange'];
+  data_refs?: string[];
+  watchlist_auto_confirm?: boolean;
+  show_provider_reasoning?: boolean;
 }
 
 export interface ChatOptions {
@@ -24,6 +30,7 @@ export interface ChatOptions {
 }
 
 export interface SendMessageBody {
+  review_revision?: ReviewRevisionRequest;
   skill_ids?: string[];
   images?: ChatImageInput[];
   show_provider_reasoning?: boolean;

@@ -38,8 +38,8 @@ function getSignal(close: number | null | undefined, ma: number | null | undefin
 }
 
 const SIGNAL_DISPLAY: Record<MASignal, { label: string; className: string }> = {
-  buy: { label: '买入', className: 'text-fin-success' },
-  sell: { label: '卖出', className: 'text-fin-danger' },
+  buy: { label: '买入', className: 'text-t-up' },
+  sell: { label: '卖出', className: 'text-t-down' },
   neutral: { label: '--', className: 'text-fin-muted' },
 };
 

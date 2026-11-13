@@ -1,12 +1,61 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ActivityRow, buildTurnActivities, detailRows, TurnActivity } from './TurnActivity';
+import { ActivityRow, TurnActivity } from "./TurnActivity";
+import { buildTurnActivities, detailRows, isActivityVisible } from "./TurnActivity.utils";
 import type { ThinkingStep } from '../../types';
 
 const step = (eventType: string, result: Record<string, unknown>): ThinkingStep => ({
   eventType: eventType as ThinkingStep['eventType'], stage: eventType, result, timestamp: '2026-11-06T10:00:00Z',
 });
 describe('turn activity projection', () => {
+  const announcedStatus = (html: string) => html.match(/data-testid="research-status">([^<]*)<\/span>/)?.[1];
+
+  it('announces the current activity without its changing result or elapsed timer', () => {
+    const started = step('tool.started', { name: 'get_stock_price', tool_call_id: 'live',
+      display: { title: '获取行情', target: 'AAPL' } });
+    const render = (summary: string, startedAt: number) => renderToStaticMarkup(<TurnActivity isLoading
+      startedAt={startedAt} thinking={[{ ...started, message: summary }]} runStatus="running" />);
+    expect(announcedStatus(render('正文片段一', Date.now() - 2000))).toBe('正在获取行情…');
+    expect(announcedStatus(render('正文片段二', Date.now() - 9000))).toBe('正在获取行情…');
+    expect(render('正文片段二', Date.now())).toContain('aria-live="polite" aria-atomic="true"');
+  });
+
+  it.each([
+    ['partial', '已有部分结果，但资料还不完整'], ['cancelled', '已停止，保留已生成内容'],
+    ['failed', '未完成'], ['persistence_failed', '保存失败'],
+  ])('announces the actual terminal state %s', (runStatus, expected) => {
+    expect(announcedStatus(renderToStaticMarkup(<TurnActivity runStatus={runStatus} />))).toBe(expected);
+  });
+
+  it('uses backend display fields and renders supplied key facts without guessing output shape', () => {
+    const row = buildTurnActivities([step('tool.result', { name: 'unregistered_protocol_fixture',
+      display: { title: '读取行情', kind: 'quote', status: 'ok', target: 'AAPL', result: '资料中提到了 error 一词',
+        key_facts: [{ label: '价格', value: 314.25 }] }, output_preview: { obsolete_value: 9999 } })], false)[0];
+    expect(row).toMatchObject({ label: '读取行情', status: 'done', target: 'AAPL', details: { display: { kind: 'quote' } } });
+    const html = renderToStaticMarkup(<ActivityRow row={row} />);
+    expect(html).toContain('价格');
+    expect(html).toContain('314.25');
+    expect(html).not.toContain('9999');
+  });
+
+  it('keeps an empty envelope distinct from provider failure and leaves started calls running', () => {
+    const rows = buildTurnActivities([
+      step('tool.started', { name: 'get_stock_price', tool_call_id: 'started', display: { kind: 'quote', status: 'ok' } }),
+      step('tool.result', { name: 'get_company_news', tool_call_id: 'empty', status: 'unavailable',
+        display: { kind: 'news', status: 'empty', result: '没有匹配资料。' } }),
+    ], true);
+    expect(rows.map((row) => row.status)).toEqual(['running', 'partial']);
+    expect(renderToStaticMarkup(<ActivityRow row={rows[1]} />)).not.toContain('失败原因');
+  });
+  it('hides successful capability checks, and shows pending checks only after two seconds', () => {
+    const started = step('activity.started', { activity_id: 'model_capability', title: '正在验证模型工具能力' });
+    const row = buildTurnActivities([started], true)[0];
+    const timestamp = Date.parse(started.timestamp);
+    expect(isActivityVisible(row, timestamp + 1999)).toBe(false);
+    expect(isActivityVisible(row, timestamp + 2000)).toBe(true);
+    expect(isActivityVisible({ ...row, status: 'error' }, timestamp)).toBe(true);
+    expect(buildTurnActivities([started, step('activity.finished', { activity_id: 'model_capability', status: 'completed' })], false)).toEqual([]);
+  });
   it('provides useful details for an old model capability event with no payload', () => {
     const row = buildTurnActivities([step('activity.started', { activity_id: 'model_capability', title: '正在验证模型工具能力' })], true)[0];
     expect(renderToStaticMarkup(<ActivityRow row={row} />)).toContain('正在确认所选模型能否调用研究工具');
@@ -84,9 +133,10 @@ describe('turn activity projection', () => {
     expect(row.details.inputs).toEqual({ ticker: 'AAPL', period: 'next_quarter' });
     expect(row.summary).toBe('供应商没有返回该季度的盈利预期。');
     const markup = renderToStaticMarkup(<ActivityRow row={row} />);
-    for (const content of ['参数', 'AAPL', '结果', '结果数量', '来源', '1.3 秒',
+    for (const content of ['参数', 'AAPL', '结果', '结果数量', '来源', '1.3s',
       '供应商没有返回该季度的盈利预期。', '可尝试其他财务来源。', 'estimates_unavailable']) expect(markup).toContain(content);
     expect(markup).toContain('href="https://example.com/estimates"');
+    expect(markup).not.toContain('耗时：');
     expect(markup).not.toMatch(/private-input|private-output|<pre/);
   });
 
@@ -123,7 +173,7 @@ describe('turn activity projection', () => {
     const markup = renderToStaticMarkup(<TurnActivity runStatus="completed" thinking={[
       { ...step('done', { status: 'partial' }), stage: 'done', message: '部分资料未取得。' },
     ]} />);
-    expect(markup).toContain('已完成，部分信息待确认');
+    expect(markup).toContain('已有部分结果，但资料还不完整');
     expect(markup).not.toContain('未完成');
     expect(renderToStaticMarkup(<TurnActivity runStatus="failed" error="模型超时" />)).toContain('未完成');
   });

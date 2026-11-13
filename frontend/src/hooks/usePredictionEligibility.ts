@@ -48,7 +48,7 @@ export function usePredictionEligibility(symbol: string): PredictionEligibility 
           setState({
             status: 'degraded',
             ...base,
-            reason: '当前只有降级行情，不能作为 AI Prediction 锚点。',
+            reason: '当前只有降级行情，不能作为 AI 判断锚点。',
           });
           return;
         }

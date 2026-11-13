@@ -1,3 +1,4 @@
+import { zh } from '../../locales/zh';
 import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -20,15 +21,15 @@ import { QualityBadge } from './QualityBadge';
 /* ---------- helpers ---------- */
 
 const SENTIMENT_TONE: Record<Exclude<Sentiment, 'unknown'>, string> = {
-  bullish: 'text-fin-success',
-  bearish: 'text-fin-danger',
+  bullish: 'text-t-up',
+  bearish: 'text-t-down',
   neutral: 'text-fin-text-secondary',
 };
 
 const RATING_TONE: Record<string, string> = {
-  BUY: 'text-fin-success',
+  BUY: 'text-t-up',
   HOLD: 'text-fin-primary',
-  SELL: 'text-fin-danger',
+  SELL: 'text-t-down',
 };
 
 const AGENT_CN: Record<string, string> = {
@@ -54,12 +55,12 @@ const agentVisual = (status: NonNullable<ReportIR['agent_status']>[string]) => {
 };
 
 const VIEWPOINT_TONE: Record<string, string> = {
-  price_agent: 'var(--fin-success)',
+  price_agent: 'var(--t-teal)',
   technical_agent: 'rgb(var(--fin-primary))',
   fundamental_agent: 'var(--fin-predict)',
   news_agent: 'var(--fin-warning)',
   macro_agent: 'var(--fin-predict)',
-  deep_search_agent: 'var(--fin-danger)',
+  deep_search_agent: 'var(--t-violet)',
 };
 const viewpointTone = (key: string): string => VIEWPOINT_TONE[key] || 'rgb(var(--fin-primary))';
 
@@ -133,6 +134,7 @@ const ViewpointRow: React.FC<{ vp: CoreViewpoint }> = ({ vp }) => {
 /* ---------- props ---------- */
 
 export interface ReportCockpitProps {
+  readOnly?: boolean;
   report: ReportIR;
   formattedDate: string;
   evidenceBadges: { quality: BadgeInfo; freshness: BadgeInfo };
@@ -140,6 +142,7 @@ export interface ReportCockpitProps {
 }
 
 export const ReportCockpit: React.FC<ReportCockpitProps> = ({
+  readOnly = false,
   report,
   formattedDate,
   evidenceBadges,
@@ -168,7 +171,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
     { kind: 'text' as const, k: '回答状态', value: presentation.answerLabel },
     { kind: 'rating' as const, k: '投资评级', value: rating || '—' },
     { kind: 'text' as const, k: '引用来源', value: evidenceBadges.quality.label },
-    { kind: 'text' as const, k: '分析执行', value: `${successCount}/${agentEntries.length || '—'}` },
+    ...(!readOnly && agentEntries.length > 0 ? [{ kind: 'text' as const, k: '分析执行', value: `${successCount}/${agentEntries.length}` }] : []),
   ];
 
   return (
@@ -185,7 +188,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
             )}
           </div>
           <div className="mt-1.5 text-[11.5px] text-fin-muted">
-            DEEP RESEARCH · 数据时效 {formattedDate}
+            {zh.report.deepResearch} · 生成于 {formattedDate}
             {report.company_name ? ` · ${report.company_name}` : ' · 深度研究报告'}
           </div>
         </div>
@@ -206,7 +209,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
       </div>
 
       {/* ===== 横向 stat 带 ===== */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 rounded-2xl border border-fin-border bg-fin-card overflow-hidden">
+      <div className={`grid grid-cols-2 ${stats.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} rounded-2xl border border-fin-border bg-fin-card overflow-hidden`}>
         {stats.map((s, i) => (
           <div key={s.k} className={`flex items-center gap-3 px-4 py-3.5 ${i < stats.length - 1 ? 'sm:border-r border-fin-border' : ''} ${i % 2 === 0 ? 'border-r sm:border-r' : ''} border-fin-border`}>
             <div className="min-w-0">
@@ -227,7 +230,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
       </div>
 
       {/* ===== agent 横卡 ===== */}
-      {agentEntries.length > 0 && (
+      {!readOnly && agentEntries.length > 0 && (
         <details className="rounded-xl border border-fin-border p-3">
           <summary className="cursor-pointer text-xs font-medium text-fin-muted">执行详情 · {successCount}/{agentEntries.length} 已完成</summary>
           <div className="mt-3 grid grid-cols-2 gap-2.5">

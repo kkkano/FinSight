@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { useCitationNavigation } from '../store/citationNavigation';
-import { extractTickers } from '../utils/ticker';
 import { sourceTitleDisplayName } from '../utils/sourceDisplayName';
-import { hasDataSourceDetails, SourceDetails } from './source/SourceDetails';
+import { SourceDetails } from './source/SourceDetails';
+import { hasDataSourceDetails } from './source/SourceDetails.utils';
 import { RightPanelMarket } from './right-panel/RightPanelMarket';
 import { RightPanelHeader } from './right-panel/RightPanelHeader';
 import styles from './right-panel/RightPanelDesign.module.css';
+import { observedMessageTickers } from "./RightPanel.utils";
 
 export function RightPanel({ onCollapse, className, symbol }: {
   onCollapse: () => void; className?: string; symbol?: string;
@@ -17,17 +18,16 @@ export function RightPanel({ onCollapse, className, symbol }: {
   const [selected, setSelected] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const sourceNodes = useRef(new Map<string, HTMLElement>());
-  const symbols = [...new Set([symbol, ...messages.flatMap((message) => message.role === 'user'
-    ? extractTickers(message.content) : [message.relatedTicker, message.report?.ticker])].filter((item): item is string => Boolean(item)))];
-  const ticker = selected && symbols.includes(selected) ? selected : symbol || symbols[0];
   const latestMessage = [...messages].reverse().find((item) => item.role === 'assistant' && item.runId);
   const focusedMessage = focus?.sessionId === sessionId && focus.changedAt >= (latestMessage?.timestamp ?? 0)
     ? messages.find((item) => item.runId === focus.runId && item.role === 'assistant') : undefined;
   const message = focusedMessage || latestMessage;
+  const observedTickers = observedMessageTickers(message);
+  const symbols = [...new Set([selected, ...observedTickers, symbol].filter((item): item is string => Boolean(item)))];
+  const ticker = selected || symbols[0];
   const sources = message?.evidence_pool ?? [];
-  const querySymbols = extractTickers(message?.requestSnapshot?.query || '');
   const priceLevels = (message?.priceLevels ?? []).filter((level) => Number.isFinite(level.price) && level.source_block_id
-    && (level.ticker ? level.ticker === ticker : querySymbols.length === 1 && querySymbols[0] === ticker));
+    && (level.ticker ? level.ticker === ticker : observedTickers.length === 1 && observedTickers[0] === ticker));
   useEffect(() => { setSelected(null); setHighlighted(null); }, [sessionId]);
   useEffect(() => {
     if (!focus || focus.sessionId !== sessionId || (focus.runId && focus.runId !== message?.runId)) return;

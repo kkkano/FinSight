@@ -252,8 +252,8 @@ const EARNINGS_NUMERIC_FIELDS = ['eps_estimate', 'eps_actual', 'surprise_pct'] a
 type EarningsNumericField = (typeof EARNINGS_NUMERIC_FIELDS)[number];
 
 /**
- * Parse raw `<chart ...>JSON</chart>` or `<chart_ref .../>` block strings
- * into structured SmartChartBlock objects.
+ * legacy-only：仅无 blocks 的旧历史解析 `<chart>` / `<chart_ref>` 协议。
+ * 新研究图表只消费 ResearchArtifactView 的结构化产物。
  */
 // eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
 export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
@@ -300,7 +300,7 @@ export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
 }
 
 /**
- * Remove all <chart>...</chart> and <chart_ref .../> tags from content.
+ * legacy-only：清理旧历史正文的 <chart> / <chart_ref> 协议标记。
  */
 // eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
 export function stripSmartChartTags(content: string): string {
@@ -310,7 +310,7 @@ export function stripSmartChartTags(content: string): string {
     .trim();
 }
 
-/** 流式阶段直接返回原文；图表正则只在消息落定后执行一次。 */
+/** legacy-only：流式阶段直接返回原文，旧图表标记只在历史消息落定后清理。 */
 // eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
 export function getRenderableMessageContent(content: string, isStreaming: boolean = false): string {
   if (isStreaming) return content;
@@ -362,6 +362,7 @@ function hasInlinePriceSemantics(title: string, json: string): boolean {
   }
 }
 
+/** legacy-only：旧正文图表的价格语义分流，不用于研究 artifact。 */
 // eslint-disable-next-line react-refresh/only-export-components -- shared rendering policy for ChatList and tests
 export function isPriceLikeInlineBlock(block: SmartChartBlock): boolean {
   return block.mode === 'inline' && (block.priceLike === true || PRICE_LIKE_INLINE_TYPES.has(block.type));
@@ -373,6 +374,7 @@ export interface RealPriceChartRequest {
   valueMode: 'close';
 }
 
+/** legacy-only：旧正文标记使用真实行情兼容路径；新研究块不得调用。 */
 // eslint-disable-next-line react-refresh/only-export-components -- pure policy helper
 export function resolveRealPriceChartRequest(
   block: SmartChartBlock,

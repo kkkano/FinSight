@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient, type MarketDataResponse, type QuoteData } from '../api/client';
 import type { PredictionHistoryItem } from '../api/domains/predictions';
 import { usePredictionHistory } from '../hooks/usePredictionHistory';
+import { researchFailureMessage } from '../utils/researchFailure';
 import { useStore } from '../store/useStore';
 import { useWatchlist } from '../hooks/useWatchlist';
 import type { WatchItem } from '../types/dashboard';
@@ -198,6 +199,11 @@ function PredictionCard({ item, onDashboard, onAsk, onHistory }: {
         </span>
       </div>
       <p className="mt-3 max-w-[76ch] break-words text-sm leading-7 text-t-text2">{prediction.thesis || '这条研究判断没有提供文字依据。'}</p>
+      {prediction.scenarios?.some((scenario) => scenario.invalidation) && <dl className="mt-3 space-y-2 text-xs text-t-text3">
+        {prediction.scenarios.filter((scenario) => scenario.invalidation).map((scenario,index) => <div key={index}>
+          <dt>{scenario.name} · 失效条件</dt><dd className="mt-1 break-words">{scenario.invalidation}</dd>
+        </div>)}
+      </dl>}
       <div className="mt-4 grid gap-2 border-t border-t-divider pt-3 text-xs text-t-text3 sm:grid-cols-3">
         <div>来源：{prediction.source_type === 'ai' ? 'AI 研究判断' : '人工研究记录'}</div>
         <div>数据来源：{prediction.evidence_provider || '未提供'}</div>
@@ -235,11 +241,11 @@ export function TodayPage() {
   const allQuotesUnavailable = watchlist.length > 0
     && Boolean(quoteQuery.data)
     && watchlist.every((item) => quotes[item.symbol]?.status === 'unavailable');
-  const quotesError = quoteQuery.error instanceof Error
-    ? quoteQuery.error.message
+  const quotesError = quoteQuery.error
+    ? researchFailureMessage(quoteQuery.error, '自选报价暂时不可用。')
     : allQuotesUnavailable ? '自选报价暂时不可用，稍后可重试。' : null;
-  const watchlistError = watchlistQuery.error instanceof Error
-    ? watchlistQuery.error.message
+  const watchlistError = watchlistQuery.error
+    ? researchFailureMessage(watchlistQuery.error, '自选列表读取失败。')
     : watchlistQuery.isError ? '自选列表读取失败，请稍后重试。' : null;
   const {
     items: predictionItems,
@@ -280,7 +286,7 @@ export function TodayPage() {
             <div>
               <h1 className="text-xl font-semibold text-t-text">登录后查看你的今日摘要</h1>
               <p className="mt-2 text-sm leading-6 text-t-text2">
-                自选标的、研究判断和待复盘内容属于个人数据。当前以只读访客模式浏览，系统不会猜测或展示其他人的内容。
+                自选标的、研究判断和待复盘内容属于个人数据。当前以只读访客模式浏览，不会展示其他人的内容。
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <button type="button" onClick={() => navigate('/welcome?from=/today')} className="inline-flex min-h-10 items-center gap-1.5 rounded-md bg-t-accent px-4 text-sm font-medium text-white hover:bg-t-accent-hi">
@@ -318,7 +324,7 @@ export function TodayPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 id="today-watchlist-title" className="text-sm font-semibold text-t-text">自选标的变化</h2>
-            <p className="mt-1 text-xs text-t-text3">只显示接口返回的真实报价；缺失时明确标记。</p>
+            <p className="mt-1 text-xs text-t-text3">只显示真实报价；暂时取不到的会明确标出。</p>
           </div>
           <button type="button" onClick={() => navigate('/dashboard')} className="text-xs text-t-accent hover:underline">管理自选</button>
         </div>
@@ -361,7 +367,7 @@ export function TodayPage() {
           </div>
           {predictionsFailure ? (
             <div className="mt-3 rounded-lg border border-t-down/35 bg-t-down/10 px-3 py-3 text-xs text-t-down" data-testid="today-predictions-error">
-              <div className="flex items-center justify-between gap-3"><span>{predictionsFailure.message}</span><button type="button" onClick={refreshPredictions} className="inline-flex items-center gap-1"><RefreshCw size={12} />重试</button></div>
+              <div className="flex items-center justify-between gap-3"><span>{researchFailureMessage({error_code:predictionsFailure.code})}</span><button type="button" onClick={refreshPredictions} className="inline-flex items-center gap-1"><RefreshCw size={12} />重试</button></div>
             </div>
           ) : predictionsLoading ? (
             <div className="mt-3 flex min-h-32 items-center justify-center gap-2 rounded-xl border border-t-border bg-t-surface text-xs text-t-text3" data-testid="today-predictions-loading"><RefreshCw size={14} className="animate-spin" />读取最近研究判断...</div>
@@ -402,7 +408,7 @@ export function TodayPage() {
               </div>
             )}
           </div>
-          {stats ? <div className="mt-3 border-t border-t-border pt-3 text-2xs text-t-text3">最近 90 天：{stats.predictions} 条研究判断 · {stats.resolved} 条已复盘 · 历史命中率 {formatHitRate(stats.hit_rate)}</div> : null}
+          {stats ? <div className="mt-3 border-t border-t-border pt-3 text-2xs text-t-text3">最近 90 天：{stats.predictions} 条研究判断 · 已复盘 {stats.resolved} 条 · 命中率 {formatHitRate(stats.hit_rate)}（{stats.resolved} 条已结算）</div> : null}
         </aside>
       </section>
     </main>

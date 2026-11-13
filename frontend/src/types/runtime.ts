@@ -30,7 +30,12 @@ export interface RuntimeEvent {
 
 /** 面向用户的有界活动详情；输入与结果在服务端脱敏后发送。 */
 export interface RuntimeActivityDetails {
-  display?: { target: string; result: string };
+  display?: {
+    target: string; result: string; title?: string;
+    kind?: 'quote' | 'series' | 'table' | 'news' | 'document' | 'computation' | 'chart' | 'control';
+    status?: 'ok' | 'empty' | 'error';
+    key_facts?: Array<{ label: string; value: unknown }>;
+  };
   inputs?: unknown;
   output_preview?: unknown;
   sources?: unknown;
@@ -85,13 +90,47 @@ export interface ResearchAction {
   expires_at?: string;
 }
 
+export interface ReviewFinding {
+  quote: string;
+  issue: string;
+  evidence: string;
+  suggestion: string;
+}
+
+export interface ReviewCoverage {
+  requirement: string;
+  met: boolean;
+}
+
+export interface ResearchReview {
+  status: 'running' | 'completed' | 'unavailable';
+  review_id: string;
+  verdict?: 'pass' | 'revise' | 'insufficient';
+  findings?: ReviewFinding[];
+  coverage?: ReviewCoverage[];
+  error_code?: string;
+  supersedes_review_id?: string | null;
+  answer_sha256?: string;
+}
+
+export interface ReviewRevisionRequest {
+  source_message_id: string;
+  source_run_id: string;
+  review_id: string;
+  answer: string;
+  findings: ReviewFinding[];
+  coverage: ReviewCoverage[];
+}
+
 export type ResearchBlock = ResearchBlockPosition & (
   | { id: string; kind: 'text'; content: string; revision: number; content_phase?: 'progress' | 'answer';
-      finish_reason?: string; completion_status?: 'complete' | 'tool_pending' | 'incomplete' }
+      finish_reason?: string; completion_status?: 'complete' | 'tool_pending' | 'incomplete';
+      revision_of?: string[]; review_id?: string }
   | { id: string; kind: 'reasoning'; content: string; provider?: string; revision: number;
       reasoning_kind?: string; truncated?: boolean; duration_ms?: number }
   | { id: string; kind: 'artifact'; artifact: ResearchArtifact; revision: number }
-  | { id: string; kind: 'action'; action: ResearchAction; revision: number });
+  | { id: string; kind: 'action'; action: ResearchAction; revision: number }
+  | { id: string; kind: 'review'; review: ResearchReview; revision: number });
 
 export interface ResearchStreamState {
   runId?: string;

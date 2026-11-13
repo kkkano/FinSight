@@ -1,3 +1,4 @@
+/** legacy-only：旧正文 CHART 协议与历史调用兼容。新研究块通过 artifact 交付图表，不使用本模块识别或注入标记。 */
 import {
   MAX_AUTO_CHART_TICKERS,
   extractTickers,

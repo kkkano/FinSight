@@ -1,4 +1,5 @@
 import type { ReportIR, ReportSection, ReportContent, Citation } from '../../types/index';
+import { zh } from '../../locales/zh';
 
 /* ------------------------------------------------------------------ */
 /*  Anchor & text helpers                                              */
@@ -88,7 +89,7 @@ export const buildEvidenceBadges = (
         tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
       },
       freshness: {
-        label: 'Freshness N/A',
+        label: zh.report.freshnessUnknown,
         tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
       },
     };
@@ -116,26 +117,26 @@ export const buildEvidenceBadges = (
 
   const freshness: BadgeInfo = freshestHours === null
     ? {
-      label: 'Freshness Unknown',
+      label: zh.report.freshnessUnknown,
       tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
     }
     : freshestHours <= 24
       ? {
-        label: 'Freshness <24h',
+        label: zh.report.fresh24h,
         tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
       }
       : freshestHours <= 72
         ? {
-          label: 'Freshness <72h',
+          label: zh.report.fresh72h,
           tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
         }
         : freshestHours <= 24 * 7
           ? {
-            label: 'Freshness <7d',
+            label: zh.report.fresh7d,
             tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
           }
           : {
-            label: 'Freshness >7d',
+            label: zh.report.older7d,
             tone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200',
           };
 

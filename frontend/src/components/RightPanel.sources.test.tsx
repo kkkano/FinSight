@@ -1,13 +1,22 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { Message } from '../types';
-import { RightPanel } from './RightPanel';
+import { RightPanel } from "./RightPanel";
+import { observedMessageTickers } from "./RightPanel.utils";
 
 const state = vi.hoisted(() => ({ messages: [] as Message[], sessionId: 'source-title-test' }));
 vi.mock('../store/useStore', () => ({ useStore: (selector: (value: typeof state) => unknown) => selector(state) }));
 vi.mock('./right-panel/RightPanelMarket', () => ({ RightPanelMarket: () => null }));
 
 describe('right panel source titles', () => {
+  it('takes the ticker from structured tool parameters and ignores user wording', () => {
+    const message: Message = { id: 'scope', role: 'assistant', content: '旧的 AAPL 描述', timestamp: 1,
+      requestSnapshot: { query: '提到 TSLA 的原话' } as Message['requestSnapshot'], thinking: [
+        { stage: 'tool_start', timestamp: '2026-11-11T00:00:00Z', result: { inputs: { ticker: 'NVDA' } } },
+        { stage: 'tool_end', timestamp: '2026-11-11T00:00:01Z', result: { payload: { inputs: { ticker: 'NVDA' } } } },
+      ] };
+    expect(observedMessageTickers(message)).toEqual(['NVDA']);
+  });
   it('maps actual ledger fallback identifiers while retaining original article titles', () => {
     state.messages = [{ id: 'a1', role: 'assistant', runId: 'run1', content: '已核查行情。', timestamp: 1,
       evidence_pool: [{ source_id: 'S1', title: 'twelve_data' }, { source_id: 'S2', title: 'get_stock_historical_data' },

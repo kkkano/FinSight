@@ -74,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { watchlist } = useWatchlist();
   const [deleting, setDeleting] = useState<{ sessionId: string; title: string } | null>(null);
   const [recentCollapsed, setRecentCollapsed] = useState(readRecentCollapsed);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({ '7天内': true, '更早': true });
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({ '7天内': false, '更早': true });
   const groups = groupConversations(conversationSummaries);
   const recent = recentConversationView(groups, sessionId, collapsedGroups);
 
@@ -113,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <span className="min-w-0 flex-1 truncate">{cleanConversationTitle(conversation.title)}</span>
         {timeHint && <span className="shrink-0 text-2xs text-t-text3">{timeHint}</span>}
       </button>
-      <button type="button" className="mr-1 rounded-md p-2 text-t-text3 opacity-0 hover:text-fin-danger group-hover:opacity-100 focus:opacity-100 max-lg:opacity-100"
+      <button type="button" className="mr-1 flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-t-text3 hover:text-fin-danger focus:text-fin-danger max-lg:opacity-100"
         aria-label="删除会话" title="删除会话" data-testid="conversation-delete" onClick={() => setDeleting(conversation)}><Trash2 size={14} /></button>
     </div>;
   };
@@ -195,10 +195,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           aria-label="新建对话" onClick={() => { startNewChat(); onChatClick?.(); closeMobile(); }}><Plus size={15} /><span className={compactMobile ? 'max-lg:hidden' : ''}>新对话</span></button>
         <nav className="mt-1 flex min-h-0 flex-1 flex-col">
           <NavGroupLabel compact={compactMobile}>主工作区</NavGroupLabel>
-          <NavItem icon={<Sun size={16} />} label="今日" active={activeKey === 'today'} compact={compactMobile} testId="sidebar-nav-today" onClick={() => { onTodayClick?.(); closeMobile(); }} />
-          <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
           <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
+          <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
           <NavItem icon={<History size={16} />} label="历史" active={activeKey === 'history'} compact={compactMobile} testId="sidebar-nav-history" onClick={() => { onHistoryClick?.(); closeMobile(); }} />
+          <NavItem icon={<Sun size={16} />} label="今日" active={activeKey === 'today'} compact={compactMobile} testId="sidebar-nav-today" onClick={() => { onTodayClick?.(); closeMobile(); }} />
           <NavItem icon={<Target size={16} />} label="战绩" active={activeKey === 'track-record'} compact={compactMobile} testId="sidebar-nav-track-record" onClick={() => { if (onTrackRecordClick) onTrackRecordClick(); else navigate('/track-record'); closeMobile(); }} />
 
           {groups.length > 0 && <div className={compactMobile ? 'mt-4 min-h-0 flex-1 overflow-y-auto max-lg:hidden' : 'mt-4 min-h-0 flex-1 overflow-y-auto'} data-testid="conversation-rail">

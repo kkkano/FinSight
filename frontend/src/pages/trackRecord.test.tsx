@@ -2,10 +2,25 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { TrackRecordContent } from './TrackRecordPage';
 import { BenchmarkRecordDetail } from '../components/track-record/BenchmarkTrackRecord';
-import { formatDelta, formatEtTime, formatHitRate, formatRatio, predictionLabel, sortRecentRecords, statusLabel } from './trackRecord';
+import { Stats } from '../components/right-panel/RightPanelTrackRecordTab';
+import { formatDelta, formatEtTime, formatHitRate, formatRatio, predictionLabel, sortRecentRecords, statusLabel, trackRecordWindow } from './trackRecord';
 import { makeEmptyTrackRecordFixture, makePendingTrackRecordFixture, makeTrackRecordFixture } from './trackRecord.fixtures';
 
 describe('prediction track record presentation', () => {
+  it('does not invent zero personal settlements before statistics are available', () => {
+    const markup = renderToStaticMarkup(<Stats stats={null} />);
+    expect(markup).toContain('统计窗口未注明 · 已结算 -- 条');
+    expect(markup).not.toContain('已结算 0 条');
+    expect(markup).not.toContain('90 天我的判断统计');
+  });
+  it('uses the response window and counts settled samples instead of inventing 90 days', () => {
+    const data = makeTrackRecordFixture(); data.metadata.window_days = 84;
+    const markup = renderToStaticMarkup(<TrackRecordContent data={data} />);
+    expect(markup).toContain('最近 84 天 · 已结算'); expect(markup).not.toContain('最近 90 天');
+    expect(markup).toContain('未结算、发布失败、未按时发布、缺行情');
+    expect(trackRecordWindow(null)).toBe('全部历史'); expect(trackRecordWindow(undefined)).toBe('统计窗口未注明');
+  });
+
   it('keeps a settlement calendar date on the same day', () => {
     expect(formatEtTime('2026-09-25')).toBe('2026/09/25');
   });
@@ -123,7 +138,7 @@ describe('prediction track record presentation', () => {
     const markup = renderToStaticMarkup(<TrackRecordContent data={makeTrackRecordFixture()} />);
     expect(markup).toContain('<table');
     expect(markup).not.toContain('min-w-[1060px]');
-    expect(markup).toContain('规则是怎么定的');
+    expect(markup).toContain('统计口径');
     expect(markup).not.toMatch(/<details[^>]*open/);
   });
 

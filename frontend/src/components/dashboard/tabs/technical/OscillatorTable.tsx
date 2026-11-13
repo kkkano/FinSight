@@ -31,8 +31,8 @@ const fmtVal = (v: number | null | undefined): string => {
 };
 
 const SIGNAL_DISPLAY: Record<OscSignal, { label: string; className: string }> = {
-  buy: { label: '买入', className: 'text-fin-success' },
-  sell: { label: '卖出', className: 'text-fin-danger' },
+  buy: { label: '买入', className: 'text-t-up' },
+  sell: { label: '卖出', className: 'text-t-down' },
   neutral: { label: '中性', className: 'text-fin-warning' },
 };
 

@@ -55,6 +55,9 @@ export function performChatHandoff(handoff: ChatHandoff, navigate: NavigateFunct
     sessionId,
     sourceView: handoff.sourceView,
     sourceTab: normalizeSourceTab(handoff.sourceTab),
+    selectedMetric: handoff.selectedMetric,
+    timeRange: handoff.timeRange,
+    dataRefs: handoff.dataRefs,
   });
 
   const activeSymbol = providedSymbol

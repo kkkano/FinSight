@@ -1,4 +1,10 @@
 import type { PredictionDirection, PredictionGroup, PredictionRecord } from '../types/predictions';
+import { zh } from '../locales/zh';
+
+export function trackRecordWindow(days?: number | null): string {
+  return days === null ? zh.trackRecord.allHistory : typeof days === 'number' && days > 0
+    ? zh.trackRecord.window(days) : zh.trackRecord.unknownWindow;
+}
 
 export const EARLY_SAMPLE_SIZE = 30;
 

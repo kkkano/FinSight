@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { artifactColumnLabel, artifactMethodRows, artifactValueLabel, buildArtifactChart, buildArtifactPanels, normalizeArtifactAnnotations, ResearchArtifactView } from './ResearchArtifactView';
+import { ResearchArtifactView } from "./ResearchArtifactView";
+import { artifactColumnLabel, artifactMethodRows, artifactValueLabel, buildArtifactChart, buildArtifactPanels, normalizeArtifactAnnotations } from "./ResearchArtifactView.utils";
 import type { ResearchArtifact } from '../../types/runtime';
 
 const artifact: ResearchArtifact = {

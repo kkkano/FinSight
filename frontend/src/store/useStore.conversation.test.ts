@@ -212,6 +212,7 @@ describe('useStore conversation lifecycle', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(useStore.getState().messages.at(-1)).toMatchObject({ content: 'Verified INTC answer', error: undefined, canRetry: false });
+    expect(useStore.getState().messages.at(-1)).not.toHaveProperty('blocks');
     expect(apiClient.createConversation).not.toHaveBeenCalled();
   });
 
@@ -237,7 +238,71 @@ describe('useStore conversation lifecycle', () => {
       expect(messages).toHaveLength(2);
       expect(messages.every((message) => !message.isLoading && message.content.startsWith('已恢复'))).toBe(true);
       expect(messages.every((message) => message.timestamp === 1794200000000)).toBe(true);
+      expect(messages.every((message) => !Object.hasOwn(message, 'blocks'))).toBe(true);
       expect(useStore.getState().chatLoadingBySession[sid]).toBe(false);
+    });
+  });
+
+  it.each(['assistant_message', 'result', 'current'] as const)('keeps explicit empty v2 blocks from %s while recovering the same saved run', async (source) => {
+    const sid = `public:test-user:v2-${source}`;
+    const reviewRevision = { source_message_id: 'prior-answer', source_run_id: 'prior-run', review_id: 'prior-review',
+      answer: '修订前正文', findings: [], coverage: [] };
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid, conversation: {
+      messages: [{ id: 'v2-user', role: 'user', content: '协议问题', timestamp: 1000 },
+        { id: 'v2-answer', role: 'assistant', content: '', timestamp: 1001,
+          run_id: 'v2-run', reply_to: 'v2-user', answer_status: 'running', isLoading: true,
+          ...(source === 'current' ? { blocks: [], review_revision: reviewRevision } : {}) }],
+    } });
+    vi.spyOn(apiClient, 'getExecutionRun').mockResolvedValue({ run_id: 'v2-run', session_id: sid,
+      user_message_id: 'v2-user', assistant_message_id: 'v2-answer', status: 'completed', created_at: 1794200000,
+      result: { type: 'done', response: '协议正文', answer_status: 'answered',
+        ...(source === 'result' ? { blocks: [], review_revision: reviewRevision } : {}),
+        ...(source === 'assistant_message' ? { assistant_message: { content: '协议正文', blocks: [], review_revision: reviewRevision } } : {}) },
+    });
+    useStore.getState().setSessionId(sid);
+    await vi.waitFor(() => {
+      const answer = useStore.getState().messages.find((message) => message.id === 'v2-answer');
+      expect(answer).toMatchObject({ content: '协议正文', blocks: [], runId: 'v2-run', replyTo: 'v2-user',
+        timestamp: 1794200000000, isLoading: false, runStatus: 'completed', answerStatus: 'answered', reviewRevision });
+      expect(answer).toHaveProperty('blocks');
+      expect(useStore.getState().sessionId).toBe(sid);
+      expect(useStore.getState().authIdentity?.userId).toBe('test-user');
+    });
+  });
+
+  it('preserves real v2 block identity revision and sequence during backend hydration', async () => {
+    const sid = useStore.getState().sessionId;
+    useStore.getState().addMessage({ id: 'v2-source-user', role: 'user', content: '协议问题', timestamp: 1 });
+    useStore.getState().startNewChat();
+    const blocks = [{ id: 'saved-block', kind: 'text', content: '完整正文', revision: 3, seq: 27 }];
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid, conversation: {
+      messages: [{ id: 'v2-source-user', role: 'user', content: '协议问题', timestamp: 1 },
+        { id: 'v2-source-answer', role: 'assistant', content: '完整正文', timestamp: 2, blocks }],
+    } });
+    await useStore.getState().flushConversationSync(useStore.getState().sessionId);
+    useStore.getState().selectConversation(sid);
+    await vi.waitFor(() => {
+      expect(useStore.getState().messages.at(-1)).toMatchObject({ id: 'v2-source-answer', content: '完整正文', blocks });
+    });
+  });
+
+  it('restores review blocks and preserves the exact answer whitespace used by quote locations', async () => {
+    const sid = 'public:test-user:review-restore';
+    const content = '  原值 10.25 美元。\n\n';
+    const review = { status: 'completed', review_id: 'saved-review', verdict: 'revise',
+      findings: [{ quote: '  原值 10.25 美元。', issue: '核对价格', evidence: '报价记录', suggestion: '更正价格' }],
+      coverage: [{ requirement: '价格', met: true }] };
+    const blocks = [{ id: 'saved-answer', kind: 'text', content, revision: 0, seq: 1 },
+      { id: review.review_id, kind: 'review', review, revision: 1, seq: 2 }];
+    const revision = { source_message_id: 'earlier-answer', source_run_id: 'earlier-run', review_id: 'earlier-review',
+      answer: '旧价格 10 美元。', findings: [{ quote: '10 美元', issue: '核对价格', evidence: '报价记录', suggestion: '更正价格' }], coverage: [] };
+    vi.mocked(apiClient.getConversation).mockResolvedValue({ success: true, session_id: sid, conversation: {
+      messages: [{ id: 'saved-question', role: 'user', content: '核对价格', timestamp: 1 },
+        { id: 'saved-answer', role: 'assistant', content, timestamp: 2, run_id: 'saved-run', run_status: 'completed', blocks, review_revision: revision }],
+    } });
+    useStore.getState().setSessionId(sid);
+    await vi.waitFor(() => {
+      expect(useStore.getState().messages.at(-1)).toMatchObject({ content, blocks, runId: 'saved-run', reviewRevision: revision });
     });
   });
 

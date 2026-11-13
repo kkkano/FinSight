@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2, ChartNoAxesCombined } from 'lucide-react';
-import { normalizeMarkdown } from '../utils/markdown';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
 import {
@@ -15,8 +14,10 @@ import {
 import { ActivityRows, TurnActivity } from './chat/TurnActivity';
 import { ResearchArtifactView } from './chat/ResearchArtifactView';
 import { ActionConfirmationCard } from './chat/ActionConfirmationCard';
-import { researchText } from '../store/researchStream';
+import { answerForReview, researchFailureMessage, researchText } from '../store/researchStream';
 import { ReasoningBlock } from './chat/ReasoningBlock';
+import { ResearchReviewBlock } from "./chat/ResearchReview";
+import { createReviewHighlightPlugin } from "./chat/ResearchReview.utils";
 import { buildMessageTimeline } from './chat/messageTimeline';
 import styles from './chat/ChatDesign.module.css';
 import { useCitationNavigation } from '../store/citationNavigation';
@@ -26,6 +27,7 @@ import { EvidenceSources } from './source/EvidenceSources';
 import { ReportView } from './report';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem, Message } from '../types/index';
+import type { ResearchBlock } from '../types/runtime';
 import { useToast } from './ui/Toast';
 import {
   MESSAGE_ACTION_LABELS,
@@ -65,36 +67,75 @@ const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; a
 
 type MessagePayload = Message;
 
-function MessageBlocks({ msg, onRetry }: { msg: MessagePayload; onRetry: () => void }) {
-  const blocks = msg.blocks ?? [];
+function MessageBlocks({ msg, onRetry, onRevise }: { msg: MessagePayload; onRetry: () => void; onRevise: (reviewId: string) => void }) {
+  const showProviderReasoning = useStore((state) => state.showProviderReasoning);
+  const isChatLoading = useStore((state) => state.isChatLoading);
+  const blocks = (msg.blocks ?? []).filter((block) => block.kind !== 'reasoning' || block.reasoning_kind !== 'provider_raw' || showProviderReasoning);
+  const reviews = blocks.filter((block) => block.kind === 'review');
+  const supersededReviews = new Set(reviews.map((block) => block.review.supersedes_review_id).filter(Boolean));
+  const currentQuotes = reviews.filter((block) => block.review.status === 'completed' && !supersededReviews.has(block.review.review_id))
+    .flatMap((block) => block.review.findings?.map((finding) => finding.quote) ?? []);
+  const revisions = blocks.filter((block): block is Extract<ResearchBlock, { kind: 'text' }> => block.kind === 'text' && Boolean(block.revision_of?.length));
+  const supersededText = new Set(revisions.flatMap((block) => block.revision_of ?? []));
+  const revisionRequest = msg.reviewRevision ?? msg.requestSnapshot?.reviewRevision;
   const textMatches = researchText(blocks) === msg.content;
   const [expanded, setExpanded] = useState(Boolean(msg.isLoading));
   useEffect(() => { setExpanded(Boolean(msg.isLoading)); }, [msg.isLoading]);
-  const timeline = buildMessageTimeline(blocks, msg.thinking ?? [], Boolean(msg.isLoading));
-  const hasProgress = blocks.some((block) => block.kind === 'text' && block.content_phase === 'progress' && block.content.trim());
+  const timeline = buildMessageTimeline(blocks.filter((block) => block.kind !== 'review'), msg.thinking ?? [], Boolean(msg.isLoading));
+  const hasProgress = blocks.some((block) => (block.kind === 'reasoning' && block.content.trim())
+    || (block.kind === 'text' && block.content_phase === 'progress' && block.content.trim()));
   const lastSeq = timeline.at(-1)?.seq;
+  const isProcessItem = (item: typeof timeline[number]) => item.kind === 'activity'
+    || item.block.kind === 'reasoning' || (item.block.kind === 'text' && item.block.content_phase === 'progress');
+  const groups = timeline.reduce<Array<typeof timeline>>((items, item) => {
+    const previous = items.at(-1);
+    if (previous && isProcessItem(item) && isProcessItem(previous[0])) previous.push(item);
+    else items.push([item]);
+    return items;
+  }, []);
+  const renderItem = (item: typeof timeline[number]) => {
+    if (item.kind === 'activity') return expanded ? <ActivityRows key={`activity:${item.rows[0].id}`} rows={item.rows} /> : null;
+    const block = item.block;
+    if (block.kind === 'text') {
+      if (block.content_phase === 'progress') return expanded && block.content.trim()
+        ? <div key={block.id} data-block-id={block.id} data-testid="research-progress" className={styles.progressText} aria-label="过程说明">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <SourceLink href={href || ''} label={children} /> }}>
+            {bindResearchCitations(block.content, msg.evidence_pool ?? [])}
+          </ReactMarkdown>
+        </div> : null;
+      if (supersededText.has(block.id)) {
+        const reviewIds = new Set(revisions.filter((revision) => revision.revision_of?.includes(block.id)).map((revision) => revision.review_id));
+        const quotes = reviews.filter((review) => reviewIds.has(review.review.review_id)).flatMap((review) => review.review.findings?.map((finding) => finding.quote) ?? []);
+        return <details key={block.id} data-block-id={block.id} className={styles.referenceDetails}>
+          <summary>{zh.chat.review.previousAnswer}</summary><MessageBody content={block.content} reviewQuotes={quotes} />
+        </details>;
+      }
+      return textMatches && !msg.report ? <div key={block.id} data-block-id={block.id}><MessageBody content={block.content} reviewQuotes={currentQuotes} /></div> : null;
+    }
+    if (block.kind === 'artifact') return <ResearchArtifactView key={block.id} artifact={block.artifact} sources={msg.evidence_pool} />;
+    if (block.kind === 'action') return <ActionConfirmationCard key={block.id} action={block.action} runId={msg.runId} />;
+    if (block.kind === 'review') return null;
+    return <ReasoningBlock key={block.id} block={block} live={Boolean(msg.isLoading && item.seq === lastSeq)} />;
+  };
   return <>
+    {revisionRequest && <a className={styles.articleLink}
+      href={`#message-${revisionRequest.source_message_id}`}>{zh.chat.review.originalAnswer}</a>}
     <TurnActivity thinking={msg.thinking} isLoading={msg.isLoading} startedAt={msg.timestamp} error={msg.error} runStatus={msg.runStatus}
       summaryOnly expanded={expanded} onExpandedChange={setExpanded} hasProgress={hasProgress} />
-    {timeline.map((item) => {
-      if (item.kind === 'activity') return expanded ? <ActivityRows key={`activity:${item.rows[0].id}`} rows={item.rows} /> : null;
-      const block = item.block;
-      if (block.kind === 'text') {
-        if (block.content_phase === 'progress') return expanded && block.content.trim()
-          ? <div key={block.id} data-block-id={block.id} data-testid="research-progress" className={styles.progressText} aria-label="过程说明">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <SourceLink href={href || ''} label={children} /> }}>
-              {normalizeMarkdown(bindResearchCitations(block.content, msg.evidence_pool ?? []))}
-            </ReactMarkdown>
-          </div> : null;
-        return textMatches && !msg.report ? <div key={block.id} data-block-id={block.id}><MessageWithChart content={block.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} /></div> : null;
-      }
-      if (block.kind === 'artifact') return <ResearchArtifactView key={block.id} artifact={block.artifact} sources={msg.evidence_pool} />;
-      if (block.kind === 'action') return <ActionConfirmationCard key={block.id} action={block.action} runId={msg.runId} />;
-      return <ReasoningBlock key={block.id} block={block} live={Boolean(msg.isLoading && item.seq === lastSeq)} />;
-    })}
+    {groups.map((group, index) => isProcessItem(group[0])
+      ? expanded ? <div key={`process:${index}`} className={styles.process}>{group.map(renderItem)}</div> : null
+      : group.map(renderItem))}
     {msg.report ? <><ReportView report={msg.report} /><ReportArchiveLink reportId={msg.report.report_id} /></>
-      : !textMatches && msg.content ? <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} /> : null}
-    {msg.isLoading && !msg.content && !blocks.length && <div className="py-2"><LoadingDots /></div>}
+      : !textMatches && msg.content && msg.content !== msg.error ? Array.isArray(msg.blocks)
+        ? <MessageBody content={msg.content} reviewQuotes={currentQuotes} />
+        : <LegacyMessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} onRetry={onRetry} /> : null}
+    {reviews.map((block) => {
+      const superseded = supersededReviews.has(block.review.review_id);
+      const review = <ResearchReviewBlock review={block.review} answer={answerForReview(blocks, block.review.review_id, msg.content)}
+        onRevise={!superseded && msg.runId ? () => onRevise(block.review.review_id) : undefined} disabled={isChatLoading || Boolean(msg.isLoading)} />;
+      return superseded ? <details key={block.id} className={styles.referenceDetails}><summary>{zh.chat.review.previousReview}</summary>{review}</details>
+        : <React.Fragment key={block.id}>{review}</React.Fragment>;
+    })}
   </>;
 }
 
@@ -102,14 +143,20 @@ const AssistantContent: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
   onDelete: () => void;
+  onRevise: (reviewId: string) => void;
   actionsInline?: boolean;
-}> = ({ msg, onRetry, onDelete, actionsInline }) => (
+}> = ({ msg, onRetry, onDelete, onRevise, actionsInline }) => (
   <MessageEvidenceContext.Provider value={{ sources: msg.evidence_pool ?? [], runId: msg.runId }}>
-    <MessageBlocks msg={msg} onRetry={onRetry} />
+    <MessageBlocks msg={msg} onRetry={onRetry} onRevise={onRevise} />
     {msg.evidence_pool && msg.evidence_pool.length > 0 && (
       <EvidenceSources sources={msg.evidence_pool} />
     )}
-    {msg.error && msg.content.trim() !== msg.error.trim() && <p role="alert" className="mt-3 border-l-2 border-fin-danger/50 pl-3 text-sm text-fin-danger">{msg.error}</p>}
+    {msg.error && <div className="mt-3 border-l-2 border-fin-danger/50 pl-3 text-sm text-fin-danger">
+      <p role="alert">{researchFailureMessage({ error_code: [...(msg.thinking ?? [])].reverse().find((step) => step.result?.error_code)?.result?.error_code || msg.error })}</p>
+      <details className="mt-1 text-xs text-t-text3"><summary>诊断详情</summary><pre className="whitespace-pre-wrap break-words">{[msg.error,
+        ...[...(msg.thinking ?? [])].reverse().filter((step) => step.stage === 'error').slice(0,1).flatMap((step) =>
+          [step.result?.error_code,step.result?.reason,step.result?.failure_detail].filter((value) => typeof value === 'string'))].join('\n')}</pre></details>
+    </div>}
     <DataOriginTag
       data_origin={msg.data_origin}
       fallback_used={msg.fallback_used}
@@ -137,7 +184,8 @@ const FlatMessageImpl: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
   onDelete: () => void;
-}> = ({ msg, onRetry, onDelete }) => {
+  onRevise: (reviewId: string) => void;
+}> = ({ msg, onRetry, onDelete, onRevise }) => {
   const isUser = msg.role === 'user';
   if (isUser) {
     // TERMINAL：用户消息 = 右对齐轻色块，无头像
@@ -153,11 +201,11 @@ const FlatMessageImpl: React.FC<{
   }
   // 助手回答采用无框阅读流，过程与产物保留在所属消息中。
   return (
-    <div className={`chat-message group/msg ${styles.message} ${msg.blocks?.some((block) => block.kind === 'artifact') ? styles.messageWide : ''}`}>
+    <div id={`message-${msg.id}`} className={`chat-message group/msg ${styles.message} ${msg.blocks?.some((block) => block.kind === 'artifact') ? styles.messageWide : ''}`}>
       <div>
         <div className="relative">
           <div className={styles.answer}>
-            <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
+            <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} onRevise={onRevise} actionsInline />
           </div>
         </div>
       </div>
@@ -190,19 +238,41 @@ export const ChatList: React.FC = () => {
   useEffect(() => { pinned.current = true; setShowJump(false); }, [sessionId]);
   return <div id="chat-scroll-container" ref={containerRef} onScroll={handleScroll} className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-8 sm:px-6">
     {visibleMessages.map((msg) => <FlatMessage key={msg.id} msg={msg}
-      onRetry={() => void chatStream.retry(msg.id)} onDelete={() => removeMessage(msg.id)} />)}
-    {showJump && <button type="button" className="sticky bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-t-border bg-t-surface px-4 py-2 text-xs shadow-sm"
+      onRetry={() => void chatStream.retry(msg.id)} onDelete={() => removeMessage(msg.id)}
+      onRevise={(reviewId) => void chatStream.revise(msg.id, reviewId)} />)}
+    {showJump && <div className={styles.jumpWrap}><button type="button" className={styles.jumpButton}
       onClick={() => { pinned.current = true; setShowJump(false); containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' }); }}
-      aria-label={zh.chat.backToLatest}>↓ {zh.chat.backToLatest}</button>}
+      aria-label={zh.chat.backToLatest}>↓ {zh.chat.backToLatest}</button></div>}
   </div>;
 };
 
-// ── MessageWithChart ──
+// ── 正文与历史图表兼容 ──
+
+/** 研究块正文只渲染文字与引用；图表由所属 artifact 块单独交付。 */
+const MessageBody: React.FC<{ content: string; reviewQuotes?: string[] }> = ({ content, reviewQuotes }) =>
+  <div className="fs-prose"><MessageMarkdown content={content} reviewQuotes={reviewQuotes} /></div>;
+
+const MessageMarkdown: React.FC<{ content: string; tickerCandidates?: string[]; reviewQuotes?: string[] }> = ({ content, tickerCandidates, reviewQuotes }) => {
+  const evidence = React.useContext(MessageEvidenceContext);
+  const tickers = useMemo(() => tickerCandidates ?? extractTickers(content), [content, tickerCandidates]);
+  const tickerLinkPlugin = useMemo(() => createTickerLinkPlugin(tickers), [tickers]);
+  const renderedContent = bindResearchCitations(content, evidence.sources);
+  const highlightPlugin = useMemo(() => createReviewHighlightPlugin(renderedContent,
+    (reviewQuotes ?? []).filter((quote) => content.includes(quote)).map((quote) => bindResearchCitations(quote, evidence.sources))),
+  [content, renderedContent, reviewQuotes, evidence.sources]);
+  return <ReactMarkdown remarkPlugins={[remarkGfm, highlightPlugin, tickerLinkPlugin]} components={{
+    a: ({ href, children }) => {
+      const ticker = tickerFromDashboardHref(href);
+      return ticker ? <TickerLink ticker={ticker}>{children}</TickerLink> : <SourceLink href={href || ''} label={children} />;
+    },
+    table: ({ children }) => <div className={`${styles.tableWrap} scrollbar-hide`}><table>{children}</table></div>,
+  }}>{renderedContent}</ReactMarkdown>;
+};
 
 const EMPTY_SMART_CHART_BLOCKS: ReturnType<typeof parseSmartChartBlocks> = [];
 
-const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRetry: () => void }> = ({ content, isStreaming, onRetry }) => {
-  const evidence = React.useContext(MessageEvidenceContext);
+/** legacy-only：无 blocks 的历史消息保留正文标记解析与现场行情图。 */
+const LegacyMessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRetry: () => void }> = ({ content, isStreaming, onRetry }) => {
   const [chartData, setChartData] = useState<Array<{
     ticker: string;
     chartType: ChartType;
@@ -216,10 +286,6 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
     [content, isStreaming],
   );
   const tickerCandidates = useMemo(() => extractTickers(content), [content]);
-  const tickerLinkPlugin = useMemo(
-    () => createTickerLinkPlugin(tickerCandidates),
-    [tickerCandidates],
-  );
 
   useEffect(() => {
     if (isStreaming) return; // CHART 标记由收尾阶段注入，流式期间无需扫描
@@ -253,29 +319,11 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
     setChartData(nextData);
   }, [content, isStreaming]);
 
-  const textContent = bindResearchCitations(getRenderableMessageContent(content, Boolean(isStreaming)), evidence.sources);
+  const textContent = getRenderableMessageContent(content, Boolean(isStreaming));
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none prose-terminal">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, tickerLinkPlugin]}
-        components={{
-          a: ({ href, children }) => {
-            const ticker = tickerFromDashboardHref(href);
-            return ticker
-              ? <TickerLink ticker={ticker}>{children}</TickerLink>
-              : <SourceLink href={href || ''} label={children} />;
-          },
-          /* 移动端：长报告 markdown 表格加横向滚动容器，避免窄屏溢出撑破布局 */
-          table: ({ children }) => (
-            <div className="overflow-x-auto scrollbar-hide">
-              <table>{children}</table>
-            </div>
-          ),
-        }}
-      >
-        {normalizeMarkdown(textContent)}
-      </ReactMarkdown>
+    <div className="fs-prose">
+      <MessageMarkdown content={textContent} tickerCandidates={tickerCandidates} />
       {chartData.map((chart) => (
         <InlineChart
           key={`${chart.ticker}-${chart.chartType}-${chart.valueMode}-${chart.period}`}
@@ -457,7 +505,7 @@ const MessageActions: React.FC<{
     URL.revokeObjectURL(url);
   };
 
-  const btnClass = "p-1.5 rounded-md hover:bg-fin-hover hover:text-fin-text transition-colors";
+  const btnClass = styles.composerAction;
 
   return (
     <div className={messageActionContainerClass(Boolean(inline))}>
@@ -468,27 +516,20 @@ const MessageActions: React.FC<{
         onClick={handleCopy}
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
+        <span>{copied ? zh.chat.copied : zh.chat.copy}</span>
       </button>
-      <button className={btnClass} title={zh.chat.retry} aria-label={MESSAGE_ACTION_LABELS.retry} onClick={onRetry}>
+      <button className={btnClass} title={MESSAGE_ACTION_LABELS.retry} aria-label={MESSAGE_ACTION_LABELS.retry} onClick={onRetry}>
         <RefreshCcw size={14} />
+        <span>{MESSAGE_ACTION_LABELS.retry}</span>
       </button>
       <button className={btnClass} title={zh.chat.export} aria-label={MESSAGE_ACTION_LABELS.export} onClick={handleExport}>
         <Download size={14} />
+        <span>{zh.chat.export}</span>
       </button>
       <button className={btnClass} title={zh.chat.delete} aria-label={MESSAGE_ACTION_LABELS.delete} onClick={onDelete}>
         <Trash2 size={14} />
+        <span>{zh.chat.delete}</span>
       </button>
-    </div>
-  );
-};
-
-const LoadingDots: React.FC = () => {
-  // TERMINAL：终端光标 + 真实阶段文案（取自 executionStore 的 statusMessage），拒绝三点弹跳
-  const statusMessage = useStore((s) => s.statusMessage);
-  return (
-    <div className="flex items-center text-2xs font-mono text-t-text3">
-      <span>{statusMessage || zh.chat.analyzingShort}</span>
-      <span className="t-caret" />
     </div>
   );
 };

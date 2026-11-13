@@ -19,9 +19,9 @@ export function SentimentStatsBar({ news }: SentimentStatsBarProps) {
   const stats = useMemo(() => computeSentimentStats(samples), [samples]);
 
   const cards: { label: string; value: number; color: string; barColor: string }[] = [
-    { label: '积极', value: stats.positive, color: 'text-fin-success', barColor: 'bg-fin-success' },
+    { label: '积极', value: stats.positive, color: 'text-t-up', barColor: 'bg-t-up' },
     { label: '中性', value: stats.neutral, color: 'text-fin-muted', barColor: 'bg-fin-muted' },
-    { label: '消极', value: stats.negative, color: 'text-fin-danger', barColor: 'bg-fin-danger' },
+    { label: '消极', value: stats.negative, color: 'text-t-down', barColor: 'bg-t-down' },
   ];
 
   return (

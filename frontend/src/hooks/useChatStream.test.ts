@@ -77,6 +77,80 @@ describe('chat retry and recovery', () => {
     vi.restoreAllMocks();
   });
 
+  it('publishes the exact answer before review and stores replayed review blocks without rewriting it', async () => {
+    const answer = '原值 10.25  美元；[1]\n不追加图表标记。';
+    const review = { status: 'completed', review_id: 'review-1', verdict: 'revise', findings: [
+      { quote: '10.25', issue: '需核对价格', evidence: '报价记录', suggestion: '确认价格' },
+    ], coverage: [{ requirement: '图表', met: false }] };
+    const chart = await import('../utils/chartIntent');
+    vi.mocked(chart.shouldGenerateChart).mockClear();
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (body, callbacks) => {
+      const emit = (seq: number, type: string, payload: Record<string, unknown>) => callbacks.onRuntimeEvent?.({
+        schema_version: 2, type, run_id: body.run_id, session_id: body.session_id, seq, payload,
+      });
+      emit(1, 'content.delta', { block_id: 'answer', delta: answer });
+      emit(2, 'answer.completed', { status: 'completed', review_pending: true });
+      expect(useStore.getState().messages.at(-1)).toMatchObject({ content: answer, isLoading: false, answerStatus: 'complete' });
+      emit(3, 'review.started', { status: 'running', review_id: 'review-1' });
+      emit(4, 'review.finished', review);
+      emit(4, 'review.finished', review);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const duringReview = useStore.getState().messages.at(-1)!;
+      expect(duringReview.content).toBe(answer);
+      expect(duringReview.isLoading).toBe(false);
+      expect(duringReview.blocks?.filter((block) => block.kind === 'review')).toHaveLength(1);
+      callbacks.onDone?.(undefined, [], { response: answer, persistence_status: 'ephemeral' });
+    });
+    await useChatStream(useStore.getState().sessionId).send('请画走势图并说明价格');
+    expect(useStore.getState().messages.at(-1)?.content).toBe(answer);
+    expect(chart.shouldGenerateChart).not.toHaveBeenCalled();
+  });
+
+  it('sends an explicit review revision as a new message and preserves the original report and request relationship', async () => {
+    const review = { status: 'completed' as const, review_id: 'review-1', verdict: 'revise' as const,
+      findings: [{ quote: '旧价格', issue: '需更正', evidence: '原始报价', suggestion: '更正价格' }], coverage: [] };
+    const original: Message = { id: 'original-answer', role: 'assistant', content: '旧价格 10.25', timestamp: 2,
+      runId: 'original-run', runStatus: 'completed', report: oldReport,
+      blocks: [{ id: 'answer', kind: 'text', content: '旧价格 10.25', revision: 0 }, { id: review.review_id, kind: 'review', review, revision: 1 }] };
+    useStore.getState().addMessage({ id: 'original-question', role: 'user', content: '写一份报告', timestamp: 1 });
+    useStore.getState().addMessage(original);
+    const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.(undefined, [], { response: '修订版价格 10.5', persistence_status: 'ephemeral', blocks: [] });
+    });
+    await useChatStream(useStore.getState().sessionId).revise(original.id, review.review_id);
+    expect(sent).toHaveBeenCalledTimes(1);
+    const body = sent.mock.calls[0][0];
+    expect(body).toMatchObject({ query: '按核查意见修订', resume_from_run_id: original.runId,
+      options: { output_mode: 'investment_report' }, review_revision: {
+        source_message_id: original.id, source_run_id: original.runId, review_id: review.review_id,
+        answer: original.content, findings: review.findings, coverage: review.coverage,
+      } });
+    expect(body.client_assistant_message_id).not.toBe(original.id);
+    expect(useStore.getState().messages.find((message) => message.id === original.id)).toMatchObject(original);
+    expect(useStore.getState().messages.at(-1)?.requestSnapshot?.reviewRevision).toEqual(body.review_revision);
+  });
+
+  it('sends strict account preferences and structured dashboard context without granting reference access', async () => {
+    const state=useStore.getState(); state.setAuthIdentity({userId:'context-owner',email:null});
+    const session=useStore.getState().sessionId;
+    state.setPendingChatHandoffContext(session,{sessionId:session,sourceView:'dashboard',sourceTab:'overview',
+      selectedMetric:{id:'trailing_pe',label:'市盈率',value:25,unit:null},timeRange:{start:'2026-10-01',end:'2026-10-31'},dataRefs:['existing-reference']});
+    const sent=vi.spyOn(apiClient,'sendMessageStream').mockImplementation(async (_request,callbacks)=>{
+      callbacks.onDone?.(undefined,[],{response:'上下文已接收',persistence_status:'ephemeral'});
+    });
+    await useChatStream(session).send('分析当前指标');
+    expect(sent.mock.calls[0][0].context).toMatchObject({selected_metric:{id:'trailing_pe',value:25},
+      time_range:{start:'2026-10-01',end:'2026-10-31'},data_refs:['existing-reference'],watchlist_auto_confirm:false,show_provider_reasoning:false});
+    expect(sent.mock.calls[0][0].show_provider_reasoning).toBe(false);
+    state.setWatchlistAutoConfirm(true); state.setShowProviderReasoning(true);
+    await useChatStream(session).send('再看一次');
+    expect(sent.mock.calls[1][0].context).toMatchObject({watchlist_auto_confirm:true,show_provider_reasoning:true});
+    state.setAuthIdentity({userId:'other-owner',email:null});
+    await useChatStream(useStore.getState().sessionId).send('新账号问题');
+    expect(sent.mock.calls[2][0].context).toMatchObject({watchlist_auto_confirm:false,show_provider_reasoning:false});
+    expect(sent.mock.calls[2][0].context?.data_refs).toBeUndefined();
+  });
+
   it('retries the saved report request after dashboard changes and clears all old output before a failure', async () => {
     const selection = { type: 'filing' as const, id: 'original-filing', title: 'Original filing' };
     useDashboardStore.setState({
@@ -124,7 +198,7 @@ describe('chat retry and recovery', () => {
     expect(retryRequest.options?.output_mode).toBe('investment_report');
     expect(retryRequest.context).toEqual({ active_symbol: '002174.SZ', view: 'chat', selection: {
       type: 'filing', id: 'original-filing', title: 'Original filing',
-    } });
+    }, show_provider_reasoning:false,watchlist_auto_confirm:false });
     expect(retryRequest.history).toEqual(originalRequest.history);
     expect(retryRequest.history?.map((message) => message.content)).toEqual(['Earlier question', 'Earlier answer']);
     expect(retryRequest.run_id).not.toBe(originalRequest.run_id);
@@ -158,7 +232,7 @@ describe('chat retry and recovery', () => {
     expect(recover).toHaveBeenCalledOnce();
     expect(latest).not.toHaveBeenCalled();
     expect(replay).not.toHaveBeenCalled();
-    expect(useStore.getState().messages.at(-1)).toMatchObject({ error: 'Stream interrupted', canRetry: true });
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ error: '研究没有完成，生成的内容已保留。 请稍后重试。', canRetry: true });
     expect(useStore.getState().messages.at(-1)?.report).toBeUndefined();
   });
 
@@ -202,7 +276,7 @@ describe('chat retry and recovery', () => {
     });
     await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
     expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '部分研究结果', blocks,
-      isLoading: false, runStatus: 'failed', error: '来源请求失败' });
+      isLoading: false, runStatus: 'failed', error: '研究没有完成，生成的内容已保留。 请稍后重试。' });
   });
 
   it('shows the safe failure reason and next action instead of the generic run message', async () => {
@@ -211,8 +285,8 @@ describe('chat retry and recovery', () => {
         reason: '模型在生成研究结论时超时。', recovery_action: '可从已有资料继续研究。' });
     });
     await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
-    expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '模型在生成研究结论时超时。 可从已有资料继续研究。',
-      error: '模型在生成研究结论时超时。 可从已有资料继续研究。', isLoading: false, runStatus: 'failed' });
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '模型响应超时，研究已中断。 请稍后重试。',
+      error: '模型响应超时，研究已中断。 请稍后重试。', isLoading: false, runStatus: 'failed' });
   });
 
   it('maps old error codes when an authoritative failed delivery has only a generic message', async () => {
@@ -222,7 +296,7 @@ describe('chat retry and recovery', () => {
     });
     await useChatStream(useStore.getState().sessionId).send('AAPL 研究');
     expect(useStore.getState().messages.at(-1)).toMatchObject({ content: '已取得部分资料', runStatus: 'failed',
-      error: '这次研究已达到步骤上限，还没完成。', isLoading: false });
+      error: '这次研究已达到步骤上限，还没完成。 请缩小研究范围或继续追问。', isLoading: false });
   });
 
   it('finishes completed research with evidence gaps without labelling it an execution error', async () => {
@@ -284,7 +358,9 @@ describe('chat retry and recovery', () => {
     expect(sent.mock.calls[2][0].skill_ids).toBeUndefined();
   });
 
-  it('requests supplied reasoning by default and retains it in the owning message blocks', async () => {
+  it('requests supplied reasoning only after account opt-in and retains it in the owning message blocks', async () => {
+    useStore.getState().setAuthIdentity({userId:'reasoning-owner',email:null});
+    useStore.getState().setShowProviderReasoning(true);
     const sent = vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (request, callbacks) => {
       callbacks.onRuntimeEvent?.({ type: 'reasoning.delta', run_id: request.run_id, session_id: request.session_id, seq: 1,
         payload: { kind: 'provider_raw', block_id: 'root_reasoning_1', delta: '核对价格与资料时点。', agent_id: 'root' } });

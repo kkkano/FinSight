@@ -3,6 +3,19 @@ import { parseSSEStream } from './sse';
 
 const response = (events: unknown[]) => new Response(events.map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join(''));
 describe('runtime SSE compatibility', () => {
+  it('delivers answer completion and review events without claiming a terminal done', async () => {
+    const onRuntimeEvent = vi.fn(); const onDone = vi.fn(); const onThinking = vi.fn();
+    await parseSSEStream(response([
+      { schema_version: 2, type: 'answer.completed', payload: { status: 'completed', review_pending: true } },
+      { schema_version: 2, type: 'review.started', payload: { status: 'running', review_id: 'review-1' } },
+      { schema_version: 2, type: 'review.finished', payload: { status: 'completed', review_id: 'review-1', verdict: 'pass', findings: [], coverage: [] } },
+      { type: 'done', response: '原文' },
+    ]), { onRuntimeEvent, onDone, onThinking }, { readTimeoutMs: 0 });
+    expect(onRuntimeEvent.mock.calls.map(([event]) => event.type)).toEqual(['answer.completed', 'review.started', 'review.finished']);
+    expect(onThinking).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
   it('dispatches a v2-compatible token once to the runtime consumer', async () => {
     const onToken = vi.fn(); const onRuntimeEvent = vi.fn(); const onDone = vi.fn();
     await parseSSEStream(response([

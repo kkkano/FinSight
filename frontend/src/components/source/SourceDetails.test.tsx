@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { hasDataSourceDetails, publicSourceText, SourceDetails, sourceDetailRows } from './SourceDetails';
+import { SourceDetails } from "./SourceDetails";
+import { hasDataSourceDetails, publicSourceText, sourceDetailRows } from "./SourceDetails.utils";
 
 describe('数据来源详情', () => {
   it('没有原文链接时仍提供可展开的来源入口', () => {

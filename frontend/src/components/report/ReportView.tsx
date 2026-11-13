@@ -366,6 +366,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, readOnly = false
       {/* ===== 方案A 紧凑指挥台主体 ===== */}
       <div className="p-6">
         <ReportCockpit
+          readOnly={readOnly}
           report={report}
           formattedDate={formattedDateShort}
           evidenceBadges={evidenceBadges}

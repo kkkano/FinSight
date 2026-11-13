@@ -1,0 +1,198 @@
+{
+  "created_at": "2026-11-13T06:38:59.663188+00:00",
+  "scope": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md 9.3(2),8.5",
+  "files": [
+    {
+      "source": "frontend/src/components/execution/AgentWorkLog.test.tsx",
+      "sha256": "a662121e9a77e4b2077f36f1414998111221d2b28d9ee99118107f843320802f",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/AgentWorkLog.tsx",
+      "sha256": "ae45d34eb77d79b755b3eda310e5c9419f6f0f1aed0ef44881a5031c7b2f379f",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/colorMaps.ts",
+      "sha256": "146afceabea949e497b3cefd58921a9ea93c1bd5822d897a97cdf365ab2d5465",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ExecutionBanner.tsx",
+      "sha256": "ef168134e905c7309927a5332540cee35c8fbae9d1c992804d08f9e23cc14f52",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/executionMetrics.test.tsx",
+      "sha256": "b702a26466a0fa876a7dee28cc4741fa27960fc86db44d7c204aa1282f9b98b7",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/executionMetrics.ts",
+      "sha256": "b68fb90be6f4dc91980d158a814e6d44e38ea2e0760124507a26de72bc9a3851",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ExecutionPanel.tsx",
+      "sha256": "27b94f6caf092b49eda8c4b1e88f240497557ce2e1d4fcd2cd3905d01ee9504b",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ExecutionStats.tsx",
+      "sha256": "fd16f42e3aca15df2a14ac7ae34b701c513ffb1b56409132df9a18f65f6e73d0",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/GroupedTimeline.tsx",
+      "sha256": "185b6f6eded590957c758e0b0f3e0a775b93085ae2b78f8e3e132b9ea8e571b7",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ParallelWaterfall.tsx",
+      "sha256": "42e41654f851b48558ed67e62d4c4d4487d84898c9dda59ad2c1183ed7d4f23c",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/PipelineStageBar.tsx",
+      "sha256": "7791f0080de4d7f10dfe082c5b11f1e6ee3e5126dbcfdae7f943ec736630a7cb",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/StageStepper.test.tsx",
+      "sha256": "35874c4a85e210189227f784166c2e0757232b0f616cc673445114985eb0e868",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/StageStepper.tsx",
+      "sha256": "538c06ac597de65713e63894dcc0cf1d76a91b5e3a17622d183002705f236d9a",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ThinkingProcess.tsx",
+      "sha256": "3965376d78befdeb6e18444b8ba3f566c1cceab5b87e3e2e1947dee1465a26ba",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ThinkingStepDetail.tsx",
+      "sha256": "7148ccbaab5705e5a63a79e0c79eae6ef7c6ad194ef1fd8cc8916e3c5ebd4d1d",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ThinkingStepList.tsx",
+      "sha256": "ee20579b9857c00d13cfc6a2a722738a9c8f37b0495c9dfcc46a9fcb929fb82f",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/ThinkingUserView.tsx",
+      "sha256": "dfd2c02568c68802744e6a3c4126797203d5be40319162e95ed599e6c297aa4d",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/thinkingUtils.tsx",
+      "sha256": "8c416f9b906a2e49562ab717ff678a7b3f44c7bcad41d824bfb8c5fc4bc36b86",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/timelineUtils.ts",
+      "sha256": "3072db20f6c28fce2b9a4725f41da98e0135882904e8de582597a801fd9d9e3a",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/WaterfallBar.tsx",
+      "sha256": "53c521aa9841cf4c16ec4e7b689c59875586387b9d4fb3fc5405ba8f020250cb",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/waterfallLayout.test.ts",
+      "sha256": "f6f3b8977db23753c6ce79a73eb0be2bf8bf68839c9d5bb7ef683aeae1bb439f",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/execution/waterfallLayout.ts",
+      "sha256": "cc51abf2030eec19708f6d86f21bf466c632f0a4de3bacb5a90316b1fd8f4b8c",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/store/executionStore.ts",
+      "sha256": "a5c8e73f64906d6f1562102675d7990ec0426792a42f8191a0a7278dcb3dd892",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/store/executionStore.reducer.test.ts",
+      "sha256": "71ec3145f80fa9c777864f9cdbbf88763a6f610c403bd47c6034219fbd8f5ac0",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/types/execution.ts",
+      "sha256": "b15efc50c578ae7a2e22a8b1dc50977d8bb4a370490e6b1a619bf3c015d22aa3",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/agent-log/constants.ts",
+      "sha256": "d75053866575d599b5dfe1f1004a4d3e2cb45fbcdca1a0a6bccbeceba91b58c6",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/agent-log/AgentStatusBar.tsx",
+      "sha256": "685037b21c40c7d84ce81344ee5ef6f6106e62ddc3d497ca052e9defe703ea34",
+      "action": "retire"
+    },
+    {
+      "source": "frontend/src/components/agent-log/AgentLogPanel.tsx",
+      "sha256": "63773ac0a934ad408f1d49e7cc5c5f6f1ca0c24a43cef25e76f5592d27580a07",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/src/components/agent-log/AgentLogToolbar.tsx",
+      "sha256": "75ea95e614c8a5209104dbd4e3d7aefc7cb7720fa2131b5532c95c829f923be2",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/src/components/agent-log/AgentEventRow.tsx",
+      "sha256": "838d6b1ea2aceef1618fced9e132333d7e49afe4769ecb9546d3650e34584174",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/src/components/agent-log/AgentLogExport.ts",
+      "sha256": "b530dc9c258f85e821a90a802ac1c9d81d2bd6231646d88de4b235e0abab867f",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/src/components/agent-log/index.ts",
+      "sha256": "98657e7c0c71bc0bed4bd22f16e793d02feb7462c438c39e55836f56c634f1f8",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/src/hooks/useChatStream.ts",
+      "sha256": "c2ce30486021a4b2366d3d94bce7440f2422956e50e93e6973808e9379fd8574",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/e2e/conversation-persistence.spec.ts",
+      "sha256": "b0076bd786d6cdc085428f6f83576736dd563bdbdc076ee0f1c4a19c58b47437",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/e2e/execution-trace.spec.ts",
+      "sha256": "0f1297616ae8a28eba8f990e5293e045803db78e9688d532a0b3660de12783db",
+      "action": "migrate_v2"
+    },
+    {
+      "source": "frontend/src/components/execution/__snapshots__/StageStepper.test.tsx.snap",
+      "sha256": "07bd68ed5d8e029bbda68457862a5a5c55b55a01a46c1aca55c52a79cbf9a301",
+      "action": "retire"
+    }
+  ],
+  "production_deletion_performed": true,
+  "test_contract_migration": {
+    "stage_progress_and_plan_ready": "旧图固定阶段、推算百分比和plan_ready为退役机制，原断言留存；不移植到新UI。",
+    "parallel_identity_and_lifecycle": "eventModel.test.ts按schema2 agent_id/run_id/seq验证，结束/失败来自真实事件。",
+    "failure_and_partial_delivery": "保留现有useChatStream.test.ts、researchStream.test.ts、TurnActivity.test.tsx断言；新增日志失败事件投影测试。",
+    "delivery_recovery": "conversation-persistence.spec.ts保留等待服务器终态、请求次数、内容与会话恢复断言，去旧store百分比。",
+    "developer_diagnostics": "AgentLogPanel.test.tsx及eventModel.test.ts验证v2展示、过滤、脱敏导出；保留execution-trace的开发者开关与活动展示。"
+  },
+  "additional_migration_files": [
+    "frontend/src/components/layout/WorkspaceShell.tsx"
+  ],
+  "remaining_external_references": []
+}

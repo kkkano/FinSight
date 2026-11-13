@@ -11,7 +11,7 @@ const fulfillJson = async (route: any, payload: unknown) => {
 };
 
 // 研究活动保留在所属对话内，标的面板不重复提供执行页签。
-const openExecutionPanel = async (page: any) => {
+const openResearchProcess = async (page: any) => {
   const summary = page.getByLabel('研究过程').getByRole('button').first();
   await expect(summary).toBeVisible();
   if (await summary.getAttribute('aria-expanded') !== 'true') await summary.click();
@@ -52,6 +52,14 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
 });
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (!path.startsWith('/api/')) return route.fallback();
+    if (path === '/api/conversations' && route.request().method() === 'POST') {
+      return fulfillJson(route, { success: true, session_id: route.request().postDataJSON().session_id });
+    }
+    await fulfillJson(route, { success: true, items: [], messages: [], count: 0, profile: {} });
+  });
   await page.addInitScript((sessionId) => {
     localStorage.clear();
     sessionStorage.setItem('finsight-welcome-gate-passed', '1');
@@ -63,7 +71,7 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('fs_dashboard_layout_v1', JSON.stringify({ hidden_widgets: [], order: [] }));
     localStorage.setItem('fs_dashboard_news_mode_v1', JSON.stringify('market'));
   }, E2E_SESSION_ID);
-  await installAuthenticatedSession(page);
+  await installAuthenticatedSession(page, { accessToken: 'fixture-token' });
   await page.route('**/api/models', (route) => fulfillJson(route, { models: [{ id: 'system:server-default', model: 'test-model',
     label: '验收模型', provider: 'system', available: true, native_tool_calls: true, effort_options: [] }], default_model_id: 'system:server-default' }));
 
@@ -101,6 +109,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test.afterEach(async ({ page }, testInfo) => {
+  const path = testInfo.outputPath('final-state.png');
+  await page.screenshot({ path, fullPage: true });
+  await testInfo.attach('final-state', { path, contentType: 'image/png' });
+});
+
 test('原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示', async ({ page }) => {
   await page.goto('/dashboard/AAPL');
   await expect(page.getByTestId('context-panel-expand')).toBeVisible();
@@ -117,44 +131,25 @@ test('原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示',
 
 test('所属对话展示真实Agent活动，不把内部计划字段当作用户过程', async ({ page }) => {
   await page.route('**/api/execute', async (route) => {
+    const request = route.request().postDataJSON();
     const frames = [
-      { type: 'pipeline_stage', stage: 'planning', status: 'start', message: 'Planner started' },
-      {
-        type: 'plan_ready',
-        plan_steps: [{ id: 's1', kind: 'agent', name: 'news_agent', optional: false }],
-        selected_agents: ['news_agent'],
-        skipped_agents: ['macro_agent'],
-        has_parallel: false,
-        reasoning_brief: 'Planner completed with one selected agent',
-      },
-      { type: 'pipeline_stage', stage: 'planning', status: 'done', message: 'Planner completed' },
-      { type: 'pipeline_stage', stage: 'executing', status: 'start', message: 'Executor started' },
-      { type: 'agent_start', agent: 'news_agent', status: 'running', step_id: 's1' },
-      {
-        type: 'agent_done',
-        agent: 'news_agent',
-        status: 'done',
-        step_id: 's1',
-        confidence: 0.82,
-        evidence_count: 5,
-        data_sources: ['reuters'],
-        duration_ms: 950,
-      },
-      { type: 'step_done', step_id: 's1', kind: 'agent', name: 'news_agent', duration_ms: 950 },
-      { type: 'pipeline_stage', stage: 'executing', status: 'done', message: 'Executor completed' },
-      {
-        type: 'decision_note',
-        scope: 'planner',
-        title: 'Planner selection summary',
-        reason: 'Selected news_agent for current query',
-        impact: 'parallel=no',
-      },
-      { type: 'pipeline_stage', stage: 'synthesizing', status: 'done', message: 'Synthesize completed' },
-      { type: 'pipeline_stage', stage: 'rendering', status: 'done', message: 'Rendering completed' },
-      { type: 'done', response: 'ok' },
+      { type: 'agent.started', agent_id: 'news-worker', payload: {
+        role: 'news_agent', agent_label: '新闻分析师', task: '核实AAPL新闻', status: 'running', internal_diagnostic: 'fixture-internal-detail',
+      } },
+      { type: 'tool.started', agent_id: 'news-worker', payload: {
+        name: 'get_company_news', tool_call_id: 'news-read', display: { title: '读取公司新闻', target: 'AAPL' },
+      } },
+      { type: 'tool.result', agent_id: 'news-worker', payload: {
+        name: 'get_company_news', tool_call_id: 'news-read', status: 'ok',
+        display: { title: '读取公司新闻', target: 'AAPL', status: 'ok', result: '已取得公司报道' },
+      } },
+      { type: 'agent.finished', agent_id: 'news-worker', payload: {
+        role: 'news_agent', agent_label: '新闻分析师', status: 'completed', summary: '新闻分析已完成',
+      } },
+      { type: 'done', response: 'ok', run_status: 'completed' },
     ];
     const body = frames
-      .map((frame) => `data: ${JSON.stringify({ ...frame, run_id: 'e2e-trace-detail' })}\n\n`)
+      .map((frame, index) => `data: ${JSON.stringify({ ...frame, schema_version: frame.type === 'done' ? undefined : '2', run_id: request.run_id, session_id: request.session_id, seq: index + 1, stream_epoch: 'trace-v2' })}\n\n`)
       .join('');
     await route.fulfill({
       status: 200,
@@ -166,42 +161,38 @@ test('所属对话展示真实Agent活动，不把内部计划字段当作用户
   await page.goto('/chat');
   await page.locator('#chat-input').fill('分析 AAPL 新闻');
   await page.getByTestId('chat-send-btn').click();
-  await openExecutionPanel(page);
+  await openResearchProcess(page);
 
   await expect(page.locator('.tool-activity-row').filter({ hasText: '新闻分析师' })).toBeVisible();
-  await expect(page.getByText('计划摘要')).toHaveCount(0);
+  await expect(page.getByText('fixture-internal-detail')).toHaveCount(0);
   await expect(page.getByTestId('context-tab-execution')).toHaveCount(0);
 });
 
-test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) => {
+test('traceRawEnabled=false 时仍可见真实工具活动', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('finsight-trace-raw-enabled', 'false');
   });
 
   await page.route('**/api/execute', async (route) => {
+    const request = route.request().postDataJSON();
     const frames = [
-      { type: 'pipeline_stage', stage: 'planning', status: 'start', message: 'Planner started' },
-      {
-        type: 'plan_ready',
-        plan_steps: [{ id: 's1', kind: 'agent', name: 'news_agent', optional: false }],
-        selected_agents: ['news_agent'],
-        skipped_agents: ['macro_agent'],
-        has_parallel: false,
-        reasoning_brief: 'Planner selected one agent.',
-      },
-      { type: 'pipeline_stage', stage: 'planning', status: 'done', message: 'Planner completed' },
-      { type: 'pipeline_stage', stage: 'executing', status: 'start', message: 'Executor started' },
-      {
-        type: 'decision_note',
-        scope: 'planner',
-        title: 'Planner selection summary',
-        reason: 'macro agent skipped due scope',
-      },
-      { type: 'pipeline_stage', stage: 'executing', status: 'done', message: 'Executor completed' },
-      { type: 'done', response: 'ok' },
+      { type: 'agent.started', agent_id: 'news-worker', payload: {
+        role: 'news_agent', agent_label: '新闻分析师', task: '核实AAPL新闻', status: 'running', internal_diagnostic: 'fixture-internal-detail',
+      } },
+      { type: 'tool.started', agent_id: 'news-worker', payload: {
+        name: 'get_company_news', tool_call_id: 'news-read', display: { title: '读取公司新闻', target: 'AAPL' },
+      } },
+      { type: 'tool.result', agent_id: 'news-worker', payload: {
+        name: 'get_company_news', tool_call_id: 'news-read', status: 'ok',
+        display: { title: '读取公司新闻', target: 'AAPL', status: 'ok', result: '已取得公司报道' },
+      } },
+      { type: 'agent.finished', agent_id: 'news-worker', payload: {
+        role: 'news_agent', agent_label: '新闻分析师', status: 'completed', summary: '新闻分析已完成',
+      } },
+      { type: 'done', response: 'ok', run_status: 'completed' },
     ];
     const body = frames
-      .map((frame) => `data: ${JSON.stringify({ ...frame, run_id: 'e2e-trace-summary' })}\n\n`)
+      .map((frame, index) => `data: ${JSON.stringify({ ...frame, schema_version: frame.type === 'done' ? undefined : '2', run_id: request.run_id, session_id: request.session_id, seq: index + 1, stream_epoch: 'trace-v2' })}\n\n`)
       .join('');
     await route.fulfill({
       status: 200,
@@ -214,6 +205,15 @@ test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) =>
   await page.locator('#chat-input').fill('分析 AAPL 新闻');
   await page.getByTestId('chat-send-btn').click();
   await expect(page.getByText('ok', { exact: true })).toBeVisible();
-  await expect(page.getByText('Planner selection summary')).toHaveCount(0);
-  await expect(page.getByText('Planner selected one agent.')).toHaveCount(0);
+  await openResearchProcess(page);
+  const agentRow = page.locator('.tool-activity-row').filter({ hasText: '新闻分析师' });
+  await expect(agentRow).toBeVisible();
+  if (await agentRow.locator('..').getAttribute('open') === null) await agentRow.click();
+  await expect(page.locator('.tool-activity-row').filter({ hasText: '读取公司新闻' })).toBeVisible();
+  await expect(page.getByText('fixture-internal-detail')).toHaveCount(0);
+  expect(await page.evaluate(async () => {
+    const path = '/src/store/useStore.ts';
+    const { useStore } = await import(path);
+    return { rawEnabled: useStore.getState().traceRawEnabled, rawCount: useStore.getState().rawEvents.length };
+  })).toEqual({ rawEnabled: false, rawCount: 0 });
 });

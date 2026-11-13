@@ -11,7 +11,6 @@ import {
   Target,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { isAxiosError } from 'axios';
 
 import type { PredictionHistoryItem, PredictionStatBucket } from '../api/domains/predictions';
 import { ReportView } from '../components/report';
@@ -22,6 +21,11 @@ import { getEffectivePredictionStatus, getPredictionDirectionPresentation } from
 import { buildPredictionDashboardUrl } from '../components/chatChartIntent';
 import { ConversationHistoryPanel } from '../components/chat/ConversationHistoryPanel';
 import { sourceDisplayName } from '../utils/sourceDisplayName';
+import { EvidenceSources } from '../components/source/EvidenceSources';
+import { researchFailure, researchFailureMessage } from '../utils/researchFailure';
+import { useStore } from '../store/useStore';
+import { zh } from '../locales/zh';
+import type { ReportIR } from '../types';
 
 type HistoryTab = 'conversations' | 'predictions' | 'reports';
 
@@ -191,6 +195,10 @@ function PredictionDetail({ item }: { item: PredictionHistoryItem | null }) {
         </section>
       </div>
 
+      {(prediction.evidence_provider || run?.market_provider || prediction.evidence_as_of || run?.market_as_of) &&
+        <EvidenceSources sources={[{ source: prediction.evidence_provider || run?.market_provider || undefined,
+          as_of: prediction.evidence_as_of || run?.market_as_of || undefined, title: `${prediction.symbol} 行情资料` }]} />}
+
       {prediction.scenarios.length > 0 ? (
         <section className="mt-7 border-t border-t-divider pt-6">
           <h3 className="text-sm font-semibold text-t-text">情景与失效条件</h3>
@@ -239,7 +247,7 @@ function PredictionHistoryPanel() {
 
       {failure ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-t-down/10 px-4 py-3 text-sm text-t-down" role="alert">
-          <span className="min-w-0 break-words">{failure.message}</span>
+          <span className="min-w-0 break-words">{researchFailureMessage({ error_code: failure.code })}</span>
           <button type="button" onClick={refresh} className="inline-flex min-h-9 shrink-0 items-center gap-2"><RefreshCw size={15} />重试</button>
         </div>
       ) : null}
@@ -248,7 +256,7 @@ function PredictionHistoryPanel() {
         <div className="overflow-y-auto border-t-divider max-lg:max-h-80 max-lg:border-b lg:min-h-0 lg:border-r">
           {loading ? (
             <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在加载…</div>
-          ) : items.length === 0 ? (
+          ) : items.length === 0 && !failure ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-t-text2">
               <Target size={24} className="text-t-text3" />
               还没有 AI 判断记录。
@@ -262,7 +270,7 @@ function PredictionHistoryPanel() {
             />
           ))}
         </div>
-        <PredictionDetail key={selected?.prediction.prediction_id ?? 'empty'} item={selected} />
+        {(selected || !failure) && <PredictionDetail key={selected?.prediction.prediction_id ?? 'empty'} item={selected} />}
       </div>
     </div>
   );
@@ -278,11 +286,9 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
   const items = effectiveFilter ? accountItems.filter((item) => item.session_id === effectiveFilter) : accountItems;
   const effectiveId = items.some((item) => item.report_id === selectedId) ? selectedId : items[0]?.report_id ?? null;
   const detailQuery = useReportDetail(effectiveId);
-  const report = detailQuery.data?.report ?? null;
+  const report: ReportIR | null = detailQuery.data?.report ?? null;
   const error = listQuery.error ?? detailQuery.error;
-  const errorMessage = isAxiosError(error)
-    ? typeof error.response?.data?.detail === 'string' ? error.response.data.detail : '报告没加载出来，稍后再试一次。'
-    : error instanceof Error ? error.message : '报告没加载出来，稍后再试一次。';
+  const failure = researchFailure(error, zh.history.reportsFailed);
   const loadingList = listQuery.isLoading;
   const loadingReport = detailQuery.isLoading;
   const refresh = () => {
@@ -299,8 +305,10 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
     <div className="flex shrink-0 flex-col gap-5 lg:min-h-0 lg:flex-1">
       {error ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-t-down/10 px-4 py-3 text-sm text-t-down" role="alert">
-          <span className="min-w-0 break-words">{errorMessage}</span>
-          <button type="button" onClick={refresh} className="inline-flex min-h-9 shrink-0 items-center gap-2"><RefreshCw size={15} />重试</button>
+          <span className="min-w-0 break-words">{researchFailureMessage(error, zh.history.reportsFailed)}
+            {failure.diagnostic && <details className="mt-1 text-xs text-t-text3"><summary>诊断详情</summary><pre className="whitespace-pre-wrap break-words">{failure.diagnostic}</pre></details>}
+          </span>
+          {failure.retryable && <button type="button" onClick={refresh} className="inline-flex min-h-9 shrink-0 items-center gap-2"><RefreshCw size={15} />重试</button>}
         </div>
       ) : null}
 
@@ -316,7 +324,7 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
         <div className="overflow-y-auto border-t-divider max-lg:max-h-80 max-lg:border-b lg:min-h-0 lg:border-r">
           {loadingList ? (
             <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在加载…</div>
-          ) : items.length === 0 ? (
+          ) : items.length === 0 && !error ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-t-text2">
               <FileText size={24} className="text-t-text3" />
               还没有研究报告。
@@ -364,10 +372,12 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
                 </button>
               </div>
               <ReportView report={report} readOnly />
+              {report.citations?.length > 0 && <EvidenceSources sources={report.citations.map((citation) => ({ ...citation,
+                confidence: citation.confidence ?? undefined, as_of: citation.published_date }))} />}
             </div>
-          ) : (
+          ) : !error ? (
             <div className="flex min-h-56 items-center justify-center text-sm text-t-text2">点左边任意一份报告查看内容。</div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -375,6 +385,7 @@ function ReportsHistoryPanel({ initialReportId }: { initialReportId: string | nu
 }
 
 export function HistoryPage() {
+  const owner = useStore((state) => state.authIdentity?.userId);
   const [searchParams] = useSearchParams();
   const reportId = searchParams.get('report')?.trim() || null;
   const [tab, setTab] = useState<HistoryTab>(reportId ? 'reports' : searchParams.get('view') === 'predictions' ? 'predictions' : 'conversations');
@@ -382,6 +393,8 @@ export function HistoryPage() {
   useEffect(() => {
     if (reportId) setTab('reports');
   }, [reportId]);
+
+  if (!owner) return <main className="design-empty" data-testid="history-login">{zh.history.login}</main>;
 
   return (
     <main className="flex h-full min-h-0 flex-col bg-t-bg" data-testid="history-page">
@@ -404,7 +417,7 @@ export function HistoryPage() {
               onClick={() => setTab('predictions')}
               className={`inline-flex min-h-9 items-center gap-2 rounded px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent ${tab === 'predictions' ? 'bg-t-hover font-medium text-t-text' : 'text-t-text2 hover:text-t-text'}`}
             >
-              <Target size={15} /> AI 判断
+              <Target size={15} /> {zh.history.predictions}
             </button>
             <button
               type="button"

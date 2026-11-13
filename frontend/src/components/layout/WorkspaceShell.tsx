@@ -11,7 +11,6 @@ import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import { HistoryWorkspace } from './HistoryWorkspace';
 import { TodayPage } from '../../pages/TodayPage';
-import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
 import { ApplicationUpdateBanner } from '../common/ApplicationUpdateBanner';
 import { useWorkspaceHealth } from '../../hooks/useWorkspaceHealth';
@@ -180,7 +179,6 @@ export function WorkspaceShell({
       <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden max-lg:ml-14">
         <ApplicationUpdateBanner />
         {view === 'today' && <div className="mx-3 mt-3 shrink-0"><AiDisclaimer variant="banner" /></div>}
-        {view === 'today' && <ExecutionBanner />}
         {workspaceHealth && workspaceHealth.state !== 'ok' ? (
           <details data-testid="workspace-health-banner" open={workspaceHealth.state === 'unreachable'}
             className={'mx-3 mt-2 shrink-0 rounded-lg border px-3 py-1.5 text-xs ' + (workspaceHealth.state === 'unreachable'

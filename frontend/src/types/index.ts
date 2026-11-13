@@ -152,6 +152,7 @@ export interface QueryCoverage {
 }
 
 export interface ChatRequestSnapshot {
+  reviewRevision?: import('./runtime').ReviewRevisionRequest;
   query: string;
   outputMode: 'chat' | 'investment_report';
   resumeFromRunId?: string;
@@ -162,6 +163,7 @@ export interface ChatRequestSnapshot {
 }
 
 export interface Message {
+  reviewRevision?: import('./runtime').ReviewRevisionRequest;
   priceLevels?: ResearchPriceLevel[];
   blocks?: ResearchBlock[];
   runStatus?: string;

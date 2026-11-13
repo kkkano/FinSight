@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PredictionHistoryItem, PredictionStatsResponse } from '../api/domains/predictions';
+import { useStore } from '../store/useStore';
 import { HistoryPage } from './HistoryPage';
 import { formatPercentagePoints, formatRatioPercent } from './historyFormatting';
 
@@ -11,6 +12,12 @@ const history = vi.hoisted(() => ({
   stats: null as PredictionStatsResponse['stats'] | null,
   loading: false,
 }));
+
+vi.mock('../store/useStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/useStore')>();
+  return { ...actual, useStore: Object.assign((selector?: (state: ReturnType<typeof actual.useStore.getState>) => unknown) =>
+    selector ? selector(actual.useStore.getState()) : actual.useStore.getState(), actual.useStore) };
+});
 
 vi.mock('../hooks/usePredictionHistory', () => ({
   usePredictionHistory: () => ({ ...history, failure: null, refresh: vi.fn() }),
@@ -27,6 +34,7 @@ function renderHistory(path = '/history') {
 
 describe('History 页面', () => {
   beforeEach(() => {
+    useStore.setState({authIdentity:{userId:'history-test',email:null}});
     history.items = [];
     history.stats = null;
     history.loading = false;
@@ -36,7 +44,7 @@ describe('History 页面', () => {
     const html = renderHistory();
 
     expect(html).toContain('历史记录');
-    expect(html).toContain('AI 判断');
+    expect(html).toContain('对话判断');
     expect(html).toContain('研究报告');
     expect(html).toContain('搜索对话');
     expect(html).toContain('全部状态');

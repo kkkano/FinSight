@@ -8,6 +8,8 @@ import { useStore } from '../../store/useStore';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
+import { zh } from '../../locales/zh';
+import { researchFailureMessage } from '../../utils/researchFailure';
 
 const selectClassName = 'w-full bg-fin-bg border border-fin-border rounded-lg px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none';
 
@@ -174,7 +176,8 @@ export function ModelSettings() {
       if (supported) setTestedSignature(signature);
       setStatus({ success: supported,
         message: supported ? `原生工具调用测试通过 · ${Math.round(result.latency_ms)} ms，可应用此模型。`
-          : result.message || '未通过原生工具调用测试，请更换模型或检查端点配置。',
+          : result.capability_status === 'unsupported' ? zh.chat.unsupportedModel
+            : researchFailureMessage({error_code:'model_unavailable'}),
       });
     } catch (error) {
       if (version !== testVersion.current) return;
@@ -289,7 +292,7 @@ export function ModelSettings() {
           <p className="text-xs text-fin-muted leading-relaxed">
             密钥仅保存在当前页面内存中；测试和使用时会发送至 FinSight 后端以调用你的服务。刷新页面后需重新填写并测试。
           </p>
-          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-fin-text-secondary">
+          <div className="space-y-2 rounded-lg border border-fin-warning/30 bg-fin-warning/5 p-3 text-xs leading-relaxed text-fin-text-secondary">
             <p>应用后，FinSight 会将你的问题、附图、系统提示词和检索到的相关资料（可能包括付费数据）发送到上方 API 地址，由该外部服务处理。连接测试只发送固定测试消息。</p>
             <label className="flex items-start gap-2">
               <input type="checkbox" checked={contextAcknowledged} disabled={testing || !isAuthenticated}
@@ -318,7 +321,9 @@ export function ModelSettings() {
         </div>
       ) : null}
 
-      {capabilitiesLoading && source === 'custom' ? <p className="text-xs text-fin-muted" role="status">正在读取模型能力…</p> : (
+      {selectedCapabilities?.native_tool_calls === false || selectedCapabilities?.capability_status === 'unsupported'
+        ? <p className="text-xs text-fin-danger" role="alert">{zh.chat.unsupportedModel}</p> : null}
+      {capabilitiesLoading && source === 'custom' ? <p className="text-xs text-fin-muted" role="status">{zh.chat.checkingModel}</p> : (
         effortOptions.length ? (
           <label className="block space-y-1 text-xs text-fin-muted">
             <span>推理强度</span>

@@ -11,7 +11,8 @@ const fetchDashboard = async (symbol: string, signal?: AbortSignal): Promise<Das
   const response = await fetch(buildApiUrl(`/api/dashboard?symbol=${encodeURIComponent(symbol)}`), { signal });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.detail?.message || payload?.message || `HTTP ${response.status}`);
+    const error = new Error(payload?.detail?.message || payload?.message || `HTTP ${response.status}`);
+    throw Object.assign(error, { status: response.status, error_code: payload?.detail?.error_code || payload?.detail?.code || payload?.error_code });
   }
   return response.json() as Promise<DashboardResponse>;
 };
@@ -32,7 +33,7 @@ export function useDashboardData(symbol: string | null, enabled = true) {
     refetch, dashboardData: query.data?.data ?? null,
     capabilities: query.data?.state.capabilities ?? null,
     asset: query.data?.state.active_asset ?? null,
-    isLoading: query.isFetching, error: query.error instanceof Error ? query.error.message : null,
+    isLoading: query.isFetching, error: query.error,
   };
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { MessageSquare, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, type ConversationSummary } from '../../store/useStore';
@@ -13,9 +13,9 @@ export function ConversationHistoryPanel() {
   const [status, setStatus] = useState('');
   const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
   const tickers = [...new Set(conversations.flatMap((item) => item.tickers ?? []))].sort();
-  const groups = useMemo(() => groupConversations(conversations.filter((item) =>
+  const groups = groupConversations(conversations.filter((item) =>
     (!query || `${item.title} ${item.lastMessagePreview} ${(item.tickers ?? []).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
-    && (!ticker || item.tickers?.includes(ticker)) && (!status || conversationStatus(item).value === status))), [conversations, query, ticker, status]);
+    && (!ticker || item.tickers?.includes(ticker)) && (!status || conversationStatus(item).value === status)));
   const control = 'h-9 rounded-lg border border-t-border bg-t-surface px-3 text-sm text-t-text2';
   return <section className="mx-auto w-full max-w-5xl">
     <div className="mb-6 flex flex-wrap items-center gap-3">

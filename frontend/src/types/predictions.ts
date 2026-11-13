@@ -92,6 +92,7 @@ export interface PredictionTrackRecord {
     has_more: boolean;
   };
   metadata: {
+    window_days?: number | null;
     source: string;
     horizon_sessions: number;
     direction_threshold: number;

@@ -17,6 +17,7 @@ export default {
           hover: 'rgb(var(--t-hover-rgb) / <alpha-value>)', text: 'var(--t-text)', text2: 'var(--t-text-2)', text3: 'var(--t-text-3)',
           accent: 'rgb(var(--t-accent) / <alpha-value>)', 'accent-hi': 'var(--t-accent-hi)',
           up: 'rgb(var(--t-up-rgb) / <alpha-value>)', down: 'rgb(var(--t-down-rgb) / <alpha-value>)',
+          success: 'rgb(var(--t-success-rgb) / <alpha-value>)', error: 'rgb(var(--t-error-rgb) / <alpha-value>)',
           warning: 'rgb(var(--t-warning-rgb) / <alpha-value>)', info: 'rgb(var(--t-info-rgb) / <alpha-value>)',
           predict: 'rgb(var(--t-predict-rgb) / <alpha-value>)',
         },
@@ -31,8 +32,8 @@ export default {
           'text-secondary': 'var(--fin-text-secondary)',
           muted: 'var(--fin-muted)',
           primary: 'rgb(var(--fin-primary) / <alpha-value>)',
-          success: 'rgb(var(--t-up-rgb) / <alpha-value>)',
-          danger: 'rgb(var(--t-down-rgb) / <alpha-value>)',
+          success: 'rgb(var(--t-success-rgb) / <alpha-value>)',
+          danger: 'rgb(var(--t-error-rgb) / <alpha-value>)',
           warning: 'rgb(var(--t-warning-rgb) / <alpha-value>)',
           predict: 'rgb(var(--t-predict-rgb) / <alpha-value>)',
         },
@@ -42,8 +43,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['-apple-system', '"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono Variable"', 'JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        sans: ['Geist Variable', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono Variable', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',

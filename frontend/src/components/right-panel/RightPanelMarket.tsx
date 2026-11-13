@@ -87,10 +87,10 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
     return rows.slice(rows.length - selected.labels.length);
   }, [rows, range]);
   const ma20 = useMemo(() => movingAverage20(rows).slice(rows.length - visible.length), [rows, visible.length]);
-  const earningsDates = ((dashboardData as unknown as { event_calendar?: Array<{ date?: string; type?: string }> })?.event_calendar ?? [])
-    .filter((event) => event.type === 'earnings' && event.date).map((event) => event.date!);
+  const earningsDates = useMemo(() => ((dashboardData as unknown as { event_calendar?: Array<{ date?: string; type?: string }> })?.event_calendar ?? [])
+    .filter((event) => event.type === 'earnings' && event.date).map((event) => event.date!), [dashboardData]);
   const chart = useMemo(() => buildContextChart(visible, { line, dark, convention, priceLevels, ma20, earningsDates }),
-    [visible, line, dark, convention, priceLevels, ma20, earningsDates.join(',')]);
+    [visible, line, dark, convention, priceLevels, ma20, earningsDates]);
   const last = rows.at(-1);
   const previous = rows.at(-2);
   const currentPrice = quote.price ?? last?.close;

@@ -37,8 +37,8 @@ interface SummaryResult {
 // --- Helpers ---
 
 const VERDICT_STYLES: Record<TechVerdict, { bg: string; text: string }> = {
-  bullish: { bg: 'bg-fin-success/10', text: 'text-fin-success' },
-  bearish: { bg: 'bg-fin-danger/10', text: 'text-fin-danger' },
+  bullish: { bg: 'bg-t-up/10', text: 'text-t-up' },
+  bearish: { bg: 'bg-t-down/10', text: 'text-t-down' },
   neutral: { bg: 'bg-fin-warning/10', text: 'text-fin-warning' },
 };
 const TREND_LABELS: Record<string, string> = { bullish: '上行', bearish: '下行', neutral: '横盘' };
@@ -146,8 +146,8 @@ export function TechnicalSummaryCard({ technicals }: TechnicalSummaryCardProps) 
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3 text-2xs">
-            <span className="text-fin-success">偏多 {summary.counts.buy}</span>
-            <span className="text-fin-danger">偏空 {summary.counts.sell}</span>
+            <span className="text-t-up">偏多 {summary.counts.buy}</span>
+            <span className="text-t-down">偏空 {summary.counts.sell}</span>
             <span className="text-fin-warning">中性: {summary.counts.neutral}</span>
           </div>
           <div className="text-2xs text-fin-muted">

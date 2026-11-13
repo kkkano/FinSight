@@ -1,7 +1,7 @@
 type ChatLoadingState = { isChatLoading: boolean };
 
 export const MESSAGE_ACTION_LABELS = {
-  retry: '重试回答',
+  retry: '重新研究',
   export: '导出回答',
   delete: '删除回答',
 } as const;
@@ -27,7 +27,7 @@ export async function copyTextWithFeedback(
 }
 
 export function messageActionContainerClass(inline: boolean = false): string {
-  const base = 'flex items-center gap-1 text-fin-muted pointer-events-auto';
+  const base = 'flex flex-wrap items-center gap-1 text-fin-muted pointer-events-auto';
   if (!inline) return `${base} absolute bottom-0 right-2 translate-y-full`;
   return `${base} mt-4 opacity-0 group-hover/msg:opacity-100 focus-within:opacity-100 max-lg:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity duration-200`;
 }

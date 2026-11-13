@@ -8,13 +8,15 @@ import { usePngAttachments } from '../hooks/usePngAttachments';
 import { MAX_PNG_ATTACHMENTS } from '../utils/pngAttachments';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { zh } from '../locales/zh';
+import { researchFailureMessage } from '../store/researchStream';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import { useModelSelectionStore } from '../store/modelSelection';
 import { TICKER_PATTERN } from '../utils/ticker';
 import { AiDisclaimer } from './common/AiDisclaimer';
 import { buildChatSuggestions } from './chatSuggestions';
-import { SelectedSkills, SkillPicker, useSkillPicker } from './chat/SkillPicker';
+import { SelectedSkills, SkillPicker } from "./chat/SkillPicker";
+import { useSkillPicker } from "./chat/SkillPicker.utils";
 import { hasUnselectedSkillCommand, removeSkillCommand } from '../utils/skillCommands';
 import type { ResearchSkill } from '../types/runtime';
 import styles from './chat/ChatDesign.module.css';
@@ -154,8 +156,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   return (
     <div className={`chat-composer ${styles.composerOuter}`}>
       {!skills.open && <SelectedSkills skills={skills.selected} onRemove={skills.remove} />}
-      {unsupportedModel && <p className="mx-auto mb-2 max-w-[760px] text-sm text-fin-danger" role="alert">当前模型不支持工具调用，请换一个模型再试。</p>}
-      {png.error && <p className="mx-auto mb-2 max-w-[760px] text-sm text-fin-danger" role="alert">{png.error}</p>}
+      {unsupportedModel && <div className="mx-auto mb-2 max-w-[760px] text-sm text-fin-danger" role="alert">
+        <span>{zh.chat.unsupportedModel}</span><ModelPickerButton label={zh.chat.changeModel} />
+      </div>}
+      {png.error && <p className="mx-auto mb-2 max-w-[760px] text-sm text-fin-danger" role="alert">{researchFailureMessage({ error_code: png.errorCode })}</p>}
       {png.attachments.length > 0 && <div className="mx-auto mb-3 max-w-[760px]" data-testid="chat-image-attachments">
         <div className="flex flex-wrap gap-3">{png.attachments.map((attachment) => <div key={attachment.id} className="relative rounded-lg border border-t-border bg-t-card p-1.5">
           <img src={attachment.data_url} alt={'附件：' + attachment.name} className="h-20 w-24 rounded object-contain" />

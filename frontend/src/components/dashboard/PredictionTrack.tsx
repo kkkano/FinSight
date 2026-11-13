@@ -19,6 +19,9 @@ import type {
 import type { PredictionOverlayLoadState } from '../../hooks/usePredictionOverlay';
 import type { PredictionEligibility } from '../../hooks/usePredictionEligibility';
 import { getEffectivePredictionStatus, getPredictionDirectionPresentation } from '../../utils/predictionPresentation';
+import { sourceDisplayName } from '../../utils/sourceDisplayName';
+import { zh } from '../../locales/zh';
+import { researchFailureMessage } from '../../utils/researchFailure';
 
 type PredictionTrackProps = {
   authenticated: boolean;
@@ -118,18 +121,15 @@ export function PredictionTrack({
   const status = getEffectivePredictionStatus(prediction?.status, outcome?.status);
   const meaning = prediction ? getPredictionDirectionPresentation(prediction.direction, status) : null;
 
-  const generationMessage = generationPhase === 'submitting'
-    ? '正在创建生成任务...'
-    : generationPhase === 'polling'
-      ? generationRun?.status === 'queued' ? '任务已排队，等待分析...' : '正在读取证据并生成判断...'
-      : generationFailure?.message ?? null;
+  const generationMessage = isGenerating ? zh.predictions.generating
+    : generationPhase === 'succeeded' ? zh.predictions.generated : generationFailure ? researchFailureMessage({error_code:generationFailure.code}) : null;
 
   const emptyMessage = !authenticated
     ? '登录后才能生成和读取个人 AI 判断。'
     : loadState.failure
-      ? loadState.failure.message
+      ? researchFailureMessage({error_code:loadState.failure.code})
       : eligibility.status === 'checking'
-      ? '正在校验行情来源...'
+      ? '尚未生成 AI 判断。'
       : eligibility.status === 'degraded' || eligibility.status === 'unavailable'
         ? eligibility.reason
         : loadState.status === 'loading'
@@ -173,7 +173,7 @@ export function PredictionTrack({
           <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
         </summary>
         <div className="mt-2 flex flex-wrap items-start gap-x-5 gap-y-2 break-words leading-5">
-          <span className="inline-flex items-center gap-1"><Database size={13} className="shrink-0" />行情 {prediction.evidence_provider || eligibility.provider || '--'}</span>
+          <span className="inline-flex items-center gap-1"><Database size={13} className="shrink-0" />行情 {sourceDisplayName(prediction.evidence_provider || eligibility.provider)}</span>
           <span className="inline-flex items-center gap-1"><Clock3 size={13} className="shrink-0" />证据 {formatDateTime(prediction.evidence_as_of || eligibility.asOf)}</span>
           <span>模型 {run?.llm_provider && run?.llm_model ? `${run.llm_provider} / ${run.llm_model}` : '--'}</span>
           <span>提示版本 {prediction.prompt_version}</span>
@@ -203,7 +203,7 @@ export function PredictionTrack({
               </span>
             )}
             {prediction && (
-              <span className="text-xs text-t-text2">
+              <span className="text-xs text-t-text2" title={zh.predictions.confidence}>
                 {meaning?.historical ? '已结束' : `模型自报置信度 ${formatConfidence(prediction.confidence)}`} · {STATUS_LABELS[status || ''] || status}
               </span>
             )}
@@ -213,7 +213,7 @@ export function PredictionTrack({
 
           {prediction ? (
             <>
-              <p className="mt-2 text-xs leading-5 text-t-text3">生成于 {formatDateTime(prediction.created_at)}{meaning?.historical ? ' · 历史结果，当前没有新的有效 AI 判断' : ` · 证据截至 ${formatDateTime(prediction.evidence_as_of)}`}</p>
+              <p className="mt-2 text-xs leading-5 text-t-text3">{sourceDisplayName(prediction.evidence_provider || run?.market_provider)} · 生成于 {formatDateTime(prediction.created_at)}{meaning?.historical ? ' · 历史结果，当前没有新的有效 AI 判断' : ` · 证据截至 ${formatDateTime(prediction.evidence_as_of)}`}</p>
               {meaning?.historical ? <details className="mt-2" data-testid="prediction-archived">
                 <summary className="cursor-pointer py-2 text-sm text-t-text2">历史判断与价位</summary>
                 {judgmentContent}
@@ -233,7 +233,7 @@ export function PredictionTrack({
           {prediction && generationMessage && (
             <div className={`mt-3 text-sm leading-6 ${generationFailure ? 'text-t-warning' : 'text-t-predict'}`} role="status">
               {generationMessage}
-              {generationFailure ? ` [${generationFailure.code}]` : ''}
+              {generationFailure && <details className="mt-1 text-xs text-t-text3"><summary>诊断详情</summary>{generationFailure.code}</details>}
             </div>
           )}
         </div>

@@ -8,21 +8,23 @@ import { useStore } from '../../store/useStore';
 import { formatPercentagePoints, formatRatioPercent } from '../../pages/historyFormatting';
 import { getPredictionDirectionPresentation, isTerminalPredictionStatus } from '../../utils/predictionPresentation';
 import { BenchmarkTrackRecordView } from '../track-record/BenchmarkTrackRecord';
+import { zh } from '../../locales/zh';
+import { researchFailureMessage } from '../../utils/researchFailure';
 import { PERSONAL_OUTCOME_LABELS, PERSONAL_PAGE_SIZE, formatPersonalPrice, formatPersonalTime, loadPersonalPredictionPage } from './personalTrackRecord';
 
 type TrackRecordView = 'personal' | 'us20';
 type DirectionFilter = 'long' | 'short' | 'neutral' | '';
 const controlClass = 'min-h-10 rounded-md border border-t-border bg-t-surface px-3 text-sm text-t-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent disabled:opacity-40';
 
-function Stats({ stats }: { stats: PredictionStatBucket | null }) {
-  return <dl className="grid grid-cols-2 gap-x-5 gap-y-4 border-b border-t-divider py-5" aria-label="90 天我的判断统计">
+export function Stats({ stats, days }: { stats: PredictionStatBucket | null; days?: number }) {
+  return <dl className="grid grid-cols-2 gap-x-5 gap-y-4 border-b border-t-divider py-5" aria-label={`${days ? zh.trackRecord.window(days) : zh.trackRecord.unknownWindow}我的判断统计`}>
     {[
       ['AI 判断', stats ? String(stats.predictions) : '--'],
       ['已结算', stats ? String(stats.resolved) : '--'],
       ['命中率', stats && stats.resolved > 0 ? formatRatioPercent(stats.hit_rate) : '--'],
       ['已失效', stats ? String(stats.invalidated) : '--'],
-    ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-t-text3">{label}</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-t-text">{value}</dd></div>)}
-    <div className="col-span-2"><dt className="sr-only">样本范围</dt><dd className="text-xs leading-5 text-t-text3">{stats ? stats.resolved > 0 ? `${stats.hits} 命中 · ${stats.misses} 未命中` : '暂无已结算样本，命中率保留为空。' : '统计尚未读取，命中率保留为空。'}仅统计最近 90 天的 AI 判断，与 US20 固定样本独立。</dd></div>
+    ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-t-text3">{label}</dt><dd className="design-caption">{zh.trackRecord.sample(days ? zh.trackRecord.window(days) : zh.trackRecord.unknownWindow,stats?.resolved ?? null)}</dd><dd className="mt-1 text-xl font-semibold tabular-nums text-t-text">{value}</dd></div>)}
+    <div className="col-span-2"><dt className="sr-only">样本范围</dt><dd className="text-xs leading-5 text-t-text3">{stats ? stats.resolved > 0 ? `${stats.hits} 命中 · ${stats.misses} 未命中` : '暂无已结算样本，命中率保留为空。' : '统计尚未读取，命中率保留为空。'}仅统计 AI 判断，与公开定时预测独立。</dd></div>
   </dl>;
 }
 
@@ -78,7 +80,7 @@ export function PersonalPredictionDetail({ item }: { item: PredictionHistoryItem
           ['生成来源', prediction.source_type === 'ai' ? 'AI 判断' : '手动判断'],
         ].map(([label, value]) => <div key={label}><dt className="text-xs text-t-text3">{label}</dt><dd className="mt-1 text-t-text2">{value}</dd></div>)}
       </dl>
-      {run?.failure_code ? <p className="mt-3 break-words text-xs leading-5 text-t-down">生成失败：{run.failure_detail || run.failure_code}</p> : null}
+      {run?.failure_code ? <p className="mt-3 break-words text-xs leading-5 text-t-down">生成失败：{researchFailureMessage({error_code:run.failure_code})}</p> : null}
     </section>
     {prediction.scenarios.length ? <section className="border-t border-t-divider py-5">
       <h4 className="text-sm font-semibold text-t-text">情景与失效条件</h4>
@@ -144,10 +146,10 @@ export function PersonalTrackRecordView({ symbol }: { symbol?: string }) {
 
   return <div ref={contentRef} className="min-w-0" data-testid="personal-track-record">
     <div className="flex flex-wrap items-start justify-between gap-3 pb-4">
-      <div><h2 className="text-base font-semibold text-t-text">我的判断</h2><p className="mt-1 text-xs leading-5 text-t-text3">{filterSymbol || '全部标的'} · 仅自己的记录</p></div>
+      <div><h2 className="text-base font-semibold text-t-text">{zh.trackRecord.personal}</h2><p className="mt-1 text-xs leading-5 text-t-text3">{filterSymbol || '全部标的'} · 仅自己的记录</p></div>
       <button type="button" aria-label="刷新我的判断" title="刷新我的判断" className={controlClass} onClick={refresh} disabled={loading}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
     </div>
-    {failure ? <div role="alert" className="pb-4 text-sm leading-6 text-t-down">{failure.message}{page ? '保留上次加载的记录。' : ''}</div> : null}
+    {failure ? <div role="alert" className="pb-4 text-sm leading-6 text-t-down">{researchFailureMessage({error_code:failure.code})}{page ? '保留上次加载的记录。' : ''}</div> : null}
     {selected ? <>
       <button type="button" onClick={() => selectRecord(null)} className="mb-4 inline-flex min-h-10 items-center gap-2 text-sm text-t-text2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-t-accent"><ArrowLeft size={16} />返回我的判断</button>
       <PersonalPredictionDetail key={selected.prediction.prediction_id} item={selected} />
@@ -156,7 +158,7 @@ export function PersonalTrackRecordView({ symbol }: { symbol?: string }) {
         <label className="min-w-0 text-xs text-t-text3">标的范围<select aria-label="我的判断标的范围" className={`${controlClass} mt-1 w-full`} value={scope} onChange={(event) => setScope(event.target.value as 'current' | 'all')}><option value="all">全部标的</option><option value="current" disabled={!symbol}>{symbol ? `当前 ${symbol}` : '未选择标的'}</option></select></label>
         <label className="min-w-0 text-xs text-t-text3">原判断方向<select aria-label="我的判断方向筛选" className={`${controlClass} mt-1 w-full`} value={direction} onChange={(event) => setDirection(event.target.value as DirectionFilter)}><option value="">全部方向</option><option value="long">上行假设</option><option value="short">回落假设</option><option value="neutral">区间假设</option></select></label>
       </div>
-      <Stats stats={aiStats} />
+      <Stats stats={aiStats} days={scopedStats?.days} />
       <p className="mt-3 text-xs leading-5 text-t-text3">统计范围：{filterSymbol || '全部标的'}、全部方向、最近 90 天。下方为全部历史明细，方向筛选不改变统计。</p>
       {statsFailure ? <p className="mt-2 text-xs leading-5 text-t-down">统计暂时无法读取。{scopedStats ? '保留上次成功读取的统计。' : '明细仍可独立查看。'}</p> : null}
       {loading && !page ? <p role="status" className="flex items-center gap-2 py-8 text-sm text-t-text2"><RefreshCw size={16} className="animate-spin" />正在读取判断记录…</p> : null}

@@ -3,6 +3,31 @@ import type { Page } from '@playwright/test';
 import { makeEmptyTrackRecordFixture, makePendingTrackRecordFixture, makeTrackRecordFixture } from '../src/pages/trackRecord.fixtures';
 import type { PredictionTrackRecord } from '../src/types/predictions';
 
+test.beforeEach(async ({ page }) => {
+  await page.context().route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    return ['127.0.0.1', 'localhost'].includes(url.hostname) ? route.fallback() : route.abort('blockedbyclient');
+  });
+  await page.context().route('**/sw.js*', (route) => route.fulfill({
+    contentType: 'application/javascript', body: "self.addEventListener('install', () => self.skipWaiting());",
+  }));
+  await page.route('**/src/api/supabaseClient.ts*', (route) => route.fulfill({
+    contentType: 'application/javascript',
+    body: 'export const getSupabaseClient = () => null; export const isSupabaseAuthConfigured = () => false;',
+  }));
+  await page.route('**/api/**', (route) => {
+    if (!new URL(route.request().url()).pathname.startsWith('/api/')) return route.fallback();
+    return route.fulfill({ contentType: 'application/json', body: '{"success":true,"items":[],"models":[],"data":{}}' });
+  });
+  await page.route('**/health', (route) => route.fulfill({ contentType: 'application/json', body: '{"status":"healthy"}' }));
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  const path = testInfo.outputPath('final-state.png');
+  await page.screenshot({ path, fullPage: true });
+  await testInfo.attach('final-state', { path, contentType: 'image/png' });
+});
+
 // 所有返回值都是明确标记的界面测试样本，不代表真实战绩。
 async function mockLedger(page: Page, getData: () => PredictionTrackRecord, fail?: () => boolean) {
   const headers: Array<Record<string, string>> = [];
@@ -33,87 +58,98 @@ test('public empty and pending states require no welcome gate and never invent h
   const headers = await mockLedger(page, () => fixture);
   await page.goto('/track-record');
   await expect(page).toHaveURL(/\/track-record$/);
-  await expect(page.getByRole('heading', { name: 'US20 预测战绩', exact: true })).toBeVisible();
-  await expect(page.getByText('固定采集尚未启用', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('direction-results').getByText('等待首批结算', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('drawdown-results').getByText('等待首批结算', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '预测战绩', exact: true })).toBeVisible();
+  await expect(page.getByText('自动预测暂停中，以前的记录照常可查。', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('direction-results').getByText('等待首批对账', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('drawdown-results').getByText('等待首批对账', { exact: true })).toBeVisible();
   await expect(page.getByText('AI 命中率', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: '返回 FinSight' })).toHaveAttribute('href', '/welcome');
   expect(await page.evaluate(() => sessionStorage.getItem('finsight-welcome-gate-passed'))).toBeNull();
 
   fixture = makePendingTrackRecordFixture();
   await page.getByRole('button', { name: '刷新战绩' }).click();
-  await expect(page.getByTestId('prediction-coverage').getByText('40 / 40', { exact: true })).toBeVisible();
+  const rules = page.locator('summary').filter({ hasText: '统计口径' });
+  await expect(rules).toBeVisible();
+  await rules.click();
+  await expect(page.getByText('实际发布 40 条，应发布 40 条。', { exact: false })).toBeVisible();
   await expect(page.getByTestId('prediction-record-row')).toHaveCount(20);
   await expect(page.getByText('AI 命中率', { exact: true })).toHaveCount(0);
-  await expect(page.getByTestId('prediction-record-row').filter({ hasText: '待结算' })).toHaveCount(20);
-  await page.getByTestId('prediction-record-row').first().click();
-  await expect(page.getByTestId('benchmark-record-detail')).toContainText('尚未产生已核验结果');
+  await expect(page.getByTestId('prediction-record-row').filter({ hasText: '等待对账' })).toHaveCount(20);
+  await page.getByTestId('prediction-record-row').first().getByRole('button').click();
+  await expect(page.getByTestId('benchmark-record-detail')).toContainText('尚未完成对账');
   await expect(page.getByTestId('benchmark-record-detail')).not.toContainText('100.0%');
-  await page.getByRole('button', { name: '返回战绩' }).click();
+  await page.getByTestId('prediction-record-row').first().getByRole('button').click();
   for (const requestHeaders of headers) {
     expect(requestHeaders.authorization).toBeUndefined();
     expect(requestHeaders['x-finsight-model']).toBeUndefined();
   }
+  await page.getByTestId('sidebar-nav-chat').click();
+  await expect(page).toHaveURL(/\/welcome(?:\?|$)/);
 });
 
 test('settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile', async ({ page }, testInfo) => {
   const fixture = makeTrackRecordFixture();
+  // 小样本提示由接口元数据给出阈值，不依赖页面暗含默认值。
+  fixture.metadata.min_sample_size = 30;
   Object.assign(fixture, { endpoint_url: 'https://private-endpoint.fixture', session_id: 'private-session-fixture', raw_reasoning: 'private-raw-thoughts-fixture' });
   await mockLedger(page, () => fixture);
   await page.goto('/track-record');
-  await expect(page.getByText('fixture-us20-v1（测试数据，非真实战绩）', { exact: false }).first()).toBeAttached();
-  await expect(page.getByTestId('prediction-coverage').getByText('36 / 40', { exact: true })).toBeVisible();
+  const rules = page.locator('summary').filter({ hasText: '统计口径' });
+  await expect(rules).toBeVisible();
+  await rules.click();
+  await expect(page.getByText('fixture-固定样本-v1', { exact: false }).first()).toBeVisible();
+  await expect(page.getByText('实际发布 36 条，应发布 40 条。', { exact: false })).toBeVisible();
   const direction = page.getByTestId('direction-results');
   await expect(direction.getByText('25.0%', { exact: true })).toBeVisible();
-  await expect(direction.getByText('75.0%', { exact: true })).toBeVisible();
-  await expect(direction.getByTestId('prediction-baseline-delta').first()).toContainText('-50.0 个百分点');
-  await expect(page.getByTestId('direction-unconfirmed-models')).toContainText('模型身份未确认 · 单独统计');
-  await expect(page.getByText('已结算 n = 4 · 样本不足', { exact: true })).toBeVisible();
+  await expect(direction).toContainText('“永远猜涨”的命中率：75.0%');
+  await expect(direction.getByTestId('prediction-baseline-delta').first()).toContainText('低 50.0 个百分点');
+  await expect(page.getByTestId('direction-unconfirmed-models')).toContainText('模型身份未确认的记录');
+  await expect(direction).toContainText('4 次已对账中猜中 1 次');
+  await expect(direction.getByText('样本还少，先别当真', { exact: true })).toBeVisible();
   const risk = page.getByTestId('drawdown-results');
-  await expect(risk.getByText('60.0%', { exact: true })).toBeVisible();
-  await expect(risk.getByText('80.0%', { exact: true })).toBeVisible();
-  await risk.getByText('预警与漏报明细', { exact: true }).click();
-  await expect(risk).toContainText('实际事件发生率：20.0%（1 / 5）');
-  await expect(risk).toContainText('TP · 正确预警');
-  await expect(risk).toContainText('FP · 误报');
-  await expect(risk).toContainText('TN · 正确排除');
-  await expect(risk).toContainText('FN · 漏报');
+  await expect(risk).toContainText('0 / 1');
+  await expect(risk).toContainText('1 次真实大跌里，提前预警了 0 次');
+  await expect(risk).toContainText('另有 1 次预警了但没跌');
+  const confusion = page.locator('section').filter({ has: page.getByRole('heading', { name: '大跌预警的对错', exact: true }) });
+  for (const [label, count] of [['报对了', 0], ['虚惊', 1], ['正确放过', 3], ['漏报', 1]] as const) {
+    await expect(confusion.locator('.track-record-cell').filter({ has: page.getByText(label, { exact: true }) }).locator('.num')).toHaveText(String(count));
+  }
   const rows = page.getByTestId('prediction-record-row');
   await expect(rows).toHaveCount(20);
-  await page.getByLabel('US20 状态筛选').selectOption('settled');
+  await page.getByLabel('状态筛选', { exact: true }).selectOption('settled');
   await expect(rows).toHaveCount(10);
-  await expect(rows.filter({ hasText: '已结算 · 未命中' })).toHaveCount(6);
+  await expect(rows.filter({ hasText: /没猜中|虚惊|漏报/ })).toHaveCount(6);
   await expect(direction.getByText('25.0%', { exact: true })).toBeVisible();
-  await rows.first().click();
-  await expect(page.getByTestId('benchmark-record-detail')).toContainText('预先判断');
-  await expect(page.getByTestId('benchmark-record-detail')).toContainText('实际结果');
+  await rows.first().getByRole('button').click();
+  await expect(page.getByTestId('benchmark-record-detail')).toContainText('当时的判断');
+  await expect(page.getByTestId('benchmark-record-detail')).toContainText('后来怎么走的');
   await expect(page.getByTestId('benchmark-record-detail')).toContainText('fixture-model-a');
-  await page.getByRole('button', { name: '返回战绩' }).click();
+  await rows.first().getByRole('button').click();
   for (const [status, count] of [['failed', 2], ['awaiting_data', 2], ['missed', 1], ['abstained', 1]] as const) {
-    await page.getByLabel('US20 状态筛选').selectOption(status);
+    await page.getByLabel('状态筛选', { exact: true }).selectOption(status);
     await expect(rows).toHaveCount(count);
   }
-  await page.getByLabel('US20 状态筛选').selectOption('failed');
+  await page.getByLabel('状态筛选', { exact: true }).selectOption('failed');
   await expect(rows).toHaveCount(2);
-  await rows.first().click();
-  await expect(page.getByTestId('benchmark-record-detail')).toContainText('fixture_timeout');
-  await page.getByRole('button', { name: '返回战绩' }).click();
-  await page.getByLabel('US20 状态筛选').selectOption('');
-  await page.getByLabel('US20 标的筛选').selectOption('AAPL');
-  await page.getByLabel('US20 任务筛选').selectOption('drawdown');
+  await expect(rows.first()).toContainText('发布失败，不计入');
+  await rows.first().getByRole('button').click();
+  await expect(page.getByTestId('benchmark-record-detail')).toContainText('这条没法评分');
+  await rows.first().getByRole('button').click();
+  await page.getByLabel('状态筛选', { exact: true }).selectOption('');
+  await page.getByLabel('标的筛选', { exact: true }).selectOption('AAPL');
+  await page.getByLabel('预测类型筛选', { exact: true }).selectOption('drawdown');
   await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText('AAPL · 5 日回撤');
+  await expect(rows.first().getByRole('button', { name: 'AAPL', exact: true })).toBeVisible();
+  await expect(rows.first()).toContainText('大跌预警');
   await expect(direction.getByText('25.0%', { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText('private-endpoint.fixture');
   await expect(page.locator('body')).not.toContainText('private-session-fixture');
   await expect(page.locator('body')).not.toContainText('private-raw-thoughts-fixture');
-  await page.getByRole('heading', { name: 'US20 预测战绩', exact: true }).scrollIntoViewIfNeeded();
+  await page.getByRole('heading', { name: '预测战绩', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('track-record-desktop-fixture.png') });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('heading', { name: 'US20 预测战绩', exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByRole('heading', { name: 'US20 预测战绩', exact: true })).toBeVisible();
+  await page.getByRole('heading', { name: '预测战绩', exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole('heading', { name: '预测战绩', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('track-record-mobile-fixture.png') });
 });
@@ -122,12 +158,12 @@ test('a failed public read offers retry without manufacturing an empty result', 
   let failing = true;
   await mockLedger(page, makeEmptyTrackRecordFixture, () => failing);
   await page.goto('/track-record');
-  await expect(page.getByRole('alert')).toContainText('战绩数据暂时无法读取');
+  await expect(page.getByRole('alert')).toContainText('战绩没加载出来，点刷新再试一次。');
   await expect(page.getByText('已结算 · 成熟样本', { exact: true })).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('fixture-internal-error');
   failing = false;
   await page.getByRole('button', { name: '刷新战绩' }).click();
-  await expect(page.getByText('固定采集尚未启用', { exact: true })).toBeVisible();
+  await expect(page.getByText('自动预测暂停中，以前的记录照常可查。', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -181,20 +217,27 @@ test('pagination reaches older settled fixtures beyond 200 records and retains t
   await expect(page.getByTestId('prediction-record-row').filter({ hasText: '已结算 ·' })).toHaveCount(0);
   await expect(page.getByTestId('direction-results').getByText('25.0%', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '下一页预测明细', exact: true }).click();
-  await expect(page.getByText('读取失败，仍显示上次成功加载的记录。请刷新重试。')).toBeVisible();
+  await expect(page.getByText('刷新失败，下面是上次加载的结果。')).toBeVisible();
   await expect(range).toHaveText('第 1–20 条，共 250 条');
   await expect(page.getByTestId('prediction-record-row')).toHaveCount(20);
+  await expect(page.getByRole('button', { name: '下一页预测明细', exact: true })).toBeEnabled();
 
   for (const offset of Array.from({ length: 12 }, (_, index) => (index + 1) * 20)) {
+    const nextResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/benchmarks/us20-v1/track-record'
+        && url.searchParams.get('offset') === String(offset) && response.status() === 200;
+    }, { timeout: 5000 });
     await page.getByRole('button', { name: '下一页预测明细', exact: true }).click();
+    await nextResponse;
     await expect(range).toHaveText(`第 ${offset + 1}–${Math.min(offset + 20, 250)} 条，共 250 条`);
   }
-  await expect(page.getByTestId('prediction-record-row').filter({ hasText: '已结算 ·' })).toHaveCount(10);
-  await expect(page.getByTestId('prediction-record-row').filter({ hasText: '已结算 · 未命中' })).toHaveCount(6);
+  await expect(page.getByTestId('prediction-record-row').filter({ hasText: /猜中|虚惊|漏报|报对了|正确放过/ })).toHaveCount(10);
+  await expect(page.getByTestId('prediction-record-row').filter({ hasText: /没猜中|虚惊|漏报/ })).toHaveCount(6);
   await expect(page.getByRole('button', { name: '下一页预测明细', exact: true })).toBeDisabled();
-  await page.getByTestId('prediction-record-row').first().click();
+  await page.getByTestId('prediction-record-row').first().getByRole('button').click();
   await expect(page.getByTestId('benchmark-record-detail')).toContainText('较早已结算记录');
-  await page.getByRole('button', { name: '返回战绩' }).click();
+  await page.getByTestId('prediction-record-row').first().getByRole('button').click();
   await page.getByRole('button', { name: '上一页预测明细', exact: true }).click();
   await expect(range).toHaveText('第 221–240 条，共 250 条');
   expect(new Set(offsets)).toEqual(new Set(Array.from({ length: 13 }, (_, index) => index * 20)));

@@ -68,7 +68,7 @@ export default defineConfig({
       workbox: {
         // 刷新必须先取服务器 HTML，不能继续由旧 app shell 启动上一版客户端。
         navigateFallback: null,
-        globIgnores: ['**/app-version.json'],
+        globIgnores: ['**/app-version.json', '**/vendor-echarts-*.js', '**/EChartRuntime-*.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname === '/app-version.json',

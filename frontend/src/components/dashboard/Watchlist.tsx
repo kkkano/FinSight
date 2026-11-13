@@ -315,7 +315,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                       <span className="text-xs font-medium text-fin-text">
                         {hasPrice ? formatMoney(quote.price, quote.currency) : '--'}
                       </span>
-                      <span className={`text-2xs font-medium ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                      <span className={`text-2xs font-medium ${isUp ? 'text-t-up' : 'text-t-down'}`}>
                         {hasPrice ? formatChangePct(quote.changePct) : '--'}
                       </span>
                     </div>

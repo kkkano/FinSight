@@ -40,7 +40,8 @@ describe('WelcomePage', () => {
     expect(text).toContain('先逛逛，行情和战绩不用登录也能看');
     expect(text).toContain('正在加载登录方式');
     expect(text).not.toContain('使用 GitHub 登录');
-    expect(text).toContain('示意');
+    expect(text).toContain('示例');
+    expect(text).not.toContain('示意');
   });
 
   it('does not advertise removed product surfaces', () => {

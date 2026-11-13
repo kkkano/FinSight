@@ -165,6 +165,12 @@ export interface DataSourceMeta {
   observed_at?: string;
   frequency?: string | null;
   error_code?: string | null;
+  delayed?: boolean;
+  delay_minutes?: number | null;
+  estimated?: boolean;
+  time_range?: { start?: string | null; end?: string | null; period?: string | null };
+  data_refs?: string[];
+  data_ref?: string;
   cached?: boolean;
   provider: string;
   source_type: string;

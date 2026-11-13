@@ -34,6 +34,15 @@ const renderHeader = (report: ReportIR, fullscreen: boolean) => renderToStaticMa
 );
 
 describe('报告判断与完整度展示', () => {
+  it('公开只读报告隐藏执行诊断，缺失执行数据不显示零执行', () => {
+    const withExecution = {...partialReport,agent_status:{technical:{status:'success'}}} as ReportIR;
+    const shared = renderReport(withExecution,true);
+    expect(shared).not.toContain('分析执行'); expect(shared).not.toContain('执行详情');
+    expect(shared).not.toContain('DEEP RESEARCH'); expect(shared).not.toContain('Freshness');
+    expect(shared).toContain('深度研究'); expect(shared).toContain('时效未注明');
+    expect(renderReport(partialReport)).not.toContain('分析执行');
+    expect(renderReport(withExecution)).toContain('分析执行');
+  });
   it('当前合同采用服务器内容判定，来源告警和无总体观点不重算为内容缺项', () => {
     const report = { ...partialReport, report_quality: { ...partialReport.report_quality!,
       content_contract_version: 'research_content.v2', content_status: 'answered' as const,

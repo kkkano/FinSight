@@ -131,6 +131,7 @@ function TodayRoute() {
 }
 
 function EntryGuard({ children }: { children: ReactElement }) {
+  const authIdentity = useStore((state) => state.authIdentity);
   const location = useLocation();
   const hash = String(location.hash || '').toLowerCase();
   const searchParams = new URLSearchParams(location.search);
@@ -141,7 +142,7 @@ function EntryGuard({ children }: { children: ReactElement }) {
     || hash.includes('type=recovery')
     || searchParams.has('code');
 
-  if (isAuthCallback) return children;
+  if (isAuthCallback || authIdentity?.userId) return children;
 
   if (hasWelcomeGatePassed()) return children;
 
@@ -169,6 +170,13 @@ function RootRedirect() {
     return <Navigate to={`/dashboard/${encodeURIComponent(symbol)}${location.search}`} replace />;
   }
   return <Navigate to={{ pathname: '/today', search: '' }} replace />;
+}
+
+function UnknownRouteRedirect() {
+  const authIdentity = useStore((state) => state.authIdentity);
+  const entryMode = useStore((state) => state.entryMode);
+  if (entryMode === 'pending') return null;
+  return <Navigate to={authIdentity?.userId ? '/today' : '/welcome'} replace />;
 }
 
 function WelcomeRoute() {
@@ -279,7 +287,7 @@ function App() {
         <Route path="/chat" element={<AuthenticatedGuard><ChatRoute /></AuthenticatedGuard>} />
         <Route path="/history" element={<AuthenticatedGuard><HistoryRoute /></AuthenticatedGuard>} />
         <Route path="/dashboard/:symbol?" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
-        <Route path="*" element={<Navigate to="/welcome" replace />} />
+        <Route path="*" element={<UnknownRouteRedirect />} />
       </Routes>
 
       <CommandPalette isOpen={isCommandPaletteOpen} onClose={handleCloseCommandPalette} />

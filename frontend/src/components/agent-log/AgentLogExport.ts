@@ -1,4 +1,4 @@
-import type { RawSSEEvent } from '../../types';
+import type { ConsoleEvent } from './eventModel';
 
 // Sensitive key fragments to redact on export
 const EXPORT_SENSITIVE_KEY_FRAGMENTS = [
@@ -55,22 +55,16 @@ const sanitizeForExport = (value: unknown): unknown => {
  * Export filtered events as a sanitized JSON file download.
  * All sensitive fields are redacted before writing.
  */
-export const exportEvents = (filteredEvents: readonly RawSSEEvent[]): void => {
-  const exportData = filteredEvents.map((event) => ({
-    timestamp: event.timestamp,
-    type: event.eventType,
-    data: sanitizeForExport(event.parsedData),
-    size: event.size,
-  }));
+export function serializeEvents(events: readonly ConsoleEvent[]): string {
+  return redactSensitiveText(JSON.stringify(events.map((event) => sanitizeForExport(event.frame)), null, 2));
+}
 
-  const firstPass = JSON.stringify(exportData, null, 2);
-  const secondPass = redactSensitiveText(firstPass);
-
-  const blob = new Blob([secondPass], { type: 'application/json' });
+export const exportEvents = (events: readonly ConsoleEvent[]): void => {
+  const blob = new Blob([serializeEvents(events)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `finsight-console-${new Date().toISOString().slice(0, 19)}.json`;
-  a.click();
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `finsight-console-${new Date().toISOString().slice(0, 19)}.json`;
+  anchor.click();
   URL.revokeObjectURL(url);
 };

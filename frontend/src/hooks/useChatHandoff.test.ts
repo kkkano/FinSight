@@ -46,7 +46,7 @@ describe('performChatHandoff', () => {
     expect(useStore.getState().pendingChatHandoffContextBySession['public:test-user:handoff']).toEqual({
       sessionId: 'public:test-user:handoff',
       sourceView: 'dashboard',
-      sourceTab: 'news',
+      sourceTab: 'news', selectedMetric:undefined,timeRange:undefined,dataRefs:undefined,
     });
     const destination = navigateMock.mock.calls[0]?.[0] as { pathname: string; search: string };
     expect(destination.pathname).toBe('/chat');
@@ -54,6 +54,18 @@ describe('performChatHandoff', () => {
     expect(destination.search).toContain('context_symbol=AAPL');
     expect(destination.search).not.toContain('private');
     expect(destination.search).not.toContain('source');
+  });
+
+  it('keeps metric, interval and references in the request context and outside the URL', () => {
+    const navigate = vi.fn();
+    const selectedMetric = {id:'trailing_pe',label:'市盈率',value:25,unit:null};
+    const timeRange = {start:'2026-10-01',end:'2026-10-31',period:'1mo'};
+    expect(performChatHandoff({draft:'分析当前指标',activeSymbol:'AAPL',sourceView:'dashboard',sourceTab:'overview',
+      selectedMetric,timeRange,dataRefs:['existing-ref']},navigate as unknown as NavigateFunction)).toBe(true);
+    expect(useStore.getState().pendingChatHandoffContextBySession['public:test-user:handoff']).toMatchObject({
+      selectedMetric,timeRange,dataRefs:['existing-ref']});
+    expect(navigate.mock.calls[0][0].search).not.toContain('existing-ref');
+    expect(navigate.mock.calls[0][0].search).not.toContain('trailing_pe');
   });
 
   it('rejects an empty draft without changing state or navigating', () => {

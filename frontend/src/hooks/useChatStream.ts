@@ -6,16 +6,15 @@ import { StreamRequestError } from '../api/http';
 import type { ChatContext, SSECallbacks, SendMessageBody } from '../api/client';
 import { useToast } from '../components/ui';
 import { useDashboardStore } from '../store/dashboardStore';
-import { useExecutionStore } from '../store/executionStore';
 import { useStore } from '../store/useStore';
 import { ModelSelectionRequiredError } from '../store/modelSelection';
 import { zh } from '../locales/zh';
 import type { AgentLogSource, ChatRequestSnapshot, Message, ReportIR, ThinkingStep } from '../types';
-import type { ChatImageInput } from '../types/runtime';
+import type { ChatImageInput, ReviewRevisionRequest } from '../types/runtime';
 import { injectChartMarkers, shouldGenerateChart } from '../utils/chartIntent';
 import { extractTicker, extractTickers } from '../utils/ticker';
 import { hasUnselectedSkillCommand, MAX_SELECTED_SKILLS } from '../utils/skillCommands';
-import { applyResearchEvent, emptyResearchStream, publicResearchBlocks, researchFailureMessage, researchQualityMessage, researchText, useRuntimeMemory } from '../store/researchStream';
+import { answerForReview, applyResearchEvent, emptyResearchStream, publicResearchBlocks, researchFailureMessage, researchQualityMessage, researchText, useRuntimeMemory } from '../store/researchStream';
 
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 export const EMPTY_CHAT_RESPONSE_MESSAGE = '模型没有返回有效内容。请检查模型设置后重试。';
@@ -35,12 +34,14 @@ export interface SendChatStreamOptions {
 export interface UseChatStreamResult {
   send: (text: string, opts?: SendChatStreamOptions) => Promise<void>;
   retry: (messageId: string) => Promise<void>;
+  revise: (messageId: string, reviewId: string) => Promise<void>;
   stop: () => void;
   steer: (text: string) => Promise<boolean>;
 }
 
 interface RunChatStreamOptions extends SendChatStreamOptions {
   retryMessageId?: string;
+  reviewRevision?: ReviewRevisionRequest;
 }
 
 const buildCancelledThinkingStep = (): ThinkingStep => ({
@@ -138,10 +139,11 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       return;
     }
 
-    const guessedTicker = extractTicker(userMsgContent);
+    const reviewRevision = previousRequest?.reviewRevision ?? opts.reviewRevision;
+    const guessedTicker = reviewRevision ? null : extractTicker(userMsgContent);
 
     // 1. 模糊查询守卫：重试已有问题时不重复插入澄清消息。
-    if (!retryMessageId && !requestImages?.length && isFuzzyAnalyzeRequest(userMsgContent) && !guessedTicker && !initialState.currentTicker) {
+    if (!reviewRevision && !retryMessageId && !requestImages?.length && isFuzzyAnalyzeRequest(userMsgContent) && !guessedTicker && !initialState.currentTicker) {
       initialState.addMessageToSession(requestSessionId, {
         id: uuidv4(), role: 'user', content: userMsgContent, timestamp: Date.now(),
       });
@@ -157,10 +159,10 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
 
     if (guessedTicker) initialState.setTicker(guessedTicker);
     if (!retryMessageId) initialState.setDraft('');
-    const pendingHandoff = retryMessageId ? undefined : initialState.takePendingChatHandoffContext(requestSessionId);
-    const resumeFromRunId = retryMessageId && retryMessage?.runId && !retryMessage.isLoading
+    const pendingHandoff = retryMessageId || reviewRevision ? undefined : initialState.takePendingChatHandoffContext(requestSessionId);
+    const resumeFromRunId = reviewRevision?.source_run_id ?? (retryMessageId && retryMessage?.runId && !retryMessage.isLoading
       && (retryMessage.error || ['failed', 'interrupted', 'persistence_failed', 'cancelled'].includes(retryMessage.runStatus || ''))
-      ? retryMessage.runId : undefined;
+      ? retryMessage.runId : undefined);
 
     const isRequestSessionActive = () => useStore.getState().sessionId === requestSessionId;
     const streamController = new AbortController();
@@ -189,7 +191,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     const outputMode = previousRequest?.outputMode ?? opts.outputMode
       ?? (retryMessage?.report ? 'investment_report' : 'chat');
     const context: ChatContext = {};
-    if (!retryMessageId) {
+    if (!retryMessageId && !reviewRevision) {
       const dashboard = useDashboardStore.getState();
       if (dashboard.activeAsset?.symbol) {
         context.active_symbol = dashboard.activeAsset.symbol;
@@ -198,6 +200,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       if (pendingHandoff?.sessionId === requestSessionId) {
         context.source_view = pendingHandoff.sourceView;
         if (pendingHandoff.sourceTab) context.source_tab = pendingHandoff.sourceTab;
+        if (pendingHandoff.selectedMetric) context.selected_metric = pendingHandoff.selectedMetric;
+        if (pendingHandoff.timeRange) context.time_range = pendingHandoff.timeRange;
+        if (pendingHandoff.dataRefs?.length) context.data_refs = pendingHandoff.dataRefs;
       }
       if (dashboard.activeSelections.length === 1) context.selection = dashboard.activeSelections[0];
       if (dashboard.activeSelections.length > 1) context.selections = dashboard.activeSelections;
@@ -205,6 +210,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     // 选区只在首次发送时读取；快照随消息本地保存，重试不受看板切换影响。
     const requestSnapshot: ChatRequestSnapshot = previousRequest ? { ...previousRequest, resumeFromRunId } : {
       query: userMsgContent, outputMode, history, resumeFromRunId,
+      ...(reviewRevision ? { reviewRevision: structuredClone(reviewRevision) } : {}),
       ...(opts.skillIds?.length ? { skillIds: [...new Set(opts.skillIds)].slice(0, MAX_SELECTED_SKILLS) } : {}),
       ...(requestImages?.length ? { hasTransientImages: true } : {}),
       context: Object.keys(context).length ? structuredClone(context) : undefined,
@@ -224,6 +230,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     } else {
       initialState.addMessageToSession(requestSessionId, {
         id: aiMsgId, runId: requestRunId, replyTo: userMessageId, requestSnapshot,
+        ...(reviewRevision ? { reviewRevision: structuredClone(reviewRevision) } : {}),
         role: 'assistant', content: '', timestamp: Date.now(), isLoading: true, runStatus: 'running', answerStatus: 'streaming',
       });
     }
@@ -244,12 +251,13 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     let fullContent = '';
     let runtimeState = emptyResearchStream(requestRunId);
     let runtimeTextStarted = false;
+    let answerCompleted = false;
     let contentFlushTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleContentUpdate = () => {
       if (contentFlushTimer) return;
       contentFlushTimer = setTimeout(() => {
         contentFlushTimer = null;
-        if (!terminalClaimed) updateScopedMessage(aiMsgId, { content: fullContent, blocks: runtimeState.blocks, isLoading: true }, true);
+        if (!terminalClaimed) updateScopedMessage(aiMsgId, { content: fullContent, blocks: runtimeState.blocks, isLoading: !answerCompleted }, true);
       }, 40);
     };
     useRuntimeMemory.getState().beginOwner(initialState.authIdentity?.userId || null);
@@ -288,22 +296,23 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       current.updateAgentStatus('supervisor', {
         status: 'waiting', endTime: new Date().toISOString(), lastMessage: zh.chat.stopped,
       });
-      if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'cancelled' });
     };
 
     try {
       // 4. 所有发送/重试共用同一个 SSE 管线。
       const request: SendMessageBody = {
           query: userMsgContent,
+          ...(requestSnapshot.reviewRevision ? { review_revision: requestSnapshot.reviewRevision } : {}),
           ...(requestSnapshot.skillIds?.length ? { skill_ids: requestSnapshot.skillIds } : {}),
           ...(requestImages?.length ? { images: requestImages } : {}),
-          show_provider_reasoning: true,
+          show_provider_reasoning: initialState.showProviderReasoning === true,
           ...(requestSnapshot.resumeFromRunId ? { resume_from_run_id: requestSnapshot.resumeFromRunId } : {}),
           run_id: requestRunId,
           client_user_message_id: userMessageId,
           client_assistant_message_id: aiMsgId,
           history,
-          context: requestSnapshot.context,
+          context: { ...requestSnapshot.context, show_provider_reasoning: initialState.showProviderReasoning === true,
+            watchlist_auto_confirm: initialState.watchlistAutoConfirm === true },
           options: {
             output_mode: outputMode,
             ...(outputMode === 'investment_report' ? { strict_selection: false } : {}),
@@ -370,12 +379,20 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             const next = applyResearchEvent(runtimeState, event);
             if (next === runtimeState) return;
             runtimeState = next;
+            if (event.type === 'answer.completed') {
+              answerCompleted = true;
+              if (contentFlushTimer) clearTimeout(contentFlushTimer);
+              contentFlushTimer = null;
+              updateScopedMessage(aiMsgId, { content: fullContent, blocks: runtimeState.blocks,
+                isLoading: false, answerStatus: 'complete' }, true);
+            }
             if (event.type.startsWith('content.') || event.type === 'snapshot.reset') {
               runtimeTextStarted = true;
               fullContent = researchText(runtimeState.blocks);
             }
             if (event.type.startsWith('content.') || event.type.startsWith('artifact.')
-              || event.type.startsWith('reasoning.') || event.type.startsWith('action.') || event.type === 'snapshot.reset') {
+              || event.type.startsWith('reasoning.') || event.type.startsWith('action.')
+              || event.type.startsWith('review.') || event.type === 'snapshot.reset') {
               scheduleContentUpdate();
             }
           },
@@ -384,7 +401,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
             if (safeToken) {
               fullContent += safeToken;
-              if (execRunId) useExecutionStore.getState().ingestExternalToken(execRunId, safeToken);
             }
             scheduleContentUpdate();
           },
@@ -463,7 +479,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 const current = useStore.getState();
                 current.addAgentLog({ id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: EMPTY_CHAT_RESPONSE_MESSAGE });
                 current.updateAgentStatus('supervisor', { status: 'error', lastMessage: EMPTY_CHAT_RESPONSE_MESSAGE });
-                if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'error', error: EMPTY_CHAT_RESPONSE_MESSAGE });
                 if (isRequestSessionActive()) current.setStatus(null);
                 toast({ type: 'error', title: zh.chat.requestFailed, message: EMPTY_CHAT_RESPONSE_MESSAGE });
                 return;
@@ -479,6 +494,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 error: deliveryFailed ? failureMessage : undefined,
                 answerStatus: meta?.answer_status || (partial || cancelled ? 'partial' : 'complete'),
                 blocks: publicResearchBlocks(meta?.assistant_message?.blocks ?? meta?.blocks ?? runtimeState.blocks),
+                reviewRevision: meta?.assistant_message?.review_revision ?? meta?.review_revision ?? requestSnapshot.reviewRevision,
                 report,
                 thinking: thinkingSteps,
                 evidence_pool: meta?.evidence_pool ?? meta?.data?.evidence_pool,
@@ -495,7 +511,8 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               }
 
               // 5. 文本先落定，图表异步补挂。
-              if (!deliveryFailed && !cancelled) void (async () => {
+              if (!runtimeTextStarted && !Array.isArray(meta?.assistant_message?.blocks ?? meta?.blocks)
+                  && !deliveryFailed && !cancelled) void (async () => {
                 let patched = fullContent;
                 try {
                   const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || initialState.currentTicker || null);
@@ -515,9 +532,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 }
             })();
 
-            if (execRunId) {
-              useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: cancelled ? 'cancelled' : partial ? 'error' : 'done', report: report ?? null, meta, ...(deliveryFailed ? { error: failureMessage } : {}) });
-            }
             if (isRequestSessionActive()) useStore.getState().setStatus(null);
             })();
           },
@@ -528,11 +542,11 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             terminalHandlingPromise = (async () => {
               if (await recoverDelivery() || terminalClaimed) return;
               terminalClaimed = true;
-              const failureMessage = researchFailureMessage(meta, String(error));
+              const failureMessage = researchFailureMessage(meta);
               serverSaved = meta?.persistence_status === 'saved';
               thinkingSteps = [...thinkingSteps, { stage: 'error', eventType: 'error', message: failureMessage,
                 timestamp: new Date().toISOString(), result: { status: 'error', error_code: meta?.error_code,
-                  reason: meta?.reason, recovery_action: meta?.recovery_action } }];
+                  reason: meta?.reason, failure_detail: String(error), recovery_action: meta?.recovery_action } }];
               updateScopedMessage(aiMsgId, {
                 content: fullContent || failureMessage,
                 isLoading: false,
@@ -547,7 +561,6 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                 id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: zh.chat.errorPrefix(failureMessage),
               });
               current.updateAgentStatus('supervisor', { status: 'error', lastMessage: failureMessage });
-              if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'error', error: failureMessage });
             })();
           },
           onThinking: (step) => {
@@ -556,21 +569,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               || (step.result && typeof (step.result as Record<string, unknown>).run_id === 'string'
                 ? (step.result as Record<string, string>).run_id
                 : null);
-            if (stepRunId) {
-              const execution = useExecutionStore.getState();
-              if (execRunId !== stepRunId) {
-                execRunId = stepRunId;
-                execution.beginExternalExecution({
-                  runId: stepRunId,
-                  query: userMsgContent,
-                  tickers: extractTickers(userMsgContent),
-                  source: 'chat',
-                  outputMode,
-                });
-              }
-              // 6. 进度只由 executionStore reducer 推导，不再维护 ChatInput 本地百分比表。
-              execution.ingestExternalThinking(stepRunId, step);
-            }
+            if (stepRunId) execRunId = stepRunId;
             if (step.eventType === 'pipeline_stage' && step.result?.stage === 'done') startDeliveryRecovery();
             thinkingSteps = [...thinkingSteps, step];
             updateScopedMessage(aiMsgId, { thinking: thinkingSteps });
@@ -611,9 +610,11 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         finishAbortedStream();
         return;
       }
-      const message = error instanceof StreamRequestError || error instanceof ModelSelectionRequiredError
-        ? error.message : zh.chat.networkRequestFailed;
-      thinkingSteps = [...thinkingSteps, { stage: 'error', eventType: 'error', message, timestamp: new Date().toISOString() }];
+      const failure = error instanceof ModelSelectionRequiredError ? {error_code:'model_selection_required'} : error;
+      const message = researchFailureMessage(failure, zh.chat.networkRequestFailed);
+      thinkingSteps = [...thinkingSteps, { stage: 'error', eventType: 'error', message, timestamp: new Date().toISOString(),
+        result: {error_code:error instanceof StreamRequestError ? error.code : error instanceof ModelSelectionRequiredError ? 'model_selection_required' : undefined,
+          failure_detail:error instanceof Error ? error.message : String(error)} }];
       updateScopedMessage(aiMsgId, { content: fullContent || message, isLoading: false, error: message, canRetry: true,
         runStatus: 'failed', answerStatus: fullContent ? 'partial' : 'unavailable', thinking: thinkingSteps, blocks: runtimeState.blocks }, true);
       const current = useStore.getState();
@@ -627,7 +628,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       if (contentFlushTimer) clearTimeout(contentFlushTimer);
       terminalClaimed = true;
       recoveryController.abort();
-      // 7. 会话级 loading/AbortController 收尾；executionStore 保持唯一进度真相源。
+      // 7. 保留会话级 loading/AbortController 收尾。
       const current = useStore.getState();
       if (current.abortControllersBySession[requestSessionId] === streamController) {
         current.setSessionLoading(requestSessionId, false);
@@ -661,6 +662,21 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
 
   const stop = useCallback(() => useStore.getState().cancelChatStream(), []);
 
+  const revise = useCallback(async (messageId: string, reviewId: string) => {
+    const state = useStore.getState();
+    if (state.sessionId !== sessionId || state.chatLoadingBySession[sessionId]) return;
+    const message = state.messages.find((item) => item.id === messageId && item.role === 'assistant');
+    const block = message?.blocks?.find((item) => item.kind === 'review' && item.review.review_id === reviewId);
+    if (!message?.runId || message.isLoading || block?.kind !== 'review' || block.review.status !== 'completed') return;
+    const review = block.review;
+    await runChatStream(zh.chat.review.revise, {
+      outputMode: message.requestSnapshot?.outputMode ?? (message.report ? 'investment_report' : 'chat'),
+      reviewRevision: { source_message_id: message.id, source_run_id: message.runId, review_id: review.review_id,
+        answer: answerForReview(message.blocks ?? [], reviewId, message.content),
+        findings: review.findings ?? [], coverage: review.coverage ?? [] },
+    });
+  }, [runChatStream, sessionId]);
+
   const steer = useCallback(async (text: string): Promise<boolean> => {
     const state = useStore.getState();
     const scopedMessages = state.sessionId === sessionId ? state.messages : [];
@@ -680,5 +696,5 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     }
   }, [sessionId, toast]);
 
-  return { send, retry, stop, steer };
+  return { send, retry, revise, stop, steer };
 }

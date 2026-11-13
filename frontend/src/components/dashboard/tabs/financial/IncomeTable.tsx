@@ -21,8 +21,8 @@ interface IncomeTableProps {
 
 function yoyClass(change: number | null | undefined): string {
   if (change == null) return '';
-  if (change > 0.05) return 'text-fin-success';
-  if (change < -0.05) return 'text-fin-danger';
+  if (change > 0.05) return 'text-t-up';
+  if (change < -0.05) return 'text-t-down';
   return '';
 }
 

@@ -181,8 +181,8 @@ export function WelcomePage() {
         <section className="welcome-intro" aria-label="投资研究助手">
           <div><h1 className="welcome-title">你只管问，<br /><span>剩下的交给 FinSight。</span></h1>
             <p className="welcome-description">它会自己查行情、翻财报、写代码算账、画图给你看。每个数字都标着出处，数据不够就直说。</p></div>
-          <div className="welcome-demo" aria-label="研究过程示意">
-            <div className="flex items-center justify-between gap-3"><span className="design-tag" style={{ color: 'var(--t-amber)', background: 'var(--t-amber-soft)' }}>示意</span><div className="welcome-demo-question">半导体 ETF 连跌 5 周，历史上像哪次？</div></div>
+          <div className="welcome-demo" aria-label="研究过程示例">
+            <div className="flex items-center justify-between gap-3"><span className="design-tag" style={{ color: 'var(--t-amber)', background: 'var(--t-amber-soft)' }}>示例</span><div className="welcome-demo-question">半导体 ETF 连跌 5 周，历史上像哪次？</div></div>
             <div>{[
               { Icon: Search, title: '拉取周线', text: 'SOXX 近 25 年', color: 'var(--t-amber)' },
               { Icon: Code2, title: '跑一段代码', text: '筛出所有连跌 ≥5 周的时段', color: 'var(--t-violet)' },

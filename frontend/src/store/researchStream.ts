@@ -1,47 +1,24 @@
 import { create } from 'zustand';
-import type { ResearchBlock, ResearchStreamState, RuntimeEvent } from '../types/runtime';
+import type { ResearchBlock, ResearchReview, ResearchStreamState, RuntimeEvent } from '../types/runtime';
 
 export const emptyResearchStream = (runId?: string): ResearchStreamState => ({ runId, seq: -1, blocks: [] });
 
 const stringValue = (value: unknown): string => typeof value === 'string' ? value : '';
 
-const failureReasons: Record<string, string> = {
-  model_timeout: '模型响应超时，研究已中断。',
-  model_probe_timeout: '检查模型的工具调用能力时超时了。',
-  TimeoutError: '处理超时，研究没有完成。',
-  model_connection_error: '模型服务连接中断。',
-  model_incomplete_stream: '模型响应提前结束，未返回完整研究结果。',
-  model_empty_response: '模型未返回有效内容。',
-  model_stream_error: '模型服务在生成过程中返回错误。',
-  model_invalid_stream_json: '模型返回的数据格式无法读取。',
-  model_tool_call_id_missing: '模型发出的工具请求缺少必要信息。',
-  model_tool_calling_unsupported: '当前模型不支持研究所需的工具调用。',
-  model_configuration_missing: '研究模型尚未配置。',
-  agent_turn_budget_exhausted: '这次研究已达到步骤上限，还没完成。',
-  provider_local_quota_exhausted: '模型调用额度已用尽。',
-  CapacityExceeded: '研究服务正忙，请稍后重试。',
-  tool_provider_error: '数据源没有返回可用结果。',
-  tool_not_allowed: '当前助手没有使用这个工具的权限。',
-  report_persistence_failed: '报告已生成，但未保存成功。',
-};
-
-/** SSE 与已保存终态使用同一展示规则，不把供应商堆栈当作用户说明。 */
-export function researchFailureMessage(meta?: Record<string, unknown>, fallback = '研究没有完成，生成的内容已保留。'): string {
-  const code = stringValue(meta?.error_code);
-  const httpStatus = /^model_http_(\d{3})$/.exec(code)?.[1];
-  const mapped = failureReasons[code] || (httpStatus ? `模型服务请求失败（HTTP ${httpStatus}）。` : '');
-  const saved = meta?.assistant_message && typeof meta.assistant_message === 'object'
-    ? meta.assistant_message as Record<string, unknown> : undefined;
-  const messages = [meta?.message, saved?.error].map(stringValue);
-  const specificMessage = messages.find((value) => value.trim()
-    && !/^本轮研究未完成[，。]?\s*(已保留可用内容[。]?)?$/.test(value.trim()));
-  const reason = [meta?.reason, meta?.failure_detail, meta?.error, specificMessage, mapped, ...messages]
-    .map(stringValue).find((value) => value.trim()) || fallback;
-  const displayReason = /^本轮研究未完成[，。]?\s*(已保留可用内容[。]?)?$/.test(reason.trim())
-    ? '研究没有完成，生成的内容已保留。' : reason;
-  const action = stringValue(meta?.recovery_action).trim();
-  return action && !displayReason.includes(action) ? `${displayReason} ${action}` : displayReason;
+/** 仅校验事件结构；核查语义与原文定位均不靠关键词推断。 */
+export function isResearchReview(value: unknown): value is ResearchReview {
+  if (!value || typeof value !== 'object') return false;
+  const review = value as ResearchReview;
+  if (typeof review.review_id !== 'string' || !review.review_id
+      || !['running', 'completed', 'unavailable'].includes(review.status)) return false;
+  if (review.status !== 'completed') return true;
+  return ['pass', 'revise', 'insufficient'].includes(review.verdict ?? '')
+    && Array.isArray(review.findings) && review.findings.every((finding) => finding && typeof finding.quote === 'string'
+      && finding.quote.length > 0 && typeof finding.issue === 'string' && typeof finding.evidence === 'string' && typeof finding.suggestion === 'string')
+    && Array.isArray(review.coverage) && review.coverage.every((item) => item && typeof item.requirement === 'string' && typeof item.met === 'boolean');
 }
+
+export { researchFailure, researchFailureMessage } from '../utils/researchFailure';
 
 export function researchQualityMessage(meta?: Record<string, unknown>): string {
   const reasons = [meta?.quality, meta?.report_quality].flatMap((quality) => quality && typeof quality === 'object'
@@ -83,7 +60,7 @@ export function applyResearchEvent(state: ResearchStreamState, event: RuntimeEve
     ...state, runId: event.run_id ?? state.runId, epoch: event.stream_epoch ?? state.epoch,
     seq: typeof event.seq === 'number' ? event.seq : state.seq, blocks: state.blocks,
   };
-  const blockId = stringValue(payload.block_id) || (event.type.startsWith('reasoning.')
+  const blockId = (event.type.startsWith('review.') ? stringValue(payload.review_id) : stringValue(payload.block_id)) || (event.type.startsWith('reasoning.')
     ? payload.kind === 'provider_raw' ? 'provider-reasoning' : 'reasoning-summary' : 'answer');
   const previous = state.blocks.find((block) => block.id === blockId);
   let block: ResearchBlock | undefined;
@@ -95,12 +72,19 @@ export function applyResearchEvent(state: ResearchStreamState, event: RuntimeEve
     const phase = payload.content_phase ?? event.content_phase;
     const completion = payload.completion_status;
     block = { id: blockId, kind: 'text', revision,
+      revision_of: Array.isArray(payload.revision_of) ? payload.revision_of.filter((id): id is string => typeof id === 'string')
+        : previous?.kind === 'text' ? previous.revision_of : undefined,
+      review_id: stringValue(payload.review_id) || (previous?.kind === 'text' ? previous.review_id : undefined),
       content_phase: phase === 'progress' || phase === 'answer' ? phase : previous?.kind === 'text' ? previous.content_phase : undefined,
       finish_reason: stringValue(payload.finish_reason) || (previous?.kind === 'text' ? previous.finish_reason : undefined),
       completion_status: completion === 'complete' || completion === 'tool_pending' || completion === 'incomplete'
         ? completion : previous?.kind === 'text' ? previous.completion_status : undefined,
       content: event.type === 'content.block_finished' ? previous?.kind === 'text' ? previous.content : ''
         : event.type === 'content.revised' ? delta : (previous?.kind === 'text' ? previous.content : '') + delta };
+  } else if (event.type === 'review.started' || event.type === 'review.finished') {
+    if (!isResearchReview(payload)) return next;
+    if (previous?.kind === 'review' && previous.review.status !== 'running' && payload.status === 'running') return next;
+    block = { id: payload.review_id, kind: 'review', review: payload, revision: payload.status === 'running' ? 0 : 1 };
   } else if (event.type.startsWith('reasoning.')) {
     const raw = payload.kind === 'provider_raw';
     const otherLength = state.blocks.reduce((count, item) => count + (item.id !== blockId && item.kind === 'reasoning'
@@ -134,8 +118,17 @@ export function applyResearchEvent(state: ResearchStreamState, event: RuntimeEve
 }
 
 export function researchText(blocks: ResearchBlock[]): string {
-  return blocks.filter((block): block is Extract<ResearchBlock, { kind: 'text' }> => block.kind === 'text' && block.content_phase !== 'progress')
+  const superseded = new Set(blocks.flatMap((block) => block.kind === 'text' ? block.revision_of ?? [] : []));
+  return blocks.filter((block): block is Extract<ResearchBlock, { kind: 'text' }> => block.kind === 'text'
+      && block.content_phase !== 'progress' && !superseded.has(block.id))
     .map((block) => block.content).join('');
+}
+
+/** 修订块指向被核查的原版本；原文始终从已保存的正文块取得。 */
+export function answerForReview(blocks: ResearchBlock[], reviewId: string, fallback: string): string {
+  const originals = new Set(blocks.flatMap((block) => block.kind === 'text' && block.review_id === reviewId ? block.revision_of ?? [] : []));
+  return originals.size ? blocks.filter((block): block is Extract<ResearchBlock, { kind: 'text' }> => block.kind === 'text' && originals.has(block.id))
+    .map((block) => block.content).join('') : fallback;
 }
 
 /** 接收所属消息的对外内容；供应商思考按单run总量截断，未知块不进入视图。 */
@@ -145,7 +138,8 @@ export function publicResearchBlocks(blocks: ResearchBlock[]): ResearchBlock[] {
   return blocks.filter((block) => block && typeof block.id === 'string'
     && ((block.kind === 'text' || block.kind === 'reasoning') ? typeof block.content === 'string'
       : block.kind === 'artifact' ? Boolean(block.artifact && typeof block.artifact.artifact_id === 'string')
-        : block.kind === 'action' && block.action && typeof block.action.action_id === 'string'))
+        : block.kind === 'review' ? isResearchReview(block.review)
+          : block.kind === 'action' && block.action && typeof block.action.action_id === 'string'))
     .map((block) => {
       if (block.kind !== 'reasoning' || block.reasoning_kind !== 'provider_raw') return block;
       const content = block.content.slice(0, remaining);

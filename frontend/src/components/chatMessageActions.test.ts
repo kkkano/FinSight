@@ -51,7 +51,7 @@ describe('chat message actions', () => {
     expect(className).toContain('[@media(hover:none)]:opacity-100');
     expect(className).toContain('[@media(pointer:coarse)]:opacity-100');
     expect(MESSAGE_ACTION_LABELS).toEqual({
-      retry: '重试回答',
+      retry: '重新研究',
       export: '导出回答',
       delete: '删除回答',
     });

@@ -1,6 +1,22 @@
 import { expect, test } from '@playwright/test';
 import type { Page, Route } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.context().route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    return ['127.0.0.1', 'localhost'].includes(url.hostname) ? route.fallback() : route.abort('blockedbyclient');
+  });
+  await page.context().route('**/sw.js*', (route) => route.fulfill({
+    contentType: 'application/javascript', body: "self.addEventListener('install', () => self.skipWaiting());",
+  }));
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  const path = testInfo.outputPath('final-state.png');
+  await page.screenshot({ path, fullPage: true });
+  await testInfo.attach('final-state', { path, contentType: 'image/png' });
+});
+
 const builtIn = {
   id: 'stepfun:step-5-preview', label: 'Step 5 Preview', model: 'step-5-preview', provider: 'stepfun',
   icon_url: '/model-icons/stepfun.png', effort_options: ['low', 'medium', 'high'],
@@ -175,6 +191,14 @@ test('custom model validates, requires testing, keeps a key-free preference on r
   const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(storage).not.toContain(customKey);
   expect(storage).toContain('api.example.com');
+  expect(await page.locator('body').innerText()).not.toContain(customKey);
+  const storedConversationAndLogs = await page.evaluate(async () => {
+    const modulePath = '/src/store/useStore.ts';
+    const { useStore } = await import(modulePath);
+    const { messages, agentLogs, rawEvents } = useStore.getState();
+    return JSON.stringify({ messages, agentLogs, rawEvents });
+  });
+  expect(storedConversationAndLogs).not.toContain(customKey);
   await page.getByTestId('chat-model-switcher').click();
   await page.getByRole('button', { name: '系统内置', exact: true }).click();
   await page.getByRole('button', { name: '应用模型', exact: true }).click();
@@ -189,6 +213,8 @@ test('custom model validates, requires testing, keeps a key-free preference on r
   const countBeforeBlockedChat = requests.chatModels.length;
   await page.locator('#chat-input').fill('刷新后继续');
   await page.getByTestId('chat-send-btn').click();
+  await expect(page.getByRole('alert').filter({ hasText: '当前模型需要重新配置。' }).first()).toBeVisible();
+  await page.getByText('诊断详情', { exact: true }).last().click();
   await expect(page.getByText('自带模型的密钥未保存。请在模型设置中重新填写 API Key、测试并应用，或明确选择内置模型。').first()).toBeVisible();
   expect(requests.chatModels).toHaveLength(countBeforeBlockedChat);
   await page.getByTestId('chat-model-switcher').click();
@@ -221,7 +247,8 @@ test('custom context consent resets when destination credentials change and defa
   await page.getByRole('button', { name: '自带模型', exact: true }).click();
   const consent = page.getByRole('checkbox', { name: '我已了解并同意将上述内容发送到填写的外部服务' });
   await expect(consent).not.toBeChecked();
-  await expect(page.getByTestId('custom-model-section')).toContainText('系统提示词、RAG 检索上下文及可能来自付费数据源的内容');
+  await expect(page.getByTestId('custom-model-section')).toContainText('你的问题、附图、系统提示词和检索到的相关资料（可能包括付费数据）');
+  await expect(page.getByTestId('custom-model-section')).toContainText('发送到上方 API 地址，由该外部服务处理');
   for (const [label, value] of [
     ['API 地址', 'https://api.example.com/v1'], ['模型 ID', 'custom-model'], ['API Key', customKey],
   ]) {
@@ -277,13 +304,17 @@ test('model preflight failure and empty completions show explicit retryable mess
   }));
   await page.locator('#chat-input').fill('你好');
   await page.getByTestId('chat-send-btn').click();
+  await expect(page.getByRole('alert').filter({ hasText: '当前模型暂时不可用。' }).first()).toBeVisible();
+  await page.getByText('诊断详情', { exact: true }).last().click();
   await expect(page.getByText('Step 5 Preview 暂时不可用，请稍后重试。').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: '重试回答', exact: true }).last()).toBeVisible();
+  await expect(page.getByRole('button', { name: '重新研究', exact: true }).last()).toBeVisible();
   await page.route('**/api/execute', (route) => route.fulfill({
     contentType: 'text/event-stream', body: 'data: {"type":"done","response":""}\n\n',
   }));
-  await page.getByRole('button', { name: '重试回答', exact: true }).last().click();
-  await expect(page.getByText('模型未返回有效内容，本次分析未完成。请检查模型设置后重试。').first()).toBeVisible();
+  await page.getByRole('button', { name: '重新研究', exact: true }).last().click();
+  await expect(page.getByRole('alert').filter({ hasText: '研究没有完成，生成的内容已保留。' }).first()).toBeVisible();
+  await page.getByText('诊断详情', { exact: true }).last().click();
+  await expect(page.getByText('模型没有返回有效内容。请检查模型设置后重试。').first()).toBeVisible();
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
 });
 
@@ -301,7 +332,7 @@ test('truncated model output keeps verified data and displays the actual cause',
   await page.locator('#chat-input').fill('分析英特尔');
   await page.getByTestId('chat-send-btn').click();
   await expect(page.locator('#chat-scroll-container').getByText('已核验的英特尔研究数据。', { exact: true })).toBeVisible();
-  await expect(page.getByText('本轮回答未完整生成', { exact: true })).toBeVisible();
+  await expect(page.getByText('回答还不完整', { exact: true })).toBeVisible();
   await expect(page.getByText(message, { exact: true }).first()).toBeVisible();
   await expect(page.getByText('LLM 暂时不可用', { exact: true })).toHaveCount(0);
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
@@ -362,7 +393,9 @@ test('reopening an interrupted empty answer shows a visible retry state', async 
     ]));
   });
   await page.reload();
+  await expect(page.getByRole('alert').filter({ hasText: '研究没有完成，生成的内容已保留。' }).first()).toBeVisible();
+  await page.getByText('诊断详情', { exact: true }).last().click();
   await expect(page.locator('#chat-scroll-container').getByText('上次回答未完整保存，可以重新生成。', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '重试回答', exact: true }).last().click();
+  await page.getByRole('button', { name: '重新研究', exact: true }).last().click();
   await expect(page.locator('#chat-scroll-container').getByText('模型测试回复', { exact: true })).toBeVisible();
 });

@@ -9,6 +9,7 @@ import { Card } from './ui/Card';
 import { Dialog } from './ui/Dialog';
 import { useToast } from './ui/Toast';
 import { ModelSettings } from './settings/ModelSettings';
+import { zh } from '../locales/zh';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -25,6 +26,10 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     setColorConvention,
     layoutMode,
     setLayoutMode,
+    watchlistAutoConfirm,
+    setWatchlistAutoConfirm,
+    showProviderReasoning,
+    setShowProviderReasoning,
     authIdentity,
     setAuthIdentity,
     setEntryMode,
@@ -75,6 +80,15 @@ export const SettingsModal: FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
       <div className="space-y-4 p-5">
         <ModelSettings />
+        <Card className="space-y-3 bg-fin-bg/40 p-4">
+          <label className="flex items-center gap-2 text-sm text-fin-text"><input type="checkbox" className="accent-fin-primary"
+            checked={watchlistAutoConfirm} disabled={!authIdentity?.userId}
+            onChange={(event) => setWatchlistAutoConfirm(event.target.checked)} />{zh.settings.watchlistAutoConfirm}</label>
+          <label className="flex items-center gap-2 text-sm text-fin-text"><input type="checkbox" className="accent-fin-primary"
+            checked={showProviderReasoning} disabled={!authIdentity?.userId}
+            onChange={(event) => setShowProviderReasoning(event.target.checked)} />{zh.settings.showProviderReasoning}</label>
+          {!authIdentity?.userId && <p className="text-xs text-fin-muted">{zh.settings.loginToAdjust}</p>}
+        </Card>
         <Card className="space-y-3 bg-fin-bg/40 p-4">
           <h3 className="text-sm font-medium text-fin-text">外观</h3>
           <div className="grid grid-cols-2 gap-2">

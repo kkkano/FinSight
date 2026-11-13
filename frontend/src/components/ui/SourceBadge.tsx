@@ -1,8 +1,10 @@
 /**
  * SourceBadge — 数据来源徽标（08/09 图表真实性治理的落地件）。
  * 所有图表与数据卡片右上角必挂：真实数据标注来源与截至时间；
- * LLM 生成的示意数据必须 synthetic 亮黄标，禁止与真实数据混淆。
+ * 模型生成且未核实的数据保留 synthetic 提示，不能与真实行情混淆。
  */
+
+import { zh } from '../../locales/zh';
 
 interface SourceBadgeProps {
   /** 数据源名（yfinance / FMP / akshare…）；synthetic 时可省略 */
@@ -11,7 +13,7 @@ interface SourceBadgeProps {
   asOf?: string | null;
   /** 走了降级源 */
   degraded?: boolean;
-  /** LLM 生成的示意数据（非真实行情） */
+  /** 模型生成但未经来源核实的数据 */
   synthetic?: boolean;
   className?: string;
 }
@@ -21,9 +23,9 @@ export function SourceBadge({ source, asOf, degraded, synthetic, className = '' 
     return (
       <span
         className={`inline-flex items-center gap-1 px-1 rounded border border-t-warning/50 text-2xs font-mono text-t-warning ${className}`.trim()}
-        title="此图数据由 AI 生成，仅作示意，非真实行情"
+        title={zh.data.generatedDescription}
       >
-        AI示意
+        {zh.data.generatedUnverified}
       </span>
     );
   }

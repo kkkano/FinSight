@@ -1,6 +1,6 @@
 import type { ThinkingStep } from '../../types';
 import type { ResearchBlock } from '../../types/runtime';
-import { buildTurnActivities, type Activity } from './TurnActivity';
+import { buildTurnActivities, type Activity } from "./TurnActivity.utils";
 
 export type MessageTimelineItem = { kind: 'block'; block: ResearchBlock; seq: number }
   | { kind: 'activity'; rows: Activity[]; seq: number };

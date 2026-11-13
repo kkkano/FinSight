@@ -1,4 +1,4 @@
-import { Eraser, Moon, Plus, Sun, PanelRightOpen } from 'lucide-react';
+import { Eraser, Moon, Sun, PanelRightOpen } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
@@ -8,6 +8,7 @@ import type { MarketQuote } from '../../hooks/useMarketQuotes';
 import { useDeveloperMode } from '../../hooks/useDeveloperMode';
 import { apiClient } from '../../api/client';
 import { useStore } from '../../store/useStore';
+import { observedMessageTickers } from "../RightPanel.utils";
 
 type ChatWorkspaceProps = {
   theme: 'dark' | 'light';
@@ -39,7 +40,9 @@ export function ChatWorkspace({
   const hasUserMessages = useStore((state) => state.messages.some((message) => message.role === 'user'));
   const turnCount = useStore((state) => state.messages.filter((message) => message.role === 'user').length);
   const updatedAt = useStore((state) => state.messages.at(-1)?.timestamp);
-  const startNewChat = useStore((state) => state.startNewChat);
+  const latestResearch = useStore((state) => [...state.messages].reverse().find((message) => message.role === 'assistant' && message.runId));
+  const observedTickers = observedMessageTickers(latestResearch);
+  const sourceCount = latestResearch?.evidence_pool?.length ?? 0;
   const clearConversationContext = useStore((state) => state.clearConversationContext);
   const setDraft = useStore((state) => state.setDraft);
 
@@ -94,24 +97,15 @@ export function ChatWorkspace({
           <h1 className="truncate text-[14.5px] font-semibold text-t-text">{hasUserMessages ? conversationSummaries.find((item) => item.sessionId === sessionId)?.title || '新对话' : '新对话'}</h1>
           <p className="mt-0.5 text-xs text-t-text3 max-sm:hidden">{turnCount && updatedAt
             ? `${turnCount} 轮 · 更新于 ${new Date(updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
-            : '问清问题，查看依据'}</p>
+            : '输入问题，查看依据'}</p>
+          {latestResearch && <p className="mt-0.5 text-xs text-t-text3 max-sm:hidden">{observedTickers.join('、') || '当前对话'} · {sourceCount} 个来源</p>}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 max-lg:justify-end max-lg:overflow-x-auto scrollbar-hide">
           <button
             type="button"
-            onClick={startNewChat}
-            className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
-            title="新建对话"
-            aria-label="新建对话"
-          >
-            <Plus size={14} />
-            <span className="hidden sm:inline">新对话</span>
-          </button>
-          <button
-            type="button"
             onClick={clearConversationContext}
-            className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            className="design-ghost [@media(pointer:coarse)]:min-h-11"
             title="清空上下文"
             aria-label="清空上下文"
           >
@@ -121,7 +115,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={onToggleTheme}
-            className="min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
+            className="design-ghost [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
             title={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
             aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
           >
@@ -131,7 +125,7 @@ export function ChatWorkspace({
             type="button"
             data-testid={!contextPanel.isExpanded ? 'context-panel-expand' : undefined}
             onClick={contextPanel.isExpanded ? contextPanel.onCollapse : contextPanel.onExpand}
-            className="relative min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
+            className="design-ghost relative [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
             title={contextPanel.isExpanded ? '收起标的面板' : '展开标的与研究详情'}
             aria-label={contextPanel.isExpanded ? '收起标的面板' : '展开标的与研究详情'}
           >
