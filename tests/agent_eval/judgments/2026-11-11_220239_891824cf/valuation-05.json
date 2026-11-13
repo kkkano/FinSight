@@ -1,0 +1,26 @@
+{
+  "request_sha256": "7da014b83adf5c41f4d650ab9f43fbd85cb277a34159a2b5304b088293ea5de6",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：三段正文只介绍取当前价格、收盘与市值、换来源补财报的计划，没有回答 TSLA 贵不贵或交付经营、估值依据及观点/假设区分。",
+      "numbers=0：虽说已取得收盘和市值，正文没有任何实际金额、估值倍数或经营数字；工具取数不能代替数字回答。",
+      "limitations=1：说明 SEC 官方接口缺访问标识，终态明确研究超时，与该轮录制配置错误相符，未否认经营事实存在。",
+      "presentation=1：三段进度句及超时、重试通知完整简短、易理解，没有断句。",
+      "no_internal_identifiers=1：没有内部数据句柄、运行 ID 或代码变量；User-Agent 是访问外部 SEC 来源所需的通用请求标识。"
+    ]
+  }
+}

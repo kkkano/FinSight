@@ -1,0 +1,11 @@
+{
+  "release_id": null,
+  "app_origin": null,
+  "api_origin": null,
+  "frontend_build_id": null,
+  "observed_frontend_build_id": null,
+  "image_manifest": null,
+  "image_manifest_sha256": null,
+  "observed_backend_image_id": null,
+  "observed_at": null
+}

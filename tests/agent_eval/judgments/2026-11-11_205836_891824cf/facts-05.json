@@ -1,0 +1,26 @@
+{
+  "request_sha256": "705af421670fddc7278c7bebbf6df370a6c928fe65c2db2f2087eb0533def804",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：最终正文正确区分二级市场成交价、每份 NAV 和组合 P/E/P/B，并交付 QQQ 收盘价；但没有交付与来源、日期一致的基金估值指标，反而宣称未取得，前段 NAV 表与最终缺口声明也不一致。",
+      "numbers=1：收盘价 690.38、涨额 15.62、2.31%、182 个观测及支撑 647.05、阻力 729.43 与报价和技术快照录制一致；基金数字在最终正文被省略，虽然搜索已有 Schwab/Morningstar 11/10 NAV 674.83、折价 −0.01%，以及基金 P/E 25.8、StockRover 28.3 等不同口径，未完成所需两类数据交付。",
+      "limitations=0：最终说没有取得 NAV、官方折溢价或可核验组合倍数，与本轮搜索的带日期 NAV、折价及基金组合倍数证据不符。可说明缺少 11/11 同日官方 NAV、第三方口径不同及部分页面抓取失败，不能笼统说这些资料没有取得。",
+      "presentation=1：最终正文按概念、已给行情、数据缺口分三节，主要概念解释清楚、完整收尾；来源与缺口的矛盾已在内容及局限项扣分。",
+      "no_internal_identifiers=1：正文没有运行或数据集 ID；[S6731ad8d75] 等用于引用，P/E、NAV 为金融术语。"
+    ]
+  }
+}

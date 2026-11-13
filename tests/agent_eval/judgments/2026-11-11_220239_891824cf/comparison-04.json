@@ -1,0 +1,26 @@
+{
+  "request_sha256": "09cb940e76adfa571da29b56c890fe7dc0d9c3812cabef71f9efb247d34f352e",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：实际计算两股共同日线窗口的年化波动和最大回撤，并在可展开stats预览给出两股数字；但正文仅有取数进度，缺少比较解读和样本限制，未满足全部must。",
+      "numbers=2：按两份2025-11-12至2026-11-11的251条收盘价独立计算250个日收益、样本标准差乘sqrt(252)，TSLA年化波动45.95649%/最大回撤-39.10345%，INTC85.00322%/-62.92749%，与计算预览一致；峰谷日期及截至期末未恢复也一致，最后使用同为日线的口径。",
+      "limitations=0：工具标题/取数通知提供日频及窗口，预览提供250个收益样本，但正文未说明样本限制、年化假设及复权/股息未知，也没有解释INTC极端观测对波动估计的影响。",
+      "presentation=0：完整数值散落在工具预览，正文没有整理对照结果或结论，最终只有超时与缩小问题建议。",
+      "no_internal_identifiers=1：正文与主要可见通知没有展示数据句柄、运行编号或代码哈希，指标/股票标签与研究问题相关。"
+    ]
+  }
+}

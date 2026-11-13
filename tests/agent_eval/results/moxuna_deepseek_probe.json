@@ -1,0 +1,7 @@
+{
+  "model": "deepseek-v4.1-flash",
+  "base_url": "https://jpn.cdn.moxuna.com/v1",
+  "error": "model_http_400",
+  "status": 400,
+  "seconds": 5.7
+}

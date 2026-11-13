@@ -1,0 +1,26 @@
+{
+  "request_sha256": "1faf6a0210bbc2d6d98841ff2d9defa059709e1621863d7c4f7a20c52f5288a6",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有准备取 INTC 行情和新闻对齐口径的一句计划，没有比较昨日与新闻跌幅，也未解释每日、累计或盘前盘后差异。",
+      "numbers=0：正文没有任何跌幅、日期区间或计算结果；当前录制存在价格及新闻数据，但未成为答案。",
+      "limitations=1：终态明确研究超时，未把周跌幅当日跌幅，也没有替来源补写未知交易所或延迟；正分只依据故障说明。",
+      "presentation=1：进度句与超时、恢复提示完整简短、可理解。",
+      "no_internal_identifiers=1：正文与可读故障通知没有数据集、运行或函数标识。"
+    ]
+  }
+}

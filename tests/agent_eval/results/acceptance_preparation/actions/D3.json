@@ -1,0 +1,14 @@
+{
+  "case_id": "D3",
+  "status": "pending",
+  "source_input_exact": "历史",
+  "expected_exact": "报告/判断分类清晰；详情带来源；错误态可重试",
+  "actions": [
+    {
+      "action": "wait",
+      "seconds": 2
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": true
+}

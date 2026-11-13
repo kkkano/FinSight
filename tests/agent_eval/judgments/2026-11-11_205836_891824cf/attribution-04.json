@@ -1,0 +1,26 @@
+{
+  "request_sha256": "fbeac8fae2708fb5378e9caf06461bc397ff06c7f242f340079cc2f266e7cccb",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：交付 EPS 超预期后的价格反应、Cybertruck/Robotaxi 后续消息及观点边界，部分回答财报影响；但财报日期与具体盈利、指引内容在最终各章节不完整，价格波动窗口也有错误，不能给完整分。",
+      "numbers=1：−3.08%、11-09 +5.54%、11-11约+2.91%及成交量可由本轮日线复核；但把10/22至11/09、11/11的约三周写成“两周内”，并把两次都称放量。11/09成交36,341,400股低于11/06的36,730,400，且11/09、11/11均低于65日均量约37,790,912股，不足支持该共同判断。",
+      "limitations=1：区分 SEC 取数失败与数据不存在，说明财务值来自其他搜索来源；指出EPS估计0.45与0.22不同口径、没有电话会全文、无法唯一归因或确认买盘/回补，边界具体。",
+      "presentation=0：第一节只剩“也就是说”而没有对应盈利数字，第二节以“即”引出缺少基础表的总结，末尾多次重复不确定与归因结论，段落承接与完整性不足。",
+      "no_internal_identifiers=1：正文没有代码变量、函数或数据集标识；引用及 SEC 数据来源名称不算内部泄漏。"
+    ]
+  }
+}

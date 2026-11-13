@@ -1,0 +1,26 @@
+{
+  "request_sha256": "6cb69f8aa0eb8fac97d21cbdaa3c14bbec8a5d02942858fc1561f685f84c0161",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 2,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=2：正文交付上涨148天、下跌102天、持平0天，并交代251个报价形成250个相邻可比日、首行不计，按返回相邻收盘比较且未额外处理缺口；全部must得到回应。",
+      "numbers=2：按录制251条收盘价独立逐邻计算得到148涨/102跌/0平，未把样本行数当计数；图中250行累计涨跌及差值也逐行匹配，没有把缺失价格补零或跨空值补算。",
+      "limitations=1：说明窗口2025-11-12至2026-11-11、首行排除、仅基于返回的相邻交易日、停牌和缺口未额外处理，并明确复权及股息未知对全收益判定的影响。",
+      "presentation=1：先给涨跌天数，再解释统计口径和局限，且实际附累计计数图，篇幅与结构适合此题。",
+      "no_internal_identifiers=0：用户可见计算结果通知直接显示observations、comparable_days、up_days内部字段名，而非面向用户的中文指标名称。"
+    ]
+  }
+}

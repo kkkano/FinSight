@@ -1,0 +1,14 @@
+{
+  "case_id": "E1",
+  "status": "pending",
+  "source_input_exact": "390px 宽",
+  "expected_exact": "无整页横向溢出；表格/图表容器内横滚",
+  "actions": [
+    {
+      "action": "wait",
+      "seconds": 2
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": true
+}

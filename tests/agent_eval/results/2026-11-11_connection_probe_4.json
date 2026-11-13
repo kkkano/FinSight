@@ -1,0 +1,42 @@
+{
+  "probe": 4,
+  "variant": "production_ModelTransport_stream",
+  "source": "tmp/agent-eval/2026-11-11_023948_891824cf/concepts-02/last_model_request.json",
+  "chunks": 711,
+  "usage": {
+    "prompt_tokens": 4292,
+    "completion_tokens": 709,
+    "total_tokens": 5001,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "cached_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 4292,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "prompt_cache_write_tokens": 0,
+    "completion_thinking_tokens": 0,
+    "cached_tokens": 0,
+    "quota": {
+      "model": "deepseek-v4.1-flash",
+      "percent": 2,
+      "reset_at": "1794460856",
+      "shared_models": []
+    }
+  },
+  "finish_reasons": [
+    "stop"
+  ],
+  "elapsed_seconds": 6.75
+}

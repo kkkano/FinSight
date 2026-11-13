@@ -1,0 +1,26 @@
+{
+  "request_sha256": "2baeaee5ae768a95db0f00864f2bb80b545e489ff7447c8df11cf375a1f7bc37",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：正文仅说补齐财报/现金流与SEC不可用后换源，没有回答能否直接比较，也没有解释腾讯与苹果的财年、会计准则及报表币种差异；资料检索不代替首条must的解释交付。",
+      "numbers=1：未直接比较人民币和美元原始金额或伪造现金流，但正文没有形成任何同口径数值比较，且未给出准确概念解释，不能按无需数字的概念题给满分。",
+      "limitations=0：只披露SEC配置缺失和研究超时，没有说明两主体、期间、会计准则、币种及FCF定义的可比性限制。",
+      "presentation=0：仅两段取数进度，没有面向问题的结论、解释或比较结构。",
+      "no_internal_identifiers=0：可展开季度财报失败预览要求设置SEC_USER_AGENT并给联系格式，暴露用户无需处理的环境配置标识。"
+    ]
+  }
+}

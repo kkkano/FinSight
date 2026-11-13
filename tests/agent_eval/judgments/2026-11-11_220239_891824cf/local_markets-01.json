@@ -1,0 +1,26 @@
+{
+  "request_sha256": "fc823bc87d1e9981a0265e686c4566b13fb9b8261867f9c336627b99f1545d5f",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=1：检索目标正确识别0700.HK为腾讯，取得腾讯官网2026Q1/Q2业绩公告，最终有本地公告证据而非仅依赖SEC；但正文为空、无产物，未回答最近财报表现和财期/币种口径。",
+      "numbers=1：录制腾讯官方Q2公告含截至2026-06-30的人民币收入2048亿元、毛利1184亿元及IFRS/非IFRS利润等真实数据，说明证据已有；但正文没有交付财务数字或财期/币种对照，不能因搜索命中公告就给数值满分。",
+      "limitations=0：没有说明最新已公布财期、人民币报表与港币交易柜台差别、未经审核及IFRS/非IFRS口径，只有各类取数错误与超时通知。",
+      "presentation=0：正文和产物均为空，用户只有搜索/取数过程与超时，未形成财报分析。",
+      "no_internal_identifiers=0：知识库失败的用户可见通知写评测隔离账户没有历史资料，暴露不属于用户财报问题的评测环境标识。"
+    ]
+  }
+}

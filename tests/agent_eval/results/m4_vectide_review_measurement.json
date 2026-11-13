@@ -1,0 +1,2596 @@
+{
+  "run_id": "review-20261113-015147",
+  "provider": "vectide",
+  "model": "deepseek-v4.1-flash-1017",
+  "synthetic": true,
+  "dataset_sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee",
+  "runtime_sha256": "970fbfc18fff0f45f8f19954af973019cf0002263622c4b33e53f7867ab33d4e",
+  "rows": [
+    {
+      "case_id": "review-number-01",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 42 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_timeout",
+        "review_id": "reviewer_ebc1d568f10e",
+        "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 45.031,
+      "usage": {
+        "total_prompt_tokens": 1793,
+        "total_completion_tokens": 58,
+        "total_tokens": 1851,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "partial",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 1793,
+            "completion": 58,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 1793,
+            "completion": 58,
+            "calls": 2,
+            "failed_calls": 1,
+            "duration_ms": 44904
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_ebc1d568f10e"
+          },
+          "agent_id": "reviewer_ebc1d568f10e"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_nBMVcZax64ciuhKAy1B80262",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_ebc1d568f10e"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_nBMVcZax64ciuhKAy1B80262",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "output_preview": {
+              "content": "{\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}",
+              "offset": 0,
+              "total_chars": 52,
+              "next_offset": 52,
+              "has_more": false
+            },
+            "display": {
+              "kind": "document",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [
+              "h_05b7e84e5def1d8497"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成报价",
+                "url": null,
+                "data_ref": "h_05b7e84e5def1d8497",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "quote",
+                  "currency": "USD"
+                },
+                "kind": "price_snapshot",
+                "type": "tool",
+                "currency": "USD"
+              }
+            ],
+            "duration_ms": 16
+          },
+          "agent_id": "reviewer_ebc1d568f10e"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_timeout",
+            "review_id": "reviewer_ebc1d568f10e",
+            "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_ebc1d568f10e"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-number-01",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 420 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_timeout",
+        "review_id": "reviewer_4a50fd3a2508",
+        "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 45.016,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 45000
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_4a50fd3a2508"
+          },
+          "agent_id": "reviewer_4a50fd3a2508"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_timeout",
+            "review_id": "reviewer_4a50fd3a2508",
+            "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_4a50fd3a2508"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "answer": "TEST_A 2026Q3 营收为 120 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_7fc1d4321740",
+        "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 43.437,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 43421
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_7fc1d4321740"
+          },
+          "agent_id": "reviewer_7fc1d4321740"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_7fc1d4321740",
+            "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_7fc1d4321740"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_502",
+          "http_status": 502
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "answer": "TEST_A 2026Q3 营收为 210 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_d323308d88aa",
+        "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 44.0,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 43983
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_d323308d88aa"
+          },
+          "agent_id": "reviewer_d323308d88aa"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_d323308d88aa",
+            "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_d323308d88aa"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_502",
+          "http_status": 502
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度经营现金流是多少",
+      "answer": "TEST_A 2026Q3 经营现金流为 18 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_03",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "operating_cash_flow": 18,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_beb87c41b55f",
+        "answer_sha256": "93a2b184df5a26a05cdb57fb8228e63b78234a54cff9ca551c394e9c6c4f8d8c",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 24.954,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 24953
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_beb87c41b55f"
+          },
+          "agent_id": "reviewer_beb87c41b55f"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_beb87c41b55f",
+            "answer_sha256": "93a2b184df5a26a05cdb57fb8228e63b78234a54cff9ca551c394e9c6c4f8d8c",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_beb87c41b55f"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_502",
+          "http_status": 502
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度经营现金流是多少",
+      "answer": "TEST_A 2026Q3 经营现金流为 81 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_03",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "operating_cash_flow": 18,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_f6111b4dd1ef",
+        "answer_sha256": "045aeae6e53220196d84b943242761b8bde83bcc4a59435d341a487a498d4f84",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 35.718,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 35702
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_f6111b4dd1ef"
+          },
+          "agent_id": "reviewer_f6111b4dd1ef"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_f6111b4dd1ef",
+            "answer_sha256": "045aeae6e53220196d84b943242761b8bde83bcc4a59435d341a487a498d4f84",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_f6111b4dd1ef"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_502",
+          "http_status": 502
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度毛利率是多少",
+      "answer": "TEST_A 2026Q3 毛利率为 23.5%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_04",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "gross_margin_pct": 23.5,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成毛利率",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_timeout",
+        "review_id": "reviewer_39bdc4a8f162",
+        "answer_sha256": "5408987cd9e5f68de2e490677a4d14d676413b2c32833e98bf020cc62401d29f",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 45.016,
+      "usage": {
+        "total_prompt_tokens": 1782,
+        "total_completion_tokens": 61,
+        "total_tokens": 1843,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "partial",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 1782,
+            "completion": 61,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 1782,
+            "completion": 61,
+            "calls": 2,
+            "failed_calls": 1,
+            "duration_ms": 44999
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_39bdc4a8f162"
+          },
+          "agent_id": "reviewer_39bdc4a8f162"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_YbC2X6Zpi4BLGSMiJXRw1118",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_d27f80dfafe2f87675"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_39bdc4a8f162"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_YbC2X6Zpi4BLGSMiJXRw1118",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_d27f80dfafe2f87675"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "gross_margin_pct": 23.5,
+                  "unit": "percent"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "gross_margin_pct": 23.5,
+                  "unit": "percent"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_d27f80dfafe2f87675"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成毛利率",
+                "url": null,
+                "data_ref": "h_d27f80dfafe2f87675",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_39bdc4a8f162"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_timeout",
+            "review_id": "reviewer_39bdc4a8f162",
+            "answer_sha256": "5408987cd9e5f68de2e490677a4d14d676413b2c32833e98bf020cc62401d29f",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_39bdc4a8f162"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度毛利率是多少",
+      "answer": "TEST_A 2026Q3 毛利率为 32.5%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_04",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "gross_margin_pct": 23.5,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成毛利率",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_timeout",
+        "review_id": "reviewer_66c65e99bab6",
+        "answer_sha256": "39677a96fea879fa8644112d2ccf0c95df3dcf8d7283a77a86af08ef3f0f51b7",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 45.031,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 45014
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_66c65e99bab6"
+          },
+          "agent_id": "reviewer_66c65e99bab6"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_timeout",
+            "review_id": "reviewer_66c65e99bab6",
+            "answer_sha256": "39677a96fea879fa8644112d2ccf0c95df3dcf8d7283a77a86af08ef3f0f51b7",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_66c65e99bab6"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的这次价格变化方向是什么",
+      "answer": "TEST_A 11 月 10 日相较前一收盘下跌 2%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_direction_01",
+          "data": {
+            "rows": [
+              {
+                "date": "2026-11-09",
+                "close": 100
+              },
+              {
+                "date": "2026-11-10",
+                "close": 98,
+                "period_return_pct": -2
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成价格序列",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_0b7dd673e804",
+        "answer_sha256": "14d5c5fd04d5cfa16b774a51f84c4541aa34850c554b515a25f41b495bc8c634",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 36.375,
+      "usage": {
+        "total_prompt_tokens": 1784,
+        "total_completion_tokens": 48,
+        "total_tokens": 1832,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "partial",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 1784,
+            "completion": 48,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 1784,
+            "completion": 48,
+            "calls": 2,
+            "failed_calls": 1,
+            "duration_ms": 36358
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_0b7dd673e804"
+          },
+          "agent_id": "reviewer_0b7dd673e804"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_5jv4VDgGWo4qyMNmZV9b1286",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_13bed0337899d7554e"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_0b7dd673e804"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_5jv4VDgGWo4qyMNmZV9b1286",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_13bed0337899d7554e"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "date": "2026-11-09",
+                  "close": 100,
+                  "period_return_pct": null
+                },
+                {
+                  "date": "2026-11-10",
+                  "close": 98,
+                  "period_return_pct": -2
+                }
+              ],
+              "offset": 0,
+              "row_count": 2,
+              "next_offset": 2,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 2 条结果，展开查看内容与来源。",
+              "summary": "返回 2 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 2,
+              "returned_rows": 2,
+              "has_more": false,
+              "rows": [
+                {
+                  "date": "2026-11-09",
+                  "close": 100,
+                  "period_return_pct": null
+                },
+                {
+                  "date": "2026-11-10",
+                  "close": 98,
+                  "period_return_pct": -2
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 2 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_13bed0337899d7554e"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成价格序列",
+                "url": null,
+                "data_ref": "h_13bed0337899d7554e",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "series"
+                },
+                "kind": "price_history",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_0b7dd673e804"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_0b7dd673e804",
+            "answer_sha256": "14d5c5fd04d5cfa16b774a51f84c4541aa34850c554b515a25f41b495bc8c634",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_0b7dd673e804"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_502",
+          "http_status": 502
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的这次价格变化方向是什么",
+      "answer": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_direction_01",
+          "data": {
+            "rows": [
+              {
+                "date": "2026-11-09",
+                "close": 100
+              },
+              {
+                "date": "2026-11-10",
+                "close": 98,
+                "period_return_pct": -2
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成价格序列",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "revise",
+        "findings": [
+          {
+            "quote": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+            "issue": "涨跌方向与幅度均与来源数据相反：数据表显示 2026-11-10 收盘 98，前一日 2026-11-09 收盘 100，period_return_pct 为 -2，即下跌 2% 而非上涨 2%。",
+            "evidence": "句柄 h_13bed0337899d7554e 的第 1-2 行：2026-11-09 收盘 100；2026-11-10 收盘 98，period_return_pct = -2（对应来源 [1]）",
+            "suggestion": "改为「TEST_A 11 月 10 日收于 98，相较前一交易日收盘（100）下跌 2%」，或明确写成 period_return_pct = -2 的回撤表述。"
+          }
+        ],
+        "coverage": [
+          {
+            "requirement": "回答 TEST_A 这次价格变化的方向",
+            "met": false
+          }
+        ],
+        "review_id": "reviewer_b99bbb9f4f2b",
+        "data_refs": [],
+        "answer_sha256": "bc141360e4266e5a2fe5287e485da28665f1722a5d30e0ca9f935d13adbd6bc2",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": true,
+      "elapsed_seconds": 20.969,
+      "usage": {
+        "total_prompt_tokens": 3742,
+        "total_completion_tokens": 504,
+        "total_tokens": 4246,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 3742,
+            "completion": 504,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 3742,
+            "completion": 504,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 20952
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_b99bbb9f4f2b"
+          },
+          "agent_id": "reviewer_b99bbb9f4f2b"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_9XUqvOXRtLxQ0ID4jK2S4089",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_13bed0337899d7554e"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_b99bbb9f4f2b"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_9XUqvOXRtLxQ0ID4jK2S4089",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_13bed0337899d7554e"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "date": "2026-11-09",
+                  "close": 100,
+                  "period_return_pct": null
+                },
+                {
+                  "date": "2026-11-10",
+                  "close": 98,
+                  "period_return_pct": -2
+                }
+              ],
+              "offset": 0,
+              "row_count": 2,
+              "next_offset": 2,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 2 条结果，展开查看内容与来源。",
+              "summary": "返回 2 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 2,
+              "returned_rows": 2,
+              "has_more": false,
+              "rows": [
+                {
+                  "date": "2026-11-09",
+                  "close": 100,
+                  "period_return_pct": null
+                },
+                {
+                  "date": "2026-11-10",
+                  "close": 98,
+                  "period_return_pct": -2
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 2 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_13bed0337899d7554e"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成价格序列",
+                "url": null,
+                "data_ref": "h_13bed0337899d7554e",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "series"
+                },
+                "kind": "price_history",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_b99bbb9f4f2b"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ys8YnkfETQiLVAbJm0Kr8507",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+                  "issue": "涨跌方向与幅度均与来源数据相反：数据表显示 2026-11-10 收盘 98，前一日 2026-11-09 收盘 100，period_return_pct 为 -2，即下跌 2% 而非上涨 2%。",
+                  "evidence": "句柄 h_13bed0337899d7554e 的第 1-2 行：2026-11-09 收盘 100；2026-11-10 收盘 98，period_return_pct = -2（对应来源 [1]）",
+                  "suggestion": "改为「TEST_A 11 月 10 日收于 98，相较前一交易日收盘（100）下跌 2%」，或明确写成 period_return_pct = -2 的回撤表述。"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 这次价格变化的方向",
+                  "met": false
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_b99bbb9f4f2b"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ys8YnkfETQiLVAbJm0Kr8507",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+                  "issue": "涨跌方向与幅度均与来源数据相反：数据表显示 2026-11-10 收盘 98，前一日 2026-11-09 收盘 100，period_return_pct 为 -2，即下跌 2% 而非上涨 2%。",
+                  "evidence": "句柄 h_13bed0337899d7554e 的第 1-2 行：2026-11-09 收盘 100；2026-11-10 收盘 98，period_return_pct = -2（对应来源 [1]）",
+                  "suggestion": "改为「TEST_A 11 月 10 日收于 98，相较前一交易日收盘（100）下跌 2%」，或明确写成 period_return_pct = -2 的回撤表述。"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 这次价格变化的方向",
+                  "met": false
+                }
+              ]
+            },
+            "output_preview": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+                  "issue": "涨跌方向与幅度均与来源数据相反：数据表显示 2026-11-10 收盘 98，前一日 2026-11-09 收盘 100，period_return_pct 为 -2，即下跌 2% 而非上涨 2%。",
+                  "evidence": "句柄 h_13bed0337899d7554e 的第 1-2 行：2026-11-09 收盘 100；2026-11-10 收盘 98，period_return_pct = -2（对应来源 [1]）",
+                  "suggestion": "改为「TEST_A 11 月 10 日收于 98，相较前一交易日收盘（100）下跌 2%」，或明确写成 period_return_pct = -2 的回撤表述。"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 这次价格变化的方向",
+                  "met": false
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_b99bbb9f4f2b"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "revise",
+            "findings": [
+              {
+                "quote": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+                "issue": "涨跌方向与幅度均与来源数据相反：数据表显示 2026-11-10 收盘 98，前一日 2026-11-09 收盘 100，period_return_pct 为 -2，即下跌 2% 而非上涨 2%。",
+                "evidence": "句柄 h_13bed0337899d7554e 的第 1-2 行：2026-11-09 收盘 100；2026-11-10 收盘 98，period_return_pct = -2（对应来源 [1]）",
+                "suggestion": "改为「TEST_A 11 月 10 日收于 98，相较前一交易日收盘（100）下跌 2%」，或明确写成 period_return_pct = -2 的回撤表述。"
+              }
+            ],
+            "coverage": [
+              {
+                "requirement": "回答 TEST_A 这次价格变化的方向",
+                "met": false
+              }
+            ],
+            "review_id": "reviewer_b99bbb9f4f2b",
+            "data_refs": [],
+            "answer_sha256": "bc141360e4266e5a2fe5287e485da28665f1722a5d30e0ca9f935d13adbd6bc2",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_b99bbb9f4f2b"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的自由现金流同比怎样变化",
+      "answer": "TEST_A 2026Q3 自由现金流同比下降 8%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "free_cash_flow_yoy_pct": -8,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "pass",
+        "findings": [],
+        "coverage": [
+          {
+            "requirement": "回答 TEST_A 自由现金流的同比变化方向与幅度",
+            "met": true
+          },
+          {
+            "requirement": "具体数字（-8%）须有资料依据",
+            "met": true
+          },
+          {
+            "requirement": "引用编号 [1] 须支持其所在句子",
+            "met": true
+          }
+        ],
+        "review_id": "reviewer_5fbc3bab844b",
+        "data_refs": [],
+        "answer_sha256": "33bcf8f42c7809beb6878e04a081fe63928e9cf615070a75413d1feea8086dbc",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 43.703,
+      "usage": {
+        "total_prompt_tokens": 3365,
+        "total_completion_tokens": 287,
+        "total_tokens": 3652,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 3365,
+            "completion": 287,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 3365,
+            "completion": 287,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 43688
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_5fbc3bab844b"
+          },
+          "agent_id": "reviewer_5fbc3bab844b"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_jemKIyGjNoJdBkwC3GNR0520",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_335b89181cecea707e"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_5fbc3bab844b"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_jemKIyGjNoJdBkwC3GNR0520",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_335b89181cecea707e"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "free_cash_flow_yoy_pct": -8,
+                  "unit": "percent"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "free_cash_flow_yoy_pct": -8,
+                  "unit": "percent"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_335b89181cecea707e"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成现金流变化",
+                "url": null,
+                "data_ref": "h_335b89181cecea707e",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_5fbc3bab844b"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_nAwTJPjHDtJkqimqF8dt8798",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 自由现金流的同比变化方向与幅度",
+                  "met": true
+                },
+                {
+                  "requirement": "具体数字（-8%）须有资料依据",
+                  "met": true
+                },
+                {
+                  "requirement": "引用编号 [1] 须支持其所在句子",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_5fbc3bab844b"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_nAwTJPjHDtJkqimqF8dt8798",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 自由现金流的同比变化方向与幅度",
+                  "met": true
+                },
+                {
+                  "requirement": "具体数字（-8%）须有资料依据",
+                  "met": true
+                },
+                {
+                  "requirement": "引用编号 [1] 须支持其所在句子",
+                  "met": true
+                }
+              ]
+            },
+            "output_preview": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 自由现金流的同比变化方向与幅度",
+                  "met": true
+                },
+                {
+                  "requirement": "具体数字（-8%）须有资料依据",
+                  "met": true
+                },
+                {
+                  "requirement": "引用编号 [1] 须支持其所在句子",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_5fbc3bab844b"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "pass",
+            "findings": [],
+            "coverage": [
+              {
+                "requirement": "回答 TEST_A 自由现金流的同比变化方向与幅度",
+                "met": true
+              },
+              {
+                "requirement": "具体数字（-8%）须有资料依据",
+                "met": true
+              },
+              {
+                "requirement": "引用编号 [1] 须支持其所在句子",
+                "met": true
+              }
+            ],
+            "review_id": "reviewer_5fbc3bab844b",
+            "data_refs": [],
+            "answer_sha256": "33bcf8f42c7809beb6878e04a081fe63928e9cf615070a75413d1feea8086dbc",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_5fbc3bab844b"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的自由现金流同比怎样变化",
+      "answer": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "free_cash_flow_yoy_pct": -8,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "revise",
+        "findings": [
+          {
+            "quote": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+            "issue": "数据表中的 free_cash_flow_yoy_pct 为 -8（percent），即同比下降 8%，回答把负值写成了正增长，同比方向被反转。",
+            "evidence": "句柄 h_335b89181cecea707e 数据表第 1 行：ticker=TEST_A, period=2026Q3, free_cash_flow_yoy_pct=-8, unit=percent（来源 [1]）",
+            "suggestion": "改为“TEST_A 2026Q3 自由现金流同比下降 8%（同比 -8%）。[1]”，并在表述中明确是下降。"
+          }
+        ],
+        "coverage": [
+          {
+            "requirement": "回答 TEST_A 自由现金流的同比变化（方向与幅度）",
+            "met": false
+          },
+          {
+            "requirement": "引用编号 [1] 需真实支持其所在语句",
+            "met": false
+          },
+          {
+            "requirement": "数字需与原始资料一致",
+            "met": false
+          }
+        ],
+        "review_id": "reviewer_a47d00b6bcfa",
+        "data_refs": [],
+        "answer_sha256": "b6b283d1ab21cd2242110885ca7002dc036764cf5989c7aff11d60b9d6aa8833",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": true,
+      "elapsed_seconds": 34.453,
+      "usage": {
+        "total_prompt_tokens": 5515,
+        "total_completion_tokens": 620,
+        "total_tokens": 6135,
+        "llm_token_calls": 3,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 3,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 5515,
+            "completion": 620,
+            "calls": 3
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 5515,
+            "completion": 620,
+            "calls": 3,
+            "failed_calls": 0,
+            "duration_ms": 32451
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_a47d00b6bcfa"
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_HCkv5JFOEgjo6hJRL1Q81995",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_335b89181cecea707e"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_HCkv5JFOEgjo6hJRL1Q81995",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_335b89181cecea707e"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "free_cash_flow_yoy_pct": -8,
+                  "unit": "percent"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "free_cash_flow_yoy_pct": -8,
+                  "unit": "percent"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_335b89181cecea707e"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成现金流变化",
+                "url": null,
+                "data_ref": "h_335b89181cecea707e",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_rtzdryi9kOyZCEditEdD4840",
+            "name": "run_python",
+            "title": "运行隔离计算",
+            "inputs": {
+              "code": "import pandas as pd\nh = \"h_335b89181cecea707e\"\ndf = get_frame(h)\nprint(df)\nprint(df.dtypes)\nprint(\"value as reported:\", df.loc[0, 'free_cash_flow_yoy_pct'])\n",
+              "handles": [
+                "h_335b89181cecea707e"
+              ]
+            },
+            "display": {
+              "kind": "computation",
+              "status": "empty",
+              "title": "运行隔离计算",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "tool.failed",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_rtzdryi9kOyZCEditEdD4840",
+            "name": "run_python",
+            "title": "运行隔离计算",
+            "status": "error",
+            "inputs": {
+              "code": "import pandas as pd\nh = \"h_335b89181cecea707e\"\ndf = get_frame(h)\nprint(df)\nprint(df.dtypes)\nprint(\"value as reported:\", df.loc[0, 'free_cash_flow_yoy_pct'])\n",
+              "handles": [
+                "h_335b89181cecea707e"
+              ]
+            },
+            "output_preview": {
+              "status": "error",
+              "error": "analysis_result_missing",
+              "logs": "   ticker  period  free_cash_flow_yoy_pct     unit\n0  TEST_A  2026Q3                      -8  percent\nticker                    object\nperiod                    object\nfree_cash_flow_yoy_pct     int64\nunit                      object\ndtype: object\nvalue as reported: -8\n",
+              "logs_truncated": false,
+              "job_id": "finsight-analysis-e8068f91f3f641f1a2427e7c08ecf735",
+              "code_hash": "85763e8f168e97f07c5200f0e21684cea5009a0544d2dc237424ae7a78700f3c",
+              "input_hash": "14fb5de3bfc0f9d83a301577bdfbc843709e9a9b4a4140527a86a6ba8cd6a4b3",
+              "duration_ms": 1720,
+              "allocated_memory_mb": 256,
+              "memory_reserve_mb": 256,
+              "summary": "代码已执行，但还没有返回计算结果。请查看 logs，并把要返回的内容赋给 result；仅 print 不会生成数据表。",
+              "retryable": true
+            },
+            "display": {
+              "kind": "computation",
+              "status": "error",
+              "title": "运行隔离计算",
+              "target": "当前研究资料",
+              "result": "这次处理出错了。",
+              "summary": "这次处理出错了。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": {
+                "code": "analysis_result_missing",
+                "user_message": "这次处理出错了。",
+                "retryable": true,
+                "suggestion": "已有数据会保留，可以重试。"
+              }
+            },
+            "summary": "这次处理出错了。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 1985
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_BNvOMzXgvVuFOfvcJD2y9080",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+                  "issue": "数据表中的 free_cash_flow_yoy_pct 为 -8（percent），即同比下降 8%，回答把负值写成了正增长，同比方向被反转。",
+                  "evidence": "句柄 h_335b89181cecea707e 数据表第 1 行：ticker=TEST_A, period=2026Q3, free_cash_flow_yoy_pct=-8, unit=percent（来源 [1]）",
+                  "suggestion": "改为“TEST_A 2026Q3 自由现金流同比下降 8%（同比 -8%）。[1]”，并在表述中明确是下降。"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 自由现金流的同比变化（方向与幅度）",
+                  "met": false
+                },
+                {
+                  "requirement": "引用编号 [1] 需真实支持其所在语句",
+                  "met": false
+                },
+                {
+                  "requirement": "数字需与原始资料一致",
+                  "met": false
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_BNvOMzXgvVuFOfvcJD2y9080",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+                  "issue": "数据表中的 free_cash_flow_yoy_pct 为 -8（percent），即同比下降 8%，回答把负值写成了正增长，同比方向被反转。",
+                  "evidence": "句柄 h_335b89181cecea707e 数据表第 1 行：ticker=TEST_A, period=2026Q3, free_cash_flow_yoy_pct=-8, unit=percent（来源 [1]）",
+                  "suggestion": "改为“TEST_A 2026Q3 自由现金流同比下降 8%（同比 -8%）。[1]”，并在表述中明确是下降。"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 自由现金流的同比变化（方向与幅度）",
+                  "met": false
+                },
+                {
+                  "requirement": "引用编号 [1] 需真实支持其所在语句",
+                  "met": false
+                },
+                {
+                  "requirement": "数字需与原始资料一致",
+                  "met": false
+                }
+              ]
+            },
+            "output_preview": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+                  "issue": "数据表中的 free_cash_flow_yoy_pct 为 -8（percent），即同比下降 8%，回答把负值写成了正增长，同比方向被反转。",
+                  "evidence": "句柄 h_335b89181cecea707e 数据表第 1 行：ticker=TEST_A, period=2026Q3, free_cash_flow_yoy_pct=-8, unit=percent（来源 [1]）",
+                  "suggestion": "改为“TEST_A 2026Q3 自由现金流同比下降 8%（同比 -8%）。[1]”，并在表述中明确是下降。"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "回答 TEST_A 自由现金流的同比变化（方向与幅度）",
+                  "met": false
+                },
+                {
+                  "requirement": "引用编号 [1] 需真实支持其所在语句",
+                  "met": false
+                },
+                {
+                  "requirement": "数字需与原始资料一致",
+                  "met": false
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "revise",
+            "findings": [
+              {
+                "quote": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+                "issue": "数据表中的 free_cash_flow_yoy_pct 为 -8（percent），即同比下降 8%，回答把负值写成了正增长，同比方向被反转。",
+                "evidence": "句柄 h_335b89181cecea707e 数据表第 1 行：ticker=TEST_A, period=2026Q3, free_cash_flow_yoy_pct=-8, unit=percent（来源 [1]）",
+                "suggestion": "改为“TEST_A 2026Q3 自由现金流同比下降 8%（同比 -8%）。[1]”，并在表述中明确是下降。"
+              }
+            ],
+            "coverage": [
+              {
+                "requirement": "回答 TEST_A 自由现金流的同比变化（方向与幅度）",
+                "met": false
+              },
+              {
+                "requirement": "引用编号 [1] 需真实支持其所在语句",
+                "met": false
+              },
+              {
+                "requirement": "数字需与原始资料一致",
+                "met": false
+              }
+            ],
+            "review_id": "reviewer_a47d00b6bcfa",
+            "data_refs": [],
+            "answer_sha256": "b6b283d1ab21cd2242110885ca7002dc036764cf5989c7aff11d60b9d6aa8833",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_a47d00b6bcfa"
+        }
+      ],
+      "model_failures": []
+    }
+  ],
+  "summary": {
+    "runs": 12,
+    "completed": 3,
+    "clean_cases": 6,
+    "false_positive_count": 0,
+    "injected_cases": 6,
+    "annotated_injected_span_count": 2,
+    "semantic_detection_adjudication": "pending_independent_review",
+    "false_positive_rate": 0.0,
+    "unavailable_count": 9
+  },
+  "collection_status": "partial_stopped_after_repeated_provider_failures",
+  "expected_variants": 24,
+  "uncollected_variants": [
+    {
+      "case_id": "review-direction-03",
+      "variant": "clean"
+    },
+    {
+      "case_id": "review-direction-03",
+      "variant": "injected"
+    },
+    {
+      "case_id": "review-direction-04",
+      "variant": "clean"
+    },
+    {
+      "case_id": "review-direction-04",
+      "variant": "injected"
+    },
+    {
+      "case_id": "review-source-01",
+      "variant": "clean"
+    },
+    {
+      "case_id": "review-source-01",
+      "variant": "injected"
+    },
+    {
+      "case_id": "review-source-02",
+      "variant": "clean"
+    },
+    {
+      "case_id": "review-source-02",
+      "variant": "injected"
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "clean"
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "injected"
+    },
+    {
+      "case_id": "review-source-04",
+      "variant": "clean"
+    },
+    {
+      "case_id": "review-source-04",
+      "variant": "injected"
+    }
+  ],
+  "stop_note": "完成第12条落盘后终止本地评测进程，保留全部12条；后继请求可能已开始但未落盘，不作为测量结果。先完成端点诊断再决定续测。"
+}

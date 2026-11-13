@@ -1,0 +1,1004 @@
+{
+  "schema_version": 1,
+  "runtime": "baseline",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:facts-01:0",
+            "session_id": "2026-11-11_185400_891824cf:facts-01",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 7688
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 10.453,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/facts-01/events.json",
+      "tool_recordings": 5
+    },
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:facts-02:0",
+          "query": "MSFT 最新一季营收和经营现金流分别是多少",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:facts-02:0",
+            "session_id": "2026-11-11_185400_891824cf:facts-02",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 1344
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 4.109,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/facts-02/events.json",
+      "tool_recordings": 14
+    },
+    {
+      "id": "facts-03",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:facts-03:0",
+          "query": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:facts-03:0",
+            "session_id": "2026-11-11_185400_891824cf:facts-03",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 5984
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 6.235,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/facts-03/events.json",
+      "tool_recordings": 23
+    },
+    {
+      "id": "facts-04",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:facts-04:0",
+          "query": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:facts-04:0",
+            "session_id": "2026-11-11_185400_891824cf:facts-04",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 7280
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 7.531,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/facts-04/events.json",
+      "tool_recordings": 0
+    },
+    {
+      "id": "facts-05",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:facts-05:0",
+          "query": "QQQ 最新价格和基金估值有什么区别",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:facts-05:0",
+            "session_id": "2026-11-11_185400_891824cf:facts-05",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 12031
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 12.266,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/facts-05/events.json",
+      "tool_recordings": 0
+    },
+    {
+      "id": "facts-06",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:facts-06:0",
+          "query": "INTC 最近两个已披露季度的营收和毛利率列出来",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:facts-06:0",
+            "session_id": "2026-11-11_185400_891824cf:facts-06",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 36218
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 36.469,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/facts-06/events.json",
+      "tool_recordings": 0
+    },
+    {
+      "id": "valuation-01",
+      "group": "valuation",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:valuation-01:0",
+          "query": "QQQ 现在估值贵不贵？把结论说完整",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:valuation-01:0",
+            "session_id": "2026-11-11_185400_891824cf:valuation-01",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 6172
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 6.406,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/valuation-01/events.json",
+      "tool_recordings": 0
+    },
+    {
+      "id": "valuation-02",
+      "group": "valuation",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_185400_891824cf:valuation-02:0",
+          "query": "AAPL 当前估值相对 MSFT 怎么看",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_185400_891824cf:valuation-02:0",
+            "session_id": "2026-11-11_185400_891824cf:valuation-02",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_403",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 6110
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 6.344,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_403",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_error": "model_http_403",
+      "judge_details": {},
+      "events_path": "tmp/agent-eval/2026-11-11_185400_891824cf/valuation-02/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 6,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 8.991999999999999,
+      "median_tokens": 0.0,
+      "median_rounds": 1.0,
+      "tool_error_rate": 0.0
+    },
+    "valuation": {
+      "cases": 2,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 6.375,
+      "median_tokens": 0.0,
+      "median_rounds": 1.0,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192,
+    "base_url": "https://api.llm.pm/v1"
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "base_url": "https://api.llm.pm/v1"
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures/primary-v3",
+  "seed_tapes": null,
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 2,
+    "request_pacing_scope": "global",
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "interrupted_reason": "研究与独立判分均返回HTTP403，停止整批请求，保留真实结果。"
+}

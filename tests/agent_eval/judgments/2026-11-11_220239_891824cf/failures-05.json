@@ -1,0 +1,26 @@
+{
+  "request_sha256": "a9003e46791a59c1d2aaa5ddf792a8442b03d9ddafb3cce26383ac0e5ae34980",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：本地公告源确实按声明返回 empty，正文却仅承诺获取腾讯资料，没有交代最新财期、已核实内容及缺口，也未回答最近财报表现。",
+      "numbers=0：虽然替代搜索取得腾讯2Q2026人民币财务数据并留存在来源中，正文没有营收、利润或财报比较数字，不算财务回答。",
+      "limitations=1：可见公告及其他工具过程说明未返回数据，终态说明研究超时，没有把公告空结果推断为腾讯没有披露，也未用美股 SEC 数字填表。",
+      "presentation=1：英文取证承诺及中文故障/恢复提示为完整短句，失败状态可读。",
+      "no_internal_identifiers=1：正文没有内部句柄或运行 ID，0700.HK 为用户指定主体。"
+    ]
+  }
+}

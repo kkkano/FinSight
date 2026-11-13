@@ -1,0 +1,26 @@
+{
+  "request_sha256": "4353f37d76f0d803bd9e5a18e67d17660a3061a7f0966cc516cd7d4fd5db47a7",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文仅声称已定位10/30–11/10共同回落窗口并准备查原因，没有同区间价格比较或带来源的共性、公司特有因素。",
+      "numbers=0：没有收益或价格数字交付，且唯一窗口判断未获序列支持。以10/30收盘至11/10收盘计算，MSFT521.90997→533.15997为+2.156%，NVDA204.64→168.89为−17.470%；即便纳入10/30当天变化、用10/29收盘作基准，MSFT仍为+0.570%。",
+      "limitations=0：正文把上述窗口称为“清晰的共同回落”，未定义峰值/起点或说明中途跌后反弹，不能将该整体区间直接认定为两者共同下跌；终态超时说明不修复这个未经支持的判断。",
+      "presentation=1：两段进度和故障通知完整简短、可读；判断正确性已在内容与局限项扣分。",
+      "no_internal_identifiers=1：正文没有内部数据集、运行或函数标识，日期和股票主体为题目相关信息。"
+    ]
+  }
+}

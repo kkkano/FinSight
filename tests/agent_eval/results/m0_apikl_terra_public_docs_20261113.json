@@ -1,0 +1,86 @@
+{
+  "requested_model": "gpt-6.1-terra",
+  "source_discovered_from": "https://apikl.ai homepage structured documentation link",
+  "rows": [
+    {
+      "url": "https://docs.apikl.ai/",
+      "http_status": 200,
+      "title": "API 中转站与 AI 中转站接入文档 · API 快连",
+      "documentation_links": [
+        "/about",
+        "/api-relay-selection",
+        "/balance-api",
+        "/chatgpt-cn",
+        "/chatgpt-model-not-found",
+        "/codex",
+        "/codex-cli-usage",
+        "/codex-desktop",
+        "/codex-feishu",
+        "/gpt-image-api",
+        "/invalid-api-key",
+        "/model-not-exist",
+        "/nano-banana-api",
+        "/why-apikl",
+        "https://docs.apikl.ai/",
+        "https://docs.apikl.ai/about",
+        "https://docs.apikl.ai/sitemap.xml"
+      ],
+      "text_excerpt": "API 中转站与 AI 中转站接入文档 · API 快连 跳到正文 API 快连 apikl.ai 🇨🇳 ZH 首页 控制台 快速上手 CC Switch 配置教程 Node.js 环境安装教程 Codex 配置教程 Codex CLI 使用教程 Codex 桌面版教程 Codex 接入飞书 Claude Code 配置教程 Gemini API / CLI 接入教程 TRAE SOLO 配置教程 WorkBuddy 配置教程 OpenClaw 配置教程 Hermes Agent 配置教程 为什么选 apikl.ai 关于我们 常见报错与接入 OpenAI 兼容接入 / Base URL 怎么填 401 invalid_api_key 怎么解决？ model not exist 怎么解决？ ChatGPT 显示 model not found Cline / Roo Code 配置教程 API 报错大全 API 余额查询 生图 API 接入 香蕉生图 API 国内使用与选型 ChatGPT 国内怎么用？ API 中转站怎么选？ Cursor 配置教程 AI 中转站接入文档 API 快连提供 Claude、OpenAI Codex / GPT、Gemini、Grok、DeepSeek、Kimi、GLM API 的统一接入方式。按下面的教程配置 Base URL、API Key、SDK 或 CLI，并先用最小请求验证连接。Grok、DeepSeek、Kimi、GLM 无需单独教程：走同一个 OpenAI 兼容 Base URL，只换模型 ID 即可。 从这里开始 CC Switch 下载安装与配置教程 ：用图形界面管理 Claude、Codex 与 Gemini 供应商配置。 Claude Code 安装与国内使用教程 ：设置 Anthropic 兼容地址、密钥和默认模型。 Codex 安装与国内使用教程 ：完成 OpenAI Compatible Base URL 与模型配置。 Codex CLI 使用教程 ：常用命令、斜杠命令、权限模式、AGENTS.md 和 codex exec。 Codex 桌面版下载安装与使用教程 ：Windows / macOS 客户端安装、接入与常见问题。 Codex 接入飞书教程 ：让 Codex 读写飞书云文档，或在手机飞书里远程使用 Codex。 Gemini API / CLI 接入教程 ：Gemini CLI、原生接口与 OpenAI 兼容三种调用方式。 OpenAI API 代码调用示例 ：用 curl、Python 或 Node.js 发起第一个请求。 API 余额查询教程 ：用 API Key 查剩余余额和用量，网页、curl、Python、Node.js 都能查。 GPT Image 2.5 生图 API 接入教程 ：gpt-image-2.5 各分组模型名、4K 尺寸、图生图写法和示例代码。 香蕉生图 API 接入教程 ：gemini-nano-banana-2.1 等香蕉分组的原生接口写法、1K/2K/4K、图生图和示例代码。 常见问题与排障 OpenAI Compatible Base URL 怎么填？ 401 invalid_api_key 怎么解决？ model not exist / model not found 怎么解决？ ChatGPT 网页版 / App 显示 model not found 怎么办？ API 报错大全（401、429、502、524 等按状态码查） 服务入口 在 控制台 创建和管理 API Key。默认线路 apikl.ai ：Claude Code 填 https://apikl.ai （不带 /v1），Codex 等 OpenAI 兼容客户端填 https"
+    },
+    {
+      "url": "https://docs.apikl.ai/about",
+      "http_status": 200,
+      "title": "关于 API 快连：运营信息、联系方式、付款与退款 · API 快连",
+      "documentation_links": [
+        "/about",
+        "/api-relay-selection",
+        "/balance-api",
+        "/chatgpt-cn",
+        "/chatgpt-model-not-found",
+        "/codex",
+        "/codex-cli-usage",
+        "/codex-desktop",
+        "/codex-feishu",
+        "/gpt-image-api",
+        "/invalid-api-key",
+        "/model-not-exist",
+        "/nano-banana-api",
+        "/why-apikl",
+        "https://docs.apikl.ai/",
+        "https://docs.apikl.ai/about",
+        "https://docs.apikl.ai/sitemap.xml"
+      ],
+      "text_excerpt": "关于 API 快连：运营信息、联系方式、付款与退款 · API 快连 跳到正文 API 快连 apikl.ai 🇨🇳 ZH 首页 控制台 快速上手 CC Switch 配置教程 Node.js 环境安装教程 Codex 配置教程 Codex CLI 使用教程 Codex 桌面版教程 Codex 接入飞书 Claude Code 配置教程 Gemini API / CLI 接入教程 TRAE SOLO 配置教程 WorkBuddy 配置教程 OpenClaw 配置教程 Hermes Agent 配置教程 为什么选 apikl.ai 关于我们 常见报错与接入 OpenAI 兼容接入 / Base URL 怎么填 401 invalid_api_key 怎么解决？ model not exist 怎么解决？ ChatGPT 显示 model not found Cline / Roo Code 配置教程 API 报错大全 API 余额查询 生图 API 接入 香蕉生图 API 国内使用与选型 ChatGPT 国内怎么用？ API 中转站怎么选？ Cursor 配置教程 关于 API 快连：运营信息、联系方式、付款与退款 更新于 2026-11-13 API 快连（apikl.ai）是面向开发者的 AI 模型 API 接入服务，2026 年 6 月上线。这一页集中说明我们提供什么、怎么联系客服、怎么付款开票、什么情况可以退款，方便你在充值前了解清楚。 基本信息 项目 内容 名称 API 快连（apikl.ai） 上线时间 2026 年 6 月 1 日 提供的服务 Claude、GPT、Gemini、Grok、DeepSeek、Kimi、GLM、MiniMax、混元、MiMo、Step 等模型的 API 接入，可用于 Claude Code、Codex、Gemini CLI、Cursor、Cline 等工具和自己的程序 接口地址 默认线路 https://apikl.ai ，中转线路 https://cf.apikl.ai ，直连线路 https://dc.apikl.ai 计费方式 预付余额，按实际用量扣费；价格以 模型广场 为准 控制台 apikl.ai （注册、充值、创建密钥、查看使用记录） 接入文档 docs.apikl.ai （各工具配置教程与报错排查） 服务是怎么提供的 你在客户端或程序里填入 API 快连的地址和密钥后，请求由 API 快连转发到上游模型服务，结果再返回给你。主要分组接入了多个上游渠道，单个渠道波动时会切换到其他渠道；网络上提供默认线路、经 Cloudflare 的中转线路和直连线路三条入口。 密钥按分组使用： 每把密钥创建时选一个分组，只能调用这个分组里的模型；一个账号可以建多把密钥，余额共用。 扣费可查： 每次请求的模型、输入输出与缓存 token、金额都能在控制台使用记录里逐条查到。 如实说明： 上游限流或模型过载时仍可能出现短时报错，生产环境建议自己做好重试和备用方案。 想了解和直接买官方 API 有什么区别、适不适合自己，可以看 为什么选 apikl.ai 。 联系我们 方式 说明 在线时间 每天 9:00–23:00（北京时间）；其他时间可以先发邮件或留言，上线后按顺序处理 邮箱 [email&#160;protected] （订单、扣费、退款这类需要核查的问题，优先发邮件） 客服 QQ 675834198 QQ 交流群 242776592 微信 在本站任意页面点右下角「在线支持服务」，扫码添加客服 Telegram 点此加入 Telegram 群 联系前可以先查 API 报错大全 ，大多数报错按状态码就能找到原因。 需要核查时请提供：账号邮箱、订单号或出问题的请求时间、报错原文和截图。 不要发送完整的 API"
+    }
+  ],
+  "model_documentation_followup": [
+    {
+      "url": "https://docs.apikl.ai/codex",
+      "http_status": 200,
+      "matching_excerpts": [
+        {
+          "term": "上下文",
+          "excerpt": "更复杂的任务。 gpt-5.6-terra ： 单价更低，适合简单、批量的任务。 切换方法： 启动时加 -m 模型名 ，会话中输入 /model ，或修改 config.toml 里的 model 。 各模型实时价格看 模型广场 。用量记录里出现你没手动选的模型名，通常是 Codex 客户端自己发起的后台请求（例如压缩上下文、自动审查），并不是线路乱跳。 国内怎么用 不需要 ChatGPT Plus / Pro 订阅，也不需要 OpenAI 账号 ，按实际用量计费。 国内多数网络可以直接访问 apikl.ai ，一般不需要额外开代理。默认线路连不上时，可以换成经 Cloudflare 的 中转线路 https://cf.apikl.ai/v1 ，同样 带 /v1 ；长任务仍建议用默认线路。 Codex 启动时如果弹出 ChatGPT 登录界面，说明没用上自定义服务商，检查 config.toml 里的 model_provider 是否是 apikl 。 在 Codex 中通过 API 快连生成图片 📌 使用第三方 API 时，不要依赖 Codex 内置的 Image Gen：它按 OpenAI 官方账号和工作区权限校验，可能返回"
+        },
+        {
+          "term": "上下文",
+          "excerpt": "决 。 stream disconnected / 反复「重新连接」 网络抖动或上游短时波动导致流式连接中断，Codex 会自动重连。偶尔出现属正常；持续出现可以换一个模型、检查本地代理，或联系客服。 413 Payload Too Large 单次请求太大，通常是会话里堆了很多截图或大文件。新开一个会话再继续即可。 上下文经常被自动压缩 Codex 在上下文快满时会自动压缩历史，这是正常机制。任务切换时开新会话，可以减少压缩次数，也更省钱。 403 insufficient balance / 余额不足 余额用完或较低时，同时运行多个任务会提前触发余额不足提示，充值或减少并发即可。 常见问题 Codex 国内能用吗？ 能。按本文把 Codex 的服务商指向 API 快连即可，不需要海外账号和信用卡。 为什么设置了 OPENAI_BASE_URL 不生效？ 较新版本的 Codex 不再读取这个环境变量，用 config.toml 的自定义服务商（第三步）最稳。 Codex 和 Claude Code 能用同一个密钥吗？ 一般不能。密钥绑定在分组上：GPT 分组的密钥调 GPT 模型，Claude 分组的密钥调 Claude 模型。"
+        }
+      ]
+    },
+    {
+      "url": "https://docs.apikl.ai/model-not-exist",
+      "http_status": 200,
+      "matching_excerpts": [
+        {
+          "term": "上下文",
+          "excerpt": "新模型用横线，例如 claude-sonnet-5-5 、 claude-opus-5-5 ；GPT 模型用点，例如 gpt-5.6-sol 、 gpt-6.1-sol 。 密钥分组不对： GPT 分组的密钥调不了 Claude 模型，反之亦然。 把界面上的标签当成模型名： 有些客户端会在模型名旁显示 [1m] 之类的上下文提示或中文说明，那不是模型名的一部分。 协议填错： OpenAI 兼容客户端用 https://apikl.ai/v1 ，Claude Code 用 https://apikl.ai 。 客户端缓存了旧配置： 桌面软件改完服务商或模型后，彻底退出再打开。 按客户端排查 Claude Code：报错里是你没选过的 haiku 模型 Claude Code 除了你选的主模型，还会用 Haiku 级别的小模型处理一些后台功能。官方文档说明， ANTHROPIC_DEFAULT_HAIKU_MODEL 既决定 haiku 别名指向哪个模型，也用于这些后台功能。如果你的分组里没有 Haiku，就会在日志或界面里看到 claude-haiku-… 模型不存在。 解决办法：在 ~/.claude/settings.json "
+        },
+        {
+          "term": "上下文",
+          "excerpt": "个模型属于哪个分组，到 控制台 用那个分组新建密钥即可。 同一个模型名，别人能用我不能？ 多半是你们的密钥不在同一个分组。分别用各自的密钥请求一次 /v1/models ，对比列表就清楚了。 使用记录里的模型名和我填的不一样？ Claude Code、Codex 等客户端会在后台自己发起一些辅助请求（例如生成标题、压缩上下文），用的可能是别的模型，这是客户端行为，不是线路乱跳。 昨天能用的模型今天提示不存在？ 可能是模型下线或改名。先用 /v1/models 查当前可用的名字；仍有疑问把完整报错、客户端名称、Base URL 和模型名发给客服（不要发完整密钥）。 → 密钥报无效看 401 invalid_api_key 怎么解决 ；其他状态码看 报错大全 。 关于我们 隐私政策 服务条款 风险提示 模型广场 官网首页 © 2026 APIKL.AI. All rights reserved. 仍跳 home #akn 兜底 --> 公告"
+        }
+      ]
+    }
+  ]
+}

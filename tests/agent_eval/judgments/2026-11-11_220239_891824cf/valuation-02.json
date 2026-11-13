@@ -1,0 +1,26 @@
+{
+  "request_sha256": "66b3abcf04eef9c080f8348a9088133580af53674faa0857a3eefe83fa259057",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有加载框架、已取报价市值及换源的进度，未交付 AAPL 与 MSFT 同口径估值及数据时点，也未区分倍数、增长与现金流假设。",
+      "numbers=0：正文没有两家公司任何估值倍数、金额或比较结果，工具录制数据并未成为答案。",
+      "limitations=1：明确 SEC 财报接口未配置、需改用其他来源，终态报告超时，与录制的配置错误相符；未伪造同口径比较或买卖结论。",
+      "presentation=1：三段进度和可见故障通知简短完整、可读，没有截断。",
+      "no_internal_identifiers=1：正文没有数据集、运行 ID 或代码函数名；SEC 是所用外部来源。"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "request_sha256": "e89372ede300f6026109840f06e37368db5f1ee98d8c0f702cdf2d7bb346b80d",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：未说明 MSFT 与 NVDA 同期回落的共同原因，正文为空；未比较同期价格和新闻，也没有带可绑定来源的共同或公司特有因素。",
+      "numbers=0：没有工具录制、价格或新闻数据，未展示两家公司同一区间的回落幅度或时点，无法形成有数据依据的比较。",
+      "limitations=1：用户可见终态 message、reason 均明确说明“这次研究用时较长，已经超时。”，承认本次交付受超时限制，没有声称未取得的资料不存在。正分依据这条可见故障说明，不依据 error_code、metrics 或其他内部诊断，也不代表已经交付题目所需口径说明。",
+      "presentation=1：虽无研究正文，可见终态有完整简短的超时通知及“可以缩小问题后再试”的恢复提示，故障表达可理解、没有断句或冗长内容。正分只评估可见失败通知的篇幅和结构，不把它当作研究答案。",
+      "no_internal_identifiers=1：用户可读正文和终态错误说明没有运行 ID、数据集 ID、工具调用 ID 或代码标识；终态用于绑定和诊断的结构化元数据不作为用户正文泄漏。"
+    ]
+  }
+}

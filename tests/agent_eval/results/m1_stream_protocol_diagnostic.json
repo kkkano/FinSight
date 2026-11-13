@@ -1,0 +1,30 @@
+[
+  {
+    "max_tokens": 512,
+    "stream": true,
+    "frames": 0,
+    "reasoning_chars": 0,
+    "content_chars": 0,
+    "tool_call_parts": 0,
+    "parse_errors": 0,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "headers_seconds": 2.0,
+    "exception": "TimeoutError",
+    "seconds": 45.0
+  },
+  {
+    "max_tokens": 16384,
+    "stream": true,
+    "frames": 0,
+    "reasoning_chars": 0,
+    "content_chars": 0,
+    "tool_call_parts": 0,
+    "parse_errors": 0,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "headers_seconds": 7.83,
+    "exception": "TimeoutError",
+    "seconds": 45.01
+  }
+]

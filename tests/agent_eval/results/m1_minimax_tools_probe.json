@@ -1,0 +1,6 @@
+{
+  "model": "MiniMax-M3",
+  "protocol": "tools",
+  "error": "TimeoutError",
+  "seconds": 45.02
+}

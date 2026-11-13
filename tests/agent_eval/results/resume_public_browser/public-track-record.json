@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "url": "https://finsight-ai.chat/track-record",
+  "text": "跳转到主要内容\n预测战绩\n\n每个交易日给 20 只美股下判断，5 个交易日后对答案：看方向，也看有没有提前躲过大跌。猜错的一条不删。\n\n近4周\n近12周\n全部\n\n自动预测暂停中，以前的记录照常可查。\n\n方向命中率\n等待首批对账\n\n还没有结束的预测，暂时算不出命中率。\n\n“永远猜涨”的命中率：等待首批对账\n\n对账结果还不够，暂时没法比较\n\n大跌预警\n等待首批对账\n\n等待行情数据和对账结果\n\n暂时无法判断预警效果\n\n等待对账\n0条\n\n暂未提供下次对账时间\n\n结果出来前不计入命中率\n\n累计方向命中率\n每次对完答案后更新，和“永远猜涨”比较\n对账结果攒够后，这里会画出命中率的走势。\n大跌预警的对错\n“大跌”= 5 个交易日内最大回撤 ≥ 5.0%\n\n还没有到期的预警。第一批对完答案后，这里会显示四种情况各有几次。\n\n每一条预测\n\n点开看当时为什么这么判断、后来怎么走的\n\n标的 \n全部标的\nAAPL\nMSFT\nNVDA\nAMZN\nGOOGL\nMETA\nTSLA\nAVGO\nAMD\nJPM\nBAC\nV\nUNH\nJNJ\nLLY\nXOM\nCVX\nCAT\nWMT\nCOST\n状态 \n全部状态\n等待对账\n已对账\n缺行情，等待对账\n发布失败，不计入\n当天没按时发布，不计入\n模型这次选择不预测\n等待生成判断\n正在生成判断\n已中断，无法评分\n数据异常，无法评分\n预测 \n全部预测\n方向预测\n大跌预警\n第一批预测还没发布，发布后会出现在这里。\n\n共 0 条记录\n\n规则是怎么定的\n看哪些股票、怎么算分",
+  "requests": [
+    {
+      "url": "https://api.finsight-ai.chat/api/benchmarks/us20-v1/track-record",
+      "model_credentials_sent": false,
+      "authorization_sent": false
+    }
+  ],
+  "new_release_acceptance": false
+}

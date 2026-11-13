@@ -1,0 +1,32 @@
+{
+  "case_id": "B3",
+  "status": "pending",
+  "source_input_exact": "「加一条 20 日均线重画」",
+  "expected_exact": "复用同一 dataset；方法字段记录参数",
+  "actions": [
+    {
+      "action": "fill_query",
+      "source": "setup",
+      "seed_index": 0
+    },
+    {
+      "action": "click_testid",
+      "testid": "chat-send-btn"
+    },
+    {
+      "action": "wait_terminal"
+    },
+    {
+      "action": "fill_query"
+    },
+    {
+      "action": "click_testid",
+      "testid": "chat-send-btn"
+    },
+    {
+      "action": "wait_terminal"
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": false
+}

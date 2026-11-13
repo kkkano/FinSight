@@ -1,0 +1,351 @@
+{
+  "prepared_at": "2026-11-13T08:50:55.549867+00:00",
+  "source": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+  "dataset_sha256": "70fee09674ebbbea7d9fa026620845a25f7a9b6e00e42e5ab6bebf5f5b452224",
+  "cases": [
+    {
+      "case_id": "A1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A6",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A7",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "A8",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B6",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B7",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "B8",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C6",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "C7",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D6",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D7",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "D8",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "E1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "E2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "E3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "E4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "E5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "F1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "F2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "F3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "F4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "F5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "F6",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "G1",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "G2",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "G3",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "G4",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "G5",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    },
+    {
+      "case_id": "G6",
+      "status": "pending",
+      "protocol": "pending",
+      "native_review": "pending",
+      "evidence": []
+    }
+  ],
+  "online_passed": 0,
+  "network_accessed": false,
+  "model_requests": 0,
+  "existing_auth_source_review": {
+    "ssh": "remote.py使用已固定known_hosts与RejectPolicy；本脚本不在准备阶段连接SSH。",
+    "old_canary": "live_api_smoke.py使用X-API-Key内部主体；不能作为普通QA身份隔离证据。",
+    "acceptance": "采用环境变量中的真实QA JWT并由服务器profile核对；浏览器只使用该QA的隔离会话，不保存storage_state或含凭据原始trace。"
+  }
+}

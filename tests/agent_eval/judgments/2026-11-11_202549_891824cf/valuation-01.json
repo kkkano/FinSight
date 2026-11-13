@@ -1,0 +1,26 @@
+{
+  "request_sha256": "891242e5173cca1f6e9ab443c9e11f16e7d8daf76f748e790f89b8a30c1f2c13",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：QQQ 当前估值贵不贵没有得到判断或比较基准，正文和产物为空；应用技能、委派任务和运行到终态均不算估值结论交付。",
+      "numbers=0：报价、历史行情、基金资料、估值搜索及网页录制均无可用数据，未取得或展示估值依据；不存在准确完成的概念解释可替代数值回答。",
+      "limitations=1：可见终态直接说明研究超时，过程中的来源不可用也有可读提示；未编造精确合理价。",
+      "presentation=1：没有正文，但完整简短的超时通知和恢复提示清楚交代停止状态；不因终态已结束奖励内容。",
+      "no_internal_identifiers=1：可读错误通知没有角色 ID、运行或数据集标识；工具诊断元数据不作为正文。"
+    ]
+  }
+}

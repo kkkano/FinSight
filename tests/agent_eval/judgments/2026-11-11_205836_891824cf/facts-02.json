@@ -1,0 +1,26 @@
+{
+  "request_sha256": "b4524bec33340570954c72d203fe98235720566a32bc2cd365c3c12538265e93",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：交付 FY27 Q1 营收 92,279 百万美元及来源，财季、单位和本币可辨；但用户同时要求经营现金流，正文称没有取得而未给金额，未完成两个指标的同季交付。",
+      "numbers=1：营收 92,279 百万美元即 922.79 亿美元及 92.3 billion 的四舍五入值与微软原文一致；经营现金流未交付，而 search 原文已明确同季 Net cash from operations 为 58,000 百万美元，完整性不足。",
+      "limitations=0：正文说资料只含利润表且“未披露 FY27 Q1 的经营活动现金流量金额”，与同一搜索录制包含 CASH FLOWS STATEMENTS、2026/2025 两列及 58,000/45,057 相矛盾；末尾将缺失限于本轮资料的限定也不能使该说明属实。",
+      "presentation=1：表格列示已给出的指标，经营现金流和局限另设明确段落，可读且完整；附加指标较多，但两个用户关心的项目仍易定位。",
+      "no_internal_identifiers=1：没有回显数据集、运行 ID 或校验错误码；[S89add01e79] 绑定搜索资料，GAAP 和 RPO 属于财务术语。"
+    ]
+  }
+}

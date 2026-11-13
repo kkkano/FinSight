@@ -1,0 +1,26 @@
+{
+  "request_sha256": "6abd032a94c7b19fb6dc63bab80295ed7db6408e55023769b4ee890117812a77",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：两轮均实际生成图；第二轮method记录rolling(window=20,min_periods=20)，取两年数据提供250行窗口前预热，正文与图使用同一计算。但第二轮重新获取2y数据并使用新句柄，没有复用首轮仍有效的1y句柄，未满足全部must。",
+      "numbers=2：按录制501条日线独立重算，第二轮图中251行close和ma20逐行一致；末值173.73与203.8045012、偏离-14.7565%、站上比例51.7928%、最高最低价格239.24001/165.17和均线228.68950085/177.1459991均支持正文舍入值。",
+      "limitations=1：明确20日简单移动平均、USD、期末时点，来源未提供复权和股息口径而保持未知；产物方法与覆盖记录证实预热后251个均线点完整。",
+      "presentation=1：生成收盘价及SMA20双序列图，并用简短指标表配合口径说明，篇幅和结构合适。",
+      "no_internal_identifiers=1：正文及可见通知没有展示数据句柄、代码哈希等无关内部标识；来源引用用于支持数值。"
+    ]
+  }
+}

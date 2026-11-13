@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "error": null,
+  "model": "deepseek-flash",
+  "usage": {
+    "prompt_tokens": 33,
+    "completion_tokens": 17,
+    "total_tokens": 50,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 14
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 33
+  },
+  "seconds": 3.11
+}

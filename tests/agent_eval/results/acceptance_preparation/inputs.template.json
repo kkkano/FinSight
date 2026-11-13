@@ -1,0 +1,19 @@
+{
+  "qa_primary": {
+    "user_id_env": "FINSIGHT_ACCEPTANCE_QA_USER_ID",
+    "access_token_env": "FINSIGHT_ACCEPTANCE_QA_TOKEN",
+    "browser_state_env": "FINSIGHT_ACCEPTANCE_QA_BROWSER_STATE"
+  },
+  "qa_secondary": {
+    "user_id_env": "FINSIGHT_ACCEPTANCE_QA2_USER_ID",
+    "access_token_env": "FINSIGHT_ACCEPTANCE_QA2_TOKEN",
+    "browser_state_env": "FINSIGHT_ACCEPTANCE_QA2_BROWSER_STATE"
+  },
+  "model_id": null,
+  "model_secret_env": "FINSIGHT_ACCEPTANCE_MODEL_KEY",
+  "qa_png_path": null,
+  "qa_share_path": null,
+  "qa_report_id": null,
+  "fault_evidence": {},
+  "note": "仅填隔离QA数据。真实故障无法安全复现时保持pending。"
+}

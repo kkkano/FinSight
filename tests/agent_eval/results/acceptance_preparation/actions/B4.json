@@ -1,0 +1,32 @@
+{
+  "case_id": "B4",
+  "status": "pending",
+  "source_input_exact": "「两只股票今年以来的走势对比」",
+  "expected_exact": "同一起点归一化，口径写明",
+  "actions": [
+    {
+      "action": "fill_query",
+      "source": "setup",
+      "seed_index": 0
+    },
+    {
+      "action": "click_testid",
+      "testid": "chat-send-btn"
+    },
+    {
+      "action": "wait_terminal"
+    },
+    {
+      "action": "fill_query"
+    },
+    {
+      "action": "click_testid",
+      "testid": "chat-send-btn"
+    },
+    {
+      "action": "wait_terminal"
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": false
+}

@@ -1,0 +1,2814 @@
+{
+  "schema_version": 1,
+  "runtime": "current",
+  "mode": "replay",
+  "head": "891824cf",
+  "run_id": "2026-11-13_024302_891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+          "query": "MSFT 最新一季营收和经营现金流分别是多少",
+          "terminal": {
+            "attempt_id": "6e65ab83ae2e44d5a97033a911376068",
+            "stream_epoch": "6e65ab83ae2e44d5a97033a911376068",
+            "committed_seq": 992,
+            "blocks": [
+              {
+                "id": "root_text_1bde4209b9634fa3a66eb8b1c1afd8b7",
+                "kind": "text",
+                "content": "**抱歉，这次拿不到数字：所有数据源都返回错误，我不能用记忆里的数字凑答案。**\n\n已经尝试过的来源，全部报错：\n- SEC CompanyFacts（季度营收和经营现金流）\n- SEC 10-Q、8-K 原文，含财报新闻稿\n- 行情与公司新闻接口\n- 公开网页抓取（微软 IR 财报页）\n- 知识库检索\n\n唯一可用的是时间服务，当前时间为 2026-11-13。\n\n**口径说明（供你核对时参考）**：微软财年为 7 月至次年 6 月，因此截至 2026-11-13，“最新一季”应是 **FY2027 Q1（2026 年 9 月 30 日止）**，一般在 10 月下旬披露。但这一季的营收与经营活动现金流具体数值，本轮没有取得任何可引用的数据。\n\n请稍等片刻让我重试一次，或你把微软 IR 的财报新闻稿链接/PDF 发我，我再据此核算营收和经营现金流（含同比与利润率）。在那之前，任何具体金额我都不会给。",
+                "revision": 0,
+                "seq": 724,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete"
+              },
+              {
+                "id": "reviewer_3ea8e26420e9",
+                "kind": "review",
+                "review": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "status": "unavailable",
+                  "error_code": "review_turn_limit",
+                  "review_id": "reviewer_3ea8e26420e9",
+                  "answer_sha256": "d2a1c3fcf59b76e7b981900e58c371e450b57c66046de18b503caaae8d4e36b3",
+                  "supersedes_review_id": null
+                },
+                "revision": 1,
+                "seq": 992,
+                "agent_id": "reviewer_3ea8e26420e9"
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "message": "读取季度财报",
+                "timestamp": "2026-11-13T10:43:07.186782+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_GLL68HPdxYh331oeqLpB3688",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "empty",
+                    "title": "读取季度财报",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 68,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:07.206774+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_GLL68HPdxYh331oeqLpB3688",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "error",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "error",
+                    "title": "读取季度财报",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_be60a2e5f3539a8842"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "seq": 69,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "读取季度财报",
+                "timestamp": "2026-11-13T10:43:17.091417+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_m4z68xM1QS2tehAgYfAt5640",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 4,
+                    "calculations": [
+                      {
+                        "metric": "revenue",
+                        "concept": "Revenues"
+                      },
+                      {
+                        "metric": "operating_cash_flow",
+                        "concept": "NetCashProvidedByUsedInOperatingActivities"
+                      }
+                    ]
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "empty",
+                    "title": "读取季度财报",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 79,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:17.109720+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_m4z68xM1QS2tehAgYfAt5640",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "error",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 4,
+                    "calculations": [
+                      {
+                        "metric": "revenue",
+                        "concept": "Revenues"
+                      },
+                      {
+                        "metric": "operating_cash_flow",
+                        "concept": "NetCashProvidedByUsedInOperatingActivities"
+                      }
+                    ]
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "error",
+                    "title": "读取季度财报",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_7c85b9045b82a53f07"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "seq": 80,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "读取监管文件",
+                "timestamp": "2026-11-13T10:43:29.441344+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_xV2k3xWZujSV9ykZj8LY2876",
+                  "name": "get_sec_filings",
+                  "title": "读取监管文件",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "forms": "10-Q,8-K",
+                    "limit": 10,
+                    "include_content": true
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "读取监管文件",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 221,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "读取重大事件",
+                "timestamp": "2026-11-13T10:43:29.441344+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_3Hp045EdvGUHrh6kra0w9350",
+                  "name": "get_sec_material_events",
+                  "title": "读取重大事件",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6,
+                    "include_content": true
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "empty",
+                    "title": "读取重大事件",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 222,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:29.459416+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_3Hp045EdvGUHrh6kra0w9350",
+                  "name": "get_sec_material_events",
+                  "title": "读取重大事件",
+                  "status": "error",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6,
+                    "include_content": true
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "error",
+                    "title": "读取重大事件",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_a65f8f875e56b053d8"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "seq": 223,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:29.488502+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_xV2k3xWZujSV9ykZj8LY2876",
+                  "name": "get_sec_filings",
+                  "title": "读取监管文件",
+                  "status": "error",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "forms": "10-Q,8-K",
+                    "limit": 10,
+                    "include_content": true
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "error",
+                    "title": "读取监管文件",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_8f5ae8b788a71d37ce"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 47,
+                  "runtime_type": "tool.failed",
+                  "seq": 224,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "搜索公开资料",
+                "timestamp": "2026-11-13T10:43:38.685271+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_dfxYdbNVOAm2HZ0YCyCo1387",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "inputs": {
+                    "query": "Microsoft fiscal Q1 2027 earnings revenue operating cash flow results"
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "搜索公开资料",
+                    "target": "Microsoft fiscal Q1 2027 earnings revenue operating cash flow results",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 282,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "读取公司新闻",
+                "timestamp": "2026-11-13T10:43:38.685271+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_2uRnWEwzcNpgQ3yxFJNQ6855",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 8,
+                    "max_age_hours": 720
+                  },
+                  "display": {
+                    "kind": "news",
+                    "status": "empty",
+                    "title": "读取公司新闻",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 283,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:38.706582+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_2uRnWEwzcNpgQ3yxFJNQ6855",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "status": "error",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 8,
+                    "max_age_hours": 720
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "news",
+                    "status": "error",
+                    "title": "读取公司新闻",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_233ad5d30fc143511a"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "seq": 284,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:38.731433+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_dfxYdbNVOAm2HZ0YCyCo1387",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "error",
+                  "inputs": {
+                    "query": "Microsoft fiscal Q1 2027 earnings revenue operating cash flow results"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "error",
+                    "title": "搜索公开资料",
+                    "target": "Microsoft fiscal Q1 2027 earnings revenue operating cash flow results",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_1ccc6ce0c66dbfa2fd"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 47,
+                  "runtime_type": "tool.failed",
+                  "seq": 285,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "核对当前时间",
+                "timestamp": "2026-11-13T10:43:48.995427+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_ZssBh5K5BJ8CP6xVRANW3220",
+                  "name": "get_current_datetime",
+                  "title": "核对当前时间",
+                  "inputs": {},
+                  "display": {
+                    "kind": "control",
+                    "status": "empty",
+                    "title": "核对当前时间",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 329,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "获取行情",
+                "timestamp": "2026-11-13T10:43:48.995427+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_ej5KEUJS12gqSXNGlIwg8922",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "empty",
+                    "title": "获取行情",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 330,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:49.018202+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_ej5KEUJS12gqSXNGlIwg8922",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "error",
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "error",
+                    "title": "获取行情",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_9f3b227e0c1b03f333"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "seq": 331,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "2026-11-13 02:11:56",
+                "timestamp": "2026-11-13T10:43:49.039776+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_ZssBh5K5BJ8CP6xVRANW3220",
+                  "name": "get_current_datetime",
+                  "title": "核对当前时间",
+                  "status": "ok",
+                  "inputs": {},
+                  "output_preview": "2026-11-13 02:11:56",
+                  "display": {
+                    "kind": "control",
+                    "status": "ok",
+                    "title": "核对当前时间",
+                    "target": "当前研究资料",
+                    "result": "2026-11-13 02:11:56",
+                    "summary": "2026-11-13 02:11:56",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "2026-11-13 02:11:56",
+                  "data_refs": [],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 31,
+                  "runtime_type": "tool.result",
+                  "seq": 332,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "读取季度财报",
+                "timestamp": "2026-11-13T10:43:59.350494+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_RoA5zaO4JB8A3nSfx2AH7182",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "inputs": {
+                    "limit": 2,
+                    "ticker": "MSFT"
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "empty",
+                    "title": "读取季度财报",
+                    "target": "MSFT",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 416,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "阅读网页",
+                "timestamp": "2026-11-13T10:43:59.350494+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_PMlBlsb7xKh32CJAhIay1335",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "inputs": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "max_length": 6000
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "阅读网页",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 417,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:59.366650+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_RoA5zaO4JB8A3nSfx2AH7182",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "error",
+                  "inputs": {
+                    "limit": 2,
+                    "ticker": "MSFT"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "error",
+                    "title": "读取季度财报",
+                    "target": "MSFT",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_f4e30e617a94633aee"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "seq": 418,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:43:59.389830+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_PMlBlsb7xKh32CJAhIay1335",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "error",
+                  "inputs": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "max_length": 6000
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tape_miss",
+                    "error": "tape_miss",
+                    "summary": "评测回放中缺少该工具及参数的录制结果。"
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "error",
+                    "title": "阅读网页",
+                    "target": "当前研究资料",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_9b7594094e73af6a3d"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 47,
+                  "runtime_type": "tool.failed",
+                  "seq": 419,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "message": "",
+                "timestamp": "2026-11-13T10:44:07.662223+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "activity_id": "root_model",
+                  "reason": "模型服务繁忙，正在等待后重试。",
+                  "retry_after_seconds": 2.0,
+                  "attempt": 1,
+                  "runtime_type": "activity.updated",
+                  "seq": 420,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "检索会话记忆",
+                "timestamp": "2026-11-13T10:44:12.411925+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_ex8ZuZvIKsB8tt5NUYvp0268",
+                  "name": "search_memory",
+                  "title": "检索会话记忆",
+                  "inputs": {
+                    "query": "Microsoft MSFT 最新一季 营收 经营现金流",
+                    "entity": "MSFT"
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "检索会话记忆",
+                    "target": "Microsoft MSFT 最新一季 营收 经营现金流",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 565,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-13T10:44:12.413938+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_ex8ZuZvIKsB8tt5NUYvp0268",
+                  "name": "search_memory",
+                  "title": "检索会话记忆",
+                  "status": "error",
+                  "inputs": {
+                    "query": "Microsoft MSFT 最新一季 营收 经营现金流",
+                    "entity": "MSFT"
+                  },
+                  "output_preview": {
+                    "results": [],
+                    "knowledge": {
+                      "status": "error",
+                      "error_code": "tape_miss",
+                      "error": "tape_miss",
+                      "summary": "评测回放中缺少该工具及参数的录制结果。"
+                    },
+                    "memory": {
+                      "status": "error",
+                      "error_code": "tape_miss",
+                      "error": "tape_miss",
+                      "summary": "评测回放中缺少该工具及参数的录制结果。"
+                    },
+                    "data_refs": []
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "error",
+                    "title": "检索会话记忆",
+                    "target": "Microsoft MSFT 最新一季 营收 经营现金流",
+                    "result": "这次处理出错了。",
+                    "summary": "这次处理出错了。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [
+                      "search_knowledge：这次处理出错了。",
+                      "search_memory：这次处理出错了。"
+                    ],
+                    "error": {
+                      "code": "tape_miss",
+                      "user_message": "这次处理出错了。",
+                      "retryable": false,
+                      "suggestion": "已有数据会保留，可以重试。"
+                    }
+                  },
+                  "summary": "这次处理出错了。",
+                  "data_refs": [
+                    "h_6922e4338acf491aa3"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "seq": 566,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:31.919291+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_92SIAWM2qqxgTbHOtC3k9652",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_be60a2e5f3539a8842",
+                    "limit": 50
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 968,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:31.920286+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_B4Kd568hOQoRbLdz5xPa9916",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_7c85b9045b82a53f07",
+                    "limit": 50
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 969,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:31.922897+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_B4Kd568hOQoRbLdz5xPa9916",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_7c85b9045b82a53f07",
+                    "limit": 50
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"er",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 50,
+                    "has_more": true
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [
+                      "本轮数据尚未保存为可续研资料，当前结果仍可使用。"
+                    ],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_7c85b9045b82a53f07"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 970,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:31.922897+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_92SIAWM2qqxgTbHOtC3k9652",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_be60a2e5f3539a8842",
+                    "limit": 50
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"er",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 50,
+                    "has_more": true
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_be60a2e5f3539a8842"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 971,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:42.855164+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_Z6hH5Y3Xx7S9eUoO6fyE4886",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_be60a2e5f3539a8842",
+                    "offset": 50,
+                    "limit": 60
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 972,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:42.856162+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_TE9XWO7ZXAszgHLTHzm61937",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_7c85b9045b82a53f07",
+                    "offset": 50,
+                    "limit": 60
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 973,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:42.856162+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_02_iFdPSdUoWVUbUrtpSA091873",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_a65f8f875e56b053d8",
+                    "limit": 200
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 974,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:42.857161+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_03_LjJu3LoLYmx7C3d4dskd7118",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_9f3b227e0c1b03f333",
+                    "limit": 200
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 975,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:42.860989+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_Z6hH5Y3Xx7S9eUoO6fyE4886",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_be60a2e5f3539a8842",
+                    "offset": 50,
+                    "limit": 60
+                  },
+                  "output_preview": {
+                    "content": "ror\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 50,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_be60a2e5f3539a8842"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 976,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:42.860989+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_03_LjJu3LoLYmx7C3d4dskd7118",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_9f3b227e0c1b03f333",
+                    "limit": 200
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_9f3b227e0c1b03f333"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 977,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:42.860989+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_02_iFdPSdUoWVUbUrtpSA091873",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_a65f8f875e56b053d8",
+                    "limit": 200
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [
+                      "本轮数据尚未保存为可续研资料，当前结果仍可使用。"
+                    ],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_a65f8f875e56b053d8"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 978,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:42.860989+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_TE9XWO7ZXAszgHLTHzm61937",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_7c85b9045b82a53f07",
+                    "offset": 50,
+                    "limit": 60
+                  },
+                  "output_preview": {
+                    "content": "ror\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 50,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_7c85b9045b82a53f07"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 979,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:54.232443+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_Xs6JFP4hYYIuOJFPTpUP5525",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_233ad5d30fc143511a",
+                    "limit": 300
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 980,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:54.233458+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_9JtwbhL4yFdV9O7Q34nF3953",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_6922e4338acf491aa3",
+                    "limit": 300
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 981,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:54.233458+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_02_Q525vvKk0ldPZ5YtCcsa1879",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_9b7594094e73af6a3d",
+                    "limit": 300
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 982,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:44:54.233458+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_03_mUamjZzwONmK2kwYu4S15906",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_8f5ae8b788a71d37ce",
+                    "limit": 300
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 983,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:54.237528+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_Xs6JFP4hYYIuOJFPTpUP5525",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_233ad5d30fc143511a",
+                    "limit": 300
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [
+                      "本轮数据尚未保存为可续研资料，当前结果仍可使用。"
+                    ],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_233ad5d30fc143511a"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 984,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:54.237528+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_03_mUamjZzwONmK2kwYu4S15906",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_8f5ae8b788a71d37ce",
+                    "limit": 300
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_8f5ae8b788a71d37ce"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 985,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:54.237528+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_02_Q525vvKk0ldPZ5YtCcsa1879",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_9b7594094e73af6a3d",
+                    "limit": 300
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [
+                      "本轮数据尚未保存为可续研资料，当前结果仍可使用。"
+                    ],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_9b7594094e73af6a3d"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 986,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:44:54.238127+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_9JtwbhL4yFdV9O7Q34nF3953",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_6922e4338acf491aa3",
+                    "limit": 300
+                  },
+                  "output_preview": {
+                    "content": "{\"results\": [], \"knowledge\": {\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}, \"memory\": {\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}, \"data_refs\": []}",
+                    "offset": 0,
+                    "total_chars": 263,
+                    "next_offset": 263,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_6922e4338acf491aa3"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 987,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:45:03.956544+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_iNTrHMlEicruwFpOg7dH9413",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_1ccc6ce0c66dbfa2fd",
+                    "limit": 300
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 988,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T10:45:03.957601+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_JNxehip5Uh2H920Mb1lL0451",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_f4e30e617a94633aee",
+                    "limit": 300
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 989,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:45:03.960115+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_00_iNTrHMlEicruwFpOg7dH9413",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_1ccc6ce0c66dbfa2fd",
+                    "limit": 300
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_1ccc6ce0c66dbfa2fd"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 990,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T10:45:03.960115+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_024302_891824cf:facts-02:0",
+                "sessionId": "2026-11-13_024302_891824cf:facts-02",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "call_01_JNxehip5Uh2H920Mb1lL0451",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_f4e30e617a94633aee",
+                    "limit": 300
+                  },
+                  "output_preview": {
+                    "content": "{\"status\": \"error\", \"error_code\": \"tape_miss\", \"error\": \"tape_miss\", \"summary\": \"评测回放中缺少该工具及参数的录制结果。\"}",
+                    "offset": 0,
+                    "total_chars": 102,
+                    "next_offset": 102,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_f4e30e617a94633aee"
+                  ],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 991,
+                  "agent_id": "reviewer_3ea8e26420e9",
+                  "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+                  "session_id": "2026-11-13_024302_891824cf:facts-02"
+                }
+              }
+            ],
+            "response": "**抱歉，这次拿不到数字：所有数据源都返回错误，我不能用记忆里的数字凑答案。**\n\n已经尝试过的来源，全部报错：\n- SEC CompanyFacts（季度营收和经营现金流）\n- SEC 10-Q、8-K 原文，含财报新闻稿\n- 行情与公司新闻接口\n- 公开网页抓取（微软 IR 财报页）\n- 知识库检索\n\n唯一可用的是时间服务，当前时间为 2026-11-13。\n\n**口径说明（供你核对时参考）**：微软财年为 7 月至次年 6 月，因此截至 2026-11-13，“最新一季”应是 **FY2027 Q1（2026 年 9 月 30 日止）**，一般在 10 月下旬披露。但这一季的营收与经营活动现金流具体数值，本轮没有取得任何可引用的数据。\n\n请稍等片刻让我重试一次，或你把微软 IR 的财报新闻稿链接/PDF 发我，我再据此核算营收和经营现金流（含同比与利润率）。在那之前，任何具体金额我都不会给。",
+            "artifacts": [],
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-13_024302_891824cf:facts-02:0",
+            "reviews": [
+              {
+                "status": "unavailable",
+                "error_code": "review_turn_limit",
+                "review_id": "reviewer_3ea8e26420e9",
+                "answer_sha256": "d2a1c3fcf59b76e7b981900e58c371e450b57c66046de18b503caaae8d4e36b3",
+                "supersedes_review_id": null
+              }
+            ],
+            "report_revision": null,
+            "review_revision": null,
+            "session_id": "2026-11-13_024302_891824cf:facts-02",
+            "message_id": "assistant:2026-11-13_024302_891824cf:facts-02:0",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "warn",
+              "reasons": [
+                {
+                  "code": "partial_tool_failure",
+                  "severity": "warn",
+                  "count": 10
+                },
+                {
+                  "code": "review_turn_limit",
+                  "severity": "warn"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": [],
+              "publishable": true,
+              "review": {
+                "status": "unavailable",
+                "error_code": "review_turn_limit",
+                "review_id": "reviewer_3ea8e26420e9",
+                "answer_sha256": "d2a1c3fcf59b76e7b981900e58c371e450b57c66046de18b503caaae8d4e36b3",
+                "supersedes_review_id": null
+              }
+            },
+            "report_quality": {
+              "state": "warn",
+              "reasons": [
+                {
+                  "code": "partial_tool_failure",
+                  "severity": "warn",
+                  "count": 10
+                },
+                {
+                  "code": "review_turn_limit",
+                  "severity": "warn"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": [],
+              "publishable": true,
+              "review": {
+                "status": "unavailable",
+                "error_code": "review_turn_limit",
+                "review_id": "reviewer_3ea8e26420e9",
+                "answer_sha256": "d2a1c3fcf59b76e7b981900e58c371e450b57c66046de18b503caaae8d4e36b3",
+                "supersedes_review_id": null
+              }
+            },
+            "publishable": true,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": false,
+            "tickers": [
+              "MSFT"
+            ],
+            "price_levels": [],
+            "current_focus": "MSFT",
+            "actions": [],
+            "evidence_pool": [],
+            "metrics": {
+              "total_prompt_tokens": 79825,
+              "total_completion_tokens": 2786,
+              "total_tokens": 82611,
+              "llm_token_calls": 12,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 12,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 79825,
+                  "completion": 2786,
+                  "calls": 12
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 66565,
+                  "completion": 1660,
+                  "calls": 8,
+                  "failed_calls": 0,
+                  "duration_ms": 77305
+                },
+                {
+                  "agent": "reviewer",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 13260,
+                  "completion": 1126,
+                  "calls": 4,
+                  "failed_calls": 0,
+                  "duration_ms": 41687
+                }
+              ],
+              "tool_calls": 11,
+              "runtime": "agent_runtime",
+              "stopped": "completed"
+            },
+            "seq": 993,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 12,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 1,
+        "misses": 11,
+        "errors": 11
+      },
+      "score": null,
+      "elapsed_seconds": 121.5,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.43478260869565216,
+        "tool_calls": 23,
+        "failed_tools": 10,
+        "tokens": 82611,
+        "rounds": 12
+      },
+      "checkpoints": 18,
+      "watchlist": [],
+      "transport_errors": [],
+      "model_call_outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 82,
+          "first_chunk_seconds": 1.735,
+          "elapsed_seconds": 2.422,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 72,
+          "first_chunk_seconds": 1.203,
+          "elapsed_seconds": 1.734,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 193,
+          "first_chunk_seconds": 1.594,
+          "elapsed_seconds": 3.187,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 101,
+          "first_chunk_seconds": 1.14,
+          "elapsed_seconds": 2.047,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 56,
+          "first_chunk_seconds": 1.515,
+          "elapsed_seconds": 2.109,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 138,
+          "first_chunk_seconds": 1.172,
+          "elapsed_seconds": 2.157,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 172,
+          "first_chunk_seconds": 0.141,
+          "elapsed_seconds": 4.875,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 400,
+          "first_chunk_seconds": 1.391,
+          "elapsed_seconds": 3.735,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 95,
+          "first_chunk_seconds": 1.703,
+          "elapsed_seconds": 2.578,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 130,
+          "first_chunk_seconds": 1.672,
+          "elapsed_seconds": 2.828,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 242,
+          "first_chunk_seconds": 1.796,
+          "elapsed_seconds": 3.265,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 233,
+          "first_chunk_seconds": 1.25,
+          "elapsed_seconds": 2.609,
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 12,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_024302_891824cf/facts-02.json",
+        "request_sha256": "b221dcd05066470306ae407f0bb3ff8e4dc983793c9727136422ef1db107b83e"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_024302_891824cf/facts-02/events.json",
+      "tool_recordings": 4
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "single_terminal_rate": 1,
+      "model_calls": 12,
+      "failed_model_calls": 0,
+      "model_failure_rate": 0.0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 121.5,
+      "median_tokens": 82611,
+      "median_rounds": 12,
+      "tool_error_rate": 0.43478260869565216
+    }
+  },
+  "judge_prompt_sha256": "d84e27eca69ffa5557c9ada1f18fb61621615dedfcbd0cd787ce72c158721c25",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "base_url": "https://vectide.cn/v1",
+    "effort": null,
+    "temperature": null
+  },
+  "judge": {
+    "model": "gpt-6.1-sol",
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "runtime_sha256": "590c7aefe6ba58e76e500e87bb1be0af12f1ffabb71ee988d84b1e3d29691648",
+  "fixtures_root": "fixtures/vectide-matched-20261113",
+  "seed_tapes": null,
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 1,
+    "request_pacing_scope": "global",
+    "model_protocol": "sse",
+    "upstream_stream": true,
+    "model_configuration": {
+      "model": "deepseek-v4.1-flash-1017",
+      "base_url": "https://vectide.cn/v1",
+      "effort": null,
+      "context_window": 1048576,
+      "max_output": 16384,
+      "temperature": null
+    },
+    "model_quotas": {
+      "concurrency": 2,
+      "rpm": 30,
+      "tpm": 250000,
+      "minimum_request_interval_seconds": 10.0,
+      "run_token_budget": 160000
+    },
+    "step5_cost_pricing": null,
+    "model_quota_scope": "run_shared",
+    "analysis_worker_enabled": true,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "cost_estimate": {
+    "currency": "CNY",
+    "priced_calls": 0,
+    "unpriced_calls": 12,
+    "all_calls_priced": false,
+    "known_components": {
+      "uncached_input_cny": null,
+      "cached_input_cny": null,
+      "output_cny": null,
+      "total_cny": null
+    },
+    "known_subtotal_cny": null,
+    "total_cny": null
+  },
+  "fixtures_sha256": "933b8131905c0d75f19575628c6c37d1b396eb7c2feabf404367a0a48931d3c2"
+}

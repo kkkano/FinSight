@@ -1,0 +1,26 @@
+{
+  "request_sha256": "34e4dee8def27065b16b4b960817a22cca0b7f82516997103119f4e6fcd43f3c",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有 SEC 财务接口未配置、将换公告核对的进度，未列 INTC 最近两个已披露季度的营收、毛利率、币种及来源。",
+      "numbers=0：正文没有任何季度金额或毛利率；虽然搜索录制已含财务数据，仍未交付用户要求的两期数值。",
+      "limitations=1：可见正文说明 SEC/XBRL 接口未配置，终态说明研究超时，与 CompanyFacts 录制配置错误相符，未冒用未披露季度填表。",
+      "presentation=1：进度句与超时、恢复说明简短完整、可读，没有截断。",
+      "no_internal_identifiers=1：正文未回显函数、数据集或运行标识；SEC、XBRL 是数据来源与披露格式名称。"
+    ]
+  }
+}

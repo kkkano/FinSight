@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "prepared_at": "2026-11-13T09:01:07.283318+00:00",
+  "status": "prepared_only",
+  "interpreter": "E:\\FinSight\\.omx\\worktrees\\research-completeness\\tmp\\agentic-venv\\Scripts\\python.exe",
+  "case_count": 48,
+  "case_statuses": {
+    "pending": 48
+  },
+  "online_passed": 0,
+  "model_requests": 0,
+  "production_accessed": false,
+  "source_plan": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+  "plan_sha256": "23219d5c4bbe85e8ba75e7e3b5fa984570a55ad01a41979094c3312711c248a7",
+  "dataset_sha256": "70fee09674ebbbea7d9fa026620845a25f7a9b6e00e42e5ab6bebf5f5b452224",
+  "matrix": "tests/agent_eval/results/acceptance_preparation/coverage_matrix.md",
+  "scripts": [
+    {
+      "file": ".omx/deploy/agentic_acceptance.py",
+      "sha256": "5833b7f8bbc0baa1833486026961b7b7cc962607ceb07553fb60a6a14ca72da8"
+    },
+    {
+      "file": ".omx/deploy/agentic_acceptance_protocol.py",
+      "sha256": "b47c5533bcc1d51ef2590ebf7529667301a112e8cac920d8805e5dbf77cb232e"
+    },
+    {
+      "file": ".omx/deploy/agentic_acceptance_tests.py",
+      "sha256": "b953681e5cf258213cef43e2c9fb5f79052f5cbc3ca6b643fa74453101c84d2d"
+    }
+  ],
+  "offline_validation": {
+    "selftests_passed": 9,
+    "syntax_compiled": true,
+    "original_48_texts_verified": true,
+    "all_prerequisite_queries_exact_from_section7_dataset": true,
+    "frozen_files_unchanged": 27
+  },
+  "executed_commands": [
+    "tmp/agentic-venv/Scripts/python.exe -B .omx/deploy/agentic_acceptance.py --help",
+    "tmp/agentic-venv/Scripts/python.exe -B .omx/deploy/agentic_acceptance.py prepare",
+    "tmp/agentic-venv/Scripts/python.exe -B .omx/deploy/agentic_acceptance.py self-test"
+  ],
+  "live_commands_executed": [],
+  "deployment_requirement": "Root提供实际镜像manifest及已部署image/build观测后核对，不增加用户审批流程。",
+  "known_pending_branches": [
+    "安全的QA后端故障证据：B7/C1/C2/C6/C7",
+    "真实IME/读屏交互证据",
+    "QA报告、公开分享、真实模型三态分支",
+    "UI动作模板需按部署后的实际DOM补充复合控件操作"
+  ],
+  "content_review": "每项必须独立原生评审；无关键词评分、无primary self-review代替；协议通过不能自动升级为验收通过。"
+}

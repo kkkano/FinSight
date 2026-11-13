@@ -1,0 +1,52 @@
+{
+  "milestone": "M1",
+  "status": "blocked",
+  "reason": "insufficient_user_quota",
+  "report": "tests/agent_eval/results/m1_serial_baseline_record.json",
+  "expected_cases": 60,
+  "attempted_cases": 12,
+  "judged_cases": 6,
+  "scores": {
+    "facts-01": 6,
+    "facts-02": 3,
+    "facts-03": 7,
+    "facts-04": 5,
+    "facts-05": 6,
+    "facts-06": 4
+  },
+  "mean_judged_score": 5.166666666666667,
+  "missing_scores": [
+    "valuation-01",
+    "valuation-02",
+    "valuation-03",
+    "valuation-04",
+    "valuation-05"
+  ],
+  "remaining_unattempted_cases": 48,
+  "full_baseline_ready": false,
+  "new_runtime_started": false,
+  "validation": [
+    {
+      "command": "tmp/agentic-venv/Scripts/python.exe -B -m pytest tests/agent_eval -q -p no:cacheprovider",
+      "result": "104 passed before final judge configuration guard"
+    },
+    {
+      "command": "tmp/agentic-venv/Scripts/python.exe -B -m pytest tests/agent_eval/test_runner.py tests/agent_eval/test_scoring.py -q -p no:cacheprovider",
+      "result": "19 passed"
+    }
+  ],
+  "saved_case_results": 11,
+  "interrupted_case_ids": [
+    "valuation-06"
+  ],
+  "modified_files": {
+    "tests/agent_eval/run.py": "统一请求间隔；仅零片段连接失败允许一次有记录的重试；按官方规格配置判分预算。",
+    "tests/agent_eval/scoring.py": "拒绝不同请求调度或判分模型、预算的基线对照。",
+    "tests/agent_eval/test_runner.py": "验证请求间隔、协议保留及已收到片段时禁止重放。",
+    "tests/agent_eval/test_scoring.py": "覆盖不一致调度及判分配置的拒绝合同。",
+    "tests/agent_eval/README.md": "记录录制回放命令、来源哈希、判分限额及真实阻塞。",
+    "tests/agent_eval/results/": "保留全部运行结果、额度拒绝及恢复执行汇总。",
+    "tests/agent_eval/fixtures/baseline-v1/": "保留并发录制取得的真实结果。",
+    "tests/agent_eval/fixtures/baseline-v2/": "保留串行录制和精确匹配的历史资料。"
+  }
+}

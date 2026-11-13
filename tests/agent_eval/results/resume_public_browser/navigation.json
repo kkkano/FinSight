@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "url": "https://finsight-ai.chat/welcome?from=%2Ftoday",
+  "links": [
+    {
+      "text": "跳转到主要内容",
+      "href": "https://finsight-ai.chat/welcome?from=%2Ftoday#main-content"
+    },
+    {
+      "text": "公开战绩",
+      "href": "https://finsight-ai.chat/track-record"
+    }
+  ],
+  "new_release_acceptance": false
+}

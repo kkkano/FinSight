@@ -1,0 +1,26 @@
+{
+  "request_sha256": "5ba1d9da5960c636e06e16b5ca82dfeacb8465ffaeb818073add305e333e2f74",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有确认能力、报价失败和换历史收盘的进度，没有交付两家港股的估值、同财期现金流质量比较或币种换算依据。",
+      "numbers=0：没有两家公司金额、估值倍数、现金流或汇率数据，尽管搜索录制已取得部分资料。",
+      "limitations=1：明确报价源未返回数据，终态报告研究超时；当前两个港股报价录制不可用，没有把港元和人民币直接混算。",
+      "presentation=1：两段进度和故障通知完整可读，篇幅合适，没有将未生成的比较表声称已交付。",
+      "no_internal_identifiers=1：正文没有内部数据集、运行或函数标识；港股代码为用户指定研究主体。"
+    ]
+  }
+}

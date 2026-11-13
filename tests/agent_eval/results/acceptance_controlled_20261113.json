@@ -1,0 +1,4092 @@
+{
+  "schema_version": 1,
+  "report_kind": "controlled_product_acceptance",
+  "status": "controlled_complete_online_pending",
+  "generated_at_utc": "2026-11-13T18:26:16.745156+00:00",
+  "definitions": {
+    "path": "tests/agent_eval/acceptance_cases.json",
+    "sha256": "70fee09674ebbbea7d9fa026620845a25f7a9b6e00e42e5ab6bebf5f5b452224",
+    "total": 48,
+    "original_rule": "第12节输入和期望逐字保留；第7节逐字问题仅作为前置。协议检查与独立内容/覆盖评审分开，任何M6/M8 mock或本地单测均不能计为线上通过。"
+  },
+  "candidate": {
+    "git_head": "891824cfcd974434a5adc3151c19642d7ae3eb03",
+    "workspace_contains_uncommitted_candidate": true,
+    "observed_production_baseline_from_parent": "step5-api-20261111",
+    "candidate_online_verified": false
+  },
+  "scope": {
+    "frontend_base_url": "http://127.0.0.1:4273",
+    "browser": "Playwright msedge headless",
+    "browser_service_worker": "仅截获本地/sw.js为合法JS验收asset；不覆盖生产SW。",
+    "api_isolation": "所有/api/**与health返回受控fixture，研究SSE只走浏览器内ReadableStream，外部网络被阻断。",
+    "auth_isolation": "只替换本地Vite加载的auth模块，两个虚构user_id和非JWT本地token；真实服务鉴权未更改。",
+    "models_and_data": "无真实provider模型/市场资料/真实账号调用，资料内容仅为明确的交互fixture。"
+  },
+  "summary": {
+    "cases": 48,
+    "controlled_status_counts": {
+      "pending_online": 12,
+      "partial": 15,
+      "controlled_pass": 21
+    },
+    "online_passed": 0,
+    "distinct_e2e_checks": 59,
+    "latest_e2e_passed": 59,
+    "unresolved_e2e_failures": 0,
+    "pytest_passed": 78,
+    "pytest_failed": 0,
+    "last_focused_e2e": {
+      "passed": 6,
+      "failed": 0,
+      "duration_seconds": 7.5
+    },
+    "test_health": "HEALTHY_FOR_CONTROLLED_SCOPE",
+    "coverage_percentage": null,
+    "aggregation_rule": "59项是不同用例的最新执行结果；不是声称一次命令全部59项通过。只重跑失败/已改动用例。"
+  },
+  "test_sources": [
+    {
+      "path": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "sha256": "144c789ffbfdc84fecd4ec96616e3471d7091c3c5fe59f4697a8e0566d9e9230"
+    },
+    {
+      "path": "frontend/e2e/model-selection.spec.ts",
+      "sha256": "3581bfefd51f6c7394449501cffa713ec3ad0ae712cf38c2d65b6a26bade42f4"
+    },
+    {
+      "path": "frontend/e2e/track-record.spec.ts",
+      "sha256": "dad7a4c87e671b754406f2b4be75b62c0a4425066da32c7c875a786c68d005f7"
+    }
+  ],
+  "e2e_runs": [
+    {
+      "name": "controlled-acceptance-existing-e2e",
+      "report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "sha256": "91131efbcc058811f25a87ababc06d03fbe346b62a6d7932dae4f84e86c7f8a2",
+      "statistics": {
+        "startTime": "2026-11-13T17:35:43.289Z",
+        "duration": 67056.44099999999,
+        "expected": 24,
+        "skipped": 0,
+        "unexpected": 9,
+        "flaky": 0
+      },
+      "outcomes": [
+        {
+          "key": "frontend/e2e/agent-runtime-chat.spec.ts::shows incremental body, settles one tool row and renders a real artifact block",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agent-runtime-chat.spec.ts::sends an instruction into the active run without creating another user turn",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agent-runtime-chat.spec.ts::keeps a narrow chat viewport within its screen and exposes navigation",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agent-runtime-chat.spec.ts::content phases keep progress separate from the final answer",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agent-runtime-chat.spec.ts::PNG attachments preview, clear on send and never enter browser storage",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agent-runtime-chat.spec.ts::PNG selection clears on a new conversation and enforces format and count",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::首次认证与token刷新保留自己的已存会话",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::旧快照未确认时合并最终回答，完成等待保存且刷新正文仍在",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::云端保存失败提示原因且不覆盖已生成的回答",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::服务器已保存的最终正文不依赖浏览器快照写入",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::刷新后按run恢复回答且不重新触发模型",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::回答槽丢失且SSE挂住时等待交付并取回同轮已保存正文",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/conversation-persistence.spec.ts::刷新旧客户端问题和空回答时恢复紧邻的同文canonical回答",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/execution-trace.spec.ts::原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/execution-trace.spec.ts::所属对话展示真实Agent活动，不把内部计划字段当作用户过程",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/execution-trace.spec.ts::traceRawEnabled=false 时仍可见真实工具活动",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::built-in model uses official metadata and preserves the same model and effort across refresh and AI features",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::anonymous users can inspect model settings and have a login entry for explicit selections",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::custom context consent resets when destination credentials change and default restore removes the override",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::logout clears the applied custom selection and credentials",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::connection-test rate limits remain a recoverable form message",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::model preflight failure and empty completions show explicit retryable messages",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::truncated model output keeps verified data and displays the actual cause",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::canonical completion IDs do not move the answer out of the current conversation",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::answers remain visible and restore after refresh when local storage is full",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::reopening an interrupted empty answer shows a visible retry state",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：桌面暗色",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：手机亮色",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::public empty and pending states require no welcome gate and never invent hit rates",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::a failed public read offers retry without manufacturing an empty result",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+          "status": "failed"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "name": "controlled-acceptance-new-e2e",
+      "report": "tmp/r261113/controlled-acceptance-new-e2e/results.json",
+      "sha256": "7c2031b95322a3fb7ebcc8bb1248d75d4092220f7c371ae8f1d7a8e542ba729b",
+      "statistics": {
+        "startTime": "2026-11-13T17:43:04.381Z",
+        "duration": 243874.127,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 26,
+        "flaky": 0
+      },
+      "outcomes": [
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C1 displays a source timeout and the alternative source used in the answer",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C2 preserves a partial answer and blocks publication when core data is missing",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C3 rejects a model with confirmed unsupported tool calling before sending",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C4 reconnects after thirty seconds into the original answer without duplicated text",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C5 stopping preserves generated content and ignores late tool and answer frames",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C6 server save failure keeps the answer exportable and never records success",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C7 exhausted budget shows partial output and the remaining gap",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B5 labels a logarithmic chart axis explicitly",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B6 expands chart data and downloads the same rows as CSV",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E1 contains wide tables and charts inside a 390px page",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via isComposing",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via keyCode229",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 sends and stops an answer with keyboard controls and a visible focus ring",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E4 aria-live changes for activity and completion without announcing body tokens",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E5 reduced-motion still permits send stop and process disclosure",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts restores only the new owner conversation",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces the watchlist owner",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces private prediction history",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G1 completion duration and tool count agree with observed events",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 public reasoning summary remains collapsed after completion",
+          "status": "timedOut"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 provider raw reasoning requires the explicit account preference",
+          "status": "timedOut"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 absent provider reasoning never creates a synthetic reasoning block",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G5 successful quick capability validation never enters the process list",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G5 capability validation appears only after two seconds or a confirmed failure",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::D7 appearance and confirmation preferences apply immediately and survive refresh",
+          "status": "failed"
+        }
+      ],
+      "notes": "首轮本地SW MIME错误及真实失败保留，后续只复验失败和已修改用例。"
+    },
+    {
+      "name": "controlled-acceptance-rerun1",
+      "report": "tmp/r261113/controlled-acceptance-rerun1/results.json",
+      "sha256": "f31462b65a70bbed7e17044c0de5664adfdd1217de927e7211152a69c25a98dc",
+      "statistics": {
+        "startTime": "2026-11-13T17:56:42.547Z",
+        "duration": 823.939,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "outcomes": [],
+      "notes": "筛选表达式锚定全标题造成0项执行，未计入验证。"
+    },
+    {
+      "name": "controlled-acceptance-rerun2",
+      "report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "sha256": "f975c9c700c8e9815d5eedf6095673603055500748978f8c871f9f187ce59b10",
+      "statistics": {
+        "startTime": "2026-11-13T17:57:45.173Z",
+        "duration": 142485.76200000002,
+        "expected": 30,
+        "skipped": 0,
+        "unexpected": 5,
+        "flaky": 0
+      },
+      "outcomes": [
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C1 displays a source timeout and the alternative source used in the answer",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C2 preserves a partial answer and blocks publication when core data is missing",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C3 rejects a model with confirmed unsupported tool calling before sending",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C4 reconnects after thirty seconds into the original answer without duplicated text",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C5 stopping preserves generated content and ignores late tool and answer frames",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C6 server save failure keeps the answer exportable and never records success",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C7 exhausted budget shows partial output and the remaining gap",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B5 labels a logarithmic chart axis explicitly",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B6 expands chart data and downloads the same rows as CSV",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E1 contains wide tables and charts inside a 390px page",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via isComposing",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via keyCode229",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 sends and stops an answer with keyboard controls and a visible focus ring",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E4 aria-live changes for activity and completion without announcing body tokens",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E5 reduced-motion still permits send stop and process disclosure",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts restores only the new owner conversation",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces the watchlist owner",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces private prediction history",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G1 completion duration and tool count agree with observed events",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 public reasoning summary remains collapsed after completion",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 provider raw reasoning requires the explicit account preference",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 absent provider reasoning never creates a synthetic reasoning block",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G5 successful quick capability validation never enters the process list",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G5 capability validation appears only after two seconds or a confirmed failure",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::D7 appearance and confirmation preferences apply immediately and survive refresh",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::custom context consent resets when destination credentials change and default restore removes the override",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::model preflight failure and empty completions show explicit retryable messages",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::truncated model output keeps verified data and displays the actual cause",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::reopening an interrupted empty answer shows a visible retry state",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::public empty and pending states require no welcome gate and never invent hit rates",
+          "status": "timedOut"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+          "status": "timedOut"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::a failed public read offers retry without manufacturing an empty result",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+          "status": "failed"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "name": "controlled-acceptance-rerun3",
+      "report": "tmp/r261113/controlled-acceptance-rerun3/results.json",
+      "sha256": "c96bbe717d99be21f0992b83399a5c6cb480e030aa760815f7688bfee165c85d",
+      "statistics": {
+        "startTime": "2026-11-13T18:04:00.384Z",
+        "duration": 75062.636,
+        "expected": 4,
+        "skipped": 0,
+        "unexpected": 2,
+        "flaky": 0
+      },
+      "outcomes": [
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B6 expands chart data and downloads the same rows as CSV",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/model-selection.spec.ts::custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::public empty and pending states require no welcome gate and never invent hit rates",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+          "status": "failed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+          "status": "timedOut"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "name": "controlled-acceptance-rerun4",
+      "report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "sha256": "63b62384801a8a54e026c3efc216f678000c06cdb66661de43b1aeace56977d9",
+      "statistics": {
+        "startTime": "2026-11-13T18:13:54.241Z",
+        "duration": 7466.521,
+        "expected": 6,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "outcomes": [
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C6 server save failure keeps the answer exportable and never records success",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 public reasoning summary remains collapsed after completion",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 provider raw reasoning requires the explicit account preference",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 absent provider reasoning never creates a synthetic reasoning block",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+          "status": "passed"
+        },
+        {
+          "key": "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+          "status": "passed"
+        }
+      ],
+      "notes": ""
+    }
+  ],
+  "latest_e2e_evidence": [
+    {
+      "key": "frontend/e2e/agent-runtime-chat.spec.ts::shows incremental body, settles one tool row and renders a real artifact block",
+      "file": "frontend/e2e/agent-runtime-chat.spec.ts",
+      "test_name": "shows incremental body, settles one tool row and renders a real artifact block",
+      "line_at_execution": 61,
+      "status": "passed",
+      "duration_ms": 9990,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/agent-runtime-chat.spec.ts::sends an instruction into the active run without creating another user turn",
+      "file": "frontend/e2e/agent-runtime-chat.spec.ts",
+      "test_name": "sends an instruction into the active run without creating another user turn",
+      "line_at_execution": 87,
+      "status": "passed",
+      "duration_ms": 3137,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/agent-runtime-chat.spec.ts::keeps a narrow chat viewport within its screen and exposes navigation",
+      "file": "frontend/e2e/agent-runtime-chat.spec.ts",
+      "test_name": "keeps a narrow chat viewport within its screen and exposes navigation",
+      "line_at_execution": 101,
+      "status": "passed",
+      "duration_ms": 792,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/agent-runtime-chat.spec.ts::content phases keep progress separate from the final answer",
+      "file": "frontend/e2e/agent-runtime-chat.spec.ts",
+      "test_name": "content phases keep progress separate from the final answer",
+      "line_at_execution": 109,
+      "status": "passed",
+      "duration_ms": 751,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/agent-runtime-chat.spec.ts::PNG attachments preview, clear on send and never enter browser storage",
+      "file": "frontend/e2e/agent-runtime-chat.spec.ts",
+      "test_name": "PNG attachments preview, clear on send and never enter browser storage",
+      "line_at_execution": 145,
+      "status": "passed",
+      "duration_ms": 2740,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/agent-runtime-chat.spec.ts::PNG selection clears on a new conversation and enforces format and count",
+      "file": "frontend/e2e/agent-runtime-chat.spec.ts",
+      "test_name": "PNG selection clears on a new conversation and enforces format and count",
+      "line_at_execution": 163,
+      "status": "passed",
+      "duration_ms": 885,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::首次认证与token刷新保留自己的已存会话",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "首次认证与token刷新保留自己的已存会话",
+      "line_at_execution": 74,
+      "status": "passed",
+      "duration_ms": 7865,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-首次认证与token刷新保留自己的已存会话/attachments/final-state-fc6ba504db9735691ed278dab40f4d01c4812e47.png",
+          "sha256": "6b87fdf54f0f0da461304a8dfbfcd46a740b48244903fc82ebdf32ba6690aa45",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::旧快照未确认时合并最终回答，完成等待保存且刷新正文仍在",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "旧快照未确认时合并最终回答，完成等待保存且刷新正文仍在",
+      "line_at_execution": 88,
+      "status": "passed",
+      "duration_ms": 1496,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-旧快照未确认时合并最终回答，完成等待保存且刷新正文仍在/attachments/final-state-bf95308ff8daa717cdbc37338b1d6c1460beef5b.png",
+          "sha256": "e18f528d5ff717be23859ff90017199e9cb5a163239ce5684b60870ebc98b129",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::云端保存失败提示原因且不覆盖已生成的回答",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "云端保存失败提示原因且不覆盖已生成的回答",
+      "line_at_execution": 116,
+      "status": "passed",
+      "duration_ms": 1516,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-云端保存失败提示原因且不覆盖已生成的回答/attachments/final-state-dc8e29ac6b6e66f7438dc41dd89642c40b7061b6.png",
+          "sha256": "e18f528d5ff717be23859ff90017199e9cb5a163239ce5684b60870ebc98b129",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::服务器已保存的最终正文不依赖浏览器快照写入",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "服务器已保存的最终正文不依赖浏览器快照写入",
+      "line_at_execution": 135,
+      "status": "passed",
+      "duration_ms": 1426,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-服务器已保存的最终正文不依赖浏览器快照写入/attachments/final-state-97c59b3e4496d09bb23656a3643df86cbf172423.png",
+          "sha256": "3018c825fbb5ea03b505d44748dd44c4323aac98b55c72b737d363f834feb6da",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::刷新后按run恢复回答且不重新触发模型",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "刷新后按run恢复回答且不重新触发模型",
+      "line_at_execution": 164,
+      "status": "passed",
+      "duration_ms": 3322,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-刷新后按run恢复回答且不重新触发模型/attachments/final-state-72155e3a8bd598de0a80c39426c7800de87ca82f.png",
+          "sha256": "69e7562364243d221e24b0db0eb6d8f3d5a6dd726c2393bc211948114fdd1ced",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::回答槽丢失且SSE挂住时等待交付并取回同轮已保存正文",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "回答槽丢失且SSE挂住时等待交付并取回同轮已保存正文",
+      "line_at_execution": 193,
+      "status": "passed",
+      "duration_ms": 932,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-回答槽丢失且SSE挂住时等待交付并取回同轮已保存正文/attachments/final-state-af812e69db218f8ae17d239144ec03bb4c58159f.png",
+          "sha256": "86ed0aa63b2b88957a178de395ac27582df88d7ec70ba72ce41187311f710ede",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/conversation-persistence.spec.ts::刷新旧客户端问题和空回答时恢复紧邻的同文canonical回答",
+      "file": "frontend/e2e/conversation-persistence.spec.ts",
+      "test_name": "刷新旧客户端问题和空回答时恢复紧邻的同文canonical回答",
+      "line_at_execution": 243,
+      "status": "passed",
+      "duration_ms": 1231,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/conversation-persistence-刷新旧客户端问题和空回答时恢复紧邻的同文canonical回答/attachments/final-state-527ea08f6db20b258030d7d71d590f931252d652.png",
+          "sha256": "f8d40bced6f3082239437524939f4fb6490bbb6a4ca1d7ef64db0ce9f4cd60c0",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/execution-trace.spec.ts::原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示",
+      "file": "frontend/e2e/execution-trace.spec.ts",
+      "test_name": "原始 AgentLogPanel 默认隐藏，仅在本地开发者标记下显示",
+      "line_at_execution": 118,
+      "status": "passed",
+      "duration_ms": 882,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/execution-trace-原始-AgentLogPanel-默认隐藏，仅在本地开发者标记下显示/attachments/final-state-487a6cc88adc490a47ef52c747bd4004193c1b6d.png",
+          "sha256": "6d2acb6503bd7c25fa2f7610f3782119193b4ff47a99287bf47b5614e2824368",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/execution-trace.spec.ts::所属对话展示真实Agent活动，不把内部计划字段当作用户过程",
+      "file": "frontend/e2e/execution-trace.spec.ts",
+      "test_name": "所属对话展示真实Agent活动，不把内部计划字段当作用户过程",
+      "line_at_execution": 132,
+      "status": "passed",
+      "duration_ms": 1083,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/execution-trace-所属对话展示真实Agent活动，不把内部计划字段当作用户过程/attachments/final-state-90abde4a2fc34ff3850d34cf96eb21d9d993413a.png",
+          "sha256": "7d534f0d487533f5c333bdb24cac1bf56867ea5daa889fb62d695eb7c7867444",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/execution-trace.spec.ts::traceRawEnabled=false 时仍可见真实工具活动",
+      "file": "frontend/e2e/execution-trace.spec.ts",
+      "test_name": "traceRawEnabled=false 时仍可见真实工具活动",
+      "line_at_execution": 171,
+      "status": "passed",
+      "duration_ms": 1197,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-existing-e2e/artifacts/execution-trace-traceRawEnabled-false-时仍可见真实工具活动/attachments/final-state-2dbd0d53dee3e6c7f654b7fa3ef949fcf3a6fa57.png",
+          "sha256": "b0f458b81a4ad464efac0ef6aafe76b559c20d2ec202c46bd387686570e3021c",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::built-in model uses official metadata and preserves the same model and effort across refresh and AI features",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "built-in model uses official metadata and preserves the same model and effort across refresh and AI features",
+      "line_at_execution": 126,
+      "status": "passed",
+      "duration_ms": 1850,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back",
+      "line_at_execution": 173,
+      "status": "passed",
+      "duration_ms": 5278,
+      "run": "controlled-acceptance-rerun3",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun3/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun3/artifacts/model-selection-custom-mod-f7377-d-never-silently-falls-back/attachments/final-state-5c192a54ecc1d4b1889b962984e963bbf4170bfc.png",
+          "sha256": "a4f8f70c3daf740a22c433c8226c594f3b4d179b6508bf3b7c33cf416dbbb2a1",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::anonymous users can inspect model settings and have a login entry for explicit selections",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "anonymous users can inspect model settings and have a login entry for explicit selections",
+      "line_at_execution": 202,
+      "status": "passed",
+      "duration_ms": 1114,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::custom context consent resets when destination credentials change and default restore removes the override",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "custom context consent resets when destination credentials change and default restore removes the override",
+      "line_at_execution": 236,
+      "status": "passed",
+      "duration_ms": 1870,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/model-selection-custom-con-10295-estore-removes-the-override/attachments/final-state-f384fd006448d9c2da33a6e31a0c908b23f7a687.png",
+          "sha256": "15b74cfe575ff3b4890eecd62ef9fb5983894c0afa10b94ac3d8870898c86dba",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::logout clears the applied custom selection and credentials",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "logout clears the applied custom selection and credentials",
+      "line_at_execution": 244,
+      "status": "passed",
+      "duration_ms": 1552,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::connection-test rate limits remain a recoverable form message",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "connection-test rate limits remain a recoverable form message",
+      "line_at_execution": 258,
+      "status": "passed",
+      "duration_ms": 710,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::model preflight failure and empty completions show explicit retryable messages",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "model preflight failure and empty completions show explicit retryable messages",
+      "line_at_execution": 290,
+      "status": "passed",
+      "duration_ms": 1122,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/model-selection-model-pref-0a39f-explicit-retryable-messages/attachments/final-state-cd0047b20a561471dfdb59e1d4e61bea352d4319.png",
+          "sha256": "b8b1f5495111bd49fc967837dda439daeb1e2f584c326ba87a9bbf16b9eb598e",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::truncated model output keeps verified data and displays the actual cause",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "truncated model output keeps verified data and displays the actual cause",
+      "line_at_execution": 313,
+      "status": "passed",
+      "duration_ms": 939,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/model-selection-truncated--288ff-d-displays-the-actual-cause/attachments/final-state-3379dbcfcf0ad7b4d93dfa01b5da264bd58f73fa.png",
+          "sha256": "2b626d45b3be457cd8867ad91db91a04e2704460fe751e6bc95a03712f26d9fd",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::canonical completion IDs do not move the answer out of the current conversation",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "canonical completion IDs do not move the answer out of the current conversation",
+      "line_at_execution": 311,
+      "status": "passed",
+      "duration_ms": 854,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::answers remain visible and restore after refresh when local storage is full",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "answers remain visible and restore after refresh when local storage is full",
+      "line_at_execution": 325,
+      "status": "passed",
+      "duration_ms": 1131,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/model-selection.spec.ts::reopening an interrupted empty answer shows a visible retry state",
+      "file": "frontend/e2e/model-selection.spec.ts",
+      "test_name": "reopening an interrupted empty answer shows a visible retry state",
+      "line_at_execution": 378,
+      "status": "passed",
+      "duration_ms": 1313,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/model-selection-reopening--25e16-shows-a-visible-retry-state/attachments/final-state-8aac49d99396bb0b4d6f14bab5aa30cc32798107.png",
+          "sha256": "6ff9e1b230059b70b21b1bb5df7d7531628600344d3cbd2526dc99fd84ff112c",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：桌面暗色",
+      "file": "frontend/e2e/research-detail-presentation.spec.ts",
+      "test_name": "研究详情与分组来源可读且可折叠：桌面暗色",
+      "line_at_execution": 5,
+      "status": "passed",
+      "duration_ms": 1509,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：手机亮色",
+      "file": "frontend/e2e/research-detail-presentation.spec.ts",
+      "test_name": "研究详情与分组来源可读且可折叠：手机亮色",
+      "line_at_execution": 5,
+      "status": "passed",
+      "duration_ms": 1165,
+      "run": "controlled-acceptance-existing-e2e",
+      "run_report": "tmp/r261113/controlled-acceptance-existing-e2e/results.json",
+      "attachments": []
+    },
+    {
+      "key": "frontend/e2e/track-record.spec.ts::public empty and pending states require no welcome gate and never invent hit rates",
+      "file": "frontend/e2e/track-record.spec.ts",
+      "test_name": "public empty and pending states require no welcome gate and never invent hit rates",
+      "line_at_execution": 56,
+      "status": "passed",
+      "duration_ms": 1336,
+      "run": "controlled-acceptance-rerun3",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun3/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun3/artifacts/track-record-public-empty--63634--and-never-invent-hit-rates/attachments/final-state-114012701b80a967f2b1a943ac87bfaece510df1.png",
+          "sha256": "c60e6476db11e45aed5d362b9d51727e5ac641ae7681c3b6fe93611851e13422",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/track-record.spec.ts::settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+      "file": "frontend/e2e/track-record.spec.ts",
+      "test_name": "settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+      "line_at_execution": 89,
+      "status": "passed",
+      "duration_ms": 2910,
+      "run": "controlled-acceptance-rerun4",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/track-record-settled-fixtu-7ae6f-tuses-on-desktop-and-mobile/attachments/final-state-acd2bc7482afefcbdd03f81dbbb393865882cbe6.png",
+          "sha256": "c0397cf9a8b3f19ced699b2ed568e5ad086c216bea404c30423b33a8648e1caf",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/track-record.spec.ts::a failed public read offers retry without manufacturing an empty result",
+      "file": "frontend/e2e/track-record.spec.ts",
+      "test_name": "a failed public read offers retry without manufacturing an empty result",
+      "line_at_execution": 151,
+      "status": "passed",
+      "duration_ms": 1011,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/track-record-a-failed-publ-4350a-nufacturing-an-empty-result/attachments/final-state-cf46068d56d0620a60ac77862873aa7ca78a50cf.png",
+          "sha256": "bec9b3bbcb6ce0d56c23b7c8ae262f496bc7df1431a6599d97a18e74a6a39bf7",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+      "file": "frontend/e2e/track-record.spec.ts",
+      "test_name": "pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+      "line_at_execution": 170,
+      "status": "passed",
+      "duration_ms": 1831,
+      "run": "controlled-acceptance-rerun4",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/track-record-pagination-re-f392d-the-current-page-on-failure/attachments/final-state-e5fa0a7a3297f99a8d8b9f15bef3fd771c217850.png",
+          "sha256": "cddc5e935e5b7d2a7a57b9685093d29cd9a0a75120256fa2d95593978828b6b9",
+          "content_type": "image/png"
+        }
+      ]
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C1 displays a source timeout and the alternative source used in the answer",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C1 displays a source timeout and the alternative source used in the answer",
+      "line_at_execution": 238,
+      "status": "passed",
+      "duration_ms": 2660,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-C-21fab-e-source-used-in-the-answer/attachments/final-state-21a243b4135497f6bf6d2c552568021cad56597a.png",
+          "sha256": "875ffa757b30f4ae785a25d4fb51a8c1736ea13e4588d3d85ce99e075b67f9ed",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/b7fc19d04b51af0f.json",
+          "sha256": "f8fd04ff90ba8dffd087c32dd0447676b204ca97c2ca2e70e1e270a4d2133994",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C2 preserves a partial answer and blocks publication when core data is missing",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C2 preserves a partial answer and blocks publication when core data is missing",
+      "line_at_execution": 254,
+      "status": "passed",
+      "duration_ms": 1007,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-C-746de-n-when-core-data-is-missing/attachments/final-state-11c3439eb5d1500e8c8c084a25a017e99b4ba841.png",
+          "sha256": "44d58f40dc29955f5f93a1623c16b6f95e9aaae79528b4550d714acd418d9052",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/c86464cba12fc0de.json",
+          "sha256": "21ab3d29a6325e6be13ad3ebc5b82b693ff59581172376eead2f988599d73cb8",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C3 rejects a model with confirmed unsupported tool calling before sending",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C3 rejects a model with confirmed unsupported tool calling before sending",
+      "line_at_execution": 269,
+      "status": "passed",
+      "duration_ms": 848,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-C-901c6-tool-calling-before-sending/attachments/final-state-ffba0b9a384aad64ba2c5d34936ff0a0756bb9d7.png",
+          "sha256": "6525a65f63f11ba1e715eff587f42060f23543f221194840cb4d9203d2f07524",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/9f57087c682dda0a.json",
+          "sha256": "9cfcb0a2ae7ae8baae329fb18c217807368df2f214cfcdc9991cedf19532a994",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 0,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C4 reconnects after thirty seconds into the original answer without duplicated text",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C4 reconnects after thirty seconds into the original answer without duplicated text",
+      "line_at_execution": 279,
+      "status": "passed",
+      "duration_ms": 31741,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-C-0db7e-wer-without-duplicated-text/attachments/final-state-54dd67b4bd5530c0d33604b4d962da12eb14bf71.png",
+          "sha256": "e4c6c85f1d42d8c0ada6ecd7cf87bcbbecc557f54f20f160db76d68503f8ef84",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/05d311d6319f39a6.json",
+          "sha256": "d94c6a198e409cfe5398f45c83eda70465a84c72dc6fcdb7ef5d683bcffb0fb1",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [
+          "/api/execute/runs/95923839-b247-41f8-8365-224652b0f142/events?after_seq=1"
+        ],
+        "disconnect_duration_ms": 30367,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C5 stopping preserves generated content and ignores late tool and answer frames",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C5 stopping preserves generated content and ignores late tool and answer frames",
+      "line_at_execution": 310,
+      "status": "passed",
+      "duration_ms": 1198,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-C-fc6d3-late-tool-and-answer-frames/attachments/final-state-017d27cc017d1d8b35ca2e7dfd13da373dd9ca3f.png",
+          "sha256": "1598e60fdeeb87abfb7aceb226be922005623580a39f50ed7b3f8e7c70ca568e",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/3adc8e0abf859529.json",
+          "sha256": "98ad8160a60c2f299ef7306e83b8830fcccbc2e4c9fd6d6d9412bffc0ce434bd",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 2,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations",
+          "POST /api/execute/runs/dcf13ac3-2b27-41fa-b53e-c773857934b3/cancel",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C6 server save failure keeps the answer exportable and never records success",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C6 server save failure keeps the answer exportable and never records success",
+      "line_at_execution": 324,
+      "status": "passed",
+      "duration_ms": 2435,
+      "run": "controlled-acceptance-rerun4",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "attachments": [
+        {
+          "name": "exported-unsaved-answer",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/agentic-final-acceptance-C-d27b8-e-and-never-records-success/attachments/exported-unsaved-answer-6b1ac478ebad746ae78bf9d409acbd8bb1211b7e.md",
+          "sha256": "51ebf8f649ca32f55ea3b8bd38907e4bb027fe3a2bab93fe74833f45bf8dfbad",
+          "content_type": "text/markdown"
+        },
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/agentic-final-acceptance-C-d27b8-e-and-never-records-success/attachments/final-state-c96e9910df0d3ea019451eec207f8fff93ce5b2d.png",
+          "sha256": "68b9b4fede0f1384761d44c3504f1578ac8434b1a226ca40ed1fbd9bbac7f624",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun4/9e7711a68f40ffcd.json",
+          "sha256": "905077187e09212e1c2ab014cf883e08d5dad13ad205e9a033a60f9dab71168a",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::C7 exhausted budget shows partial output and the remaining gap",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "C7 exhausted budget shows partial output and the remaining gap",
+      "line_at_execution": 342,
+      "status": "passed",
+      "duration_ms": 969,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-C-f19ed-utput-and-the-remaining-gap/attachments/final-state-9662a2492593c29d2d18b5049f7399fec2087b7e.png",
+          "sha256": "3082fd7373c43c4c43b64dd4675835e5f0d6f923bb0f8550b44b19af27b044d9",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/0c4f7a848b865e4c.json",
+          "sha256": "1c8aa2838c294c088bb7e5dbd92c45d85358ac9a14927c410cdb81a66b20f766",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B5 labels a logarithmic chart axis explicitly",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "B5 labels a logarithmic chart axis explicitly",
+      "line_at_execution": 355,
+      "status": "passed",
+      "duration_ms": 1261,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-B-06ef4-thmic-chart-axis-explicitly/attachments/final-state-f45bc45bfe1e3ff210b0c7292ccc7e5a74ed2df3.png",
+          "sha256": "66108c35831d8d8076e6f532eeeab5b36ce07214d4c60f907326a9f180574201",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/460875bd8d3f8aa2.json",
+          "sha256": "3fd4636a27841267361352473b95828707241154eb47caa49a294e71d368a0b4",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::B6 expands chart data and downloads the same rows as CSV",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "B6 expands chart data and downloads the same rows as CSV",
+      "line_at_execution": 365,
+      "status": "passed",
+      "duration_ms": 2581,
+      "run": "controlled-acceptance-rerun3",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun3/results.json",
+      "attachments": [
+        {
+          "name": "downloaded-chart-data",
+          "path": "tmp/r261113/controlled-acceptance-rerun3/artifacts/agentic-final-acceptance-B-06928-nloads-the-same-rows-as-CSV/attachments/downloaded-chart-data-96d61ce3e4d59eae6ead14e5fe4fc279d1d8a2a7.csv",
+          "sha256": "18ea82be9f3c2cacff1ca178c810a2c670fecbaedef05ab38c9595beaf599952",
+          "content_type": "text/csv"
+        },
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun3/artifacts/agentic-final-acceptance-B-06928-nloads-the-same-rows-as-CSV/attachments/final-state-8078271189760ac6b511bc9cebe0f52f9aeb432a.png",
+          "sha256": "bebf3a1338cd6b6b0dbf2bd1febf8558050dbe5045500d09c12546fc2bfa36b1",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun3/8848b955a8ef92b9.json",
+          "sha256": "7a0ae2be02deb9986a7a4f86902b5456849dc05ccb3d368899f2d2b75f34ad83",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E1 contains wide tables and charts inside a 390px page",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E1 contains wide tables and charts inside a 390px page",
+      "line_at_execution": 385,
+      "status": "passed",
+      "duration_ms": 1229,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-E-41c1f--charts-inside-a-390px-page/attachments/final-state-3917dc7212b82c4df01c2d99fb9424b54653cec9.png",
+          "sha256": "43cffea8ca7c332a0a514611295050d023d9983ede76ba6ccf9eb67ed915173f",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/99db5f4575b6b119.json",
+          "sha256": "ffe482cc96f6699bbdb5363cfd0d5bc72beba8e6fbd4e5048e318d0457103a03",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via isComposing",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E2 does not send Chinese composition Enter via isComposing",
+      "line_at_execution": 405,
+      "status": "passed",
+      "duration_ms": 904,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-E-da07c-ition-Enter-via-isComposing/attachments/final-state-135992fe87739ed9500b60c0c86f527508d222ab.png",
+          "sha256": "c4dd44b35ed65a64d154a3e6af5b2136949b0e35f5dc4b38676256a0bfacbe30",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/8f78deb5f6247acd.json",
+          "sha256": "68922d9a3f0cf1c0455c25ed88750268f015db74e029a37acd5b342d58a5927d",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via keyCode229",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E2 does not send Chinese composition Enter via keyCode229",
+      "line_at_execution": 405,
+      "status": "passed",
+      "duration_ms": 901,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-E-bb0d0-sition-Enter-via-keyCode229/attachments/final-state-4bc9747b2ef13ecee02f21288aae5610e03f1df2.png",
+          "sha256": "c4dd44b35ed65a64d154a3e6af5b2136949b0e35f5dc4b38676256a0bfacbe30",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/c6674724afd9f51a.json",
+          "sha256": "82837335acff698a17de6ad3c5eceada70e82785728f8ab7ee122646dab0649a",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 sends and stops an answer with keyboard controls and a visible focus ring",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E3 sends and stops an answer with keyboard controls and a visible focus ring",
+      "line_at_execution": 422,
+      "status": "passed",
+      "duration_ms": 1222,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-E-35f6d-ls-and-a-visible-focus-ring/attachments/final-state-0cd6ebd892287039ac6243bd58b546c020831146.png",
+          "sha256": "746f6b378caf992f80e2e47d447831d9c2020916039fb49a5c3de4d310c45e58",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/cf544d01785b8e0d.json",
+          "sha256": "62dc18916a54889d2e8f87e16cc3966a84b07d43b7d0709a01fe8e3840e5bc8a",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations",
+          "POST /api/execute/runs/6aaa99bc-c4f3-4009-bb7b-3171dc2a11e4/cancel",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E3 expands process and follows a source citation using only keyboard activation",
+      "line_at_execution": 442,
+      "status": "passed",
+      "duration_ms": 1550,
+      "run": "controlled-acceptance-rerun3",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun3/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun3/artifacts/agentic-final-acceptance-E-55ee8-ng-only-keyboard-activation/attachments/final-state-158a63e88f2844e30f696b11582686e6a6b952c1.png",
+          "sha256": "273f56979ad742eb1f3d739c20c9a91ef830d4edb26c86401f749e61feb9c46f",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun3/1d3692a5eb8b00c8.json",
+          "sha256": "b332007574872262f1bf87fe02171ea415a334930da4b7ddd7b0c3f802fee8b2",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations",
+          "GET /api/dashboard",
+          "GET /api/predictions/history",
+          "GET /api/stock/company/AAPL",
+          "GET /api/stock/kline/AAPL",
+          "GET /api/stock/price/AAPL"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E4 aria-live changes for activity and completion without announcing body tokens",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E4 aria-live changes for activity and completion without announcing body tokens",
+      "line_at_execution": 464,
+      "status": "passed",
+      "duration_ms": 1167,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-E-aadf6-hout-announcing-body-tokens/attachments/final-state-15bd335b47611ed4cfe4e47d0284c8861ae76522.png",
+          "sha256": "8d791769993f3c3045c6c0ad098913d422fba032d86df5fe322def8499f028a8",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/2a4b0bfc1a3dfcf7.json",
+          "sha256": "274f710e5f6a755d0cea1f3faa6890ac993cb99a2e3a5c3c3efd84231100a472",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::E5 reduced-motion still permits send stop and process disclosure",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "E5 reduced-motion still permits send stop and process disclosure",
+      "line_at_execution": 485,
+      "status": "passed",
+      "duration_ms": 810,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-E-a6903-stop-and-process-disclosure/attachments/final-state-f2fe76793ae9ffe59ae38e63d434879c8ea392cd.png",
+          "sha256": "6aafa25f106bc2674a8c5f6738dd309f309310840026a9bc23ceb6218e1f66d6",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/fdce69d53eac252f.json",
+          "sha256": "a470feb87229b38ce8f5e4d4e860075b62df4e9fbeb370cdb719a57844e209bc",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations",
+          "POST /api/execute/runs/addcd8a2-e9ae-4307-b64b-c1fa02bc2db5/cancel",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts restores only the new owner conversation",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "F3 switching controlled accounts restores only the new owner conversation",
+      "line_at_execution": 501,
+      "status": "passed",
+      "duration_ms": 692,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-F-34c04--the-new-owner-conversation/attachments/final-state-b6299037ee80a3a2dbe488651d8dd00ceea62afd.png",
+          "sha256": "65cbb0849248c91b0b0a43484f81d8c12662a64737d99e19540f903f48dcd8bd",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/6dd57a1fd8797ca2.json",
+          "sha256": "3ee5d828ec1f202451f0e620e1479c8b48c21731b13a8612ca2b40ec545b26a1",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 0,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "GET /api/watchlist"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces the watchlist owner",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "F3 switching controlled accounts replaces the watchlist owner",
+      "line_at_execution": 511,
+      "status": "passed",
+      "duration_ms": 784,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-F-b2eb3-eplaces-the-watchlist-owner/attachments/final-state-ec53373bea72a46ea298d7e120fd80e78d089f77.png",
+          "sha256": "d80efedb2424440b884e97a983f068e776c8e4b8c3e8c470c3c02769e9698a93",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/d96547795f114e1b.json",
+          "sha256": "e1648a74450240a56f5982f800f7a4b70be964f5bc588d3b41bf01235dc85630",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 0,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/dashboard",
+          "GET /api/capabilities",
+          "GET /api/stock/company/AAPL",
+          "GET /api/stock/price/AAPL",
+          "GET /api/stock/kline/AAPL",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "GET /api/monitor/comments/stream",
+          "POST /api/monitor/leases",
+          "GET /api/predictions/latest",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/reports/index",
+          "GET /api/stock/kline/AAPL",
+          "GET /api/monitor/comments/stream",
+          "POST /api/monitor/leases",
+          "GET /api/conversations/public%3Acontrolled-beta%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/reports/index",
+          "GET /api/stock/price/MSFT",
+          "GET /api/stock/kline/MSFT"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces private prediction history",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "F3 switching controlled accounts replaces private prediction history",
+      "line_at_execution": 521,
+      "status": "passed",
+      "duration_ms": 681,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-F-b08bf--private-prediction-history/attachments/final-state-8f348e06ef13d3e5f33c9aa0bc5644704d82d686.png",
+          "sha256": "2ba98a893c34c24fcbe89cca35ddf19f49a0fe0e75b1dc25d1bc0801a7069209",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/4b27c4ea53217ed9.json",
+          "sha256": "ec38d7a48c5ba7f4bbf0c1110a3f12a0e47b0d808ff4e9888f2f75e7433016e8",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 0,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/predictions/history",
+          "GET /api/predictions/stats",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "GET /api/predictions/runs/prediction-controlled-alpha",
+          "GET /api/predictions/history",
+          "GET /api/predictions/stats",
+          "GET /api/conversations/public%3Acontrolled-beta%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/predictions/runs/prediction-controlled-beta"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G1 completion duration and tool count agree with observed events",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "G1 completion duration and tool count agree with observed events",
+      "line_at_execution": 531,
+      "status": "passed",
+      "duration_ms": 847,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-G-5b6f9--agree-with-observed-events/attachments/final-state-44279d97694166be4fd822a3e3a24ad5d343d23d.png",
+          "sha256": "533bd22a39551c3ae80f8b64c095668186e1a80f06f08b03ac31556f6e6efcdd",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/bb1435df3e1604d0.json",
+          "sha256": "895ca545716d5f0e9a52cc971404a0f14fd79652451303fa53e246f45852b17a",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 public reasoning summary remains collapsed after completion",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "G4 public reasoning summary remains collapsed after completion",
+      "line_at_execution": 553,
+      "status": "passed",
+      "duration_ms": 1063,
+      "run": "controlled-acceptance-rerun4",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/agentic-final-acceptance-G-30c75--collapsed-after-completion/attachments/final-state-6725cf9aff058e1f7c1f1b9eccad49586b83e1e3.png",
+          "sha256": "7d2c7a49985f3429ffca077bf3741cc3e0df5e5b91a4a411284efd20273c4852",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun4/7e4377fe5d97c3ce.json",
+          "sha256": "de008aa3b038b1a1344e16ab8811e99d43658b5e677c33aee4d0e70481937456",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 provider raw reasoning requires the explicit account preference",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "G4 provider raw reasoning requires the explicit account preference",
+      "line_at_execution": 569,
+      "status": "passed",
+      "duration_ms": 1081,
+      "run": "controlled-acceptance-rerun4",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/agentic-final-acceptance-G-45448-explicit-account-preference/attachments/final-state-6858b001ddedebab06663357dbcda0aa5b16006c.png",
+          "sha256": "b92a292b15af2ebe46797372745c8d2b37bf203559f9563e53b3fa97889316a2",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun4/7076fcddec617820.json",
+          "sha256": "ee5f2a02e894d7dd7cce50203c51b3421a1c58fa41d8094daf7900e502382b96",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations",
+          "GET /api/models"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G4 absent provider reasoning never creates a synthetic reasoning block",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "G4 absent provider reasoning never creates a synthetic reasoning block",
+      "line_at_execution": 588,
+      "status": "passed",
+      "duration_ms": 826,
+      "run": "controlled-acceptance-rerun4",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun4/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun4/artifacts/agentic-final-acceptance-G-e7c58-a-synthetic-reasoning-block/attachments/final-state-6abfb188a85e2e7840e31a0b113ab9b51684e97c.png",
+          "sha256": "34690d2968c5899c97e82e5c02c28a0146753ef27a6337d345e7b9b9cb960cc7",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun4/5faf49a40874863b.json",
+          "sha256": "29fddb8d2253048f9ed2765059c6facadcfe18d0e2b8c5c31f3d9d4273c67a24",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G5 successful quick capability validation never enters the process list",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "G5 successful quick capability validation never enters the process list",
+      "line_at_execution": 592,
+      "status": "passed",
+      "duration_ms": 991,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-G-ee190-ver-enters-the-process-list/attachments/final-state-65383db09b1ebfd64ee345e39fe32b911c0742d6.png",
+          "sha256": "5e954d58caf03ca34d7790783e4f595a6edfaf07e47d835f7bb51a56534663d7",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/e2534259f9d24ce4.json",
+          "sha256": "26a7512f88930b15b5ee4a02c3a38eea62b9628bc8895530cd32c90cc2c08a10",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::G5 capability validation appears only after two seconds or a confirmed failure",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "G5 capability validation appears only after two seconds or a confirmed failure",
+      "line_at_execution": 604,
+      "status": "passed",
+      "duration_ms": 3867,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-G-2f480-onds-or-a-confirmed-failure/attachments/final-state-3fea159c35ba7c1ab11de9197e1b8d3f7b207749.png",
+          "sha256": "15ef5e80d0089cb6d714811f125296cdf4b6c656bdae8c8e637d26900b36c1bf",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/eec04c306642f0d0.json",
+          "sha256": "8255c6d63d6062dab29c7c695fc53ed10cd15e21f39741494aabbe9156afbb16",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 1,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "POST /api/conversations"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    },
+    {
+      "key": "frontend/e2e/agentic-final-acceptance.spec.ts::D7 appearance and confirmation preferences apply immediately and survive refresh",
+      "file": "frontend/e2e/agentic-final-acceptance.spec.ts",
+      "test_name": "D7 appearance and confirmation preferences apply immediately and survive refresh",
+      "line_at_execution": 620,
+      "status": "passed",
+      "duration_ms": 1457,
+      "run": "controlled-acceptance-rerun2",
+      "run_report": "tmp/r261113/controlled-acceptance-rerun2/results.json",
+      "attachments": [
+        {
+          "name": "final-state",
+          "path": "tmp/r261113/controlled-acceptance-rerun2/artifacts/agentic-final-acceptance-D-77212-diately-and-survive-refresh/attachments/final-state-2b59198edec91b83cb0ac6c6ebead2b992549146.png",
+          "sha256": "d8169d891ecee7069cb1c0b8d4e6c21ee3fc56f71efe3e912596920aa374eefe",
+          "content_type": "image/png"
+        },
+        {
+          "name": "controlled-evidence",
+          "path": "tmp/r261113/controlled-acceptance-evidence/controlled-acceptance-rerun2/4f8bd7e0f47850f4.json",
+          "sha256": "a9b6361bc237122712f3c01ffea2b8d72dc06f07b482be1677384b769d2f76df",
+          "content_type": "application/json"
+        }
+      ],
+      "controlled_observations": {
+        "execute_posts": 0,
+        "resume_requests": [],
+        "disconnect_duration_ms": null,
+        "late_frame_attempts": 0,
+        "mocked_api_requests": [
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "GET /api/models",
+          "GET /api/capabilities",
+          "GET /api/conversations/public%3Acontrolled-alpha%3Adefault",
+          "GET /api/watchlist",
+          "GET /api/models",
+          "GET /api/stock/price/%5EIXIC",
+          "GET /api/stock/price/%5EGSPC",
+          "GET /api/stock/price/000300.SS",
+          "GET /api/stock/price/GC%3DF",
+          "GET /api/stock/price/BTC-USD",
+          "GET /api/models"
+        ],
+        "blocked_external_requests": [],
+        "page_errors": [],
+        "original_real_model_answer_sha256": null
+      }
+    }
+  ],
+  "pytest_runs": [
+    {
+      "name": "controlled-acceptance-pytest",
+      "passed": 74,
+      "failed": 0,
+      "junit": "tmp/r261113/controlled-acceptance-pytest/junit.xml",
+      "sha256": "8a4f09dc72dcd1ab084e6ec3bd1e69e09fee2a2b2b04159cd4fa8e31bbec6913",
+      "log": "tmp/r261113/controlled-acceptance-pytest/run.log"
+    },
+    {
+      "name": "controlled-acceptance-worker-pytest",
+      "passed": 4,
+      "failed": 0,
+      "junit": "tmp/r261113/controlled-acceptance-worker-pytest/junit.xml",
+      "sha256": "705fe4a0b1603b7f3d9bd4451325260c9934ef01d5d9d0b571eb30d1820188d5",
+      "log": "tmp/r261113/controlled-acceptance-worker-pytest/run.log"
+    }
+  ],
+  "pytest_evidence": [
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_event_sequences_and_checkpoints_keep_exact_model_text",
+      "status": "passed",
+      "duration_seconds": 0.003,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_checkpoint_failure_has_unique_sequence_and_preserves_raw_snapshot",
+      "status": "passed",
+      "duration_seconds": 0.001,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_done_waits_for_real_commit_and_keeps_raw_content_in_every_projection",
+      "status": "passed",
+      "duration_seconds": 0.175,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_cancellation_after_streaming_keeps_partial_and_publishes_one_terminal",
+      "status": "passed",
+      "duration_seconds": 0.067,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_closing_stream_cancels_producer_and_commits_partial_once",
+      "status": "passed",
+      "duration_seconds": 0.064,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_failed_final_persistence_never_emits_done_or_publishable[exception]",
+      "status": "passed",
+      "duration_seconds": 0.074,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_failed_final_persistence_never_emits_done_or_publishable[returned_failure]",
+      "status": "passed",
+      "duration_seconds": 0.079,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_event_contract.py::test_report_index_failure_cannot_become_publishable_done",
+      "status": "passed",
+      "duration_seconds": 0.111,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_stream_replays_only_events_after_cursor",
+      "status": "passed",
+      "duration_seconds": 0.014,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_run_is_not_visible_or_cancellable_across_users",
+      "status": "passed",
+      "duration_seconds": 0.012,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_rejects_unknown_run",
+      "status": "passed",
+      "duration_seconds": 0.008,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_stream_pump_redacts_upstream_exception",
+      "status": "passed",
+      "duration_seconds": 0.011,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_binds_new_authenticated_session_to_request_user",
+      "status": "passed",
+      "duration_seconds": 0.009,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_rejects_cross_user_session_without_disclosing_owner",
+      "status": "passed",
+      "duration_seconds": 0.009,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_confines_anonymous_session_namespace",
+      "status": "passed",
+      "duration_seconds": 0.011,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_ignores_forged_user_id_in_request_context",
+      "status": "passed",
+      "duration_seconds": 0.01,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_unavailable_model_emits_replayable_failure_without_starting_runtime",
+      "status": "passed",
+      "duration_seconds": 0.011,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_chat_stream_replay_api.py::test_execute_model_preflight_follows_quota_check",
+      "status": "passed",
+      "duration_seconds": 0.009,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_revision_post_uses_owned_saved_review_and_exact_original[None]",
+      "status": "passed",
+      "duration_seconds": 0.121,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_revision_post_uses_owned_saved_review_and_exact_original[answer]",
+      "status": "passed",
+      "duration_seconds": 0.01,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_revision_post_uses_owned_saved_review_and_exact_original[findings]",
+      "status": "passed",
+      "duration_seconds": 0.01,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_revision_post_uses_owned_saved_review_and_exact_original[message]",
+      "status": "passed",
+      "duration_seconds": 0.01,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_revision_post_uses_owned_saved_review_and_exact_original[owner]",
+      "status": "passed",
+      "duration_seconds": 0.01,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_terminal_saved_and_duplicate_post_never_restarts_runtime",
+      "status": "passed",
+      "duration_seconds": 0.13,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_completed_run_recovers_after_in_memory_replay_and_owner_cache_lost",
+      "status": "passed",
+      "duration_seconds": 0.126,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_persistent_run_owner_is_enforced_after_restart",
+      "status": "passed",
+      "duration_seconds": 0.125,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_same_run_cannot_be_reused_for_different_query",
+      "status": "passed",
+      "duration_seconds": 0.122,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_store_failure_prevents_runtime_and_failed_save_preserves_preview",
+      "status": "passed",
+      "duration_seconds": 0.122,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_failed_preflight_is_durable_and_recovery_never_calls_model_again",
+      "status": "passed",
+      "duration_seconds": 0.124,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_unexpected_pipeline_end_is_persisted_as_interrupted",
+      "status": "passed",
+      "duration_seconds": 0.122,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_cancelling_streamed_preflight_saves_terminal_state",
+      "status": "passed",
+      "duration_seconds": 0.126,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_snapshot_cannot_overwrite_server_reply_and_retry_is_in_place",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_public_run_omits_internal_identity_and_request_fields",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_authoritative_commit_preserves_verbatim_reviewed_answer_and_revision_link",
+      "status": "passed",
+      "duration_seconds": 0.001,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_chat_quality_block_is_not_replaced_by_empty_report_success",
+      "status": "passed",
+      "duration_seconds": 0.002,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_research_run_delivery.py::test_pipeline_awaits_final_commit_before_exposing_done",
+      "status": "passed",
+      "duration_seconds": 0.002,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_data_answer_is_visible_before_review_and_review_is_persisted_by_default",
+      "status": "passed",
+      "duration_seconds": 0.167,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_concept_answer_without_data_has_no_review_call",
+      "status": "passed",
+      "duration_seconds": 0.075,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_chat_findings_only_annotate_and_never_replace_text",
+      "status": "passed",
+      "duration_seconds": 0.166,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_unmet_coverage_appends_once_preserving_transcript_and_then_rechecks",
+      "status": "passed",
+      "duration_seconds": 0.237,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_followup_token_limit_delivers_original_answer_and_review_as_partial[False]",
+      "status": "passed",
+      "duration_seconds": 0.175,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_followup_token_limit_delivers_original_answer_and_review_as_partial[True]",
+      "status": "passed",
+      "duration_seconds": 0.169,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_report_revision_is_model_generated_keeps_original_and_publishes_after_recheck",
+      "status": "passed",
+      "duration_seconds": 0.238,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_unavailable_review_preserves_report_draft_without_indexing",
+      "status": "passed",
+      "duration_seconds": 0.148,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_review_delivery.py::test_main_phase_timeout_keeps_streamed_prefix_in_answer_and_continuation_history",
+      "status": "passed",
+      "duration_seconds": 0.223,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_session_id_normalization_rules",
+      "status": "passed",
+      "duration_seconds": 0.97,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_session_id_rejects_invalid_format",
+      "status": "passed",
+      "duration_seconds": 0.04,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_owned_session_resolution_enforces_principal_namespace",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_report_index_worker_receives_explicit_authenticated_owner",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_anonymous_report_is_not_scheduled_for_private_index",
+      "status": "passed",
+      "duration_seconds": 0.001,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_trace_raw_override_priority",
+      "status": "passed",
+      "duration_seconds": 0.041,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_chat_request_accepts_selected_url_context",
+      "status": "passed",
+      "duration_seconds": 0.001,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_is_raw_trace_event_keeps_execution_progress_events",
+      "status": "passed",
+      "duration_seconds": 0.042,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_is_raw_trace_event_filters_verbose_events",
+      "status": "passed",
+      "duration_seconds": 0.04,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_redact_sensitive_payload_masks_values",
+      "status": "passed",
+      "duration_seconds": 0.041,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_execute_endpoint_rejects_illegal_session_id",
+      "status": "passed",
+      "duration_seconds": 0.107,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_session_context_isolation_blocks_cross_session_reference",
+      "status": "passed",
+      "duration_seconds": 0.043,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_session_context_only_persists_tickers_explicit_in_query",
+      "status": "passed",
+      "duration_seconds": 0.001,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_session_context_keeps_multiple_explicit_compare_tickers",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_trace_and_session_security.py::test_rag_collection_name_uses_session_key_shape",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_raw_numbers_and_internal_looking_words_are_never_rewritten",
+      "status": "passed",
+      "duration_seconds": 0.056,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_final_review_rejects_new_instructions_but_keeps_existing_receipts",
+      "status": "passed",
+      "duration_seconds": 0.003,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_tool_names_in_prose_do_not_execute_tools",
+      "status": "passed",
+      "duration_seconds": 0.055,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_only_protocol_requested_tool_executes_and_result_returns_to_same_history",
+      "status": "passed",
+      "duration_seconds": 0.095,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_tool_group_executes_concurrently_without_synthesized_calls",
+      "status": "passed",
+      "duration_seconds": 0.09,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_last_allowed_model_turn_has_no_tool_schemas",
+      "status": "passed",
+      "duration_seconds": 0.122,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_final_response_margin_uses_observed_model_time_without_extending_deadline",
+      "status": "passed",
+      "duration_seconds": 0.082,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_successful_model_request_records_actual_budget_duration",
+      "status": "passed",
+      "duration_seconds": 0.06,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_tool_call_without_offered_tools_is_a_protocol_error",
+      "status": "passed",
+      "duration_seconds": 0.057,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_length_continuation_keeps_prior_history_and_joins_at_exact_character",
+      "status": "passed",
+      "duration_seconds": 0.094,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_instruction_arriving_during_output_is_in_next_model_history[stop]",
+      "status": "passed",
+      "duration_seconds": 0.097,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_instruction_arriving_during_output_is_in_next_model_history[length]",
+      "status": "passed",
+      "duration_seconds": 0.095,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_instruction_during_tool_execution_preserves_tool_response_order",
+      "status": "passed",
+      "duration_seconds": 0.095,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_runtime_loop_contract.py::test_loop_stays_small_and_does_not_import_retired_answer_patches",
+      "status": "passed",
+      "duration_seconds": 0.005,
+      "evidence": "tmp/r261113/controlled-acceptance-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_analysis_worker.py::test_failures_have_stable_codes_and_always_cleanup[timeout-analysis_timeout]",
+      "status": "passed",
+      "duration_seconds": 0.039,
+      "evidence": "tmp/r261113/controlled-acceptance-worker-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_analysis_worker.py::test_cancellation_removes_container_tree_and_volume_before_propagating",
+      "status": "passed",
+      "duration_seconds": 0.002,
+      "evidence": "tmp/r261113/controlled-acceptance-worker-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_analysis_worker.py::test_http_disconnect_waits_for_cancellation_cleanup",
+      "status": "passed",
+      "duration_seconds": 0.002,
+      "evidence": "tmp/r261113/controlled-acceptance-worker-pytest/junit.xml"
+    },
+    {
+      "key": "backend/tests/test_analysis_worker.py::test_cancel_during_create_waits_for_rpc_then_cleans_result",
+      "status": "passed",
+      "duration_seconds": 0.002,
+      "evidence": "tmp/r261113/controlled-acceptance-worker-pytest/junit.xml"
+    }
+  ],
+  "owned_test_diagnostics": {
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "evidence": "tmp/r261113/controlled-acceptance-checks/results.json"
+  },
+  "candidate_build_scan": {
+    "evidence": "tmp/r261113/controlled-acceptance-source-scan.json",
+    "sha256": "c7b4f9e86fec95f0c82937fc826f1ed0a668e55da478993ddbf02196ae7f206b",
+    "results": {
+      "generated_at_utc": "2026-11-13T18:26:16.223082+00:00",
+      "test_name": "test_candidate_bundle_excludes_fixture_and_placeholder_markers",
+      "command": "python -X utf8 tmp/r261113/controlled-acceptance-scan-assets.py",
+      "status": "controlled_build_scan_pass",
+      "source": "frontend/dist/assets/*.js",
+      "built_js_files": 7,
+      "markers": [
+        "trackRecord.fixtures",
+        "fixture-us20-v1",
+        "fixture-internal-error",
+        "fixtures",
+        "示例数据",
+        "示意",
+        "mock"
+      ],
+      "hits": [],
+      "build_evidence": "tmp/r261113/frontend-verification.json",
+      "asset_manifest": [
+        {
+          "path": "frontend/dist/assets/EChartRuntime-BZ-Tmil8.js",
+          "sha256": "3947b13cb32ae69fa554314ec7adcc6b44084dd0c5c27ab4f5b7f94aa61cd38b"
+        },
+        {
+          "path": "frontend/dist/assets/index-BXtYcalA.js",
+          "sha256": "e0d1db3adb63f1f89ff05ac8ce26821694a0c612727842507c138e0f9b163920"
+        },
+        {
+          "path": "frontend/dist/assets/rolldown-runtime-DGruFWvd.js",
+          "sha256": "509fd36f6c31aad744033287fb420391534662af951bfc19487a2464aafdfeca"
+        },
+        {
+          "path": "frontend/dist/assets/vendor-echarts-CRChtF6w.js",
+          "sha256": "1c41a02af463d468504346fe610e65164b817df3e9efce34496e4e07bf7357e1"
+        },
+        {
+          "path": "frontend/dist/assets/vendor-markdown-B1pVU-5o.js",
+          "sha256": "10142f75cc63bb86bf365f5d36c9545523981f44583f65a7925ed6dcf86c3a19"
+        },
+        {
+          "path": "frontend/dist/assets/vendor-misc-DlE8XeUF.js",
+          "sha256": "330bf0ca3fb74a66c055e2441988c12497ad66a39ac240615d3b75cf21a2e0f8"
+        },
+        {
+          "path": "frontend/dist/assets/vendor-react-BCYzO2ah.js",
+          "sha256": "52d2078710a00a9c7f989724ab41268b3648933df5943ecfeb040b8ad257b2cf"
+        }
+      ],
+      "scope": "候选构建静态词及fixture排除扫描，不是线上全页真实资料输出验收。"
+    }
+  },
+  "parent_frontend_verification": {
+    "execution_owner": "root",
+    "snapshot": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+    "snapshot_sha256": "d2731a780575942b5c2774c5c1863da4c8853d4b081951075ad7b344288a8692",
+    "results": {
+      "full_unit": {
+        "command": "npm run test:unit --prefix frontend -- --reporter=default",
+        "files": 81,
+        "passed": 560,
+        "failed": 0,
+        "duration_seconds": 7.21
+      },
+      "affected_unit_after_fixes": {
+        "command": "node node_modules/vitest/vitest.mjs run <13 affected test files>",
+        "files": 13,
+        "passed": 150,
+        "failed": 0,
+        "duration_seconds": 1.67
+      },
+      "lint": {
+        "path": "tmp/r261113/frontend-lint-verified.json",
+        "errors": 0,
+        "warnings": 0
+      },
+      "tsc": {
+        "command": "node node_modules/typescript/bin/tsc -b --pretty false",
+        "exit_code": 0
+      },
+      "build": {
+        "status": "passed",
+        "command": "npm run build --prefix frontend",
+        "log": "tmp/r261113/frontend-build.log",
+        "vite_seconds": 3.97,
+        "production_images_still_pending": true
+      },
+      "source_fixes": [
+        "reasoning process disclosure",
+        "conversation persistence error mapping",
+        "same-offset pagination retry",
+        "unverified legacy chart provenance",
+        "pure helper module boundaries and hook deps"
+      ]
+    }
+  },
+  "verified_parent_fixes": [
+    {
+      "finding": "无工具的非空推理完成后没有展开入口",
+      "file": "frontend/src/components/ChatList.tsx",
+      "verified_by": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G4 public reasoning summary remains collapsed after completion",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G4 provider raw reasoning requires the explicit account preference",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G4 absent provider reasoning never creates a synthetic reasoning block"
+      ]
+    },
+    {
+      "finding": "保存失败公开文案被通用错误覆盖",
+      "file": "frontend/src/locales/zh.ts",
+      "verified_by": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C6 server save failure keeps the answer exportable and never records success"
+      ]
+    },
+    {
+      "finding": "分页失败后再次下一页为无效按钮",
+      "file": "frontend/src/components/track-record/BenchmarkTrackRecord.tsx",
+      "verified_by": [
+        "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure"
+      ]
+    }
+  ],
+  "visual_review": {
+    "performed": true,
+    "checks": [
+      "390px表图容器横滚",
+      "保存失败提示与导出操作",
+      "切换后只展示乙账号私有判断",
+      "无工具推理有展开入口"
+    ],
+    "scope": "人工读取受控Playwright PNG；不构成真实数据/供应商/线上验收。"
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "test_name": "A1 直接回答，不调数据工具；无工具行",
+      "input_exact": "「什么是自由现金流」",
+      "expected_exact": "直接回答，不调数据工具；无工具行",
+      "source_line": 1347,
+      "query_exact": "什么是自由现金流",
+      "query_sha256": "03010897c6b6e710cfaa5a88cb2587fe1e0f9a68b447872f06107f2ba74f2b1b",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "未执行此逐字查询的真实模型答复；不得将概念fixture算为验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A1",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": false,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A2",
+      "test_name": "A2 真实报价，带来源/币种/时点；无随机兜底",
+      "input_exact": "「AAPL 现在多少钱」",
+      "expected_exact": "真实报价，带来源/币种/时点；无随机兜底",
+      "source_line": 1348,
+      "query_exact": "AAPL 现在多少钱",
+      "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "缺少候选部署上的真实报价、币种、来源和时点证据。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A2",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A3",
+      "test_name": "A3 港股主体 + 本地公告路径；财期/币种正确",
+      "input_exact": "「0700.HK 最近财报怎么样」",
+      "expected_exact": "港股主体 + 本地公告路径；财期/币种正确",
+      "source_line": 1349,
+      "query_exact": "0700.HK 最近财报怎么样",
+      "query_sha256": "d19195dc1123156c138129c6ac2577b313ff74de7aab1dcaf2b2e3d6a8912a5c",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "港股原始公告、财期和本币语义待真实资料验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A3",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A4",
+      "test_name": "A4 复合需求被拆解（财报+价格），不缩成纯报价",
+      "input_exact": "「NVDA 财报对股价影响」",
+      "expected_exact": "复合需求被拆解（财报+价格），不缩成纯报价",
+      "source_line": 1350,
+      "query_exact": "NVDA 财报对股价影响",
+      "query_sha256": "e21f4d09a32f6dcb9149625876a30e6d4f74a6a8015e61616123bdc6a25ffd69",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "复合财报与股价需求待真实模型及资料验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A4",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A5",
+      "test_name": "A5 两标的同口径财期；专业任务按需并行",
+      "input_exact": "「比较 AAPL 和 MSFT 的现金流」",
+      "expected_exact": "两标的同口径财期；专业任务按需并行",
+      "source_line": 1351,
+      "query_exact": "比较 AAPL 和 MSFT 的现金流",
+      "query_sha256": "20e37b76e91a952a0ca5c958c1c1e23eb57d27c7da380e6ef48e02982a3a1766",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "同财期双标的现金流与按需专业任务待真实模型验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A5",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A6",
+      "test_name": "A6 后续调用尊重限制",
+      "input_exact": "「不要新闻，只看技术面」",
+      "expected_exact": "后续调用尊重限制",
+      "source_line": 1352,
+      "query_exact": "不要新闻，只看技术面",
+      "query_sha256": "4d54bdaf807a3a1391df9f0ba83c4752c30f8888a2cea003a2eefdebfd18d631",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "禁止新闻的多轮语义待真实模型验证，不以字符串规则判定。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A6",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A7",
+      "test_name": "A7 主体切换；旧主体证据不混入新结论",
+      "input_exact": "先问 TSLA 再问「换成 NVDA」",
+      "expected_exact": "主体切换；旧主体证据不混入新结论",
+      "source_line": 1353,
+      "query_exact": "换成 NVDA",
+      "query_sha256": "f26015e7d68012196331913a86783fe6beb65cd0353a46f16d254cc11449373f",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "TSLA→NVDA主体切换和真实证据隔离未在本lane执行。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A7",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "A8",
+      "test_name": "A8 有受理回执；下一调度边界纳入；不重复创建 run",
+      "input_exact": "运行中输入「再补一个毛利率对比」",
+      "expected_exact": "有受理回执；下一调度边界纳入；不重复创建 run",
+      "source_line": 1354,
+      "query_exact": "再补一个毛利率对比",
+      "query_sha256": "cd778b4c3fab6021bb51d27d76c0751f897dc208e895f159eaf8722dbe153c22",
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "既有UI回执/单run及原生循环下一边界纳入已过；UI输入为‘只看现金流’，逐字毛利率追加与真实语义仍待线上。",
+      "test_evidence_refs": [
+        "frontend/e2e/agent-runtime-chat.spec.ts::sends an instruction into the active run without creating another user turn",
+        "backend/tests/test_runtime_loop_contract.py::test_instruction_arriving_during_output_is_in_next_model_history[stop]",
+        "backend/tests/test_runtime_loop_contract.py::test_instruction_arriving_during_output_is_in_next_model_history[length]",
+        "backend/tests/test_runtime_loop_contract.py::test_instruction_during_tool_execution_preserves_tool_response_order"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::A8",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B1",
+      "test_name": "B1 从真实数据算事件并出图；区间编号与主图对应",
+      "input_exact": "「画 SOXX 历史上连续下跌 5 周以上的区间」",
+      "expected_exact": "从真实数据算事件并出图；区间编号与主图对应",
+      "source_line": 1360,
+      "query_exact": "画 SOXX 历史上连续下跌 5 周以上的区间",
+      "query_sha256": "137e02b822b92fd2af40dc65d58fbea3de059975937fbd394f9d73339a7553c6",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "连续下跌事件与图表需真实SOXX数据和主图编号对照。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B1",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B2",
+      "test_name": "B2 假设与事实分开；表/图/文一致",
+      "input_exact": "「按不同 EPS/PE 假设画 NVDA 估值情景」",
+      "expected_exact": "假设与事实分开；表/图/文一致",
+      "source_line": 1361,
+      "query_exact": "按不同 EPS/PE 假设画 NVDA 估值情景",
+      "query_sha256": "a27f419075433a21f55f9d197048c1686c062efb2ccce85596aea400b0d05f25",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "真实NVDA资料下EPS/PE事实与假设、表图文一致性待验证。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B2",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B3",
+      "test_name": "B3 复用同一 dataset；方法字段记录参数",
+      "input_exact": "「加一条 20 日均线重画」",
+      "expected_exact": "复用同一 dataset；方法字段记录参数",
+      "source_line": 1362,
+      "query_exact": "加一条 20 日均线重画",
+      "query_sha256": "31101ac011fe4fd5199bbba4be09d61ce7bc95c53e1c2276ab867378b591cd8b",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "同dataset复用与20日均线真实方法记录待验证。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B3",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B4",
+      "test_name": "B4 同一起点归一化，口径写明",
+      "input_exact": "「两只股票今年以来的走势对比」",
+      "expected_exact": "同一起点归一化，口径写明",
+      "source_line": 1363,
+      "query_exact": "两只股票今年以来的走势对比",
+      "query_sha256": "09089442b1e2a234d171f797747757a2d3b91c1ef08714b66c72cc91a56d0fd0",
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "真实双股票YTD同起点归一化待验证。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B4",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B5",
+      "test_name": "B5 明确标注对数轴",
+      "input_exact": "对数坐标图表",
+      "expected_exact": "明确标注对数轴",
+      "source_line": 1364,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "实际ECharts画布和对数坐标标注已过；资料为显式受控dataset。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::B5 labels a logarithmic chart axis explicitly"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B5",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B6",
+      "test_name": "B6 数据表可展开、可下载；无假按钮",
+      "input_exact": "图表「查看数据 / 下载」",
+      "expected_exact": "数据表可展开、可下载；无假按钮",
+      "source_line": 1365,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "真实浏览器展开2行表并下载CSV；下载含BOM、标题及与表相同的全部资料行。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::B6 expands chart data and downloads the same rows as CSV"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B6",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B7",
+      "test_name": "B7 作业终止，正文保留，说明失败与重试",
+      "input_exact": "代码超时（注入）",
+      "expected_exact": "作业终止，正文保留，说明失败与重试",
+      "source_line": 1366,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "dispatcher真实超时分支与清理边界在FakeDocker单测通过；未启动真实隔离计算容器，不能充当作业终止在线证据。",
+      "test_evidence_refs": [
+        "backend/tests/test_analysis_worker.py::test_failures_have_stable_codes_and_always_cleanup[timeout-analysis_timeout]",
+        "backend/tests/test_analysis_worker.py::test_cancellation_removes_container_tree_and_volume_before_propagating",
+        "backend/tests/test_analysis_worker.py::test_http_disconnect_waits_for_cancellation_cleanup",
+        "backend/tests/test_analysis_worker.py::test_cancel_during_create_waits_for_rpc_then_cleans_result"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B7",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": "隔离QA计算作业真实超时及终止记录；不得用假tool错误代替作业终止。",
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "B8",
+      "test_name": "B8 描述可读事实与不确定性；不杜撰精确数值；模型无视觉能力时明确提示",
+      "input_exact": "上传一张 K 线截图问「怎么看」",
+      "expected_exact": "描述可读事实与不确定性；不杜撰精确数值；模型无视觉能力时明确提示",
+      "source_line": 1367,
+      "query_exact": "怎么看",
+      "query_sha256": "cd6224591fadb5d47aee16d1b7bc5457113ff0e100bfc94df93a9882fcdd3ead",
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "PNG上传、格式/数量、内存/刷新边界已过；K线截图识别、不杜撰数值及供应商视觉能力需真实模型。",
+      "test_evidence_refs": [
+        "frontend/e2e/agent-runtime-chat.spec.ts::PNG attachments preview, clear on send and never enter browser storage",
+        "frontend/e2e/agent-runtime-chat.spec.ts::PNG selection clears on a new conversation and enforces format and count"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::B8",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C1",
+      "test_name": "C1 工具行显示失败原因 + 改用其他来源或明说缺口",
+      "input_exact": "某数据源超时",
+      "expected_exact": "工具行显示失败原因 + 改用其他来源或明说缺口",
+      "source_line": 1373,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "规范tool.failed事件显示超时与改源建议、可用来源引用；未使真实供应商超时。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C1 displays a source timeout and the alternative source used in the answer"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C1",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": "隔离QA数据源/自选URL真实超时；禁止全站关闭供应商。",
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C2",
+      "test_name": "C2 部分结果 + 缺口说明；不生成可发布报告",
+      "input_exact": "核心数据缺失",
+      "expected_exact": "部分结果 + 缺口说明；不生成可发布报告",
+      "source_line": 1374,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "缺数据partial正文、缺口与不可发布边界已过；选定真实缺失期/披露原始空结果未执行。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C2 preserves a partial answer and blocks publication when core data is missing",
+        "backend/tests/test_research_run_delivery.py::test_chat_quality_block_is_not_replaced_by_empty_report_success",
+        "backend/tests/test_runtime_review_delivery.py::test_unavailable_review_preserves_report_draft_without_indexing"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C2",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": "隔离QA选定的真实缺失数据/披露期；保留原始空结果和不可发布证据。",
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C3",
+      "test_name": "C3 发送前/服务端拒绝，给「更换模型」；无问答降级",
+      "input_exact": "模型确证不支持工具调用",
+      "expected_exact": "发送前/服务端拒绝，给「更换模型」；无问答降级",
+      "source_line": 1375,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "服务目录明确不支持工具调用时禁发，并给更换模型入口；执行POST数量为0，无问答降级。真实provider probe另验。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C3 rejects a model with confirmed unsupported tool calling before sending"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C3",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C4",
+      "test_name": "C4 恢复原消息，不重复正文，不假完成",
+      "input_exact": "断线 30 秒后重连",
+      "expected_exact": "恢复原消息，不重复正文，不假完成",
+      "source_line": 1376,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "真实等待至少30秒后受控SSE重连；after_seq=1、相同消息/run、1个执行POST，重复旧seq不重复正文，期间不假完成。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C4 reconnects after thirty seconds into the original answer without duplicated text",
+        "frontend/e2e/conversation-persistence.spec.ts::刷新后按run恢复回答且不重新触发模型",
+        "backend/tests/test_chat_stream_replay_api.py::test_execute_stream_replays_only_events_after_cursor",
+        "backend/tests/test_research_run_delivery.py::test_completed_run_recovers_after_in_memory_replay_and_owner_cache_lost"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C4",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C5",
+      "test_name": "C5 「已停止，保留已生成内容」；迟到的工具结果不追加结论",
+      "input_exact": "运行中停止",
+      "expected_exact": "「已停止，保留已生成内容」；迟到的工具结果不追加结论",
+      "source_line": 1377,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "停止按钮保留正文、取消POST一次，迟到工具/正文尝试不进入结论；后端单终态亦过。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C5 stopping preserves generated content and ignores late tool and answer frames",
+        "backend/tests/test_runtime_event_contract.py::test_cancellation_after_streaming_keeps_partial_and_publishes_one_terminal",
+        "backend/tests/test_runtime_event_contract.py::test_closing_stream_cancels_producer_and_commits_partial_once"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C5",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C6",
+      "test_name": "C6 「回答已生成，但未保存成功」；可导出；历史不假成功",
+      "input_exact": "保存失败（注入）",
+      "expected_exact": "「回答已生成，但未保存成功」；可导出；历史不假成功",
+      "source_line": 1378,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "受控服务器终态保存失败明确显示合同文案、正文保留并实际导出MD，状态persistence_failed；真正数据库保存失败仍待隔离线上注入。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C6 server save failure keeps the answer exportable and never records success",
+        "backend/tests/test_runtime_event_contract.py::test_failed_final_persistence_never_emits_done_or_publishable[exception]",
+        "backend/tests/test_runtime_event_contract.py::test_failed_final_persistence_never_emits_done_or_publishable[returned_failure]",
+        "backend/tests/test_research_run_delivery.py::test_store_failure_prevents_runtime_and_failed_save_preserves_preview",
+        "backend/tests/test_runtime_event_contract.py::test_done_waits_for_real_commit_and_keeps_raw_content_in_every_projection"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C6",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": "隔离QA运行的真实保存失败；浏览器快照失败不能代替服务器终态保存失败。",
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "C7",
+      "test_name": "C7 partial 状态 + 缺口说明，不显示「分析完成」",
+      "input_exact": "预算耗尽",
+      "expected_exact": "partial 状态 + 缺口说明，不显示「分析完成」",
+      "source_line": 1379,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "预算partial终态、缺口与非完成文案已过；真实provider预算耗尽未在本lane执行。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::C7 exhausted budget shows partial output and the remaining gap",
+        "backend/tests/test_runtime_review_delivery.py::test_followup_token_limit_delivers_original_answer_and_review_as_partial[False]",
+        "backend/tests/test_runtime_review_delivery.py::test_followup_token_limit_delivers_original_answer_and_review_as_partial[True]",
+        "backend/tests/test_runtime_loop_contract.py::test_last_allowed_model_turn_has_no_tool_schemas"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::C7",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": "隔离QA运行真实达到既有预算限制；禁止修改生产全局预算。",
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D1",
+      "test_name": "D1 报价真实、缺失标记；90 天命中率带分母",
+      "input_exact": "今日",
+      "expected_exact": "报价真实、缺失标记；90 天命中率带分母",
+      "source_line": 1385,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "pending_online",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "今日真实报价和90天统计分母未在本lane执行浏览器验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D1",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D2",
+      "test_name": "D2 卡片带数据时点与来源；「问 AI」带结构化上下文进对话",
+      "input_exact": "看板",
+      "expected_exact": "卡片带数据时点与来源；「问 AI」带结构化上下文进对话",
+      "source_line": 1386,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "主代理单测验证结构化选中指标、时间范围和现有引用；真实看板卡片/问AI完整浏览器链待线上。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/utils/dashboardResearchContext.test.ts::carries only selected metric, declared time range and existing references",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "3a6c50b2f9ae19052cb5275844f4dedf19b15a49abd2895bbf3744da70c877a2",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D2",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D3",
+      "test_name": "D3 报告/判断分类清晰；详情带来源；错误态可重试",
+      "input_exact": "历史",
+      "expected_exact": "报告/判断分类清晰；详情带来源；错误态可重试",
+      "source_line": 1387,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "私有判断历史及未结算为空已走浏览器；报告详情来源与读取错误重试需进一步真实页面验收。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces private prediction history"
+      ],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/pages/HistoryPage.test.tsx::首屏使用清楚的中文视图名称",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "4922a5532f24d6576cc5c70a548e6a527e03e3e7c37b693859fc87b7000a184d",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D3",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D4",
+      "test_name": "D4 US20 metadata 与后端一致；方向/回撤分开；未结算不混分母",
+      "input_exact": "战绩",
+      "expected_exact": "US20 metadata 与后端一致；方向/回撤分开；未结算不混分母",
+      "source_line": 1388,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "统计与API fixture一致：1/4方向、3/4基线、0/1预警与TP0/FP1/TN3/FN1；未知模型、全部失败和未结算保留，250行可达、失败页复点重试有效。真实US20 metadata另验。",
+      "test_evidence_refs": [
+        "frontend/e2e/track-record.spec.ts::settled fixtures retain losing groups, unknown models and all failure statuses on desktop and mobile",
+        "frontend/e2e/track-record.spec.ts::pagination reaches older settled fixtures beyond 200 records and retains the current page on failure",
+        "frontend/e2e/track-record.spec.ts::public empty and pending states require no welcome gate and never invent hit rates",
+        "frontend/e2e/track-record.spec.ts::a failed public read offers retry without manufacturing an empty result"
+      ],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/pages/trackRecord.test.tsx::keeps pending record outcomes unknown and preserves failed opportunities",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "b6b15f1424994b4ce1b0a7efe8904fd78e8cdcb163a0026266e1b177c5d5d652",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D4",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D5",
+      "test_name": "D5 跟随当前会话标的；用户固定后不被自动切换；引用跳转高亮",
+      "input_exact": "右栏",
+      "expected_exact": "跟随当前会话标的；用户固定后不被自动切换；引用跳转高亮",
+      "source_line": 1389,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "纯键盘引用跳转、当前run来源和可见高亮已过；用户固定及后续标的自动切换完整情景未执行。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation"
+      ],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/components/RightPanel.sources.test.tsx::takes the ticker from structured tool parameters and ignores user wording",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "deed01a26066af944314d0b2a75ee86dcecfd02015e95a578efcace8ae72b6f7",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D5",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D6",
+      "test_name": "D6 未配置 GitHub 时无假按钮；「示例」标记在位；登录后回原页",
+      "input_exact": "欢迎页",
+      "expected_exact": "未配置 GitHub 时无假按钮；「示例」标记在位；登录后回原页",
+      "source_line": 1390,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "匿名设置提供登录入口已走浏览器；无GitHub配置、欢迎示例区和登录回原页完整情景待验。",
+      "test_evidence_refs": [
+        "frontend/e2e/model-selection.spec.ts::anonymous users can inspect model settings and have a login entry for explicit selections"
+      ],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/components/welcome/WelcomePage.test.tsx::offers authenticated login and read-only market access",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "78ddf514267cb1161927e15ecf9810ddcc4a650146b64ebb889329ed9674797e",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D6",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D7",
+      "test_name": "D7 主题/红涨绿跌/免确认开关即时生效并持久化",
+      "input_exact": "设置",
+      "expected_exact": "主题/红涨绿跌/免确认开关即时生效并持久化",
+      "source_line": 1391,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "主题、红涨绿跌和自选免确认的用户操作即时生效，并在刷新后保持；真实写操作权限不被降低。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::D7 appearance and confirmation preferences apply immediately and survive refresh"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D7",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "D8",
+      "test_name": "D8 未登录可读公开报告；只读标记；无私有数据",
+      "input_exact": "分享页",
+      "expected_exact": "未登录可读公开报告；只读标记；无私有数据",
+      "source_line": 1392,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "主代理公开分享页单测覆盖真实发布时间、来源数量与只读标记；匿名公开URL和私有数据隔离需部署后浏览器验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/pages/SharedReportPage.test.tsx::shows title, real publication time, source count and read-only label",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "52e4df7ebaa4766305c194a884e439742b97428499e71e16d1d7237460cbed07",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::D8",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "E1",
+      "test_name": "E1 无整页横向溢出；表格/图表容器内横滚",
+      "input_exact": "390px 宽",
+      "expected_exact": "无整页横向溢出；表格/图表容器内横滚",
+      "source_line": 1398,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "390×844无整页横向溢出，宽表/图表数据在容器内横滚，已视觉检查手机截图。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E1 contains wide tables and charts inside a 390px page",
+        "frontend/e2e/agent-runtime-chat.spec.ts::keeps a narrow chat viewport within its screen and exposes navigation",
+        "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：手机亮色"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::E1",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "E2",
+      "test_name": "E2 不误发送",
+      "input_exact": "中文输入法组合输入 Enter",
+      "expected_exact": "不误发送",
+      "source_line": 1399,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "isComposing与keyCode229两种组合Enter均不发送，组合结束才产生一个POST。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via isComposing",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E2 does not send Chinese composition Enter via keyCode229"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::E2",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "E3",
+      "test_name": "E3 折叠/展开/停止/发送/引用跳转可完成；焦点可见",
+      "input_exact": "纯键盘操作",
+      "expected_exact": "折叠/展开/停止/发送/引用跳转可完成；焦点可见",
+      "source_line": 1400,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "真实Tab/Enter操作发送、停止、折叠/展开和引用跳转；停止焦点2px可见，引用来源真实高亮。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E3 sends and stops an answer with keyboard controls and a visible focus ring",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::E3",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "E4",
+      "test_name": "E4 状态区 aria-live 只播报活动/终态，不逐 token",
+      "input_exact": "读屏",
+      "expected_exact": "状态区 aria-live 只播报活动/终态，不逐 token",
+      "source_line": 1401,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "aria-live=polite且atomic，活动与终态改变播报文字，连续正文token不改变状态区。未使用实际读屏软件录音。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E4 aria-live changes for activity and completion without announcing body tokens"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::E4",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "E5",
+      "test_name": "E5 无动画仍可完成全部操作",
+      "input_exact": "prefers-reduced-motion",
+      "expected_exact": "无动画仍可完成全部操作",
+      "source_line": 1402,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "系统prefers-reduced-motion被浏览器实际启用，旋转动画≤0.001s，发送/停止/展开仍有效。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E5 reduced-motion still permits send stop and process disclosure"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::E5",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "F1",
+      "test_name": "F1 来源/时点/币种/延迟口径可见",
+      "input_exact": "报价卡片",
+      "expected_exact": "来源/时点/币种/延迟口径可见",
+      "source_line": 1408,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "主代理来源详情单测覆盖供应商、行情口径和参数；真实报价卡币种/时点/延迟的可见性未在本lane验收。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/components/source/SourceDetails.test.tsx::显示真实供应商、行情口径和参数，不暴露内部编号和未知元数据",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "a77aab092488724050d3bc5a89bfd3fb879142ba4d9d9fb243d1b9d0753980a7",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::F1",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "F2",
+      "test_name": "F2 财期、单位、本币/美元标注正确",
+      "input_exact": "财报数字",
+      "expected_exact": "财期、单位、本币/美元标注正确",
+      "source_line": 1409,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "主代理财报展示单测保留年报日期、本币与报告数值、缺数不补造；真实财期/换汇资料待验。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/components/dashboard/tabs/financial/FinancialDataContract.test.tsx::keeps annual dates, report currency and reported values",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "9db8d340c4fae6e338554d88e6810fc423a578c81e1ad1e4e0b9d009b71842b3",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::F2",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "F3",
+      "test_name": "F3 会话/自选/私有预测按 user_id 隔离",
+      "input_exact": "切换账号",
+      "expected_exact": "会话/自选/私有预测按 user_id 隔离",
+      "source_line": 1410,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "两个纯本地虚构身份切换：会话/自选/私有预测均替换成新user_id，服务端跨owner回放/取消/伪造context亦拒绝；未使用或伪造生产JWT。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts restores only the new owner conversation",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces the watchlist owner",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::F3 switching controlled accounts replaces private prediction history",
+        "backend/tests/test_chat_stream_replay_api.py::test_execute_run_is_not_visible_or_cancellable_across_users",
+        "backend/tests/test_research_run_delivery.py::test_persistent_run_owner_is_enforced_after_restart",
+        "backend/tests/test_chat_stream_replay_api.py::test_execute_ignores_forged_user_id_in_request_context"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::F3",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "F4",
+      "test_name": "F4 可读统计；请求不带任何模型凭据",
+      "input_exact": "未登录看公开战绩",
+      "expected_exact": "可读统计；请求不带任何模型凭据",
+      "source_line": 1411,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "匿名公开统计可读、未触发欢迎gate；实际公开请求无authorization和x-finsight-model。",
+      "test_evidence_refs": [
+        "frontend/e2e/track-record.spec.ts::public empty and pending states require no welcome gate and never invent hit rates"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::F4",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "F5",
+      "test_name": "F5 凭据仅存内存；不出现在消息/日志/公开请求",
+      "input_exact": "自定义模型",
+      "expected_exact": "凭据仅存内存；不出现在消息/日志/公开请求",
+      "source_line": 1412,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "受控自定义凭据只在内存与授权调用参数内；浏览器两类存储、消息、agent日志、原始日志、可见正文及公共目录请求无凭据。",
+      "test_evidence_refs": [
+        "frontend/e2e/model-selection.spec.ts::custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::F5",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "F6",
+      "test_name": "F6 使用实际选择的模型；界面显示与请求一致",
+      "input_exact": "换模型后重新提问",
+      "expected_exact": "使用实际选择的模型；界面显示与请求一致",
+      "source_line": 1413,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "内置/自带选择、强度、刷新和再次提问的界面与实际请求一致，不暗中回落；真实后端provider另验。",
+      "test_evidence_refs": [
+        "frontend/e2e/model-selection.spec.ts::built-in model uses official metadata and preserves the same model and effort across refresh and AI features",
+        "frontend/e2e/model-selection.spec.ts::custom model validates, requires testing, keeps a key-free preference on refresh, and never silently falls back"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::F6",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "G1",
+      "test_name": "G1 过程收为一行「已处理 N 秒 · M 次工具调用」；数字真实",
+      "input_exact": "完成态",
+      "expected_exact": "过程收为一行「已处理 N 秒 · M 次工具调用」；数字真实",
+      "source_line": 1419,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "完成默认收一行；秒数由消息/终态实测时间算、2次工具调用与去重事件一致。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G1 completion duration and tool count agree with observed events"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::G1",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "G2",
+      "test_name": "G2 工具单行、对象独立成列、详情参数/结果/来源",
+      "input_exact": "展开过程",
+      "expected_exact": "工具单行、对象独立成列、详情参数/结果/来源",
+      "source_line": 1420,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "原有工具/专业角色单行过程和参数、资料结果、来源展开真实可用，不展示内部字段。",
+      "test_evidence_refs": [
+        "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：桌面暗色",
+        "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：手机亮色",
+        "frontend/e2e/execution-trace.spec.ts::traceRawEnabled=false 时仍可见真实工具活动",
+        "frontend/e2e/agent-runtime-chat.spec.ts::shows incremental body, settles one tool row and renders a real artifact block"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::G2",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "G3",
+      "test_name": "G3 ≤6 项单层可折叠；编号与正文引用一致",
+      "input_exact": "来源列表",
+      "expected_exact": "≤6 项单层可折叠；编号与正文引用一致",
+      "source_line": 1421,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "≤6项来源单层折叠、编号绑定正文引用并跳转高亮；主代理单测补覆盖7项分组。",
+      "test_evidence_refs": [
+        "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：桌面暗色",
+        "frontend/e2e/research-detail-presentation.spec.ts::研究详情与分组来源可读且可折叠：手机亮色",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::E3 expands process and follows a source citation using only keyboard activation"
+      ],
+      "supplementary_parent_unit_evidence": [
+        {
+          "test": "frontend/src/components/source/EvidenceSources.test.tsx::keeps six or fewer sources flat and preserves provider names, evidence numbers and titles",
+          "status": "passed_in_parent_full_suite",
+          "definition_sha256": "975d26b9d6561256fbea8f85d301b3e92747ab125b59536bfbf9b6a0d7b1872d",
+          "evidence": "tmp/r261113/controlled-acceptance-checks/parent-frontend-verification.json",
+          "execution_owner": "root",
+          "individually_reexecuted_in_this_lane": false
+        }
+      ],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::G3",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "G4",
+      "test_name": "G4 公开摘要默认折叠；原始字段默认关（可开）；无字段不伪造",
+      "input_exact": "供应商推理三态",
+      "expected_exact": "公开摘要默认折叠；原始字段默认关（可开）；无字段不伪造",
+      "source_line": 1422,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "公开摘要完成后默认折叠、无工具时仍可展开；原始字段默认不显示，账号开关显式显示；无字段不生成伪块。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G4 public reasoning summary remains collapsed after completion",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G4 provider raw reasoning requires the explicit account preference",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G4 absent provider reasoning never creates a synthetic reasoning block"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::G4",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "G5",
+      "test_name": "G5 成功不出现过程列表；失败/超 2 秒才显示",
+      "input_exact": "能力验证",
+      "expected_exact": "成功不出现过程列表；失败/超 2 秒才显示",
+      "source_line": 1423,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "controlled_pass",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "快速验证成功无过程条；进行超过2秒才展示，确认失败显示原因及更换模型。供应商真实能力probe未执行。",
+      "test_evidence_refs": [
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G5 successful quick capability validation never enters the process list",
+        "frontend/e2e/agentic-final-acceptance.spec.ts::G5 capability validation appears only after two seconds or a confirmed failure"
+      ],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::G5",
+      "real_model_required": true,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false
+    },
+    {
+      "id": "G6",
+      "test_name": "G6 非演示区无「示例/示意/mock」残留；`trackRecord.fixtures` 不在产物",
+      "input_exact": "示例数据扫描",
+      "expected_exact": "非演示区无「示例/示意/mock」残留；`trackRecord.fixtures` 不在产物",
+      "source_line": 1424,
+      "query_exact": null,
+      "query_sha256": null,
+      "controlled_status": "partial",
+      "online_status": "pending_candidate_deployment_and_online_execution",
+      "online_pass": false,
+      "conclusion": "7个候选生产JS包不含fixtures/mock/示意/示例数据或战绩fixture标识，构建排除检查已过；真实全页输出扫描仍待线上。",
+      "test_evidence_refs": [],
+      "supplementary_parent_unit_evidence": [],
+      "planned_online_test": "tests/agent_eval/acceptance_cases.json::G6",
+      "real_model_required": false,
+      "real_data_or_prior_live_result_required": true,
+      "real_fault_prerequisite": null,
+      "real_prerequisites_satisfied_in_this_lane": false,
+      "static_evidence": {
+        "test": "tmp/r261113/controlled-acceptance-scan-assets.py::test_candidate_bundle_excludes_fixture_and_placeholder_markers",
+        "status": "controlled_build_scan_pass",
+        "evidence": "tmp/r261113/controlled-acceptance-source-scan.json",
+        "sha256": "c7b4f9e86fec95f0c82937fc826f1ed0a668e55da478993ddbf02196ae7f206b"
+      }
+    }
+  ],
+  "limitations": [
+    "全部48项线上状态仍待候选部署后的真实验收，本报告线上通过数为0。",
+    "C1/C2/C6/C7未注入真实外部源、真实缺失披露、数据库失败或真实模型预算；B7未启动真实隔离计算容器。",
+    "A组、B1-B4及B8内容质量不可用mock或协议通过代替真实模型独立内容评审。",
+    "E4验证DOM播报合同，未运行真实读屏软件；F3只有纯本地身份与服务器pytest权限fixture。",
+    "失败命令、失败测试与trace未删除或改判。"
+  ]
+}

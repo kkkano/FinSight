@@ -1,0 +1,14 @@
+{
+  "case_id": "G6",
+  "status": "pending",
+  "source_input_exact": "示例数据扫描",
+  "expected_exact": "非演示区无「示例/示意/mock」残留；`trackRecord.fixtures` 不在产物",
+  "actions": [
+    {
+      "action": "wait",
+      "seconds": 2
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": true
+}

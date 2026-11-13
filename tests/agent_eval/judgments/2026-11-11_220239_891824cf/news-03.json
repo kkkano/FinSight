@@ -1,0 +1,26 @@
+{
+  "request_sha256": "729f449bc6c7696b1cbebf0ec45bc0c871f6f5a9957994c59fa9967bc266273d",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：最终正文、blocks 与产物为空，未区分 QQQ 基金/指数、成分股和宏观新闻，也未给相关性依据或归因解释。",
+      "numbers=0：没有市场表现、新闻事件或时点的数字/事实回答；录制中的新闻和行情不等于用户交付。",
+      "limitations=1：终态明确研究超时，没有无来源断言具体市场反应或把成分股消息全当主因；正分依据可见故障说明。",
+      "presentation=1：虽无研究正文，超时及缩小问题重试提示完整简短、可读。",
+      "no_internal_identifiers=1：可读错误和恢复说明没有内部标识。"
+    ]
+  }
+}

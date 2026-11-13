@@ -1,0 +1,26 @@
+{
+  "request_sha256": "54b31d960562636c3f3065705e85c72bee5189ba5ac97cea31866102d4ca1905",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：未解释 MSFT 现金流估值与 PE 估值的口径差异，正文为空；未以当前工具证据支持公司判断，也未交代资本开支、增长和折现假设。",
+      "numbers=0：完整录制为空，没有现金流、利润或估值依据；本题虽包含概念解释，但实际没有任何解释，不能按准确完成的概念题给一致性分。",
+      "limitations=1：用户可见终态 message、reason 均明确说明“这次研究用时较长，已经超时。”，承认本次交付受超时限制，没有声称未取得的资料不存在。正分依据这条可见故障说明，不依据 error_code、metrics 或其他内部诊断，也不代表已经交付题目所需口径说明。",
+      "presentation=1：虽无研究正文，可见终态有完整简短的超时通知及“可以缩小问题后再试”的恢复提示，故障表达可理解、没有断句或冗长内容。正分只评估可见失败通知的篇幅和结构，不把它当作研究答案。",
+      "no_internal_identifiers=1：用户可读正文和终态错误说明没有运行 ID、数据集 ID、工具调用 ID 或代码标识；终态用于绑定和诊断的结构化元数据不作为用户正文泄漏。"
+    ]
+  }
+}

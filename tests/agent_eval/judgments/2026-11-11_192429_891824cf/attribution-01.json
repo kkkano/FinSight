@@ -1,0 +1,26 @@
+{
+  "request_sha256": "0b2aa6dc69aa2657528619f0858d456fb899ea2ecba3d1c22764e855c91d3fcb",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：唯一正文是“I先取 NVDA 的真实价格和近期行情，同时查新闻与”，仅为截断的研究计划；未确认本次跌幅和日期，也未提供区分个股、行业、大盘因素的来源支持。",
+      "numbers=0：没有工具调用和录制，未取得价格历史或计算结果，正文没有本次跌幅或起止日期，不能用不存在的数字核实近期下跌。",
+      "limitations=1：用户可见终态 message、reason 均明确说明“这次研究用时较长，已经超时。”，承认本次交付受超时限制，没有声称未取得的资料不存在。正分依据这条可见故障说明，不依据 error_code、metrics 或其他内部诊断，也不代表已经交付题目所需口径说明。",
+      "presentation=0：可见正文以“I先取”开头，并截断在“同时查新闻与”，混入突兀字母且句子未完成；终态错误通知虽完整，仍不能消除已显示正文的断句问题。",
+      "no_internal_identifiers=1：用户可读正文和终态错误说明没有运行 ID、数据集 ID、工具调用 ID 或代码标识；终态用于绑定和诊断的结构化元数据不作为用户正文泄漏。"
+    ]
+  }
+}

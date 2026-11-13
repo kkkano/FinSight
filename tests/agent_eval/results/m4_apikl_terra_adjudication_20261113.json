@@ -1,0 +1,730 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-11-13T17:18:37.005502+00:00",
+  "status": "complete_independent_semantic_adjudication",
+  "synthetic": true,
+  "measurement_identity": {
+    "run_id": "review-20261113-090857",
+    "provider": "apikl",
+    "model": "gpt-6.1-terra",
+    "runtime_sha256": "65cdf5df20f722b0d8a1799dfd5b0883bcd7adb1ce16888e9d01666a79e04bc6"
+  },
+  "adjudicator": {
+    "model": "gpt-6.1-sol",
+    "protocol": "native_tool_sse",
+    "base_url": "https://apikl.ai/v1",
+    "not_blinded": true,
+    "method": "实际独立模型逐条读取完整资料和原始核查；代码仅验证结构、模型身份和输入绑定并汇总。"
+  },
+  "inputs": [
+    {
+      "path": "tests/agent_eval/results/m4_apikl_terra_review_20261113.json",
+      "sha256": "56bf97a3cb9faca0cf2a0cf80865c71e2cdbee2b77e2ea436c73c37be3af2a32"
+    },
+    {
+      "path": "tests/agent_eval/review_cases.json",
+      "sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee"
+    }
+  ],
+  "rows": [
+    {
+      "case_id": "review-number-01",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为clean，答案所述TEST_A报价42美元与资料中的price为42、currency为USD一致，引用[1]亦对应所提供来源。实际核查通过且未提出任何finding，没有将正确答案误报为错误。注错元数据不改变本样本实际答案及clean属性。",
+      "input_sha256": "42332239513c3e4e9e46302456c35d3ff58930781572cc7dce510f67d0c8ef2b",
+      "usage": {
+        "prompt_tokens": 1008,
+        "completion_tokens": 105,
+        "total_tokens": 1113
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 5.813
+    },
+    {
+      "case_id": "review-number-01",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料明确给出 TEST_A 的 price 为 42、currency 为 USD；核查准确指出答案中的 420 美元与资料不符，并建议改为 42 美元，核心问题有直接资料支持。"
+        }
+      ],
+      "reason": "这是数值由 42 注错为 420 的 injected 样本。实际核查明确指出该数值错误，并引用资料中的 42 美元作为依据，已检出所注入的核心错误；未见附加瑕疵。",
+      "input_sha256": "24718372e0c9a81927c95ec680426f4d4a1ecae2393f51f3c5a46646866457b1",
+      "usage": {
+        "prompt_tokens": 1114,
+        "completion_tokens": 158,
+        "total_tokens": 1272
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.078
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为clean，答案中的TEST_A 2026Q3营收120百万美元与资料唯一季度记录及其单位一致，引用[1]对应资料来源。实际核查无finding并判定通过，没有将正确答案误标为有误。注错元数据不改变本样本实际答案及clean属性。",
+      "input_sha256": "ab5cf8d6b1a2255abfbb3f21839b8541e79e62e56bfd4b1baf741978168b2c84",
+      "usage": {
+        "prompt_tokens": 1042,
+        "completion_tokens": 108,
+        "total_tokens": 1150
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 5.156
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料中 TEST_A 的 2026Q3 营收为 120，单位为百万美元；答案写成 210 百万美元。该 finding 明确指出数值不符、引用对应行数据，并建议改为 120 百万美元，准确识别注入错误。"
+        }
+      ],
+      "reason": "这是数值注错样本，实际核查明确指出营收被从 120 改为 210 的核心错误，并以资料中同一标的、季度和单位的数据支持，属于有效检出；未发现附加瑕疵。",
+      "input_sha256": "1fc8b123395060dab2e64780a5772421adbd122ecaba204af56a758e1d24b4cd",
+      "usage": {
+        "prompt_tokens": 1132,
+        "completion_tokens": 172,
+        "total_tokens": 1304
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.609
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "93a2b184df5a26a05cdb57fb8228e63b78234a54cff9ca551c394e9c6c4f8d8c",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为clean，答案所述TEST_A 2026Q3经营现金流18百万美元与资料中唯一季度记录及单位一致，引用[1]也对应所给来源。核查未提出任何finding并判定通过，没有将正确答案误报为错误。注错元数据不改变本样本实际答案与clean属性，故语义检出不适用。",
+      "input_sha256": "7fb9b0dbca797d09fa688aee289f0bf5265ffc3dbe417901499204527454094b",
+      "usage": {
+        "prompt_tokens": 1047,
+        "completion_tokens": 121,
+        "total_tokens": 1168
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 5.844
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "045aeae6e53220196d84b943242761b8bde83bcc4a59435d341a487a498d4f84",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料中 TEST_A 的 2026Q3 operating_cash_flow 为 18，单位为 million USD；答案写成 81 百万美元。核查明确指出数值错误，引用对应表格字段，并建议改为 18 百万美元，准确检出注入的核心错误。"
+        }
+      ],
+      "reason": "该样本为数值注错样本，金额由 18 改为 81。实际核查以资料中的 18 million USD 为依据，明确指出并纠正该错误，期间及单位判断也与资料一致。",
+      "input_sha256": "b7c7cd8321401015e6f0d78bc3eb1d8fd377fdc0dfd124b57dc3ffe6d262e419",
+      "usage": {
+        "prompt_tokens": 5047,
+        "completion_tokens": 181,
+        "total_tokens": 5228,
+        "completion_tokens_details": {
+          "reasoning_tokens": 11
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.125
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "5408987cd9e5f68de2e490677a4d14d676413b2c32833e98bf020cc62401d29f",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为 clean，答案所述 TEST_A 2026Q3 毛利率 23.5% 与资料中的季度、数值及百分比单位一致，引用 [1] 对应给定来源。实际核查通过且未提出任何 finding，没有把正确答案误判为错误。注错元数据未体现在当前答案中，不作为已注错样本处理。",
+      "input_sha256": "0e74d1c4c73bc699a89e21f7026b053c58b3313ac3e4f832f0e979bfb6d43781",
+      "usage": {
+        "prompt_tokens": 4965,
+        "completion_tokens": 132,
+        "total_tokens": 5097,
+        "completion_tokens_details": {
+          "reasoning_tokens": 10
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.437
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "39677a96fea879fa8644112d2ccf0c95df3dcf8d7283a77a86af08ef3f0f51b7",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料中 TEST_A 的 2026Q3 毛利率为 23.5，单位为 percent；答案写成 32.5%。核查准确指出该数值不符，引用对应行作为证据，并建议改为 23.5%。"
+        }
+      ],
+      "reason": "该样本注入了将 23.5 改为 32.5 的数值错误。实际核查明确指出这一核心错误，且所引标的、季度、数值和单位均与资料一致，构成有资料支持的检出。",
+      "input_sha256": "4581cfa81fb0ec539922a3695e25a7830f698a0b59afa201caf78290069a203e",
+      "usage": {
+        "prompt_tokens": 5063,
+        "completion_tokens": 170,
+        "total_tokens": 5233
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.047
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "14d5c5fd04d5cfa16b774a51f84c4541aa34850c554b515a25f41b495bc8c634",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本标记为 clean，应以实际答案核对资料。价格由 11 月 9 日的 100 降至 11 月 10 日的 98，收益率为 -2%，与答案“下跌 2%”及来源 [1] 一致。实际核查通过且未提出任何 finding，没有将正确答案误报为错误。注错元数据不改变此 clean 样本的判定。",
+      "input_sha256": "9027d10a200bda0063684750c1f1f817aff3cb1ebc9031194fbe9c6b0bc61116",
+      "usage": {
+        "prompt_tokens": 4974,
+        "completion_tokens": 143,
+        "total_tokens": 5117,
+        "completion_tokens_details": {
+          "reasoning_tokens": 10
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.266
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "bc141360e4266e5a2fe5287e485da28665f1722a5d30e0ca9f935d13adbd6bc2",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料显示收盘价由11月9日的100降至11月10日的98，收益率为-2%，支持核查所指出的方向写反；建议改为“下跌2%”准确。"
+        }
+      ],
+      "reason": "这是方向注错样本。实际核查明确指出“上涨”应为“下跌”，并引用两日收盘价及-2%的收益率作为支持，准确检出注入的核心错误，无附加瑕疵。",
+      "input_sha256": "67cbebc0e6b8830b7bacb68bd7d71019bbbeacbac41df333f3d08b8b295274ab",
+      "usage": {
+        "prompt_tokens": 5107,
+        "completion_tokens": 157,
+        "total_tokens": 5264
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.656
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "33bcf8f42c7809beb6878e04a081fe63928e9cf615070a75413d1feea8086dbc",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为clean。资料显示TEST_A在2026Q3的自由现金流同比变化为-8%，答案表述为同比下降8%，方向、数值和期间均与资料一致，引用[1]也对应所给来源。实际核查未提出任何finding并判定通过，没有将正确答案误报为有误。注错元数据不改变本样本实际答案正确且标记为clean的事实。",
+      "input_sha256": "743c7e88565dc8cbfc488745253a3490a06b74f9d8aba43c1550cd7280af0c38",
+      "usage": {
+        "prompt_tokens": 4959,
+        "completion_tokens": 150,
+        "total_tokens": 5109,
+        "completion_tokens_details": {
+          "reasoning_tokens": 17
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.812
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "b6b283d1ab21cd2242110885ca7002dc036764cf5989c7aff11d60b9d6aa8833",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料明确显示 free_cash_flow_yoy_pct 为 -8%，单位为 percent，表示同比下降8%；答案写成同比增长8%，方向与数值含义相反。核查准确指出了该注入的方向错误，并给出了资料支持。"
+        }
+      ],
+      "reason": "这是注入的方向错误样本。核查依据来源[1]的结构化数据识别出负百分比应表示下降，准确指出答案将其写成增长并提供了正确改写。",
+      "input_sha256": "4ae3d7b59e67f85eb26e673cdd9c5380b8b28accb2c37f5f0cd0350100c0c224",
+      "usage": {
+        "prompt_tokens": 2287,
+        "completion_tokens": 156,
+        "total_tokens": 2443
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 15.907
+    },
+    {
+      "case_id": "review-direction-03",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "5bfcdd370a67d0aec2c51ced2ed7a7561d392fed536377448096635f631672ec",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "本样本为 clean，答案称 TEST_A 2027FY EPS 预期上调 5%，与资料中 eps_revision_pct 为 5、单位为 percent 一致，也回答了修正方向。实际核查无 finding 并判为通过，没有将正确答案误报为有误。注错元数据未体现在此 clean 答案中，不作为实际错误判定依据。",
+      "input_sha256": "64e886774d585528270c4e58db199fa9a130813a65934b9dbc596ba23135766e",
+      "usage": {
+        "prompt_tokens": 4961,
+        "completion_tokens": 140,
+        "total_tokens": 5101,
+        "prompt_tokens_details": {
+          "cached_tokens": 4352
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 16
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.359
+    },
+    {
+      "case_id": "review-direction-03",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "bb5d823345202536cb4292fa6b868e77a3ca552dc694a51410e2e0d0b19c4a3d",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料显示 eps_revision_pct 为正 5%，在该核查语境下表示 EPS 预期上调 5%；答案写成“下调”，方向与资料相反。核查准确指出了这一注入的核心方向错误，并给出了有资料支持的更正。"
+        }
+      ],
+      "reason": "这是注入的方向错误样本。核查明确识别出答案将正向 5% 修正写成下调，并引用了表格中的 eps_revision_pct=5 作为支持，因此语义检测成立；该 finding 的核心错误有资料支持，未发现附加瑕疵。",
+      "input_sha256": "f0f9fce92257c2b86973a3c6e7f58e19d0df53e74aacc9cc072e6ac8c47a5d76",
+      "usage": {
+        "prompt_tokens": 876,
+        "completion_tokens": 184,
+        "total_tokens": 1060
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.203
+    },
+    {
+      "case_id": "review-direction-04",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "f09022cc041d2b2cfb64edda89be61f9c5b138724b817a5f73dd5518fd9ade0c",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为clean。资料显示TEST_A在2026Q3的营收同比变化为-12%，单位为percent，答案“同比下降12%”与资料一致，且引用[1]对应所给来源。实际核查为pass且无finding，没有将正确答案错误标为有误，因此false_positive为false；clean样本的semantic_detection为null。",
+      "input_sha256": "3ed09814c56fec07365ae120abe1a5554702a8ee84f49e0072820d120186364a",
+      "usage": {
+        "prompt_tokens": 4975,
+        "completion_tokens": 132,
+        "total_tokens": 5107,
+        "completion_tokens_details": {
+          "reasoning_tokens": 13
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.5,
+      "previous_attempts": [
+        {
+          "case_id": "review-direction-04",
+          "variant": "clean",
+          "original_status": "completed",
+          "original_verdict": "pass",
+          "answer_sha256": "f09022cc041d2b2cfb64edda89be61f9c5b138724b817a5f73dd5518fd9ade0c",
+          "unavailable": false,
+          "judge_error": "adjudication_clean_fields_invalid",
+          "elapsed_seconds": 4.688
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-04",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "dd52c27a2a8a0c4b039d999011047c8e4b13ee60b5626b0982f68936dfb57171",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料表明 TEST_A 2026Q3 的 revenue_yoy_pct 为 -12 percent，答案却写成“同比增长 12%”，方向与数据相反。核查明确指出了该注入的方向错误，并提供了表格行作为支持。"
+        }
+      ],
+      "reason": "这是注入的方向错误样本。实际核查准确识别了负增长被表述为正增长，证据、问题描述和修正建议均与资料一致。",
+      "input_sha256": "de261e5b9c4dcb592a5f5081b0efc33209251724fc1ab2e66f7ffb1bb1d8d2a0",
+      "usage": {
+        "prompt_tokens": 5243,
+        "completion_tokens": 152,
+        "total_tokens": 5395
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 5.921
+    },
+    {
+      "case_id": "review-source-01",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本标记为 clean，回答称 TEST_A 报价为 42 美元，与其合成报价资料中的 TEST_A 价格及 USD 货币一致。核查结果为 pass 且无 findings，没有把正确答案错误标为有误。",
+      "input_sha256": "ddae742d27ab6de1b183dfba0d57f0b64bea4e62fdb2b0ebe20189c2ba3ee54e",
+      "usage": {
+        "prompt_tokens": 5230,
+        "completion_tokens": 93,
+        "total_tokens": 5323
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 4.406
+    },
+    {
+      "case_id": "review-source-01",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "6d4798a4158bfc18d9605221a51e77d5f4f736c8a5fcc4cc333dd56f84b09fee",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料中来源[1]对应TEST_A、报价42美元，来源[2]对应TEST_B、报价70美元。核查明确指出答案数值正确但引用了另一标的的来源，并建议将[2]改为[1]，准确识别了注入的引用错误。"
+        }
+      ],
+      "reason": "这是将引用[1]替换为[2]的合成注错样本。实际核查以两份资料中的标的、价格和币种为依据，明确检出了错误引用并给出正确修复，故语义检出成立；注错样本的误报字段不适用。",
+      "input_sha256": "0912f3ca2fca7c8de65b261b402b4cd467c301701c785166643b8797062c0323",
+      "usage": {
+        "prompt_tokens": 5176,
+        "completion_tokens": 189,
+        "total_tokens": 5365
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.719
+    },
+    {
+      "case_id": "review-source-02",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": false,
+          "secondary_issues": [],
+          "reason": "答案准确报告了资料中 TEST_A 在 2026Q3 营收为 120 百万美元，并有来源 [1] 支持。问题询问财务表现，现有资料仅含营收一项指标，核查指出答案未限定不能据此评价整体财务表现，属于有依据的完整性与范围限定问题。"
+        }
+      ],
+      "reason": "这是 clean 样本，答案中的公司、期间、指标、数值、单位和引用均与合成资料一致；核查指出单一营收指标不足以评价整体财务表现，并建议明确资料限制，属于合理反馈，而非把正确答案误标为有误。",
+      "input_sha256": "61d41ce12859c8975b9b73d3ae9f498ed7b8996431a0bdb4ce4009af6eac29a4",
+      "usage": {
+        "prompt_tokens": 5423,
+        "completion_tokens": 193,
+        "total_tokens": 5616
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 6.359
+    },
+    {
+      "case_id": "review-source-02",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "d09d90ac55151944411a7527b5a95876c4181633ad22a82dba329f86a08ae734",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "核查指出引用编号[2]实际对应TEST_B的数据，而句子陈述的是TEST_A；该引用确实不能支持TEST_A营收120百万美元这一表述。资料显示TEST_A的对应来源是[1]，因此将[2]改为[1]有明确依据。"
+        }
+      ],
+      "reason": "这是注入样本。实际核查准确识别了合成注入的核心来源错配，并以来源表格逐项说明了[1]与[2]分别对应TEST_A和TEST_B，给出了资料支持及正确修订建议。",
+      "input_sha256": "53fb75fab066f04fcb78fafc7942580aa933f448ed37186ae3bf6ce6d59b800e",
+      "usage": {
+        "prompt_tokens": 1015,
+        "completion_tokens": 177,
+        "total_tokens": 1192
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 5.969
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "0a8fc3414bc3e6b23209cd8e5022f92161e26946da758d9447d64c141f00ec3d",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本标记为 clean，实际答案的数值、期间、披露口径及单位均与资料[1]一致：TEST_A 在 2026Q3 已披露 EPS 为每股 1.2 美元，引用[1]亦正确。资料[2]是 2027Q1 的预测值，与答案无关。核查没有提出任何 finding 并判定通过，未将正确答案误报为有误；注错元数据不改变本次实际答案及 clean 样本性质。",
+      "input_sha256": "7a06c8b4ac2e5cc6fe4079a1ecfadaab54158bf1af8a7cd62d6caa212b4df893",
+      "usage": {
+        "prompt_tokens": 5152,
+        "completion_tokens": 168,
+        "total_tokens": 5320,
+        "completion_tokens_details": {
+          "reasoning_tokens": 14
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.64
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "f9f968546f3e56a8269ca997c3216b4066af6a58a6ec53f6dca5274fc87813a7",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料[1]明确记载 TEST_A 的 2026Q3 已披露 EPS 为每股1.2美元；资料[2]记载的是2027Q1预测 EPS 每股1.5美元。核查正确指出数值本身正确而引用[2]不支持该季度已披露数据，并提出改引[1]，有充分资料支持。"
+        }
+      ],
+      "reason": "本样本注入的错误是将正确引用[1]替换为[2]。实际核查明确识别了这一来源错配，并用两份资料的期间、数据性质及数值支持判断，准确检出注入的核心错误。",
+      "input_sha256": "6755872281a8baa4fdaa579bf65c68445ffcb43d8064482b0e4f055767131288",
+      "usage": {
+        "prompt_tokens": 5285,
+        "completion_tokens": 209,
+        "total_tokens": 5494,
+        "completion_tokens_details": {
+          "reasoning_tokens": 12
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.672
+    },
+    {
+      "case_id": "review-source-04",
+      "variant": "clean",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "answer_sha256": "8a277e511ee5967ff9d98eb31c57e2020281188a221a001ac17383fc63338db1",
+      "unavailable": false,
+      "semantic_detection": null,
+      "false_positive": false,
+      "finding_assessments": [],
+      "reason": "该样本为 clean。答案所述 TEST_A 于 11 月 10 日下跌 2%，与资料中 2026-11-10 的 period_return_pct=-2、单位 percent 一致，引用 [1] 也对应 TEST_A 的资料来源。实际核查为 pass 且无 finding，未将正确答案标为有误，因此不存在误报。注错元数据不改变本次 clean 答案的实际内容，semantic_detection 为 null。",
+      "input_sha256": "f10e45f1a4eb40ed2c42e4bcf9d89d2c88b6f932fb0ae95244c6e15015a0969b",
+      "usage": {
+        "prompt_tokens": 5131,
+        "completion_tokens": 152,
+        "total_tokens": 5283,
+        "completion_tokens_details": {
+          "reasoning_tokens": 12
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 5.875,
+      "previous_attempts": [
+        {
+          "case_id": "review-source-04",
+          "variant": "clean",
+          "original_status": "completed",
+          "original_verdict": "pass",
+          "answer_sha256": "8a277e511ee5967ff9d98eb31c57e2020281188a221a001ac17383fc63338db1",
+          "unavailable": false,
+          "semantic_detection": null,
+          "false_positive": true,
+          "finding_assessments": [],
+          "reason": "这是clean样本。答案准确引用了TEST_A在2026年11月10日下跌2%的资料，查询要求已满足；实际review判定为pass且无finding，因此将其标为无误，属于对正确答案错误标为有误。",
+          "input_sha256": "f10e45f1a4eb40ed2c42e4bcf9d89d2c88b6f932fb0ae95244c6e15015a0969b",
+          "usage": {
+            "prompt_tokens": 907,
+            "completion_tokens": 93,
+            "total_tokens": 1000
+          },
+          "reported_models": [
+            "gpt-6.1-sol"
+          ],
+          "elapsed_seconds": 6.188,
+          "judge_error": "adjudication_false_positive_has_no_flag"
+        }
+      ]
+    },
+    {
+      "case_id": "review-source-04",
+      "variant": "injected",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "answer_sha256": "959765ebf0e57b308ce360e81415d862291844b8749bb917555bb0436fa4fcf6",
+      "unavailable": false,
+      "semantic_detection": true,
+      "false_positive": null,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "core_error_supported": true,
+          "secondary_issues": [],
+          "reason": "资料中来源[1]对应TEST_A，2026年11月10日涨跌幅为-2%；来源[2]对应TEST_MARKET，涨跌幅为-1%。核查准确指出答案的下跌2%数值正确，但引用[2]无法支持TEST_A的表现，并建议改为[1]，有充分资料支持。"
+        }
+      ],
+      "reason": "本样本注入的核心错误是将支持TEST_A跌幅的引用[1]替换为市场数据引用[2]。实际核查明确识别该来源错配，并用两个来源的标的和涨跌幅作对照，且给出正确引用修复，故判定检出。",
+      "input_sha256": "0a2a3db3e90542280751690bd699e5d1089bedc911dd12c77f12420cf4f38ae8",
+      "usage": {
+        "prompt_tokens": 5245,
+        "completion_tokens": 218,
+        "total_tokens": 5463,
+        "completion_tokens_details": {
+          "reasoning_tokens": 14
+        }
+      },
+      "reported_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 7.515
+    }
+  ],
+  "summary": {
+    "measured_runs": 24,
+    "injected_cases": 12,
+    "clean_cases": 12,
+    "semantic_detections": 12,
+    "false_positives": 0,
+    "unavailable": 0,
+    "judge_errors": 0,
+    "ancillary_issue_findings": 0
+  }
+}

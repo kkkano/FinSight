@@ -1,0 +1,26 @@
+{
+  "request_sha256": "812955f5f708fb357807d29d1eb2169efb392ea4e18026bc45c3d9fdb4106186",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：正文仅为我先取两家公司的真实现金流数据，终态超时且无产物，没有按同财期比较OCF、资本开支或FCF，也未解释计算口径；搜索命中财报页面本身不等于交付比较。",
+      "numbers=1：没有伪造资本开支或自由现金流，但用户可见正文与已展示预览没有形成两股同财期的经营现金流/资本开支/FCF数值对照，必需数字未交付，不能给一致性满分。",
+      "limitations=0：通知仅笼统说明处理错误和超时，没有解释现金流来源、单位、不同财年结束日或FCF口径及资料缺口。",
+      "presentation=0：只有一句取数进度和超时恢复建议，没有比较结论或清晰数值表。",
+      "no_internal_identifiers=0：可展开SEC失败预览直接向用户要求Set SEC_USER_AGENT in format FinSight contact@company.com，暴露运行环境配置名称。"
+    ]
+  }
+}

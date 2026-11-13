@@ -1,0 +1,26 @@
+{
+  "request_sha256": "fd8f13fcc8a9c341dccba241988b634d0f161800b2a86e68b264cba4534bc9e3",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：两个财务核心调用确实被注入 provider_timeout，最终正文和产物为空，未说明 MSFT 缺失项目与可核实内容，也未交付最新季度营收、自由现金流。",
+      "numbers=0：终态没有所需财务金额或计算结果；虽然替代搜索资料被保留，来源摘要不能代替本题要求的季度财务数字答复。",
+      "limitations=1：可见终态明确研究超时，没有补造季度数字，也未生成标为完整可发布的报告；正分依据故障和未完成交付说明。",
+      "presentation=1：无研究正文，但超时和缩小问题重试提示完整简短、可读。",
+      "no_internal_identifiers=1：可读错误与恢复说明无内部标识。"
+    ]
+  }
+}

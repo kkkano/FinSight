@@ -1,0 +1,39 @@
+[
+  {
+    "mode": "forced_tool",
+    "status": 400,
+    "error": {
+      "message": "Thinking mode does not support this tool_choice (request_id: 0ba86853-458d-4541-b4fe-4df9a3b189b3)",
+      "type": "invalid_request_error",
+      "param": "",
+      "code": "invalid_request_error"
+    }
+  },
+  {
+    "mode": "auto_tool_sse",
+    "first_chunk_seconds": 2.92,
+    "usage": {
+      "prompt_tokens": 314,
+      "completion_tokens": 47,
+      "total_tokens": 361,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 314
+    },
+    "finish_reason": "tool_calls",
+    "calls": [
+      {
+        "name": "capability_probe",
+        "arguments": "{\"value\": 7}",
+        "id": "call_00_ET_wTZ3urrS8dp4WVzPN7Hc7399"
+      }
+    ],
+    "valid": true,
+    "seconds": 3.02
+  }
+]

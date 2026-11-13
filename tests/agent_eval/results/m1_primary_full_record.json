@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "runtime": "baseline",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [],
+  "groups": {},
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192,
+    "base_url": "https://api.llm.pm/v1"
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "base_url": "https://api.llm.pm/v1"
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures/baseline-v2",
+  "seed_tapes": "fixtures/archive-v1/tapes",
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 1,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "interrupted_reason": "历史种子缺少结构化供应商原值，保留结果，改用独立新录制目录保证M2可比性。"
+}

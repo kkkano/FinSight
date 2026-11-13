@@ -1,0 +1,1131 @@
+{
+  "schema_version": 1,
+  "runtime": "current",
+  "mode": "replay",
+  "head": "891824cf",
+  "run_id": "2026-11-12_214700_891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "step-5-preview",
+      "turns": [
+        {
+          "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "attempt_id": "c7ab0d49990a477a8ab1abecfeff0f12",
+            "stream_epoch": "c7ab0d49990a477a8ab1abecfeff0f12",
+            "committed_seq": 65,
+            "blocks": [
+              {
+                "id": "root_text_8ef17d44f566452d98722642e1d558e9",
+                "kind": "text",
+                "content": "AAPL（苹果）最新收盘价 **355.63 美元**，上涨 7.12 美元（+2.04%）[1]。\n\n说明：\n- 数据时点为 2026-11-11 美股常规时段收盘，币种为美元；报价来自第三方行情源，非交易所实时推送，无法保证当前秒级价格。\n- 该价格为收盘价，不含盘前/盘后波动；如需最新盘中报价请以交易平台为准。",
+                "revision": 0,
+                "seq": 11,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete"
+              },
+              {
+                "id": "reviewer_a611ec959732",
+                "kind": "review",
+                "review": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "status": "completed",
+                  "verdict": "pass",
+                  "findings": [],
+                  "coverage": [
+                    {
+                      "requirement": "回答 AAPL 当前价格",
+                      "met": true
+                    },
+                    {
+                      "requirement": "提供涨跌额与涨跌幅",
+                      "met": true
+                    },
+                    {
+                      "requirement": "标注数据时点与数据来源",
+                      "met": true
+                    },
+                    {
+                      "requirement": "说明非实时/盘后限制",
+                      "met": true
+                    }
+                  ],
+                  "review_id": "reviewer_a611ec959732",
+                  "data_refs": [],
+                  "answer_sha256": "e1a4fb0ba320449f83f72656d0d0545f8efd2cda11e0d01c7cb819777bd06c49",
+                  "supersedes_review_id": null
+                },
+                "revision": 1,
+                "seq": 65,
+                "agent_id": "reviewer_a611ec959732"
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "message": "获取行情",
+                "timestamp": "2026-11-13T05:47:04.090208+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-12_214700_891824cf:facts-01:0",
+                "sessionId": "2026-11-12_214700_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "chatcmpl-tool-9d5b5c3ac26471e3",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "empty",
+                    "title": "获取行情",
+                    "target": "AAPL",
+                    "result": "None",
+                    "summary": "None",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 9,
+                  "agent_id": "root",
+                  "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+                  "session_id": "2026-11-12_214700_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "355.63 USD",
+                "timestamp": "2026-11-13T05:47:04.106084+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-12_214700_891824cf:facts-01:0",
+                "sessionId": "2026-11-12_214700_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "chatcmpl-tool-9d5b5c3ac26471e3",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "ok",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "as_of": "2026-11-11T00:00:00Z",
+                    "asset": {
+                      "calendar_name": "NYSE",
+                      "exchange": "US",
+                      "market": "US",
+                      "symbol": "AAPL",
+                      "timezone": "America/New_York"
+                    },
+                    "attempted_providers": [
+                      "twelve_data"
+                    ],
+                    "cached": false,
+                    "capability": "quote",
+                    "currency": "USD",
+                    "data": {
+                      "change": 7.119989999999973,
+                      "change_percent": 2.0429800567277745,
+                      "currency": "USD",
+                      "data_kind": "daily_close",
+                      "market_session": "regular_close",
+                      "price": 355.63,
+                      "source_time_precision": "date",
+                      "source_time_status": "provided",
+                      "source_timestamp": "2026-11-11"
+                    },
+                    "data_kind": "daily_close",
+                    "degraded": false,
+                    "error_code": null,
+                    "frequency": null,
+                    "freshness_seconds": 104333,
+                    "meta": {},
+                    "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                    "provider": "twelve_data",
+                    "provider_failures": [],
+                    "quality": "trusted",
+                    "quote": {
+                      "change": 7.119989999999973,
+                      "change_percent": 2.0429800567277745,
+                      "currency": "USD",
+                      "data_kind": "daily_close",
+                      "market_session": "regular_close",
+                      "price": 355.63,
+                      "source_time_precision": "date",
+                      "source_time_status": "provided",
+                      "source_timestamp": "2026-11-11"
+                    },
+                    "source": "twelve_data",
+                    "status": "ok"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "ok",
+                    "title": "获取行情",
+                    "target": "AAPL",
+                    "result": "355.63 USD",
+                    "summary": "355.63 USD",
+                    "key_facts": [
+                      {
+                        "label": "价格",
+                        "value": 355.63
+                      },
+                      {
+                        "label": "涨跌额",
+                        "value": 7.119989999999973
+                      },
+                      {
+                        "label": "涨跌幅",
+                        "value": 2.0429800567277745
+                      },
+                      {
+                        "label": "货币",
+                        "value": "USD"
+                      },
+                      {
+                        "label": "数据时间",
+                        "value": "2026-11-11"
+                      },
+                      {
+                        "label": "数据时间",
+                        "value": "2026-11-11T00:00:00Z"
+                      },
+                      {
+                        "label": "频率",
+                        "value": null
+                      }
+                    ],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": "2026-11-11T00:00:00+00:00",
+                    "sources": [
+                      {
+                        "title": "twelve_data",
+                        "publisher": "twelve_data",
+                        "url": null,
+                        "published_at": null
+                      }
+                    ],
+                    "notes": [
+                      "延迟未知，不能表述为实时"
+                    ],
+                    "error": null
+                  },
+                  "summary": "355.63 USD",
+                  "data_refs": [
+                    "h_5cc20e646bac6458a5"
+                  ],
+                  "source_refs": [
+                    "1"
+                  ],
+                  "evidence_refs": [
+                    "1"
+                  ],
+                  "sources": [
+                    {
+                      "source": "twelve_data",
+                      "source_name": "twelve_data",
+                      "source_id": "1",
+                      "title": "twelve_data",
+                      "url": null,
+                      "data_ref": "h_5cc20e646bac6458a5",
+                      "as_of": "2026-11-11T00:00:00Z",
+                      "quality": "trusted",
+                      "currency": "USD",
+                      "frequency": null,
+                      "meta": {},
+                      "metadata": {
+                        "tool": "get_stock_price",
+                        "parameters": {
+                          "ticker": "AAPL"
+                        },
+                        "tool_kind": "quote",
+                        "as_of": "2026-11-11T00:00:00Z",
+                        "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                        "currency": "USD",
+                        "frequency": null,
+                        "market_session": "regular_close",
+                        "source_timestamp": "2026-11-11",
+                        "source_time_precision": "date",
+                        "source_time_status": "provided"
+                      },
+                      "kind": "price_snapshot",
+                      "type": "tool",
+                      "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-11",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided"
+                    }
+                  ],
+                  "duration_ms": 16,
+                  "runtime_type": "tool.result",
+                  "seq": 10,
+                  "agent_id": "root",
+                  "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+                  "session_id": "2026-11-12_214700_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "查看已取得的资料",
+                "timestamp": "2026-11-13T05:47:24.661504+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-12_214700_891824cf:facts-01:0",
+                "sessionId": "2026-11-12_214700_891824cf:facts-01",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "chatcmpl-tool-9957bd538bb1f4e8",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "inputs": {
+                    "handle": "h_5cc20e646bac6458a5"
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "empty",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "None",
+                    "summary": "None",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 61,
+                  "agent_id": "reviewer_a611ec959732",
+                  "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+                  "session_id": "2026-11-12_214700_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T05:47:24.665013+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-12_214700_891824cf:facts-01:0",
+                "sessionId": "2026-11-12_214700_891824cf:facts-01",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "chatcmpl-tool-9957bd538bb1f4e8",
+                  "name": "read_data",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "inputs": {
+                    "handle": "h_5cc20e646bac6458a5"
+                  },
+                  "output_preview": {
+                    "content": "{\"as_of\": \"2026-11-11T00:00:00Z\", \"asset\": {\"calendar_name\": \"NYSE\", \"exchange\": \"US\", \"market\": \"US\", \"symbol\": \"AAPL\", \"timezone\": \"America/New_York\"}, \"attempted_providers\": [\"twelve_data\"], \"cached\": false, \"capability\": \"quote\", \"currency\": \"USD\", \"data\": {\"change\": 7.119989999999973, \"change_percent\": 2.0429800567277745, \"currency\": \"USD\", \"data_kind\": \"daily_close\", \"market_session\": \"regular_close\", \"price\": 355.63, \"source_time_precision\": \"date\", \"source_time_status\": \"provided\", \"source_timestamp\": \"2026-11-11\"}, \"data_kind\": \"daily_close\", \"degraded\": false, \"error_code\": null, \"fr…",
+                    "offset": 0,
+                    "total_chars": 1100,
+                    "next_offset": 1100,
+                    "has_more": false
+                  },
+                  "display": {
+                    "kind": "document",
+                    "status": "ok",
+                    "title": "查看已取得的资料",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_5cc20e646bac6458a5"
+                  ],
+                  "source_refs": [
+                    "1"
+                  ],
+                  "evidence_refs": [
+                    "1"
+                  ],
+                  "sources": [
+                    {
+                      "source": "twelve_data",
+                      "source_name": "twelve_data",
+                      "source_id": "1",
+                      "title": "twelve_data",
+                      "url": null,
+                      "data_ref": "h_5cc20e646bac6458a5",
+                      "as_of": "2026-11-11T00:00:00Z",
+                      "quality": "trusted",
+                      "currency": "USD",
+                      "frequency": null,
+                      "meta": {},
+                      "metadata": {
+                        "tool": "get_stock_price",
+                        "parameters": {
+                          "ticker": "AAPL"
+                        },
+                        "tool_kind": "quote",
+                        "as_of": "2026-11-11T00:00:00Z",
+                        "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                        "currency": "USD",
+                        "frequency": null,
+                        "market_session": "regular_close",
+                        "source_timestamp": "2026-11-11",
+                        "source_time_precision": "date",
+                        "source_time_status": "provided"
+                      },
+                      "kind": "price_snapshot",
+                      "type": "tool",
+                      "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-11",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided"
+                    }
+                  ],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 62,
+                  "agent_id": "reviewer_a611ec959732",
+                  "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+                  "session_id": "2026-11-12_214700_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "提交核查结果",
+                "timestamp": "2026-11-13T05:47:39.044980+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-12_214700_891824cf:facts-01:0",
+                "sessionId": "2026-11-12_214700_891824cf:facts-01",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "chatcmpl-tool-a50c1741bac768c5",
+                  "name": "submit_review",
+                  "title": "提交核查结果",
+                  "inputs": {
+                    "verdict": "pass",
+                    "findings": [],
+                    "coverage": [
+                      {
+                        "requirement": "回答 AAPL 当前价格",
+                        "met": true
+                      },
+                      {
+                        "requirement": "提供涨跌额与涨跌幅",
+                        "met": true
+                      },
+                      {
+                        "requirement": "标注数据时点与数据来源",
+                        "met": true
+                      },
+                      {
+                        "requirement": "说明非实时/盘后限制",
+                        "met": true
+                      }
+                    ]
+                  },
+                  "display": {
+                    "kind": "control",
+                    "status": "empty",
+                    "title": "提交核查结果",
+                    "target": "当前研究资料",
+                    "result": "None",
+                    "summary": "None",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 63,
+                  "agent_id": "reviewer_a611ec959732",
+                  "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+                  "session_id": "2026-11-12_214700_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T05:47:39.045484+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-12_214700_891824cf:facts-01:0",
+                "sessionId": "2026-11-12_214700_891824cf:facts-01",
+                "result": {
+                  "role": "reviewer",
+                  "agent_label": "核查员",
+                  "tool_call_id": "chatcmpl-tool-a50c1741bac768c5",
+                  "name": "submit_review",
+                  "title": "提交核查结果",
+                  "status": "ok",
+                  "inputs": {
+                    "verdict": "pass",
+                    "findings": [],
+                    "coverage": [
+                      {
+                        "requirement": "回答 AAPL 当前价格",
+                        "met": true
+                      },
+                      {
+                        "requirement": "提供涨跌额与涨跌幅",
+                        "met": true
+                      },
+                      {
+                        "requirement": "标注数据时点与数据来源",
+                        "met": true
+                      },
+                      {
+                        "requirement": "说明非实时/盘后限制",
+                        "met": true
+                      }
+                    ]
+                  },
+                  "output_preview": {
+                    "verdict": "pass",
+                    "findings": [],
+                    "coverage": [
+                      {
+                        "requirement": "回答 AAPL 当前价格",
+                        "met": true
+                      },
+                      {
+                        "requirement": "提供涨跌额与涨跌幅",
+                        "met": true
+                      },
+                      {
+                        "requirement": "标注数据时点与数据来源",
+                        "met": true
+                      },
+                      {
+                        "requirement": "说明非实时/盘后限制",
+                        "met": true
+                      }
+                    ]
+                  },
+                  "display": {
+                    "kind": "control",
+                    "status": "ok",
+                    "title": "提交核查结果",
+                    "target": "当前研究资料",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 64,
+                  "agent_id": "reviewer_a611ec959732",
+                  "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+                  "session_id": "2026-11-12_214700_891824cf:facts-01"
+                }
+              }
+            ],
+            "response": "AAPL（苹果）最新收盘价 **355.63 美元**，上涨 7.12 美元（+2.04%）[1]。\n\n说明：\n- 数据时点为 2026-11-11 美股常规时段收盘，币种为美元；报价来自第三方行情源，非交易所实时推送，无法保证当前秒级价格。\n- 该价格为收盘价，不含盘前/盘后波动；如需最新盘中报价请以交易平台为准。",
+            "artifacts": [],
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-12_214700_891824cf:facts-01:0",
+            "reviews": [
+              {
+                "status": "completed",
+                "verdict": "pass",
+                "findings": [],
+                "coverage": [
+                  {
+                    "requirement": "回答 AAPL 当前价格",
+                    "met": true
+                  },
+                  {
+                    "requirement": "提供涨跌额与涨跌幅",
+                    "met": true
+                  },
+                  {
+                    "requirement": "标注数据时点与数据来源",
+                    "met": true
+                  },
+                  {
+                    "requirement": "说明非实时/盘后限制",
+                    "met": true
+                  }
+                ],
+                "review_id": "reviewer_a611ec959732",
+                "data_refs": [],
+                "answer_sha256": "e1a4fb0ba320449f83f72656d0d0545f8efd2cda11e0d01c7cb819777bd06c49",
+                "supersedes_review_id": null
+              }
+            ],
+            "report_revision": null,
+            "review_revision": null,
+            "session_id": "2026-11-12_214700_891824cf:facts-01",
+            "message_id": "assistant:2026-11-12_214700_891824cf:facts-01:0",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "answered",
+            "quality": {
+              "state": "pass",
+              "reasons": [],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "twelve_data",
+                  "source_name": "twelve_data",
+                  "source_id": "1",
+                  "title": "twelve_data",
+                  "url": null,
+                  "data_ref": "h_5cc20e646bac6458a5",
+                  "as_of": "2026-11-11T00:00:00Z",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "frequency": null,
+                  "meta": {},
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "AAPL"
+                    },
+                    "tool_kind": "quote",
+                    "as_of": "2026-11-11T00:00:00Z",
+                    "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                    "currency": "USD",
+                    "frequency": null,
+                    "market_session": "regular_close",
+                    "source_timestamp": "2026-11-11",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "kind": "price_snapshot",
+                  "type": "tool",
+                  "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                  "market_session": "regular_close",
+                  "source_timestamp": "2026-11-11",
+                  "source_time_precision": "date",
+                  "source_time_status": "provided"
+                }
+              ],
+              "publishable": true,
+              "review": {
+                "status": "completed",
+                "verdict": "pass",
+                "findings": [],
+                "coverage": [
+                  {
+                    "requirement": "回答 AAPL 当前价格",
+                    "met": true
+                  },
+                  {
+                    "requirement": "提供涨跌额与涨跌幅",
+                    "met": true
+                  },
+                  {
+                    "requirement": "标注数据时点与数据来源",
+                    "met": true
+                  },
+                  {
+                    "requirement": "说明非实时/盘后限制",
+                    "met": true
+                  }
+                ],
+                "review_id": "reviewer_a611ec959732",
+                "data_refs": [],
+                "answer_sha256": "e1a4fb0ba320449f83f72656d0d0545f8efd2cda11e0d01c7cb819777bd06c49",
+                "supersedes_review_id": null
+              }
+            },
+            "report_quality": {
+              "state": "pass",
+              "reasons": [],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "twelve_data",
+                  "source_name": "twelve_data",
+                  "source_id": "1",
+                  "title": "twelve_data",
+                  "url": null,
+                  "data_ref": "h_5cc20e646bac6458a5",
+                  "as_of": "2026-11-11T00:00:00Z",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "frequency": null,
+                  "meta": {},
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "AAPL"
+                    },
+                    "tool_kind": "quote",
+                    "as_of": "2026-11-11T00:00:00Z",
+                    "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                    "currency": "USD",
+                    "frequency": null,
+                    "market_session": "regular_close",
+                    "source_timestamp": "2026-11-11",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "kind": "price_snapshot",
+                  "type": "tool",
+                  "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                  "market_session": "regular_close",
+                  "source_timestamp": "2026-11-11",
+                  "source_time_precision": "date",
+                  "source_time_status": "provided"
+                }
+              ],
+              "publishable": true,
+              "review": {
+                "status": "completed",
+                "verdict": "pass",
+                "findings": [],
+                "coverage": [
+                  {
+                    "requirement": "回答 AAPL 当前价格",
+                    "met": true
+                  },
+                  {
+                    "requirement": "提供涨跌额与涨跌幅",
+                    "met": true
+                  },
+                  {
+                    "requirement": "标注数据时点与数据来源",
+                    "met": true
+                  },
+                  {
+                    "requirement": "说明非实时/盘后限制",
+                    "met": true
+                  }
+                ],
+                "review_id": "reviewer_a611ec959732",
+                "data_refs": [],
+                "answer_sha256": "e1a4fb0ba320449f83f72656d0d0545f8efd2cda11e0d01c7cb819777bd06c49",
+                "supersedes_review_id": null
+              }
+            },
+            "publishable": true,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": false,
+            "tickers": [
+              "AAPL"
+            ],
+            "price_levels": [],
+            "current_focus": "AAPL",
+            "actions": [],
+            "evidence_pool": [
+              {
+                "source": "twelve_data",
+                "source_name": "twelve_data",
+                "source_id": "1",
+                "title": "twelve_data",
+                "url": null,
+                "data_ref": "h_5cc20e646bac6458a5",
+                "as_of": "2026-11-11T00:00:00Z",
+                "quality": "trusted",
+                "currency": "USD",
+                "frequency": null,
+                "meta": {},
+                "metadata": {
+                  "tool": "get_stock_price",
+                  "parameters": {
+                    "ticker": "AAPL"
+                  },
+                  "tool_kind": "quote",
+                  "as_of": "2026-11-11T00:00:00Z",
+                  "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                  "currency": "USD",
+                  "frequency": null,
+                  "market_session": "regular_close",
+                  "source_timestamp": "2026-11-11",
+                  "source_time_precision": "date",
+                  "source_time_status": "provided"
+                },
+                "kind": "price_snapshot",
+                "type": "tool",
+                "observed_at": "2026-11-12T04:58:53.753467+00:00",
+                "market_session": "regular_close",
+                "source_timestamp": "2026-11-11",
+                "source_time_precision": "date",
+                "source_time_status": "provided"
+              }
+            ],
+            "metrics": {
+              "total_prompt_tokens": 18936,
+              "total_completion_tokens": 551,
+              "total_tokens": 19487,
+              "llm_token_calls": 4,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 4,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "step-5-preview": {
+                  "prompt": 18936,
+                  "completion": 551,
+                  "calls": 4
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "step-5-preview",
+                  "prompt": 15262,
+                  "completion": 141,
+                  "calls": 2,
+                  "failed_calls": 0,
+                  "duration_ms": 15983
+                },
+                {
+                  "agent": "reviewer",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "step-5-preview",
+                  "prompt": 3674,
+                  "completion": 410,
+                  "calls": 2,
+                  "failed_calls": 0,
+                  "duration_ms": 20515
+                }
+              ],
+              "tool_calls": 1,
+              "runtime": "agent_runtime",
+              "stopped": "completed"
+            },
+            "seq": 66,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 4,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 1,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 38.359,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 3,
+        "failed_tools": 0,
+        "tokens": 19487,
+        "rounds": 4
+      },
+      "checkpoints": 6,
+      "watchlist": [],
+      "transport_errors": [],
+      "model_call_outcomes": [
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 12,
+          "first_chunk_seconds": 1.125,
+          "elapsed_seconds": 1.547,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 7503,
+            "completion_tokens": 39,
+            "cached_tokens": 0,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.052521,
+            "cached_input_cny": 0.0,
+            "output_cny": 0.00078,
+            "total_cny": 0.053301
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 50,
+          "first_chunk_seconds": 3.562,
+          "elapsed_seconds": 5.296,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 7759,
+            "completion_tokens": 102,
+            "cached_tokens": 7424,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.002345,
+            "cached_input_cny": 0.0051968,
+            "output_cny": 0.00204,
+            "total_cny": 0.0095818
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 9,
+          "first_chunk_seconds": 0.609,
+          "elapsed_seconds": 1.078,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 1582,
+            "completion_tokens": 45,
+            "cached_tokens": 1024,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.003906,
+            "cached_input_cny": 0.0007168,
+            "output_cny": 0.0009,
+            "total_cny": 0.0055228
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 128,
+          "first_chunk_seconds": 0.797,
+          "elapsed_seconds": 5.266,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 2092,
+            "completion_tokens": 365,
+            "cached_tokens": 1536,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.003892,
+            "cached_input_cny": 0.0010752,
+            "output_cny": 0.0073,
+            "total_cny": 0.0122672
+          }
+        }
+      ],
+      "model_cost_estimates": [
+        {
+          "currency": "CNY",
+          "prompt_tokens": 7503,
+          "completion_tokens": 39,
+          "cached_tokens": 0,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.052521,
+          "cached_input_cny": 0.0,
+          "output_cny": 0.00078,
+          "total_cny": 0.053301
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 7759,
+          "completion_tokens": 102,
+          "cached_tokens": 7424,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.002345,
+          "cached_input_cny": 0.0051968,
+          "output_cny": 0.00204,
+          "total_cny": 0.0095818
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 1582,
+          "completion_tokens": 45,
+          "cached_tokens": 1024,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.003906,
+          "cached_input_cny": 0.0007168,
+          "output_cny": 0.0009,
+          "total_cny": 0.0055228
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 2092,
+          "completion_tokens": 365,
+          "cached_tokens": 1536,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.003892,
+          "cached_input_cny": 0.0010752,
+          "output_cny": 0.0073,
+          "total_cny": 0.0122672
+        }
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 4,
+        "unpriced_calls": 0,
+        "all_calls_priced": true,
+        "known_components": {
+          "uncached_input_cny": 0.062664,
+          "cached_input_cny": 0.0069888,
+          "output_cny": 0.01102,
+          "total_cny": 0.0806728
+        },
+        "known_subtotal_cny": 0.0806728,
+        "total_cny": 0.0806728
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-12_214700_891824cf/facts-01/events.json",
+      "tool_recordings": 1
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "single_terminal_rate": 1,
+      "model_calls": 4,
+      "failed_model_calls": 0,
+      "model_failure_rate": 0.0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 38.359,
+      "median_tokens": 19487,
+      "median_rounds": 4,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "step-5-preview",
+    "context_window": 1000000,
+    "max_output": 4096,
+    "base_url": "https://api.stepfun.com/v1",
+    "effort": "low",
+    "temperature": null
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "base_url": "https://api.stepfun.com/v1",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "protocol": "tools"
+  },
+  "runtime_sha256": "a9f2a23cecb5622f25aa65509374abe75526d68bf11c2ed260fd71c69733829d",
+  "fixtures_root": "fixtures/qwen-canonical-v1",
+  "seed_tapes": null,
+  "harness_config": {
+    "request_interval_seconds": 0,
+    "jobs": 1,
+    "request_pacing_scope": "unrestricted",
+    "model_protocol": "sse",
+    "upstream_stream": true,
+    "model_configuration": {
+      "model": "step-5-preview",
+      "base_url": "https://api.stepfun.com/v1",
+      "effort": "low",
+      "context_window": 1000000,
+      "max_output": 4096,
+      "temperature": null
+    },
+    "model_quotas": {
+      "concurrency": 2,
+      "rpm": 30,
+      "tpm": 250000,
+      "minimum_request_interval_seconds": 10.0,
+      "run_token_budget": 160000
+    },
+    "step5_cost_pricing": {
+      "currency": "CNY",
+      "uncached_input_per_million": 7,
+      "cached_input_per_million": 0.7,
+      "output_per_million": 20,
+      "cache_rate_basis": "new_user"
+    },
+    "model_quota_scope": "run_shared",
+    "analysis_worker_enabled": true,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "cost_estimate": {
+    "currency": "CNY",
+    "priced_calls": 4,
+    "unpriced_calls": 0,
+    "all_calls_priced": true,
+    "known_components": {
+      "uncached_input_cny": 0.062664,
+      "cached_input_cny": 0.0069888,
+      "output_cny": 0.01102,
+      "total_cny": 0.0806728
+    },
+    "known_subtotal_cny": 0.0806728,
+    "total_cny": 0.0806728
+  },
+  "fixtures_sha256": "c1db08e39b63f365513ad9056d5b5f1a12eb2f9c84c031e5554583c084bf7917"
+}

@@ -1,0 +1,26 @@
+{
+  "request_sha256": "4faad2b69c147c9efee1c9eaac82a1c96f89501e475cbcee99bb1b339fbf270a",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：直接解释经营现金流净额减资本性支出的基本公式，并说明公司自定义FCF、维护/扩张投入与负值局限，未调用数据工具；但扩展为长篇多章节说明，未满足概念短问的篇幅要求。",
+      "numbers=1：没有编造某家公司财务数字，基本FCF公式正确；但将经营现金流减资本开支称作公司自由现金流后，又说FCFE需再扣利息，未区分通常已在经营现金流扣息的口径与FCFF的税后利息调整，可能重复扣息；且声称上一条回答给固定门槛，输入只有本轮，属于无依据的对话事实。",
+      "limitations=1：明确公司自行披露FCF定义可能调整、资本开支范围差异、维护性拆分多数为假设、负FCF可能来自投入期且没有普适现金转化率阈值，提供了基本口径限制。",
+      "presentation=0：什么是自由现金流这一短问被展开为定义、公式、净利润差别、用途、多个概念、负值和现金转化率等长篇章节，明显不够简洁，还加入不存在的前轮纠正与后续取数邀请。",
+      "no_internal_identifiers=1：正文只有相关财务术语，没有工具调用、数据句柄、运行编号或内部配置标识。"
+    ]
+  }
+}

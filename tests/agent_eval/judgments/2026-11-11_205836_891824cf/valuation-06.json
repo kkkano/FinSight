@@ -1,0 +1,26 @@
+{
+  "request_sha256": "f9ceaed7ad9607569d7785635bd72ef4f06e688ccbcdba575928dc4213430ac2",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文三段只有基础取数、重试和更新财报期的进度，没有交付 0700.HK 与 9988.HK 的估值、现金流质量比较或同财期口径。",
+      "numbers=0：正文没有两家公司估值或现金流数字，也没有汇率换算；“当前是 2026 年 11 月”不是本题所需财务数值。",
+      "limitations=1：说明基础行情超时、仅取得部分财报线索，终态明确研究超时；没有将两家公司币种混为一谈，也未声称已经完成比较。",
+      "presentation=1：进度句分段完整、篇幅合适，可见终态故障通知清楚；无正文截断或假装已给比较表。",
+      "no_internal_identifiers=1：没有内部数据句柄或运行标识；港股代码是用户指定主体。"
+    ]
+  }
+}

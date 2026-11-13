@@ -1,0 +1,81 @@
+[
+  {
+    "check": "health",
+    "result": {
+      "ready": true,
+      "error": null,
+      "available_memory_mb": 5740,
+      "job_memory_mb": 256,
+      "can_accept_job": true,
+      "min_job_memory_mb": 128,
+      "max_job_memory_mb": 256,
+      "memory_reserve_mb": 256,
+      "adaptive_memory": false
+    }
+  },
+  {
+    "check": "frames_and_library",
+    "result": {
+      "status": "ok",
+      "result": {
+        "rows": [
+          {
+            "first": 10.0,
+            "last": 20.0,
+            "minimum": 10.0,
+            "maximum": 20.0,
+            "mean": 15.0,
+            "difference": 10.0,
+            "return_ratio": 1.0,
+            "observations": 2
+          }
+        ],
+        "units": {
+          "first": "USD",
+          "last": "USD",
+          "minimum": "USD",
+          "maximum": "USD",
+          "mean": "USD",
+          "difference": "USD",
+          "return_ratio": "ratio",
+          "observations": "count"
+        },
+        "method": {
+          "kind": "series_statistics",
+          "field": "close",
+          "start": "2026-01-01T00:00:00+00:00",
+          "end": "2026-01-02T00:00:00+00:00",
+          "latest_n": null,
+          "return_definition": "last/first-1 when first>0",
+          "missing_values": 0,
+          "missing_policy": "exclude_missing_observations_without_imputation"
+        }
+      },
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-22d2ce2576eb4982a44b11748856af22",
+      "code_hash": "e9043f06c4ac8cbe380937ed0d83487efe6f060b7cbb4643e790c8d476f796ee",
+      "input_hash": "8517f7087e3c3d859114649697de195fed4ed69bd7362a3d7cbe20b1feddb58f",
+      "duration_ms": 851,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  },
+  {
+    "check": "hypothesis",
+    "result": {
+      "status": "ok",
+      "result": {
+        "mean": 2.0
+      },
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-27d51983b40b4b009e6448aa876e8d97",
+      "code_hash": "c776b19707bd2465efad3a91bf9f7888e4eaa317c7283c70c1439c48571d5f08",
+      "input_hash": "9ae7e6d7a56c4e42b5741b4a8c6d1c01b086b637be84fd3cd36d21b8bc892774",
+      "duration_ms": 856,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  }
+]

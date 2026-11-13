@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "milestones": {
+    "M0": {
+      "implementation": "baseline_saved",
+      "acceptance": "full_relay_context_boundary_unmeasured"
+    },
+    "M1": {
+      "implementation": "complete_corpus_record_replay_scoring_baseline",
+      "acceptance": "baseline_ready",
+      "cases": 60,
+      "judged": 60,
+      "baseline": "tests/agent_eval/results/m1_qwen_baseline_complete.json",
+      "mean_score": 3.3333333333333335,
+      "completed_cases": 12
+    },
+    "M2": {
+      "implementation": "single_runtime_envelopes_and_adapters_completed",
+      "acceptance": "protocol_passed_matched_quality_replay_pending",
+      "active_capture": "tests/agent_eval/results/m2_moxuna_baseline_record.json",
+      "comparison_fixture_root": "fixtures/moxuna-comparison-v1",
+      "reason_for_new_model": "之前的Qwen密钥现不再启用该模型；使用用户新授权端点建立同模型对照"
+    },
+    "M3": {
+      "implementation": "single_native_loop_compactor_skills_integer_citations_spawn_completed",
+      "acceptance": "vectide_matched_record_and_replay_running",
+      "loop_lines": 215,
+      "failed_record": "tests/agent_eval/results/m3_current_record.json",
+      "smoke": "tests/agent_eval/results/m3_current_smoke.json"
+    },
+    "M4": {
+      "implementation": "default_readonly_review_annotations_append_and_versioned_revision_integrated",
+      "acceptance": "vectide_full_paired_measurement_and_semantic_adjudication_completed",
+      "measurement": "tests/agent_eval/results/m4_vectide_review_recovery.json",
+      "adjudication": "tests/agent_eval/results/m4_vectide_review_recovery_adjudication.json",
+      "protocol_followup": "tests/agent_eval/results/m4_step5_protocol_followup.json",
+      "browser": "frontend/test-results/m4-native/evidence.json",
+      "detections": 12,
+      "injected_cases": 12,
+      "false_positives": 0,
+      "clean_cases": 12,
+      "unavailable": 0,
+      "measured_runs": 24,
+      "ancillary_overreach": 1
+    },
+    "M5": {
+      "implementation": "old_patch_modules_removed_with_reference_snapshots",
+      "acceptance": "user_authorized_single_runtime_production_release_still_pending"
+    },
+    "M6": {
+      "implementation": "completed",
+      "acceptance": "8_6_all_passed_current_source",
+      "evidence": "frontend/test-results/m6-native/2026-11-12-closeout/evidence.json",
+      "source_files_hashed": 329,
+      "unit_tests_passed": 561,
+      "build": "passed",
+      "deployed": false
+    },
+    "M7": {
+      "implementation": "184_old_production_files_retired_and_live_contracts_migrated",
+      "acceptance": "canonical_backend_reference_and_clean_image_gates_passed_release_pending",
+      "active_passed": 1937,
+      "active_skipped": 41,
+      "reference_passed": 1330,
+      "manifest": "tests/agent_eval/reference/retirement_scope.json"
+    },
+    "M8": {
+      "implementation": "completed",
+      "acceptance": "local_ui_protocol_passed_live_48_cases_pending"
+    },
+    "M9": {
+      "implementation": "store_css_lazy_echarts_chart_dispatch_and_reference_compatibility_completed",
+      "acceptance": "local_unit_build_interaction_and_lazy_loading_passed_release_pending"
+    },
+    "M10": {
+      "implementation": "single_runtime_dependency_boundary_typed_config_and_current_docs_updated",
+      "acceptance": "backend_suite_passed_single_instance_documented_production_gate_pending"
+    }
+  },
+  "production_default_switched": false,
+  "forecast_strategy_changed": false,
+  "provider_recheck": "tmp/model_availability_recheck.json",
+  "frozen_scope": "tmp/m7_liveness_inventory.json",
+  "evidence": {
+    "backend": "tmp/agentic_backend_validation.xml",
+    "m6": "frontend/test-results/m6-native/final-contract/evidence.json",
+    "m8": "frontend/test-results/m8-native/evidence.json",
+    "m9_css": "tmp/m9_css_split.json",
+    "frontend": "tmp/agentic_frontend_validation.xml",
+    "m9_chart": "frontend/test-results/m9-chart-boundary/evidence.json",
+    "m8_commands": "frontend/test-results/m8-native/README.md",
+    "m9_store": "frontend/src/store/useStore.persistence.test.ts"
+  },
+  "validation": {
+    "backend_passed": 1937,
+    "backend_skipped": 41,
+    "backend_skip_reason": "conditional integration/live environments; see canonical pytest output",
+    "frontend_passed": 554,
+    "frontend_files": 82,
+    "frontend_build": "passed",
+    "forecast_protected_files": 27,
+    "forecast_changed_files": [],
+    "echarts_initial_preload": false,
+    "fixture_bundle_markers": [],
+    "reference_passed": 1330,
+    "frontend_m4_focused_passed": 96,
+    "frontend_m4_browser_variants_passed": 4
+  },
+  "pending_required_input": null,
+  "latest_resume": {
+    "summary": "tests/agent_eval/results/m1_kunyou_resume_summary.json",
+    "fallback_option_added": true,
+    "fallback_native_tool_calls_verified": true,
+    "m1_ready": false,
+    "independent_judge_verified": false,
+    "eval_tests_passed": 111,
+    "frozen_protected_files_unchanged": 27
+  },
+  "active_continuation": {
+    "milestone": "M3",
+    "status": "matched_measurement_running",
+    "provider": "vectide",
+    "execution": "tests/agent_eval/results/vectide_matched_execution.json",
+    "note": "4进程快速批次触发共享额度耗尽，失败单独保留；完整重跑恢复原基线调度配置。"
+  },
+  "step5_integration": {
+    "status": "deployed",
+    "model": "step-5-preview",
+    "model_id": "stepfun-api:step-5-preview",
+    "label": "Step 5 Preview（按量）",
+    "release": "step5-api-20261111-a147e695613e",
+    "evidence": "tests/agent_eval/results/step5_production_deployed.json",
+    "runtime_default_changed": false,
+    "forecast_files_changed": [],
+    "api_tests_passed": 77,
+    "image_frozen_python_files_unchanged": 26,
+    "local_followup": "Effort tuple membership guards malformed JSON types; not included in already-deployed a147e695613e overlay."
+  },
+  "next_steps": [
+    "完成当前/基线同模型同资料录制和冻结回放",
+    "完成独立逐题评分与质量/耗时对照",
+    "审查并执行已准备的唯一运行时发布",
+    "完成48项真实产品与登录隔离验收",
+    "同步最终运行状态和有效文档"
+  ],
+  "latest_user_contract": {
+    "production_runtime": "single implementation in backend/agent_runtime",
+    "reference_code": "tests/agent_eval only; excluded from production image",
+    "production_old_code": "remove before release; no agent1/agent2/v1/v2 switches",
+    "frozen_forecast": "unchanged",
+    "authorization": "user explicitly requires old implementation removal"
+  },
+  "latest_reported_at": "2026-11-13T10:23:13.574703+00:00"
+}

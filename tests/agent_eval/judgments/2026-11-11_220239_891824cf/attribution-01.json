@@ -1,0 +1,26 @@
+{
+  "request_sha256": "ad5e6abf2230d606dacd7afecd915d7a4b16422d8dc92e11729f9b79479259f0",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：虽正文只有取数进度，终态确实交付含24个真实日收盘观测和两个下跌事件窗口的图，部分回答跌幅日期及原因；但没有完整区分个股、行业和大盘因素的解释，图的原因注释缺少明确的报道/推断界定。",
+      "numbers=1：图中24个收盘、高低价及成交量逐项与本次3个月历史录制一致，11/09-10两日累计约−9.51%支持9.5%标签；11/04-05两日以11/03收盘为基准实际−12.139%，一位小数应为−12.1%，图却标12.0%，事件面板还未包含前一日基准。",
+      "limitations=0：正文只提示报价与11/12新闻时间不一致，图却直接以监管恐慌、董事会调查及通胀给两轮跌势贴原因标签，没有说明报道性质、未确认事项或无法唯一确定因果；终态超时说明不补足这些边界。",
+      "presentation=1：实际图表有明确标题、日期轴、美元单位和事件窗口，正文及故障通知完整可读；数字与因果问题已在对应项扣分。",
+      "no_internal_identifiers=1：用户正文没有内部句柄或运行 ID，图的 method/input_refs 等结构化审计元数据不作为正文泄漏；未执行录制中的模型代码。"
+    ]
+  }
+}

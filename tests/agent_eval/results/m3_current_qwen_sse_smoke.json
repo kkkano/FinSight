@@ -1,0 +1,422 @@
+{
+  "schema_version": 1,
+  "runtime": "current",
+  "mode": "record",
+  "head": "891824cf",
+  "run_id": "2026-11-13_005346_891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "model": "qwen3.8-flash",
+      "turns": [
+        {
+          "run_id": "2026-11-13_005346_891824cf:facts-02:0",
+          "query": "MSFT 最新一季营收和经营现金流分别是多少",
+          "terminal": {
+            "attempt_id": "de0399d019ee45b6a257e3cc39d2a164",
+            "stream_epoch": "de0399d019ee45b6a257e3cc39d2a164",
+            "committed_seq": 1,
+            "blocks": [],
+            "thinking": [],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_005346_891824cf:facts-02:0",
+            "session_id": "2026-11-13_005346_891824cf:facts-02",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_400",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "qwen3.8-flash": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "qwen3.8-flash",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 2952
+                }
+              ],
+              "tool_calls": 0
+            },
+            "seq": 2,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 5.75,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 1,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_400",
+          "cause": null
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "model": "qwen3.8-flash",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 2.891,
+          "error_code": "model_http_400",
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 1,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_005346_891824cf/facts-02.json",
+        "request_sha256": "d0157943ccd6953c9e052a39346fbac23e598edd9f32845acb091982bf861575"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_005346_891824cf/facts-02/events.json",
+      "tool_recordings": 4
+    },
+    {
+      "id": "valuation-02",
+      "group": "valuation",
+      "model": "qwen3.8-flash",
+      "turns": [
+        {
+          "run_id": "2026-11-13_005346_891824cf:valuation-02:0",
+          "query": "AAPL 当前估值相对 MSFT 怎么看",
+          "terminal": {
+            "attempt_id": "d1f2fc80553f4a6499773f29472d9708",
+            "stream_epoch": "d1f2fc80553f4a6499773f29472d9708",
+            "committed_seq": 22,
+            "blocks": [],
+            "thinking": [],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_005346_891824cf:valuation-02:0",
+            "session_id": "2026-11-13_005346_891824cf:valuation-02",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "模型响应超时了。",
+            "error_code": "model_timeout",
+            "reason": "模型响应超时了。",
+            "recovery_action": "可以稍后重试，或先聚焦一个问题。",
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "qwen3.8-flash": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "qwen3.8-flash",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 95093
+                }
+              ],
+              "tool_calls": 0
+            },
+            "seq": 23,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 95.453,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 2,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_timeout",
+          "cause": "TimeoutError"
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "model": "qwen3.8-flash",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 43,
+          "first_chunk_seconds": 60.172,
+          "elapsed_seconds": 90.0,
+          "error_code": "model_timeout",
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 1,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_005346_891824cf/valuation-02.json",
+        "request_sha256": "d917ac38ed3e8ee4dc339b3da5869fe7802595793a4e6d9011fb155e016c1d64"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_005346_891824cf/valuation-02/events.json",
+      "tool_recordings": 11
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "single_terminal_rate": 1,
+      "model_calls": 1,
+      "failed_model_calls": 1,
+      "model_failure_rate": 1.0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 5.75,
+      "median_tokens": 0,
+      "median_rounds": 1,
+      "tool_error_rate": 0.0
+    },
+    "valuation": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "single_terminal_rate": 1,
+      "model_calls": 1,
+      "failed_model_calls": 1,
+      "model_failure_rate": 1.0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 95.453,
+      "median_tokens": 0,
+      "median_rounds": 1,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "d84e27eca69ffa5557c9ada1f18fb61621615dedfcbd0cd787ce72c158721c25",
+  "subject": {
+    "model": "qwen3.8-flash",
+    "context_window": 1000000,
+    "max_output": 16384,
+    "base_url": "https://api.kunyou.asia/v1",
+    "effort": null,
+    "temperature": null
+  },
+  "judge": {
+    "model": "gpt-6.1-sol",
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "runtime_sha256": "970fbfc18fff0f45f8f19954af973019cf0002263622c4b33e53f7867ab33d4e",
+  "fixtures_root": "fixtures/qwen-current-matched-20261112",
+  "seed_tapes": null,
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 1,
+    "request_pacing_scope": "global",
+    "model_protocol": "sse",
+    "upstream_stream": true,
+    "model_configuration": {
+      "model": "qwen3.8-flash",
+      "base_url": "https://api.kunyou.asia/v1",
+      "effort": null,
+      "context_window": 1000000,
+      "max_output": 16384,
+      "temperature": null
+    },
+    "model_quotas": {
+      "concurrency": 2,
+      "rpm": 30,
+      "tpm": 250000,
+      "minimum_request_interval_seconds": 10.0,
+      "run_token_budget": 160000
+    },
+    "step5_cost_pricing": null,
+    "model_quota_scope": "run_shared",
+    "analysis_worker_enabled": true,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "cost_estimate": {
+    "currency": "CNY",
+    "priced_calls": 0,
+    "unpriced_calls": 2,
+    "all_calls_priced": false,
+    "known_components": {
+      "uncached_input_cny": null,
+      "cached_input_cny": null,
+      "output_cny": null,
+      "total_cny": null
+    },
+    "known_subtotal_cny": null,
+    "total_cny": null
+  },
+  "fixtures_sha256": "fbc702e2c3780627cb2961bf34980f2b2c9bdbe4a904387e25fc0d9f4dd26f29"
+}

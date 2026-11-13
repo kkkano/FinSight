@@ -1,0 +1,26 @@
+{
+  "request_sha256": "74fc112a9db0168d7f8c36e1ffcc00488b43ba3f2808d8af33a600e18c5c25e4",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 0,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=1：正文解释利润与现金确认、非经营项目和资本开支处理不同，回答了概念部分；但没有用 MSFT 当前财务数据形成公司判断，也没有增长与折现假设的具体限制。",
+      "numbers=0：最终正文没有 PE、经营或自由现金流倍数、资本开支等实际数字，用户可见代码片段也只是变量公式；失败计算没有交付定量结果。",
+      "limitations=0：称摘要没有资本开支和营运资本细项而不能精确计算，与本轮原文相矛盾。FY26 表已有 OCF 182,935、资本开支 115,948 百万美元；TTM 来源已有 OCF 195.88B、资本开支 135.92B、FCF 59.96B；FY27Q1 表另有 OCF 58,000、资本开支 39,367 百万美元。",
+      "presentation=0：用户可见 progress 正文出现未闭合的 <tool_call>/<function=run_analysis_code>、参数标记和一长段 Python 公式，最后截断在 result['DA_over_capex_FY26']，污染金融解释并破坏阅读。",
+      "no_internal_identifiers=0：工具名 run_analysis_code、参数协议和 PE_TTM_gaap 等代码变量出现在用户可读 content 中；不是仅存于诊断元数据。"
+    ]
+  }
+}

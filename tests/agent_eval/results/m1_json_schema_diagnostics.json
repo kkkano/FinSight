@@ -1,0 +1,33 @@
+[
+  {
+    "model": "deepseek-v4.1-flash-1017",
+    "protocol": "json",
+    "response_model": "deepseek-v4.1-flash-1017",
+    "usage": {
+      "prompt_tokens": 0,
+      "completion_tokens": 1,
+      "total_tokens": 1
+    },
+    "finish_reason": "stop",
+    "content_format": "non_json",
+    "content_chars": 106,
+    "error": "schema_validation",
+    "validation_errors": [
+      {
+        "type": "json_invalid",
+        "loc": [],
+        "msg": "Invalid JSON: expected value at line 1 column 1",
+        "ctx": {
+          "error": "expected value at line 1 column 1"
+        }
+      }
+    ],
+    "seconds": 14.86
+  },
+  {
+    "model": "glm-5.3",
+    "protocol": "json",
+    "error": "model_http_502",
+    "seconds": 11.44
+  }
+]

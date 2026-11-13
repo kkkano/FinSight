@@ -1,0 +1,42 @@
+{
+  "source_request": "tmp\\agent-eval\\2026-11-11_192429_891824cf\\facts-02\\last_model_request.json",
+  "stream": false,
+  "max_tokens": 512,
+  "status": 200,
+  "error": null,
+  "usage": {
+    "completion_tokens": 261,
+    "prompt_tokens": 5400,
+    "prompt_tokens_details": {
+      "cached_tokens": 4096
+    },
+    "total_tokens": 5661
+  },
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "content": "",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"calculations\": \n[{\"label\": \"Revenue\", \"concept\": \"RevenueFromContractWithCustomerExcludingAssessedTax\"}, {\"label\": \"RevenueAlt\", \"concept\": \"Revenues\"}, {\"label\": \"OperatingCashFlow\", \"concept\": \"NetCashProvidedByUsedInOperatingActivities\"}]\n\n, \"limit\": 8, \"ticker\": \"MSFT\", \"time_scope\": {\"frame\": \"latest_quarters\"}}",
+            "name": "get_sec_company_facts_quarterly"
+          },
+          "id": "call_d48aff1dda4a414599de652a",
+          "index": 0,
+          "type": "function"
+        },
+        {
+          "function": {
+            "arguments": "{\"ticker\": \"MSFT\"}",
+            "name": "get_company_info"
+          },
+          "id": "call_5756c106a0364158b9d6dd75",
+          "index": 1,
+          "type": "function"
+        }
+      ]
+    }
+  ],
+  "seconds": 19.97
+}

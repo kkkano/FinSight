@@ -1,0 +1,26 @@
+{
+  "request_sha256": "17ecbaebe7bcc761004153af5b163401fbde1ca36a93ab203ae28ee3e2636590",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 2,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=2：交付 FY2027 Q1、三个月截至2026-09-30、发布日2026-10-28、本币美元、营收及经营现金流，并引用微软官网与同财期第二资料，全部核心 must 已交付。",
+      "numbers=2：录制同季营收 92,279 百万美元及 OCF 58,000 百万美元分别等于 922.79、580.00 亿美元；去年同期 77,673、45,057 一致，OCF 同比计算为28.7%，未混年度数据。",
+      "limitations=0：虽正确说明 SEC 接口失败与公司财年口径，但末尾又宣称财报、财期和经营现金流尚未核实、资料不足，与正文表格、官方原文及交叉核对相矛盾，未明确仍缺的是哪项。",
+      "presentation=1：标题明确财季，表格让两项金额易比较，来源链接和口径说明齐全，完整收尾；不确定声明的内容矛盾在局限项扣分。",
+      "no_internal_identifiers=1：正文没有运行或数据句柄，来源 URL 和财季、SEC 数据源名称属于证据说明。"
+    ]
+  }
+}

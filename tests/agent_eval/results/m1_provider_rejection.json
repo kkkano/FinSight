@@ -1,0 +1,14 @@
+{
+  "model": "deepseek-v4.1-flash-1017",
+  "status": 403,
+  "request": {
+    "endpoint": "/chat/completions",
+    "max_tokens": 16,
+    "stream": false
+  },
+  "error": {
+    "code": "insufficient_user_quota",
+    "type": "new_api_error",
+    "message": "用户额度不足, 剩余额度: ¥-0.005516 (request id: 202611111643409886841398268d9d6uQcfqioP)"
+  }
+}

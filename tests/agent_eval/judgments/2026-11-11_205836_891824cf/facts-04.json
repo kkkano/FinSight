@@ -1,0 +1,26 @@
+{
+  "request_sha256": "6c2c49017b2ef5c8e52478c2f5e5c320a6511f1f04612d564134230f68381844",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：交付 Zacks 在 2026-11-04 将 Q4 2026 EPS 0.16 下调为 0.15、Q1 2027 预期 0.03，以及部分评级动作；但未清楚区分已披露 EPS 与未来预期的实际数据，正文在共识评级句中截断，不能视为完整回答。",
+      "numbers=1：Zacks 的 0.16→0.15、0.03、报道中的全年共识 0.67 及目标价动作有原文支持；但将同一财季预期修正称为“Q4 环比”混淆修正与季度增长，并把单机构方向泛化为卖方整体下修。录制 Yahoo 同期共识 EPS 为 Q4 0.50、全年 1.72，当前 Q4 比七日前 0.49 上升，未协调这些口径。",
+      "limitations=0：正文称这是本轮“唯一”可核实的数值修正，但同次搜索还有 Yahoo 的 EPS Trend/Revisions 表，并存在与 MarketBeat 全年共识不一致的数值；未说明来源分歧、单机构与共识的边界。终态超时通知能解释截断，不能补足研究结论的口径限制。",
+      "presentation=0：回答结束于“共识评级为 **\"Moderate Buy”，句子、引号与加粗均未闭合，没有完整收尾。",
+      "no_internal_identifiers=1：可见正文未泄漏数据句柄、函数或运行标识；[S8fb81629ab] 是来源引用。"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "request_sha256": "35c9684dad4c8f92493b562729dc936dada50cb2e8e8160f4d4515a725a42f51",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=1：第二轮沿用当前主体AAPL，回读其报价/技术资料并计算MA20/50/200，没有补抓新闻或启动完整报告，尊重显式限制；但第二轮正文为空，首轮也只有取数进度，均未交付相应分析结论。",
+      "numbers=1：第二轮可展开计算摘要收盘355.63及MA20/50/200为344.87/337.88/300.27，与录制2y日线独立重算的舍入值一致，主体正确；首轮基本面数字没有形成答案，整组必需数据未全部交付。",
+      "limitations=0：首轮只说明SEC接口不可用，第二轮无正文解释日频、均线预热、价格复权与股息未知、技术指标的非预测性质；没有完整口径与局限说明。",
+      "presentation=0：首轮为英文取数进度，第二轮正文为空且无产物，用户需从技术工具预览自行整理，未形成当前问题所需技术结论。",
+      "no_internal_identifiers=0：首轮SEC失败预览显示SEC_USER_AGENT配置名，第二轮回读预览包含代码、code_hash与input_hash等用户无需的内部计算标识。"
+    ]
+  }
+}

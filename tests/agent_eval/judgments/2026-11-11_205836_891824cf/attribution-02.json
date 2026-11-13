@@ -1,0 +1,26 @@
+{
+  "request_sha256": "5409cfb7230c505f2945d2e99cd5625ec7bb37ecf278408850f7131a3b437c58",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：有上涨催化的解释、来源和真实三个月价格图；但正文未明确本轮上涨区间与幅度，“四个主要推手”只保留第2、第3项，财报超预期和机构评级两项没有对应的完整展开，覆盖不完整。",
+      "numbers=2：正文 355.63、关税退款对毛利率约1个百分点和 EPS 0.05、目标价共识345.94及高点355.91有当前录制支持；图中65个 OHLCV 与日收益观测及两个事件面板逐项与历史源一致，财报窗口11/02也与当前财报来源对应。",
+      "limitations=1：明确一次性关税退款不可外推、缺少主动买卖/机构净流入数据，并区分产品周期与 AI 叙事的预期性质；复权/股息未知也保留，没有用无价格依据的上涨叙事替代行情。",
+      "presentation=0：章节承诺“四个主要推手”却只出现编号2与3，价格事实段仅留下对图的括注，缺少清楚的上涨幅度概括；标题与剩余内容的组织不完整。",
+      "no_internal_identifiers=1：用户正文只有来源引用及金融术语，图的技术绑定字段不作为正文泄漏。"
+    ]
+  }
+}

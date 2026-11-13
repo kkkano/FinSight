@@ -1,0 +1,76 @@
+[
+  {
+    "model": "deepseek-v4.1-flash-1017",
+    "provider": "fallback",
+    "status": 200,
+    "content_type": "application/json; charset=utf-8",
+    "error": null,
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "json": {
+          "ok": true
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 38,
+      "completion_tokens": 30,
+      "total_tokens": 68,
+      "completion_tokens_details": {
+        "reasoning_tokens": 24
+      }
+    },
+    "seconds": 3.41
+  },
+  {
+    "model": "MiniMax-M3",
+    "provider": "fallback",
+    "status": 200,
+    "content_type": "application/json; charset=utf-8",
+    "error": null,
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "valid_json": false
+      }
+    ],
+    "usage": {
+      "total_tokens": 229,
+      "total_characters": 0,
+      "prompt_tokens": 206,
+      "completion_tokens": 23,
+      "completion_tokens_details": {
+        "reasoning_tokens": 15
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 193
+      }
+    },
+    "seconds": 3.47
+  },
+  {
+    "model": "glm-5.3",
+    "provider": "configured",
+    "status": 200,
+    "content_type": "application/json",
+    "error": null,
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "json": {
+          "ok": true
+        }
+      }
+    ],
+    "usage": {
+      "completion_tokens": 80,
+      "completion_tokens_details": {
+        "reasoning_tokens": 74
+      },
+      "prompt_tokens": 35,
+      "total_tokens": 115
+    },
+    "seconds": 8.16
+  }
+]

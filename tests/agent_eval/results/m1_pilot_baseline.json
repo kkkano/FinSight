@@ -1,0 +1,401 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_021943_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_021943_891824cf:facts-01:0",
+            "session_id": "2026-11-11_021943_891824cf:facts-01",
+            "message": "模型连接中断了。",
+            "error_code": "model_connection_error",
+            "reason": "模型连接中断了。",
+            "recovery_action": "稍后再试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-11T10:19:48.067795+00:00",
+                "runId": "2026-11-11_021943_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_021943_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_3rrjQ3mRcSDBDJIjC0VY5406",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 3,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_021943_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_021943_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T10:20:18.068158+00:00",
+                "runId": "2026-11-11_021943_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_021943_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_3rrjQ3mRcSDBDJIjC0VY5406",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30014,
+                  "runtime_type": "tool.failed",
+                  "seq": 4,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_021943_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_021943_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取日线",
+                "timestamp": "2026-11-11T10:20:22.105801+00:00",
+                "runId": "2026-11-11_021943_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_021943_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_4DrbvM7v2C9XW5q9kXyc1422",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "display": {
+                    "target": "AAPL · 日线 · 近1月",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL",
+                    "interval": "1d",
+                    "period": "1mo"
+                  },
+                  "summary": "正在获取日线",
+                  "runtime_type": "tool.started",
+                  "seq": 6,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_021943_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_021943_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T10:20:52.109646+00:00",
+                "runId": "2026-11-11_021943_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_021943_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_4DrbvM7v2C9XW5q9kXyc1422",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "inputs": {
+                    "ticker": "AAPL",
+                    "interval": "1d",
+                    "period": "1mo"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "AAPL · 日线 · 近1月",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 7,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_021943_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_021943_891824cf:facts-01"
+                }
+              }
+            ],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 10405,
+              "total_completion_tokens": 118,
+              "total_tokens": 10523,
+              "llm_token_calls": 3,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 2,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 10405,
+                  "completion": 118,
+                  "calls": 3
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 10405,
+                  "completion": 118,
+                  "calls": 3,
+                  "failed_calls": 1,
+                  "duration_ms": 22420
+                }
+              ],
+              "tool_calls": 2,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 3,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 1,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 83.797,
+      "structure": {
+        "completed": false,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "tool_error_rate": 1.0,
+        "tool_calls": 2,
+        "failed_tools": 2,
+        "tokens": 10523,
+        "rounds": 3
+      },
+      "checkpoints": 2,
+      "watchlist": [],
+      "judge_error": "model_connection_error",
+      "events_path": "tmp/agent-eval/2026-11-11_021943_891824cf/facts-01/events.json",
+      "tool_recordings": 1
+    },
+    {
+      "id": "concepts-01",
+      "group": "concepts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_021943_891824cf:concepts-01:0",
+          "query": "什么是自由现金流",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_021943_891824cf:concepts-01:0",
+            "session_id": "2026-11-11_021943_891824cf:concepts-01",
+            "message": "模型连接中断了。",
+            "error_code": "model_connection_error",
+            "reason": "模型连接中断了。",
+            "recovery_action": "稍后再试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 15719
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": {
+        "answered": 0,
+        "numbers": 0,
+        "limitations": 0,
+        "presentation": 0,
+        "no_internal_identifiers": 1,
+        "reasons": [
+          "answered=0：终端记录显示模型连接中断（error_code=model_connection_error，run_status=failed，answer_status=unavailable），response 为空字符串，用户问题“什么是自由现金流”完全没有得到任何回答，must 要求的“解释经营现金流减资本开支的基本口径与限制”未实现。",
+          "numbers=0：概念题本不需要具体数字，且未捏造数字（tool_calls=0，也无任何公司财务数字），但由于回答为空，不存在任何准确解释，无法按“准确解释且未编造数字”给分。",
+          "limitations=0：因回答为空，未给出自由现金流口径（经营现金流减资本开支）的定义，也未提及维持性开支、资本化口径差异等局限说明。",
+          "presentation=0：响应为空，无任何内容、篇幅和组织结构，与“篇幅适合概念短问”的 must 要求完全不符。",
+          "no_internal_identifiers=1：用户可见内容为空（仅连接中断提示），未泄漏 run_id、session_id、内部模型名等用户不需要的内部标识。"
+        ],
+        "total": 1,
+        "usage": {
+          "completion_tokens": 1436,
+          "completion_tokens_details": {
+            "reasoning_tokens": 1166
+          },
+          "prompt_tokens": 1071,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 2507
+        },
+        "model": "glm-5.3"
+      },
+      "elapsed_seconds": 15.969,
+      "structure": {
+        "completed": false,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "events_path": "tmp/agent-eval/2026-11-11_021943_891824cf/concepts-01/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "median_seconds": 83.797,
+      "median_tokens": 10523,
+      "median_rounds": 3,
+      "tool_error_rate": 1.0
+    },
+    "concepts": {
+      "cases": 1,
+      "judged": 1,
+      "scores": {
+        "answered": 0,
+        "numbers": 0,
+        "limitations": 0,
+        "presentation": 0,
+        "no_internal_identifiers": 1,
+        "total": 1
+      },
+      "completed_rate": 0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "median_seconds": 15.969,
+      "median_tokens": 0,
+      "median_rounds": 1,
+      "tool_error_rate": 0.0
+    }
+  },
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 2048
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "ready": false,
+  "expected_cases": 60,
+  "fixtures_sha256": "4dab32a1830c4ef83ba405eec11c6c57c16518c8ad01c3a05e7733df1047dae1"
+}

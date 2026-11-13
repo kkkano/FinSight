@@ -1,0 +1,26 @@
+{
+  "request_sha256": "26215f2b3a0687ea768cf89682edec81acb66ede86ef54302f3ebe178649dd20",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：有绑定 AAPL 的 watchlist.add 结构化 action，且清单回读从total=0变为total=1、rows含AAPL，证明实际发生写入；但没有独立结构化确认/授权记录可核对，不能凭completed标签证明授权，最终正文还否认写入及回读能力，状态未如实一致显示。",
+      "numbers=2：本题不要求金融金额；AAPL action参数与前后清单读取一致，0→1的实际数据支持写入结果，未虚构金融数字。执行与授权是否满足要求分别在内容及局限项评估。",
+      "limitations=0：正文称本轮没有自选写入或回读接口、无法核实是否写入，与实际get_watchlist前后两次成功读取和包含AAPL的结果直接矛盾；不是资料缺失而是忽略已取得的状态证据。",
+      "presentation=0：简单加入请求被扩成多段无关报价、财报与后续研究建议；action卡已完成、前段称已加入，最终又否认可验证，组织与状态表达冲突。",
+      "no_internal_identifiers=1：正文没有内部数据句柄或运行ID，action_id/payload_hash等结构化绑定字段用于操作追踪，不作为正文泄漏。"
+    ]
+  }
+}

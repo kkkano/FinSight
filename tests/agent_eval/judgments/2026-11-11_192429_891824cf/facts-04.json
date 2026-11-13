@@ -1,0 +1,25 @@
+{
+  "request_sha256": "9b1b9758b45553a2ee92fa414ba88e0d9409dc7e555416e71a871211d03bab2c",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：回答仅为“我先确认可用的盈利预期数据能力，再取 TSLA 的三项预期指标”，随后超时；这只是准备行动，未说明盈利预期或 EPS 修正变化，未区分已披露 EPS、未来预期和预期修正，也未提供时期及来源。",
+      "numbers=0：过程仅查找并启用工具，没有实际获取盈利预期或 EPS 修正；录制和证据池均为空，正文的“三项”是计划数量，不是所需盈利数据。",
+      "limitations=1：终态明确告知超时且没有交付确定预期结论，未把预测冒充已披露事实，也未在缺少修正数据时声称没有修正。",
+      "presentation=1、no_internal_identifiers=1：进度文字和故障通知简短可理解，用户可读正文未输出内部标识；工具过程中的技术字段不视为答案正文。"
+    ]
+  }
+}

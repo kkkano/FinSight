@@ -1,0 +1,1010 @@
+{
+  "run_id": "review-20261112-223125",
+  "provider": "stepfun",
+  "model": "step-5-preview",
+  "synthetic": true,
+  "dataset_sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee",
+  "runtime_sha256": "a0142d7c2658c357a8630bc8de199d2cde01203895b53b5708bf303eaefb4512",
+  "rows": [
+    {
+      "case_id": "review-source-03",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 在 2026Q3 披露的 EPS 是多少",
+      "answer": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_03a",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "eps": 1.2,
+                "unit": "USD/share",
+                "basis": "reported"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成已披露 EPS",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        },
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_03b",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "forecast_period": "2027Q1",
+                "eps_estimate": 1.5,
+                "unit": "USD/share",
+                "basis": "forecast"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 2,
+              "title": "TEST_A 合成未来 EPS 预期",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "pass",
+        "findings": [],
+        "coverage": [
+          {
+            "requirement": "给出 TEST_A 2026Q3 已披露 EPS 数值",
+            "met": true
+          }
+        ],
+        "review_id": "reviewer_5708906c1828",
+        "data_refs": [],
+        "answer_sha256": "0a8fc3414bc3e6b23209cd8e5022f92161e26946da758d9447d64c141f00ec3d",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 22.718,
+      "usage": {
+        "total_prompt_tokens": 3308,
+        "total_completion_tokens": 504,
+        "total_tokens": 3812,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 3308,
+            "completion": 504,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 3308,
+            "completion": 504,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 22593
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_5708906c1828"
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-a453d845adf3ac20",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_07d336ed01159af1bf"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-a7aa19b61258c819",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_1ce6f9d5bdb5118b43"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-a453d845adf3ac20",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_07d336ed01159af1bf"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "eps": 1.2,
+                  "unit": "USD/share",
+                  "basis": "reported"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "eps": 1.2,
+                  "unit": "USD/share",
+                  "basis": "reported"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_07d336ed01159af1bf"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成已披露 EPS",
+                "url": null,
+                "data_ref": "h_07d336ed01159af1bf",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-a7aa19b61258c819",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_1ce6f9d5bdb5118b43"
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "forecast_period": "2027Q1",
+                  "eps_estimate": 1.5,
+                  "unit": "USD/share",
+                  "basis": "forecast"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "forecast_period": "2027Q1",
+                  "eps_estimate": 1.5,
+                  "unit": "USD/share",
+                  "basis": "forecast"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [
+                "本轮数据尚未保存为可续研资料，当前结果仍可使用。"
+              ],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_1ce6f9d5bdb5118b43"
+            ],
+            "source_refs": [
+              "2"
+            ],
+            "evidence_refs": [
+              "2"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "2",
+                "title": "TEST_A 合成未来 EPS 预期",
+                "url": null,
+                "data_ref": "h_1ce6f9d5bdb5118b43",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-824138ab2a494dbe",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "给出 TEST_A 2026Q3 已披露 EPS 数值",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-824138ab2a494dbe",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "给出 TEST_A 2026Q3 已披露 EPS 数值",
+                  "met": true
+                }
+              ]
+            },
+            "output_preview": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "给出 TEST_A 2026Q3 已披露 EPS 数值",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_5708906c1828"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "pass",
+            "findings": [],
+            "coverage": [
+              {
+                "requirement": "给出 TEST_A 2026Q3 已披露 EPS 数值",
+                "met": true
+              }
+            ],
+            "review_id": "reviewer_5708906c1828",
+            "data_refs": [],
+            "answer_sha256": "0a8fc3414bc3e6b23209cd8e5022f92161e26946da758d9447d64c141f00ec3d",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_5708906c1828"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 在 2026Q3 披露的 EPS 是多少",
+      "answer": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_03a",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "eps": 1.2,
+                "unit": "USD/share",
+                "basis": "reported"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成已披露 EPS",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        },
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_03b",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "forecast_period": "2027Q1",
+                "eps_estimate": 1.5,
+                "unit": "USD/share",
+                "basis": "forecast"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 2,
+              "title": "TEST_A 合成未来 EPS 预期",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "revise",
+        "findings": [
+          {
+            "quote": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+            "issue": "数值正确但引用编号错误：2026Q3 已披露 EPS 1.2 美元/股 出自来源 [1]（h_07d336ed01159af1bf，basis=reported），而 [2]（h_1ce6f9d5bdb5118b43）是 2027Q1 的预测 EPS 1.5 美元/股（basis=forecast），并不支持这句话。",
+            "evidence": "句柄 h_07d336ed01159af1bf 第 1 行：TEST_A | 2026Q3 | 1.2 | USD/share | reported；句柄 h_1ce6f9d5bdb5118b43 第 1 行：TEST_A | 2027Q1 | 1.5 | USD/share | forecast",
+            "suggestion": "将引用编号改为 [1]，即“TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]”"
+          }
+        ],
+        "coverage": [
+          {
+            "requirement": "给出合成标的 TEST_A 在 2026Q3 披露的 EPS",
+            "met": true
+          }
+        ],
+        "review_id": "reviewer_757444654fce",
+        "data_refs": [],
+        "answer_sha256": "f9f968546f3e56a8269ca997c3216b4066af6a58a6ec53f6dca5274fc87813a7",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": true,
+      "elapsed_seconds": 16.532,
+      "usage": {
+        "total_prompt_tokens": 3312,
+        "total_completion_tokens": 570,
+        "total_tokens": 3882,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 3312,
+            "completion": 570,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 3312,
+            "completion": 570,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 16516
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_757444654fce"
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-ab0c98f0f395903a",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_07d336ed01159af1bf",
+              "limit": 50
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-8136c6365350625f",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_1ce6f9d5bdb5118b43",
+              "limit": 50
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-ab0c98f0f395903a",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_07d336ed01159af1bf",
+              "limit": 50
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "eps": 1.2,
+                  "unit": "USD/share",
+                  "basis": "reported"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "period": "2026Q3",
+                  "eps": 1.2,
+                  "unit": "USD/share",
+                  "basis": "reported"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_07d336ed01159af1bf"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成已披露 EPS",
+                "url": null,
+                "data_ref": "h_07d336ed01159af1bf",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 14
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-8136c6365350625f",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_1ce6f9d5bdb5118b43",
+              "limit": 50
+            },
+            "output_preview": {
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "forecast_period": "2027Q1",
+                  "eps_estimate": 1.5,
+                  "unit": "USD/share",
+                  "basis": "forecast"
+                }
+              ],
+              "offset": 0,
+              "row_count": 1,
+              "next_offset": 1,
+              "has_more": false
+            },
+            "display": {
+              "kind": "table",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "返回 1 条结果，展开查看内容与来源。",
+              "summary": "返回 1 条结果，展开查看内容与来源。",
+              "key_facts": [],
+              "row_count": 1,
+              "returned_rows": 1,
+              "has_more": false,
+              "rows": [
+                {
+                  "ticker": "TEST_A",
+                  "forecast_period": "2027Q1",
+                  "eps_estimate": 1.5,
+                  "unit": "USD/share",
+                  "basis": "forecast"
+                }
+              ],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "返回 1 条结果，展开查看内容与来源。",
+            "data_refs": [
+              "h_1ce6f9d5bdb5118b43"
+            ],
+            "source_refs": [
+              "2"
+            ],
+            "evidence_refs": [
+              "2"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "2",
+                "title": "TEST_A 合成未来 EPS 预期",
+                "url": null,
+                "data_ref": "h_1ce6f9d5bdb5118b43",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "table"
+                },
+                "kind": "fundamental_snapshot",
+                "type": "tool"
+              }
+            ],
+            "duration_ms": 14
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-9645d7e76948d026",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+                  "issue": "数值正确但引用编号错误：2026Q3 已披露 EPS 1.2 美元/股 出自来源 [1]（h_07d336ed01159af1bf，basis=reported），而 [2]（h_1ce6f9d5bdb5118b43）是 2027Q1 的预测 EPS 1.5 美元/股（basis=forecast），并不支持这句话。",
+                  "evidence": "句柄 h_07d336ed01159af1bf 第 1 行：TEST_A | 2026Q3 | 1.2 | USD/share | reported；句柄 h_1ce6f9d5bdb5118b43 第 1 行：TEST_A | 2027Q1 | 1.5 | USD/share | forecast",
+                  "suggestion": "将引用编号改为 [1]，即“TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]”"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "给出合成标的 TEST_A 在 2026Q3 披露的 EPS",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-9645d7e76948d026",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+                  "issue": "数值正确但引用编号错误：2026Q3 已披露 EPS 1.2 美元/股 出自来源 [1]（h_07d336ed01159af1bf，basis=reported），而 [2]（h_1ce6f9d5bdb5118b43）是 2027Q1 的预测 EPS 1.5 美元/股（basis=forecast），并不支持这句话。",
+                  "evidence": "句柄 h_07d336ed01159af1bf 第 1 行：TEST_A | 2026Q3 | 1.2 | USD/share | reported；句柄 h_1ce6f9d5bdb5118b43 第 1 行：TEST_A | 2027Q1 | 1.5 | USD/share | forecast",
+                  "suggestion": "将引用编号改为 [1]，即“TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]”"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "给出合成标的 TEST_A 在 2026Q3 披露的 EPS",
+                  "met": true
+                }
+              ]
+            },
+            "output_preview": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "quote": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+                  "issue": "数值正确但引用编号错误：2026Q3 已披露 EPS 1.2 美元/股 出自来源 [1]（h_07d336ed01159af1bf，basis=reported），而 [2]（h_1ce6f9d5bdb5118b43）是 2027Q1 的预测 EPS 1.5 美元/股（basis=forecast），并不支持这句话。",
+                  "evidence": "句柄 h_07d336ed01159af1bf 第 1 行：TEST_A | 2026Q3 | 1.2 | USD/share | reported；句柄 h_1ce6f9d5bdb5118b43 第 1 行：TEST_A | 2027Q1 | 1.5 | USD/share | forecast",
+                  "suggestion": "将引用编号改为 [1]，即“TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]”"
+                }
+              ],
+              "coverage": [
+                {
+                  "requirement": "给出合成标的 TEST_A 在 2026Q3 披露的 EPS",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_757444654fce"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "revise",
+            "findings": [
+              {
+                "quote": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+                "issue": "数值正确但引用编号错误：2026Q3 已披露 EPS 1.2 美元/股 出自来源 [1]（h_07d336ed01159af1bf，basis=reported），而 [2]（h_1ce6f9d5bdb5118b43）是 2027Q1 的预测 EPS 1.5 美元/股（basis=forecast），并不支持这句话。",
+                "evidence": "句柄 h_07d336ed01159af1bf 第 1 行：TEST_A | 2026Q3 | 1.2 | USD/share | reported；句柄 h_1ce6f9d5bdb5118b43 第 1 行：TEST_A | 2027Q1 | 1.5 | USD/share | forecast",
+                "suggestion": "将引用编号改为 [1]，即“TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]”"
+              }
+            ],
+            "coverage": [
+              {
+                "requirement": "给出合成标的 TEST_A 在 2026Q3 披露的 EPS",
+                "met": true
+              }
+            ],
+            "review_id": "reviewer_757444654fce",
+            "data_refs": [],
+            "answer_sha256": "f9f968546f3e56a8269ca997c3216b4066af6a58a6ec53f6dca5274fc87813a7",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_757444654fce"
+        }
+      ],
+      "model_failures": []
+    }
+  ],
+  "summary": {
+    "runs": 2,
+    "completed": 2,
+    "clean_cases": 1,
+    "false_positive_count": 0,
+    "injected_cases": 1,
+    "annotated_injected_span_count": 1,
+    "semantic_detection_adjudication": "pending_independent_review",
+    "false_positive_rate": 0.0,
+    "unavailable_count": 0
+  }
+}

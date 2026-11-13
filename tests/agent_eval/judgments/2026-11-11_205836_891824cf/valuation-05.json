@@ -1,0 +1,26 @@
+{
+  "request_sha256": "8da2e2dfd1f1c912f65689967d0572b5b1f1ac1e88952bc8b96a00eadd6a2bf1",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只是 SEC 取数失败和已取得市值、准备补查的进度，没有回答 TSLA 贵不贵，也没有区分经营事实、估值依据与情景观点。",
+      "numbers=1：正文市值约 1.50 万亿美元与公司资料录制 USD 1,501,178,406,279 的近似值一致；但未给估值倍数或经营数据，不能凭一个市值数字完成数值依据。",
+      "limitations=1：明确 SEC 访问标识缺失，终态报告超时，与该轮 SEC 录制错误相符，没有把失败说成经营事实不存在。",
+      "presentation=1：两段进度和可见超时说明简短、完整、易读；不因取数进度给予内容完成分。",
+      "no_internal_identifiers=1：正文未包含数据集、运行或函数标识，SEC CompanyFacts 是所用外部数据来源名称。"
+    ]
+  }
+}

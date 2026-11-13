@@ -1,0 +1,26 @@
+{
+  "request_sha256": "7c9b594dabfe1bdc61e2c00dd265802f53e55c8163930753f97e8699e653bc33",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=1：第二轮所有股票取数、搜索和委派均切换至NVDA，没有继续输出TSLA结论或用TSLA来源支撑NVDA，路由正确；但首轮正文为空，第二轮只有取数与准备核实进度，没有回答现在怎么看的投资观点。",
+      "numbers=1：第二轮正文173.73美元及可见报价/技术通知与NVDA录制一致，首轮TSLA通知390.84美元等也各自绑定；但增长、估值、风险等研究没有形成答案，缺少完整观点所需数据，不能因取得报价给满分。",
+      "limitations=0：虽有来源超时/SEC失败通知，却未解释实际常规收盘与实时行情的差别、财务缺口、新闻仅为搜索线索且未完成核验的限制。",
+      "presentation=0：一轮正文为空、一轮只有进度说明，最终超时；没有组织价格/技术/消息/基本面/风险结论。",
+      "no_internal_identifiers=0：两轮可展开SEC失败结果直接显示SEC_USER_AGENT配置名称与联系格式，属于用户无需处理的内部标识。"
+    ]
+  }
+}

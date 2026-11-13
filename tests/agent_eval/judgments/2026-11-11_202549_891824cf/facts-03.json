@@ -1,0 +1,26 @@
+{
+  "request_sha256": "cbd8af82e1c8f18125880663a1ad5a51e725cab0c8636ae760e642cb975391a8",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：最终正文、blocks 和产物均为空，只有超时通知；未交付 NVDA 最新季度自由现金流、同财期经营现金流和资本开支，也未说明计算方法、单位及来源。",
+      "numbers=0：季度财报调用虽包含计算参数，但返回 SEC 访问配置错误，后续网页和搜索均失败，没有两个计算输入或自由现金流结果；工具参数中的公式不是用户可见计算交付。",
+      "limitations=1：用户可见终态明确说“这次研究用时较长，已经超时。”，如实说明交付受限；没有将未取得的财务值写成确定事实。",
+      "presentation=1：无正文，但终态超时通知和缩小问题重试提示完整简短，故障表达清楚；只为通知形式给分。",
+      "no_internal_identifiers=1：可读错误说明中没有数据集、运行或工具调用标识；诊断元数据不作为正文泄漏。"
+    ]
+  }
+}

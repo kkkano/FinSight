@@ -1,0 +1,26 @@
+{
+  "request_sha256": "a333ac36d2236112cfabee95e46f37ee21229fba3abbcab37cce594304f2c699",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：正文仅说明取周线失败、转日线和准备聚合，超时终态没有任何连续下跌事件、区间日期、累计跌幅或图表；两次计算分别未返回结果和第10行出错，不能视为交付。",
+      "numbers=1：正文日线范围2006-12-27至2026-11-11与录制的5000行首尾一致，但必需的连续下跌周数和累计跌幅均未取得。",
+      "limitations=0：虽披露周线不可用及超时，却未向用户说明未收盘周与缺失数据如何处理；将有限返回序列称为日线数据完整也未交代覆盖范围局限。",
+      "presentation=0：仅有分段进度说明，artifacts为空，缺少题目要求的图及对应统计表。",
+      "no_internal_identifiers=0：用户可见计算失败通知要求查看logs、赋值给result，并提到print，暴露了用户无需操作的代码运行内部名称。"
+    ]
+  }
+}

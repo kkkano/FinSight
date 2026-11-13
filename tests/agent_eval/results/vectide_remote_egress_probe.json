@@ -1,0 +1,34 @@
+{
+  "location": "production_server_egress",
+  "stream": true,
+  "max_tokens": 256,
+  "chunks": 3,
+  "http_status": 200,
+  "first_chunk_seconds": 2.003,
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "completion_tokens": 2,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 182,
+    "prompt_tokens": 182,
+    "prompt_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "total_tokens": 184
+  },
+  "finish_reason": "stop",
+  "elapsed_seconds": 2.003,
+  "exit_code": 0
+}

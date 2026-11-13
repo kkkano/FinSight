@@ -1,0 +1,26 @@
+{
+  "request_sha256": "b38cc0ae040b2bb8b7cd4797b44f33c0b42406e6449a7c0f6b8dd2ee06a187ea",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=1：计算工具结果及可展开inspect预览实际提供峰值2025-12-16、谷值2026-07-29、最大回撤-39.10%和ongoing=true/恢复日期为空，完成统计部分；但render_chart因多表未指定table失败，正文为空且artifacts为空，未交付要求的图表。",
+      "numbers=2：按录制251条收盘价独立计算滚动最高价回撤，峰489.88、谷298.32001、最大回撤-39.10345%，谷后截至2026-11-11没有收复峰值；可见计算预览的舍入数值与恢复状态一致，未以单日跌幅替代回撤。",
+      "limitations=0：只有工具预览和超时通知，没有用户解释收盘口径、复权/股息未知及观察窗口对回撤和恢复状态的限制。",
+      "presentation=0：用户必须从计算及表格工具预览自行拼接结果，没有正文总结或实际图；终态只显示超时与缩小问题建议。",
+      "no_internal_identifiers=0：计算失败通知要求查看logs、赋值给result并提及print；画图失败通知要求以table指定子表，暴露内部代码接口名称。"
+    ]
+  }
+}

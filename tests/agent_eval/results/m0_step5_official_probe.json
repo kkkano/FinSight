@@ -1,0 +1,24 @@
+{
+  "model": "step-5-preview",
+  "base_url": "https://api.stepfun.com/v1",
+  "effort": "low",
+  "capability": {
+    "native_tool_calls": true,
+    "streaming": true,
+    "streaming_tool_calls": true,
+    "verified": true,
+    "model": "step-5-preview",
+    "probe_usage": {
+      "prompt_tokens": 250,
+      "completion_tokens": 26,
+      "total_tokens": 276,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      }
+    }
+  },
+  "seconds": 2.34
+}

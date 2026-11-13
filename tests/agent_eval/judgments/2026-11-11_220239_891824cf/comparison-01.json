@@ -1,0 +1,26 @@
+{
+  "request_sha256": "d9b98c03e3a58f790dbd52942917fe74dd76fa33f1d8a83962e3be65d3fe2da3",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：indexed_comparison实际以两股共同2025-12-31收盘基准归一化，用户可见通知交付AAPL+30.81%、MSFT+7.76%；但没有调用成功的render_chart，正文为空、artifacts为空，未完成对比图与解释。",
+      "numbers=2：两份录制均为2025-12-31至2026-11-11的218个共同日期；独立核算AAPL271.85999至355.63为30.81366%、MSFT483.62至521.13为7.75609%，与通知/预览舍入值一致，没有以绝对股价比较收益。",
+      "limitations=1：可展开比较预览记录共同日期交集、2025-12-31基准、2026-11-11终点、USD及价格收益方法，并明确复权和股息未全提供、口径未知而不冒充总回报。",
+      "presentation=0：没有正文总结或实际对比图，用户只取得散落的工具结果及最终超时通知。",
+      "no_internal_identifiers=1：主要可见通知使用股票名、日期、收益等相关指标，没有暴露数据句柄或运行编号。"
+    ]
+  }
+}

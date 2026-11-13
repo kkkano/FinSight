@@ -1,0 +1,26 @@
+{
+  "request_sha256": "f9c007f979a0010f252926fd72c2e11dd6ea0e67913567e2a260fc9f32f3512a",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：实际取得26周FINRA数据，可展开预览说明周汇总不含盘前盘后拆分；正文与通知披露两次扩展时段取数超时。但正文没有完成盘前盘后OHLCV与FINRA周成交的解释比较，且artifacts为空，没有画出已取得的FINRA序列。",
+      "numbers=1：可见FINRA通知的最新2026-10-19周ATS65430235股、非ATS158344989.87股与原始录制一致，并标为延迟26周统计；扩展时段OHLCV没有取得，不能按已完成数值图表给满分，未将成交股数伪称净资金流。",
+      "limitations=1：可展开FINRA预览明确两/四周延迟、ATS不等于全部暗池、无买卖方向和逐笔价格、股数/笔数非资金流、缺失场所保持null；正文及通知如实说明盘前盘后数据超时缺口。",
+      "presentation=0：正文只有启用工具、取数和重试进度，终态超时，缺少用户要求的比较说明及图表。",
+      "no_internal_identifiers=1：正文及主要可见状态通知未展示数据句柄、代码哈希或运行编号；FINRA来源名称和成交指标用于说明数据含义。"
+    ]
+  }
+}

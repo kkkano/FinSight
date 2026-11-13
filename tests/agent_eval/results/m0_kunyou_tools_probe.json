@@ -1,0 +1,33 @@
+{
+  "base_url": "https://api.kunyou.asia/v1",
+  "results": [
+    {
+      "model": "qwen3.8-flash",
+      "result": {
+        "native_tool_calls": true,
+        "streaming": true,
+        "streaming_tool_calls": true,
+        "verified": true,
+        "model": "qwen3.8-flash",
+        "probe_usage": {
+          "completion_tokens": 56,
+          "prompt_tokens": 341,
+          "total_tokens": 397
+        }
+      },
+      "elapsed_seconds": 38.53
+    },
+    {
+      "model": "deepseek-v4.1-flash-1017",
+      "error": "model_tool_calling_unsupported",
+      "status": null,
+      "elapsed_seconds": 1.72
+    },
+    {
+      "model": "glm-5.3",
+      "error": "TimeoutError",
+      "status": null,
+      "elapsed_seconds": 45.0
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "request_sha256": "925ede83e9236d42ac64ac6567531db77e643d9cb33800240a60ac944c262098",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文仅说明准备查 TSLA 预期、主源超时后换源，没有交付已披露 EPS、未来预期、修正变化或时期及来源。",
+      "numbers=0：没有正文中的 EPS、修正幅度或分析师人数；录制有后续搜索数据，但没有成为用户可见数字回答。",
+      "limitations=1：正文明确 yfinance 本次超时，终态告知“模型响应超时了”；预期和修正录制均返回 fetch_failed: Timeout，未把无数据表述为没有修正。",
+      "presentation=1：两句进度及超时、重试提示完整可读，虽空行偏多，整体仍简短清楚；形式分不代表完成研究。",
+      "no_internal_identifiers=1：可见正文没有数据集、运行或函数标识；yfinance 是说明取数失败的数据来源。"
+    ]
+  }
+}

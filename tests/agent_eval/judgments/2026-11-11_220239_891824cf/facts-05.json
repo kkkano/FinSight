@@ -1,0 +1,26 @@
+{
+  "request_sha256": "9b6c08e91adf0f0c2f787e368aa26ebf8682f2633c4ca07fd4d6a3a9fc375ce6",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：最终正文、blocks 与产物均为空，未解释 QQQ 交易价格与基金估值区别，也未交付两类具体数字及来源。",
+      "numbers=0：工具录制已有报价、NAV 和估值资料，但终态没有任何数字或准确概念解释；不能因取证成功给数字完成分。",
+      "limitations=1：可见终态说明研究超时，没有把未交付的基金数据写成不存在或将价格冒充市盈率；正分只依据明确故障通知。",
+      "presentation=1：虽无研究正文，可见超时和缩小问题重试提示完整、简短、易理解。",
+      "no_internal_identifiers=1：可读错误与恢复说明没有内部标识，结构化诊断字段不算正文泄漏。"
+    ]
+  }
+}

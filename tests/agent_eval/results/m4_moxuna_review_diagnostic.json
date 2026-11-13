@@ -1,0 +1,239 @@
+{
+  "run_id": "review-20261112-213802",
+  "provider": "moxuna",
+  "model": "deepseek-v4.1-flash",
+  "synthetic": true,
+  "dataset_sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee",
+  "runtime_sha256": "60a0be72e58eccb167d1b89353526bdebc3ad39b3971408ddace28445c504a94",
+  "rows": [
+    {
+      "case_id": "review-number-02",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "answer": "TEST_A 2026Q3 营收为 120 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_e14163708711",
+        "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 1.782,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 1672
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_e14163708711"
+          },
+          "agent_id": "reviewer_e14163708711"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_e14163708711",
+            "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_e14163708711"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_401",
+          "http_status": 401
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "answer": "TEST_A 2026Q3 营收为 210 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_5a56b7504012",
+        "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 11.375,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 11375
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_5a56b7504012"
+          },
+          "agent_id": "reviewer_5a56b7504012"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_5a56b7504012",
+            "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_5a56b7504012"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_401",
+          "http_status": 401
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "runs": 2,
+    "completed": 0,
+    "clean_cases": 1,
+    "false_positive_count": 0,
+    "injected_cases": 1,
+    "annotated_injected_span_count": 0,
+    "semantic_detection_adjudication": "pending_independent_review",
+    "false_positive_rate": 0.0,
+    "unavailable_count": 2
+  }
+}

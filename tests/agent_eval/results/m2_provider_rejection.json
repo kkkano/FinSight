@@ -1,0 +1,9 @@
+{
+  "status": 400,
+  "error": {
+    "message": "model is not enabled for this key: sh:intern/inkstone/qwen3.8-flash",
+    "type": "invalid_request_error"
+  },
+  "model": null,
+  "usage": null
+}

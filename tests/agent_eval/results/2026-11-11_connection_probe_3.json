@@ -1,0 +1,39 @@
+{
+  "probe": 3,
+  "variant": "shared_client_full_after_minimal",
+  "status": 200,
+  "data_lines": 761,
+  "usage": {
+    "prompt_tokens": 4292,
+    "completion_tokens": 758,
+    "total_tokens": 5050,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "cached_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 4292,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "prompt_cache_write_tokens": 0,
+    "completion_thinking_tokens": 0,
+    "cached_tokens": 0,
+    "quota": {
+      "model": "deepseek-v4.1-flash",
+      "percent": 1,
+      "reset_at": "1794464641",
+      "shared_models": []
+    }
+  },
+  "elapsed_seconds": 5.078
+}

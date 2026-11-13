@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+            "session_id": "2026-11-11_024525_891824cf:facts-01",
+            "message_id": "assistant:2026-11-11_024525_891824cf:facts-01:0",
+            "attempt_id": "ab387089e1e84c05ac59701680b3d3ff",
+            "stream_epoch": "ab387089e1e84c05ac59701680b3d3ff",
+            "response": "现在无法取得 AAPL 的实时报价：报价接口没有返回数据；近一个月的日线行情也为空。技术快照和网络检索同样超时，因此我没有可用的可信价格，也不会凭记忆报出一个数字。\n\n建议稍等几分钟再问一次；或者，如果你想查询**最近收盘价和一段时间内的走势**，我也可以再尝试获取历史数据。请注意，任何与「当前价格」相关的判断都必须基于能核实的报价，我无法提供实时行情。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_4",
+                "kind": "text",
+                "content": "现在无法取得 AAPL 的实时报价：报价接口没有返回数据；近一个月的日线行情也为空。技术快照和网络检索同样超时，因此我没有可用的可信价格，也不会凭记忆报出一个数字。\n\n建议稍等几分钟再问一次；或者，如果你想查询**最近收盘价和一段时间内的走势**，我也可以再尝试获取历史数据。请注意，任何与「当前价格」相关的判断都必须基于能核实的报价，我无法提供实时行情。",
+                "revision": 0,
+                "seq": 111,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": []
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-11T10:45:30.743397+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_GNDdZSHbaJR1ZhQ0tBwd0431",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 17,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T10:45:30.763915+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_GNDdZSHbaJR1ZhQ0tBwd0431",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_84ea74d40e4614e6b3"
+                  ],
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T10:45:30.777821+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 19,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T10:45:37.813617+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 20,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取日线",
+                "timestamp": "2026-11-11T10:45:45.212482+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_6y7NBv8YTl0IRgJ7ehHe9835",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "display": {
+                    "target": "AAPL · 日线 · 近1月",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL",
+                    "period": "1mo",
+                    "interval": "1d"
+                  },
+                  "summary": "正在获取日线",
+                  "runtime_type": "tool.started",
+                  "seq": 46,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "行情来源暂时不可用。",
+                "timestamp": "2026-11-11T10:45:45.230140+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_6y7NBv8YTl0IRgJ7ehHe9835",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_240f6375e757551ce8"
+                  ],
+                  "inputs": {
+                    "ticker": "AAPL",
+                    "period": "1mo",
+                    "interval": "1d"
+                  },
+                  "output_preview": {
+                    "as_of": null,
+                    "asset": {
+                      "calendar_name": "NYSE",
+                      "exchange": "US",
+                      "market": "US",
+                      "symbol": "AAPL",
+                      "timezone": "America/New_York"
+                    },
+                    "attempted_providers": [
+                      "yfinance",
+                      "stooq"
+                    ],
+                    "cached": false,
+                    "capability": "kline",
+                    "currency": null,
+                    "data": [],
+                    "degraded": true,
+                    "derived_fields": {
+                      "period_return_pct": {
+                        "basis": "相邻返回观测；首行或前收盘缺失时为空，不跨缺失值补算。",
+                        "formula": "(close/previous_returned_close-1)*100",
+                        "unit": "percent"
+                      }
+                    },
+                    "error": "market_data_unavailable",
+                    "error_code": "market_data_unavailable",
+                    "frequency": null,
+                    "freshness_seconds": null,
+                    "interval": "1d",
+                    "kline_data": [],
+                    "meta": {},
+                    "observed_at": "2026-11-11T10:21:26.775014+00:00",
+                    "period": "1mo",
+                    "provider": null,
+                    "provider_failures": [
+                      "provider_request_failed",
+                      "invalid_provider_data"
+                    ],
+                    "其他字段数": 1
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "行情来源暂时不可用。",
+                  "display": {
+                    "target": "AAPL · 日线 · 近1月",
+                    "result": "行情来源暂时不可用。"
+                  },
+                  "error_code": "market_data_unavailable",
+                  "reason": "行情来源暂时不可用。",
+                  "recovery_action": "稍后重试，或选择其他来源。",
+                  "duration_ms": 14,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T10:45:45.245328+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 48,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T10:45:48.308089+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 49,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在计算技术指标",
+                "timestamp": "2026-11-11T10:45:52.986659+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_NhCvlCnGihBCNglrHFaE7399",
+                  "name": "get_technical_snapshot",
+                  "title": "计算技术指标",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在计算技术指标",
+                  "runtime_type": "tool.started",
+                  "seq": 82,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T10:46:22.986503+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_NhCvlCnGihBCNglrHFaE7399",
+                  "name": "get_technical_snapshot",
+                  "title": "计算技术指标",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 83,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-11T10:46:27.041911+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_q8Nu2Z5gEHMdbmC5pXOb6322",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "AAPL 苹果 股价 今日 收盘",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "AAPL 苹果 股价 今日 收盘"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 107,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T10:46:27.060090+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_q8Nu2Z5gEHMdbmC5pXOb6322",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_2dd5e8cb0303cd21b8"
+                  ],
+                  "inputs": {
+                    "query": "AAPL 苹果 股价 今日 收盘"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "AAPL 苹果 股价 今日 收盘",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T10:46:27.074332+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 109,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T10:46:33.142287+00:00",
+                "runId": "2026-11-11_024525_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_024525_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 110,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_024525_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_024525_891824cf:facts-01"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": "AAPL",
+            "tickers": [
+              "AAPL"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 41272,
+              "total_completion_tokens": 399,
+              "total_tokens": 41671,
+              "llm_token_calls": 5,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 5,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 41272,
+                  "completion": 399,
+                  "calls": 5
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 41272,
+                  "completion": 399,
+                  "calls": 5,
+                  "failed_calls": 0,
+                  "duration_ms": 44435
+                }
+              ],
+              "tool_calls": 4,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": false
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 5,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 1,
+        "hits": 2,
+        "misses": 0,
+        "errors": 1
+      },
+      "score": null,
+      "elapsed_seconds": 75.875,
+      "structure": {
+        "completed": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 1.0,
+        "tool_calls": 4,
+        "failed_tools": 4,
+        "tokens": 41671,
+        "rounds": 5
+      },
+      "checkpoints": 6,
+      "watchlist": [],
+      "transport_errors": [],
+      "judge_error": "ValueError",
+      "events_path": "tmp/agent-eval/2026-11-11_024525_891824cf/facts-01/events.json",
+      "tool_recordings": 3
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 75.875,
+      "median_tokens": 41671,
+      "median_rounds": 5,
+      "tool_error_rate": 1.0
+    }
+  },
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 2048
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "ready": false,
+  "expected_cases": 60
+}

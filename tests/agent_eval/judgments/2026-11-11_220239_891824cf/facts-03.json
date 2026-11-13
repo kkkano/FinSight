@@ -1,0 +1,26 @@
+{
+  "request_sha256": "436b012681e75d93968ea8a1ce2c51454685fa6976ea593119cbcf3d8c4339ed",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：最终正文、blocks 与产物均为空，只剩研究超时通知，未交付 NVDA 自由现金流、同季经营现金流和资本开支、计算方法、单位或来源。",
+      "numbers=0：录制虽已取得包含财务数字的搜索资料，但用户终态没有任何所需金额或计算结果；工具取证不能代替数值回答。",
+      "limitations=1：可见 message、reason 明确说明研究超时，未将没交付的财务值写成确定事实，也没有声称财务数据不存在；正分依据可见故障说明。",
+      "presentation=1：没有研究正文，但可见超时和缩小问题重试通知是完整简短的句子，故障表达清楚。",
+      "no_internal_identifiers=1：可读错误与恢复说明没有运行、数据集或函数标识，诊断元数据不视为正文泄漏。"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "case_id": "A8",
+  "status": "pending",
+  "source_input_exact": "运行中输入「再补一个毛利率对比」",
+  "expected_exact": "有受理回执；下一调度边界纳入；不重复创建 run",
+  "actions": [
+    {
+      "action": "fill_query",
+      "source": "setup",
+      "seed_index": 0
+    },
+    {
+      "action": "click_testid",
+      "testid": "chat-send-btn"
+    },
+    {
+      "action": "wait_busy"
+    },
+    {
+      "action": "fill_query"
+    },
+    {
+      "action": "press",
+      "key": "Enter"
+    },
+    {
+      "action": "wait_terminal"
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": false
+}

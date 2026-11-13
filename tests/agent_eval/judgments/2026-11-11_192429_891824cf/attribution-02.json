@@ -1,0 +1,26 @@
+{
+  "request_sha256": "1e1291ff5c5cf3eb3a563f732fb5ffa339ae91868fef61ef72a2f37abbc0b3d3",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有“我先取一下 AAPL 的最新报价、近期走势和技术指标，同时拉最近的新闻。”，没有确认上涨区间、幅度、时点，也没有区分报道支持的催化与推断。",
+      "numbers=0：完整录制为空、工具调用数为零，未取得或交付 AAPL 上涨的价格、涨幅及日期；准备查数的承诺不算数值回答。",
+      "limitations=1：用户可见终态 message、reason 均明确说明“这次研究用时较长，已经超时。”，承认本次交付受超时限制，没有声称未取得的资料不存在。正分依据这条可见故障说明，不依据 error_code、metrics 或其他内部诊断，也不代表已经交付题目所需口径说明。",
+      "presentation=1：可见进度正文是简短完整的句子，随后终态用完整超时通知和“可以缩小问题后再试”的提示交代停止状态，篇幅与结构适合作为失败交付；这一分不奖励未完成的研究计划。",
+      "no_internal_identifiers=1：用户可读正文和终态错误说明没有运行 ID、数据集 ID、工具调用 ID 或代码标识；终态用于绑定和诊断的结构化元数据不作为用户正文泄漏。"
+    ]
+  }
+}

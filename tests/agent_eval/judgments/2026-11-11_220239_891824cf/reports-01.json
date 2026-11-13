@@ -1,0 +1,26 @@
+{
+  "request_sha256": "f8f894a4d0f6e14e6a436a0919f9f19b677aae1bffda454487fc357fee31cd6e",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：只调用mark_report设定报告标题，正文仅一句英文准备取证，artifacts为空、blocked_report为空，没有结构完整的报告或草稿，没有事实/估值假设/风险判断；publishable=false与未完成状态一致但不是报告交付。",
+      "numbers=1：可见AAPL报价355.63美元与技术通知344.87/54.92匹配录制，但财报、估值和风险所需核心数字没有形成报告，不能因已有行情给数值满分。",
+      "limitations=0：仅有工具失败及超时，未明确报告缺哪些财期/财务与预期数据、来源口径和假设限制；mark_report称质量不足会保留草稿只是准备状态，实际没有草稿或具体缺口说明。",
+      "presentation=0：没有报告产物或章节内容，只有取数进度与超时，无法供用户阅读报告。",
+      "no_internal_identifiers=0：可展开财报失败预览要求设置SEC_USER_AGENT并给联系格式，暴露运行环境配置标识。"
+    ]
+  }
+}

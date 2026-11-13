@@ -1,0 +1,26 @@
+{
+  "request_sha256": "9179a177286d64d63f91804f2bf01377d59315d8282181f7151749b8c710b0ee",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：正文为空且无产物，未解释财年与自然年的起止差异或如何对齐比较；反而调用AAPL/MSFT季度财报工具和两次公司财年搜索，违反本题概念直接解释及禁止数据工具的要求。",
+      "numbers=1：可见搜索预览中AAPL FY2025截至2025-09-27、MSFT截至2025-06-30与相应录制一致，没有在正文伪造财务金额；但完全没有准确完成概念解释，不能因未写错误数字而给概念题满分。",
+      "limitations=0：只有SEC处理错误与超时通知，没有说明自然年1月至12月、财年错位、季节性/52或53周影响、统一起止或可比同比/TTM的口径限制。",
+      "presentation=0：用户只得到取数活动和最终超时，正文为空，不符合概念问题直接短答。",
+      "no_internal_identifiers=0：两次SEC失败可展开预览向用户显示SEC_USER_AGENT配置名与联系格式，属于无关内部配置标识。"
+    ]
+  }
+}

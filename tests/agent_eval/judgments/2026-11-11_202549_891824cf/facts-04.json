@@ -1,0 +1,26 @@
+{
+  "request_sha256": "61afdc6ec33e98d1e061e24679a46220bd784e8679334b1070724c22e6f74cbe",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文仅说明 TSLA 盈利预期、EPS 修正数据未取得，并列缺口及备选来源；没有回答实际变化，没有区分已披露 EPS 与未来预期的实际数据，也没有财期和证据来源。",
+      "numbers=0：预期和修正录制均为 fetch_failed: Timeout，earnings_estimate、eps_revisions、eps_trend 均为空、revision_signal 为 unknown；正文没有 EPS、修正幅度或上调下调人数等所需数字。",
+      "limitations=1：明确预期方向、幅度及来源无法确认，列出一致预期、分析师修正、机构分歧和事件背景缺口，未把没有修正数据表述为没有修正。",
+      "presentation=1：开头说明无法作具体判断，缺口和可补充来源分列表呈现，完整收尾；属于清楚的缺失说明而非完成内容。",
+      "no_internal_identifiers=1：正文只有金融术语和来源类别，没有内部数据集、角色或运行标识。"
+    ]
+  }
+}

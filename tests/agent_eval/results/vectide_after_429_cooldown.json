@@ -1,0 +1,13 @@
+{
+  "max_tokens": 64,
+  "stream": true,
+  "chunks": 0,
+  "http_status": 429,
+  "retry_after": "188894",
+  "error": {
+    "type": "rate_limit_error",
+    "code": "VectorTide_week_limit_exceeded",
+    "message": "本周的套餐请求额度已用完，请在额度重置后重试。 参考编号：req_vt_a71760dacdd651ec81847af722fefd23"
+  },
+  "elapsed_seconds": 0.391
+}

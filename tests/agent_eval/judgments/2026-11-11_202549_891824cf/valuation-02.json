@@ -1,0 +1,26 @@
+{
+  "request_sha256": "a23aa91ca03b069162bcdbf391013991760dad6c1256b434b17930439f3ffeef",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有“第一轮行情源全部超时，我换路径重试并取 SEC 披露数据。”，没有 AAPL 与 MSFT 同口径估值及数据时点，也未区分倍数、增长和现金流假设。",
+      "numbers=0：两家公司报价及资料录制都失败，没有可比估值数字；准备重试和工具技能输出不是数据回答。",
+      "limitations=1：正文说明首轮行情源超时，与可见工具过程一致，终态进一步说明研究超时，没有强行比较或给买卖指令。",
+      "presentation=1：可见进度句完整简短，终态超时与恢复说明清楚，没有断句；形式分不代表完成比较。",
+      "no_internal_identifiers=1：正文未输出数据句柄、技能 ID 或运行 ID；SEC 是所提披露来源。"
+    ]
+  }
+}

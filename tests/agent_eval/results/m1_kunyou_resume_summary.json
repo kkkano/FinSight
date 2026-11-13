@@ -1,0 +1,110 @@
+{
+  "milestone": "M1",
+  "status": "blocked",
+  "baseline_head": "891824cfcd974434a5adc3151c19642d7ae3eb03",
+  "M0": {
+    "status": "partial",
+    "official_qwen_context_window": 1000000,
+    "official_qwen_max_output": 131072,
+    "runtime_max_output": 16384,
+    "relay_full_boundary_verified": false,
+    "baseline_commit_created_this_turn": false,
+    "no_new_natural_language_control_rules": true
+  },
+  "blockers": [
+    "独立判分候选均未通过当前备用端点的协议探针；无有效独立判分不能建立M1完整基线。",
+    "报价试跑在原180秒预算耗尽时失败；保留结果，不算作完成。"
+  ],
+  "changes": {
+    ".env.runtime.local": "增加仅供显式评测选用的私有备用端点与预算；密钥仅在此文件保存。",
+    ".env.example": "同步备用端点选项的空密钥示例。",
+    ".env.server.example": "同步备用端点选项的空密钥示例。",
+    "backend/agent_runtime/config.py": "登记Qwen官方能力值，保留生产默认模型。",
+    "tests/agent_eval/run.py": "增加--provider fallback；结果记录模型端点；不修改冻结快照。",
+    "tests/agent_eval/test_runner.py": "验证显式选择、配置隔离及缺失配置的失败合同。",
+    "tests/agent_eval/README.md": "记录备用选项、复现命令与未通过的真实结果。",
+    "tests/agent_eval/fixtures/kunyou-v1/": "按精确参数复用已有录制，不伪造新数据。",
+    "tests/agent_eval/results/m0_kunyou_probe.json": "HTTP与官方能力信息；不保存密钥或模型推理正文。",
+    "tests/agent_eval/results/m0_kunyou_tools_probe.json": "三个模型的首轮原生工具调用探针。",
+    "tests/agent_eval/results/m1_kunyou_judge_probe.json": "GLM延长时限与Qwen Max探针。",
+    "tests/agent_eval/results/m1_kunyou_judge_alternative.json": "Qwen Max明确拒绝原因与Qwen Plus探针。",
+    "tests/agent_eval/results/m1_kunyou_pilot.json": "完整旧服务入口的报价试跑，失败和未判分原样保留。",
+    "tests/agent_eval/results/implementation_progress.json": "只追加本轮证据，不把既有里程碑标成新完成。"
+  },
+  "commands": [
+    {
+      "command": "chcp 65001 > $null\ngit tag --points-at HEAD",
+      "result": "baseline/research-completeness-20261111"
+    },
+    {
+      "command": "chcp 65001 > $null\ngit check-ignore .env.runtime.local",
+      "result": ".env.runtime.local"
+    },
+    {
+      "command": "chcp 65001 > $null\ntmp/agentic-venv/Scripts/python.exe -B -m pytest tests/agent_eval/test_runner.py tests/agent_eval/test_baseline_runtime.py -q -p no:cacheprovider",
+      "result": "10 passed in 4.53s"
+    },
+    {
+      "command": "chcp 65001 > $null\ntmp/agentic-venv/Scripts/python.exe -B tests/agent_eval/run.py --runtime baseline --provider fallback --mode record --case facts-01 --fixtures-root fixtures/kunyou-v1 --seed-tapes fixtures/archive-v1/tapes --jobs 1 --context-window 32768 --max-output 8192 --timeout 180 --no-judge --output tests/agent_eval/results/m1_kunyou_pilot.json",
+      "result": "ready=false; 0/1完成; 未判分; 181.89秒; tape hits=1 misses=0; 原始失败保留"
+    },
+    {
+      "command": "chcp 65001 > $null\ntmp/agentic-venv/Scripts/python.exe -B -m pytest tests/agent_eval -q -p no:cacheprovider --basetemp tmp/pytest-m1-kunyou-20261111",
+      "result": "111 passed in 3.01s"
+    }
+  ],
+  "validation": {
+    "eval_tests_passed": 111,
+    "frozen_files_checked": 27,
+    "frozen_files_changed": [],
+    "credential_scan_files": 333,
+    "credential_leaks": [],
+    "baseline_snapshot_validation_passed": true
+  },
+  "pilot": {
+    "ready": false,
+    "subject": {
+      "model": "qwen3.8-flash",
+      "context_window": 32768,
+      "max_output": 8192,
+      "base_url": "https://api.kunyou.asia/v1"
+    },
+    "groups": {
+      "facts": {
+        "cases": 1,
+        "judged": 0,
+        "scores": {
+          "answered": null,
+          "numbers": null,
+          "limitations": null,
+          "presentation": null,
+          "no_internal_identifiers": null,
+          "total": null
+        },
+        "completed_rate": 0,
+        "references_valid_rate": 1,
+        "artifacts_met_rate": 1,
+        "no_actions_met_rate": 1,
+        "median_seconds": 181.89,
+        "median_tokens": 10972,
+        "median_rounds": 3,
+        "tool_error_rate": 0.5
+      }
+    }
+  },
+  "remaining": [
+    "M0中转完整上下文上限实测",
+    "M1完整60题录制、独立判分与冻结回放",
+    "M2同题成绩不低于基线",
+    "M3-M4循环及核查实现和真实测量",
+    "M5/M7质量、存活性、稳定期门槛满足后才能删除",
+    "M6/M8/M9/M10既有实现的剩余验收",
+    "第12节48条产品验收和F组冻结回归"
+  ],
+  "authorization_required": false,
+  "needed_external_change": "备用端点启用一个可用且与qwen3.8-flash不同的独立判分模型，或提供另一可用判分端点。",
+  "production_default_switched": false,
+  "forecast_strategy_changed": false,
+  "restart_required": false,
+  "commit_push_deploy_or_deletion_performed": false
+}

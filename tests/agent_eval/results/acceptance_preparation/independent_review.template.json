@@ -1,0 +1,14 @@
+{
+  "case_id": null,
+  "review_packet_sha256": null,
+  "reviewer": {
+    "kind": "native_independent",
+    "id": null,
+    "model": null
+  },
+  "decision": "needs_more_evidence",
+  "reason": "",
+  "evidence_refs": [],
+  "protocol_adjudications": {},
+  "real_qa_fault_evidence": null
+}

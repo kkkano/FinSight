@@ -1,0 +1,25 @@
+{
+  "request_sha256": "7d317e3c9942376cd0ab1144b722e9a17fd7c359ccd169972fe87669e4121686",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：NVDA 最新季度自由现金流及计算口径均未交付，终态 response 为空；没有同财期经营现金流、资本开支、计算方法、单位或来源。",
+      "numbers=0：完整录制为空、未执行数据工具、证据池为空，没有取得自由现金流计算的两个输入或计算结果，不存在可核对的财务数字回答。",
+      "limitations=1：终态明确说明研究超时，没有用未取得的财务值作确定事实，也没有假造跨财期计算结果。",
+      "presentation=1、no_internal_identifiers=1：超时通知与恢复提示篇幅合适，用户可读正文未回显内部运行、工具或数据集标识。"
+    ]
+  }
+}

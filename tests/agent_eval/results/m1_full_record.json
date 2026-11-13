@@ -1,0 +1,532 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081115_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_081115_891824cf:facts-01:0",
+            "session_id": "2026-11-11_081115_891824cf:facts-01",
+            "message_id": "assistant:2026-11-11_081115_891824cf:facts-01:0",
+            "attempt_id": "5cb29ba17498467abf13c9b43d911132",
+            "stream_epoch": "5cb29ba17498467abf13c9b43d911132",
+            "response": "**AAPL 最新报价：342.37 美元**。这个价格是常规交易时段收盘时的报价，比前一个交易日下跌 1.80 美元，跌幅 0.52%。报价日期为 **2026-11-06**，由 Twelve Data 提供，币种为美元 [S...]。\n\n需要注意：这是最近一个收盘价，并非今日盘中实时价格；数据对应到 2026-11-06，之后可能已有新的交易。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "answered",
+            "quality": {
+              "state": "pass",
+              "reasons": [],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "get_stock_price",
+                  "source_name": "twelve_data",
+                  "published_date": null,
+                  "as_of": "2026-11-06",
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "price_snapshot",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "meta": {
+                    "market_session": "regular_close",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "snippet": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_id": "Sa6413361f2",
+                  "title": "get_stock_price output",
+                  "url": null,
+                  "data_ref": "dataset_bad2db095b059cfaa2",
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "AAPL"
+                    }
+                  }
+                }
+              ]
+            },
+            "report_quality": {
+              "state": "pass",
+              "reasons": [],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "get_stock_price",
+                  "source_name": "twelve_data",
+                  "published_date": null,
+                  "as_of": "2026-11-06",
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "price_snapshot",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "meta": {
+                    "market_session": "regular_close",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "snippet": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_id": "Sa6413361f2",
+                  "title": "get_stock_price output",
+                  "url": null,
+                  "data_ref": "dataset_bad2db095b059cfaa2",
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "AAPL"
+                    }
+                  }
+                }
+              ]
+            },
+            "publishable": true,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": false,
+            "blocks": [
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "**AAPL 最新报价：342.37 美元**。这个价格是常规交易时段收盘时的报价，比前一个交易日下跌 1.80 美元，跌幅 0.52%。报价日期为 **2026-11-06**，由 Twelve Data 提供，币种为美元 [S...]。\n\n需要注意：这是最近一个收盘价，并非今日盘中实时价格；数据对应到 2026-11-06，之后可能已有新的交易。",
+                "revision": 1,
+                "seq": 7,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": []
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-11T16:11:26.019148+00:00",
+                "runId": "2026-11-11_081115_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081115_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_IQ7CODuzG1S5xELszlSc0207",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 3,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081115_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081115_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends i…",
+                "timestamp": "2026-11-11T16:11:26.166148+00:00",
+                "runId": "2026-11-11_081115_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081115_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_IQ7CODuzG1S5xELszlSc0207",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_bad2db095b059cfaa2"
+                  ],
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_refs": [
+                    "Sa6413361f2"
+                  ],
+                  "evidence_refs": [
+                    "Sa6413361f2"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "Sa6413361f2",
+                      "title": "get_stock_price output",
+                      "url": null,
+                      "source": "get_stock_price",
+                      "as_of": "2026-11-06"
+                    }
+                  ],
+                  "summary": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends i…",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "342.37 USD · -0.52% · 2026-11-06"
+                  },
+                  "duration_ms": 155,
+                  "runtime_type": "tool.result",
+                  "seq": 4,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081115_891824cf:facts-01:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:11:26.175186+00:00",
+                "runId": "2026-11-11_081115_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081115_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 5,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081115_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081115_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:11:28.194828+00:00",
+                "runId": "2026-11-11_081115_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081115_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 6,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081115_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081115_891824cf:facts-01"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": "AAPL",
+            "tickers": [
+              "AAPL"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 10468,
+              "total_completion_tokens": 140,
+              "total_tokens": 10608,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 2,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 10468,
+                  "completion": 140,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 10468,
+                  "completion": 140,
+                  "calls": 2,
+                  "failed_calls": 0,
+                  "duration_ms": 22969
+                }
+              ],
+              "tool_calls": 1,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": false
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 1,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 25.797,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 1,
+        "failed_tools": 0,
+        "tokens": 10608,
+        "rounds": 2
+      },
+      "checkpoints": 5,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081115_891824cf/facts-01/events.json",
+      "tool_recordings": 1
+    },
+    {
+      "id": "facts-03",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081115_891824cf:facts-03:0",
+          "query": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_081115_891824cf:facts-03:0",
+            "session_id": "2026-11-11_081115_891824cf:facts-03",
+            "message": "模型服务暂时限流了。",
+            "error_code": "model_http_429",
+            "reason": "模型服务暂时限流了。",
+            "recovery_action": "稍后再试，已查到的数据会保留。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "模型服务繁忙，正在等待后重试。",
+                "timestamp": "2026-11-11T16:11:42.813119+00:00",
+                "runId": "2026-11-11_081115_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081115_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_model_retry",
+                  "title": "模型服务繁忙，正在等待后重试。",
+                  "reason": "模型服务繁忙，正在等待后重试。",
+                  "retry_after_seconds": 10.0,
+                  "attempt": 1,
+                  "runtime_type": "activity.updated",
+                  "seq": 2,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081115_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081115_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "模型服务繁忙，正在等待后重试。",
+                "timestamp": "2026-11-11T16:11:55.159505+00:00",
+                "runId": "2026-11-11_081115_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081115_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_model_retry",
+                  "title": "模型服务繁忙，正在等待后重试。",
+                  "reason": "模型服务繁忙，正在等待后重试。",
+                  "retry_after_seconds": 20.0,
+                  "attempt": 2,
+                  "runtime_type": "activity.updated",
+                  "seq": 3,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081115_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081115_891824cf:facts-03"
+                }
+              }
+            ],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 36014
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 36.25,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_http_429",
+          "cause": null
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081115_891824cf/facts-03/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 2,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0.5,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 31.0235,
+      "median_tokens": 5304.0,
+      "median_rounds": 1.5,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 16384
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures/baseline-v1",
+  "seed_tapes": "fixtures/archive-v1/tapes",
+  "ready": false,
+  "expected_cases": 60
+}

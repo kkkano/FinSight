@@ -1,0 +1,26 @@
+{
+  "request_sha256": "e57ed4845e400d975c4076758a20ff21d6574230914a2f7371a78f132a18adc2",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：仅尝试两股财务工具、检索10-K并回读片段，正文全部是补数进度；artifacts/blocked_report为空，没有同财期同口径现金流/资本开支比较报告，没有表格、结论或来源绑定。",
+      "numbers=1：未在正文捏造OCF、Capex或未计算的FCF结果，也未直接跨币种混算；但没有交付两股同财期比较所需数字，检索到2025年报片段不等于形成已核比较。",
+      "limitations=0：正文只说明SEC缺配置/UA和换数据源，没有解释AAPL九月财年与MSFT六月财年的期间差异、Capex现金支付/租赁口径或可比方案；publishable=false与缺口一致，但没有实际草稿和明确财务缺口。",
+      "presentation=0：没有报告产物或比较表，只有多段重复取证进度和超时，无法作为比较报告阅读。",
+      "no_internal_identifiers=0：正文写SEC通道缺UA，可展开财务失败预览还显示SEC_USER_AGENT及联系格式，暴露用户无需处理的配置细节。"
+    ]
+  }
+}

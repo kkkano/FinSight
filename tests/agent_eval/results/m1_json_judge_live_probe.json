@@ -1,0 +1,10 @@
+{
+  "subject_model": "qwen3.8-flash",
+  "judge_model": "deepseek-v4.1-flash-1017",
+  "protocol": "json",
+  "case": "facts-01",
+  "source_report": "m1_kunyou_pilot.json",
+  "error": "ValidationError",
+  "details": {},
+  "seconds": 15.61
+}

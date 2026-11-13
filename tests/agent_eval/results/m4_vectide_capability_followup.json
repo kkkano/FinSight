@@ -1,0 +1,75 @@
+{
+  "created_at": "2026-11-13T10:07:08.238016+00:00",
+  "endpoint": "https://vectide.cn/v1",
+  "request": {
+    "model": "deepseek-v4.1-flash-1017",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Call capability_probe with value=7. This is a synthetic compatibility test."
+      }
+    ],
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "max_tokens": 256,
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "capability_probe",
+          "description": "Synthetic no-op. No data access or side effects.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    ]
+  },
+  "timeout_seconds": 45,
+  "attempts": 1,
+  "http_status": 200,
+  "first_chunk_seconds": 2.0,
+  "received_chunks": 35,
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 128,
+    "completion_tokens": 66,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "cached_tokens": 0,
+      "reasoning_tokens": 26,
+      "rejected_prediction_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 337,
+    "prompt_tokens": 465,
+    "prompt_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "cached_tokens": 128,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "total_tokens": 531
+  },
+  "status": "completed",
+  "headers_seconds": 2.0,
+  "returned_model": "deepseek-v4.1-flash-1017",
+  "finish_reason": "tool_calls",
+  "done_received": true,
+  "native_tool_verified": true,
+  "elapsed_seconds": 2.547
+}

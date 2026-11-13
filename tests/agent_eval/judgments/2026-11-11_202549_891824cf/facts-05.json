@@ -1,0 +1,26 @@
+{
+  "request_sha256": "ed132c603b2b48cd8331603ca76b66776894915f06ebcb6b18f22486e75ae51d",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有三段取数进度，承诺说明最新价格与 NAV 区别但并未解释，更没有基金层面估值指标或对应数字与来源。",
+      "numbers=0：报价、基金资料、网页和搜索录制均失败，没有 QQQ 价格或净值和估值数据；正文无数字答案，不能按准确概念解释给分。",
+      "limitations=1：可见正文交代数据源超时、接口不可用，终态另明确研究超时，没有伪造报价或用单一成分股估值充当基金指标。",
+      "presentation=1：进度句分段完整、简短，终态故障及重试提示清楚，没有半句话截断；这一分只评价已显示文字的形式。",
+      "no_internal_identifiers=1：正文未回显函数名、数据集或运行 ID；NAV 是基金净值术语。"
+    ]
+  }
+}

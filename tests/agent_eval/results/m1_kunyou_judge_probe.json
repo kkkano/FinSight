@@ -1,0 +1,17 @@
+{
+  "timeout": 90,
+  "results": [
+    {
+      "model": "glm-5.3",
+      "error": "model_stream_error",
+      "status": null,
+      "elapsed_seconds": 72.41
+    },
+    {
+      "model": "qwen3.8-max",
+      "error": "model_http_400",
+      "status": 400,
+      "elapsed_seconds": 2.08
+    }
+  ]
+}

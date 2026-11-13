@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-11-13T06:28:04.941735+00:00",
+  "inputs": [
+    {
+      "path": "tests/agent_eval/results/m4_step5_review_measurement.json",
+      "sha256": "a38377273cc0bb8c1e27a2676ee86a35a69f2f2d66cf6dc1cc19b0fac2b9379a"
+    },
+    {
+      "path": "tests/agent_eval/review_cases.json",
+      "sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee"
+    }
+  ],
+  "measurement_identity": {
+    "run_id": "review-20261112-214238",
+    "provider": "stepfun",
+    "model": "step-5-preview",
+    "runtime_sha256_reported_by_measurement": "8d438738292ccdd74720b4dfd01dd4d9baf0d6cda50874e61f166aa018f98fb1",
+    "synthetic_cases": true
+  },
+  "adjudicator": {
+    "kind": "native_codex_subagent",
+    "task_name": "/root/readonly_verifier",
+    "requested_identity": "native verifier gpt-6.1-sol",
+    "verified_model_id": null,
+    "identity_status": "exact_model_not_independently_verifiable",
+    "identity_note": "任务指定native verifier gpt-6.1-sol；本会话仅声明Codex/GPT-6，可用list_agents未公开精确部署模型ID，故不伪称已核实。",
+    "paid_api_calls_made_for_adjudication": 0
+  },
+  "method": {
+    "judgment_source": "由当前原生代理逐条阅读query、answer、fixture和原始review的issue/evidence/suggestion作语义判断；脚本仅校验身份/哈希、组装结果和算术汇总。",
+    "not_blinded": true,
+    "prior_information_note": "任务提供过预统计数，题集也含expected；这些数值和annotated_injected_span未作为本文件语义评分的程序输入。",
+    "semantic_detection_definition": "仅用于injected：有效finding必须实质指出被注入的错误，并以给定资料支持其错误判断；quote重合本身不算检出。核心检出成立但有附带错误时仍记true，并单列secondary_issues。",
+    "false_positive_definition": "仅用于已完成clean：把本来有给定资料支持的正确答案标为错误、缺依据或未满足；injected和unavailable填null，不混入clean误报分类。",
+    "unavailable_definition": "逐字保留输入review的unavailable与error_code；不推定pass，也不计有效完成clean的正确放行。",
+    "input_alignment": "24/24的query、answer、fixtures及answer_sha256与输入题集/记录一致；dataset_sha256匹配。",
+    "scope_limitations": [
+      "这是实际Step 5模型在合成短答案/结构数据上的单次评测，不是真实市场数据验收。",
+      "12个基础题各有clean/injected，配对且多题同构；不宜当作24个完全独立复杂研究任务。",
+      "未覆盖复杂长报告、多跳解释、真实取数失败、覆盖遗漏、自动修订后质量或生产用户会话。"
+    ]
+  },
+  "rows": [
+    {
+      "case_id": "review-number-01",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "资料给出 TEST_A price=42、currency=USD，原答案为42美元且引用[1]。核查无finding，与资料一致。",
+      "injection_kind": "number",
+      "review_id": "reviewer_b8d61f350339",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-number-01",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "注错把42改为420。finding明确指出原始price=42而非420，并建议恢复42美元，正确检出数值错误。",
+      "injection_kind": "number",
+      "review_id": "reviewer_bb7b8c460087",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "注错把42改为420。finding明确指出原始price=42而非420，并建议恢复42美元，正确检出数值错误。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "2026Q3 revenue=120、unit=million USD，与120百万美元及引用[1]一致。没有错误标注。",
+      "injection_kind": "number",
+      "review_id": "reviewer_49e4c08fe5d9",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "注错把营收120改为210；finding明确引用同一标的、同一财期的120 million USD并建议改回120，实质检出数字错写。",
+      "injection_kind": "number",
+      "review_id": "reviewer_aaddc4bd0e4d",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "注错把营收120改为210；finding明确引用同一标的、同一财期的120 million USD并建议改回120，实质检出数字错写。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "资料为2026Q3经营现金流18 million USD，原答案18百万美元正确。核查pass且无finding，不构成误报。",
+      "injection_kind": "number",
+      "review_id": "reviewer_f627a549e705",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "93a2b184df5a26a05cdb57fb8228e63b78234a54cff9ca551c394e9c6c4f8d8c",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding引用经营现金流18并将81修正为18，正确指出注入的数值错误；但其附带“单位误用”不成立，原答案百万美元与million USD等价。核心检出成立，整条意见并非完全正确。",
+      "secondary_issues": [
+        {
+          "kind": "unsupported_allegation",
+          "text": "“且单位误用”没有依据；注错只改18为81，单位始终为百万美元。"
+        }
+      ],
+      "injection_kind": "number",
+      "review_id": "reviewer_1a3f7ddb4866",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "045aeae6e53220196d84b943242761b8bde83bcc4a59435d341a487a498d4f84",
+      "finding_count": 1,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "mixed",
+          "supports_injected_error": true,
+          "reason": "finding引用经营现金流18并将81修正为18，正确指出注入的数值错误；但其附带“单位误用”不成立，原答案百万美元与million USD等价。核心检出成立，整条意见并非完全正确。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "资料gross_margin_pct=23.5且单位percent，原答案23.5%正确，核查无finding。",
+      "injection_kind": "number",
+      "review_id": "reviewer_73918fde672c",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "5408987cd9e5f68de2e490677a4d14d676413b2c32833e98bf020cc62401d29f",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding明确区分资料的23.5%与错写的32.5%，并提出正确数值，检出毛利率数字错误。",
+      "injection_kind": "number",
+      "review_id": "reviewer_9009b190fb21",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "39677a96fea879fa8644112d2ccf0c95df3dcf8d7283a77a86af08ef3f0f51b7",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding明确区分资料的23.5%与错写的32.5%，并提出正确数值，检出毛利率数字错误。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "收盘价从100到98，资料period_return_pct=-2，原答案“下跌2%”正确。无finding，不构成误报。",
+      "injection_kind": "direction",
+      "review_id": "reviewer_3232aa8ee7db",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "14d5c5fd04d5cfa16b774a51f84c4541aa34850c554b515a25f41b495bc8c634",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding用100到98及-2%的记录指出“上涨”应为“下跌”，且提出正确修订，检出方向反转。",
+      "injection_kind": "direction",
+      "review_id": "reviewer_ef8eaaf486d9",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "bc141360e4266e5a2fe5287e485da28665f1722a5d30e0ca9f935d13adbd6bc2",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding用100到98及-2%的记录指出“上涨”应为“下跌”，且提出正确修订，检出方向反转。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "free_cash_flow_yoy_pct=-8表示同比下降8%，原答案与财期和单位一致，核查pass成立。",
+      "injection_kind": "direction",
+      "review_id": "reviewer_0d3055e4a346",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "33bcf8f42c7809beb6878e04a081fe63928e9cf615070a75413d1feea8086dbc",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding明确把同比-8%解释为下降，并指出“增长8%”方向错误，正确定位注入错误。",
+      "injection_kind": "direction",
+      "review_id": "reviewer_3c544c65890f",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "b6b283d1ab21cd2242110885ca7002dc036764cf5989c7aff11d60b9d6aa8833",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding明确把同比-8%解释为下降，并指出“增长8%”方向错误，正确定位注入错误。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-03",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": true,
+      "unavailable": false,
+      "reason": "eps_revision_pct=5是正的百分比修正，支持2027FY EPS预期上调5%，不需要独立direction列或显式加号。核查却否认方向并建议写成方向未知，且将coverage判为未满足，属于对正确答案的误报。",
+      "secondary_issues": [
+        {
+          "kind": "incorrect_repair_suggestion",
+          "text": "建议删除本来有数据支持的上调方向，会降低正确答案的信息质量。"
+        }
+      ],
+      "injection_kind": "direction",
+      "review_id": "reviewer_81a9a5ec45c9",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "5bfcdd370a67d0aec2c51ced2ed7a7561d392fed536377448096635f631672ec",
+      "finding_count": 1,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "incorrect",
+          "supports_injected_error": null,
+          "reason": "eps_revision_pct=5是正的百分比修正，支持2027FY EPS预期上调5%，不需要独立direction列或显式加号。核查却否认方向并建议写成方向未知，且将coverage判为未满足，属于对正确答案的误报。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-03",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding明确指出数据为+5，且“下调”与正值所表达的上调方向矛盾，因此实质识别了注错；但同一finding又声称方向符号缺失，并建议改成方向未知，该附加判断和建议不成立。核心检出与正确修订建议不能混为一谈。",
+      "secondary_issues": [
+        {
+          "kind": "contradictory_explanation",
+          "text": "一方面识别+5与下调矛盾，另一方面把正数没有显式加号解释成无方向。"
+        },
+        {
+          "kind": "incorrect_repair_suggestion",
+          "text": "应为上调5%，不应将已知方向改成未知。"
+        }
+      ],
+      "injection_kind": "direction",
+      "review_id": "reviewer_4a219e09b4db",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "bb5d823345202536cb4292fa6b868e77a3ca552dc694a51410e2e0d0b19c4a3d",
+      "finding_count": 1,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "mixed",
+          "supports_injected_error": true,
+          "reason": "finding明确指出数据为+5，且“下调”与正值所表达的上调方向矛盾，因此实质识别了注错；但同一finding又声称方向符号缺失，并建议改成方向未知，该附加判断和建议不成立。核心检出与正确修订建议不能混为一谈。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-04",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "revenue_yoy_pct=-12支持同比下降12%，原答案正确且引用对应来源。核查无finding。",
+      "injection_kind": "direction",
+      "review_id": "reviewer_581691b0d879",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "f09022cc041d2b2cfb64edda89be61f9c5b138724b817a5f73dd5518fd9ade0c",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-direction-04",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding依据-12 percent指出同比增长应改为同比下降，方向和幅度均核对正确。",
+      "injection_kind": "direction",
+      "review_id": "reviewer_66b2ba1d8d76",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "dd52c27a2a8a0c4b039d999011047c8e4b13ee60b5626b0982f68936dfb57171",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding依据-12 percent指出同比增长应改为同比下降，方向和幅度均核对正确。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-source-01",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "来源[1]是TEST_A的42美元报价，[2]为TEST_B的70美元。原答案引用[1]与标的及数值一致，无误报。",
+      "injection_kind": "source",
+      "review_id": "reviewer_da0d776ce6d0",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-source-01",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding明确指出[2]属于TEST_B/70美元，而TEST_A/42美元来自[1]，并建议只改引用为[1]，正确识别错绑公司来源。",
+      "injection_kind": "source",
+      "review_id": "reviewer_9b2394635290",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "6d4798a4158bfc18d9605221a51e77d5f4f736c8a5fcc4cc333dd56f84b09fee",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding明确指出[2]属于TEST_B/70美元，而TEST_A/42美元来自[1]，并建议只改引用为[1]，正确识别错绑公司来源。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-source-02",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "来源[1]提供TEST_A 2026Q3营收120 million USD，[2]属于TEST_B/350。原答案的标的、财期、数值和引用均一致，核查未误报。",
+      "injection_kind": "source",
+      "review_id": "reviewer_94feb1641060",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-source-02",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding区分TEST_A/120与TEST_B/350的披露来源，指出正确数字被错误绑定到[2]，建议改回[1]，语义检出成立。",
+      "injection_kind": "source",
+      "review_id": "reviewer_ec0f5312de48",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "d09d90ac55151944411a7527b5a95876c4181633ad22a82dba329f86a08ae734",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding区分TEST_A/120与TEST_B/350的披露来源，指出正确数字被错误绑定到[2]，建议改回[1]，语义检出成立。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": null,
+      "unavailable": true,
+      "reason": "资料[1]为TEST_A 2026Q3已披露EPS 1.2 USD/share，原答案正确；但该次review原始状态为unavailable、error_code=review_not_submitted，没有有效核查提交。保留不可用，既不算pass，也不计已完成clean的正确放行。",
+      "injection_kind": "source",
+      "review_id": "reviewer_6d445c5a0d5b",
+      "original_status": "unavailable",
+      "original_verdict": null,
+      "original_error_code": "review_not_submitted",
+      "answer_sha256": "0a8fc3414bc3e6b23209cd8e5022f92161e26946da758d9447d64c141f00ec3d",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-source-03",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding明确指出[2]是2027Q1预测EPS 1.5、basis=forecast，不能支持2026Q3已披露EPS 1.2；正确来源为[1]。期间、事实/预测口径和引用关系均被实质识别。",
+      "secondary_issues": [
+        {
+          "kind": "evidence_notation_error",
+          "text": "evidence中的“1.2 USD/reported”混写单位与口径；输入实际是unit=USD/share、basis=reported。此措辞瑕疵不改变其正确的来源错绑判断。"
+        }
+      ],
+      "injection_kind": "source",
+      "review_id": "reviewer_f06b9b0ce662",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "f9f968546f3e56a8269ca997c3216b4066af6a58a6ec53f6dca5274fc87813a7",
+      "finding_count": 1,
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "mixed",
+          "supports_injected_error": true,
+          "reason": "finding明确指出[2]是2027Q1预测EPS 1.5、basis=forecast，不能支持2026Q3已披露EPS 1.2；正确来源为[1]。期间、事实/预测口径和引用关系均被实质识别。"
+        }
+      ]
+    },
+    {
+      "case_id": "review-source-04",
+      "variant": "clean",
+      "semantic_detection": null,
+      "false_positive": false,
+      "unavailable": false,
+      "reason": "来源[1]给出TEST_A在11月10日收益-2%，[2]是TEST_MARKET/-1%。原答案下跌2%且引用[1]正确，没有finding。",
+      "injection_kind": "source",
+      "review_id": "reviewer_76e1c01fc4af",
+      "original_status": "completed",
+      "original_verdict": "pass",
+      "original_error_code": null,
+      "answer_sha256": "8a277e511ee5967ff9d98eb31c57e2020281188a221a001ac17383fc63338db1",
+      "finding_count": 0,
+      "secondary_issues": [],
+      "finding_assessments": []
+    },
+    {
+      "case_id": "review-source-04",
+      "variant": "injected",
+      "semantic_detection": true,
+      "false_positive": null,
+      "unavailable": false,
+      "reason": "finding没有误改正确的-2%幅度，而是明确指出[2]对应市场而非TEST_A，正确来源为[1]，检出错误来源归属。",
+      "injection_kind": "source",
+      "review_id": "reviewer_7acb19b6ea82",
+      "original_status": "completed",
+      "original_verdict": "revise",
+      "original_error_code": null,
+      "answer_sha256": "959765ebf0e57b308ce360e81415d862291844b8749bb917555bb0436fa4fcf6",
+      "finding_count": 1,
+      "secondary_issues": [],
+      "finding_assessments": [
+        {
+          "finding_index": 0,
+          "judgment": "correct",
+          "supports_injected_error": true,
+          "reason": "finding没有误改正确的-2%幅度，而是明确指出[2]对应市场而非TEST_A，正确来源为[1]，检出错误来源归属。"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_variants": 24,
+    "base_cases": 12,
+    "clean_variants": 12,
+    "injected_variants": 12,
+    "completed_reviews": 23,
+    "semantic_detection_rate_all_injected": {
+      "numerator": 12,
+      "denominator": 12,
+      "rate": 1.0,
+      "percent": 100.0,
+      "denominator_definition": "全部12个injected变体；不可用不能记为检出"
+    },
+    "semantic_detection_rate_completed_injected": {
+      "numerator": 12,
+      "denominator": 12,
+      "rate": 1.0,
+      "percent": 100.0,
+      "denominator_definition": "有效完成核查的injected变体"
+    },
+    "clean_false_positive_rate_all_clean": {
+      "numerator": 1,
+      "denominator": 12,
+      "rate": 0.08333333333333333,
+      "percent": 8.3333,
+      "denominator_definition": "全部12个clean变体；该数是已观察误报占全clean样本的比例，不将不可用计作正确放行"
+    },
+    "clean_false_positive_rate_completed_clean": {
+      "numerator": 1,
+      "denominator": 11,
+      "rate": 0.09090909090909091,
+      "percent": 9.0909,
+      "denominator_definition": "有效完成核查的11个clean变体，排除1个不可用"
+    },
+    "unavailable_rate_all": {
+      "numerator": 1,
+      "denominator": 24,
+      "rate": 0.041666666666666664,
+      "percent": 4.1667,
+      "denominator_definition": "全部24个变体"
+    },
+    "unavailable_rate_clean": {
+      "numerator": 1,
+      "denominator": 12,
+      "rate": 0.08333333333333333,
+      "percent": 8.3333,
+      "denominator_definition": "全部12个clean变体"
+    },
+    "unavailable_rate_injected": {
+      "numerator": 0,
+      "denominator": 12,
+      "rate": 0.0,
+      "percent": 0.0,
+      "denominator_definition": "全部12个injected变体"
+    },
+    "clean_valid_passes": 10,
+    "clean_false_positive_cases": [
+      "review-direction-03"
+    ],
+    "unavailable_cases": [
+      {
+        "case_id": "review-source-03",
+        "variant": "clean",
+        "error_code": "review_not_submitted"
+      }
+    ],
+    "injected_cases_with_secondary_quality_issues": [
+      "review-number-03",
+      "review-direction-03",
+      "review-source-03"
+    ],
+    "by_injection_kind": {
+      "direction": {
+        "numerator": 4,
+        "denominator": 4,
+        "rate": 1.0,
+        "percent": 100.0,
+        "denominator_definition": "该类型全部injected变体"
+      },
+      "number": {
+        "numerator": 4,
+        "denominator": 4,
+        "rate": 1.0,
+        "percent": 100.0,
+        "denominator_definition": "该类型全部injected变体"
+      },
+      "source": {
+        "numerator": 4,
+        "denominator": 4,
+        "rate": 1.0,
+        "percent": 100.0,
+        "denominator_definition": "该类型全部injected变体"
+      }
+    }
+  },
+  "recommendation": {
+    "default_enabled_for_read_only_annotations": true,
+    "strength": "有条件支持，小样本证据",
+    "reason": "12/12注错的核心错误均得到语义识别，支持把核查作为只读标注辅助；同时clean存在1个误报和1个未提交，且部分注错发现附带错误判断，不能宣称零误报或把核查意见直接视为事实。",
+    "conditions": [
+      "保留原文，只显示可回溯标注；用户显式触发修订时保留版本关系。",
+      "unavailable/超时/无提交单独展示，不能标为已核查或资料不足。",
+      "公布检出、误报、不可用三个指标及分母；不以12/12局部检出宣称整体回答准确。",
+      "正数修正方向、等价单位和报告修订误伤需进入后续独立评测；本次不修改实现或样本。"
+    ],
+    "not_established": [
+      "零误报",
+      "真实市场/复杂报告总体准确率",
+      "自动报告修订和发布门禁无误伤",
+      "生产部署或48项验收通过"
+    ]
+  }
+}

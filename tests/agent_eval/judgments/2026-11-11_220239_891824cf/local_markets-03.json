@@ -1,0 +1,26 @@
+{
+  "request_sha256": "06e9786f57e89a41d72dac06591bd1c1da3b46c43597ede8b2d5111887282c86",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：正确将600519.SH映射到600519.SS贵州茅台，取得巨潮2026三季报、半年报及2025年报，文内证券代码600519和公司名称匹配，未强制以美股工具为唯一来源；但正文为空，没有区分利润和经营现金流或分析质量。",
+      "numbers=1：原始2026三季报明确人民币元单位，前三季归母净利64467425981.95元、OCF84058979832.29元且增长120.07%，资料已存在；但用户正文没有交付这些数字和期间，不能因完整公告存在即给数值满分。",
+      "limitations=0：未解释单季度利润与前三季累计现金流的期间差别、未经审计状态，或公告披露OCF大增主要由财务子公司同业存款收回及成员单位存款变化驱动；没有现金质量局限说明。",
+      "presentation=0：只有工具准备、公告读取与超时通知，正文及产物为空，没有财务对照或结论。",
+      "no_internal_identifiers=1：主要可见通知没有配置名、运行编号或代码哈希，股票代码与公告出处是核实主体所需信息。"
+    ]
+  }
+}

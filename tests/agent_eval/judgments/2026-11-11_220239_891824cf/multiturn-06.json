@@ -1,0 +1,26 @@
+{
+  "request_sha256": "8d21781e33e74f5463450f33cecc6e58d49668645100c31358dca2ffa7d64606",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 2,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=2：首轮实际生成MSFT一年收盘价图；第二轮仅调用render_chart，复用同一有效句柄，图spec.scale由linear改为log，主体、区间、序列及251行数据完全相同，满足全部must。",
+      "numbers=1：两轮图数据相同且逐行匹配录制；首尾511.14001/521.13、区间+1.95445%、高低555.79999/352.82999、均值448.783585及最后价格均支持正文舍入值。但首轮称最近三个交易日连续回落，录制11/6收530.60999、11/9收545.17999，11/9实际上涨，只有11/10与11/11连续下跌，不能给全部数值一致满分。",
+      "limitations=1：说明日频、USD、窗口、来源时点与抓取时间，明确复权/股息未知且不能当总回报；第二轮延续同口径并准确解释对数等距离对应等百分比。",
+      "presentation=1：两轮均有实际图及相应短说明，第二轮清楚说明尺度变化、数据不变。",
+      "no_internal_identifiers=1：正文和可见通知没有数据句柄、运行编号或配置标识，引用和股票指标用于支撑图表说明。"
+    ]
+  }
+}

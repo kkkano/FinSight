@@ -1,0 +1,19 @@
+{
+  "model": "gpt-6-luna",
+  "model_ids": [
+    "codex-auto-review",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-6",
+    "gpt-6-astra",
+    "gpt-6-sol",
+    "gpt-6.1-sol",
+    "gpt-6.1-terra"
+  ],
+  "models_status": 200,
+  "responses_probe": {
+    "http_status": 404,
+    "elapsed_seconds": 1.188,
+    "error": "{\"error\":{\"message\":\"Model \\\"gpt-6-luna\\\" is not supported by any configured account in this group\",\"type\":\"model_not_found\"}}"
+  }
+}

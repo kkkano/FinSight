@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "concepts-02",
+      "group": "concepts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_023948_891824cf:concepts-02:0",
+          "query": "市盈率和市销率分别适合什么情形",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_023948_891824cf:concepts-02:0",
+            "session_id": "2026-11-11_023948_891824cf:concepts-02",
+            "message_id": "assistant:2026-11-11_023948_891824cf:concepts-02:0",
+            "attempt_id": "a63f23b6d0434640bcde0a9e60d8d903",
+            "stream_epoch": "a63f23b6d0434640bcde0a9e60d8d903",
+            "response": "市盈率和市销率适合的情形，核心区别在于：**市盈率适用于利润可信时；市销率适用于收入可信但利润暂时不可用时。**\n\n## 市盈率（P/E）的适用情形\n\n- **盈利为正且相对稳定的公司**，比如消费、公用事业、成熟制造和银行。\n- **同一行业内、会计口径相近的公司**横向比较。\n- **利润能够反映股东可获得回报**，而不是靠一次性项目撑起来。\n\n不适合用的情况：\n\n## 市销率（P/S）的适用情形\n\n- **收入已经规模化但尚未盈利或利润波动大的公司**，如早期科技、SaaS、创新药、新能源扩张期。\n- **利润被成长投入主动压低**时（销售费用、研发费用前置），收入更能反映业务真实的扩张速度。\n- **同一商业模式内**的横向比较，但要配合毛利率和增速一起看。\n- **亏损阶段仍需判断贵不贵**的时候。\n\n不适合用的情况：\n\n## 实务上的搭配用法\n\n一句话概括：**市盈率对分母质量敏感，市销率对分母的“转化率”敏感。** 前者要求利润可信，后者要求收入未来能变成利润，所以市销率始终需要利润率作为补充条件。\n\n上面是方法论层面的适用性判断，不涉及任何具体标的的当期估值、增速或利润率数据；如果你想把标准套到某只具体股票上，告诉我标的，我再取真实的倍数、增速和利润率来核对。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_0",
+                "kind": "text",
+                "content": "**市盈率（P/E）更适合“盈利稳定、能代表公司真实赚钱能力”的公司；市销率（P/S）更适合“利润受短期因素扭曲、或者还没盈利但收入已经规模化”的公司。**\n\n## 市盈率的适用与不适用情形\n\n**适用：**\n- 商业模式成熟、盈利为正且相对稳定的行业（消费、公用事业、成熟制造、银行等）\n- 同一行业内、会计口径相近的公司横向比较\n- 用在“利润是股东真正能分到的东西”这个逻辑成立时\n\n**不适合：**\n- 亏损公司——市盈率是负数或没有意义\n- 周期股——利润处于周期顶部时市盈率显得极低（“越涨越便宜”），底部时极高，容易反向误导\n- 一次性损益占比大——卖资产、减值、诉讼赔偿等会大幅扭曲分母\n- 高杠杆或重资产公司——利润受利息和折旧政策影响大，跨公司不可比\n- 折旧摊销政策巨大差异的行业（如重资产与轻资产混比）\n\n## 市销率的适用与不适用情形\n\n**适用：**\n- 收入已经规模化但尚未盈利或利润波动大的公司（早期科技、SaaS、创新药、新能源扩张期）\n- 利润被成长投入“主动压低”时（销售费用、研发费用前置），收入更能反映业务真实扩张速度\n- 同一商业模式内的横向比较（要配合毛利率、增速一起看）\n- 亏损但需要判断“贵不贵”的阶段\n\n## 实务上的搭配用法\n\n单独用哪一个都容易出错，常见做法是：\n\n如果你想把这些标准套到某个具体标的上（比如自己关注的某只 A 股或美股），我可以取当期真实估值、增速和利润率数据来核对当前倍数是否合理。",
+                "revision": 1,
+                "seq": 2,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              },
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "市盈率和市销率适合的情形，核心区别在于：**市盈率适用于利润可信时；市销率适用于收入可信但利润暂时不可用时。**\n\n## 市盈率（P/E）的适用情形\n\n- **盈利为正且相对稳定的公司**，比如消费、公用事业、成熟制造和银行。\n- **同一行业内、会计口径相近的公司**横向比较。\n- **利润能够反映股东可获得回报**，而不是靠一次性项目撑起来。\n\n不适合用的情况：\n\n## 市销率（P/S）的适用情形\n\n- **收入已经规模化但尚未盈利或利润波动大的公司**，如早期科技、SaaS、创新药、新能源扩张期。\n- **利润被成长投入主动压低**时（销售费用、研发费用前置），收入更能反映业务真实的扩张速度。\n- **同一商业模式内**的横向比较，但要配合毛利率和增速一起看。\n- **亏损阶段仍需判断贵不贵**的时候。\n\n不适合用的情况：\n\n## 实务上的搭配用法\n\n一句话概括：**市盈率对分母质量敏感，市销率对分母的“转化率”敏感。** 前者要求利润可信，后者要求收入未来能变成利润，所以市销率始终需要利润率作为补充条件。\n\n上面是方法论层面的适用性判断，不涉及任何具体标的的当期估值、增速或利润率数据；如果你想把标准套到某只具体股票上，告诉我标的，我再取真实的倍数、增速和利润率来核对。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+                "revision": 1,
+                "seq": 724,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-11T10:39:58.873789+00:00",
+                "runId": "2026-11-11_023948_891824cf:concepts-02:0",
+                "sessionId": "2026-11-11_023948_891824cf:concepts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "市盈率和市销率分别适合什么情形",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 721,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_023948_891824cf:concepts-02:0",
+                  "session_id": "2026-11-11_023948_891824cf:concepts-02"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T10:39:58.887843+00:00",
+                "runId": "2026-11-11_023948_891824cf:concepts-02:0",
+                "sessionId": "2026-11-11_023948_891824cf:concepts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "市盈率和市销率分别适合什么情形",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 722,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_023948_891824cf:concepts-02:0",
+                  "session_id": "2026-11-11_023948_891824cf:concepts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T10:40:00.910355+00:00",
+                "runId": "2026-11-11_023948_891824cf:concepts-02:0",
+                "sessionId": "2026-11-11_023948_891824cf:concepts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "市盈率和市销率分别适合什么情形",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 723,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_023948_891824cf:concepts-02:0",
+                  "session_id": "2026-11-11_023948_891824cf:concepts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "已保留与资料一致的结果。",
+                "timestamp": "2026-11-11T10:40:07.447531+00:00",
+                "runId": "2026-11-11_023948_891824cf:concepts-02:0",
+                "sessionId": "2026-11-11_023948_891824cf:concepts-02",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "completed",
+                  "title": "回答核对完成",
+                  "summary": "已保留与资料一致的结果。",
+                  "runtime_type": "activity.finished",
+                  "seq": 1490,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_023948_891824cf:concepts-02:0",
+                  "session_id": "2026-11-11_023948_891824cf:concepts-02"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": null,
+            "tickers": [],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 9444,
+              "total_completion_tokens": 1479,
+              "total_tokens": 10923,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 2,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 9444,
+                  "completion": 1479,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 9444,
+                  "completion": 1479,
+                  "calls": 2,
+                  "failed_calls": 0,
+                  "duration_ms": 17530
+                }
+              ],
+              "tool_calls": 0,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 18.906,
+      "structure": {
+        "completed": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 10923,
+        "rounds": 2
+      },
+      "checkpoints": 10,
+      "watchlist": [],
+      "transport_errors": [],
+      "events_path": "tmp/agent-eval/2026-11-11_023948_891824cf/concepts-02/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "concepts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 18.906,
+      "median_tokens": 10923,
+      "median_rounds": 2,
+      "tool_error_rate": 0.0
+    }
+  },
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 2048
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "ready": false,
+  "expected_cases": 60,
+  "fixtures_sha256": "4dab32a1830c4ef83ba405eec11c6c57c16518c8ad01c3a05e7733df1047dae1"
+}

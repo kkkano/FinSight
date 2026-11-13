@@ -1,0 +1,26 @@
+{
+  "request_sha256": "9239f4b5da7ac15b5a2a5a4dab1773bf5386406b667fe1255f3c9657501d20f0",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：四段正文只有取数、核对口径和启用工具的进度，没有回答 QQQ 贵不贵，也没有比较基准或完整估值结论。",
+      "numbers=1：正文提到约27倍与32.7倍；当前录制有 QQQ PE27.18、Nasdaq-100 trailing PE32.76 等近似依据，但二者主体/时期/精度和定义没有交付，且无估值与增长的量化结论。",
+      "limitations=1：明确两套倍数仍需核对来源与定义，终态报告研究超时，没有把未经核对的合理价或判断作确定结论。",
+      "presentation=1：进度句完整、分段可读，超时和重试提示清楚；空行虽偏多，整体形式仍合适。",
+      "no_internal_identifiers=1：正文只有金融术语和取数进度，没有数据集、运行或函数标识。"
+    ]
+  }
+}

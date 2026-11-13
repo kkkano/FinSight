@@ -1,0 +1,1616 @@
+{
+  "schema_version": 1,
+  "runtime": "current",
+  "mode": "record",
+  "head": "891824cf",
+  "run_id": "2026-11-13_015234_891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-13_015234_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "attempt_id": "7ca68227e5a947c486d9559765809fee",
+            "stream_epoch": "7ca68227e5a947c486d9559765809fee",
+            "committed_seq": 22,
+            "blocks": [],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "message": "获取行情",
+                "timestamp": "2026-11-13T09:54:05.805255+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:facts-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_i0hWbNEq6Z6SE72gRWQr8177",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "empty",
+                    "title": "获取行情",
+                    "target": "AAPL",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 21,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:facts-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "354.88 USD",
+                "timestamp": "2026-11-13T09:54:09.056486+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:facts-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_i0hWbNEq6Z6SE72gRWQr8177",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "ok",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "status": "ok",
+                    "provider": "twelve_data",
+                    "as_of": "2026-11-12T00:00:00Z",
+                    "observed_at": "2026-11-13T09:54:09.044517+00:00",
+                    "currency": "USD",
+                    "frequency": null,
+                    "error_code": null,
+                    "meta": {},
+                    "data": {
+                      "price": 354.88,
+                      "change": -0.75,
+                      "change_percent": -0.21089334420605685,
+                      "currency": "USD",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-12",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided",
+                      "data_kind": "daily_close"
+                    },
+                    "asset": {
+                      "symbol": "AAPL",
+                      "market": "US",
+                      "exchange": "US",
+                      "timezone": "America/New_York",
+                      "calendar_name": "NYSE"
+                    },
+                    "capability": "quote",
+                    "source": "twelve_data",
+                    "freshness_seconds": 122049,
+                    "quality": "trusted",
+                    "degraded": false,
+                    "attempted_providers": [
+                      "twelve_data"
+                    ],
+                    "provider_failures": [],
+                    "cached": false,
+                    "quote": {
+                      "price": 354.88,
+                      "change": -0.75,
+                      "change_percent": -0.21089334420605685,
+                      "currency": "USD",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-12",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided",
+                      "data_kind": "daily_close"
+                    },
+                    "data_kind": "daily_close"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "ok",
+                    "title": "获取行情",
+                    "target": "AAPL",
+                    "result": "354.88 USD",
+                    "summary": "354.88 USD",
+                    "key_facts": [
+                      {
+                        "label": "价格",
+                        "value": 354.88
+                      },
+                      {
+                        "label": "涨跌额",
+                        "value": -0.75
+                      },
+                      {
+                        "label": "涨跌幅",
+                        "value": -0.21089334420605685
+                      },
+                      {
+                        "label": "货币",
+                        "value": "USD"
+                      },
+                      {
+                        "label": "数据时间",
+                        "value": "2026-11-12"
+                      },
+                      {
+                        "label": "数据时间",
+                        "value": "2026-11-12T00:00:00Z"
+                      },
+                      {
+                        "label": "频率",
+                        "value": null
+                      }
+                    ],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": "2026-11-12T00:00:00+00:00",
+                    "sources": [
+                      {
+                        "title": "twelve_data",
+                        "publisher": "twelve_data",
+                        "url": null,
+                        "published_at": null
+                      }
+                    ],
+                    "notes": [
+                      "延迟未知，不能表述为实时"
+                    ],
+                    "error": null
+                  },
+                  "summary": "354.88 USD",
+                  "data_refs": [
+                    "h_449552a3f1f7c22820"
+                  ],
+                  "source_refs": [
+                    "1"
+                  ],
+                  "evidence_refs": [
+                    "1"
+                  ],
+                  "sources": [
+                    {
+                      "source": "twelve_data",
+                      "source_name": "twelve_data",
+                      "source_id": "1",
+                      "title": "twelve_data",
+                      "url": null,
+                      "data_ref": "h_449552a3f1f7c22820",
+                      "as_of": "2026-11-12T00:00:00Z",
+                      "quality": "trusted",
+                      "currency": "USD",
+                      "frequency": null,
+                      "meta": {},
+                      "metadata": {
+                        "tool": "get_stock_price",
+                        "parameters": {
+                          "ticker": "AAPL"
+                        },
+                        "tool_kind": "quote",
+                        "as_of": "2026-11-12T00:00:00Z",
+                        "observed_at": "2026-11-13T09:54:09.044517+00:00",
+                        "currency": "USD",
+                        "frequency": null,
+                        "market_session": "regular_close",
+                        "source_timestamp": "2026-11-12",
+                        "source_time_precision": "date",
+                        "source_time_status": "provided"
+                      },
+                      "kind": "price_snapshot",
+                      "type": "tool",
+                      "observed_at": "2026-11-13T09:54:09.044517+00:00",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-12",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided"
+                    }
+                  ],
+                  "duration_ms": 3250,
+                  "runtime_type": "tool.result",
+                  "seq": 22,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:facts-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:facts-01"
+                }
+              }
+            ],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_015234_891824cf:facts-01:0",
+            "session_id": "2026-11-13_015234_891824cf:facts-01",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "这次研究用时较长，已经超时。",
+            "error_code": "run_deadline_exceeded",
+            "reason": "这次研究用时较长，已经超时。",
+            "recovery_action": "已查到的数据会保留，可以缩小问题后再试。",
+            "metrics": {
+              "total_prompt_tokens": 7434,
+              "total_completion_tokens": 60,
+              "total_tokens": 7494,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 1,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 7434,
+                  "completion": 60,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 7434,
+                  "completion": 60,
+                  "calls": 2,
+                  "failed_calls": 1,
+                  "duration_ms": 131311
+                }
+              ],
+              "tool_calls": 1
+            },
+            "seq": 23,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 1,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 137.437,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 1,
+        "failed_tools": 0,
+        "tokens": 7494,
+        "rounds": 2
+      },
+      "checkpoints": 5,
+      "watchlist": [],
+      "transport_errors": [],
+      "model_call_outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 30,
+          "first_chunk_seconds": 32.625,
+          "elapsed_seconds": 88.344,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "cancelled",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 42.875,
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null,
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 2,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_015234_891824cf/facts-01.json",
+        "request_sha256": "fe7d6796060e7aaff7bea010a34051762aeadefd430236881e6e25863085add2"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_015234_891824cf/facts-01/events.json",
+      "tool_recordings": 1
+    },
+    {
+      "id": "statistics-02",
+      "group": "statistics",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-13_015234_891824cf:statistics-02:0",
+          "query": "画 NVDA 最近一年的收盘价",
+          "terminal": {
+            "attempt_id": "87f711a8e7024503ae983e2879c766a3",
+            "stream_epoch": "87f711a8e7024503ae983e2879c766a3",
+            "committed_seq": 91,
+            "blocks": [],
+            "thinking": [],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_015234_891824cf:statistics-02:0",
+            "session_id": "2026-11-13_015234_891824cf:statistics-02",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "模型响应超时了。",
+            "error_code": "model_timeout",
+            "reason": "模型响应超时了。",
+            "recovery_action": "可以稍后重试，或先聚焦一个问题。",
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 100203
+                }
+              ],
+              "tool_calls": 0
+            },
+            "seq": 92,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        },
+        {
+          "run_id": "2026-11-13_015234_891824cf:statistics-02:1",
+          "query": "加一条 20 日均线重画",
+          "terminal": {
+            "attempt_id": "a1c6748f19824403a567e4f9288ec5a1",
+            "stream_epoch": "a1c6748f19824403a567e4f9288ec5a1",
+            "committed_seq": 1,
+            "blocks": [],
+            "thinking": [],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_015234_891824cf:statistics-02:1",
+            "session_id": "2026-11-13_015234_891824cf:statistics-02",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "模型服务这次没有响应成功。",
+            "error_code": "model_http_502",
+            "reason": "模型服务这次没有响应成功。",
+            "recovery_action": "检查模型服务状态和账户配置后重试。",
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 71561
+                }
+              ],
+              "tool_calls": 0
+            },
+            "seq": 2,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 174.781,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": false,
+        "missing_artifacts": [
+          "chart"
+        ],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 2
+      },
+      "checkpoints": 5,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_timeout",
+          "cause": "TimeoutError"
+        },
+        {
+          "code": "model_http_502",
+          "cause": null
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 103,
+          "first_chunk_seconds": 72.844,
+          "elapsed_seconds": 90.0,
+          "error_code": "model_timeout",
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 69.516,
+          "error_code": "model_http_502",
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null,
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 2,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_015234_891824cf/statistics-02.json",
+        "request_sha256": "85797c45b2bd2ec60cdc848e83ccc909a96a93b00a0993984367d68105f47e96"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_015234_891824cf/statistics-02/events.json",
+      "tool_recordings": 0
+    },
+    {
+      "id": "concepts-01",
+      "group": "concepts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-13_015234_891824cf:concepts-01:0",
+          "query": "什么是自由现金流",
+          "terminal": {
+            "attempt_id": "77a2f84e86a8435891b8d9b0ef9c8678",
+            "stream_epoch": "77a2f84e86a8435891b8d9b0ef9c8678",
+            "committed_seq": 1,
+            "blocks": [],
+            "thinking": [],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_015234_891824cf:concepts-01:0",
+            "session_id": "2026-11-13_015234_891824cf:concepts-01",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "模型响应超时了。",
+            "error_code": "model_timeout",
+            "reason": "模型响应超时了。",
+            "recovery_action": "可以稍后重试，或先聚焦一个问题。",
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 90047
+                }
+              ],
+              "tool_calls": 0
+            },
+            "seq": 2,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 90.375,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 1,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_timeout",
+          "cause": "TimeoutError"
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 90.015,
+          "error_code": "model_timeout",
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 1,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_015234_891824cf/concepts-01.json",
+        "request_sha256": "14a5599f58010ead78e520a0b4cc5f7d3ca4cb461fc32c65a5b888eb2f1ec33a"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_015234_891824cf/concepts-01/events.json",
+      "tool_recordings": 0
+    },
+    {
+      "id": "reports-01",
+      "group": "reports",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+          "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+          "terminal": {
+            "attempt_id": "96677692df4a4d6ca0a8d9515ed0e757",
+            "stream_epoch": "96677692df4a4d6ca0a8d9515ed0e757",
+            "committed_seq": 1028,
+            "blocks": [],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "message": "应用研究技能",
+                "timestamp": "2026-11-13T09:56:17.513509+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_k5AuXpVKoisZfmhb4TdA9807",
+                  "name": "load_skill",
+                  "title": "应用研究技能",
+                  "inputs": {
+                    "name": "research-report-writing"
+                  },
+                  "display": {
+                    "kind": "control",
+                    "status": "empty",
+                    "title": "应用研究技能",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 208,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "## 方法\n按用户要求确定范围与深度；只有互相独立、需要多步研究的方向才用 spawn_agents。共享完整证据账本与句柄，不让子任务各自复写同一原文。\n\n第一句给出结论，再以事实、判断与限制展开。财期、币种、单位和出处随数据呈现；成组数字走 render_table，图表来自真实计算与 render_chart。\n\n交付前核实覆盖、引用与数据缺口。核查发现不足时保留草稿，不把资料缺失包装成可发布报告，不回显用户的流程控制语句。\n",
+                "timestamp": "2026-11-13T09:56:17.514020+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_00_k5AuXpVKoisZfmhb4TdA9807",
+                  "name": "load_skill",
+                  "title": "应用研究技能",
+                  "status": "ok",
+                  "inputs": {
+                    "name": "research-report-writing"
+                  },
+                  "output_preview": "## 方法\n按用户要求确定范围与深度；只有互相独立、需要多步研究的方向才用 spawn_agents。共享完整证据账本与句柄，不让子任务各自复写同一原文。\n\n第一句给出结论，再以事实、判断与限制展开。财期、币种、单位和出处随数据呈现；成组数字走 render_table，图表来自真实计算与 render_chart。\n\n交付前核实覆盖、引用与数据缺口。核查发现不足时保留草稿，不把资料缺失包装成可发布报告，不回显用户的流程控制语句。\n",
+                  "display": {
+                    "kind": "control",
+                    "status": "ok",
+                    "title": "应用研究技能",
+                    "target": "当前研究资料",
+                    "result": "## 方法\n按用户要求确定范围与深度；只有互相独立、需要多步研究的方向才用 spawn_agents。共享完整证据账本与句柄，不让子任务各自复写同一原文。\n\n第一句给出结论，再以事实、判断与限制展开。财期、币种、单位和出处随数据呈现；成组数字走 render_table，图表来自真实计算与 render_chart。\n\n交付前核实覆盖、引用与数据缺口。核查发现不足时保留草稿，不把资料缺失包装成可发布报告，不回显用户的流程控制语句。\n",
+                    "summary": "## 方法\n按用户要求确定范围与深度；只有互相独立、需要多步研究的方向才用 spawn_agents。共享完整证据账本与句柄，不让子任务各自复写同一原文。\n\n第一句给出结论，再以事实、判断与限制展开。财期、币种、单位和出处随数据呈现；成组数字走 render_table，图表来自真实计算与 render_chart。\n\n交付前核实覆盖、引用与数据缺口。核查发现不足时保留草稿，不把资料缺失包装成可发布报告，不回显用户的流程控制语句。\n",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "## 方法\n按用户要求确定范围与深度；只有互相独立、需要多步研究的方向才用 spawn_agents。共享完整证据账本与句柄，不让子任务各自复写同一原文。\n\n第一句给出结论，再以事实、判断与限制展开。财期、币种、单位和出处随数据呈现；成组数字走 render_table，图表来自真实计算与 render_chart。\n\n交付前核实覆盖、引用与数据缺口。核查发现不足时保留草稿，不把资料缺失包装成可发布报告，不回显用户的流程控制语句。\n",
+                  "data_refs": [],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 209,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "应用研究技能",
+                "timestamp": "2026-11-13T09:56:17.514020+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_4HXgknyphC4TgfoFDYUX1497",
+                  "name": "load_skill",
+                  "title": "应用研究技能",
+                  "inputs": {
+                    "name": "earnings-interpretation"
+                  },
+                  "display": {
+                    "kind": "control",
+                    "status": "empty",
+                    "title": "应用研究技能",
+                    "target": "当前研究资料",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 210,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "## 方法\n以原始公告或监管事实为依据，确认财年、季度、财期、单位及本币口径。同一指标的季度值、累计值和全年值分开；跨公司比较只使用可比财期与定义。\n\n自由现金流的资本开支范围、差分输入和计算方法随数据保留。经营现金流与利润、维持性投入与扩张投入、实际回购与授权额度分别说明；缺失不能替换成零。\n\n将实际结果、一致预期、管理层指引与分析判断分开。财报对股价的解释同时核实价格区间与消息时点，不用长期涨跌幅解释当次反应。\n",
+                "timestamp": "2026-11-13T09:56:17.515036+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_01_4HXgknyphC4TgfoFDYUX1497",
+                  "name": "load_skill",
+                  "title": "应用研究技能",
+                  "status": "ok",
+                  "inputs": {
+                    "name": "earnings-interpretation"
+                  },
+                  "output_preview": "## 方法\n以原始公告或监管事实为依据，确认财年、季度、财期、单位及本币口径。同一指标的季度值、累计值和全年值分开；跨公司比较只使用可比财期与定义。\n\n自由现金流的资本开支范围、差分输入和计算方法随数据保留。经营现金流与利润、维持性投入与扩张投入、实际回购与授权额度分别说明；缺失不能替换成零。\n\n将实际结果、一致预期、管理层指引与分析判断分开。财报对股价的解释同时核实价格区间与消息时点，不用长期涨跌幅解释当次反应。\n",
+                  "display": {
+                    "kind": "control",
+                    "status": "ok",
+                    "title": "应用研究技能",
+                    "target": "当前研究资料",
+                    "result": "## 方法\n以原始公告或监管事实为依据，确认财年、季度、财期、单位及本币口径。同一指标的季度值、累计值和全年值分开；跨公司比较只使用可比财期与定义。\n\n自由现金流的资本开支范围、差分输入和计算方法随数据保留。经营现金流与利润、维持性投入与扩张投入、实际回购与授权额度分别说明；缺失不能替换成零。\n\n将实际结果、一致预期、管理层指引与分析判断分开。财报对股价的解释同时核实价格区间与消息时点，不用长期涨跌幅解释当次反应。\n",
+                    "summary": "## 方法\n以原始公告或监管事实为依据，确认财年、季度、财期、单位及本币口径。同一指标的季度值、累计值和全年值分开；跨公司比较只使用可比财期与定义。\n\n自由现金流的资本开支范围、差分输入和计算方法随数据保留。经营现金流与利润、维持性投入与扩张投入、实际回购与授权额度分别说明；缺失不能替换成零。\n\n将实际结果、一致预期、管理层指引与分析判断分开。财报对股价的解释同时核实价格区间与消息时点，不用长期涨跌幅解释当次反应。\n",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "## 方法\n以原始公告或监管事实为依据，确认财年、季度、财期、单位及本币口径。同一指标的季度值、累计值和全年值分开；跨公司比较只使用可比财期与定义。\n\n自由现金流的资本开支范围、差分输入和计算方法随数据保留。经营现金流与利润、维持性投入与扩张投入、实际回购与授权额度分别说明；缺失不能替换成零。\n\n将实际结果、一致预期、管理层指引与分析判断分开。财报对股价的解释同时核实价格区间与消息时点，不用长期涨跌幅解释当次反应。\n",
+                  "data_refs": [],
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 211,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "读取公司资料",
+                "timestamp": "2026-11-13T09:56:17.515036+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_02_u4b4RZqS983jWo9qjqnv2856",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "empty",
+                    "title": "读取公司资料",
+                    "target": "AAPL",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 212,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "message": "获取行情",
+                "timestamp": "2026-11-13T09:56:17.515036+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_03_nEk9OxNYYZD3hia9G7q98501",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "empty",
+                    "title": "获取行情",
+                    "target": "AAPL",
+                    "result": "",
+                    "summary": "",
+                    "key_facts": [],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [],
+                    "notes": [],
+                    "error": null
+                  },
+                  "runtime_type": "tool.started",
+                  "seq": 213,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "354.88 USD",
+                "timestamp": "2026-11-13T09:56:20.840649+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_03_nEk9OxNYYZD3hia9G7q98501",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "ok",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "status": "ok",
+                    "provider": "twelve_data",
+                    "as_of": "2026-11-12T00:00:00Z",
+                    "observed_at": "2026-11-13T09:56:20.822273+00:00",
+                    "currency": "USD",
+                    "frequency": null,
+                    "error_code": null,
+                    "meta": {},
+                    "data": {
+                      "price": 354.88,
+                      "change": -0.75,
+                      "change_percent": -0.21089334420605685,
+                      "currency": "USD",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-12",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided",
+                      "data_kind": "daily_close"
+                    },
+                    "asset": {
+                      "symbol": "AAPL",
+                      "market": "US",
+                      "exchange": "US",
+                      "timezone": "America/New_York",
+                      "calendar_name": "NYSE"
+                    },
+                    "capability": "quote",
+                    "source": "twelve_data",
+                    "freshness_seconds": 122180,
+                    "quality": "trusted",
+                    "degraded": false,
+                    "attempted_providers": [
+                      "twelve_data"
+                    ],
+                    "provider_failures": [],
+                    "cached": false,
+                    "quote": {
+                      "price": 354.88,
+                      "change": -0.75,
+                      "change_percent": -0.21089334420605685,
+                      "currency": "USD",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-12",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided",
+                      "data_kind": "daily_close"
+                    },
+                    "data_kind": "daily_close"
+                  },
+                  "display": {
+                    "kind": "quote",
+                    "status": "ok",
+                    "title": "获取行情",
+                    "target": "AAPL",
+                    "result": "354.88 USD",
+                    "summary": "354.88 USD",
+                    "key_facts": [
+                      {
+                        "label": "价格",
+                        "value": 354.88
+                      },
+                      {
+                        "label": "涨跌额",
+                        "value": -0.75
+                      },
+                      {
+                        "label": "涨跌幅",
+                        "value": -0.21089334420605685
+                      },
+                      {
+                        "label": "货币",
+                        "value": "USD"
+                      },
+                      {
+                        "label": "数据时间",
+                        "value": "2026-11-12"
+                      },
+                      {
+                        "label": "数据时间",
+                        "value": "2026-11-12T00:00:00Z"
+                      },
+                      {
+                        "label": "频率",
+                        "value": null
+                      }
+                    ],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": "2026-11-12T00:00:00+00:00",
+                    "sources": [
+                      {
+                        "title": "twelve_data",
+                        "publisher": "twelve_data",
+                        "url": null,
+                        "published_at": null
+                      }
+                    ],
+                    "notes": [
+                      "延迟未知，不能表述为实时"
+                    ],
+                    "error": null
+                  },
+                  "summary": "354.88 USD",
+                  "data_refs": [
+                    "h_d85c2f4bdf355381ee"
+                  ],
+                  "source_refs": [
+                    "1"
+                  ],
+                  "evidence_refs": [
+                    "1"
+                  ],
+                  "sources": [
+                    {
+                      "source": "twelve_data",
+                      "source_name": "twelve_data",
+                      "source_id": "1",
+                      "title": "twelve_data",
+                      "url": null,
+                      "data_ref": "h_d85c2f4bdf355381ee",
+                      "as_of": "2026-11-12T00:00:00Z",
+                      "quality": "trusted",
+                      "currency": "USD",
+                      "frequency": null,
+                      "meta": {},
+                      "metadata": {
+                        "tool": "get_stock_price",
+                        "parameters": {
+                          "ticker": "AAPL"
+                        },
+                        "tool_kind": "quote",
+                        "as_of": "2026-11-12T00:00:00Z",
+                        "observed_at": "2026-11-13T09:56:20.822273+00:00",
+                        "currency": "USD",
+                        "frequency": null,
+                        "market_session": "regular_close",
+                        "source_timestamp": "2026-11-12",
+                        "source_time_precision": "date",
+                        "source_time_status": "provided"
+                      },
+                      "kind": "price_snapshot",
+                      "type": "tool",
+                      "observed_at": "2026-11-13T09:56:20.822273+00:00",
+                      "market_session": "regular_close",
+                      "source_timestamp": "2026-11-12",
+                      "source_time_precision": "date",
+                      "source_time_status": "provided"
+                    }
+                  ],
+                  "duration_ms": 3327,
+                  "runtime_type": "tool.result",
+                  "seq": 214,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-13T09:56:23.810773+00:00",
+                "eventType": "trace",
+                "runId": "2026-11-13_015234_891824cf:reports-01:0",
+                "sessionId": "2026-11-13_015234_891824cf:reports-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "tool_call_id": "call_02_u4b4RZqS983jWo9qjqnv2856",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "status": "ok",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "ticker": "AAPL",
+                    "name": "Apple Inc.",
+                    "country": "US",
+                    "currency": "USD",
+                    "estimateCurrency": "USD",
+                    "exchange": "NASDAQ NMS - GLOBAL MARKET",
+                    "ipo": "1980-12-12",
+                    "marketCapitalization": 5157180.691432888,
+                    "logo": "https://static2.finnhub.io/file/publicdatany/finnhubimage/stock_logo/AAPL.png",
+                    "shareOutstanding": 14594.18,
+                    "finnhubIndustry": "Technology",
+                    "phone": "14089961010",
+                    "weburl": "https://www.apple.com/",
+                    "floatingShare": 14352.36,
+                    "source": "finnhub",
+                    "status": "ok",
+                    "column_units": {
+                      "marketCapitalization": "million USD"
+                    }
+                  },
+                  "display": {
+                    "kind": "table",
+                    "status": "ok",
+                    "title": "读取公司资料",
+                    "target": "AAPL",
+                    "result": "结果已返回，展开查看关键数据。",
+                    "summary": "结果已返回，展开查看关键数据。",
+                    "key_facts": [
+                      {
+                        "label": "货币",
+                        "value": "USD"
+                      }
+                    ],
+                    "row_count": 0,
+                    "returned_rows": 0,
+                    "has_more": false,
+                    "rows": [],
+                    "as_of": null,
+                    "sources": [
+                      {
+                        "title": "finnhub",
+                        "publisher": "finnhub",
+                        "url": null,
+                        "published_at": null
+                      }
+                    ],
+                    "notes": [],
+                    "error": null
+                  },
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "data_refs": [
+                    "h_10e9045ed853813d91"
+                  ],
+                  "source_refs": [
+                    "2"
+                  ],
+                  "evidence_refs": [
+                    "2"
+                  ],
+                  "sources": [
+                    {
+                      "source": "finnhub",
+                      "source_name": "finnhub",
+                      "source_id": "2",
+                      "title": "finnhub",
+                      "url": null,
+                      "data_ref": "h_10e9045ed853813d91",
+                      "currency": "USD",
+                      "metadata": {
+                        "tool": "get_company_info",
+                        "parameters": {
+                          "ticker": "AAPL"
+                        },
+                        "tool_kind": "table",
+                        "currency": "USD",
+                        "column_units": {
+                          "marketCapitalization": "million USD"
+                        }
+                      },
+                      "kind": "company_profile",
+                      "type": "tool"
+                    }
+                  ],
+                  "duration_ms": 6296,
+                  "runtime_type": "tool.result",
+                  "seq": 215,
+                  "agent_id": "root",
+                  "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+                  "session_id": "2026-11-13_015234_891824cf:reports-01"
+                }
+              }
+            ],
+            "response": "",
+            "artifacts": [],
+            "type": "error",
+            "run_id": "2026-11-13_015234_891824cf:reports-01:0",
+            "session_id": "2026-11-13_015234_891824cf:reports-01",
+            "run_status": "failed",
+            "publishable": false,
+            "answer_status": "unavailable",
+            "message": "这次研究用时较长，已经超时。",
+            "error_code": "run_deadline_exceeded",
+            "reason": "这次研究用时较长，已经超时。",
+            "recovery_action": "已查到的数据会保留，可以缩小问题后再试。",
+            "metrics": {
+              "total_prompt_tokens": 7445,
+              "total_completion_tokens": 343,
+              "total_tokens": 7788,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 1,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 7445,
+                  "completion": 343,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 7445,
+                  "completion": 343,
+                  "calls": 2,
+                  "failed_calls": 1,
+                  "duration_ms": 128609
+                }
+              ],
+              "tool_calls": 4
+            },
+            "seq": 1029,
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 2,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 135.266,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": false,
+        "missing_artifacts": [
+          "report"
+        ],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 4,
+        "failed_tools": 0,
+        "tokens": 7788,
+        "rounds": 2
+      },
+      "checkpoints": 22,
+      "watchlist": [],
+      "transport_errors": [],
+      "model_call_outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 249,
+          "first_chunk_seconds": 38.141,
+          "elapsed_seconds": 47.812,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "cancelled",
+          "received_chunks": 814,
+          "first_chunk_seconds": 55.813,
+          "elapsed_seconds": 80.719,
+          "cost_estimate": null
+        }
+      ],
+      "model_cost_estimates": [
+        null,
+        null
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 0,
+        "unpriced_calls": 2,
+        "all_calls_priced": false,
+        "known_components": {
+          "uncached_input_cny": null,
+          "cached_input_cny": null,
+          "output_cny": null,
+          "total_cny": null
+        },
+        "known_subtotal_cny": null,
+        "total_cny": null
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-13_015234_891824cf/reports-01.json",
+        "request_sha256": "de3262b4b63390a27d09c7c1cc0db9e839c9a7da069f4ab93353a418e7299fad"
+      },
+      "events_path": "tmp/agent-eval/2026-11-13_015234_891824cf/reports-01/events.json",
+      "tool_recordings": 2
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "single_terminal_rate": 1,
+      "model_calls": 2,
+      "failed_model_calls": 1,
+      "model_failure_rate": 0.5,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 137.437,
+      "median_tokens": 7494,
+      "median_rounds": 2,
+      "tool_error_rate": 0.0
+    },
+    "statistics": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "single_terminal_rate": 1,
+      "model_calls": 2,
+      "failed_model_calls": 2,
+      "model_failure_rate": 1.0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 0,
+      "no_actions_met_rate": 1,
+      "median_seconds": 174.781,
+      "median_tokens": 0,
+      "median_rounds": 2,
+      "tool_error_rate": 0.0
+    },
+    "concepts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "single_terminal_rate": 1,
+      "model_calls": 1,
+      "failed_model_calls": 1,
+      "model_failure_rate": 1.0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 90.375,
+      "median_tokens": 0,
+      "median_rounds": 1,
+      "tool_error_rate": 0.0
+    },
+    "reports": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0,
+      "single_terminal_rate": 1,
+      "model_calls": 2,
+      "failed_model_calls": 1,
+      "model_failure_rate": 0.5,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 0,
+      "no_actions_met_rate": 1,
+      "median_seconds": 135.266,
+      "median_tokens": 7788,
+      "median_rounds": 2,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "d84e27eca69ffa5557c9ada1f18fb61621615dedfcbd0cd787ce72c158721c25",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "base_url": "https://vectide.cn/v1",
+    "effort": null,
+    "temperature": null
+  },
+  "judge": {
+    "model": "gpt-6.1-sol",
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "runtime_sha256": "970fbfc18fff0f45f8f19954af973019cf0002263622c4b33e53f7867ab33d4e",
+  "fixtures_root": "fixtures/vectide-matched-20261113",
+  "seed_tapes": "fixtures/qwen-current-matched-20261112",
+  "harness_config": {
+    "request_interval_seconds": 0,
+    "jobs": 2,
+    "request_pacing_scope": "unrestricted",
+    "model_protocol": "sse",
+    "upstream_stream": true,
+    "model_configuration": {
+      "model": "deepseek-v4.1-flash-1017",
+      "base_url": "https://vectide.cn/v1",
+      "effort": null,
+      "context_window": 1048576,
+      "max_output": 16384,
+      "temperature": null
+    },
+    "model_quotas": {
+      "concurrency": 2,
+      "rpm": 30,
+      "tpm": 250000,
+      "minimum_request_interval_seconds": 10.0,
+      "run_token_budget": 160000
+    },
+    "step5_cost_pricing": null,
+    "model_quota_scope": "run_shared",
+    "analysis_worker_enabled": true,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "cost_estimate": {
+    "currency": "CNY",
+    "priced_calls": 0,
+    "unpriced_calls": 7,
+    "all_calls_priced": false,
+    "known_components": {
+      "uncached_input_cny": null,
+      "cached_input_cny": null,
+      "output_cny": null,
+      "total_cny": null
+    },
+    "known_subtotal_cny": null,
+    "total_cny": null
+  },
+  "fixtures_sha256": "e5a0ab550b8554ed133972f9b65a4998a1165f878568961af6008884df0b3ec3"
+}

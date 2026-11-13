@@ -1,0 +1,69 @@
+{
+  "requested_model": "gpt-6.1-terra",
+  "probes": [
+    {
+      "url": "https://apikl.ai/v1/models/gpt-6.1-terra",
+      "authenticated": true,
+      "http_status": 200,
+      "content_type": "application/json",
+      "metadata": {
+        "id": "gpt-6.1-terra",
+        "object": "model",
+        "created": 1792972800,
+        "owned_by": "openai",
+        "type": "model",
+        "display_name": "GPT-6.1 Terra"
+      }
+    },
+    {
+      "url": "https://apikl.ai/v1/models",
+      "authenticated": true,
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "metadata": [
+        {
+          "id": "gpt-6.1-terra",
+          "object": "model",
+          "created": 1792972800,
+          "owned_by": "openai",
+          "type": "model",
+          "display_name": "GPT-6.1 Terra"
+        }
+      ]
+    },
+    {
+      "url": "https://apikl.ai/",
+      "authenticated": false,
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "title": "API 中转站与 AI API 接入服务 - API 快连",
+      "scripts": [
+        "/__akl-theme.js?v=7",
+        "/__akl-logo-home.js",
+        "/__akl-sidebar-wm.js?v=wmside85u1113",
+        "/__akl-login-wm.js?v=wmlogin1113c",
+        "/__akl-pricing-btn.js?v=b1108",
+        "/__akl-pricing-rates-bridge.js?v=3",
+        "/__akl-purchase-polish.js?v=pc1108c",
+        "/__akl-daily-cost.js?v=2",
+        "/__akl-tickets-badge.js?v=1",
+        "/__akl-monitor.js?v=m1112",
+        "/__akl-zhipu-group-icon.js?v=14",
+        "/__akl-deepseek-group-icon.js?v=4",
+        "/__akl-kimi-group-icon.js?v=4",
+        "/__akl-support.js?v=k1108",
+        "/__akl-title.js?v=5",
+        "https://static.cloudflareinsights.com/beacon.min.js"
+      ],
+      "text_preview": " \n \n  html,body{background:#030713!important}html[data-akl-theme=\"light\"],html[data-akl-theme=\"light\"] body{background:#f9fafb!important}body::before,body::after,#akl-app-bg-canvas{display:none!important}   \n \n (function(){try{if(new URLSearchParams(location.search).get(\"ui_mode\")===\"embedded\")document.documentElement.classList.add(\"akl-embedded\");}catch(e){}})(); \n \n API 中转站与 AI API 接入服务 - API 快连  \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n {\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":\"WebSite\",\"@id\":\"https://apikl.ai/#website\",\"name\":\"API 快连 · 官网\",\"alternateName\":[\"API快连\",\"APIKL\",\"apikl\",\"apikl.ai\"],\"url\":\"https://apikl.ai/\",\"inLanguage\":\"zh-CN\",\"publisher\":{\"@id\":\"https://apikl.ai/#org\"}},{\"@type\":\"Organization\",\"@id\":\"https://apikl.ai/#org\",\"name\":\"API 快连\",\"logo\":{\"@type\":\"ImageObject\",\"url\":\"https://img.apikl.ai/logo-kl.png\",\"width\":192,\"height\":192},\"foundingDate\":\"2026-06-01\",\"email\":\"support@apikl.ai\",\"contactPoint\":{\"@type\":\"ContactPoint\",\"contactType\":\"customer support\",\"email\":\"support@apikl.ai\",\"availableLanguage\":[\"zh-CN\"],\"url\":\"https://docs.apikl.ai/about\"},\"alternateName\":[\"API快连\",\"APIKL\",\"apikl\",\"apikl.ai\"],\"url\":\"https://apikl.ai/\",\"sameAs\":[\"https://t.me/apikl_com\",\"h"
+    },
+    {
+      "url": "https://apikl.ai/models",
+      "authenticated": false,
+      "http_status": 401,
+      "content_type": "application/json; charset=utf-8",
+      "metadata": []
+    }
+  ],
+  "official_context_or_output_spec_verified": false
+}

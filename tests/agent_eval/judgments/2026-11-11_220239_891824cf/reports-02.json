@@ -1,0 +1,26 @@
+{
+  "request_sha256": "d03f3371bc4b4ef5a6c71d067e02bf2be014c3ef17be737decba7cabe8563be9",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=0：准备活动和委派保持NVDA主体，没有误升为AMD/TSMC等权比较；但正文仅一句英文启动研究，artifacts与blocked_report均为空，没有任何财务、竞争、估值或未来风险报告内容，mark_report和受理委派不算报告交付。",
+      "numbers=1：可见NVDA173.73美元、+4.84/+2.87%与对应录制一致，未用竞品数字冒充NVDA；所需财务/估值/风险数字未形成报告，因此不能给数值一致满分。",
+      "limitations=0：publishable=false与证据不足/未完成状态一致，但没有实际草稿和明确缺口、财期、估值假设或风险判断说明；工具失败与待办任务不能替代报告局限。",
+      "presentation=0：无报告产物、正文章节或摘要，只有启动进度和超时通知。",
+      "no_internal_identifiers=0：财报失败可展开预览要求设置SEC_USER_AGENT并提供联系格式，暴露用户无需处理的配置标识。"
+    ]
+  }
+}

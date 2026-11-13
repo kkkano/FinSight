@@ -1,0 +1,11 @@
+{
+  "model": "qwen3.8-flash",
+  "base_url": "https://api.kunyou.asia/v1",
+  "synthetic_input": true,
+  "repeated_pairs": 950000,
+  "input_chars": 1900010,
+  "input_sha256": "0c5e556110a87cc18775e325063a905be1e56da9ec978289fd3f5c0e9978cae7",
+  "requested_output_tokens": 32,
+  "exception": "ReadTimeout",
+  "elapsed_seconds": 130.51
+}

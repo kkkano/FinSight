@@ -1,0 +1,37 @@
+{
+  "requested_model": "gpt-6-luna",
+  "configured_model_unchanged": true,
+  "alias_evidence": null,
+  "probes": [
+    {
+      "model": "gpt-6",
+      "protocol": "chat_completions_native_tool_sse",
+      "http_status": 503,
+      "chunks": 0,
+      "error": "{\"error\":{\"message\":\"Service temporarily unavailable\",\"type\":\"api_error\"}}",
+      "elapsed_seconds": 1.359
+    },
+    {
+      "model": "gpt-6-sol",
+      "protocol": "chat_completions_native_tool_sse",
+      "http_status": 200,
+      "chunks": 9,
+      "first_chunk_seconds": 3.078,
+      "reported_model": "gpt-6-sol",
+      "finish_reason": "tool_calls",
+      "usage": {
+        "prompt_tokens": 4430,
+        "completion_tokens": 17,
+        "total_tokens": 4447
+      },
+      "tool_calls": [
+        {
+          "name": "echo",
+          "arguments": "{\"text\":\"OK\"}"
+        }
+      ],
+      "native_tool_passed": true,
+      "elapsed_seconds": 3.188
+    }
+  ]
+}

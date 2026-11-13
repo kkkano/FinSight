@@ -1,0 +1,26 @@
+{
+  "request_sha256": "e892b64fda7375130ba3b12dd301303334f79b092f0a3e7befb88542de737113",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有“I'll fetch the latest AAPL news directly.”，没有中文事件概括、投资含义或原文引用，也没有主体、时间和来源的新闻交付。",
+      "numbers=0：没有任何事件事实、日期或数字回答，录制中的新闻与价格资料未被交付；不能按准确完成的概念或新闻解释给分。",
+      "limitations=1：可见终态明确“模型响应超时了”，没有宣称新闻列表穷尽所有事件或声称 AAPL 没有新闻；正分依据故障通知。",
+      "presentation=1：虽正文只是英文进度承诺，中文超时与重试通知完整简短，失败状态表达可读；未交付中文新闻内容已在 answered 项扣分。",
+      "no_internal_identifiers=1：正文与可读故障说明没有数据集、运行或函数标识。"
+    ]
+  }
+}

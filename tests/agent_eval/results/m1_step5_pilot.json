@@ -1,0 +1,1910 @@
+{
+  "schema_version": 1,
+  "runtime": "baseline",
+  "mode": "record",
+  "head": "891824cf",
+  "run_id": "2026-11-11_201733_891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "model": "step-5-preview",
+      "turns": [
+        {
+          "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+          "query": "MSFT 最新一季营收和经营现金流分别是多少",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+            "session_id": "2026-11-11_201733_891824cf:facts-02",
+            "message_id": "assistant:2026-11-11_201733_891824cf:facts-02:0",
+            "attempt_id": "a28b0357d7ab45559407e2e2ccf9ae7f",
+            "stream_epoch": "a28b0357d7ab45559407e2e2ccf9ae7f",
+            "response": "本会话没有取得任何已核实的 MSFT 财报/行情资料，因此**无法给出最新一季营收和经营现金流的真实数值**；我不应凭记忆或推测填数。\n\n部分结论还缺少可靠依据，暂时无法确认。\n\n尚未核实：MSFT 已披露财报及财期、MSFT 经营与自由现金流。现有资料不足以完成这部分判断。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                },
+                {
+                  "code": "research_incomplete",
+                  "severity": "block",
+                  "message": "尚未核实：MSFT 已披露财报及财期、MSFT 经营与自由现金流。",
+                  "missing_evidence": [
+                    {
+                      "ticker": "MSFT",
+                      "facet": "filings",
+                      "label": "已披露财报及财期"
+                    },
+                    {
+                      "ticker": "MSFT",
+                      "facet": "cash_flow",
+                      "label": "经营与自由现金流"
+                    }
+                  ]
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                },
+                {
+                  "code": "research_incomplete",
+                  "severity": "block",
+                  "message": "尚未核实：MSFT 已披露财报及财期、MSFT 经营与自由现金流。",
+                  "missing_evidence": [
+                    {
+                      "ticker": "MSFT",
+                      "facet": "filings",
+                      "label": "已披露财报及财期"
+                    },
+                    {
+                      "ticker": "MSFT",
+                      "facet": "cash_flow",
+                      "label": "经营与自由现金流"
+                    }
+                  ]
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "SEC 数据接口当前不可用，新闻源超时，我改用其他渠道核对。",
+                "revision": 0,
+                "seq": 79,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_6",
+                "kind": "text",
+                "content": "本会话没有取得任何已核实的 MSFT 财报/行情资料，因此**无法给出最新一季营收和经营现金流的真实数值**；我不应凭记忆或推测填数。\n\n部分结论还缺少可靠依据，暂时无法确认。\n\n尚未核实：MSFT 已披露财报及财期、MSFT 经营与自由现金流。现有资料不足以完成这部分判断。",
+                "revision": 2,
+                "seq": 528,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              },
+              {
+                "id": "root_text_7",
+                "kind": "text",
+                "content": "",
+                "revision": 1,
+                "seq": 721,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取季度财报",
+                "timestamp": "2026-11-12T04:17:39.984178+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-8875ca2607587e01",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6
+                  },
+                  "summary": "正在读取季度财报",
+                  "runtime_type": "tool.started",
+                  "seq": 53,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T04:17:40.004187+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-8875ca2607587e01",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_cf46c3ab9cce752bd0"
+                  ],
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6
+                  },
+                  "output_preview": {
+                    "ticker": "MSFT",
+                    "market": "US",
+                    "supported_market": "US",
+                    "source": "sec_edgar",
+                    "error": "missing_sec_user_agent",
+                    "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "missing_sec_user_agent",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司新闻",
+                "timestamp": "2026-11-12T04:17:40.004187+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a01f4d68e06adbc0",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 5
+                  },
+                  "summary": "正在读取公司新闻",
+                  "runtime_type": "tool.started",
+                  "seq": 55,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T04:18:10.009709+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a01f4d68e06adbc0",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 5
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30015,
+                  "runtime_type": "tool.failed",
+                  "seq": 56,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-12T04:18:12.629000+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-8cc0fcc00f1cd8bc",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Microsoft FY2027 Q1 results revenue net income operating cash flow quarter ended September 30 2026",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Microsoft FY2027 Q1 results revenue net income operating cash flow quarter ended September 30 2026"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 92,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T04:18:16.650382+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-8cc0fcc00f1cd8bc",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_42c39ae752a2392029"
+                  ],
+                  "inputs": {
+                    "query": "Microsoft FY2027 Q1 results revenue net income operating cash flow quarter ended September 30 2026"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Microsoft FY2027 Q1 results revenue net income operating cash flow quarter ended September 30 2026",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4030,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司资料",
+                "timestamp": "2026-11-12T04:18:16.650885+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-b26dbd36e6fd360c",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "summary": "正在读取公司资料",
+                  "runtime_type": "tool.started",
+                  "seq": 94,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T04:18:46.656488+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-b26dbd36e6fd360c",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 95,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T04:18:52.701296+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-8a933cefc14c80b9",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 4000,
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 140,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T04:18:52.812942+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-8a933cefc14c80b9",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_3b4b95b0fd736f7f41"
+                  ],
+                  "inputs": {
+                    "max_length": 4000,
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast"
+                  },
+                  "output_preview": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 110,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T04:18:52.812942+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a603c2f3c60303eb",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 4000,
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 142,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T04:18:52.931808+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a603c2f3c60303eb",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_c8dafbcfd9fd1a9396"
+                  ],
+                  "inputs": {
+                    "max_length": 4000,
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast"
+                  },
+                  "output_preview": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 125,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T04:18:53.000353+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 144,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T04:18:59.053599+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 145,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司新闻",
+                "timestamp": "2026-11-12T04:19:03.990010+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-aeabb6ee0cf0a4cf",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "limit": 5,
+                    "ticker": "MSFT"
+                  },
+                  "summary": "正在读取公司新闻",
+                  "runtime_type": "tool.started",
+                  "seq": 188,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                "timestamp": "2026-11-12T04:19:04.041885+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-aeabb6ee0cf0a4cf",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_b1eca69cb96a73840a"
+                  ],
+                  "inputs": {
+                    "limit": 5,
+                    "ticker": "MSFT"
+                  },
+                  "output_preview": {
+                    "attempted_providers": [
+                      "finnhub",
+                      "yfinance",
+                      "web_search"
+                    ],
+                    "data": [],
+                    "error": "market_data_unavailable",
+                    "error_code": "market_data_unavailable",
+                    "provider_failures": [
+                      "provider_request_failed",
+                      "provider_request_failed",
+                      "search_request_failed"
+                    ],
+                    "status": "unavailable",
+                    "summary": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                    "ticker": "MSFT"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "新闻来源未能提供可用结果；这不表示该公司没有新闻。"
+                  },
+                  "error_code": "market_data_unavailable",
+                  "reason": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                  "recovery_action": "稍后重试，或选择其他来源。",
+                  "duration_ms": 46,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-12T04:19:04.041885+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-bdec688a95be91d5",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Microsoft quarterly earnings revenue operating cash flow latest quarter",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Microsoft quarterly earnings revenue operating cash flow latest quarter"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 190,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T04:19:08.178173+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-bdec688a95be91d5",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_b01339ab94994414b2"
+                  ],
+                  "inputs": {
+                    "query": "Microsoft quarterly earnings revenue operating cash flow latest quarter"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Microsoft quarterly earnings revenue operating cash flow latest quarter",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4140,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T04:19:08.200227+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 192,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T04:19:09.210670+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 193,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-12T04:19:11.574750+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-80d3001e7d92f817",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 223,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T04:19:41.584818+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-80d3001e7d92f817",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30015,
+                  "runtime_type": "tool.failed",
+                  "seq": 224,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在检索知识库",
+                "timestamp": "2026-11-12T04:19:41.586819+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-b1be9c52d3a6a7f7",
+                  "name": "search_knowledge",
+                  "title": "检索知识库",
+                  "display": {
+                    "target": "Microsoft 营收 经营现金流 季度财报",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "entity": "MSFT",
+                    "query": "Microsoft 营收 经营现金流 季度财报"
+                  },
+                  "summary": "正在检索知识库",
+                  "runtime_type": "tool.started",
+                  "seq": 225,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "评测隔离账户没有历史资料。",
+                "timestamp": "2026-11-12T04:19:41.589328+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-b1be9c52d3a6a7f7",
+                  "name": "search_knowledge",
+                  "title": "检索知识库",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_26a6e99bbb2d03bba0"
+                  ],
+                  "inputs": {
+                    "entity": "MSFT",
+                    "query": "Microsoft 营收 经营现金流 季度财报"
+                  },
+                  "output_preview": {
+                    "status": "empty",
+                    "items": [],
+                    "source": "evaluation_isolated_store",
+                    "summary": "评测隔离账户没有历史资料。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "评测隔离账户没有历史资料。",
+                  "display": {
+                    "target": "Microsoft 营收 经营现金流 季度财报",
+                    "result": "评测隔离账户没有历史资料。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "评测隔离账户没有历史资料。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取日线",
+                "timestamp": "2026-11-12T04:19:45.315864+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a166124e94933a28",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "display": {
+                    "target": "MSFT · 日线 · 近1月",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "period": "1mo"
+                  },
+                  "summary": "正在获取日线",
+                  "runtime_type": "tool.started",
+                  "seq": 255,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T04:20:15.315330+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a166124e94933a28",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "period": "1mo"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT · 日线 · 近1月",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 256,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T04:20:15.317325+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a3b9dc66d087e4d1",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://stockanalysis.com/stocks/msft/financials/",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 3000,
+                    "url": "https://stockanalysis.com/stocks/msft/financials/"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 257,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T04:20:15.336836+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "chatcmpl-tool-a3b9dc66d087e4d1",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_666c07d86e7c4c37f2"
+                  ],
+                  "inputs": {
+                    "max_length": 3000,
+                    "url": "https://stockanalysis.com/stocks/msft/financials/"
+                  },
+                  "output_preview": {
+                    "url": "https://stockanalysis.com/stocks/msft/financials/",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://stockanalysis.com/stocks/msft/financials/",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 30,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-12T04:20:29.677999+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 613,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "保留已核实的结果，其余部分暂时无法确认。",
+                "timestamp": "2026-11-12T04:20:35.579179+00:00",
+                "runId": "2026-11-11_201733_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_201733_891824cf:facts-02",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "failed",
+                  "title": "回答核对未完成",
+                  "summary": "保留已核实的结果，其余部分暂时无法确认。",
+                  "error_code": "run_deadline_exceeded",
+                  "runtime_type": "activity.finished",
+                  "seq": 777,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_201733_891824cf:facts-02"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": "MSFT",
+            "tickers": [
+              "MSFT"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 40819,
+              "total_completion_tokens": 2147,
+              "total_tokens": 42966,
+              "llm_token_calls": 8,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 7,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "step-5-preview": {
+                  "prompt": 40819,
+                  "completion": 2147,
+                  "calls": 8
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "step-5-preview",
+                  "prompt": 40819,
+                  "completion": 2147,
+                  "calls": 8,
+                  "failed_calls": 1,
+                  "duration_ms": 50962
+                }
+              ],
+              "tool_calls": 12,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 8,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 10,
+        "hits": 1,
+        "misses": 0,
+        "errors": 2
+      },
+      "score": null,
+      "elapsed_seconds": 182.031,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 1.0,
+        "tool_calls": 12,
+        "failed_tools": 12,
+        "tokens": 42966,
+        "rounds": 8
+      },
+      "checkpoints": 38,
+      "watchlist": [],
+      "transport_errors": [],
+      "model_call_outcomes": [
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 63,
+          "first_chunk_seconds": 1.594,
+          "elapsed_seconds": 3.922,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 5337,
+            "completion_tokens": 193,
+            "cached_tokens": 0,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.037359,
+            "cached_input_cny": 0.0,
+            "output_cny": 0.00386,
+            "total_cny": 0.041219
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 46,
+          "first_chunk_seconds": 0.812,
+          "elapsed_seconds": 2.562,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 5698,
+            "completion_tokens": 129,
+            "cached_tokens": 5120,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.004046,
+            "cached_input_cny": 0.003584,
+            "output_cny": 0.00258,
+            "total_cny": 0.01021
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 60,
+          "first_chunk_seconds": 1.485,
+          "elapsed_seconds": 3.922,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 5954,
+            "completion_tokens": 228,
+            "cached_tokens": 5376,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.004046,
+            "cached_input_cny": 0.0037632,
+            "output_cny": 0.00456,
+            "total_cny": 0.0123692
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 52,
+          "first_chunk_seconds": 0.796,
+          "elapsed_seconds": 2.781,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 6351,
+            "completion_tokens": 164,
+            "cached_tokens": 5888,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.003241,
+            "cached_input_cny": 0.0041216,
+            "output_cny": 0.00328,
+            "total_cny": 0.0106426
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 38,
+          "first_chunk_seconds": 0.781,
+          "elapsed_seconds": 2.344,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 6725,
+            "completion_tokens": 135,
+            "cached_tokens": 6144,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.004067,
+            "cached_input_cny": 0.0043008,
+            "output_cny": 0.0027,
+            "total_cny": 0.0110678
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 41,
+          "first_chunk_seconds": 2.063,
+          "elapsed_seconds": 3.672,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 6996,
+            "completion_tokens": 149,
+            "cached_tokens": 6656,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.00238,
+            "cached_input_cny": 0.0046592,
+            "output_cny": 0.00298,
+            "total_cny": 0.0100192
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 352,
+          "first_chunk_seconds": 2.594,
+          "elapsed_seconds": 14.281,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 1879,
+            "completion_tokens": 759,
+            "cached_tokens": 0,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.013153,
+            "cached_input_cny": 0.0,
+            "output_cny": 0.01518,
+            "total_cny": 0.028333
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "cancelled",
+          "received_chunks": 161,
+          "first_chunk_seconds": 0.64,
+          "elapsed_seconds": 5.844,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 1879,
+            "completion_tokens": 390,
+            "cached_tokens": 0,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.013153,
+            "cached_input_cny": 0.0,
+            "output_cny": 0.0078,
+            "total_cny": 0.020953
+          }
+        }
+      ],
+      "model_cost_estimates": [
+        {
+          "currency": "CNY",
+          "prompt_tokens": 5337,
+          "completion_tokens": 193,
+          "cached_tokens": 0,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.037359,
+          "cached_input_cny": 0.0,
+          "output_cny": 0.00386,
+          "total_cny": 0.041219
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 5698,
+          "completion_tokens": 129,
+          "cached_tokens": 5120,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.004046,
+          "cached_input_cny": 0.003584,
+          "output_cny": 0.00258,
+          "total_cny": 0.01021
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 5954,
+          "completion_tokens": 228,
+          "cached_tokens": 5376,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.004046,
+          "cached_input_cny": 0.0037632,
+          "output_cny": 0.00456,
+          "total_cny": 0.0123692
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 6351,
+          "completion_tokens": 164,
+          "cached_tokens": 5888,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.003241,
+          "cached_input_cny": 0.0041216,
+          "output_cny": 0.00328,
+          "total_cny": 0.0106426
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 6725,
+          "completion_tokens": 135,
+          "cached_tokens": 6144,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.004067,
+          "cached_input_cny": 0.0043008,
+          "output_cny": 0.0027,
+          "total_cny": 0.0110678
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 6996,
+          "completion_tokens": 149,
+          "cached_tokens": 6656,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.00238,
+          "cached_input_cny": 0.0046592,
+          "output_cny": 0.00298,
+          "total_cny": 0.0100192
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 1879,
+          "completion_tokens": 759,
+          "cached_tokens": 0,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.013153,
+          "cached_input_cny": 0.0,
+          "output_cny": 0.01518,
+          "total_cny": 0.028333
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 1879,
+          "completion_tokens": 390,
+          "cached_tokens": 0,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.013153,
+          "cached_input_cny": 0.0,
+          "output_cny": 0.0078,
+          "total_cny": 0.020953
+        }
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 8,
+        "unpriced_calls": 0,
+        "all_calls_priced": true,
+        "known_components": {
+          "uncached_input_cny": 0.081445,
+          "cached_input_cny": 0.0204288,
+          "output_cny": 0.04294,
+          "total_cny": 0.1448138
+        },
+        "known_subtotal_cny": 0.1448138,
+        "total_cny": 0.1448138
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-11_201733_891824cf/facts-02.json",
+        "request_sha256": "9cddd7000f718d84facb6020ef7e872728a17197901cf184e37ef2a63fd8007f"
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_201733_891824cf/facts-02/events.json",
+      "tool_recordings": 10
+    },
+    {
+      "id": "concepts-01",
+      "group": "concepts",
+      "model": "step-5-preview",
+      "turns": [
+        {
+          "run_id": "2026-11-11_201733_891824cf:concepts-01:0",
+          "query": "什么是自由现金流",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_201733_891824cf:concepts-01:0",
+            "session_id": "2026-11-11_201733_891824cf:concepts-01",
+            "message_id": "assistant:2026-11-11_201733_891824cf:concepts-01:0",
+            "attempt_id": "2807029acaa14688aac4f5733c7f5d2c",
+            "stream_epoch": "2807029acaa14688aac4f5733c7f5d2c",
+            "response": "## 自由现金流（Free Cash Flow, FCF）是什么\n\n**一句话定义**：自由现金流是企业在维持和扩张生产经营所必需的投资之后，真正可以自由支配、能分配给股东和债权人的现金。它回答的是\"这家公司一年到头实际能剩下多少钱\"，而不是会计上赚了多少钱。\n\n---\n\n### 两种常见计算方式\n\n最通用的算法是从现金流量表出发，用经营活动产生的现金流净额减去资本支出，得到企业真正可自由动用的现金。这里的资本支出通常对应\"购建固定资产、无形资产和其他长期资产支付的现金\"。\n\n如果做绝对估值或比较不同资本结构的公司，则常用企业自由现金流口径：以息税前利润乘以一减所得税率，加回折旧与摊销，减去营运资本增加额和资本支出。另一种等价算法是用经营活动现金流净额加上税后利息费用，再减去资本支出。\n\n两者的核心区别在于是否先扣除利息。前者更接近归股东所有的现金，后者对应全体资本提供方，折现时使用的贴现率也不同。\n\n---\n\n### 为什么它比净利润更值得关注\n\n净利润是权责发生制下的数字，包含应收账款、折旧政策、减值时点等可调节空间；自由现金流是实际现金的进出，相对更难操纵。更重要的是，净利润本身不包含维持企业运转所必需的再投资，一家公司可以连续多年盈利但自由现金流为负——利润挂在应收账款上，同时大举扩产，这种\"纸面利润\"是财务风险的典型信号。\n\n---\n\n### 使用时需要注意什么\n\n公司自行披露的\"Adjusted FCF\"常把股权激励、重组费用等加回，数字往往高于按现金流量表硬算的结果；横向比较前必须拉齐口径。\n\n资本支出的内部结构也要留意。有些公司会把无形资产和软件开发支出计入长期资产购置，而报表通常不区分\"维持性资本支出\"与\"扩张性资本支出\"。直接拿总资本支出计算，会低估成长期公司的真实可分配现金，也会高估成熟期公司的现金余量。\n\n此外，自由现金流单年波动较大。营运资本的季节性摆荡、一次性税款或集中付款都会让某一年的数字失真，观察多年趋势以及自由现金流与净利润的比率，比盯着单年绝对值更可靠。\n\n---\n\n### 主要用途\n\n在绝对估值模型中，自由现金流是预测和折现的分子，用于估算企业内在价值。在分配能力判断上，若自由现金流长期高于分红与回购金额，说明现有分配可持续；反之，靠借钱维持分红则不可持续。在横向比较上，由于受会计政策差异影响较小，自由现金流也比净利润更适合对比不同公司的现金创造能力。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "answered",
+            "quality": {
+              "state": "pass",
+              "reasons": [],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "pass",
+              "reasons": [],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": true,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": false,
+            "blocks": [
+              {
+                "id": "root_text_0",
+                "kind": "text",
+                "content": "## 自由现金流（Free Cash Flow, FCF）是什么\n\n**一句话定义**：自由现金流是企业在**维持和扩张生产经营所必需的投资之后，真正可以自由支配、能分配给股东和债权人的现金**。它回答的是\"这家公司一年到头实际能剩下多少钱\"，而不是会计上赚了多少钱。\n\n---\n\n### 最常见的计算口径\n\n```\n自由现金流 = 经营活动现金流净额 − 资本支出（CapEx）\n```\n\n资本支出通常取现金流量表中\"购建固定资产、无形资产和其他长期资产支付的现金\"。\n\n两者的区别在于**是否先扣除利息**：FCFE 归股东，FCFF 归全体资本提供方（股权+债权），做 DCF 估值时 FCFF 对应 WACC 折现。\n\n---\n\n### 为什么它比净利润更重要\n\n| 维度 | 净利润 | 自由现金流 |\n|---|---|---|\n| 性质 | 权责发生制，含应计项 | 实际现金进出 |\n| 可操纵性 | 较高（收入确认、折旧政策、减值时点） | 相对难操纵 |\n| 是否含投资 | 不含 CapEx | 已扣除维持性投资 |\n| 是否含利息 | EBITDA/EBIT 口径不含，净利含 | 视口径而定 |\n\n一家公司可以连续多年\"盈利但现金流为负\"——比如利润挂在应收账款上，同时大举扩产，这类\"纸面利润\"是财务风险的典型信号。\n\n---\n\n### 使用时的三个注意点\n\n---\n\n### 主要用途\n\n- **DCF 估值**：FCF 是绝对估值模型的分子，预测未来 FCF 并折现得到内在价值\n- **判断分红/回购能力**：FCF 长期高于分红+回购金额，说明分配可持续；反之靠借钱分红不可持续\n- **跨公司比较**：相比净利润，FCF 受会计政策差异影响小，更适合横向对比\n\n---\n\n需要我针对某家具体公司（A股或美股）拉取它近几个季度的经营现金流和资本支出，实际算一遍自由现金流和现金转化率吗？",
+                "revision": 1,
+                "seq": 49,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              },
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "## 自由现金流（Free Cash Flow, FCF）是什么\n\n**一句话定义**：自由现金流是企业在维持和扩张生产经营所必需的投资之后，真正可以自由支配、能分配给股东和债权人的现金。它回答的是\"这家公司一年到头实际能剩下多少钱\"，而不是会计上赚了多少钱。\n\n---\n\n### 两种常见计算方式\n\n最通用的算法是从现金流量表出发，用经营活动产生的现金流净额减去资本支出，得到企业真正可自由动用的现金。这里的资本支出通常对应\"购建固定资产、无形资产和其他长期资产支付的现金\"。\n\n如果做绝对估值或比较不同资本结构的公司，则常用企业自由现金流口径：以息税前利润乘以一减所得税率，加回折旧与摊销，减去营运资本增加额和资本支出。另一种等价算法是用经营活动现金流净额加上税后利息费用，再减去资本支出。\n\n两者的核心区别在于是否先扣除利息。前者更接近归股东所有的现金，后者对应全体资本提供方，折现时使用的贴现率也不同。\n\n---\n\n### 为什么它比净利润更值得关注\n\n净利润是权责发生制下的数字，包含应收账款、折旧政策、减值时点等可调节空间；自由现金流是实际现金的进出，相对更难操纵。更重要的是，净利润本身不包含维持企业运转所必需的再投资，一家公司可以连续多年盈利但自由现金流为负——利润挂在应收账款上，同时大举扩产，这种\"纸面利润\"是财务风险的典型信号。\n\n---\n\n### 使用时需要注意什么\n\n公司自行披露的\"Adjusted FCF\"常把股权激励、重组费用等加回，数字往往高于按现金流量表硬算的结果；横向比较前必须拉齐口径。\n\n资本支出的内部结构也要留意。有些公司会把无形资产和软件开发支出计入长期资产购置，而报表通常不区分\"维持性资本支出\"与\"扩张性资本支出\"。直接拿总资本支出计算，会低估成长期公司的真实可分配现金，也会高估成熟期公司的现金余量。\n\n此外，自由现金流单年波动较大。营运资本的季节性摆荡、一次性税款或集中付款都会让某一年的数字失真，观察多年趋势以及自由现金流与净利润的比率，比盯着单年绝对值更可靠。\n\n---\n\n### 主要用途\n\n在绝对估值模型中，自由现金流是预测和折现的分子，用于估算企业内在价值。在分配能力判断上，若自由现金流长期高于分红与回购金额，说明现有分配可持续；反之，靠借钱维持分红则不可持续。在横向比较上，由于受会计政策差异影响较小，自由现金流也比净利润更适合对比不同公司的现金创造能力。",
+                "revision": 1,
+                "seq": 623,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": []
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T04:20:35.911299+00:00",
+                "runId": "2026-11-11_201733_891824cf:concepts-01:0",
+                "sessionId": "2026-11-11_201733_891824cf:concepts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "什么是自由现金流",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 2,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:concepts-01:0",
+                  "session_id": "2026-11-11_201733_891824cf:concepts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T04:20:39.954621+00:00",
+                "runId": "2026-11-11_201733_891824cf:concepts-01:0",
+                "sessionId": "2026-11-11_201733_891824cf:concepts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "什么是自由现金流",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 3,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:concepts-01:0",
+                  "session_id": "2026-11-11_201733_891824cf:concepts-01"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-12T04:20:54.712464+00:00",
+                "runId": "2026-11-11_201733_891824cf:concepts-01:0",
+                "sessionId": "2026-11-11_201733_891824cf:concepts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "什么是自由现金流",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 353,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:concepts-01:0",
+                  "session_id": "2026-11-11_201733_891824cf:concepts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "已保留与资料一致的结果。",
+                "timestamp": "2026-11-12T04:21:14.865321+00:00",
+                "runId": "2026-11-11_201733_891824cf:concepts-01:0",
+                "sessionId": "2026-11-11_201733_891824cf:concepts-01",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "completed",
+                  "title": "回答核对完成",
+                  "summary": "已保留与资料一致的结果。",
+                  "runtime_type": "activity.finished",
+                  "seq": 851,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_201733_891824cf:concepts-01:0",
+                  "session_id": "2026-11-11_201733_891824cf:concepts-01"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": null,
+            "tickers": [],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 9232,
+              "total_completion_tokens": 1922,
+              "total_tokens": 11154,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 2,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "step-5-preview": {
+                  "prompt": 9232,
+                  "completion": 1922,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "step-5-preview",
+                  "prompt": 9232,
+                  "completion": 1922,
+                  "calls": 2,
+                  "failed_calls": 0,
+                  "duration_ms": 38951
+                }
+              ],
+              "tool_calls": 0,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 39.219,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 11154,
+        "rounds": 2
+      },
+      "checkpoints": 27,
+      "watchlist": [],
+      "transport_errors": [],
+      "model_call_outcomes": [
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 348,
+          "first_chunk_seconds": 3.25,
+          "elapsed_seconds": 14.734,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 5244,
+            "completion_tokens": 757,
+            "cached_tokens": 1024,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.02954,
+            "cached_input_cny": 0.0007168,
+            "output_cny": 0.01514,
+            "total_cny": 0.0453968
+          }
+        },
+        {
+          "model": "step-5-preview",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 495,
+          "first_chunk_seconds": 3.75,
+          "elapsed_seconds": 20.11,
+          "cost_estimate": {
+            "currency": "CNY",
+            "prompt_tokens": 3988,
+            "completion_tokens": 1165,
+            "cached_tokens": 1024,
+            "cache_discount_applied": true,
+            "uncached_input_cny": 0.020748,
+            "cached_input_cny": 0.0007168,
+            "output_cny": 0.0233,
+            "total_cny": 0.0447648
+          }
+        }
+      ],
+      "model_cost_estimates": [
+        {
+          "currency": "CNY",
+          "prompt_tokens": 5244,
+          "completion_tokens": 757,
+          "cached_tokens": 1024,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.02954,
+          "cached_input_cny": 0.0007168,
+          "output_cny": 0.01514,
+          "total_cny": 0.0453968
+        },
+        {
+          "currency": "CNY",
+          "prompt_tokens": 3988,
+          "completion_tokens": 1165,
+          "cached_tokens": 1024,
+          "cache_discount_applied": true,
+          "uncached_input_cny": 0.020748,
+          "cached_input_cny": 0.0007168,
+          "output_cny": 0.0233,
+          "total_cny": 0.0447648
+        }
+      ],
+      "cost_estimate": {
+        "currency": "CNY",
+        "priced_calls": 2,
+        "unpriced_calls": 0,
+        "all_calls_priced": true,
+        "known_components": {
+          "uncached_input_cny": 0.050288,
+          "cached_input_cny": 0.0014336,
+          "output_cny": 0.03844,
+          "total_cny": 0.0901616
+        },
+        "known_subtotal_cny": 0.0901616,
+        "total_cny": 0.0901616
+      },
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "external_judge_verified": false,
+      "external_judge": {
+        "request_path": "tests/agent_eval/requests/2026-11-11_201733_891824cf/concepts-01.json",
+        "request_sha256": "d98b507a054f0cbe649842852ba0980ba6796f2585a2d37bad3bc0465339b65d"
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_201733_891824cf/concepts-01/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 182.031,
+      "median_tokens": 42966,
+      "median_rounds": 8,
+      "tool_error_rate": 1.0
+    },
+    "concepts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 39.219,
+      "median_tokens": 11154,
+      "median_rounds": 2,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "d84e27eca69ffa5557c9ada1f18fb61621615dedfcbd0cd787ce72c158721c25",
+  "subject": {
+    "model": "step-5-preview",
+    "context_window": 1000000,
+    "max_output": 4096,
+    "base_url": "https://api.stepfun.com/v1",
+    "effort": "low"
+  },
+  "judge": {
+    "model": "gpt-6.1-sol",
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures/step5-v1",
+  "seed_tapes": null,
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 1,
+    "request_pacing_scope": "global",
+    "model_protocol": "sse",
+    "upstream_stream": true,
+    "model_configuration": {
+      "model": "step-5-preview",
+      "base_url": "https://api.stepfun.com/v1",
+      "effort": "low",
+      "context_window": 1000000,
+      "max_output": 4096
+    },
+    "model_quotas": {
+      "concurrency": 2,
+      "rpm": 30,
+      "tpm": 250000,
+      "minimum_request_interval_seconds": 10.0,
+      "run_token_budget": 160000
+    },
+    "step5_cost_pricing": {
+      "currency": "CNY",
+      "uncached_input_per_million": 7,
+      "cached_input_per_million": 0.7,
+      "output_per_million": 20,
+      "cache_rate_basis": "new_user"
+    },
+    "model_quota_scope": "run_shared",
+    "analysis_worker_enabled": true,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "cost_estimate": {
+    "currency": "CNY",
+    "priced_calls": 10,
+    "unpriced_calls": 0,
+    "all_calls_priced": true,
+    "known_components": {
+      "uncached_input_cny": 0.131733,
+      "cached_input_cny": 0.0218624,
+      "output_cny": 0.08138,
+      "total_cny": 0.2349754
+    },
+    "known_subtotal_cny": 0.2349754,
+    "total_cny": 0.2349754
+  },
+  "fixtures_sha256": "18ac834a58a4ba40ace448d976b9e69ecd121722d00dfc4867ad8ee6ccd678cb"
+}

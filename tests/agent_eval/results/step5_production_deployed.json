@@ -1,0 +1,103 @@
+{
+  "release": "step5-api-20261111-a147e695613e",
+  "previous": "/home/ubuntu/finsight-releases/agent-20261110-2a5de207900b",
+  "steps": [
+    {
+      "step": "image_verified",
+      "time": 1794458498.864984,
+      "image_id": "sha256:1cfcdcead407ae932028dbb19ff95229aab4ce99ee87a02dc08ccdf5d6e8f4b2"
+    },
+    {
+      "step": "source_and_private_configuration_verified",
+      "time": 1794458501.055537,
+      "changed_files": 5
+    },
+    {
+      "step": "active_research_checked",
+      "time": 1794458501.2418582,
+      "active": 0
+    },
+    {
+      "step": "backend_recreated",
+      "time": 1794458512.8745244
+    },
+    {
+      "step": "verified_and_selected",
+      "time": 1794458525.3203177,
+      "model": "step-5-preview",
+      "other_containers_unchanged": true
+    }
+  ],
+  "status": "deployed",
+  "image_id": "sha256:1cfcdcead407ae932028dbb19ff95229aab4ce99ee87a02dc08ccdf5d6e8f4b2",
+  "catalog": {
+    "models": [
+      {
+        "id": "system:server-default",
+        "model": "deepseek-v4.1-flash-1017",
+        "provider": "system",
+        "label": "deepseek-v4.1-flash-1017",
+        "vision": true,
+        "icon_url": null,
+        "effort_options": [],
+        "default_effort": null,
+        "docs_url": null,
+        "available": true
+      },
+      {
+        "id": "stepfun:step-5-preview",
+        "model": "step-5-preview",
+        "provider": "stepfun",
+        "label": "Step 5 Preview",
+        "vision": false,
+        "icon_url": "/model-icons/stepfun.png",
+        "effort_options": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "default_effort": "medium",
+        "docs_url": "https://platform.stepfun.com/docs/zh/guides/models/step-5-preview",
+        "available": true
+      },
+      {
+        "id": "stepfun-api:step-5-preview",
+        "model": "step-5-preview",
+        "provider": "stepfun",
+        "label": "Step 5 Preview（按量）",
+        "vision": true,
+        "icon_url": "/model-icons/stepfun.png",
+        "effort_options": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "default_effort": "medium",
+        "docs_url": "https://platform.stepfun.com/docs/zh/guides/models/step-5-preview",
+        "available": true
+      }
+    ],
+    "default_model_id": "system:server-default"
+  },
+  "model_probe": {
+    "native_tool_calls": true,
+    "streaming": true,
+    "streaming_tool_calls": true,
+    "verified": true,
+    "model": "step-5-preview",
+    "probe_usage": {
+      "prompt_tokens": 250,
+      "completion_tokens": 37,
+      "total_tokens": 287,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      }
+    }
+  },
+  "previous_backend_id": "91b7d22fda9427315793fe3c36feddd3696b7cff0f41f48c39be904ae6fdfa79",
+  "backend_id": "4c7f46fec7ca8774cf5548a74fc420c5440fa0af70c2f66e37d5293dd7397c21",
+  "other_containers_unchanged": true
+}

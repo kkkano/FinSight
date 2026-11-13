@@ -1,0 +1,14 @@
+{
+  "case_id": "F6",
+  "status": "pending",
+  "source_input_exact": "换模型后重新提问",
+  "expected_exact": "使用实际选择的模型；界面显示与请求一致",
+  "actions": [
+    {
+      "action": "wait",
+      "seconds": 2
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": true
+}

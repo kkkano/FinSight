@@ -1,0 +1,26 @@
+{
+  "request_sha256": "41b412799f7180616fc914367c14705c84866eb28f5b98cac94cb7cd410fd981",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：交付 NVDA 三个近期交易日的价格、日涨跌、成交量及治理/AI 板块报道；但未对大盘因素做实质区分，还把 11-09、11-10 与 11-10 报道称为“同日出现”，时间对应不严谨。",
+      "numbers=2：11-09/10/11 收盘 178.67/168.89/173.73、日涨跌 −4.27%/−5.47%/+2.87% 及成交量均与本次真实日线一致；当前报价与 10-13 的 228.52 也有录制支持，报道的近 10% 未冒充工具核实跌幅。",
+      "limitations=0：称历史数据是“共23行、返回5行”的抽样、只能说明三个观测日，但完整历史录制已有 23 个交易日，包括 11-05 的 −9.26% 等重要本轮跌势；将查看摘要的行数误作取得数据范围，使缺口边界不准确。文中的不唯一归因和指控未确认说明虽正确，仍不足抵消此问题。",
+      "presentation=1：行情表、报道、解读和边界分节，来源 URL 明确，主要数字容易查找，完整收尾。",
+      "no_internal_identifiers=1：正文未回显数据集或运行标识；金融主体、日期、报道链接和数据商口径属于证据说明。"
+    ]
+  }
+}

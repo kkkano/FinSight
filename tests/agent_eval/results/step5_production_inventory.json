@@ -1,0 +1,54 @@
+{
+  "exit_code": 0,
+  "data": {
+    "current": "/home/ubuntu/finsight-releases/agent-20261110-2a5de207900b",
+    "containers": [
+      {
+        "name": "/finsight-frontend",
+        "image": "finsight-frontend:agent-20261110-2a5de207900b",
+        "id": "dcb0c6320afc",
+        "health": "healthy",
+        "service": "frontend",
+        "step_plan_configured": false,
+        "research_step_api_configured": false
+      },
+      {
+        "name": "/finsight-prediction-watchdog-1",
+        "image": "finsight-backend:agent-20261110-2a5de207900b",
+        "id": "5e942926e4eb",
+        "health": null,
+        "service": "prediction-watchdog",
+        "step_plan_configured": true,
+        "research_step_api_configured": false
+      },
+      {
+        "name": "/finsight-backend",
+        "image": "finsight-backend:agent-20261110-2a5de207900b",
+        "id": "91b7d22fda94",
+        "health": "healthy",
+        "service": "backend",
+        "step_plan_configured": true,
+        "research_step_api_configured": false
+      },
+      {
+        "name": "/finsight-compute-dispatcher-1",
+        "image": "finsight-compute-dispatcher:python-20261107-a0b8e1d70e82",
+        "id": "ae32e4d791bb",
+        "health": "healthy",
+        "service": "compute-dispatcher",
+        "step_plan_configured": false,
+        "research_step_api_configured": false
+      },
+      {
+        "name": "/finsight-postgres",
+        "image": "pgvector/pgvector:pg16",
+        "id": "057c11bfdc1a",
+        "health": "healthy",
+        "service": "postgres",
+        "step_plan_configured": false,
+        "research_step_api_configured": false
+      }
+    ]
+  },
+  "error": null
+}

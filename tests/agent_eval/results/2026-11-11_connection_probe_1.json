@@ -1,0 +1,49 @@
+{
+  "probe": 1,
+  "source": "tmp/agent-eval/2026-11-11_023948_891824cf/concepts-02/last_model_request.json",
+  "variant": "httpx_original",
+  "request_bytes": 18235,
+  "messages": 4,
+  "tools": 5,
+  "status": 200,
+  "data_lines": 878,
+  "usage": {
+    "prompt_tokens": 4292,
+    "completion_tokens": 875,
+    "total_tokens": 5167,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "cached_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0,
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 4292,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "prompt_cache_write_tokens": 0,
+    "completion_thinking_tokens": 0,
+    "cached_tokens": 0,
+    "quota": {
+      "model": "deepseek-v4.1-flash",
+      "percent": 0,
+      "reset_at": "1794480099",
+      "shared_models": []
+    }
+  },
+  "headers": {
+    "content-type": "text/event-stream",
+    "content-encoding": null,
+    "transfer-encoding": "chunked",
+    "server": "cloudflare"
+  },
+  "elapsed_seconds": 8.719
+}

@@ -1,0 +1,308 @@
+{
+  "created_at": "2026-11-13T06:35:46.972585+00:00",
+  "production_modified": false,
+  "database_accessed": false,
+  "model_requests": {
+    "configured": {
+      "provider": "configured",
+      "model": "deepseek-v4.1-flash-1017",
+      "request_count": 1,
+      "max_tokens": 8,
+      "local_key_sha256": "85ea5d3a7b817ffb7ea673461278d1a0ce76723f4fd3c6487d276744c068a9f7",
+      "endpoint_host": "api.llm.pm",
+      "http_status": 200,
+      "status": "reachable",
+      "has_choices": true,
+      "usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cached_tokens": 0,
+        "completion_thinking_tokens": 0,
+        "completion_tokens": 2,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 59,
+        "prompt_cache_write_tokens": 0,
+        "prompt_tokens": 59,
+        "prompt_tokens_details": {
+          "accepted_prediction_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": 0
+        },
+        "quota": {
+          "model": "deepseek-v4.1-flash",
+          "percent": 27,
+          "reset_at": "1794592234",
+          "shared_models": []
+        },
+        "total_tokens": 61
+      },
+      "elapsed_seconds": 3.438
+    },
+    "moxuna": {
+      "provider": "moxuna",
+      "model": "deepseek-v4.1-flash",
+      "request_count": 1,
+      "max_tokens": 8,
+      "local_key_sha256": "e92ff5954e740d0174240a9be5df95bc59351bfd682530c2a3443b41bc1b0f0f",
+      "endpoint_host": "jpn.cdn.moxuna.com",
+      "http_status": 401,
+      "status": "rejected",
+      "error_code": "new_api_error",
+      "error_type": "new_api_error",
+      "safe_message": "该令牌已过期",
+      "elapsed_seconds": 1.594
+    },
+    "fallback": {
+      "provider": "fallback",
+      "model": "qwen3.8-flash",
+      "request_count": 1,
+      "max_tokens": 8,
+      "local_key_sha256": "1eae86f23ad00f7e1dd84c167ae0ff57cfd53c44613b9981045a8fb7f5124d9c",
+      "endpoint_host": "api.kunyou.asia",
+      "http_status": 200,
+      "status": "reachable",
+      "has_choices": true,
+      "usage": {
+        "completion_tokens": 18,
+        "prompt_tokens": 65,
+        "total_tokens": 83
+      },
+      "elapsed_seconds": 16.687
+    }
+  },
+  "model_endpoints_attempted": [
+    "0baf8dd9d546c9a1a548647f0b6ffdf867c3f59283d29bc912882cc697299a23",
+    "43a6f867ebeac1b7c44f14f57322bafcaeaaad63e8c5a1f88cd78c66bc425282",
+    "64264f4cd6e47c2fc14a4bd2b2a2cd3acbb8d7e68882867fde272729db8a9b61"
+  ],
+  "configuration": {
+    "configured": {
+      "model": "deepseek-v4.1-flash-1017",
+      "endpoint_host": "api.llm.pm",
+      "configured": true,
+      "local_key_sha256": "85ea5d3a7b817ffb7ea673461278d1a0ce76723f4fd3c6487d276744c068a9f7",
+      "same_named_remote_present": true,
+      "same_named_key_matches": true,
+      "remote_matching_endpoint_fields": [
+        "FINSIGHT_AGENT_API_BASE"
+      ],
+      "remote_matching_key_fields": [
+        "FINSIGHT_AGENT_API_KEY"
+      ]
+    },
+    "moxuna": {
+      "model": "deepseek-v4.1-flash",
+      "endpoint_host": "jpn.cdn.moxuna.com",
+      "configured": true,
+      "local_key_sha256": "e92ff5954e740d0174240a9be5df95bc59351bfd682530c2a3443b41bc1b0f0f",
+      "same_named_remote_present": false,
+      "same_named_key_matches": null,
+      "remote_matching_endpoint_fields": [],
+      "remote_matching_key_fields": []
+    },
+    "fallback": {
+      "model": "qwen3.8-flash",
+      "endpoint_host": "api.kunyou.asia",
+      "configured": true,
+      "local_key_sha256": "1eae86f23ad00f7e1dd84c167ae0ff57cfd53c44613b9981045a8fb7f5124d9c",
+      "same_named_remote_present": false,
+      "same_named_key_matches": null,
+      "remote_matching_endpoint_fields": [],
+      "remote_matching_key_fields": []
+    }
+  },
+  "sec_configuration": {
+    "local_present": true,
+    "remote_present": true,
+    "same_sha256": true,
+    "local_required_shape": true
+  },
+  "yahoo_proxy": {
+    "local_configured": false,
+    "remote_configured": true,
+    "scheme": "socks5h",
+    "remote_port": 10808,
+    "remote_host_sha256": "346840d5a3d9fe9b61ce99955bb98df3db872090732c96aa5df1d83cb1f3e85a",
+    "requires_authentication": false
+  },
+  "sec_request": {
+    "ticker": "AAPL",
+    "request_count": 1,
+    "endpoint": "data.sec.gov/companyfacts",
+    "user_agent_printed": false,
+    "http_status": 200,
+    "status": "available",
+    "cik_matches": true,
+    "revenue_concepts": [
+      "RevenueFromContractWithCustomerExcludingAssessedTax",
+      "Revenues",
+      "SalesRevenueNet"
+    ],
+    "sample": [
+      {
+        "start": "2025-09-28",
+        "end": "2026-09-26",
+        "val": 478834000000,
+        "filed": "2026-11-03",
+        "form": "10-K",
+        "fp": "FY"
+      },
+      {
+        "start": "2024-09-29",
+        "end": "2025-09-27",
+        "val": 416161000000,
+        "filed": "2026-11-03",
+        "form": "10-K",
+        "fp": "FY"
+      }
+    ],
+    "response_sha256": "f085735b4d08fb116ade18d24247ffabe11df8eb52eae6556b165831f15ef1ad",
+    "elapsed_seconds": 2.407,
+    "evidence_note": "单次诊断请求原始安全输出；与并行模型诊断写入同一暂存文件后，此处恢复该已观察结果，未重发SEC请求。"
+  },
+  "data_path_probes": {
+    "yahoo_forward": {
+      "request_count": 1,
+      "route": "loopback_ssh_existing_remote_socks",
+      "ticker": "AAPL",
+      "server_changed": false,
+      "http_status": 200,
+      "status": "available",
+      "observations": 5,
+      "valid_closes": 5,
+      "currency": "USD",
+      "last_close": 354.8800048828125,
+      "elapsed_seconds": 2.14
+    },
+    "sec_ticker_map": {
+      "request_count": 1,
+      "endpoint": "www.sec.gov/company_tickers",
+      "user_agent_printed": false,
+      "http_status": 200,
+      "status": "available",
+      "aapl_resolved": true,
+      "elapsed_seconds": 2.25
+    }
+  },
+  "local_forward": {
+    "status": "ready",
+    "pid": 48172,
+    "local_host": "127.0.0.1",
+    "local_port": 50858,
+    "private_env_path": "tmp/agent-eval/yahoo-forward.env",
+    "server_configuration_modified": false,
+    "ssh_host_key_policy": "RejectPolicy",
+    "started_at": "2026-11-13T06:39:56.911291+00:00"
+  },
+  "historical_403_evidence": [
+    {
+      "case_id": "attribution-01",
+      "path": "tmp/agent-eval/2026-11-12_215645_891824cf/attribution-01/model_call_outcomes.json",
+      "sha256": "e6f7b470c5148a4b54f0c60f67316cd77d0d5bff8bf3aa91f5b3480f47da34cd",
+      "failures": [
+        {
+          "status": "failed",
+          "error_code": "model_http_403",
+          "elapsed_seconds": 1.546
+        }
+      ],
+      "recorded_response_body_available": false,
+      "request_shape": {
+        "stream": true,
+        "max_tokens": 4096,
+        "messages": 8,
+        "tools": 45
+      }
+    },
+    {
+      "case_id": "actions-01",
+      "path": "tmp/agent-eval/2026-11-12_215645_891824cf/actions-01/model_call_outcomes.json",
+      "sha256": "6063a2118303ddd1ee87ecac0ebb1209382875d9223a9adfb1371b15a6e80e64",
+      "failures": [
+        {
+          "status": "failed",
+          "error_code": "model_http_403",
+          "elapsed_seconds": 1.438
+        }
+      ],
+      "recorded_response_body_available": false,
+      "request_shape": {
+        "stream": true,
+        "max_tokens": 4096,
+        "messages": 3,
+        "tools": 45
+      }
+    },
+    {
+      "case_id": "actions-02",
+      "path": "tmp/agent-eval/2026-11-12_215645_891824cf/actions-02/model_call_outcomes.json",
+      "sha256": "98ef50609293e3384de26f1f3b72f7b3743551fee8a8ccbd05895328107d5748",
+      "failures": [
+        {
+          "status": "failed",
+          "error_code": "model_http_403",
+          "elapsed_seconds": 5.125
+        }
+      ],
+      "recorded_response_body_available": false,
+      "request_shape": {
+        "stream": true,
+        "max_tokens": 4096,
+        "messages": 3,
+        "tools": 45
+      }
+    }
+  ],
+  "quota_metadata_note": {
+    "reported_percent": 27,
+    "percent_semantics": "未查到供应商定义，不把percent推断为剩余或已用额度",
+    "reset_at_utc": "2026-11-13T17:50:34+00:00"
+  },
+  "conclusions": {
+    "configured": {
+      "classification": "currently_authenticated_small_request_succeeded",
+      "key_matches_production": true,
+      "requires_new_key_demonstrated": false,
+      "reason": "本地key与线上同名key哈希相同；当前唯一小请求HTTP200。历史403只留状态码，没有拒绝正文，不能据此断言密钥过期或额度耗尽。批量工具请求与本次小请求的体量/协议不同，其可用性尚未重验。"
+    },
+    "moxuna": {
+      "classification": "provider_reported_expired_token",
+      "requires_user_action": true,
+      "reason": "本轮唯一请求HTTP401，供应商明确返回该令牌已过期；需有效新令牌或在供应商处续期。线上没有同名配置，不能声称本地/线上key不同。"
+    },
+    "fallback": {
+      "classification": "currently_authenticated_but_latency_sensitive",
+      "requires_new_key_demonstrated": false,
+      "reason": "Qwen唯一小请求HTTP200，耗时16.687秒；此前25秒工具能力探针超时不足以证明认证或额度问题。生产容器没有可比较的同名fallback配置。"
+    },
+    "sec": {
+      "classification": "direct_sec_paths_available",
+      "reason": "与线上同哈希的SEC声明已在本机通过一次CompanyFacts和一次ticker列表请求，均HTTP200；仅验证AAPL小样本，未冒充整批财务研究验收。"
+    },
+    "yahoo": {
+      "classification": "existing_remote_proxy_reused_successfully",
+      "reason": "本机回环SSH转发复用服务器已有SOCKS代理，AAPL 5d/1d一次请求200且5个有效收盘。服务器配置未改，仅新评测进程加载专属env。"
+    }
+  },
+  "limits": {
+    "paid_model_request_count": 3,
+    "max_model_requests_per_endpoint": 1,
+    "full_research_restarted": false,
+    "production_env_modified": false,
+    "prediction_env_modified": false,
+    "database_accessed": false,
+    "raw_keys_user_agent_emails_printed": false,
+    "local_forward_left_running_for_parent_evaluation": true,
+    "forward_wrapper": "tmp/agent-eval/run_with_yahoo_forward.py"
+  },
+  "completed_at": "2026-11-13T06:44:09.684712+00:00"
+}

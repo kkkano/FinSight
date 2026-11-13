@@ -1,0 +1,26 @@
+{
+  "request_sha256": "2b369d7191331885311da1c3cc6d324f9aef036de12521904a378325abd739ea",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文仅说将取得 MSFT 财报标题和财期，没有结合原文解释指引变化，也未区分记者观点、公司表态和披露数据。",
+      "numbers=0：没有指引数字、变化时点或准确指引解释交付，录制中的搜索及财务资料未成为答案。",
+      "limitations=1：终态明确研究超时，未伪造 MSFT 指引或借用同行数据，正分只依据可见故障说明。",
+      "presentation=1：英文进度承诺及中文超时/重试通知为完整短句，失败状态清楚；没有形成英文摘要堆叠的答案。",
+      "no_internal_identifiers=1：正文和可读错误说明没有内部标识。"
+    ]
+  }
+}

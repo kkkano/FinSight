@@ -1,0 +1,25 @@
+{
+  "request_sha256": "ae83e628937707727e62666e9795da7d4508c9c8e1d57c66a93b2b0b48231918",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：INTC 最近两个已披露季度的营收和毛利率均未列出，终态 response 为空；没有对齐财期、币种、毛利率口径或引用来源。",
+      "numbers=0：完整录制为空、未执行数据工具、证据池为空，没有取得或展示两季度的任何营收、毛利率数字，无法形成所需数据表。",
+      "limitations=1：终态如实说明研究超时，未拿尚未披露季度填表，也没有把未取得的数值或百分比写成确定事实。",
+      "presentation=1、no_internal_identifiers=1：故障通知及恢复提示简洁可读，正文没有不必要的内部标识；技术元数据不作为正文泄漏。"
+    ]
+  }
+}

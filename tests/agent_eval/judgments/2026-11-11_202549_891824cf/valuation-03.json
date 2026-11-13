@@ -1,0 +1,26 @@
+{
+  "request_sha256": "eaba964e91c8f0fe72ee0b1c2bbb846881331d4f16ae73f3ad2d6a2ca62541c8",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有取现价和财报锚点、换工具的进度，chart 与 table 均为空；没有明确情景假设、事实边界、工具生成情景数据或一致的图表解读。",
+      "numbers=0：报价与财报失败、盈利预期表为空，且过程没有情景计算调用；既没有 EPS、PE 情景取值，也没有估值计算结果。",
+      "limitations=1：正文交代现价源超时，终态明确研究超时，没有声称已画情景图或把假设当预测事实。",
+      "presentation=1：两段进度文字和终态错误说明简短完整，已显示内容易读；这一分不替代要求的图表形式交付。",
+      "no_internal_identifiers=1：可见正文和故障通知未包含内部数据集、运行或工具调用标识。"
+    ]
+  }
+}

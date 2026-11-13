@@ -1,0 +1,2797 @@
+{
+  "schema_version": 1,
+  "runtime": "baseline",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+            "session_id": "2026-11-11_184334_891824cf:facts-01",
+            "message_id": "assistant:2026-11-11_184334_891824cf:facts-01:0",
+            "attempt_id": "906fd0e32efe41d88a8977e707b1784d",
+            "stream_epoch": "906fd0e32efe41d88a8977e707b1784d",
+            "response": "本轮行情源没有返回任何可用数据，因此我无法给出 AAPL 的当前价格——任何数字都可能不是真实报价，我不会凭记忆或估算填补。\n\n**需要说明的几点：**\n\n**自行核实的可靠渠道**：纳斯达克官网的 AAPL 报价页、Apple 投资者关系页（investor.apple.com），或你所用券商的实时行情。查看时留意三项信息：报价时间戳、币种（美元）、以及是否有延迟说明。\n\n如果你之后能提供具体的报价来源或截图，我可以帮你核对、并与历史区间做对比分析。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_2",
+                "kind": "text",
+                "content": "",
+                "revision": 1,
+                "seq": 12,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_3",
+                "kind": "text",
+                "content": "",
+                "revision": 1,
+                "seq": 16,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_4",
+                "kind": "text",
+                "content": "",
+                "revision": 1,
+                "seq": 21,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_5",
+                "kind": "text",
+                "content": "",
+                "revision": 1,
+                "seq": 28,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_6",
+                "kind": "text",
+                "content": "本轮行情源没有返回任何可用数据，因此我无法给出 AAPL 的当前价格——任何数字都可能不是真实报价，我不会凭记忆或估算填补。\n\n**需要说明的几点：**\n\n**自行核实的可靠渠道**：纳斯达克官网的 AAPL 报价页、Apple 投资者关系页（investor.apple.com），或你所用券商的实时行情。查看时留意三项信息：报价时间戳、币种（美元）、以及是否有延迟说明。\n\n如果你之后能提供具体的报价来源或截图，我可以帮你核对、并与历史区间做对比分析。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+                "revision": 1,
+                "seq": 35,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-12T02:43:45.089393+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_CFe24bLNcAOen5MAR6YQ3121",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 5,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T02:44:15.093178+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_CFe24bLNcAOen5MAR6YQ3121",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 6,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-12T02:44:19.186095+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_165WiOfhxo0CVDZVdJTr8288",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 10,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T02:44:49.660811+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_165WiOfhxo0CVDZVdJTr8288",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_84ea74d40e4614e6b3"
+                  ],
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 30468,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取日线",
+                "timestamp": "2026-11-12T02:44:53.214765+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-ad68c63f-0ab7-42b5-ab9b-6486392237f4",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "display": {
+                    "target": "AAPL · 日线 · 近1月",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL",
+                    "interval": "1d",
+                    "period": "1mo"
+                  },
+                  "summary": "正在获取日线",
+                  "runtime_type": "tool.started",
+                  "seq": 14,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T02:45:23.231027+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-ad68c63f-0ab7-42b5-ab9b-6486392237f4",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "inputs": {
+                    "ticker": "AAPL",
+                    "interval": "1d",
+                    "period": "1mo"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "AAPL · 日线 · 近1月",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30014,
+                  "runtime_type": "tool.failed",
+                  "seq": 15,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在计算技术指标",
+                "timestamp": "2026-11-12T02:45:26.961883+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-f964c809-2b4a-4dcb-b567-b0f504f8ce2f",
+                  "name": "get_technical_snapshot",
+                  "title": "计算技术指标",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在计算技术指标",
+                  "runtime_type": "tool.started",
+                  "seq": 19,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T02:45:56.973156+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-f964c809-2b4a-4dcb-b567-b0f504f8ce2f",
+                  "name": "get_technical_snapshot",
+                  "title": "计算技术指标",
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 20,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取日线",
+                "timestamp": "2026-11-12T02:46:00.795151+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-96b2ed5b-6141-4d9d-a99a-800a528f5186",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "display": {
+                    "target": "AAPL · 日线 · 近5日",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "interval": "1d",
+                    "period": "5d",
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取日线",
+                  "runtime_type": "tool.started",
+                  "seq": 24,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "录制时工具调用失败；未保存异常正文。",
+                "timestamp": "2026-11-12T02:46:00.813236+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-96b2ed5b-6141-4d9d-a99a-800a528f5186",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_24ac928850038d2199"
+                  ],
+                  "inputs": {
+                    "interval": "1d",
+                    "period": "5d",
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error_code": "tool_exception",
+                    "error": "tool_exception",
+                    "summary": "录制时工具调用失败；未保存异常正文。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "录制时工具调用失败；未保存异常正文。",
+                  "display": {
+                    "target": "AAPL · 日线 · 近5日",
+                    "result": "录制时工具调用失败；未保存异常正文。"
+                  },
+                  "error_code": "tool_exception",
+                  "reason": "录制时工具调用失败；未保存异常正文。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:46:00.829246+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 26,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:46:07.873451+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 27,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-12T02:46:10.813149+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-fe66a77e-06c9-40f0-88d4-6a34a2ae9636",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "AAPL Apple stock price today",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "AAPL Apple stock price today"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 31,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T02:46:14.837571+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call-fe66a77e-06c9-40f0-88d4-6a34a2ae9636",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_e355f166a2ad8d182a"
+                  ],
+                  "inputs": {
+                    "query": "AAPL Apple stock price today"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "AAPL Apple stock price today",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4031,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:46:14.850514+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 33,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:46:18.886203+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 34,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-12T02:46:25.012698+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 125,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:46:25.031225+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 126,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:46:29.062664+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 127,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "保留已核实的结果，其余部分暂时无法确认。",
+                "timestamp": "2026-11-12T02:46:36.689255+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-01",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "failed",
+                  "title": "回答核对未完成",
+                  "summary": "保留已核实的结果，其余部分暂时无法确认。",
+                  "error_code": "run_deadline_exceeded",
+                  "runtime_type": "activity.finished",
+                  "seq": 128,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-01"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": "AAPL",
+            "tickers": [
+              "AAPL"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 36339,
+              "total_completion_tokens": 1058,
+              "total_tokens": 37397,
+              "llm_token_calls": 8,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 7,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 36339,
+                  "completion": 1058,
+                  "calls": 8
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 36339,
+                  "completion": 1058,
+                  "calls": 8,
+                  "failed_calls": 1,
+                  "duration_ms": 55016
+                }
+              ],
+              "tool_calls": 6,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 8,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 5,
+        "hits": 0,
+        "misses": 0,
+        "errors": 2
+      },
+      "score": {
+        "answered": 1,
+        "numbers": 1,
+        "limitations": 1,
+        "presentation": 1,
+        "no_internal_identifiers": 1,
+        "reasons": [
+          "题目要求给出 AAPL 当前报价。录制资料显示全部工具均失败（get_stock_price 返回 market_data_unavailable，search 全源失败，历史数据两次调用均报错/降级无数据），因此不存在工具支持的任何价格数字。",
+          "answered=1（部分回答）：must 第1条“给出工具取得的价格、币种、数据时点和来源”因数据源失败未能交付，无法给 2；但助手直接回应了问题，明确说明本轮行情源无可用数据、拒绝凭记忆估算填补，并提供了可行的核实渠道（纳斯达克官网、Apple 投资者关系页、券商行情），属于部分回答而非未回答。",
+          "must 第2条：由于没有任何报价，延迟口径事实上未知；助手整体明确表示无法给出报价，但未逐项明确说明“延迟口径为未知”，仅在建议中提醒用户查看延迟说明，属部分满足。",
+          "numbers=1：按规则“未取得必需数字时最多 1 分”；助手未输出任何未经工具支持的价格数字，未把旧收盘价当实时价（must_not 两条均未违反），无编造数值，故给 1 而非 0。",
+          "limitations=1：口径与局限说明充分——明确说明行情源无返回、任何数字都可能不真实、部分结论缺少可靠依据且暂时无法确认，未把“未查到”说成“不存在”。",
+          "presentation=1：篇幅精简、结构清晰，先给结论再给核实建议，适合数据缺失场景。",
+          "no_internal_identifiers=1：未泄漏工具名称（如 get_stock_price）、错误码（market_data_unavailable）、provider 等内部标识，仅以“行情源”等通用表述概括。"
+        ],
+        "total": 5,
+        "usage": {
+          "completion_tokens": 3032,
+          "completion_tokens_details": {
+            "reasoning_tokens": 2616
+          },
+          "prompt_tokens": 1654,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "total_tokens": 4686
+        },
+        "model": "glm-5.3"
+      },
+      "elapsed_seconds": 181.875,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 1.0,
+        "tool_calls": 6,
+        "failed_tools": 6,
+        "tokens": 37397,
+        "rounds": 8
+      },
+      "checkpoints": 12,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_transport_errors": [],
+      "events_path": "tmp/agent-eval/2026-11-11_184334_891824cf/facts-01/events.json",
+      "tool_recordings": 5
+    },
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+          "query": "MSFT 最新一季营收和经营现金流分别是多少",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+            "session_id": "2026-11-11_184334_891824cf:facts-02",
+            "message": "这次研究用时较长，已经超时。",
+            "error_code": "run_deadline_exceeded",
+            "reason": "这次研究用时较长，已经超时。",
+            "recovery_action": "已查到的数据会保留，可以缩小问题后再试。",
+            "response": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "partial",
+            "blocks": [
+              {
+                "id": "root_text_0",
+                "kind": "text",
+                "content": "\n\n",
+                "revision": 0,
+                "seq": 2,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 8,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_2",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 15,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_3",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 22,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_4",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 29,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_5",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 36,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_6",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 45,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              },
+              {
+                "id": "root_text_7",
+                "kind": "text",
+                "content": "\n\n\n\n",
+                "revision": 0,
+                "seq": 71,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending"
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取季度财报",
+                "timestamp": "2026-11-12T02:47:08.892375+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-bcb1ead9-bab5-45ee-928d-b3ddae35c2c2",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6,
+                    "calculations": [
+                      {
+                        "name": "revenue",
+                        "concept": "RevenueFromContractWithCustomerExcludingAssessedTax"
+                      },
+                      {
+                        "name": "operating_cash_flow",
+                        "concept": "NetCashProvidedByUsedInOperatingActivities"
+                      }
+                    ]
+                  },
+                  "summary": "正在读取季度财报",
+                  "runtime_type": "tool.started",
+                  "seq": 4,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T02:47:08.911398+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-bcb1ead9-bab5-45ee-928d-b3ddae35c2c2",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_85c01d61e516af8685"
+                  ],
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 6,
+                    "calculations": [
+                      {
+                        "name": "revenue",
+                        "concept": "RevenueFromContractWithCustomerExcludingAssessedTax"
+                      },
+                      {
+                        "name": "operating_cash_flow",
+                        "concept": "NetCashProvidedByUsedInOperatingActivities"
+                      }
+                    ]
+                  },
+                  "output_preview": {
+                    "ticker": "MSFT",
+                    "market": "US",
+                    "supported_market": "US",
+                    "source": "sec_edgar",
+                    "error": "missing_sec_user_agent",
+                    "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "missing_sec_user_agent",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司资料",
+                "timestamp": "2026-11-12T02:47:08.911398+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-06ac79cf-8e85-43c9-8dd3-9fe8d15a80a8",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "summary": "正在读取公司资料",
+                  "runtime_type": "tool.started",
+                  "seq": 6,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T02:47:38.913557+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-06ac79cf-8e85-43c9-8dd3-9fe8d15a80a8",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30015,
+                  "runtime_type": "tool.failed",
+                  "seq": 7,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-12T02:47:42.844463+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-9e3baf51-ad7b-44e3-88f3-dd50ef650c63",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Microsoft latest quarterly earnings revenue operating cash flow fiscal 2026 Q1",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Microsoft latest quarterly earnings revenue operating cash flow fiscal 2026 Q1"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 11,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T02:47:46.865557+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-9e3baf51-ad7b-44e3-88f3-dd50ef650c63",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_692a398ab46466a3ac"
+                  ],
+                  "inputs": {
+                    "query": "Microsoft latest quarterly earnings revenue operating cash flow fiscal 2026 Q1"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Microsoft latest quarterly earnings revenue operating cash flow fiscal 2026 Q1",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4030,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司新闻",
+                "timestamp": "2026-11-12T02:47:46.865557+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-05cd5503-8339-4e16-8148-af0fcb13b9d8",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 10,
+                    "max_age_hours": 2000
+                  },
+                  "summary": "正在读取公司新闻",
+                  "runtime_type": "tool.started",
+                  "seq": 13,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T02:48:16.888537+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-05cd5503-8339-4e16-8148-af0fcb13b9d8",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 10,
+                    "max_age_hours": 2000
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30015,
+                  "runtime_type": "tool.failed",
+                  "seq": 14,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T02:48:23.616562+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-77b2587c-49a2-408b-aecb-cbf8c799de8b",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "max_length": 6000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 18,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T02:48:23.636728+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-77b2587c-49a2-408b-aecb-cbf8c799de8b",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_a1887e94b29141852d"
+                  ],
+                  "inputs": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "max_length": 6000
+                  },
+                  "output_preview": {
+                    "url": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/investor/earnings/fy-2027-q1/press-release-webcast",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-12T02:48:23.636728+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-4bb56b26-8fb3-47be-8792-5ac826db1fb4",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Microsoft FY2027 first quarter results revenue cash from operations",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Microsoft FY2027 first quarter results revenue cash from operations"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 20,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T02:48:27.656196+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-4bb56b26-8fb3-47be-8792-5ac826db1fb4",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_0187c9c87acc0e60fb"
+                  ],
+                  "inputs": {
+                    "query": "Microsoft FY2027 first quarter results revenue cash from operations"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Microsoft FY2027 first quarter results revenue cash from operations",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4015,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T02:48:34.154991+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-a30158ab-239f-41f3-98b5-1443d7a8e43a",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/Investor/earnings/FY-2027-Q1/press-release-webcast",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 8000,
+                    "url": "https://www.microsoft.com/en-us/Investor/earnings/FY-2027-Q1/press-release-webcast"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 25,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T02:48:34.175587+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-a30158ab-239f-41f3-98b5-1443d7a8e43a",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_c3b32c1dcc6d05bc8a"
+                  ],
+                  "inputs": {
+                    "max_length": 8000,
+                    "url": "https://www.microsoft.com/en-us/Investor/earnings/FY-2027-Q1/press-release-webcast"
+                  },
+                  "output_preview": {
+                    "url": "https://www.microsoft.com/en-us/Investor/earnings/FY-2027-Q1/press-release-webcast",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.microsoft.com/en-us/Investor/earnings/FY-2027-Q1/press-release-webcast",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-12T02:48:34.176591+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-b7292b06-3ef7-4527-860b-273d3c37a951",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Microsoft fiscal 2027 Q1 earnings press release October 2026",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Microsoft fiscal 2027 Q1 earnings press release October 2026"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 27,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-12T02:48:38.195637+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-b7292b06-3ef7-4527-860b-273d3c37a951",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_ddbd289d1a944f3eaf"
+                  ],
+                  "inputs": {
+                    "query": "Microsoft fiscal 2027 Q1 earnings press release October 2026"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Microsoft fiscal 2027 Q1 earnings press release October 2026",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4030,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-12T02:48:45.093466+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-a0f19f99-8fa7-4655-b4fb-28ac271a15a0",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 32,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-12T02:49:15.085820+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-a0f19f99-8fa7-4655-b4fb-28ac271a15a0",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 33,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T02:49:15.088331+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-912679ba-8b4b-47ca-bba7-e2934d4fec35",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://stockanalysis.com/stocks/msft/financials/quarterly/",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 8000,
+                    "url": "https://stockanalysis.com/stocks/msft/financials/quarterly/"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 34,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T02:49:15.112165+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-912679ba-8b4b-47ca-bba7-e2934d4fec35",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_f5c091d763e5ab0319"
+                  ],
+                  "inputs": {
+                    "max_length": 8000,
+                    "url": "https://stockanalysis.com/stocks/msft/financials/quarterly/"
+                  },
+                  "output_preview": {
+                    "url": "https://stockanalysis.com/stocks/msft/financials/quarterly/",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://stockanalysis.com/stocks/msft/financials/quarterly/",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 14,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T02:49:21.995299+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-40713b1b-22d2-4bb7-8efa-21b9d0bda4e3",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.macrotrends.net/stocks/charts/MSFT/microsoft/revenue",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 8000,
+                    "url": "https://www.macrotrends.net/stocks/charts/MSFT/microsoft/revenue"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 39,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T02:49:22.015150+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-40713b1b-22d2-4bb7-8efa-21b9d0bda4e3",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_1a9f3dcd80cc263cd9"
+                  ],
+                  "inputs": {
+                    "max_length": 8000,
+                    "url": "https://www.macrotrends.net/stocks/charts/MSFT/microsoft/revenue"
+                  },
+                  "output_preview": {
+                    "url": "https://www.macrotrends.net/stocks/charts/MSFT/microsoft/revenue",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.macrotrends.net/stocks/charts/MSFT/microsoft/revenue",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在检索知识库",
+                "timestamp": "2026-11-12T02:49:22.015150+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-d98427e1-3e5c-4d2b-bde2-a76dad0885e7",
+                  "name": "search_knowledge",
+                  "title": "检索知识库",
+                  "display": {
+                    "target": "MSFT quarterly revenue operating cash flow latest quarter",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "MSFT quarterly revenue operating cash flow latest quarter",
+                    "entity": "MSFT"
+                  },
+                  "summary": "正在检索知识库",
+                  "runtime_type": "tool.started",
+                  "seq": 41,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "评测隔离账户没有历史资料。",
+                "timestamp": "2026-11-12T02:49:22.017110+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-d98427e1-3e5c-4d2b-bde2-a76dad0885e7",
+                  "name": "search_knowledge",
+                  "title": "检索知识库",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_b22511b01afe008fef"
+                  ],
+                  "inputs": {
+                    "query": "MSFT quarterly revenue operating cash flow latest quarter",
+                    "entity": "MSFT"
+                  },
+                  "output_preview": {
+                    "status": "empty",
+                    "items": [],
+                    "source": "evaluation_isolated_store",
+                    "summary": "评测隔离账户没有历史资料。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "评测隔离账户没有历史资料。",
+                  "display": {
+                    "target": "MSFT quarterly revenue operating cash flow latest quarter",
+                    "result": "评测隔离账户没有历史资料。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "评测隔离账户没有历史资料。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:49:22.048331+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 43,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:49:26.070159+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 44,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在委派专业研究",
+                "timestamp": "2026-11-12T02:49:32.972912+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-ccf4f6a2-1dbe-4a11-a441-00650ae300c7",
+                  "name": "delegate_research",
+                  "title": "委派专业研究",
+                  "display": {
+                    "target": "基本面分析师",
+                    "result": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 000…"
+                  },
+                  "inputs": {
+                    "role": "fundamental_agent",
+                    "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。"
+                  },
+                  "summary": "正在委派专业研究",
+                  "runtime_type": "tool.started",
+                  "seq": 48,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "agent.started",
+                "eventType": "trace",
+                "message": "",
+                "timestamp": "2026-11-12T02:49:32.973415+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "agent_id": "agent_9e96a94886",
+                  "runtime_type": "agent.started",
+                  "seq": 49,
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "任务已受理，尚未完成。",
+                "timestamp": "2026-11-12T02:49:32.977419+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-ccf4f6a2-1dbe-4a11-a441-00650ae300c7",
+                  "name": "delegate_research",
+                  "title": "委派专业研究",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_9d677e6da4a093d1e2"
+                  ],
+                  "inputs": {
+                    "role": "fundamental_agent",
+                    "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。"
+                  },
+                  "output_preview": {
+                    "agent_id": "agent_9e96a94886",
+                    "status": "accepted",
+                    "summary": "任务已受理，尚未完成。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "任务已受理，尚未完成。",
+                  "display": {
+                    "target": "基本面分析师",
+                    "result": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 000…"
+                  },
+                  "duration_ms": 14,
+                  "runtime_type": "tool.result",
+                  "seq": 50,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在委派专业研究",
+                "timestamp": "2026-11-12T02:49:32.977419+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-ab4022f6-12d7-4f6d-8a8b-3a3700f58a07",
+                  "name": "delegate_research",
+                  "title": "委派专业研究",
+                  "display": {
+                    "target": "舆情新闻分析师",
+                    "result": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。"
+                  },
+                  "inputs": {
+                    "role": "news_agent",
+                    "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。"
+                  },
+                  "summary": "正在委派专业研究",
+                  "runtime_type": "tool.started",
+                  "seq": 51,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "agent.started",
+                "eventType": "trace",
+                "message": "",
+                "timestamp": "2026-11-12T02:49:32.977419+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "agent_id": "agent_9a9aa76613",
+                  "runtime_type": "agent.started",
+                  "seq": 52,
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "任务已受理，尚未完成。",
+                "timestamp": "2026-11-12T02:49:32.981419+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-ab4022f6-12d7-4f6d-8a8b-3a3700f58a07",
+                  "name": "delegate_research",
+                  "title": "委派专业研究",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_9ce2dab58e23988fa8"
+                  ],
+                  "inputs": {
+                    "role": "news_agent",
+                    "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。"
+                  },
+                  "output_preview": {
+                    "agent_id": "agent_9a9aa76613",
+                    "status": "accepted",
+                    "summary": "任务已受理，尚未完成。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "任务已受理，尚未完成。",
+                  "display": {
+                    "target": "舆情新闻分析师",
+                    "result": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 53,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:49:33.011031+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "activity_id": "agent_9a9aa76613_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 54,
+                  "agent_id": "agent_9a9aa76613",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:49:33.037228+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "activity_id": "agent_9e96a94886_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 55,
+                  "agent_id": "agent_9e96a94886",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:49:37.033416+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "activity_id": "agent_9a9aa76613_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 56,
+                  "agent_id": "agent_9a9aa76613",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在查找研究工具",
+                "timestamp": "2026-11-12T02:49:40.282014+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "tool_call_id": "call-b788889a-db9c-48ef-9ef8-f208eb023134",
+                  "name": "discover_tools",
+                  "title": "查找研究工具",
+                  "display": {
+                    "target": "研究工具",
+                    "result": ""
+                  },
+                  "inputs": {},
+                  "summary": "正在查找研究工具",
+                  "runtime_type": "tool.started",
+                  "seq": 58,
+                  "agent_id": "agent_9a9aa76613",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "返回 10 条结果，展开查看内容与来源。",
+                "timestamp": "2026-11-12T02:49:40.282526+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "tool_call_id": "call-b788889a-db9c-48ef-9ef8-f208eb023134",
+                  "name": "discover_tools",
+                  "title": "查找研究工具",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_d41a7f0d0ef8e1081c"
+                  ],
+                  "inputs": {},
+                  "output_preview": {
+                    "tools": [
+                      {
+                        "name": "get_current_datetime",
+                        "description": "Provide the current timestamp to anchor analysis and reporting."
+                      },
+                      {
+                        "name": "get_technical_snapshot",
+                        "description": "Compute a lightweight technical snapshot (MA/RSI/MACD) from recent daily prices.\n\nReturns a JSON string so the planner/synthesizer can reliably parse it."
+                      },
+                      {
+                        "name": "get_sec_company_facts_quarterly",
+                        "description": "按请求财期取得 SEC CompanyFacts，并核对同口径两期计算。"
+                      },
+                      {
+                        "name": "get_company_info",
+                        "description": "Return company fundamentals such as industry, market cap, website, and a short description."
+                      },
+                      {
+                        "name": "get_company_news",
+                        "description": "Retrieve the latest company or index headlines, ordered by recency."
+                      },
+                      {
+                        "其他条目数": 1
+                      }
+                    ]
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "返回 10 条结果，展开查看内容与来源。",
+                  "display": {
+                    "target": "研究工具",
+                    "result": "10 项研究工具"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 59,
+                  "agent_id": "agent_9a9aa76613",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司新闻",
+                "timestamp": "2026-11-12T02:49:40.285543+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "tool_call_id": "call-abe24e77-f06b-4194-8b65-71cff52dd648",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 10,
+                    "max_age_hours": 720
+                  },
+                  "summary": "正在读取公司新闻",
+                  "runtime_type": "tool.started",
+                  "seq": 60,
+                  "agent_id": "agent_9a9aa76613",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:49:40.361203+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 61,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                "timestamp": "2026-11-12T02:49:46.502014+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "tool_call_id": "call-abe24e77-f06b-4194-8b65-71cff52dd648",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_33da98d840f9e6757a"
+                  ],
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 10,
+                    "max_age_hours": 720
+                  },
+                  "output_preview": {
+                    "status": "unavailable",
+                    "error": "market_data_unavailable",
+                    "error_code": "market_data_unavailable",
+                    "data": [],
+                    "ticker": "MSFT",
+                    "attempted_providers": [
+                      "finnhub",
+                      "yfinance",
+                      "web_search"
+                    ],
+                    "provider_failures": [
+                      "provider_request_failed",
+                      "provider_cooldown",
+                      "search_request_failed"
+                    ],
+                    "summary": "新闻来源未能提供可用结果；这不表示该公司没有新闻。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "新闻来源未能提供可用结果；这不表示该公司没有新闻。"
+                  },
+                  "error_code": "market_data_unavailable",
+                  "reason": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                  "recovery_action": "稍后重试，或选择其他来源。",
+                  "duration_ms": 6218,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:49:47.193131+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "activity_id": "agent_9e96a94886_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 63,
+                  "agent_id": "agent_9e96a94886",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在查找研究工具",
+                "timestamp": "2026-11-12T02:49:50.519111+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "tool_call_id": "call-b2c647df-ee4c-4013-a20b-62beadabd265",
+                  "name": "discover_tools",
+                  "title": "查找研究工具",
+                  "display": {
+                    "target": "研究工具",
+                    "result": ""
+                  },
+                  "inputs": {},
+                  "summary": "正在查找研究工具",
+                  "runtime_type": "tool.started",
+                  "seq": 65,
+                  "agent_id": "agent_9e96a94886",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "返回 9 条结果，展开查看内容与来源。",
+                "timestamp": "2026-11-12T02:49:50.520748+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "tool_call_id": "call-b2c647df-ee4c-4013-a20b-62beadabd265",
+                  "name": "discover_tools",
+                  "title": "查找研究工具",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_b5b5a3d832952afac2"
+                  ],
+                  "inputs": {},
+                  "output_preview": {
+                    "tools": [
+                      {
+                        "name": "get_current_datetime",
+                        "description": "Provide the current timestamp to anchor analysis and reporting."
+                      },
+                      {
+                        "name": "get_technical_snapshot",
+                        "description": "Compute a lightweight technical snapshot (MA/RSI/MACD) from recent daily prices.\n\nReturns a JSON string so the planner/synthesizer can reliably parse it."
+                      },
+                      {
+                        "name": "get_sec_company_facts_quarterly",
+                        "description": "按请求财期取得 SEC CompanyFacts，并核对同口径两期计算。"
+                      },
+                      {
+                        "name": "get_company_info",
+                        "description": "Return company fundamentals such as industry, market cap, website, and a short description."
+                      },
+                      {
+                        "name": "get_local_market_filings",
+                        "description": "Find CN/HK exchange disclosures via free local filing sources."
+                      },
+                      {
+                        "其他条目数": 1
+                      }
+                    ]
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "返回 9 条结果，展开查看内容与来源。",
+                  "display": {
+                    "target": "研究工具",
+                    "result": "9 项研究工具"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 66,
+                  "agent_id": "agent_9e96a94886",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司资料",
+                "timestamp": "2026-11-12T02:49:50.525083+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "tool_call_id": "call-dd4a6ad7-bb67-4332-b61c-f9a2f7b29ae3",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "summary": "正在读取公司资料",
+                  "runtime_type": "tool.started",
+                  "seq": 67,
+                  "agent_id": "agent_9e96a94886",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源没有返回结果。",
+                "timestamp": "2026-11-12T02:49:50.548477+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "tool_call_id": "call-dd4a6ad7-bb67-4332-b61c-f9a2f7b29ae3",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_a1630c08d838386936"
+                  ],
+                  "inputs": {
+                    "ticker": "MSFT"
+                  },
+                  "output_preview": "Search error: 所有搜索源均失败，无法获取搜索结果。",
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "数据源没有返回结果。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "数据源没有返回结果。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "数据源没有返回结果。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:49:50.561386+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "查找微软（MSFT）最新已披露季度的营收（revenue）和经营活动现金流（net cash provided by operating activities），需给出具体财期（如 FY2026 Q1 或更晚）、数值、币种、数据来源与披露时间。优先尝试SEC EDGAR公司facts（CIK 0000789019）或公司投资者关系新闻稿；工具在当前环境可能超时，请如实报告成功或失败。",
+                  "activity_id": "agent_9e96a94886_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 69,
+                  "agent_id": "agent_9e96a94886",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-12T02:49:57.674863+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 70,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-12T02:50:02.242501+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-81ca2f88-cb03-45cd-b300-d6584c16d94b",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax.j…",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "max_length": 3000,
+                    "url": "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax.json"
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 74,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-12T02:50:02.261868+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call-81ca2f88-cb03-45cd-b300-d6584c16d94b",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_93eef76cafa4586d09"
+                  ],
+                  "inputs": {
+                    "max_length": 3000,
+                    "url": "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax.json"
+                  },
+                  "output_preview": {
+                    "url": "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax.json",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://data.sec.gov/api/xbrl/companyconcept/CIK0000789019/us-gaap/RevenueFromContractWithCustomerExcludingAssessedTax.j…",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-12T02:50:02.281055+00:00",
+                "runId": "2026-11-11_184334_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_184334_891824cf:facts-02",
+                "result": {
+                  "role": "news_agent",
+                  "agent_label": "舆情新闻分析师",
+                  "task": "查找微软（MSFT）最近一次季度财报（earnings release）的报道：确认最新财期（fiscal quarter）、营收和经营现金流数字、发布日期。给出原始来源链接与发布时间。如实报告检索成功或失败。",
+                  "activity_id": "agent_9a9aa76613_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 76,
+                  "agent_id": "agent_9a9aa76613",
+                  "run_id": "2026-11-11_184334_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_184334_891824cf:facts-02"
+                }
+              }
+            ],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 61533,
+              "total_completion_tokens": 3053,
+              "total_tokens": 64586,
+              "llm_token_calls": 10,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 10,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 61533,
+                  "completion": 3053,
+                  "calls": 10
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 52527,
+                  "completion": 2705,
+                  "calls": 8,
+                  "failed_calls": 0,
+                  "duration_ms": 74578
+                },
+                {
+                  "agent": "news_agent",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 4551,
+                  "completion": 173,
+                  "calls": 1,
+                  "failed_calls": 0,
+                  "duration_ms": 7297
+                },
+                {
+                  "agent": "fundamental_agent",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 4455,
+                  "completion": 175,
+                  "calls": 1,
+                  "failed_calls": 0,
+                  "duration_ms": 17531
+                }
+              ],
+              "tool_calls": 19,
+              "failed_stage": "context_preparation"
+            }
+          },
+          "model_calls": 10,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 14,
+        "hits": 1,
+        "misses": 0,
+        "errors": 2
+      },
+      "score": {
+        "answered": 0,
+        "numbers": 0,
+        "limitations": 0,
+        "presentation": 0,
+        "no_internal_identifiers": 1,
+        "reasons": [
+          "answered=0：用户要求 MSFT 最新一季的营收和经营现金流，最终回答内容为数十个空行，没有任何文字、数字、财季说明或来源，属于完全未回答。",
+          "numbers=0：题目必须交付营收与经营现金流的具体数值，回答中没有任何数字。回放显示 search_knowledge 为空、get_company_info/search 均失败、两次 fetch SEC XBRL 与 macrotrends/stockanalysis/microsoft investor 页面均 fetch_failed、get_sec_company_facts_quarterly 返回 missing_sec_user_agent、get_company_news 两次 market_data_unavailable，所有渠道均未取得数据，必需数字缺失。",
+          "limitations=0：回答未说明工具全部失败、数据缺失的原因或任何口径与局限，用户完全无法得知发生了什么。虽然回放中有大量失败尝试，但最终答案里没有体现。",
+          "presentation=0：全文仅由换行符构成，篇幅与结构完全不合适。",
+          "no_internal_identifiers=1：答案为空，未向用户泄露任何内部标识或调试信息。",
+          "must 核对：两条 must（标明财季/单位/本币/来源；数值与回放相同财期一致）均未交付；must_not（混用年度与季度、把缺失数值写成零）因未输出任何内容而未违反，但这属于零交付而非合规交付。"
+        ],
+        "total": 1,
+        "usage": {
+          "completion_tokens": 1099,
+          "completion_tokens_details": {
+            "reasoning_tokens": 760
+          },
+          "prompt_tokens": 2527,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "total_tokens": 3626
+        },
+        "model": "glm-5.3"
+      },
+      "elapsed_seconds": 180.188,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.7894736842105263,
+        "tool_calls": 19,
+        "failed_tools": 15,
+        "tokens": 64586,
+        "rounds": 10
+      },
+      "checkpoints": 17,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "judge_transport_errors": [],
+      "events_path": "tmp/agent-eval/2026-11-11_184334_891824cf/facts-02/events.json",
+      "tool_recordings": 14
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 2,
+      "judged": 2,
+      "scores": {
+        "answered": 0.5,
+        "numbers": 0.5,
+        "limitations": 0.5,
+        "presentation": 0.5,
+        "no_internal_identifiers": 1,
+        "total": 3
+      },
+      "completed_rate": 0.5,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 181.0315,
+      "median_tokens": 50991.5,
+      "median_rounds": 9.0,
+      "tool_error_rate": 0.8947368421052632
+    }
+  },
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192,
+    "base_url": "https://api.llm.pm/v1"
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "base_url": "https://api.llm.pm/v1"
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures/primary-v3",
+  "seed_tapes": null,
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 1,
+    "retry_unstarted_connections": 1
+  },
+  "ready": false,
+  "expected_cases": 60,
+  "interrupted_reason": "保留串行诊断成绩和真实录制，改用统一跨进程限速的jobs=2配置重新运行完整题集。"
+}

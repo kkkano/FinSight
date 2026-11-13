@@ -1,0 +1,26 @@
+{
+  "request_sha256": "8d71500c902d3828cd83e60d8bde11dc64d6473feed64ebc31066c77554188b6",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有准备取 MSFT 数据与 SEC 失败后换源的进度，既未解释现金流估值和 PE 差异，也未形成公司判断或资本开支、增长、折现假设的限制说明。",
+      "numbers=0：没有正文中的现金流、PE、资本开支或比较数值；录制中已取得的财务资料未成为答案。",
+      "limitations=1：明确 SEC 财报接口未配置，终态说明研究超时，录制含相应配置错误；没有将资料缺失说成不存在或伪造预测。",
+      "presentation=1：英文取数进度与中文故障说明均为完整短句，可见超时提示清楚，整体形式可读。",
+      "no_internal_identifiers=1：正文没有数据集、运行 ID 或代码/函数标识，SEC 是外部来源名称。"
+    ]
+  }
+}

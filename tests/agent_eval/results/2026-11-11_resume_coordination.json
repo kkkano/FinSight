@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "execution_coordination",
+  "task": "01a1c9fe-ccbd-7d22-9ef8-60a42cab8604",
+  "workspace": "E:/FinSight/.omx/worktrees/research-completeness",
+  "reporting_thread": "01a1cb56-e376-7e91-8cc5-480607add4d9",
+  "active_execution_thread": "01a1cb5c-741c-7473-b2ed-fd2048da4bb2",
+  "status": "duplicate_recording_stopped",
+  "stopped_result": "tests/agent_eval/results/2026-11-11_record_corpus.json",
+  "active_result": "tests/agent_eval/results/m1_serial_record.json",
+  "active_fixtures": "tests/agent_eval/fixtures/baseline-v2",
+  "active_command": "tmp/agentic-venv/Scripts/python.exe -B tests/agent_eval/run.py --mode record --fixtures-root fixtures/baseline-v2 --seed-tapes fixtures/archive-v1/tapes --jobs 1 --request-interval 6.1 --context-window 32768 --max-output 8192 --timeout 180 --no-judge --output tests/agent_eval/results/m1_serial_record.json",
+  "message": "检测到两个恢复会话在同一工作区执行相同计划。报告会话已停止自己的重复录制和模型请求，保留所有结果；后续源码修改由 active_execution_thread 统一执行。原任务仍为完整执行 M0–M10，未声明里程碑或整体验收完成。",
+  "tool_communication": "codex_tui/read_thread 和 send_message_to_thread 均因本机 MCP 传输连接错误失败，尚未收到执行方确认。",
+  "validation": {
+    "focused_tests_passed": 45,
+    "pilot": "两题运行时均完成，报价判分 6/7，概念题判分在 8192 token 处截断，未给分。"
+  }
+}

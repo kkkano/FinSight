@@ -1,0 +1,26 @@
+{
+  "request_sha256": "908d4a0e5b9e5975814487098a6ff5a9d635bbc775bdc6d77593d13ee650da80",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正确识别腾讯0700.HK，但只设置报告标题、准备工具与委派任务；没有实际调用取得港股公告，正文只有英文取证进度，artifacts/blocked_report均为空，没有财报/估值报告或清楚的事实、情景、限制内容。",
+      "numbers=1：没有把美元或未核口径写成已知腾讯财报数据，但港股报价与公司资料取数均超时，未取得报告所需财务/估值数字；委派任务里待核股本范围不能充作实际报告数字。",
+      "limitations=0：仅有取数超时与待办任务，没有实际报告说明报价、本地披露、币种/财期、IFRS/Non-IFRS或估值情景的缺口；publishable=false符合未完成状态但不代替局限说明。",
+      "presentation=0：没有报告或草稿产物、正文章节和估值结论，只有启动进度与超时通知。",
+      "no_internal_identifiers=1：正文和主要可见通知没有环境配置、数据句柄或运行编号，主体代码与研究角色名称用于说明当前任务。"
+    ]
+  }
+}

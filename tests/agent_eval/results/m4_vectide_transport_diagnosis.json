@@ -1,0 +1,264 @@
+{
+  "scope": "Vectide传输诊断，不是完整质量验收",
+  "sources": [
+    {
+      "path": "tests/agent_eval/results/m3_vectide_smoke.json",
+      "sha256": "27dfb7d5d722065b67a50c2712b98b9b9f9c0d5211c77508dcb39d51d160c366"
+    },
+    {
+      "path": "tests/agent_eval/results/m4_vectide_review_measurement.json",
+      "sha256": "0bb95bafcade6c592cec8f27e013819b4e8bb7f865ed364e29655eea5b83551b"
+    },
+    {
+      "path": "tests/agent_eval/results/m4_vectide_transport_probe.json",
+      "sha256": "5efca88e7fe8fb812c309a9d30a5f3e6f24a97e0841671991a532de3fea4299a"
+    }
+  ],
+  "smoke_model_outcomes": [
+    {
+      "case_id": "facts-01",
+      "outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 30,
+          "first_chunk_seconds": 32.625,
+          "elapsed_seconds": 88.344,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "cancelled",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 42.875,
+          "cost_estimate": null
+        }
+      ]
+    },
+    {
+      "case_id": "statistics-02",
+      "outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 103,
+          "first_chunk_seconds": 72.844,
+          "elapsed_seconds": 90.0,
+          "error_code": "model_timeout",
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 69.516,
+          "error_code": "model_http_502",
+          "cost_estimate": null
+        }
+      ]
+    },
+    {
+      "case_id": "concepts-01",
+      "outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "failed",
+          "received_chunks": 0,
+          "first_chunk_seconds": null,
+          "elapsed_seconds": 90.015,
+          "error_code": "model_timeout",
+          "cost_estimate": null
+        }
+      ]
+    },
+    {
+      "case_id": "reports-01",
+      "outcomes": [
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "completed",
+          "received_chunks": 249,
+          "first_chunk_seconds": 38.141,
+          "elapsed_seconds": 47.812,
+          "cost_estimate": null
+        },
+        {
+          "model": "deepseek-v4.1-flash-1017",
+          "protocol": "sse",
+          "status": "cancelled",
+          "received_chunks": 814,
+          "first_chunk_seconds": 55.813,
+          "elapsed_seconds": 80.719,
+          "cost_estimate": null
+        }
+      ]
+    }
+  ],
+  "review_observation": {
+    "collected_variants": 12,
+    "completed": 3,
+    "errors": [
+      {
+        "case_id": "review-number-01",
+        "variant": "clean",
+        "review_error": "review_timeout",
+        "model_failures": [],
+        "elapsed_seconds": 45.031
+      },
+      {
+        "case_id": "review-number-01",
+        "variant": "injected",
+        "review_error": "review_timeout",
+        "model_failures": [],
+        "elapsed_seconds": 45.016
+      },
+      {
+        "case_id": "review-number-02",
+        "variant": "clean",
+        "review_error": "review_model_error",
+        "model_failures": [
+          {
+            "code": "model_http_502",
+            "http_status": 502
+          }
+        ],
+        "elapsed_seconds": 43.437
+      },
+      {
+        "case_id": "review-number-02",
+        "variant": "injected",
+        "review_error": "review_model_error",
+        "model_failures": [
+          {
+            "code": "model_http_502",
+            "http_status": 502
+          }
+        ],
+        "elapsed_seconds": 44.0
+      },
+      {
+        "case_id": "review-number-03",
+        "variant": "clean",
+        "review_error": "review_model_error",
+        "model_failures": [
+          {
+            "code": "model_http_502",
+            "http_status": 502
+          }
+        ],
+        "elapsed_seconds": 24.954
+      },
+      {
+        "case_id": "review-number-03",
+        "variant": "injected",
+        "review_error": "review_model_error",
+        "model_failures": [
+          {
+            "code": "model_http_502",
+            "http_status": 502
+          }
+        ],
+        "elapsed_seconds": 35.718
+      },
+      {
+        "case_id": "review-number-04",
+        "variant": "clean",
+        "review_error": "review_timeout",
+        "model_failures": [],
+        "elapsed_seconds": 45.016
+      },
+      {
+        "case_id": "review-number-04",
+        "variant": "injected",
+        "review_error": "review_timeout",
+        "model_failures": [],
+        "elapsed_seconds": 45.031
+      },
+      {
+        "case_id": "review-direction-01",
+        "variant": "clean",
+        "review_error": "review_model_error",
+        "model_failures": [
+          {
+            "code": "model_http_502",
+            "http_status": 502
+          }
+        ],
+        "elapsed_seconds": 36.375
+      }
+    ]
+  },
+  "minimal_probe": [
+    {
+      "protocol": "sse",
+      "http_status": 402,
+      "first_byte_seconds": null,
+      "first_chunk_seconds": null,
+      "received_chunks": 0,
+      "reported_usage": null,
+      "status": "http_error",
+      "headers_seconds": 10.625,
+      "elapsed_seconds": 10.625
+    },
+    {
+      "protocol": "json",
+      "http_status": 200,
+      "first_byte_seconds": 1.781,
+      "first_chunk_seconds": null,
+      "received_chunks": 1,
+      "reported_usage": {
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "completion_tokens": 2,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 182,
+        "prompt_tokens": 182,
+        "prompt_tokens_details": {
+          "accepted_prediction_tokens": 0,
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": 0
+        },
+        "total_tokens": 184
+      },
+      "status": "completed",
+      "headers_seconds": 1.781,
+      "returned_model": "deepseek-v4.1-flash-1017",
+      "finish_reason": "stop",
+      "elapsed_seconds": 1.781
+    }
+  ],
+  "evidence": [
+    "主研究4题全部失败；成功收完的单个模型调用也曾需47.812或88.344秒。",
+    "同一批主研究SSE首片等待32.625至72.844秒；另有90秒无片段、HTTP502以及预算取消。",
+    "12条核查样本中9不可用，但末3条完成，说明并非所有请求都固定不支持协议。",
+    "随后极小SSE请求得到HTTP402，非流式JSON请求200并在1.781秒内完成。"
+  ],
+  "inference": [
+    "中转服务的可用性与延迟不稳定是当前验收阻碍；现有证据尚不能把原因精确归于额度、限流、流式路由或上游排队。",
+    "非流式小请求成功只能证明一次最小请求可用，不能保证多工具长研究能完成。"
+  ],
+  "not_changed": [
+    "生产SSE传输",
+    "45秒/4轮核查预算",
+    "模型推理或输出配置",
+    "Technical/Risk预测冻结依赖"
+  ],
+  "next_condition": "需端点在生产SSE多轮工具调用上稳定后再恢复完整配对核查和60题评测，历史失败不得覆盖。"
+}

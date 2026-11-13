@@ -1,0 +1,25 @@
+{
+  "request_sha256": "9157c07f940d53e186ca7d6dcc98c4e2b3948c848473f11881955b8e2e195539",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：用户询问 AAPL 当前价格，终态 response 为空，只有超时通知；未交付价格、币种、报价时点、来源或延迟口径。",
+      "numbers=0：录制中的 get_quote 返回 market_data_unavailable，quote、currency、as_of、source 均为空；没有任何可核对的 AAPL 报价数字，也没有数字性回答。",
+      "limitations=1：终态明确告知本次研究超时，工具过程也说明行情源未在限时内返回，未把资料不可用表述为价格不存在或冒用旧价。",
+      "presentation=1、no_internal_identifiers=1：用户可读的超时及恢复说明简短清楚，正文未回显数据集、运行或工具调用标识；录制和终态技术字段不作为正文泄漏。"
+    ]
+  }
+}

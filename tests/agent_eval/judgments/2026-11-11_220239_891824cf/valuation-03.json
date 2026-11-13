@@ -1,0 +1,26 @@
+{
+  "request_sha256": "a776e5d408d24c63cd7a340acc7ee65731a4852323163fbc67351d749a1612d3",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：最终正文、blocks、chart与table均为空，未交付 NVDA EPS×PE 情景、假设与事实区分或图表解读。",
+      "numbers=0：没有用户可见的 EPS、PE 情景输入或结果；录制取得行情和财报资料不等于完成情景计算交付。",
+      "limitations=1：可见终态明确研究超时，未把假设当预测事实或宣称已画图；正分只依据故障说明。",
+      "presentation=1：无研究正文，但超时和缩小问题重试提示完整简短，停止状态表达清楚。",
+      "no_internal_identifiers=1：可读故障通知没有内部运行、数据集或工具标识。"
+    ]
+  }
+}

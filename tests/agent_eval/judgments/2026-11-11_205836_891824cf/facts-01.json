@@ -1,0 +1,26 @@
+{
+  "request_sha256": "8b9eb9812db307b27c8970a86560a16cc68395cd5aa6470cb0321ced8307d03e",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：已交付 AAPL 355.63 美元、USD、2026-11-11 常规时段收盘及 Twelve Data 来源；但 must 要求说明报价延迟、未知时明确未知，正文没有交代延迟或实时性是否已核实，复权和股息的 unknown 不能代替这一项。",
+      "numbers=2：355.63、+7.12、+2.04% 与报价录制一致，供应商日线最新收盘 355.63000、前收盘 348.51001 支持该涨跌；没有把该收盘报价写成实时成交价。",
+      "limitations=0：虽说明日期精度、收盘时段、复权与股息未知，但没有明确报价延迟未知或不属于实时报价；“部分结论还缺少可靠依据”未说明是哪项口径，不能补足要求。",
+      "presentation=1：价格置于开头，日期、币种、来源和未提供信息分项列出，结构清楚且完整收尾。",
+      "no_internal_identifiers=1：正文没有数据句柄、运行或错误码；[Sc4b86d561d] 是对应报价证据的引用。"
+    ]
+  }
+}

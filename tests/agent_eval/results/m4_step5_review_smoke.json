@@ -1,0 +1,661 @@
+{
+  "run_id": "review-20261112-213835",
+  "provider": "stepfun",
+  "model": "step-5-preview",
+  "synthetic": true,
+  "dataset_sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee",
+  "runtime_sha256": "60a0be72e58eccb167d1b89353526bdebc3ad39b3971408ddace28445c504a94",
+  "rows": [
+    {
+      "case_id": "review-number-01",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 42 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "pass",
+        "findings": [],
+        "coverage": [],
+        "review_id": "reviewer_67168b9bd28c",
+        "data_refs": [],
+        "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 14.61,
+      "usage": {
+        "total_prompt_tokens": 2439,
+        "total_completion_tokens": 114,
+        "total_tokens": 2553,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 2439,
+            "completion": 114,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 2439,
+            "completion": 114,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 14515
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_67168b9bd28c"
+          },
+          "agent_id": "reviewer_67168b9bd28c"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-8aa922634f4639f8",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "None",
+              "summary": "None",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_67168b9bd28c"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-8aa922634f4639f8",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "output_preview": {
+              "content": "{\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}",
+              "offset": 0,
+              "total_chars": 52,
+              "next_offset": 52,
+              "has_more": false
+            },
+            "display": {
+              "kind": "document",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [
+              "h_05b7e84e5def1d8497"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成报价",
+                "url": null,
+                "data_ref": "h_05b7e84e5def1d8497",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "quote",
+                  "currency": "USD"
+                },
+                "kind": "price_snapshot",
+                "type": "tool",
+                "currency": "USD"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_67168b9bd28c"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-94fee5cc9f72c594",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": []
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "None",
+              "summary": "None",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_67168b9bd28c"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-94fee5cc9f72c594",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": []
+            },
+            "output_preview": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": []
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_67168b9bd28c"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "pass",
+            "findings": [],
+            "coverage": [],
+            "review_id": "reviewer_67168b9bd28c",
+            "data_refs": [],
+            "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_67168b9bd28c"
+        }
+      ],
+      "model_failures": []
+    },
+    {
+      "case_id": "review-number-01",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 420 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_invalid_submission",
+        "review_id": "reviewer_ebe18a60a1b6",
+        "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 41.047,
+      "usage": {
+        "total_prompt_tokens": 5453,
+        "total_completion_tokens": 547,
+        "total_tokens": 6000,
+        "llm_token_calls": 4,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 4,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "step-5-preview": {
+            "prompt": 5453,
+            "completion": 547,
+            "calls": 4
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "step-5-preview",
+            "prompt": 5453,
+            "completion": 547,
+            "calls": 4,
+            "failed_calls": 0,
+            "duration_ms": 41045
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_ebe18a60a1b6"
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-ba1dd14af43547f6",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "None",
+              "summary": "None",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-ba1dd14af43547f6",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "output_preview": {
+              "content": "{\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}",
+              "offset": 0,
+              "total_chars": 52,
+              "next_offset": 52,
+              "has_more": false
+            },
+            "display": {
+              "kind": "document",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [
+              "h_05b7e84e5def1d8497"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成报价",
+                "url": null,
+                "data_ref": "h_05b7e84e5def1d8497",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "quote",
+                  "currency": "USD"
+                },
+                "kind": "price_snapshot",
+                "type": "tool",
+                "currency": "USD"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        },
+        {
+          "type": "tool.failed",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-a44ba8ab0699286b",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "error",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "type": "unsupported_number",
+                  "quote": "TEST_A 的报价为 420 美元。[1]",
+                  "comment": "数据源 h_05b7e84e5def1d8497 的内容为 {\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}，实际报价是 42 美元，而非 420 美元，金额相差 10 倍。"
+                }
+              ],
+              "coverage": []
+            },
+            "output_preview": null,
+            "display": {
+              "kind": "control",
+              "status": "error",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "这次处理出错了。",
+              "summary": "这次处理出错了。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": {
+                "code": "invalid_tool_arguments",
+                "user_message": "这次处理出错了。",
+                "retryable": false,
+                "suggestion": "已有数据会保留，可以重试。"
+              }
+            },
+            "summary": "这次处理出错了。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        },
+        {
+          "type": "tool.failed",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-8a7f90fd4084782d",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "error",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "type": "unsupported_number",
+                  "quote": "TEST_A 的报价为 420 美元。[1]",
+                  "comment": "数据源 h_05b7e84e5def1d8497 显示 TEST_A 价格为 42 USD（原文 {\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}），回答中的 420 美元与资料不符，相差 10 倍。"
+                }
+              ],
+              "coverage": []
+            },
+            "output_preview": null,
+            "display": {
+              "kind": "control",
+              "status": "error",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "这次处理出错了。",
+              "summary": "这次处理出错了。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": {
+                "code": "invalid_tool_arguments",
+                "user_message": "这次处理出错了。",
+                "retryable": false,
+                "suggestion": "已有数据会保留，可以重试。"
+              }
+            },
+            "summary": "这次处理出错了。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        },
+        {
+          "type": "tool.failed",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "chatcmpl-tool-ba3ab627329be1a8",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "error",
+            "inputs": {
+              "verdict": "revise",
+              "findings": [
+                {
+                  "type": "unsupported_number",
+                  "quote": "TEST_A 的报价为 420 美元。[1]",
+                  "comment": "数据源 h_05b7e84e5def1d8497 显示 TEST_A 价格为 42 USD，回答中的 420 美元与资料不符，相差 10 倍。"
+                }
+              ],
+              "coverage": []
+            },
+            "output_preview": null,
+            "display": {
+              "kind": "control",
+              "status": "error",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "这次处理出错了。",
+              "summary": "这次处理出错了。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": {
+                "code": "invalid_tool_arguments",
+                "user_message": "这次处理出错了。",
+                "retryable": false,
+                "suggestion": "已有数据会保留，可以重试。"
+              }
+            },
+            "summary": "这次处理出错了。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_invalid_submission",
+            "review_id": "reviewer_ebe18a60a1b6",
+            "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_ebe18a60a1b6"
+        }
+      ],
+      "model_failures": []
+    }
+  ],
+  "summary": {
+    "runs": 2,
+    "completed": 1,
+    "clean_cases": 1,
+    "false_positive_count": 0,
+    "injected_cases": 1,
+    "annotated_injected_span_count": 0,
+    "semantic_detection_adjudication": "pending_independent_review",
+    "false_positive_rate": 0.0,
+    "unavailable_count": 1
+  }
+}

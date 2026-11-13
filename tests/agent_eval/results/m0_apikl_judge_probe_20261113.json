@@ -1,0 +1,26 @@
+{
+  "judge_model": "gpt-6.1-sol",
+  "subject_model": "gpt-6-luna",
+  "synthetic": true,
+  "protocol": "tools",
+  "score": {
+    "answered": 2,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "答案“2+2=4。”准确且完整满足必须回答4的要求，未编造资料。",
+      "该题为简单算术题，无须额外口径或局限说明；表达简洁合适，未包含内部标识。"
+    ],
+    "total": 7,
+    "usage": {
+      "prompt_tokens": 4765,
+      "completion_tokens": 96,
+      "total_tokens": 4861
+    },
+    "model": "gpt-6.1-sol"
+  },
+  "passed": true,
+  "elapsed_seconds": 5.578
+}

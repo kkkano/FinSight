@@ -1,0 +1,22 @@
+{
+  "model": "gpt-6.1-terra",
+  "protocol": "chat_completions_native_tool_sse",
+  "http_status": 200,
+  "chunks": 9,
+  "first_chunk_seconds": 4.094,
+  "reported_model": "gpt-6.1-terra",
+  "finish_reason": "tool_calls",
+  "usage": {
+    "prompt_tokens": 4430,
+    "completion_tokens": 17,
+    "total_tokens": 4447
+  },
+  "tool_calls": [
+    {
+      "name": "echo",
+      "arguments": "{\"text\":\"OK\"}"
+    }
+  ],
+  "native_tool_passed": true,
+  "elapsed_seconds": 4.125
+}

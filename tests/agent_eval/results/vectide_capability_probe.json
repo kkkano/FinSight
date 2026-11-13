@@ -1,0 +1,42 @@
+{
+  "provider": "vectide",
+  "model": "deepseek-v4.1-flash-1017",
+  "configuration": {
+    "model": "deepseek-v4.1-flash-1017",
+    "base_url": "https://vectide.cn/v1",
+    "endpoint_name": "evaluation-vectide",
+    "context_window": 1048576,
+    "max_output": 16384,
+    "effort": null
+  },
+  "probe": {
+    "native_tool_calls": true,
+    "streaming": true,
+    "streaming_tool_calls": true,
+    "verified": true,
+    "model": "deepseek-v4.1-flash-1017",
+    "probe_usage": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 128,
+      "completion_tokens": 56,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "reasoning_tokens": 16,
+        "rejected_prediction_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 128,
+      "prompt_cache_miss_tokens": 337,
+      "prompt_tokens": 465,
+      "prompt_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "cached_tokens": 128,
+        "reasoning_tokens": 0,
+        "rejected_prediction_tokens": 0
+      },
+      "total_tokens": 521
+    }
+  }
+}

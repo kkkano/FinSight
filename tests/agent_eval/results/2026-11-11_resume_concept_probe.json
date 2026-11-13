@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "replay",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "concepts-01",
+      "group": "concepts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_080608_891824cf:concepts-01:0",
+          "query": "什么是自由现金流",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_080608_891824cf:concepts-01:0",
+            "session_id": "2026-11-11_080608_891824cf:concepts-01",
+            "message_id": "assistant:2026-11-11_080608_891824cf:concepts-01:0",
+            "attempt_id": "3b58547002a94300b06cc945f5e68f49",
+            "stream_epoch": "3b58547002a94300b06cc945f5e68f49",
+            "response": "# 自由现金流（Free Cash Flow，FCF）\n\n自由现金流是公司在维持经营并完成必要资本投入之后，真正可自由支配的现金，用于分红、回购、还债、并购或再投资。它是判断一家公司“自我造血”能力的核心指标。\n\n**常见计算口径**\n\n- **简化口径（最常用）**：自由现金流 = 经营活动现金流 − 资本开支（CapEx）\n- **更严格口径**：经营活动现金流 − 资本开支 − 其他必要投入（例如部分软件/无形资产购置）\n\n**几个容易混淆的点**\n\n**为什么重要**\n\n自由现金流折现（DCF）是估值模型的核心输入；自由现金流与净利润的长期匹配度可用来检验盈利质量；分红与回购的可持续性最终取决于自由现金流水平。\n\n**局限**：以上均为指标定义与解读方法层面的说明，本轮没有取用任何具体公司的财报数据，因此不涉及某标的的实际自由现金流数值、增长率或利润率。若需要针对具体公司按统一口径计算近年自由现金流并与净利润对照，我可以调取该公司真实财报数据来完成。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_0",
+                "kind": "text",
+                "content": "自由现金流（Free Cash Flow，FCF）是指公司在维持和扩张经营所必需的资本开支之后，真正可以自由支配的现金流。它是衡量一家公司“自我造血”能力的关键指标：赚到的钱扣掉维持生意必须投入的钱后，还剩多少能用于分红、回购、还债、并购或再投资。\n\n**常见计算口径**\n\n- **简化口径（最常用）**：自由现金流 = 经营活动现金流 − 资本开支（CapEx）\n- **更严格口径**：经营活动现金流 − 资本开支 − 其他必要投入（如部分软件/无形资产购置）\n\n**几个容易混淆的点**\n\n**为什么重要**\n\n- 估值上，现金流折现（DCF）模型的核心就是未来自由现金流。\n- 质量上，FCF 与净利润的长期匹配度可以检验盈利质量（利润是否真的变成现金）。\n- 回报上，分红、回购的可持续性最终取决于 FCF。\n\n需要的话，我可以拿某家具体公司（比如你关注的标的）的真实财报数据，按统一口径算一下它近几年的自由现金流，并和净利润做个对比。",
+                "revision": 1,
+                "seq": 2,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              },
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "# 自由现金流（Free Cash Flow，FCF）\n\n自由现金流是公司在维持经营并完成必要资本投入之后，真正可自由支配的现金，用于分红、回购、还债、并购或再投资。它是判断一家公司“自我造血”能力的核心指标。\n\n**常见计算口径**\n\n- **简化口径（最常用）**：自由现金流 = 经营活动现金流 − 资本开支（CapEx）\n- **更严格口径**：经营活动现金流 − 资本开支 − 其他必要投入（例如部分软件/无形资产购置）\n\n**几个容易混淆的点**\n\n**为什么重要**\n\n自由现金流折现（DCF）是估值模型的核心输入；自由现金流与净利润的长期匹配度可用来检验盈利质量；分红与回购的可持续性最终取决于自由现金流水平。\n\n**局限**：以上均为指标定义与解读方法层面的说明，本轮没有取用任何具体公司的财报数据，因此不涉及某标的的实际自由现金流数值、增长率或利润率。若需要针对具体公司按统一口径计算近年自由现金流并与净利润对照，我可以调取该公司真实财报数据来完成。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+                "revision": 1,
+                "seq": 412,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-11T16:06:28.072574+00:00",
+                "runId": "2026-11-11_080608_891824cf:concepts-01:0",
+                "sessionId": "2026-11-11_080608_891824cf:concepts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "什么是自由现金流",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 411,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_080608_891824cf:concepts-01:0",
+                  "session_id": "2026-11-11_080608_891824cf:concepts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "已保留与资料一致的结果。",
+                "timestamp": "2026-11-11T16:06:41.588069+00:00",
+                "runId": "2026-11-11_080608_891824cf:concepts-01:0",
+                "sessionId": "2026-11-11_080608_891824cf:concepts-01",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "completed",
+                  "title": "回答核对完成",
+                  "summary": "已保留与资料一致的结果。",
+                  "runtime_type": "activity.finished",
+                  "seq": 919,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_080608_891824cf:concepts-01:0",
+                  "session_id": "2026-11-11_080608_891824cf:concepts-01"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": null,
+            "tickers": [],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 9019,
+              "total_completion_tokens": 910,
+              "total_tokens": 9929,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 2,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 9019,
+                  "completion": 910,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 9019,
+                  "completion": 910,
+                  "calls": 2,
+                  "failed_calls": 0,
+                  "duration_ms": 30579
+                }
+              ],
+              "tool_calls": 0,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 33.328,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 9929,
+        "rounds": 2
+      },
+      "checkpoints": 9,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_080608_891824cf/concepts-01/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "concepts": {
+      "cases": 1,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 1,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 33.328,
+      "median_tokens": 9929,
+      "median_rounds": 2,
+      "tool_error_rate": 0.0
+    }
+  },
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 8192
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures",
+  "ready": false,
+  "expected_cases": 60,
+  "fixtures_sha256": "31d8ce7aae757042ce300b686043f277912f7ba1a9637b514b0787a4120a0fd3"
+}

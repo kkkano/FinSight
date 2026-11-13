@@ -1,0 +1,150 @@
+{
+  "base_url": "https://api.kunyou.asia/v1",
+  "requested_model": "qwen3.8-flash",
+  "checked_at": "2026-11-12T02:19:36Z",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/models",
+      "status": 200,
+      "models": [
+        {
+          "id": "MiniMax-M2.5"
+        },
+        {
+          "id": "MiniMax-M2.5-highspeed"
+        },
+        {
+          "id": "MiniMax-M2.7"
+        },
+        {
+          "id": "MiniMax-M2.7-highspeed"
+        },
+        {
+          "id": "MiniMax-M3"
+        },
+        {
+          "id": "agents-a1"
+        },
+        {
+          "id": "atria-dawn"
+        },
+        {
+          "id": "atria-dawn-preview"
+        },
+        {
+          "id": "deepseek-v4-flash"
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "deepseek-v4-flash-vision"
+        },
+        {
+          "id": "deepseek-v4-pro-0813"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "intern-s2"
+        },
+        {
+          "id": "intern/inkstone/agents-a1"
+        },
+        {
+          "id": "intern/inkstone/glm-5.2"
+        },
+        {
+          "id": "intern/inkstone/kimi-k2.7-code"
+        },
+        {
+          "id": "intern/inkstone/qwen3.7-plus"
+        },
+        {
+          "id": "intern/inkstone/qwen3.8-flash"
+        },
+        {
+          "id": "kimi-k2.6"
+        },
+        {
+          "id": "kimi-k2.7-code"
+        },
+        {
+          "id": "qwen3.7-plus"
+        },
+        {
+          "id": "qwen3.8-27b"
+        },
+        {
+          "id": "qwen3.8-flash"
+        },
+        {
+          "id": "qwen3.8-max"
+        },
+        {
+          "id": "sage-a1.5"
+        },
+        {
+          "id": "kimi-k3.1-pro"
+        },
+        {
+          "id": "kimi-k3"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "minimax-m3.1-flash"
+        },
+        {
+          "id": "step-5-preview"
+        },
+        {
+          "id": "deepseek-flash"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/chat/completions",
+      "status": 200,
+      "model": "qwen3.8-flash",
+      "usage": {
+        "completion_tokens": 31,
+        "prompt_tokens": 64,
+        "total_tokens": 95
+      },
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "index": 0,
+          "message": {
+            "content": "OK",
+            "role": "assistant"
+          }
+        }
+      ]
+    }
+  ],
+  "official_model_limits": {
+    "model": "qwen3.8-flash",
+    "context_window": 1000000,
+    "max_output": 131072,
+    "source": "https://www.alibabacloud.com/help/en/model-studio/qwen3-8-flash",
+    "relay_full_boundary_verified": false
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "case_id": "B1",
+  "status": "pending",
+  "source_input_exact": "「画 SOXX 历史上连续下跌 5 周以上的区间」",
+  "expected_exact": "从真实数据算事件并出图；区间编号与主图对应",
+  "actions": [
+    {
+      "action": "fill_query"
+    },
+    {
+      "action": "click_testid",
+      "testid": "chat-send-btn"
+    },
+    {
+      "action": "wait_terminal"
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": false
+}

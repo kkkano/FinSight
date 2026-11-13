@@ -1,0 +1,26 @@
+{
+  "request_sha256": "adb725083a8ca61586374f5c5e022d6d6da21c5883ed414b00b191c46be43915",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文为空，未按相邻收盘观测统计上涨、下跌与持平天数，也未说明首行及缺失观测如何处理。",
+      "numbers=0：没有价格或计算工具调用与录制，未交付任何涨跌持平计数，不能把空回答视为与资料一致的统计。",
+      "limitations=1：SOXX 一年涨跌天数的用户可见终态明确提示“这次研究用时较长，已经超时。”，如实说明本次交付受限，没有把未查到当成不存在。正分只依据可见故障说明，不依据内部诊断，也不代表题目所需数据口径已经交付。",
+      "presentation=1：SOXX 一年涨跌天数虽无研究正文，但可见超时通知是完整简短的句子，并附“可以缩小问题后再试”的恢复提示；故障表达篇幅和结构合适，这一分不把空正文或缺失图表算作完成。",
+      "no_internal_identifiers=1：用户可读正文为空，可见错误和恢复说明未包含运行、工具调用或数据集标识；结构化绑定与诊断元数据不作为答案正文泄漏。"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "source_request": "tmp\\agent-eval\\2026-11-11_192429_891824cf\\facts-02\\last_model_request.json",
+  "stream": false,
+  "max_tokens": 16384,
+  "other_evaluation_processes_stopped": true,
+  "status": 200,
+  "error": null,
+  "usage": {
+    "completion_tokens": 341,
+    "prompt_tokens": 5400,
+    "prompt_tokens_details": {
+      "cached_tokens": 5376
+    },
+    "total_tokens": 5741
+  },
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "content_chars": 0,
+      "tool_calls": [
+        "get_sec_company_facts_quarterly"
+      ]
+    }
+  ],
+  "seconds": 27.8
+}

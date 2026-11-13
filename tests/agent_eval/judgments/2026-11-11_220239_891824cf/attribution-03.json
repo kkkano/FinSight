@@ -1,0 +1,26 @@
+{
+  "request_sha256": "5aa0769a510f7b121c108cafd24f4636f2db27c1fde2fa6372473d4cdb257b70",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只有取数及准备换 ETF 做比较的进度，没有交付 SOXX 与大盘同期表现或行业/市场因素的判断。",
+      "numbers=1：11/11 收盘155.40美元、+6.01%与当前 SOXX 报价录制一致；但未给任何同区间市场参照收益或比较数字。",
+      "limitations=1：明确标普指数历史接口取不到，改用 ETF 的计划与 ^GSPC 录制为空且 market_data_unavailable 相符，终态说明研究超时，没有声称完成因果比较。",
+      "presentation=1：两段完整进度句和故障通知简短可读，没有截断。",
+      "no_internal_identifiers=1：正文没有数据集、运行或函数标识；指数和 ETF 是用户研究对象/参照。"
+    ]
+  }
+}

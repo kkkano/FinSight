@@ -1,0 +1,217 @@
+{
+  "run_id": "review-20261112-213639",
+  "provider": "moxuna",
+  "model": "deepseek-v4.1-flash",
+  "synthetic": true,
+  "dataset_sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee",
+  "runtime_sha256": "60a0be72e58eccb167d1b89353526bdebc3ad39b3971408ddace28445c504a94",
+  "rows": [
+    {
+      "case_id": "review-number-01",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 42 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_3416eebe1061",
+        "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 2.422,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 2328
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_3416eebe1061"
+          },
+          "agent_id": "reviewer_3416eebe1061"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_3416eebe1061",
+            "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_3416eebe1061"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-01",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 420 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_e7e23b7311b8",
+        "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 9.688,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 9687
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_e7e23b7311b8"
+          },
+          "agent_id": "reviewer_e7e23b7311b8"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_e7e23b7311b8",
+            "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_e7e23b7311b8"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "runs": 2,
+    "completed": 0,
+    "clean_cases": 1,
+    "false_positive_count": 0,
+    "injected_cases": 1,
+    "annotated_injected_span_count": 0,
+    "semantic_detection_adjudication": "pending_independent_review",
+    "false_positive_rate": 0.0,
+    "unavailable_count": 2
+  }
+}

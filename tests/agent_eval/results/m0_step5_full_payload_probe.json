@@ -1,0 +1,22 @@
+{
+  "model": "step-5-preview",
+  "tool_count": 28,
+  "effort": "low",
+  "max_output": 4096,
+  "frames": 13,
+  "tool_call_parts": 10,
+  "first_chunk_seconds": 2.44,
+  "usage": {
+    "prompt_tokens": 5337,
+    "completion_tokens": 66,
+    "total_tokens": 5403,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  },
+  "finish_reason": "tool_calls",
+  "seconds": 3.11
+}

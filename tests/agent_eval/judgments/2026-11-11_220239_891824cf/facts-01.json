@@ -1,0 +1,26 @@
+{
+  "request_sha256": "20d9b4ccfa3b05dbde3ea0041c5bfc6124b6a70ed63989a09f9b9825593e9efe",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 2,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：交付 355.63 美元、USD 和 Twelve Data 来源，但没有报价时点、常规收盘口径或延迟未知说明，未交付全部 must。",
+      "numbers=2：355.63 与当前报价录制、供应商 2026-11-11 日线收盘 355.63000 一致；没有编造价格。",
+      "limitations=0：录制明确 regular_close、日期精度和报价日期，正文均未注明；泛泛的“部分结论缺少可靠依据”和可再查实时变动不能说明本次价格的时效及延迟。",
+      "presentation=1：价格在开头，来源另列，文本简短完整；后续可选查询建议不影响可读性。",
+      "no_internal_identifiers=1：正文没有数据集、运行或工具调用标识；[Sc4b86d561d] 是对应报价的来源引用。"
+    ]
+  }
+}

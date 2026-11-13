@@ -1,0 +1,26 @@
+{
+  "request_sha256": "fda9957ac3c83f9d4687fcb312610b1f8ea00c108290a8dd82c5b884b98d3405",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：用户可见前段曾交付 Q2 2026 营收 161.28 亿美元、GAAP 毛利率 40.4% 及 non-GAAP 41.8%，属于部分回答；未列 Q3 2026，最终正文又撤回为没有 Q2/Q3 数值，没有完成最近两期对齐的列表。",
+      "numbers=1：前段 Q2 营收 16,128 百万美元、毛利 6,509、GAAP 40.4% 及 non-GAAP 41.8% 与 Intel 原文一致，金额换算正确；但缺少另一必需季度。录制 Q3 2026 已给营收 16,513 百万美元、GAAP 43.0%、non-GAAP 44.1%，最终未交付。",
+      "limitations=0：最终声明资料没有 Q2 或 Q3 对应值，与两次 search 的季度实际财务表直接矛盾；CompanyFacts 接口配置失败不表示其他搜索资料没有取得。新闻列表不穷尽事件的说明正确，但不修复财务缺口的错误描述。",
+      "presentation=0：要求是两季度财务列表，最终却展开四条无关新闻，再重复缺口；同一可见交付中先给 Q2 数据、随后否认取得 Q2，也使结构与结论难以理解。",
+      "no_internal_identifiers=1：正文未回显内部数据句柄、运行 ID 或错误码，引用 URL 和 GAAP 口径属于用户所需来源与说明。"
+    ]
+  }
+}

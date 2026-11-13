@@ -1,0 +1,26 @@
+{
+  "request_sha256": "991ce00d7ddb805d16a64d4961990b592c574b086000a9c91f74f06def5e8dcd",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：七段正文仅描述取数、补资料和重试，没有给出 AAPL 与 MSFT 同口径估值比较或数据时点，也未说明倍数与增长、现金流假设的区别。",
+      "numbers=0：正文未交付两家任何估值倍数或比较数值；两次计算都返回 analysis_request_too_large，产物为空，不能把计划计算算成数值回答。",
+      "limitations=1：可见正文说明 SEC 接口不可用及计算请求过大，终态说明研究超时；录制对应 SEC 配置错误和计算失败，未伪造比较结论。",
+      "presentation=1：进度句和超时通知完整分段、易读，最后“简化后重试”也是完整句子；形式分不代表问题完成。",
+      "no_internal_identifiers=1：正文的 PS/PB/EV-EBITDA/PEG 为相关估值术语，没有输出内部数据集或运行标识。"
+    ]
+  }
+}

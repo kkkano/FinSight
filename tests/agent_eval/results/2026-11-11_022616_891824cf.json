@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "concepts-01",
+      "group": "concepts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_022616_891824cf:concepts-01:0",
+          "query": "什么是自由现金流",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_022616_891824cf:concepts-01:0",
+            "session_id": "2026-11-11_022616_891824cf:concepts-01",
+            "message": "模型连接中断了。",
+            "error_code": "model_connection_error",
+            "reason": "模型连接中断了。",
+            "recovery_action": "稍后再试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [],
+            "evidence_pool": [],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 0,
+              "total_completion_tokens": 0,
+              "total_tokens": 0,
+              "llm_token_calls": 1,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 0,
+              "unreported_usage_calls": 0,
+              "usage_state": "not_reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 17828
+                }
+              ],
+              "tool_calls": 0,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 1,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 0,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": {
+        "answered": 0,
+        "numbers": 0,
+        "limitations": 0,
+        "presentation": 0,
+        "no_internal_identifiers": 1,
+        "reasons": [
+          "answered=0：本应直接解释自由现金流（经营现金流减资本开支）的基本口径与局限，但录制资料显示该轮 LLM 调用失败（failure_kind=execution_error，failed_stage=model_response，run_status=failed，answer_status=unavailable），响应为空字符串，未回答问题的任何内容。",
+          "numbers=0：这是概念题，本可在无数字的情况下准确解释并获满分，但由于回答完全为空，既没有解释口径，也没有任何可与资料核对的内容，无从判定数值或概念表述一致，故不得分。",
+          "limitations=0：须说明自由现金流“经营现金流减资本开支”口径的适用限制（如口径选择差异、单一期间波动、非现金项目等），但回答为空，毫无局限说明。",
+          "presentation=0：需为适合概念短问的简短结构化解释，实际没有任何正文呈现，篇幅与结构完全不合适（该失败为执行层错误，非回答质量问题，但按已记录资料评分仍为0分）。",
+          "no_internal_identifiers=1：面向用户的回答为空，错误信息仅为“模型连接中断了/稍后再试”，未在回答内容中泄漏 run_id、session_id 等内部标识；须核对的 must_not（不得调用数据工具、不得捏造某公司财务数字）均因无回答而未触犯，工具调用数为0。"
+        ],
+        "total": 1,
+        "usage": {
+          "completion_tokens": 1722,
+          "completion_tokens_details": {
+            "reasoning_tokens": 1386
+          },
+          "prompt_tokens": 1071,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 2793
+        },
+        "model": "glm-5.3"
+      },
+      "elapsed_seconds": 19.61,
+      "structure": {
+        "completed": false,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 0,
+        "failed_tools": 0,
+        "tokens": 0,
+        "rounds": 1
+      },
+      "checkpoints": 0,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_connection_error",
+          "cause": "RemoteProtocolError"
+        }
+      ],
+      "events_path": "tmp/agent-eval/2026-11-11_022616_891824cf/concepts-01/events.json",
+      "tool_recordings": 0
+    }
+  ],
+  "groups": {
+    "concepts": {
+      "cases": 1,
+      "judged": 1,
+      "scores": {
+        "answered": 0,
+        "numbers": 0,
+        "limitations": 0,
+        "presentation": 0,
+        "no_internal_identifiers": 1,
+        "total": 1
+      },
+      "completed_rate": 0,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "median_seconds": 19.61,
+      "median_tokens": 0,
+      "median_rounds": 1,
+      "tool_error_rate": 0.0
+    }
+  },
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 2048
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "ready": false,
+  "expected_cases": 60,
+  "fixtures_sha256": "4dab32a1830c4ef83ba405eec11c6c57c16518c8ad01c3a05e7733df1047dae1"
+}

@@ -1,0 +1,77 @@
+{
+  "currency": "CNY",
+  "user_reported_initial_balance": 15,
+  "overall": {
+    "currency": "CNY",
+    "priced_calls": 247,
+    "unpriced_calls": 1,
+    "all_calls_priced": false,
+    "known_components": {
+      "uncached_input_cny": 5.331627,
+      "cached_input_cny": 0.8284416,
+      "output_cny": 2.543,
+      "total_cny": 8.7030686
+    },
+    "known_subtotal_cny": 8.7030686,
+    "total_cny": null
+  },
+  "runs": {
+    "2026-11-11_201733_891824cf": {
+      "currency": "CNY",
+      "priced_calls": 10,
+      "unpriced_calls": 0,
+      "all_calls_priced": true,
+      "known_components": {
+        "uncached_input_cny": 0.131733,
+        "cached_input_cny": 0.0218624,
+        "output_cny": 0.08138,
+        "total_cny": 0.2349754
+      },
+      "known_subtotal_cny": 0.2349754,
+      "total_cny": 0.2349754
+    },
+    "2026-11-11_202549_891824cf": {
+      "currency": "CNY",
+      "priced_calls": 89,
+      "unpriced_calls": 0,
+      "all_calls_priced": true,
+      "known_components": {
+        "uncached_input_cny": 1.368941,
+        "cached_input_cny": 0.215936,
+        "output_cny": 0.3987,
+        "total_cny": 1.983577
+      },
+      "known_subtotal_cny": 1.983577,
+      "total_cny": 1.983577
+    },
+    "2026-11-11_205836_891824cf": {
+      "currency": "CNY",
+      "priced_calls": 145,
+      "unpriced_calls": 1,
+      "all_calls_priced": false,
+      "known_components": {
+        "uncached_input_cny": 3.790094,
+        "cached_input_cny": 0.5906432,
+        "output_cny": 2.06034,
+        "total_cny": 6.4410772
+      },
+      "known_subtotal_cny": 6.4410772,
+      "total_cny": null
+    }
+  },
+  "probe_costs": {
+    "currency": "CNY",
+    "priced_calls": 3,
+    "unpriced_calls": 0,
+    "all_calls_priced": true,
+    "known_components": {
+      "uncached_input_cny": 0.040859,
+      "cached_input_cny": 0.0,
+      "output_cny": 0.00258,
+      "total_cny": 0.043439
+    },
+    "known_subtotal_cny": 0.043439,
+    "total_cny": 0.043439
+  },
+  "note": "不含未知usage或线上用户自主调用，不等同于账户余额。"
+}

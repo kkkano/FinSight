@@ -1,0 +1,1888 @@
+{
+  "run_id": "review-20261113-032129",
+  "provider": "vectide",
+  "model": "deepseek-v4.1-flash-1017",
+  "synthetic": true,
+  "dataset_sha256": "1c7de03efbe307c1d06ba507c169f998a3522d64d5c3fdacb57ed7af403f0fee",
+  "runtime_sha256": "65cdf5df20f722b0d8a1799dfd5b0883bcd7adb1ce16888e9d01666a79e04bc6",
+  "expected_variants": 24,
+  "collection_status": "partial_stopped_after_shared_account_429",
+  "rows": [
+    {
+      "case_id": "review-number-01",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 42 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "completed",
+        "verdict": "pass",
+        "findings": [],
+        "coverage": [
+          {
+            "requirement": "回答合成标的 TEST_A 的报价",
+            "met": true
+          }
+        ],
+        "review_id": "reviewer_04c8a3569489",
+        "data_refs": [],
+        "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 13.0,
+      "usage": {
+        "total_prompt_tokens": 3873,
+        "total_completion_tokens": 178,
+        "total_tokens": 4051,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 0,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 2,
+        "unreported_usage_calls": 0,
+        "usage_state": "reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 3873,
+            "completion": 178,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 3873,
+            "completion": 178,
+            "calls": 2,
+            "failed_calls": 0,
+            "duration_ms": 12907
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_04c8a3569489"
+          },
+          "agent_id": "reviewer_04c8a3569489"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_R4jtP7AGujApp0blinNH7690",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_04c8a3569489"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_R4jtP7AGujApp0blinNH7690",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "output_preview": {
+              "content": "{\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}",
+              "offset": 0,
+              "total_chars": 52,
+              "next_offset": 52,
+              "has_more": false
+            },
+            "display": {
+              "kind": "document",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [
+              "h_05b7e84e5def1d8497"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成报价",
+                "url": null,
+                "data_ref": "h_05b7e84e5def1d8497",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "quote",
+                  "currency": "USD"
+                },
+                "kind": "price_snapshot",
+                "type": "tool",
+                "currency": "USD"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_04c8a3569489"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_uqku8jLk4vZ1qC40p5T14479",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "回答合成标的 TEST_A 的报价",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "empty",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_04c8a3569489"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_uqku8jLk4vZ1qC40p5T14479",
+            "name": "submit_review",
+            "title": "提交核查结果",
+            "status": "ok",
+            "inputs": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "回答合成标的 TEST_A 的报价",
+                  "met": true
+                }
+              ]
+            },
+            "output_preview": {
+              "verdict": "pass",
+              "findings": [],
+              "coverage": [
+                {
+                  "requirement": "回答合成标的 TEST_A 的报价",
+                  "met": true
+                }
+              ]
+            },
+            "display": {
+              "kind": "control",
+              "status": "ok",
+              "title": "提交核查结果",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [],
+            "source_refs": [],
+            "evidence_refs": [],
+            "sources": [],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_04c8a3569489"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "completed",
+            "verdict": "pass",
+            "findings": [],
+            "coverage": [
+              {
+                "requirement": "回答合成标的 TEST_A 的报价",
+                "met": true
+              }
+            ],
+            "review_id": "reviewer_04c8a3569489",
+            "data_refs": [],
+            "answer_sha256": "c50fc239affc5a8f1faf206c14284cbf86154319e2132de4fa66999fde7add53",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_04c8a3569489"
+        }
+      ],
+      "model_failures": [],
+      "model_call_outcomes": [
+        {
+          "status": "completed",
+          "received_chunks": 23,
+          "first_chunk_seconds": 1.86,
+          "elapsed_seconds": 2.047
+        },
+        {
+          "status": "completed",
+          "received_chunks": 76,
+          "first_chunk_seconds": 2.047,
+          "elapsed_seconds": 2.672
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-01",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "answer": "TEST_A 的报价为 420 美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_ec86d7fe89d4",
+        "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 39.218,
+      "usage": {
+        "total_prompt_tokens": 1858,
+        "total_completion_tokens": 51,
+        "total_tokens": 1909,
+        "llm_token_calls": 2,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 1,
+        "unreported_usage_calls": 0,
+        "usage_state": "partial",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 1858,
+            "completion": 51,
+            "calls": 2
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 1858,
+            "completion": 51,
+            "calls": 2,
+            "failed_calls": 1,
+            "duration_ms": 39202
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_ec86d7fe89d4"
+          },
+          "agent_id": "reviewer_ec86d7fe89d4"
+        },
+        {
+          "type": "tool.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_ZYMr60YE3js5jBXJpWtP6827",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "display": {
+              "kind": "document",
+              "status": "empty",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "",
+              "summary": "",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            }
+          },
+          "agent_id": "reviewer_ec86d7fe89d4"
+        },
+        {
+          "type": "tool.result",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "tool_call_id": "call_00_ET_ZYMr60YE3js5jBXJpWtP6827",
+            "name": "read_data",
+            "title": "查看已取得的资料",
+            "status": "ok",
+            "inputs": {
+              "handle": "h_05b7e84e5def1d8497"
+            },
+            "output_preview": {
+              "content": "{\"ticker\": \"TEST_A\", \"price\": 42, \"currency\": \"USD\"}",
+              "offset": 0,
+              "total_chars": 52,
+              "next_offset": 52,
+              "has_more": false
+            },
+            "display": {
+              "kind": "document",
+              "status": "ok",
+              "title": "查看已取得的资料",
+              "target": "当前研究资料",
+              "result": "结果已返回，展开查看关键数据。",
+              "summary": "结果已返回，展开查看关键数据。",
+              "key_facts": [],
+              "row_count": 0,
+              "returned_rows": 0,
+              "has_more": false,
+              "rows": [],
+              "as_of": null,
+              "sources": [],
+              "notes": [],
+              "error": null
+            },
+            "summary": "结果已返回，展开查看关键数据。",
+            "data_refs": [
+              "h_05b7e84e5def1d8497"
+            ],
+            "source_refs": [
+              "1"
+            ],
+            "evidence_refs": [
+              "1"
+            ],
+            "sources": [
+              {
+                "source": "合成评测样本",
+                "source_name": "合成评测样本",
+                "published_date": "2026-11-10T00:00:00Z",
+                "source_id": "1",
+                "title": "TEST_A 合成报价",
+                "url": null,
+                "data_ref": "h_05b7e84e5def1d8497",
+                "metadata": {
+                  "tool": "synthetic_fixture",
+                  "parameters": {},
+                  "tool_kind": "quote",
+                  "currency": "USD"
+                },
+                "kind": "price_snapshot",
+                "type": "tool",
+                "currency": "USD"
+              }
+            ],
+            "duration_ms": 0
+          },
+          "agent_id": "reviewer_ec86d7fe89d4"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_ec86d7fe89d4_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_ec86d7fe89d4"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_ec86d7fe89d4",
+            "answer_sha256": "9fd393d3ec3fd50bff7ac016d20aa8c138c58ffd53c3ddb8ec6ce19842fa9e77",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_ec86d7fe89d4"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "completed",
+          "received_chunks": 23,
+          "first_chunk_seconds": 5.391,
+          "elapsed_seconds": 5.407
+        },
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.453,
+          "elapsed_seconds": 20.609,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "answer": "TEST_A 2026Q3 营收为 120 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_61c67b11d2ca",
+        "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.5,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20483
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_61c67b11d2ca"
+          },
+          "agent_id": "reviewer_61c67b11d2ca"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_61c67b11d2ca_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_61c67b11d2ca"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_61c67b11d2ca",
+            "answer_sha256": "17e73f7c62254f913bf28ddc3b7809a4cd2c4b038f36cc7dac07cc480e7f7240",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_61c67b11d2ca"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.296,
+          "elapsed_seconds": 20.453,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-02",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "answer": "TEST_A 2026Q3 营收为 210 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_454761bfd081",
+        "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.719,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20719
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_454761bfd081"
+          },
+          "agent_id": "reviewer_454761bfd081"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_454761bfd081_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_454761bfd081"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_454761bfd081",
+            "answer_sha256": "f156b3a04b7ba1f63295050e2033afca60341d2c72c05fdf46c7e7edc33180d9",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_454761bfd081"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.546,
+          "elapsed_seconds": 20.671,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度经营现金流是多少",
+      "answer": "TEST_A 2026Q3 经营现金流为 18 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_03",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "operating_cash_flow": 18,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_2290867dab2f",
+        "answer_sha256": "93a2b184df5a26a05cdb57fb8228e63b78234a54cff9ca551c394e9c6c4f8d8c",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.547,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20546
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_2290867dab2f"
+          },
+          "agent_id": "reviewer_2290867dab2f"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_2290867dab2f_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_2290867dab2f"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_2290867dab2f",
+            "answer_sha256": "93a2b184df5a26a05cdb57fb8228e63b78234a54cff9ca551c394e9c6c4f8d8c",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_2290867dab2f"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.407,
+          "elapsed_seconds": 20.516,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-03",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度经营现金流是多少",
+      "answer": "TEST_A 2026Q3 经营现金流为 81 百万美元。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_03",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "operating_cash_flow": 18,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_ae7555898d15",
+        "answer_sha256": "045aeae6e53220196d84b943242761b8bde83bcc4a59435d341a487a498d4f84",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.453,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20437
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_ae7555898d15"
+          },
+          "agent_id": "reviewer_ae7555898d15"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_ae7555898d15_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_ae7555898d15"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_ae7555898d15",
+            "answer_sha256": "045aeae6e53220196d84b943242761b8bde83bcc4a59435d341a487a498d4f84",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_ae7555898d15"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.281,
+          "elapsed_seconds": 20.406,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 最新季度毛利率是多少",
+      "answer": "TEST_A 2026Q3 毛利率为 23.5%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_04",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "gross_margin_pct": 23.5,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成毛利率",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_fc126a1f98e0",
+        "answer_sha256": "5408987cd9e5f68de2e490677a4d14d676413b2c32833e98bf020cc62401d29f",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.594,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20578
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_fc126a1f98e0"
+          },
+          "agent_id": "reviewer_fc126a1f98e0"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_fc126a1f98e0_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_fc126a1f98e0"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_fc126a1f98e0",
+            "answer_sha256": "5408987cd9e5f68de2e490677a4d14d676413b2c32833e98bf020cc62401d29f",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_fc126a1f98e0"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.39,
+          "elapsed_seconds": 20.515,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-number-04",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 最新季度毛利率是多少",
+      "answer": "TEST_A 2026Q3 毛利率为 32.5%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_04",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "gross_margin_pct": 23.5,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成毛利率",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_03153442107c",
+        "answer_sha256": "39677a96fea879fa8644112d2ccf0c95df3dcf8d7283a77a86af08ef3f0f51b7",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 21.156,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 21156
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_03153442107c"
+          },
+          "agent_id": "reviewer_03153442107c"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_03153442107c_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_03153442107c"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_03153442107c",
+            "answer_sha256": "39677a96fea879fa8644112d2ccf0c95df3dcf8d7283a77a86af08ef3f0f51b7",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_03153442107c"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.297,
+          "elapsed_seconds": 21.093,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的这次价格变化方向是什么",
+      "answer": "TEST_A 11 月 10 日相较前一收盘下跌 2%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_direction_01",
+          "data": {
+            "rows": [
+              {
+                "date": "2026-11-09",
+                "close": 100
+              },
+              {
+                "date": "2026-11-10",
+                "close": 98,
+                "period_return_pct": -2
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成价格序列",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_bc5d3431dbc3",
+        "answer_sha256": "14d5c5fd04d5cfa16b774a51f84c4541aa34850c554b515a25f41b495bc8c634",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 21.203,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 21187
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_bc5d3431dbc3"
+          },
+          "agent_id": "reviewer_bc5d3431dbc3"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_bc5d3431dbc3_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_bc5d3431dbc3"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_bc5d3431dbc3",
+            "answer_sha256": "14d5c5fd04d5cfa16b774a51f84c4541aa34850c554b515a25f41b495bc8c634",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_bc5d3431dbc3"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 1.047,
+          "elapsed_seconds": 21.172,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-01",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的这次价格变化方向是什么",
+      "answer": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_direction_01",
+          "data": {
+            "rows": [
+              {
+                "date": "2026-11-09",
+                "close": 100
+              },
+              {
+                "date": "2026-11-10",
+                "close": 98,
+                "period_return_pct": -2
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成价格序列",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_3bc67ff9d6c0",
+        "answer_sha256": "bc141360e4266e5a2fe5287e485da28665f1722a5d30e0ca9f935d13adbd6bc2",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.453,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20452
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_3bc67ff9d6c0"
+          },
+          "agent_id": "reviewer_3bc67ff9d6c0"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_3bc67ff9d6c0_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_3bc67ff9d6c0"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_3bc67ff9d6c0",
+            "answer_sha256": "bc141360e4266e5a2fe5287e485da28665f1722a5d30e0ca9f935d13adbd6bc2",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_3bc67ff9d6c0"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.297,
+          "elapsed_seconds": 20.406,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "clean",
+      "query": "合成标的 TEST_A 的自由现金流同比怎样变化",
+      "answer": "TEST_A 2026Q3 自由现金流同比下降 8%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "free_cash_flow_yoy_pct": -8,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_98eaf34b9478",
+        "answer_sha256": "33bcf8f42c7809beb6878e04a081fe63928e9cf615070a75413d1feea8086dbc",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.609,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20608
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_98eaf34b9478"
+          },
+          "agent_id": "reviewer_98eaf34b9478"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_98eaf34b9478_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_98eaf34b9478"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_98eaf34b9478",
+            "answer_sha256": "33bcf8f42c7809beb6878e04a081fe63928e9cf615070a75413d1feea8086dbc",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_98eaf34b9478"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.313,
+          "elapsed_seconds": 20.563,
+          "error_code": "model_http_429"
+        }
+      ]
+    },
+    {
+      "case_id": "review-direction-02",
+      "variant": "injected",
+      "query": "合成标的 TEST_A 的自由现金流同比怎样变化",
+      "answer": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "free_cash_flow_yoy_pct": -8,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "review": {
+        "status": "unavailable",
+        "error_code": "review_model_error",
+        "review_id": "reviewer_4de816124e93",
+        "answer_sha256": "b6b283d1ab21cd2242110885ca7002dc036764cf5989c7aff11d60b9d6aa8833",
+        "supersedes_review_id": null
+      },
+      "annotated_injected_span": false,
+      "elapsed_seconds": 20.438,
+      "usage": {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_token_calls": 1,
+        "failed_llm_calls": 1,
+        "selection_failed_llm_calls": 0,
+        "reported_usage_calls": 0,
+        "unreported_usage_calls": 0,
+        "usage_state": "not_reported",
+        "total_cost_usd": 0.0,
+        "tokens_by_model": {
+          "deepseek-v4.1-flash-1017": {
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1
+          }
+        },
+        "usage_by_attribution": [
+          {
+            "agent": "reviewer",
+            "layer": "agent_runtime",
+            "prediction_id": null,
+            "model": "deepseek-v4.1-flash-1017",
+            "prompt": 0,
+            "completion": 0,
+            "calls": 1,
+            "failed_calls": 1,
+            "duration_ms": 20437
+          }
+        ]
+      },
+      "events": [
+        {
+          "type": "review.started",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "running",
+            "review_id": "reviewer_4de816124e93"
+          },
+          "agent_id": "reviewer_4de816124e93"
+        },
+        {
+          "type": "activity.updated",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "activity_id": "reviewer_4de816124e93_model",
+            "reason": "模型服务繁忙，正在等待后重试。",
+            "retry_after_seconds": 20.0,
+            "attempt": 1
+          },
+          "agent_id": "reviewer_4de816124e93"
+        },
+        {
+          "type": "review.finished",
+          "payload": {
+            "role": "reviewer",
+            "agent_label": "核查员",
+            "status": "unavailable",
+            "error_code": "review_model_error",
+            "review_id": "reviewer_4de816124e93",
+            "answer_sha256": "b6b283d1ab21cd2242110885ca7002dc036764cf5989c7aff11d60b9d6aa8833",
+            "supersedes_review_id": null
+          },
+          "agent_id": "reviewer_4de816124e93"
+        }
+      ],
+      "model_failures": [
+        {
+          "code": "model_http_429",
+          "http_status": 429
+        }
+      ],
+      "model_call_outcomes": [
+        {
+          "status": "failed",
+          "received_chunks": 1,
+          "first_chunk_seconds": 0.296,
+          "elapsed_seconds": 20.406,
+          "error_code": "model_http_429"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "runs": 12,
+    "completed": 1,
+    "clean_cases": 6,
+    "false_positive_count": 0,
+    "injected_cases": 6,
+    "annotated_injected_span_count": 0,
+    "semantic_detection_adjudication": "not_performed_incomplete_provider_limited_batch",
+    "false_positive_rate": 0.0,
+    "unavailable_count": 11
+  },
+  "stopped_at": "2026-11-13T11:26:21.451566+00:00",
+  "stop_reason": "主评测与M4并行使用同一账号后连续HTTP429，按父代理要求在样本落盘边界停止；不据此判断提示词质量。之后应在主评测全部结束后独占账号启动全新完整24条。",
+  "uncollected_variants": 12,
+  "inflight_note": "边界终止进程时后继请求可能已启动但未落盘，不计入已运行完整样本。"
+}

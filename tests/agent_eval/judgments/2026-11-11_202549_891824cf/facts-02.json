@@ -1,0 +1,26 @@
+{
+  "request_sha256": "261ba293d8166addac0e6f2e95a2780e0f5e005e92476747ca9a8db6bc61602b",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：未提供 MSFT 最新季度营业收入及同期经营活动现金流，财季、金额单位、本币和报表来源也未交付；列出未核实项与故障尝试不等于数字回答。",
+      "numbers=0：CompanyFacts 返回 missing_sec_user_agent，微软投资者关系页、SEC 网页及第三方财务页均抓取失败，搜索和新闻也不可用；完整录制没有同季度财务原值，正文无任何所需金额。",
+      "limitations=1：正文明确两项财务值、报告期截止日、币种及 GAAP 口径尚未核实，并说明以公司披露财季为准；没有把缺失金额填零或否认财报存在。",
+      "presentation=1：开头直接告知未取得数据，以列表列出具体缺口，句子完整可读；末尾虽有重复缺口说明，整体结构仍清楚。",
+      "no_internal_identifiers=1：正文未回显错误码、数据句柄或运行 ID；fiscal period、GAAP 是相关财务口径术语。"
+    ]
+  }
+}

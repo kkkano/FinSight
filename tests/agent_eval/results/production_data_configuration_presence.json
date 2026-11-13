@@ -1,0 +1,9 @@
+{
+  "FINNHUB_API_KEY": true,
+  "TWELVE_DATA_API_KEY": true,
+  "ALPHA_VANTAGE_API_KEY": true,
+  "FRED_API_KEY": true,
+  "TAVILY_API_KEY": true,
+  "EXA_API_KEY": true,
+  "YFINANCE_PROXY": true
+}

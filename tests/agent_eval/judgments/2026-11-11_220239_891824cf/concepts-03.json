@@ -1,0 +1,26 @@
+{
+  "request_sha256": "d2a3f64a6f8f8cbb45b77dae6f43c4dc0e808b2f43592251aef948e24d89551f",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 2,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=2：首句与表格解释波动率是收益离散、上涨下跌都计入，最大回撤是前峰到后谷的最大路径损失并依赖顺序；共同局限说明两者是历史统计、不保证未来分布，回应不能替代方向/收益预测；没有调用工具或声称高波动必然下跌。",
+      "numbers=2：本题无需实际行情数字，核心概念区分准确且没有编造公司或行情数值；对顺序的说明针对同一组收益观测，对回撤的用途受后文历史后视、不保证未来的限制。",
+      "limitations=1：明确历史统计不保证未来，波动率对采样频率敏感、最大回撤对窗口和单次事件敏感，并建议与持续/恢复时间结合，说明主要边界。",
+      "presentation=0：两个指标怎么算和为什么不能相互替代章节被替换为数值或来源尚未核实的空泛拒答，本题无需取数，形成不必要空章节；另附长取数邀请和重复未确认兜底，影响概念短答结构。",
+      "no_internal_identifiers=1：正文仅含相关统计/金融术语，没有工具调用或内部标识。"
+    ]
+  }
+}

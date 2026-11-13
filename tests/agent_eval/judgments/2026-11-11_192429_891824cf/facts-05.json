@@ -1,0 +1,25 @@
+{
+  "request_sha256": "18c56e98943dd574717eedad6c898ab74bb557d7efda25976a720db0d92cc761",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：QQQ 最新价格和基金估值的区别未解释，终态 response 为空；既未分开说明交易价格与基金层面的估值指标，也未给数字及各自来源。",
+      "numbers=0：录制为空、工具调用数为零、证据池为空，未取得或展示 QQQ 最新价格和基金估值；本题同时要求具体数据，空回答不能按已完成的概念解释给分。",
+      "limitations=1：终态明确提示研究超时，没有将基金价格当作市盈率，也没有借成分股估值假充全基金估值。",
+      "presentation=1、no_internal_identifiers=1：简短的超时通知和恢复提示表达清楚，用户可读正文没有内部标识。"
+    ]
+  }
+}

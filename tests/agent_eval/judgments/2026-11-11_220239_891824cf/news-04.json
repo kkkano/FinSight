@@ -1,0 +1,26 @@
+{
+  "request_sha256": "6ec34456c77f2196af378e4ce76801e71d38e5d38a280fd82391dabf7e100ceb",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：最终正文、blocks 与产物为空，没有 TSLA 近期重大公告或下一次事件日历，也没有已发生与未来安排的区分。",
+      "numbers=0：未交付任何公告日期、事件安排或相关数字；工具录制的公告/日历线索没有成为答案。",
+      "limitations=1：可见终态明确研究超时，没有把未确认日期作为正式日历或把未交付事件说成近期没有事件；正分依据故障通知。",
+      "presentation=1：无研究正文，但超时及缩小问题重试提示完整简短、可读。",
+      "no_internal_identifiers=1：可读错误与恢复说明没有内部数据集、运行或函数标识。"
+    ]
+  }
+}

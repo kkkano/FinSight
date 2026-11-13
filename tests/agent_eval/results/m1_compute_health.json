@@ -1,0 +1,33 @@
+[
+  {
+    "request": "health",
+    "status": 200,
+    "result": {
+      "ready": true,
+      "error": null,
+      "available_memory_mb": 6156,
+      "job_memory_mb": 256,
+      "can_accept_job": true,
+      "min_job_memory_mb": 128,
+      "max_job_memory_mb": 256,
+      "memory_reserve_mb": 256,
+      "adaptive_memory": false
+    }
+  },
+  {
+    "request": "mean",
+    "status": 200,
+    "result": {
+      "status": "ok",
+      "result": 2.0,
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-7fc5f3fc8baf46959aa11f0b1664cfb0",
+      "code_hash": "6b4f2d8965c9aa16d27be11099a084be3dfc3b850b7cb0b052fd3b0ef166d1b1",
+      "input_hash": "390761da0c156dfdca9c1d145ac3999834dcbff24feb14d42dbae343b823ebec",
+      "duration_ms": 1741,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  }
+]

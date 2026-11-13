@@ -1,0 +1,20 @@
+{
+  "model": "gpt-6-luna",
+  "base_url": "https://apikl.ai/v1",
+  "timestamp": 1794589455.3728778,
+  "probes": [
+    {
+      "probe": "metadata",
+      "http_status": 200,
+      "model_metadata": [],
+      "elapsed_seconds": 1.438
+    },
+    {
+      "probe": "native_tool_sse",
+      "http_status": 404,
+      "chunks": 0,
+      "error": "{\"error\":{\"message\":\"Model \\\"gpt-6-luna\\\" is not supported by any configured account in this group\",\"type\":\"model_not_found\"}}",
+      "elapsed_seconds": 1.328
+    }
+  ]
+}

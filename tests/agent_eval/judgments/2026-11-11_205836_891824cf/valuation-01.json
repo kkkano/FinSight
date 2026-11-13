@@ -1,0 +1,26 @@
+{
+  "request_sha256": "e5872c7d210059512cee36073e8237522e700b674f08509d464c9671859b9351",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 0,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文四段均为加载方法、取数和修正计算的进度，没有给出 QQQ 贵不贵的判断、比较基准或估值限制，产物为空；已有取数或计算结果不等于交付结论。",
+      "numbers=0：没有用户正文中的估值倍数、比较数据或计算数字；录制和过程虽已有多口径估值及一年收益/回撤，正文没有交付这些数值。",
+      "limitations=0：正文明确声称“已拿到实时报价”，但当前 get_stock_price 录制为 2026-11-11 regular_close、日期精度，不能验证实时性；也未说明各估值口径限制。终态超时通知不能修正此前的实时口径误述。",
+      "presentation=1：四段进度句均完整，终态超时和重试提示简短清楚，没有断句；这一分只评已显示文字的形式。",
+      "no_internal_identifiers=1：正文没有数据句柄、运行 ID 或工具调用代码。"
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "provider_keys_synced": [
+    "ALPHA_VANTAGE_API_KEY",
+    "EODHD_API_KEY",
+    "EXA_API_KEY",
+    "FINNHUB_API_KEY",
+    "FMP_API_KEY",
+    "FRED_API_KEY",
+    "MASSIVE_API_KEY",
+    "OPENFIGI_API_KEY",
+    "TAVILY_API_KEY",
+    "TWELVE_DATA_API_KEY"
+  ],
+  "database_auth_storage_configuration_copied": false,
+  "previous_cases_retained": 16,
+  "previous_cost": {
+    "currency": "CNY",
+    "priced_calls": 84,
+    "unpriced_calls": 0,
+    "all_calls_priced": true,
+    "known_components": {
+      "uncached_input_cny": 1.294062,
+      "cached_input_cny": 0.2028544,
+      "output_cny": 0.38132,
+      "total_cny": 1.8782364
+    },
+    "known_subtotal_cny": 1.8782364,
+    "total_cny": 1.8782364
+  }
+}

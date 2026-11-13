@@ -1,0 +1,230 @@
+[
+  {
+    "check": "health",
+    "result": {
+      "ready": true,
+      "error": null,
+      "available_memory_mb": 6151,
+      "job_memory_mb": 256,
+      "can_accept_job": true,
+      "min_job_memory_mb": 128,
+      "max_job_memory_mb": 256,
+      "memory_reserve_mb": 256,
+      "adaptive_memory": false
+    }
+  },
+  {
+    "check": "frames_and_library",
+    "result": {
+      "status": "ok",
+      "result": {
+        "rows": [
+          {
+            "first": 10.0,
+            "last": 20.0,
+            "minimum": 10.0,
+            "maximum": 20.0,
+            "mean": 15.0,
+            "difference": 10.0,
+            "return_ratio": 1.0,
+            "observations": 2
+          }
+        ],
+        "units": {
+          "first": "USD",
+          "last": "USD",
+          "minimum": "USD",
+          "maximum": "USD",
+          "mean": "USD",
+          "difference": "USD",
+          "return_ratio": "ratio",
+          "observations": "count"
+        },
+        "method": {
+          "kind": "series_statistics",
+          "field": "close",
+          "start": "2026-01-01T00:00:00+00:00",
+          "end": "2026-01-02T00:00:00+00:00",
+          "latest_n": null,
+          "return_definition": "last/first-1 when first>0",
+          "missing_values": 0,
+          "missing_policy": "exclude_missing_observations_without_imputation"
+        }
+      },
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-0834d684adc04fc99965bec1adc66979",
+      "code_hash": "e9043f06c4ac8cbe380937ed0d83487efe6f060b7cbb4643e790c8d476f796ee",
+      "input_hash": "8517f7087e3c3d859114649697de195fed4ed69bd7362a3d7cbe20b1feddb58f",
+      "duration_ms": 1313,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  },
+  {
+    "check": "hypothesis",
+    "result": {
+      "status": "ok",
+      "result": {
+        "mean": 2.0
+      },
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-090653f761e34d4b939d3c8c771cbdf1",
+      "code_hash": "c776b19707bd2465efad3a91bf9f7888e4eaa317c7283c70c1439c48571d5f08",
+      "input_hash": "9ae7e6d7a56c4e42b5741b4a8c6d1c01b086b637be84fd3cd36d21b8bc892774",
+      "duration_ms": 1005,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  },
+  {
+    "check": "valuation",
+    "result": {
+      "status": "ok",
+      "result": {
+        "rows": [
+          {
+            "multiple": 10.0,
+            "eps": 2.0,
+            "scenario_price": 20.0,
+            "return_pct": null
+          },
+          {
+            "multiple": 15.0,
+            "eps": 2.0,
+            "scenario_price": 30.0,
+            "return_pct": null
+          }
+        ],
+        "units": {
+          "multiple": "multiple",
+          "eps": "USD/share",
+          "scenario_price": "USD",
+          "return_pct": "ratio"
+        },
+        "method": {
+          "formula": "EPS × PE",
+          "kind": "assumption",
+          "currency": "USD",
+          "eps_basis": "explicit_assumption"
+        },
+        "limitations": [
+          "情景倍数为假设，不是已实现价格。"
+        ]
+      },
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-987fe26a56f54f4eb2c02ba2528f9451",
+      "code_hash": "ca7278da0e28d1e16cddbfb914722a74902c1833e68c5e65f27ba3960a8a44cf",
+      "input_hash": "064429a04cb25f10330335a95a534a4ecb975de970601ee97a738bd7f9267a81",
+      "duration_ms": 1014,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  },
+  {
+    "check": "financial_ratios",
+    "result": {
+      "status": "ok",
+      "result": {
+        "rows": [
+          {
+            "ticker": "TEST",
+            "period_end": "2026-03-31",
+            "currency": "USD",
+            "frequency": "quarterly",
+            "gross_margin_pct": 25.0,
+            "operating_margin_pct": null,
+            "net_margin_pct": null,
+            "operating_cash_flow_to_net_income_pct": null,
+            "free_cash_flow_margin_pct": null,
+            "liabilities_to_assets_pct": null,
+            "capital_expenditures_to_revenue_pct": null,
+            "net_income_less_operating_income_margin_pp": null,
+            "long_term_debt_less_cash_amount": null,
+            "revenue_qoq_pct": null,
+            "revenue_yoy_pct": null,
+            "net_income_qoq_pct": null,
+            "net_income_yoy_pct": null
+          }
+        ],
+        "calculations": [
+          {
+            "metric": "gross_margin_pct",
+            "value": 25.0,
+            "unit": "%",
+            "period_end": "2026-03-31",
+            "formula": "gross_profit/revenue*100",
+            "derivation_inputs": [
+              {
+                "subject": "TEST",
+                "metric": "gross_profit",
+                "unit": "USD",
+                "frequency": "quarterly",
+                "period_start": "2026-01-01",
+                "period_end": "2026-03-31",
+                "source": "sec_companyfacts",
+                "source_url": null,
+                "value": 25.0
+              },
+              {
+                "subject": "TEST",
+                "metric": "revenue",
+                "unit": "USD",
+                "frequency": "quarterly",
+                "period_start": "2026-01-01",
+                "period_end": "2026-03-31",
+                "source": "sec_companyfacts",
+                "source_url": null,
+                "value": 100.0
+              }
+            ]
+          }
+        ],
+        "metric_gaps": {
+          "operating_margin_pct": "missing_or_incompatible_fact",
+          "net_margin_pct": "missing_or_incompatible_fact",
+          "operating_cash_flow_to_net_income_pct": "missing_or_incompatible_fact",
+          "free_cash_flow_margin_pct": "missing_or_incompatible_fact",
+          "liabilities_to_assets_pct": "missing_or_incompatible_fact",
+          "capital_expenditures_to_revenue_pct": "missing_or_incompatible_fact",
+          "net_income_less_operating_income_margin_pp": "missing_or_incompatible_fact",
+          "long_term_debt_less_cash_amount": "missing_or_incompatible_fact",
+          "revenue_qoq_pct": "comparable_positive_baseline_unavailable",
+          "revenue_yoy_pct": "comparable_positive_baseline_unavailable",
+          "net_income_qoq_pct": "comparable_positive_baseline_unavailable",
+          "net_income_yoy_pct": "comparable_positive_baseline_unavailable"
+        },
+        "financial_context": {
+          "ticker": "TEST",
+          "source": "sec_companyfacts",
+          "frequency": "quarterly",
+          "currency": "USD",
+          "period_start": "2026-01-01",
+          "period_end": "2026-03-31",
+          "revenue": 100,
+          "gross_profit": 25
+        },
+        "method": {
+          "kind": "financial_ratios",
+          "unit": "%",
+          "frequency": "quarterly",
+          "growth_baseline": "相邻单季或约一年前同季度，单位、会计概念与区间长度一致且基数为正"
+        },
+        "limitations": [
+          "仅计算已披露单季事实；缺失比率保留空值，不推算单季年化、未来 EPS 或 PEG。",
+          "净利与营业利润率差额不单独归因于非经营收益或税费；长期债务减现金及等价物不代表总净债务。"
+        ]
+      },
+      "logs": "",
+      "logs_truncated": false,
+      "job_id": "finsight-analysis-37ecd2534a5d44439ec40f0d84154ced",
+      "code_hash": "bce67ec2e8302d06cbe88670523b861c5e6e570bf1a6c12bb0609784c74f7d0a",
+      "input_hash": "a170bd9872e38fc8dc813873e6c42ac860773109548054c54c30aab522956b5b",
+      "duration_ms": 1044,
+      "allocated_memory_mb": 256,
+      "memory_reserve_mb": 256
+    }
+  }
+]

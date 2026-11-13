@@ -1,0 +1,26 @@
+{
+  "request_sha256": "e00055e685fa87c1e67a2dc36eaa1a0ba2e3ac7d523ea059189f32abbdcaa0e4",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 2,
+    "numbers": 2,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=2：已取得2026-08-12至2026-11-11的65条真实AAPL日线并生成三序列图，图spec.scale为log且标题、正文明确对数坐标；没有把缺失价格填成零。",
+      "numbers=2：图中65行日期及close/high/low逐行匹配原始录制；独立核算首尾302.25/355.63、变动53.38与17.6609%、期末单日2.04298%、三次连续跌段3.9213%/3.4216%/4.8752%，支持正文舍入值及高低价。",
+      "limitations=1：交代日频、USD、真实窗口、Twelve Data来源及常规收盘口径，明确来源未提供复权方式和股息处理；对数线形说明同时提醒并非每日上涨。",
+      "presentation=1：实际对数图配简洁重点条目，价格、区间收益与回调说明结构清晰。",
+      "no_internal_identifiers=1：正文和可见通知没有无关数据句柄或运行编号，来源引用用于支持结论。"
+    ]
+  }
+}

@@ -1,0 +1,4493 @@
+{
+  "schema_version": 1,
+  "runtime": "agent",
+  "mode": "record",
+  "head": "891824cf",
+  "cases_sha256": "2355ea3f4cb32ee7f5228c36ff34da656501ec00604e01229b71ce7f67dbe66f",
+  "results": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+          "query": "AAPL 现在多少钱",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+            "session_id": "2026-11-11_081504_891824cf:facts-01",
+            "message_id": "assistant:2026-11-11_081504_891824cf:facts-01:0",
+            "attempt_id": "c875f70e766a46b9b43da6760fcc9600",
+            "stream_epoch": "c875f70e766a46b9b43da6760fcc9600",
+            "response": "AAPL 最新可获取的报价为 **342.37 美元**，较前一交易日收盘下跌 **1.80 美元，跌幅 0.52%** [Sa6413361f2]。\n\n买卖方向、币种和报价时点如下：\n\n- **币种**：USD\n- **报价时点**：2026-11-06，常规交易时段收盘（常规时段收盘）\n- **较前一交易日的变化**：−1.80 美元（−0.52%）\n\n如果需要，我可以补充这段时间的实际走势与区间表现。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "explanation_contains_unbound_date",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                }
+              ],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "get_stock_price",
+                  "source_name": "twelve_data",
+                  "published_date": null,
+                  "as_of": "2026-11-06",
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "price_snapshot",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "meta": {
+                    "market_session": "regular_close",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "snippet": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_id": "Sa6413361f2",
+                  "title": "get_stock_price output",
+                  "url": null,
+                  "data_ref": "dataset_bad2db095b059cfaa2",
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "AAPL"
+                    }
+                  }
+                }
+              ]
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "explanation_contains_unbound_date",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                }
+              ],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "get_stock_price",
+                  "source_name": "twelve_data",
+                  "published_date": null,
+                  "as_of": "2026-11-06",
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "price_snapshot",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "meta": {
+                    "market_session": "regular_close",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "snippet": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_id": "Sa6413361f2",
+                  "title": "get_stock_price output",
+                  "url": null,
+                  "data_ref": "dataset_bad2db095b059cfaa2",
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "AAPL"
+                    }
+                  }
+                }
+              ]
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_1",
+                "kind": "text",
+                "content": "AAPL 最新可获取报价为 **342.37 美元**，较前一交易日收盘跌 **1.80 美元（−0.52%）**。\n\n如果需要，我可以补充近期走势或关键技术位。",
+                "revision": 1,
+                "seq": 61,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "explanation_contains_unbound_date"
+                ]
+              },
+              {
+                "id": "root_text_2",
+                "kind": "text",
+                "content": "AAPL 最新可获取的报价为 **342.37 美元**，较前一交易日收盘下跌 **1.80 美元，跌幅 0.52%** [Sa6413361f2]。\n\n买卖方向、币种和报价时点如下：\n\n- **币种**：USD\n- **报价时点**：2026-11-06，常规交易时段收盘（常规时段收盘）\n- **较前一交易日的变化**：−1.80 美元（−0.52%）\n\n如果需要，我可以补充这段时间的实际走势与区间表现。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+                "revision": 1,
+                "seq": 292,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "explanation_contains_unbound_date"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-11T16:15:11.633822+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_WOi0nX2mu9QGdi2eCuqd7011",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "AAPL",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 3,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends i…",
+                "timestamp": "2026-11-11T16:15:11.770547+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "tool_call_id": "call_00_WOi0nX2mu9QGdi2eCuqd7011",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_bad2db095b059cfaa2"
+                  ],
+                  "inputs": {
+                    "ticker": "AAPL"
+                  },
+                  "output_preview": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_refs": [
+                    "Sa6413361f2"
+                  ],
+                  "evidence_refs": [
+                    "Sa6413361f2"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "Sa6413361f2",
+                      "title": "get_stock_price output",
+                      "url": null,
+                      "source": "get_stock_price",
+                      "as_of": "2026-11-06"
+                    }
+                  ],
+                  "summary": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends i…",
+                  "display": {
+                    "target": "AAPL",
+                    "result": "342.37 USD · -0.52% · 2026-11-06"
+                  },
+                  "duration_ms": 125,
+                  "runtime_type": "tool.result",
+                  "seq": 4,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:15:11.779546+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 5,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:15:17.827942+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 6,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-11T16:15:22.012989+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 176,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:15:22.020439+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 177,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:15:28.049428+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "AAPL 现在多少钱",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 178,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "已保留与资料一致的结果。",
+                "timestamp": "2026-11-11T16:15:37.827827+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-01:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-01",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "completed",
+                  "title": "回答核对完成",
+                  "summary": "已保留与资料一致的结果。",
+                  "runtime_type": "activity.finished",
+                  "seq": 526,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-01:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-01"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [
+              {
+                "source": "get_stock_price",
+                "source_name": "twelve_data",
+                "published_date": null,
+                "as_of": "2026-11-06",
+                "confidence": 0.6,
+                "type": "tool",
+                "kind": "price_snapshot",
+                "quality": "trusted",
+                "currency": "USD",
+                "meta": {
+                  "market_session": "regular_close",
+                  "source_time_precision": "date",
+                  "source_time_status": "provided"
+                },
+                "snippet": "AAPL Current Price: $342.37 | Change: -1.80 (-0.52%) | Provider: twelve_data | As of: 2026-11-06 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                "source_id": "Sa6413361f2",
+                "title": "get_stock_price output",
+                "url": null,
+                "data_ref": "dataset_bad2db095b059cfaa2",
+                "metadata": {
+                  "tool": "get_stock_price",
+                  "parameters": {
+                    "ticker": "AAPL"
+                  }
+                }
+              }
+            ],
+            "current_focus": "AAPL",
+            "tickers": [
+              "AAPL"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 14119,
+              "total_completion_tokens": 551,
+              "total_tokens": 14670,
+              "llm_token_calls": 3,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 3,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 14119,
+                  "completion": 551,
+                  "calls": 3
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 14119,
+                  "completion": 551,
+                  "calls": 3,
+                  "failed_calls": 0,
+                  "duration_ms": 30734
+                }
+              ],
+              "tool_calls": 1,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 3,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 0,
+        "hits": 1,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 33.265,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.0,
+        "tool_calls": 1,
+        "failed_tools": 0,
+        "tokens": 14670,
+        "rounds": 3
+      },
+      "checkpoints": 5,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081504_891824cf/facts-01/events.json",
+      "tool_recordings": 1
+    },
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+          "query": "MSFT 最新一季营收和经营现金流分别是多少",
+          "terminal": {
+            "type": "error",
+            "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+            "session_id": "2026-11-11_081504_891824cf:facts-02",
+            "message": "模型连接中断了。",
+            "error_code": "model_connection_error",
+            "reason": "模型连接中断了。",
+            "recovery_action": "稍后再试。",
+            "response": "",
+            "publishable": false,
+            "run_status": "failed",
+            "failure_kind": "execution_error",
+            "blocked_report": null,
+            "answer_status": "unavailable",
+            "blocks": [],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取季度财报",
+                "timestamp": "2026-11-11T16:15:44.679131+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call_00_ZZpCPxWROvWUjZlveNem9194",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "display": {
+                    "target": "MSFT",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 8
+                  },
+                  "summary": "正在读取季度财报",
+                  "runtime_type": "tool.started",
+                  "seq": 127,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:15:44.687920+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call_00_ZZpCPxWROvWUjZlveNem9194",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_3e4fd6a338e32ac754"
+                  ],
+                  "inputs": {
+                    "ticker": "MSFT",
+                    "limit": 8
+                  },
+                  "output_preview": {
+                    "ticker": "MSFT",
+                    "market": "US",
+                    "supported_market": "US",
+                    "source": "sec_edgar",
+                    "error": "missing_sec_user_agent",
+                    "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "MSFT",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "missing_sec_user_agent",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在核对当前时间",
+                "timestamp": "2026-11-11T16:15:44.688427+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call_01_NI3mIEOrvz4sL3yL4zDJ7480",
+                  "name": "get_current_datetime",
+                  "title": "核对当前时间",
+                  "display": {
+                    "target": "当前时间",
+                    "result": ""
+                  },
+                  "inputs": {},
+                  "summary": "正在核对当前时间",
+                  "runtime_type": "tool.started",
+                  "seq": 129,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "2026-11-08 06:52:33",
+                "timestamp": "2026-11-11T16:15:44.696135+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "tool_call_id": "call_01_NI3mIEOrvz4sL3yL4zDJ7480",
+                  "name": "get_current_datetime",
+                  "title": "核对当前时间",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_038f5c770e12a22200"
+                  ],
+                  "inputs": {},
+                  "output_preview": "2026-11-08 06:52:33",
+                  "source_refs": [
+                    "S8e54865ea4"
+                  ],
+                  "evidence_refs": [
+                    "S8e54865ea4"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "S8e54865ea4",
+                      "title": "get_current_datetime output",
+                      "url": null,
+                      "source": "get_current_datetime",
+                      "as_of": null
+                    }
+                  ],
+                  "summary": "2026-11-08 06:52:33",
+                  "display": {
+                    "target": "当前时间",
+                    "result": "2026-11-08 06:52:33"
+                  },
+                  "duration_ms": 14,
+                  "runtime_type": "tool.result",
+                  "seq": 130,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:15:44.705189+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 131,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-02"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:15:48.727844+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-02:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-02",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "MSFT 最新一季营收和经营现金流分别是多少",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 132,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-02:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-02"
+                }
+              }
+            ],
+            "evidence_pool": [
+              {
+                "source": "get_current_datetime",
+                "source_name": "get_current_datetime",
+                "published_date": null,
+                "confidence": 0.6,
+                "type": "tool",
+                "kind": "unknown",
+                "snippet": "2026-11-08 06:52:33",
+                "source_id": "S8e54865ea4",
+                "title": "get_current_datetime output",
+                "url": null,
+                "data_ref": "dataset_038f5c770e12a22200",
+                "metadata": {
+                  "tool": "get_current_datetime",
+                  "parameters": {}
+                }
+              }
+            ],
+            "artifacts": [],
+            "metrics": {
+              "total_prompt_tokens": 5260,
+              "total_completion_tokens": 201,
+              "total_tokens": 5461,
+              "llm_token_calls": 2,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 1,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 5260,
+                  "completion": 201,
+                  "calls": 2
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 5260,
+                  "completion": 201,
+                  "calls": 2,
+                  "failed_calls": 1,
+                  "duration_ms": 15656
+                }
+              ],
+              "tool_calls": 2,
+              "failed_stage": "model_response"
+            }
+          },
+          "model_calls": 2,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 1,
+        "hits": 1,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 15.906,
+      "structure": {
+        "completed": false,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.5,
+        "tool_calls": 2,
+        "failed_tools": 1,
+        "tokens": 5461,
+        "rounds": 2
+      },
+      "checkpoints": 2,
+      "watchlist": [],
+      "transport_errors": [
+        {
+          "code": "model_connection_error",
+          "cause": "ConnectError"
+        }
+      ],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081504_891824cf/facts-02/events.json",
+      "tool_recordings": 2
+    },
+    {
+      "id": "facts-03",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+          "query": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+            "session_id": "2026-11-11_081504_891824cf:facts-03",
+            "message_id": "assistant:2026-11-11_081504_891824cf:facts-03:0",
+            "attempt_id": "5256429233ef41e59ead1ff23c7d5a60",
+            "stream_epoch": "5256429233ef41e59ead1ff23c7d5a60",
+            "response": "抱歉，这个问题我这轮没能给出可靠答案。原因是本轮取数资源已用尽，负责调取最新财报现金流的分析没有完成，我手上没有NVDA最新已披露财季的经营活动现金流（CFO）与资本开支原始数值，因此也无法计算或引用自由现金流。\n\n**需要说明的几点：**\n- 我不能凭记忆或推算给出CFO、资本开支或自由现金流的数字，以免与公司实际披露的财期和口径不符。\n- 通常计算口径是「自由现金流 ≈ 经营活动现金流 − 购置生产性资产（含软件及无形资产）」，但这属于通用算法，不等于英伟达自己披露的非GAAP FCF口径；公司是否单独披露、如何调整，本轮未能核实。\n- 最新已披露季度究竟是FY2027 Q2还是Q3，也依赖实际财报发布时间，本轮同样未核实。\n\n部分结论还缺少可靠依据，暂时无法确认。\n\n尚未核实：NVDA 经营与自由现金流。现有资料不足以完成这部分判断。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "explanation_contains_unbound_number",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                },
+                {
+                  "code": "research_incomplete",
+                  "severity": "block",
+                  "message": "尚未核实：NVDA 经营与自由现金流。",
+                  "missing_evidence": [
+                    {
+                      "ticker": "NVDA",
+                      "facet": "cash_flow",
+                      "label": "经营与自由现金流"
+                    }
+                  ]
+                }
+              ],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "get_current_datetime",
+                  "source_name": "get_current_datetime",
+                  "published_date": null,
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "unknown",
+                  "snippet": "2026-11-08 06:52:33",
+                  "source_id": "S8e54865ea4",
+                  "title": "get_current_datetime output",
+                  "url": null,
+                  "data_ref": "dataset_038f5c770e12a22200",
+                  "metadata": {
+                    "tool": "get_current_datetime",
+                    "parameters": {}
+                  }
+                }
+              ]
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "explanation_contains_unbound_number",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                },
+                {
+                  "code": "research_incomplete",
+                  "severity": "block",
+                  "message": "尚未核实：NVDA 经营与自由现金流。",
+                  "missing_evidence": [
+                    {
+                      "ticker": "NVDA",
+                      "facet": "cash_flow",
+                      "label": "经营与自由现金流"
+                    }
+                  ]
+                }
+              ],
+              "source_count": 1,
+              "evidence_ledger": [
+                {
+                  "source": "get_current_datetime",
+                  "source_name": "get_current_datetime",
+                  "published_date": null,
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "unknown",
+                  "snippet": "2026-11-08 06:52:33",
+                  "source_id": "S8e54865ea4",
+                  "title": "get_current_datetime output",
+                  "url": null,
+                  "data_ref": "dataset_038f5c770e12a22200",
+                  "metadata": {
+                    "tool": "get_current_datetime",
+                    "parameters": {}
+                  }
+                }
+              ]
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_8",
+                "kind": "text",
+                "content": "抱歉，这个问题我这轮没能给出可靠答案。原因是本轮取数资源已用尽，负责调取最新财报现金流的分析没有完成，我手上没有NVDA最新已披露财季的经营活动现金流（CFO）与资本开支原始数值，因此也无法计算或引用自由现金流。\n\n**需要说明的几点：**\n- 我不能凭记忆或推算给出CFO、资本开支或自由现金流的数字，以免与公司实际披露的财期和口径不符。\n- 通常计算口径是「自由现金流 ≈ 经营活动现金流 − 购置生产性资产（含软件及无形资产）」，但这属于通用算法，不等于英伟达自己披露的非GAAP FCF口径；公司是否单独披露、如何调整，本轮未能核实。\n- 最新已披露季度究竟是FY2027 Q2还是Q3，也依赖实际财报发布时间，本轮同样未核实。\n\n部分结论还缺少可靠依据，暂时无法确认。\n\n尚未核实：NVDA 经营与自由现金流。现有资料不足以完成这部分判断。",
+                "revision": 2,
+                "seq": 488,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "explanation_contains_unbound_number"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取季度财报",
+                "timestamp": "2026-11-11T16:16:03.598201+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_s32aJIbMAu5P6JIG4Bab0367",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "display": {
+                    "target": "NVDA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "NVDA",
+                    "limit": 8
+                  },
+                  "summary": "正在读取季度财报",
+                  "runtime_type": "tool.started",
+                  "seq": 441,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:16:03.606210+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_s32aJIbMAu5P6JIG4Bab0367",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_fc4e4bdcc593c611ca"
+                  ],
+                  "inputs": {
+                    "ticker": "NVDA",
+                    "limit": 8
+                  },
+                  "output_preview": {
+                    "ticker": "NVDA",
+                    "market": "US",
+                    "supported_market": "US",
+                    "source": "sec_edgar",
+                    "error": "missing_sec_user_agent",
+                    "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "NVDA",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "missing_sec_user_agent",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 14,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司资料",
+                "timestamp": "2026-11-11T16:16:03.606210+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_ZLVLY1Sv8q0ejc35WCNb3467",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "display": {
+                    "target": "NVDA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "NVDA"
+                  },
+                  "summary": "正在读取公司资料",
+                  "runtime_type": "tool.started",
+                  "seq": 443,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T16:16:33.608479+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_ZLVLY1Sv8q0ejc35WCNb3467",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "inputs": {
+                    "ticker": "NVDA"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "NVDA",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30000,
+                  "runtime_type": "tool.failed",
+                  "seq": 444,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在查看已取得的资料",
+                "timestamp": "2026-11-11T16:16:42.123226+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_6WMWjqu7PxpvZnZKpnWb0224",
+                  "name": "read_evidence",
+                  "title": "查看已取得的资料",
+                  "display": {
+                    "target": "NVDA · 原始资料",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "data_ref": "dataset_fc4e4bdcc593c611ca",
+                    "max_chars": 3000
+                  },
+                  "summary": "正在查看已取得的资料",
+                  "runtime_type": "tool.started",
+                  "seq": 446,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-11T16:16:42.124388+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_6WMWjqu7PxpvZnZKpnWb0224",
+                  "name": "read_evidence",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_fc4e4bdcc593c611ca"
+                  ],
+                  "inputs": {
+                    "data_ref": "dataset_fc4e4bdcc593c611ca",
+                    "max_chars": 3000
+                  },
+                  "output_preview": {
+                    "offset": 0,
+                    "total_chars": 315,
+                    "next_offset": 315,
+                    "has_more": false,
+                    "preview": {
+                      "ticker": "NVDA",
+                      "market": "US",
+                      "supported_market": "US",
+                      "source": "sec_edgar",
+                      "error": "missing_sec_user_agent",
+                      "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                    }
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "display": {
+                    "target": "NVDA · 原始资料",
+                    "result": "读取第 0–315 字"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 447,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司新闻",
+                "timestamp": "2026-11-11T16:16:42.124949+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_taktNG0tJV5PFL5DUpWS6025",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "display": {
+                    "target": "NVDA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "NVDA",
+                    "limit": 10,
+                    "max_age_hours": 1000
+                  },
+                  "summary": "正在读取公司新闻",
+                  "runtime_type": "tool.started",
+                  "seq": 448,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T16:17:12.139341+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_taktNG0tJV5PFL5DUpWS6025",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "inputs": {
+                    "ticker": "NVDA",
+                    "limit": 10,
+                    "max_age_hours": 1000
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "NVDA",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30016,
+                  "runtime_type": "tool.failed",
+                  "seq": 449,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-11T16:17:23.667945+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_kACWOUjWRvRYjg0duLKC0692",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=10-Q&dateb=&owner=include&count=10",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=10-Q&dateb=&owner=include&count=10",
+                    "max_length": 4000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 451,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:17:23.677960+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_kACWOUjWRvRYjg0duLKC0692",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_1f8885d959da6b0b75"
+                  ],
+                  "inputs": {
+                    "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=10-Q&dateb=&owner=include&count=10",
+                    "max_length": 4000
+                  },
+                  "output_preview": {
+                    "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=10-Q&dateb=&owner=include&count=10",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=10-Q&dateb=&owner=include&count=10",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-11T16:17:23.678487+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_lCTkG3kgumQ0XYPj4fN49421",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "NVIDIA Q3 fiscal 2027 results free cash flow October 2026",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "NVIDIA Q3 fiscal 2027 results free cash flow October 2026"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 453,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T16:17:27.690471+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_lCTkG3kgumQ0XYPj4fN49421",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_b9726ad543144a2a4b"
+                  ],
+                  "inputs": {
+                    "query": "NVIDIA Q3 fiscal 2027 results free cash flow October 2026"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "NVIDIA Q3 fiscal 2027 results free cash flow October 2026",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4000,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-11T16:17:35.677289+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_2PQnLOBS2ngqwycizbof2096",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "NVIDIA third quarter fiscal 2027 financial results",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "NVIDIA third quarter fiscal 2027 financial results"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 456,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T16:17:39.687981+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_2PQnLOBS2ngqwycizbof2096",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_992f9da350449676cd"
+                  ],
+                  "inputs": {
+                    "query": "NVIDIA third quarter fiscal 2027 financial results"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "NVIDIA third quarter fiscal 2027 financial results",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4016,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-11T16:17:39.688990+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_LQcZIWuNBbQ2UoiYLJcr5803",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://investor.nvidia.com/financial-info/quarterly-results/default.aspx",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://investor.nvidia.com/financial-info/quarterly-results/default.aspx",
+                    "max_length": 5000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 458,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:17:39.697451+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_LQcZIWuNBbQ2UoiYLJcr5803",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_866abd513f3f2cf98a"
+                  ],
+                  "inputs": {
+                    "url": "https://investor.nvidia.com/financial-info/quarterly-results/default.aspx",
+                    "max_length": 5000
+                  },
+                  "output_preview": {
+                    "url": "https://investor.nvidia.com/financial-info/quarterly-results/default.aspx",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://investor.nvidia.com/financial-info/quarterly-results/default.aspx",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 14,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-11T16:17:45.720836+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_B8zNaNzTD76GThHoBajr6777",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=8-K&dateb=&owner=include&count=10",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=8-K&dateb=&owner=include&count=10",
+                    "max_length": 4000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 461,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:17:45.740887+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_B8zNaNzTD76GThHoBajr6777",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_79e95d7582c432f627"
+                  ],
+                  "inputs": {
+                    "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=8-K&dateb=&owner=include&count=10",
+                    "max_length": 4000
+                  },
+                  "output_preview": {
+                    "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=8-K&dateb=&owner=include&count=10",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001045810&type=8-K&dateb=&owner=include&count=10",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 30,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-11T16:17:45.743003+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_wv9kuEAhhEuAUYuJKvSm9710",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://nvidianews.nvidia.com/news",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://nvidianews.nvidia.com/news",
+                    "max_length": 4000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 463,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:17:45.752004+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_wv9kuEAhhEuAUYuJKvSm9710",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_cedd8962ff9e475fcc"
+                  ],
+                  "inputs": {
+                    "url": "https://nvidianews.nvidia.com/news",
+                    "max_length": 4000
+                  },
+                  "output_preview": {
+                    "url": "https://nvidianews.nvidia.com/news",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://nvidianews.nvidia.com/news",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:17:45.768929+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 465,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:17:49.834441+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 466,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取季度财报",
+                "timestamp": "2026-11-11T16:17:56.512628+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_RvL0NAesQGlnGITDojZ42588",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "display": {
+                    "target": "NVDA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "NVDA",
+                    "limit": 4,
+                    "calculations": [
+                      {
+                        "name": "fcf_cfo_minus_capex",
+                        "formula": "OperatingCashFlow - PaymentsToAcquirePropertyPlantAndEquipment"
+                      }
+                    ]
+                  },
+                  "summary": "正在读取季度财报",
+                  "runtime_type": "tool.started",
+                  "seq": 468,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:17:56.522141+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_RvL0NAesQGlnGITDojZ42588",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_2d0058b680dbf0498b"
+                  ],
+                  "inputs": {
+                    "ticker": "NVDA",
+                    "limit": 4,
+                    "calculations": [
+                      {
+                        "name": "fcf_cfo_minus_capex",
+                        "formula": "OperatingCashFlow - PaymentsToAcquirePropertyPlantAndEquipment"
+                      }
+                    ]
+                  },
+                  "output_preview": {
+                    "ticker": "NVDA",
+                    "market": "US",
+                    "supported_market": "US",
+                    "source": "sec_edgar",
+                    "error": "missing_sec_user_agent",
+                    "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "NVDA",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "missing_sec_user_agent",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 14,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在核对当前时间",
+                "timestamp": "2026-11-11T16:17:56.524160+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_Pxkuq8Afx3Tpr6IVWvCY2972",
+                  "name": "get_current_datetime",
+                  "title": "核对当前时间",
+                  "display": {
+                    "target": "当前时间",
+                    "result": ""
+                  },
+                  "inputs": {},
+                  "summary": "正在核对当前时间",
+                  "runtime_type": "tool.started",
+                  "seq": 470,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "2026-11-08 06:52:33",
+                "timestamp": "2026-11-11T16:17:56.533140+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_Pxkuq8Afx3Tpr6IVWvCY2972",
+                  "name": "get_current_datetime",
+                  "title": "核对当前时间",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_038f5c770e12a22200"
+                  ],
+                  "inputs": {},
+                  "output_preview": "2026-11-08 06:52:33",
+                  "source_refs": [
+                    "S8e54865ea4"
+                  ],
+                  "evidence_refs": [
+                    "S8e54865ea4"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "S8e54865ea4",
+                      "title": "get_current_datetime output",
+                      "url": null,
+                      "source": "get_current_datetime",
+                      "as_of": null
+                    }
+                  ],
+                  "summary": "2026-11-08 06:52:33",
+                  "display": {
+                    "target": "当前时间",
+                    "result": "2026-11-08 06:52:33"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 471,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:17:56.546218+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 472,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:18:00.568978+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 473,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-11T16:18:20.500417+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_XMqYdCzWiMP7wJGHKuGo6040",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Nvidia free cash flow quarterly fiscal Q2 2027",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Nvidia free cash flow quarterly fiscal Q2 2027"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 475,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T16:18:26.418711+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_XMqYdCzWiMP7wJGHKuGo6040",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_995d74a541d6f23212"
+                  ],
+                  "inputs": {
+                    "query": "Nvidia free cash flow quarterly fiscal Q2 2027"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Nvidia free cash flow quarterly fiscal Q2 2027",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 5921,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-11T16:18:26.421302+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_7HHei0tPu3aGu8pXREte4712",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://stockanalysis.com/stocks/NVDA/financials/cash-flow-statement/?p=quarterly",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://stockanalysis.com/stocks/NVDA/financials/cash-flow-statement/?p=quarterly",
+                    "max_length": 6000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 477,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:18:26.432951+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_7HHei0tPu3aGu8pXREte4712",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_bd9c379e967cb55b7d"
+                  ],
+                  "inputs": {
+                    "url": "https://stockanalysis.com/stocks/NVDA/financials/cash-flow-statement/?p=quarterly",
+                    "max_length": 6000
+                  },
+                  "output_preview": {
+                    "url": "https://stockanalysis.com/stocks/NVDA/financials/cash-flow-statement/?p=quarterly",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://stockanalysis.com/stocks/NVDA/financials/cash-flow-statement/?p=quarterly",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 16,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在阅读网页",
+                "timestamp": "2026-11-11T16:18:32.558057+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_ETOuszvSl1aNw2xTg3RR1395",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "display": {
+                    "target": "https://www.macrotrends.net/stocks/charts/NVDA/nvidia/cash-flow-statement",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "url": "https://www.macrotrends.net/stocks/charts/NVDA/nvidia/cash-flow-statement",
+                    "max_length": 5000
+                  },
+                  "summary": "正在阅读网页",
+                  "runtime_type": "tool.started",
+                  "seq": 480,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:18:32.567648+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_00_ETOuszvSl1aNw2xTg3RR1395",
+                  "name": "fetch_url_content",
+                  "title": "阅读网页",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_628a492e08979faab7"
+                  ],
+                  "inputs": {
+                    "url": "https://www.macrotrends.net/stocks/charts/NVDA/nvidia/cash-flow-statement",
+                    "max_length": 5000
+                  },
+                  "output_preview": {
+                    "url": "https://www.macrotrends.net/stocks/charts/NVDA/nvidia/cash-flow-statement",
+                    "error": "fetch_failed"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "https://www.macrotrends.net/stocks/charts/NVDA/nvidia/cash-flow-statement",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "fetch_failed",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在委派专业研究",
+                "timestamp": "2026-11-11T16:18:32.570645+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_yA86JzmC30XYJ8P6AXlq7240",
+                  "name": "delegate_research",
+                  "title": "委派专业研究",
+                  "display": {
+                    "target": "基本面分析师",
+                    "result": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财…"
+                  },
+                  "inputs": {
+                    "role": "fundamental_agent",
+                    "task": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财季、币种、单位（百万美元）、数据来源URL与披露日期，并说明公司自己是否披露非GAAP FCF及口径。若无法取得具体数值，请明确说明并给出已成功获得的任何数据。"
+                  },
+                  "summary": "正在委派专业研究",
+                  "runtime_type": "tool.started",
+                  "seq": 482,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "agent.started",
+                "eventType": "trace",
+                "message": "",
+                "timestamp": "2026-11-11T16:18:32.570645+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财季、币种、单位（百万美元）、数据来源URL与披露日期，并说明公司自己是否披露非GAAP FCF及口径。若无法取得具体数值，请明确说明并给出已成功获得的任何数据。",
+                  "agent_id": "agent_06018df4da",
+                  "runtime_type": "agent.started",
+                  "seq": 483,
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "任务已受理，尚未完成。",
+                "timestamp": "2026-11-11T16:18:32.575656+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "tool_call_id": "call_01_yA86JzmC30XYJ8P6AXlq7240",
+                  "name": "delegate_research",
+                  "title": "委派专业研究",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_e6df6050f7bc489734"
+                  ],
+                  "inputs": {
+                    "role": "fundamental_agent",
+                    "task": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财季、币种、单位（百万美元）、数据来源URL与披露日期，并说明公司自己是否披露非GAAP FCF及口径。若无法取得具体数值，请明确说明并给出已成功获得的任何数据。"
+                  },
+                  "output_preview": {
+                    "agent_id": "agent_06018df4da",
+                    "status": "accepted",
+                    "summary": "任务已受理，尚未完成。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "任务已受理，尚未完成。",
+                  "display": {
+                    "target": "基本面分析师",
+                    "result": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财…"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 484,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:18:32.589158+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财季、币种、单位（百万美元）、数据来源URL与披露日期，并说明公司自己是否披露非GAAP FCF及口径。若无法取得具体数值，请明确说明并给出已成功获得的任何数据。",
+                  "activity_id": "agent_06018df4da_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 485,
+                  "agent_id": "agent_06018df4da",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:18:32.605439+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 486,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:18:36.635244+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 487,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-11T16:18:45.429316+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 743,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:18:45.441268+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "NVDA 最新季度自由现金流是多少，按什么口径算的",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 744,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:18:46.752356+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财季、币种、单位（百万美元）、数据来源URL与披露日期，并说明公司自己是否披露非GAAP FCF及口径。若无法取得具体数值，请明确说明并给出已成功获得的任何数据。",
+                  "activity_id": "agent_06018df4da_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 745,
+                  "agent_id": "agent_06018df4da",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "agent.finished",
+                "eventType": "trace",
+                "message": "这次研究用时较长，已经超时。",
+                "timestamp": "2026-11-11T16:18:53.944767+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "role": "fundamental_agent",
+                  "agent_label": "基本面分析师",
+                  "task": "NVDA（英伟达）最新已披露季度（截至2026-11-11，最可能是FY2027 Q2，财季截至2026年7月底；如FY2027 Q3已披露则以其为准）的现金流数据：经营活动现金流（CFO）、资本开支/购置生产性资产（含软件与无形资产的口径要说明）、由此计算的自由现金流（CFO-资本开支）。请给出财季、币种、单位（百万美元）、数据来源URL与披露日期，并说明公司自己是否披露非GAAP FCF及口径。若无法取得具体数值，请明确说明并给出已成功获得的任何数据。",
+                  "agent_id": "agent_06018df4da",
+                  "status": "failed",
+                  "error_code": "run_deadline_exceeded",
+                  "reason": "这次研究用时较长，已经超时。",
+                  "recovery_action": "已查到的数据会保留，可以缩小问题后再试。",
+                  "runtime_type": "agent.finished",
+                  "seq": 746,
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "保留已核实的结果，其余部分暂时无法确认。",
+                "timestamp": "2026-11-11T16:18:53.963374+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-03:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-03",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "failed",
+                  "title": "回答核对未完成",
+                  "summary": "保留已核实的结果，其余部分暂时无法确认。",
+                  "error_code": "run_deadline_exceeded",
+                  "runtime_type": "activity.finished",
+                  "seq": 747,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-03:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-03"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": "NVDA",
+            "tickers": [
+              "NVDA"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 52415,
+              "total_completion_tokens": 1830,
+              "total_tokens": 54245,
+              "llm_token_calls": 10,
+              "failed_llm_calls": 1,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 9,
+              "unreported_usage_calls": 0,
+              "usage_state": "partial",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 52415,
+                  "completion": 1830,
+                  "calls": 10
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 52415,
+                  "completion": 1830,
+                  "calls": 9,
+                  "failed_calls": 0,
+                  "duration_ms": 97249
+                },
+                {
+                  "agent": "fundamental_agent",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 0,
+                  "completion": 0,
+                  "calls": 1,
+                  "failed_calls": 1,
+                  "duration_ms": 21375
+                }
+              ],
+              "tool_calls": 16,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 10,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 13,
+        "hits": 1,
+        "misses": 0,
+        "errors": 1
+      },
+      "score": null,
+      "elapsed_seconds": 180.234,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.8125,
+        "tool_calls": 16,
+        "failed_tools": 13,
+        "tokens": 54245,
+        "rounds": 10
+      },
+      "checkpoints": 17,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081504_891824cf/facts-03/events.json",
+      "tool_recordings": 14
+    },
+    {
+      "id": "facts-04",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+          "query": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+            "session_id": "2026-11-11_081504_891824cf:facts-04",
+            "message_id": "assistant:2026-11-11_081504_891824cf:facts-04:0",
+            "attempt_id": "4a7e1d7d33e6452782ca08020f50cf5d",
+            "stream_epoch": "4a7e1d7d33e6452782ca08020f50cf5d",
+            "response": "本轮实际成功返回的资料为空，我无法基于真实数据回答 TSLA 最近的盈利预期和 EPS 修正变化。为避免杜撰数值，这里先说明缺口：\n\n**尚未核实的内容**\n- 最近财季（已披露的 fiscal quarter）市场一致预期 EPS 的最新值、上一个月及三个月前的对比。\n- 分析师上调/下调 EPS 预期的家数、幅度与净修正方向。\n- 下一财年或下一季度盈利预期的变化轨迹。\n- 最近一次财报后预期修正的时间点与股价反应。\n\n**结论**：目前没有可引用的数据支撑“预期上修/下修、修正幅度、修正广度”这类判断，因此不对方向或强弱下结论。\n\n补齐上述数据后，我可以给出：预期修正的方向与幅度、修正广度、以及这些变化与股价表现是否一致，并标注每个数值的财期与来源时间。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "missing_factual_evidence",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "no_verified_evidence",
+                  "severity": "block",
+                  "message": "本轮没有取得可核验的研究数据。"
+                }
+              ],
+              "source_count": 0,
+              "evidence_ledger": []
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_0",
+                "kind": "text",
+                "content": "我会先获取 TSLA 的盈利预期和 EPS 修正数据。",
+                "revision": 0,
+                "seq": 2,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_4",
+                "kind": "text",
+                "content": "这两类盈利预期接口本次都没有返回数据，我改用其他来源检索，看能否找到可核查的预期与修正信息。",
+                "revision": 1,
+                "seq": 39,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_5",
+                "kind": "text",
+                "content": "目前我没有拿到可核验的 TSLA 盈利预期与 EPS 修正数据，因此不能给出具体变化数值。\n\n**本轮回答边界**\n- 本轮成功返回的资料摘要为空，无法提取分析师一致预期 EPS、下季度或下一年度 EPS 修正方向、修正幅度，以及预期变动的时间分布。\n- 在没有真实一致预期数据的情况下，我不会凭记忆或推测填写“上调/下调”“修正百分比”等数字；这些都不是当前可引用的事实。\n- 因此也无法判断近期 EPS 修正对股价的含义，或与历史修正趋势作对比。\n\n本轮资源已用尽，未获取到上述数据，也无法确认任何具体修正结论。",
+                "revision": 1,
+                "seq": 72,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              },
+              {
+                "id": "root_text_6",
+                "kind": "text",
+                "content": "本轮实际成功返回的资料为空，我无法基于真实数据回答 TSLA 最近的盈利预期和 EPS 修正变化。为避免杜撰数值，这里先说明缺口：\n\n**尚未核实的内容**\n- 最近财季（已披露的 fiscal quarter）市场一致预期 EPS 的最新值、上一个月及三个月前的对比。\n- 分析师上调/下调 EPS 预期的家数、幅度与净修正方向。\n- 下一财年或下一季度盈利预期的变化轨迹。\n- 最近一次财报后预期修正的时间点与股价反应。\n\n**结论**：目前没有可引用的数据支撑“预期上修/下修、修正幅度、修正广度”这类判断，因此不对方向或强弱下结论。\n\n补齐上述数据后，我可以给出：预期修正的方向与幅度、修正广度、以及这些变化与股价表现是否一致，并标注每个数值的财期与来源时间。\n\n部分结论还缺少可靠依据，暂时无法确认。",
+                "revision": 1,
+                "seq": 317,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "missing_factual_evidence"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在查找研究工具",
+                "timestamp": "2026-11-11T16:19:05.061651+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_X2vIxgeBSxzQzccWUO0C6809",
+                  "name": "discover_tools",
+                  "title": "查找研究工具",
+                  "display": {
+                    "target": "研究工具",
+                    "result": ""
+                  },
+                  "inputs": {},
+                  "summary": "正在查找研究工具",
+                  "runtime_type": "tool.started",
+                  "seq": 18,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "返回 35 条结果，展开查看内容与来源。",
+                "timestamp": "2026-11-11T16:19:05.062806+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_X2vIxgeBSxzQzccWUO0C6809",
+                  "name": "discover_tools",
+                  "title": "查找研究工具",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_acbc4b578b50258635"
+                  ],
+                  "inputs": {},
+                  "output_preview": {
+                    "tools": [
+                      {
+                        "name": "get_fred_data",
+                        "description": "获取有明确期间、单位和来源的官方宏观指标；新增非农是 PAYEMS 月差人数，非存量。"
+                      },
+                      {
+                        "name": "get_price_window_metrics",
+                        "description": "按完成交易日计算可复核的收益、最大收盘回撤或量价突破，不含股息。"
+                      },
+                      {
+                        "name": "get_sec_capital_allocation",
+                        "description": "核对同季度或完整财年资本分配的现金支付及期末普通股净变化。"
+                      },
+                      {
+                        "name": "get_current_datetime",
+                        "description": "Provide the current timestamp to anchor analysis and reporting."
+                      },
+                      {
+                        "name": "get_stock_price",
+                        "description": "Fetch a live quote with multi-source fallback (Alpha Vantage -> Finnhub -> yfinance -> scrape)."
+                      },
+                      {
+                        "其他条目数": 1
+                      }
+                    ]
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "返回 35 条结果，展开查看内容与来源。",
+                  "display": {
+                    "target": "研究工具",
+                    "result": "35 项研究工具"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 19,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在准备研究工具",
+                "timestamp": "2026-11-11T16:19:09.836050+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_J87ObWxaGnjVHZLGHLFc8413",
+                  "name": "enable_tools",
+                  "title": "准备研究工具",
+                  "display": {
+                    "target": "读取盈利预期、读取盈利预期修正、查询事件日历、读取公司新闻",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "names": [
+                      "get_earnings_estimates",
+                      "get_eps_revisions",
+                      "get_event_calendar",
+                      "get_company_news"
+                    ]
+                  },
+                  "summary": "正在准备研究工具",
+                  "runtime_type": "tool.started",
+                  "seq": 21,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "下次模型调用可使用这些工具的完整参数。",
+                "timestamp": "2026-11-11T16:19:09.836050+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_J87ObWxaGnjVHZLGHLFc8413",
+                  "name": "enable_tools",
+                  "title": "准备研究工具",
+                  "status": "ok",
+                  "data_refs": [],
+                  "inputs": {
+                    "names": [
+                      "get_earnings_estimates",
+                      "get_eps_revisions",
+                      "get_event_calendar",
+                      "get_company_news"
+                    ]
+                  },
+                  "output_preview": {
+                    "enabled": [
+                      "get_earnings_estimates",
+                      "get_eps_revisions",
+                      "get_event_calendar",
+                      "get_company_news"
+                    ],
+                    "summary": "下次模型调用可使用这些工具的完整参数。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "下次模型调用可使用这些工具的完整参数。",
+                  "display": {
+                    "target": "读取盈利预期、读取盈利预期修正、查询事件日历、读取公司新闻",
+                    "result": "4 项工具"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 22,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:19:09.847045+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 23,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:19:15.880960+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 24,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取盈利预期",
+                "timestamp": "2026-11-11T16:19:24.771032+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_Lr6H29vgJLIFVG09VgWm4367",
+                  "name": "get_earnings_estimates",
+                  "title": "读取盈利预期",
+                  "display": {
+                    "target": "TSLA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "summary": "正在读取盈利预期",
+                  "runtime_type": "tool.started",
+                  "seq": 26,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T16:19:54.774127+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_Lr6H29vgJLIFVG09VgWm4367",
+                  "name": "get_earnings_estimates",
+                  "title": "读取盈利预期",
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "TSLA",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30014,
+                  "runtime_type": "tool.failed",
+                  "seq": 27,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取盈利预期修正",
+                "timestamp": "2026-11-11T16:19:54.775120+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_01_MhsBKOEgzpoJjj6h04Dj4358",
+                  "name": "get_eps_revisions",
+                  "title": "读取盈利预期修正",
+                  "display": {
+                    "target": "TSLA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "summary": "正在读取盈利预期修正",
+                  "runtime_type": "tool.started",
+                  "seq": 28,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T16:20:24.791680+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_01_MhsBKOEgzpoJjj6h04Dj4358",
+                  "name": "get_eps_revisions",
+                  "title": "读取盈利预期修正",
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "TSLA",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30015,
+                  "runtime_type": "tool.failed",
+                  "seq": 29,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在查询事件日历",
+                "timestamp": "2026-11-11T16:20:24.792672+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_02_ygHITWEJG0Bbd2dq33Id9284",
+                  "name": "get_event_calendar",
+                  "title": "查询事件日历",
+                  "display": {
+                    "target": "TSLA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "TSLA",
+                    "days_ahead": 60
+                  },
+                  "summary": "正在查询事件日历",
+                  "runtime_type": "tool.started",
+                  "seq": 30,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T16:20:54.813108+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_02_ygHITWEJG0Bbd2dq33Id9284",
+                  "name": "get_event_calendar",
+                  "title": "查询事件日历",
+                  "inputs": {
+                    "ticker": "TSLA",
+                    "days_ahead": 60
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "TSLA",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30016,
+                  "runtime_type": "tool.failed",
+                  "seq": 31,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取盈利预期",
+                "timestamp": "2026-11-11T16:20:57.899384+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_jDb7lTvhg4VuYhEsZQWc2181",
+                  "name": "get_earnings_estimates",
+                  "title": "读取盈利预期",
+                  "display": {
+                    "target": "TSLA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "summary": "正在读取盈利预期",
+                  "runtime_type": "tool.started",
+                  "seq": 33,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:20:57.912033+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_jDb7lTvhg4VuYhEsZQWc2181",
+                  "name": "get_earnings_estimates",
+                  "title": "读取盈利预期",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_c9067e24110779f370"
+                  ],
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "output_preview": {
+                    "as_of": "2026-11-11T08:19:24.774335",
+                    "calendar": {},
+                    "earnings_estimate": [],
+                    "eps_revisions": [],
+                    "eps_trend": [],
+                    "error": "fetch_failed: Timeout",
+                    "revision_signal": "unknown",
+                    "source": "yfinance",
+                    "ticker": "TSLA"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "TSLA",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "runtime_internal_error",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 15,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取盈利预期修正",
+                "timestamp": "2026-11-11T16:20:57.913034+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_01_Dq3Jql0OMezIW921Pp7V4831",
+                  "name": "get_eps_revisions",
+                  "title": "读取盈利预期修正",
+                  "display": {
+                    "target": "TSLA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "summary": "正在读取盈利预期修正",
+                  "runtime_type": "tool.started",
+                  "seq": 35,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:20:57.925750+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_01_Dq3Jql0OMezIW921Pp7V4831",
+                  "name": "get_eps_revisions",
+                  "title": "读取盈利预期修正",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_7c4f298cc2f8b9ba00"
+                  ],
+                  "inputs": {
+                    "ticker": "TSLA"
+                  },
+                  "output_preview": {
+                    "as_of": "2026-11-11T08:19:54.779031",
+                    "eps_revisions": [],
+                    "eps_trend": [],
+                    "error": "fetch_failed: Timeout",
+                    "revision_signal": "unknown",
+                    "source": "yfinance",
+                    "ticker": "TSLA"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "TSLA",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "runtime_internal_error",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:20:57.937856+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 37,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:21:04.982954+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 38,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-11T16:21:18.166924+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_ZevIpXjiCbJHpNjp2WmP2344",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "TSLA Tesla Q4 2026 EPS estimate analyst consensus revisions November 2026",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "TSLA Tesla Q4 2026 EPS estimate analyst consensus revisions November 2026"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 68,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T16:21:22.178497+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_00_ZevIpXjiCbJHpNjp2WmP2344",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_e962bfe7e6c5060569"
+                  ],
+                  "inputs": {
+                    "query": "TSLA Tesla Q4 2026 EPS estimate analyst consensus revisions November 2026"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "TSLA Tesla Q4 2026 EPS estimate analyst consensus revisions November 2026",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4016,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司新闻",
+                "timestamp": "2026-11-11T16:21:22.180504+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_01_xnudPeu5JV8xVn3wTHs52255",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "display": {
+                    "target": "TSLA",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "TSLA",
+                    "limit": 10,
+                    "max_age_hours": 336
+                  },
+                  "summary": "正在读取公司新闻",
+                  "runtime_type": "tool.started",
+                  "seq": 70,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                "timestamp": "2026-11-11T16:21:27.575230+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "tool_call_id": "call_01_xnudPeu5JV8xVn3wTHs52255",
+                  "name": "get_company_news",
+                  "title": "读取公司新闻",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_233a6e65ec7d44aa88"
+                  ],
+                  "inputs": {
+                    "ticker": "TSLA",
+                    "limit": 10,
+                    "max_age_hours": 336
+                  },
+                  "output_preview": {
+                    "status": "unavailable",
+                    "error": "market_data_unavailable",
+                    "error_code": "market_data_unavailable",
+                    "data": [],
+                    "ticker": "TSLA",
+                    "attempted_providers": [
+                      "finnhub",
+                      "yfinance",
+                      "web_search"
+                    ],
+                    "provider_failures": [
+                      "provider_request_failed",
+                      "provider_cooldown",
+                      "search_request_failed"
+                    ],
+                    "summary": "新闻来源未能提供可用结果；这不表示该公司没有新闻。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                  "display": {
+                    "target": "TSLA",
+                    "result": "新闻来源未能提供可用结果；这不表示该公司没有新闻。"
+                  },
+                  "error_code": "market_data_unavailable",
+                  "reason": "新闻来源未能提供可用结果；这不表示该公司没有新闻。",
+                  "recovery_action": "稍后重试，或选择其他来源。",
+                  "duration_ms": 5389,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-11T16:21:36.626130+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 314,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:21:36.633128+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 315,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:21:37.647575+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "TSLA 最近的盈利预期和 EPS 修正有什么变化",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 316,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "已保留与资料一致的结果。",
+                "timestamp": "2026-11-11T16:21:45.755303+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-04:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-04",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "completed",
+                  "title": "回答核对完成",
+                  "summary": "已保留与资料一致的结果。",
+                  "runtime_type": "activity.finished",
+                  "seq": 614,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-04:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-04"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [],
+            "current_focus": "TSLA",
+            "tickers": [
+              "TSLA"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 36857,
+              "total_completion_tokens": 986,
+              "total_tokens": 37843,
+              "llm_token_calls": 7,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 7,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 36857,
+                  "completion": 986,
+                  "calls": 7
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 36857,
+                  "completion": 986,
+                  "calls": 7,
+                  "failed_calls": 0,
+                  "duration_ms": 71950
+                }
+              ],
+              "tool_calls": 9,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 7,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 5,
+        "hits": 2,
+        "misses": 0,
+        "errors": 1
+      },
+      "score": null,
+      "elapsed_seconds": 171.719,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.7777777777777778,
+        "tool_calls": 9,
+        "failed_tools": 7,
+        "tokens": 37843,
+        "rounds": 7
+      },
+      "checkpoints": 17,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081504_891824cf/facts-04/events.json",
+      "tool_recordings": 5
+    },
+    {
+      "id": "facts-05",
+      "group": "facts",
+      "model": "deepseek-v4.1-flash-1017",
+      "turns": [
+        {
+          "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+          "query": "QQQ 最新价格和基金估值有什么区别",
+          "terminal": {
+            "type": "done",
+            "schema_version": "2",
+            "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+            "session_id": "2026-11-11_081504_891824cf:facts-05",
+            "message_id": "assistant:2026-11-11_081504_891824cf:facts-05:0",
+            "attempt_id": "edbcf0f3937145d8b6afbc3298593eee",
+            "stream_epoch": "edbcf0f3937145d8b6afbc3298593eee",
+            "response": "**价格与“估值”是两个维度，两者不能相互替代。**\n\nQQQ（Invesco QQQ Trust）最新读取到的价格为 **$679.35**，较前值 **+$23.25（+3.54%）**，常规交易时段收盘价，数据截至 **2026-11-09**，币种美元 [Se5fd820bdd]。这是**市场价格**：由交易形成、随时变动，反映买卖双方当下的成交水平。该报价的**价格基准与是否含股息均未提供**，因此不能判断它是否为分红调整后价格。\n\n**基金层面的“估值”**通常指对基金所持资产按估值规则计算的单位净值（NAV）；对 QQQ 这类交易所上市 ETF，还有盘中指示性价值（IOPV／“实时估值”），属于对成分股价格的估算参考值，并不等于可成交价。本轮已取得的资料中**没有 QQQ 的 NAV 或 IOPV 数值**，也没有基金官方页面数据，因此无法给出价格与净值之间的具体差额或溢价／折价幅度，这部分需以 Invesco 官方披露的每日 NAV 为准。\n\n**结论：** $679.35 是价格事实；NAV／IOPV 属于基金估值口径，本轮资料未提供；27.98 倍与 1.90 倍是第三方汇总的估值倍数，属参考指标而非基金披露净值。\n\n**局限与风险：** 价格为单一日期收盘值，不是实时报价，且价格基准与股息处理方式未知；行情倍数与基金净值口径不同，不可互换或直接比较；估值倍数是否合理需结合成分股盈利增长与利率环境，本轮资料不足以支撑这一判断，以上内容也不构成任何买卖建议。\n\n部分结论还缺少可靠依据，暂时无法确认。\n\n尚未核实：QQQ 已披露财报及财期。现有资料不足以完成这部分判断。",
+            "success": true,
+            "run_status": "completed",
+            "answer_status": "partial",
+            "quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "explanation_contains_unbound_number",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "partial_tool_failure",
+                  "severity": "warn",
+                  "message": "回答中仍有未能取得的资料或未完成的计算。"
+                },
+                {
+                  "code": "research_incomplete",
+                  "severity": "block",
+                  "message": "尚未核实：QQQ 已披露财报及财期。",
+                  "missing_evidence": [
+                    {
+                      "ticker": "QQQ",
+                      "facet": "filings",
+                      "label": "已披露财报及财期"
+                    }
+                  ]
+                }
+              ],
+              "source_count": 2,
+              "evidence_ledger": [
+                {
+                  "source": "get_stock_price",
+                  "source_name": "twelve_data",
+                  "published_date": null,
+                  "as_of": "2026-11-09",
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "price_snapshot",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "meta": {
+                    "market_session": "regular_close",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "snippet": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_id": "Se5fd820bdd",
+                  "title": "get_stock_price output",
+                  "url": null,
+                  "data_ref": "dataset_2e42e94bc41875888e",
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "QQQ"
+                    }
+                  }
+                },
+                {
+                  "source": "yfinance",
+                  "source_name": "yfinance",
+                  "published_date": "2026-11-10T03:58:29.629143Z",
+                  "as_of": "2026-11-10T03:58:29.629143Z",
+                  "type": "tool",
+                  "kind": "company_profile",
+                  "snippet": "- Source URL: https://finance.yahoo.com/quote/QQQ/profile/",
+                  "source_id": "S9e60407f97",
+                  "title": "get_company_info",
+                  "url": "https://finance.yahoo.com/quote/QQQ/profile/",
+                  "data_ref": "dataset_dca8e5ccb0cb1d6824",
+                  "metadata": {
+                    "tool": "get_company_info",
+                    "parameters": {
+                      "ticker": "QQQ"
+                    }
+                  }
+                }
+              ]
+            },
+            "report_quality": {
+              "state": "block",
+              "reasons": [
+                {
+                  "code": "explanation_contains_unbound_number",
+                  "severity": "block",
+                  "message": "部分结论缺少可核实的数据依据。"
+                },
+                {
+                  "code": "partial_tool_failure",
+                  "severity": "warn",
+                  "message": "回答中仍有未能取得的资料或未完成的计算。"
+                },
+                {
+                  "code": "research_incomplete",
+                  "severity": "block",
+                  "message": "尚未核实：QQQ 已披露财报及财期。",
+                  "missing_evidence": [
+                    {
+                      "ticker": "QQQ",
+                      "facet": "filings",
+                      "label": "已披露财报及财期"
+                    }
+                  ]
+                }
+              ],
+              "source_count": 2,
+              "evidence_ledger": [
+                {
+                  "source": "get_stock_price",
+                  "source_name": "twelve_data",
+                  "published_date": null,
+                  "as_of": "2026-11-09",
+                  "confidence": 0.6,
+                  "type": "tool",
+                  "kind": "price_snapshot",
+                  "quality": "trusted",
+                  "currency": "USD",
+                  "meta": {
+                    "market_session": "regular_close",
+                    "source_time_precision": "date",
+                    "source_time_status": "provided"
+                  },
+                  "snippet": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_id": "Se5fd820bdd",
+                  "title": "get_stock_price output",
+                  "url": null,
+                  "data_ref": "dataset_2e42e94bc41875888e",
+                  "metadata": {
+                    "tool": "get_stock_price",
+                    "parameters": {
+                      "ticker": "QQQ"
+                    }
+                  }
+                },
+                {
+                  "source": "yfinance",
+                  "source_name": "yfinance",
+                  "published_date": "2026-11-10T03:58:29.629143Z",
+                  "as_of": "2026-11-10T03:58:29.629143Z",
+                  "type": "tool",
+                  "kind": "company_profile",
+                  "snippet": "- Source URL: https://finance.yahoo.com/quote/QQQ/profile/",
+                  "source_id": "S9e60407f97",
+                  "title": "get_company_info",
+                  "url": "https://finance.yahoo.com/quote/QQQ/profile/",
+                  "data_ref": "dataset_dca8e5ccb0cb1d6824",
+                  "metadata": {
+                    "tool": "get_company_info",
+                    "parameters": {
+                      "ticker": "QQQ"
+                    }
+                  }
+                }
+              ]
+            },
+            "publishable": false,
+            "report": null,
+            "blocked_report": null,
+            "quality_blocked": true,
+            "blocks": [
+              {
+                "id": "root_text_0",
+                "kind": "text",
+                "content": "我先获取 QQQ 的最新报价和基金层面信息。",
+                "revision": 0,
+                "seq": 2,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "tool_calls",
+                "completion_status": "tool_pending",
+                "validation_issues": []
+              },
+              {
+                "id": "root_text_3",
+                "kind": "text",
+                "content": "**基金估值**通常指对基金所持资产按估值规则计算的单位净值（NAV）。对 QQQ 这类在交易所上市的 ETF，另有**盘中指示性价值（IOPV/“实时估值”）**，属于对成分股价格的估算参考值，不等于可成交价。本次资料**没有取得 QQQ 的 NAV 或 IOPV 数值**，也没有官方基金页面数据，因此无法给出价格与净值之间的具体差额或溢价/折价幅度，这一点需以 Invesco 官方披露的每日 NAV 为准。\n\n**易被混用的第三类“估值”是估值倍数。** 资料给出 QQQ 的**滚动市盈率 27.98 倍、市净率 1.90 倍**（Yahoo Finance，https://finance.yahoo.com/quote/QQQ/profile/，抓取于 **2026-11-10**）。需注意：QQQ 是跟踪纳斯达克‑100 的信托/ETF，市盈率、市净率是**行情供应商汇总的指标**，不是基金自身按会计准则披露的财务数字；市净率 1.90 倍对指数型 ETF 而言含义有限，不宜直接当作成分股整体估值读。市值数据缺失。\n\n**结论：** $679.35 是价格事实；NAV/IOPV 是基金层面的估值口径，本轮未取到；27.98 倍与 1.90 倍是第三方汇总的估值倍数，属参考指标。\n\n**风险与局限：** 价格为单一日期收盘值，非实时报价；价格基准与股息处理方式未提供，不能判断是否含分红调整；行情倍数与基金净值口径不同，不可相互替代或直接比较；估值倍数高低需结合成分股盈利增长与利率环境，本次资料不足以判断其是否合理，也不构成买卖建议。",
+                "revision": 1,
+                "seq": 33,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "progress",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "unverified_citation"
+                ]
+              },
+              {
+                "id": "root_text_4",
+                "kind": "text",
+                "content": "**价格与“估值”是两个维度，两者不能相互替代。**\n\nQQQ（Invesco QQQ Trust）最新读取到的价格为 **$679.35**，较前值 **+$23.25（+3.54%）**，常规交易时段收盘价，数据截至 **2026-11-09**，币种美元 [Se5fd820bdd]。这是**市场价格**：由交易形成、随时变动，反映买卖双方当下的成交水平。该报价的**价格基准与是否含股息均未提供**，因此不能判断它是否为分红调整后价格。\n\n**基金层面的“估值”**通常指对基金所持资产按估值规则计算的单位净值（NAV）；对 QQQ 这类交易所上市 ETF，还有盘中指示性价值（IOPV／“实时估值”），属于对成分股价格的估算参考值，并不等于可成交价。本轮已取得的资料中**没有 QQQ 的 NAV 或 IOPV 数值**，也没有基金官方页面数据，因此无法给出价格与净值之间的具体差额或溢价／折价幅度，这部分需以 Invesco 官方披露的每日 NAV 为准。\n\n**结论：** $679.35 是价格事实；NAV／IOPV 属于基金估值口径，本轮资料未提供；27.98 倍与 1.90 倍是第三方汇总的估值倍数，属参考指标而非基金披露净值。\n\n**局限与风险：** 价格为单一日期收盘值，不是实时报价，且价格基准与股息处理方式未知；行情倍数与基金净值口径不同，不可互换或直接比较；估值倍数是否合理需结合成分股盈利增长与利率环境，本轮资料不足以支撑这一判断，以上内容也不构成任何买卖建议。\n\n部分结论还缺少可靠依据，暂时无法确认。\n\n尚未核实：QQQ 已披露财报及财期。现有资料不足以完成这部分判断。",
+                "revision": 2,
+                "seq": 528,
+                "agent_id": "root",
+                "agent_label": "主研究员",
+                "content_phase": "answer",
+                "finish_reason": "stop",
+                "completion_status": "complete",
+                "validation_issues": [
+                  "explanation_contains_unbound_number"
+                ]
+              }
+            ],
+            "thinking": [
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取行情",
+                "timestamp": "2026-11-11T16:21:55.217689+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_00_rEdTicrWqZ8ScRGVs5k36088",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "display": {
+                    "target": "QQQ",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "QQQ"
+                  },
+                  "summary": "正在获取行情",
+                  "runtime_type": "tool.started",
+                  "seq": 15,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends i…",
+                "timestamp": "2026-11-11T16:21:55.225866+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_00_rEdTicrWqZ8ScRGVs5k36088",
+                  "name": "get_stock_price",
+                  "title": "获取行情",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_2e42e94bc41875888e"
+                  ],
+                  "inputs": {
+                    "ticker": "QQQ"
+                  },
+                  "output_preview": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                  "source_refs": [
+                    "Se5fd820bdd"
+                  ],
+                  "evidence_refs": [
+                    "Se5fd820bdd"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "Se5fd820bdd",
+                      "title": "get_stock_price output",
+                      "url": null,
+                      "source": "get_stock_price",
+                      "as_of": "2026-11-09"
+                    }
+                  ],
+                  "summary": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends i…",
+                  "display": {
+                    "target": "QQQ",
+                    "result": "679.35 USD · +3.54% · 2026-11-09"
+                  },
+                  "duration_ms": 14,
+                  "runtime_type": "tool.result",
+                  "seq": 16,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取公司资料",
+                "timestamp": "2026-11-11T16:21:55.226324+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_01_6r3Mt3p0o1p6UEQahGJL2792",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "display": {
+                    "target": "QQQ",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "QQQ"
+                  },
+                  "summary": "正在读取公司资料",
+                  "runtime_type": "tool.started",
+                  "seq": 17,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "Company Profile (QQQ):\n- Name: Invesco QQQ Trust\n- Sector: Unknown\n- Industry: Unknown\n- Market Cap: [数据缺失] 市值不可用\n- Currency: USD\n- Trailing P/E: 27.98\n- Price/Book: 1.90\n- Website: N/A\n- Source: yfinance\n- Source URL: https://finance.yahoo…",
+                "timestamp": "2026-11-11T16:21:55.234862+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_01_6r3Mt3p0o1p6UEQahGJL2792",
+                  "name": "get_company_info",
+                  "title": "读取公司资料",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_dca8e5ccb0cb1d6824"
+                  ],
+                  "inputs": {
+                    "ticker": "QQQ"
+                  },
+                  "output_preview": "Company Profile (QQQ):\n- Name: Invesco QQQ Trust\n- Sector: Unknown\n- Industry: Unknown\n- Market Cap: [数据缺失] 市值不可用\n- Currency: USD\n- Trailing P/E: 27.98\n- Price/Book: 1.90\n- Website: N/A\n- Source: yfinance\n- Source URL: https://finance.yahoo.com/quote/QQQ/profile/\n- Retrieved At: 2026-11-10T03:58:29.629143Z\n- Description: To maintain the correspondence between the composition and weights of the securities in the trust (the \"securities\") and the stocks in the NASDAQ-100 Index®, the adviser adjusts the securities from ti...",
+                  "source_refs": [
+                    "S9e60407f97"
+                  ],
+                  "evidence_refs": [
+                    "S9e60407f97"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "S9e60407f97",
+                      "title": "get_company_info",
+                      "url": "https://finance.yahoo.com/quote/QQQ/profile/",
+                      "source": "yfinance",
+                      "as_of": "2026-11-10T03:58:29.629143Z"
+                    }
+                  ],
+                  "summary": "Company Profile (QQQ):\n- Name: Invesco QQQ Trust\n- Sector: Unknown\n- Industry: Unknown\n- Market Cap: [数据缺失] 市值不可用\n- Currency: USD\n- Trailing P/E: 27.98\n- Price/Book: 1.90\n- Website: N/A\n- Source: yfinance\n- Source URL: https://finance.yahoo…",
+                  "display": {
+                    "target": "QQQ",
+                    "result": " Invesco QQQ Trust · 行业 Unknown · 市值 [数据缺失] 市值不可用"
+                  },
+                  "duration_ms": 0,
+                  "runtime_type": "tool.result",
+                  "seq": 18,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:21:55.243652+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 19,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:21:56.253303+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 20,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在查看已取得的资料",
+                "timestamp": "2026-11-11T16:22:00.863482+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_00_y8XQgKZxK52IFmLSzlQ83326",
+                  "name": "read_evidence",
+                  "title": "查看已取得的资料",
+                  "display": {
+                    "target": "QQQ · 原始资料",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "data_ref": "dataset_2e42e94bc41875888e"
+                  },
+                  "summary": "正在查看已取得的资料",
+                  "runtime_type": "tool.started",
+                  "seq": 22,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.result",
+                "eventType": "trace",
+                "message": "结果已返回，展开查看关键数据。",
+                "timestamp": "2026-11-11T16:22:00.865518+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_00_y8XQgKZxK52IFmLSzlQ83326",
+                  "name": "read_evidence",
+                  "title": "查看已取得的资料",
+                  "status": "ok",
+                  "data_refs": [
+                    "dataset_2e42e94bc41875888e"
+                  ],
+                  "inputs": {
+                    "data_ref": "dataset_2e42e94bc41875888e"
+                  },
+                  "output_preview": {
+                    "offset": 0,
+                    "total_chars": 347,
+                    "next_offset": 347,
+                    "has_more": false,
+                    "preview": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown"
+                  },
+                  "source_refs": [
+                    "Se5fd820bdd"
+                  ],
+                  "evidence_refs": [
+                    "Se5fd820bdd"
+                  ],
+                  "sources": [
+                    {
+                      "source_id": "Se5fd820bdd",
+                      "title": "get_stock_price output",
+                      "url": null,
+                      "source": "get_stock_price",
+                      "as_of": "2026-11-09"
+                    }
+                  ],
+                  "summary": "结果已返回，展开查看关键数据。",
+                  "display": {
+                    "target": "QQQ · 原始资料",
+                    "result": "读取第 0–347 字"
+                  },
+                  "duration_ms": 15,
+                  "runtime_type": "tool.result",
+                  "seq": 23,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "其他字段数": 1
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在读取季度财报",
+                "timestamp": "2026-11-11T16:22:00.866276+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_01_cSDUJW4de3zHLfqAtVg78027",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "display": {
+                    "target": "QQQ",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "QQQ",
+                    "limit": 4
+                  },
+                  "summary": "正在读取季度财报",
+                  "runtime_type": "tool.started",
+                  "seq": 24,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "这次处理出错了。",
+                "timestamp": "2026-11-11T16:22:00.876328+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_01_cSDUJW4de3zHLfqAtVg78027",
+                  "name": "get_sec_company_facts_quarterly",
+                  "title": "读取季度财报",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_e76932f4201b8e7b8c"
+                  ],
+                  "inputs": {
+                    "ticker": "QQQ",
+                    "limit": 4
+                  },
+                  "output_preview": {
+                    "ticker": "QQQ",
+                    "market": "US",
+                    "supported_market": "US",
+                    "source": "sec_edgar",
+                    "error": "missing_sec_user_agent",
+                    "message": "Set SEC_USER_AGENT in format 'FinSight contact@company.com'."
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "这次处理出错了。",
+                  "display": {
+                    "target": "QQQ",
+                    "result": "这次处理出错了。"
+                  },
+                  "error_code": "missing_sec_user_agent",
+                  "reason": "这次处理出错了。",
+                  "recovery_action": "已有数据会保留，可以重试。",
+                  "duration_ms": 0,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                "timestamp": "2026-11-11T16:22:00.885693+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "activity_id": "root_provider_wait",
+                  "title": "等待模型服务调用间隔",
+                  "summary": "正在遵守模型服务频率限制，避免请求被拒绝。",
+                  "runtime_type": "activity.updated",
+                  "seq": 26,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "调用间隔等待结束",
+                "timestamp": "2026-11-11T16:22:06.957691+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "activity_id": "root_provider_wait",
+                  "title": "调用间隔等待结束",
+                  "status": "completed",
+                  "runtime_type": "activity.finished",
+                  "seq": 27,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在获取日线",
+                "timestamp": "2026-11-11T16:22:13.836042+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_00_VMDRzUn3x3aGyeSOom1L7404",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "display": {
+                    "target": "QQQ · 日线 · 近1月",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "ticker": "QQQ",
+                    "interval": "1d",
+                    "period": "1mo"
+                  },
+                  "summary": "正在获取日线",
+                  "runtime_type": "tool.started",
+                  "seq": 29,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "数据源未在本次限时内返回结果。",
+                "timestamp": "2026-11-11T16:22:43.865635+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_00_VMDRzUn3x3aGyeSOom1L7404",
+                  "name": "get_stock_historical_data",
+                  "title": "获取日线",
+                  "inputs": {
+                    "ticker": "QQQ",
+                    "interval": "1d",
+                    "period": "1mo"
+                  },
+                  "error_code": "tool_timeout",
+                  "reason": "数据源未在本次限时内返回结果。",
+                  "recovery_action": "可以换用其他来源，或稍后重试此项查询。",
+                  "summary": "数据源未在本次限时内返回结果。",
+                  "display": {
+                    "target": "QQQ · 日线 · 近1月",
+                    "result": "数据源未在本次限时内返回结果。"
+                  },
+                  "duration_ms": 30030,
+                  "runtime_type": "tool.failed",
+                  "seq": 30,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.started",
+                "eventType": "trace",
+                "message": "正在搜索公开资料",
+                "timestamp": "2026-11-11T16:22:43.867388+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_01_YYZUWKojpvqxTtWZHRNj1150",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "display": {
+                    "target": "Invesco QQQ Trust NAV net asset value per share premium discount November 2026",
+                    "result": ""
+                  },
+                  "inputs": {
+                    "query": "Invesco QQQ Trust NAV net asset value per share premium discount November 2026"
+                  },
+                  "summary": "正在搜索公开资料",
+                  "runtime_type": "tool.started",
+                  "seq": 31,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "tool.failed",
+                "eventType": "trace",
+                "message": "供应商未返回可用数据。",
+                "timestamp": "2026-11-11T16:22:47.881247+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "tool_call_id": "call_01_YYZUWKojpvqxTtWZHRNj1150",
+                  "name": "search",
+                  "title": "搜索公开资料",
+                  "status": "unavailable",
+                  "data_refs": [
+                    "dataset_491e322838e9199da6"
+                  ],
+                  "inputs": {
+                    "query": "Invesco QQQ Trust NAV net asset value per share premium discount November 2026"
+                  },
+                  "output_preview": {
+                    "status": "error",
+                    "error": "tool_provider_error",
+                    "summary": "供应商未返回可用数据。"
+                  },
+                  "source_refs": [],
+                  "evidence_refs": [],
+                  "sources": [],
+                  "summary": "供应商未返回可用数据。",
+                  "display": {
+                    "target": "Invesco QQQ Trust NAV net asset value per share premium discount November 2026",
+                    "result": "供应商未返回可用数据。"
+                  },
+                  "error_code": "tool_provider_error",
+                  "reason": "供应商未返回可用数据。",
+                  "recovery_action": "可以换个来源再查。",
+                  "duration_ms": 4016,
+                  "runtime_type": "tool.failed",
+                  "其他字段数": 4
+                }
+              },
+              {
+                "stage": "activity.updated",
+                "eventType": "trace",
+                "message": "正在修正与已取得资料不一致的表述。",
+                "timestamp": "2026-11-11T16:23:08.933443+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "role": "research_lead",
+                  "agent_label": "主研究员",
+                  "task": "QQQ 最新价格和基金估值有什么区别",
+                  "activity_id": "answer_check",
+                  "title": "核对回答中的数据",
+                  "summary": "正在修正与已取得资料不一致的表述。",
+                  "runtime_type": "activity.updated",
+                  "seq": 527,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              },
+              {
+                "stage": "activity.finished",
+                "eventType": "trace",
+                "message": "已保留与资料一致的结果。",
+                "timestamp": "2026-11-11T16:23:15.124084+00:00",
+                "runId": "2026-11-11_081504_891824cf:facts-05:0",
+                "sessionId": "2026-11-11_081504_891824cf:facts-05",
+                "result": {
+                  "activity_id": "answer_check",
+                  "status": "completed",
+                  "title": "回答核对完成",
+                  "summary": "已保留与资料一致的结果。",
+                  "runtime_type": "activity.finished",
+                  "seq": 1048,
+                  "agent_id": "root",
+                  "run_id": "2026-11-11_081504_891824cf:facts-05:0",
+                  "session_id": "2026-11-11_081504_891824cf:facts-05"
+                }
+              }
+            ],
+            "price_levels": [],
+            "evidence_pool": [
+              {
+                "source": "get_stock_price",
+                "source_name": "twelve_data",
+                "published_date": null,
+                "as_of": "2026-11-09",
+                "confidence": 0.6,
+                "type": "tool",
+                "kind": "price_snapshot",
+                "quality": "trusted",
+                "currency": "USD",
+                "meta": {
+                  "market_session": "regular_close",
+                  "source_time_precision": "date",
+                  "source_time_status": "provided"
+                },
+                "snippet": "QQQ Current Price: $679.35 | Change: +23.25 (+3.54%) | Provider: twelve_data | As of: 2026-11-09 | Currency: USD | Quality: trusted | Session: regular_close | Time precision: date | Time status: provided | Price basis: unknown | Dividends included: unknown",
+                "source_id": "Se5fd820bdd",
+                "title": "get_stock_price output",
+                "url": null,
+                "data_ref": "dataset_2e42e94bc41875888e",
+                "metadata": {
+                  "tool": "get_stock_price",
+                  "parameters": {
+                    "ticker": "QQQ"
+                  }
+                }
+              }
+            ],
+            "current_focus": "QQQ",
+            "tickers": [
+              "QQQ"
+            ],
+            "artifacts": [],
+            "actions": [],
+            "metrics": {
+              "total_prompt_tokens": 23486,
+              "total_completion_tokens": 1316,
+              "total_tokens": 24802,
+              "llm_token_calls": 5,
+              "failed_llm_calls": 0,
+              "selection_failed_llm_calls": 0,
+              "reported_usage_calls": 5,
+              "unreported_usage_calls": 0,
+              "usage_state": "reported",
+              "total_cost_usd": 0.0,
+              "tokens_by_model": {
+                "deepseek-v4.1-flash-1017": {
+                  "prompt": 23486,
+                  "completion": 1316,
+                  "calls": 5
+                }
+              },
+              "usage_by_attribution": [
+                {
+                  "agent": "research_lead",
+                  "layer": "agent_runtime",
+                  "prediction_id": null,
+                  "model": "deepseek-v4.1-flash-1017",
+                  "prompt": 23486,
+                  "completion": 1316,
+                  "calls": 5,
+                  "failed_calls": 0,
+                  "duration_ms": 54951
+                }
+              ],
+              "tool_calls": 6,
+              "research_recovery_rounds": 0,
+              "fact_fallback_used": false,
+              "answer_repair_attempted": true
+            },
+            "persistence_status": "ephemeral"
+          },
+          "model_calls": 5,
+          "terminal_count": 1
+        }
+      ],
+      "tape": {
+        "recorded": 2,
+        "hits": 2,
+        "misses": 0,
+        "errors": 0
+      },
+      "score": null,
+      "elapsed_seconds": 89.328,
+      "structure": {
+        "completed": true,
+        "single_terminal_per_turn": true,
+        "references_valid": true,
+        "unknown_references": [],
+        "artifacts_met": true,
+        "missing_artifacts": [],
+        "no_data_tools_met": true,
+        "no_actions_met": true,
+        "tool_error_rate": 0.5,
+        "tool_calls": 6,
+        "failed_tools": 3,
+        "tokens": 24802,
+        "rounds": 5
+      },
+      "checkpoints": 11,
+      "watchlist": [],
+      "transport_errors": [],
+      "capture_hooks": {
+        "installed": [
+          "market_data_gateway.get_quote",
+          "market_data_gateway.get_kline",
+          "market_data_gateway.get_news",
+          "yfinance.TickerBase.get_info",
+          "yfinance.TickerBase.history",
+          "requests.Response.json",
+          "httpx.Response.json",
+          "curl_cffi.requests.Response.json",
+          "ddgs.DDGS.text",
+          "ThreadPoolExecutor.submit"
+        ],
+        "unavailable": []
+      },
+      "events_path": "tmp/agent-eval/2026-11-11_081504_891824cf/facts-05/events.json",
+      "tool_recordings": 4
+    }
+  ],
+  "groups": {
+    "facts": {
+      "cases": 5,
+      "judged": 0,
+      "scores": {
+        "answered": null,
+        "numbers": null,
+        "limitations": null,
+        "presentation": null,
+        "no_internal_identifiers": null,
+        "total": null
+      },
+      "completed_rate": 0.8,
+      "references_valid_rate": 1,
+      "artifacts_met_rate": 1,
+      "no_actions_met_rate": 1,
+      "median_seconds": 89.328,
+      "median_tokens": 24802,
+      "median_rounds": 5,
+      "tool_error_rate": 0.5180555555555556
+    }
+  },
+  "judge_prompt_sha256": "de669ba19d4bcf3eb3907472cc25ec7257865f469120caf496693b2bba0a172f",
+  "subject": {
+    "model": "deepseek-v4.1-flash-1017",
+    "context_window": 32768,
+    "max_output": 8192
+  },
+  "judge": {
+    "model": "glm-5.3",
+    "context_window": 131072,
+    "max_output": 16384
+  },
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "fixtures_root": "fixtures/baseline-v2",
+  "seed_tapes": "fixtures/archive-v1/tapes",
+  "harness_config": {
+    "request_interval_seconds": 6.1,
+    "jobs": 1
+  },
+  "ready": false,
+  "expected_cases": 60
+}

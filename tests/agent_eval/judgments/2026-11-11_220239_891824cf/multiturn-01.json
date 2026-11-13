@@ -1,0 +1,26 @@
+{
+  "request_sha256": "0607c887e7194d7744957eba3bf522ed7daea10ad479ba7250e31bdd7642eb2c",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 0,
+    "reasons": [
+      "answered=1：各轮取数正确从INTC切换到NVDA再到AAPL；最后一轮只对AAPL取报价/技术资料，没有继续取旧标的或强制比较，报价通知实际显示355.63美元。但前三轮财报正文均为空，最终正文也未列实际报价，整组仅部分交付。",
+      "numbers=1：最终AAPL通知355.63美元、+7.12/+2.04%、来源日期2026-11-11与录制一致，主体没有交叉；正文却标为2026-11-12 02:02美东时点最新报价，来源仅提供前一交易日常规收盘、日期精度，未支持该精确报价时点，且前轮财报数值未形成答案。",
+      "limitations=0：最终正文未说明实际报价是2026-11-11常规收盘及时间精度为日期，仅建议以后再取；前三轮也未解释财务数据/来源局限。",
+      "presentation=0：前三轮正文为空，最终回复只有已取报价标题和再取建议，没有报价数值；第三轮另有实际图，但不能替代整组缺失的财报回答。",
+      "no_internal_identifiers=0：可展开SEC失败预览显示SEC_USER_AGENT配置名；第三轮可见计算目标显示原样\\u8ba1等Unicode转义序列，暴露内部格式。"
+    ]
+  }
+}

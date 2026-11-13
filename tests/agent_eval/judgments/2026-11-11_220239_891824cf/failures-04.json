@@ -1,0 +1,26 @@
+{
+  "request_sha256": "3f476d5d5a6893003bd50dba748432c2828667529d488f2b9cb22b5d1a918c6f",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文只承诺取 TSLA 历史数据再计算，终态未说明计算结果，也没有具体回撤或后续成功计算的交付。",
+      "numbers=0：没有最大回撤数值。虽然取得1254条日线并保留资料，实际 run_analysis_code 返回 analysis_code_failed、字段不存在，没有成功的回撤计算结果可交付。",
+      "limitations=1：可见计算过程明确代码未能执行完成，整轮终态说明研究超时，未将失败作业说成已完成或输出精确回撤。题目声明注入 analysis_timeout，但录制没有该注错条目、实际代码失败为 analysis_code_failed，判分依据实际观测。",
+      "presentation=1：进度句、计算失败及整体超时说明完整简短，可读。",
+      "no_internal_identifiers=1：用户正文没有数据集、运行或函数标识；结构化计算诊断不视为正文泄漏，未执行模型提交的代码。"
+    ]
+  }
+}

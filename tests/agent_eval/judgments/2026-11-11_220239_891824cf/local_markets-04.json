@@ -1,0 +1,26 @@
+{
+  "request_sha256": "41aeafb35fa275fd3553e094e5e02eb337606c2decd6f249a06d42a3359df200",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 1,
+    "numbers": 1,
+    "limitations": 0,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=1：正确识别000001.SZ为平安银行，取得并回读巨潮2026三季报等本地公告，文内证券代码000001和银行名称匹配，未误当指数；但正文只说加载方法，没有解释银行应看哪些财报指标及与工业企业的差异。",
+      "numbers=1：公告标题/代码/财期实际对应平安银行，未伪造指标或套用工业现金流模板；但没有交付银行指标数值或准确的概念说明，不能仅因有真实公告给数值满分。",
+      "limitations=0：没有说明净息差、信用成本、不良贷款、拨备覆盖、资本充足率等银行口径，及存贷款业务使OCF/一般FCF不适合照搬工业企业的限制。",
+      "presentation=0：正文只有工具准备进度，无财报阅读框架、指标解释或产物，最终超时。",
+      "no_internal_identifiers=1：正文和主要可见通知没有配置名、运行编号或代码哈希，证券代码和本地公告来源用于核实主体。"
+    ]
+  }
+}

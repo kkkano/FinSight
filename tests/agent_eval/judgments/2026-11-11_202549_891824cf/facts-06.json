@@ -1,0 +1,26 @@
+{
+  "request_sha256": "0fa5ceaafa69a0e099eb3d54808f057d44158a9b643ed3c01542bc90bdacf888",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 0,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文承认没有 Intel 最近两个已披露季度的营收、毛利率和财期，未列出所需两期数据；软银持股融资新闻不能代替财务表。",
+      "numbers=1：软银敞口 105 亿美元、融资 74 亿美元及标题所称 5.23% 与录制新闻的 $10.5 billion、$7.4 billion、5.23% 一致，转换正确；这些是辅助新闻数字，必需两季度营收及毛利率未取得，因此最多部分分。",
+      "limitations=1：明确唯一取得的是新闻而非财报，并把报道或标题说法与未核实财务值分开；未用尚未披露季度或模型记忆填表。",
+      "presentation=0：用户要求列两季度营收和毛利率，正文却首先展开无关的持股融资新闻，随后用长段罗列缺口、请求继续授权，再重复财报缺口；缺失说明的篇幅和组织不够聚焦。",
+      "no_internal_identifiers=1：正文没有数据句柄或运行 ID，[S9a2d7fd24e] 对应明确的新闻引用；10-Q、GAAP 是披露与财务口径术语。"
+    ]
+  }
+}

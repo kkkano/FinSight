@@ -1,0 +1,26 @@
+{
+  "request_sha256": "216a1fb8b59ff856ae0c593a98346ecf5ff4cebe5c9de47866ef28e4cdaf9d51",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 1,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：正文明确无法提供 AAPL 当前报价；价格、币种、报价时点及行情来源均未交付。录制中的报价、历史行情及技术快照均未返回有效行情，运行 completed 不能代替这些必需项。",
+      "numbers=1：正文时间数字 2026-11-11 20:26:35 与 get_current_datetime 原值一致，仅属辅助信息，必需价格仍缺失；工具时间字符串没有时区，正文自行加上 UTC 不受录制支持，不能给满分。",
+      "limitations=1：明确列出成交价、涨跌幅、交易所及盘前盘后状态未取得，拒绝用历史印象填写，没有把未取得报价说成价格不存在。",
+      "presentation=1：先说明无法报价，再列现有信息与缺口，分段完整，适合作为数据不可用的交付；没有据运行结束声称已经回答价格。",
+      "no_internal_identifiers=1：正文没有数据集或运行标识；[S3161049b35] 用于绑定所引用时间证据，属于来源引用。"
+    ]
+  }
+}

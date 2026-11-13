@@ -1,0 +1,25 @@
+{
+  "request_sha256": "4d0959ccc2229b696557253c0aa61e79914abd84ba74dcfc3e3669466267dd0c",
+  "judge": {
+    "base_url": null,
+    "context_window": null,
+    "max_output": null,
+    "model": "gpt-6.1-sol",
+    "protocol": "external",
+    "provider": "codex-native",
+    "role": "verifier"
+  },
+  "score": {
+    "answered": 0,
+    "numbers": 0,
+    "limitations": 1,
+    "presentation": 1,
+    "no_internal_identifiers": 1,
+    "reasons": [
+      "answered=0：MSFT 最新一季营收和经营现金流均未回答，终态 response 为空；没有财季、单位、本币或来源，只有研究超时通知。",
+      "numbers=0：完整录制为空、工具调用数为零、证据池为空，未取得或展示同一季度的营收与经营现金流，不能因未编造数字给一致性分。",
+      "limitations=1：终态如实提示本次研究超时，没有把未取得的财务值写成零，也没有宣称这些财务数据不存在。",
+      "presentation=1、no_internal_identifiers=1：可读的故障通知和重试提示简洁，正文无用户不需要的内部标识；技术信封字段不作为正文泄漏。"
+    ]
+  }
+}

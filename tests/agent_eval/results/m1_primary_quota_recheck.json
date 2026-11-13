@@ -1,0 +1,10 @@
+{
+  "status": 403,
+  "error": {
+    "message": "用户额度不足, 剩余额度: ¥-0.106090 (request id: 202611120255069172893508268d9d6jMzwQW26)",
+    "type": "new_api_error",
+    "param": "",
+    "code": "insufficient_user_quota"
+  },
+  "usage": null
+}

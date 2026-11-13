@@ -1,0 +1,14 @@
+{
+  "case_id": "B7",
+  "status": "pending",
+  "source_input_exact": "代码超时（注入）",
+  "expected_exact": "作业终止，正文保留，说明失败与重试",
+  "actions": [
+    {
+      "action": "wait",
+      "seconds": 2
+    }
+  ],
+  "action_scope": "原生走查可基于实际页面补充控件操作；fill_query只能取第12节原问或第7节指定前置原问。",
+  "requires_additional_ui_steps": true
+}
