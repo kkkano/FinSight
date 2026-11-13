@@ -1,0 +1,55 @@
+{
+  "backend-verification.json": {
+    "total_cases": 2350,
+    "passed": 2309,
+    "skipped": 41,
+    "failed": 0,
+    "first_attempt_interruption": "custom test launcher lacked Windows spawn __main__ guard; 2187 case results kept",
+    "completed_evidence": [
+      "tmp/r261113/release-unit-suite/run.log",
+      "tmp/r261113/release-unit-suite/interrupted.json",
+      "tmp/r261113/release-unit-suite/remaining.log",
+      "tmp/r261113/release-unit-suite/remaining-junit.xml"
+    ],
+    "network_disabled": true
+  },
+  "frontend-verification.json": {
+    "full_unit": {
+      "command": "npm run test:unit --prefix frontend -- --reporter=default",
+      "files": 81,
+      "passed": 560,
+      "failed": 0,
+      "duration_seconds": 7.21
+    },
+    "affected_unit_after_fixes": {
+      "command": "node node_modules/vitest/vitest.mjs run <13 affected test files>",
+      "files": 13,
+      "passed": 150,
+      "failed": 0,
+      "duration_seconds": 1.67
+    },
+    "lint": {
+      "path": "tmp/r261113/frontend-lint-verified.json",
+      "errors": 0,
+      "warnings": 0
+    },
+    "tsc": {
+      "command": "node node_modules/typescript/bin/tsc -b --pretty false",
+      "exit_code": 0
+    },
+    "build": {
+      "status": "passed",
+      "command": "npm run build --prefix frontend",
+      "log": "tmp/r261113/frontend-build.log",
+      "vite_seconds": 3.97,
+      "production_images_still_pending": true
+    },
+    "source_fixes": [
+      "reasoning process disclosure",
+      "conversation persistence error mapping",
+      "same-offset pagination retry",
+      "unverified legacy chart provenance",
+      "pure helper module boundaries and hook deps"
+    ]
+  }
+}

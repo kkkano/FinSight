@@ -2,7 +2,7 @@
 
 ## ✅ 配置状态
 
-**API Key**: `NnE_U49S5fwLhgGjqpgBAKCVEZQaGpLE`  
+**API Key**: `${MASSIVE_API_KEY}`
 **状态**: ✅ 已配置并测试通过
 
 ## 📋 配置详情

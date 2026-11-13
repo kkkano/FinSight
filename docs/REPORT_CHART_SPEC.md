@@ -1,105 +1,109 @@
-# Report 与 Chart 合同
+# 报告、图表与数据表合同
 
-更新时间：2026-11-07　前端基线：ECharts 6
+文档校准：2026-11-13。本文规定当前原生研究的数据产物、数值口径、报告版本和发布条件。拟发布 APIKL 模型正在完整质量对照，新候选尚未部署，真实模型与认证浏览器最终验收仍需独立记录。
 
-默认原生对话通过`artifact.ready`输出声明式`ResearchArtifact`，作为消息blocks保存；报告ReportIR与Markdown `<chart>/<chart_ref>`仍为兼容展示格式。优先使用真实数据引用，避免LLM重写数值。
-
-原生产物携带dataset_refs/source_refs、真实rows、图型/序列/单位/方法与局限，由ResearchArtifactView/ECharts渲染；不执行模型任意JS/formatter。区间日期对齐真实类目，连跌小图包含前一期基准和结束观测；百分比原值不再乘100，unknown复权/股息显示未注明。真实实例/悬停验证见 [REAL_CHARTS](reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md)，核心图表通过不等于候选解释全部可信。
-
-## 原生数据、缺值与来源
+## 原生数据产物
 
 ```mermaid
 flowchart LR
-    DATA[授权原始 datasets] --> INSPECT[标量列 / 日期 / column_units]
-    DATA --> CALC[确定性分析或隔离 Python]
-    CALC --> RESULT{存在可序列化 result}
-    RESULT -->|否| ERROR[错误与有界日志 / 不造图]
-    RESULT -->|是| ROWS[选择真实 rows / table / series]
-    ROWS --> COVER[逐字段 coverage / limitations]
-    COVER --> ART[artifact.ready / 当前消息]
-    ART --> VIEW[数值不改写 / 可追溯来源去重]
-    ART --> PRIOR[有效数据支撑的 prior_artifacts]
-    PRIOR --> CHECK[后续问题核对 / 不自动重画]
+    DATA[已授权原始记录] --> READ[read_data 分页回读]
+    DATA --> CALC[run_python 与 finsight 计算库]
+    CALC --> RESULT{有效 result}
+    RESULT -->|否| ERROR[结构错误与诊断日志]
+    RESULT -->|是| HANDLE[衍生数据句柄]
+    DATA --> CHART[render_chart]
+    DATA --> TABLE[render_table]
+    HANDLE --> CHART
+    HANDLE --> TABLE
+    CHART --> ART[artifact.ready]
+    TABLE --> ART
+    ART --> UI[真实数值直接渲染]
+    UI --> REVIEW[原答案与实际交付核查]
 ```
 
-`inspect_dataset` 用于查看资料结构，不把完整元数据重复塞入模型上下文：默认选非嵌套的标量列、日期，保留 `column_units`；可显式指定 `columns/table`。最多 12 行，实际 `returned_rows/row_count/has_more` 分开；超过 8000 的保守上下文估算会减少返回行数，仍过大则返回 `dataset_projection_too_large`，不能悄悄改值或单位。
+`read_data(handle, columns, table, offset, limit)` 读取当前 run 的授权记录或已授权知识票据。表格按行、文档按字符分页，返回实际 offset/next_offset/has_more，不扫描全文猜字段、表名或单位。原始内容留在账本，模型投影受上下文预算限制。
 
-隔离 Python 的 `get_frame` 与 SEC inspect 表名对齐，支持 `companyfacts` 及 `period_end/period` 别名，同时保留原平行数组字段和已有标量上下文。返回图表数据时，NumPy 标量转为原生 JSON 值，`pd.Timestamp` 转为 ISO 字符串；NaN/Infinity 仍应由代码明确处理后再返回，不能让编码器伪补。结果大小和日志边界不变。
+`render_chart` 与 `render_table` 只接受真实句柄和已存在列，产物包含 artifact_id、kind、title、dataset_refs/source_refs、spec 和真实 data.rows。数据表不需要模型重抄数字，前端 ResearchArtifactView 统一呈现，禁止执行任意模型 JavaScript、HTML 或 formatter。
 
-每个实际 series 字段都有 `coverage[field]`：
+开放 Python 只交给独立 worker。datasets 保留原包，frames/get_frame 提供表格，finsight 提供回撤、连续下跌、均线、统计和共同基准比较。需返回的数据赋给 result；日志、只 print 或 worker healthy 不等于已有可展示计算结果。SEC 多表、财期、币种与缺失值均保持实际来源含义。
 
-| 字段 | 含义 |
-| --- | --- |
-| `points` | 当前图表总行数 |
-| `valid` / `missing` | 有效数值与缺失点数；null 不补成零 |
-| `leading_missing` | 当前图表开头连续缺失点数；全部缺失时为 points |
-| `first_valid` / `last_valid` | 首末有效值对应的真实 x 坐标；没有有效值时为 null |
+### 声明式产物字段
 
-`limitations` 直接说明缺失与开头空值。均线先在完整历史上计算、再裁剪显示窗口时，开头可能已经有值；不能仅凭窗口是 MA20 就断言“前19点为空”。此类陈述须与 coverage 及实际 rows 一致。
+| 字段 | 含义与限制 |
+|---|---|
+| `artifact_id/version/kind/title` | 产物身份、协议版本与显示类型；标题不是数据来源 |
+| `dataset_refs` | 真实原始或衍生句柄，按当前运行归属校验 |
+| `source_refs` | 从输入资料关系解析的出处编号；不凭模型文字增加来源 |
+| `spec` | 图表类型、x、series、scale、annotations 或表格字段 |
+| `data.rows` | 已登记资料的真实值；缺失保留 null |
+| `method` | 衍生计算方法、参数与基准；估值情景明确标为假设 |
+| `coverage/limitations` | 数据有效点、缺失、起始空值、首末有效坐标及局限 |
 
-`indexed_comparison` 返回统一的 `comparison_stats`：逐序列下降期数/负收益期数/终值、领先/持平期数、严格单调性及 `crossovers`。交叉由纯函数 `comparison_crossovers` 统一计算，每对记录包含 `left/right/count/dates/dates_truncated`；它表示已有领先方的交换，基准日持平后的首次分离不计，途中持平不会重置前一个领先方。日期取新领先方首次出现的观测日，列表最多保留最后 24 个日期，总 count 不截断。文字中的次数、日期或“全年领先”须按同一定义与该统计/完整源序列核对，不能由终值或旧回执猜测。
+`analysis.render_chart` 当前支持 line、bar、scatter、candlestick、line_with_event_windows；只允许 linear/log 比例。x 和 series.field 必须真实存在；K 线需要完整且关系一致的 OHLC，log 数值必须为有限正数。无法满足时返回结构错误，不生成空图或伪造列。规模限制来自实际函数与工具 schema，不能通过模型自定义 formatter 绕过。
 
-连续下跌区间标注以真实开始/结束观测对齐 x 轴。日期边界包含结束日；带时间的边界保持盘中精度。小图有 `baseline_included/periods` 时包含下跌前一期真实收盘价，点数为下跌周期数加一，既不统一成 0/100，也不伪造基准。主图用短区间编号，完整日期/周数/跌幅在列表和实际 tooltip 中对应；小图独立使用线性纵轴并说明，不继承主图的对数轴。
+`render_table` 与图表共享来源和数据句柄，但使用表格协议。当前轮数据产物进入 blocks，恢复的 `prior_artifacts` 只表示已有历史资料。模型正文中的 Markdown 表格是模型文本，不能等同于由句柄渲染的逐值数据表。
 
-`source_refs` 是引用记录 ID，不能直接当作独立来源数量。图表展示按可追溯 HTTP(S) URL 去重，无 URL 时按明确的数据 provider 去重；工具包装、`analyze_dataset/run_analysis_code` 等计算方法不作为额外数据来源。同一 provider 已有 URL 记录时，不再重复计数仅 provider 的投影。原始引用 ID 与数据保持不变，计算说明留在 method。时间按原始日期/时区友好展示，未知不补当前时间。
+## 数值与图表口径
 
-`prior_artifacts` 只保留仍有有效 dataset_refs 支撑的历史图表 spec/coverage/method/limitations 等投影，最多 30 项，不复制整份 rows，不发新 artifact.ready。它用于核对“刚才图上”的覆盖和结论，不能充当新的计算或当前行情。
+- 原始数值、财期、时点、币种、单位与复权信息随数据保留；未知不补默认值。
+- 图表缺失值用 null，不能补成零；开头均线空值按实际显示窗口说明。
+- 日期边界含实际结束观测，需要收益基准时使用真实前一期收盘，不制造起点。
+- 回撤事件、连续下跌期数和区间收益分别定义；频率、已收盘条件和阈值来自明确计算参数。
+- 多标的比较使用共同有效日期与一致基准，基准首次分离不当成领先方交换；次数、日期与终值分别核对。
+- 图表源数量按实际可追溯来源统计，计算方法、包装工具和重复记录不算新增金融来源。
+- 图表成功不能证明“全程领先”“持续上涨”等文字结论，核查需回读完整路径或重算。
+- 前端图例、坐标轴与 tooltip 保留币种/百分比口径，避免浮点长尾和重复乘百。
 
-比较统计的预览必须保留具体 `dates`；`compact_result` 从根层投影该部分，不把已有日期列表仅压成数量。`crossovers/strictly_increasing` 等已知标签在说明中使用中文，原数据字段不改；模型没有逐一读取，不等于原始统计没有提供。
+图表的 coverage/limitations 描述真实有效值、缺失、起始空值与首末有效坐标；核查 coverage 则描述用户交付事项，两个字段属于不同协议对象，不能混用。历史 prior_artifacts 与本轮 artifact.ready 区分，旧图不因恢复而成为新交付。
 
-## 报告与研究结果
+## 报告版本与质量
 
-legacy 报告消费唯一 `research_result` 的任务、事实、Claim、引用和缺口；原生报告从正式 `answer`/最终 `response` 与实际引用构建，安全 `progress` 仅作过程记录。两者都不能在展示时重写事实或补造来源；私有思考不进入公开报告。
+`finalize.py` 从模型真实 answer、实际引用和产物构建 ReportIR。正式报告不包含供应商私有思考或核查内部推理，不用旧 Claim/图节点补丁重写答案。
 
-legacy 质量由 `evaluate_result_quality` 合并；原生交付由 `service.py` 的 quality/reasons 与 report_quality 共同决定。两者使用 `pass/warn/block`，已有阻断不可被报告构建覆盖。完整报告必须有受支持论据并满足必需维度；facts-only 或缺口结果可返回 `blocked_report` 预览，但不能进入报告索引、分享或最终缓存。内部 conflict ID 留在诊断数据，正文说明实际冲突的指标和期限。
+数据回答默认核查，报告必须核查。核查员只读既有数据，submit_review 提交 verdict/findings/coverage；quote 必须逐字存在。资料不足与核查超时分开，不能用一条通用“已核查”掩盖不可用。
 
-`done`、`publishable`、`archived`、`persistence_status` 各有独立含义。正文生成后须保存服务器终态与助手消息，报告归档失败或会话保存失败均保留预览并明确提示。刷新恢复按 run/message ID 读取权威内容，不能依赖浏览器最后一次快照。
+| 情况 | 处理 |
+|---|---|
+| pass，且无 findings/未交付项、引用有效、完整收尾 | 可进入报告发布与保存 |
+| 有 findings | 报告最多自动修订一次，保留原版再核查；聊天由用户显式触发新轮修订 |
+| coverage 有未交付项 | 原预算内最多追加一次实际交付，不覆盖已显示原文 |
+| insufficient 或 unavailable | 草稿与原因保留，不发布为已核查报告 |
+| 数据、消息或报告保存失败 | 保留预览并说明，不能显示已保存或可恢复承诺 |
 
-缺总体判断时 `report_quality.conclusion_status=unavailable`、`sentiment=unknown`、`confidence_score=null`。不把未知写成中性，重验和历史回放不补默认 0.5/0.7。没有校准依据的方向、证据、来源置信度不显示百分比；前端展示可追溯来源数量和实际缺项。有依据的 neutral 仍可显示为中性，partial 保留有效正文与证据。
+自动修订新增 content.revised 块，以 revision_of/review_id 关联原始正文，旧块可展开。新核查用 supersedes_review_id 保留审计链。用户修订通过 review_revision 关联原消息与运行，云恢复仍保留关系。渲染、复制与导出采用当前正式版本，不修改保存的旧文本。
 
-卡片、全屏与历史只读页共用 `ReportPresentation`；未完成项在正文前说明，来源及执行详情默认收起。纯展示派生不改写服务器 canonical 正文。
+done、quality、publishable、persistence_status 分别表示执行结束、质量、发布资格和持久化结果；不能互相替代。当前原生报告方向没有独立校准判断时使用 sentiment=unknown、confidence_score=null，不填默认置信度。
 
-原生候选最多做一次禁工具修正。无支持的旧候选删除/替换，不逐段生成“已撤回”；最终仍不足时保留部分回答与质量原因。图表成功、计算返回 result 和 `completed` 不能替代逐项最终答案验收：请求的数值必须真正交付，不能只留在 progress 或调试日志中。
+### 正文、版本与持久化数据流
 
-## ReportIR chart
-
-```json
-{
-  "type": "chart",
-  "content": {
-    "option": {
-      "xAxis": {"type": "category", "data": ["2023", "2024"]},
-      "yAxis": {"type": "value"},
-      "series": [{"type": "line", "name": "Revenue", "data": [100, 120]}]
-    }
-  },
-  "metadata": {"chart_type": "line", "title": "Revenue", "unit": "USD bn", "as_of": "2024-12-31"},
-  "citation_refs": ["SRC-1"]
-}
+```mermaid
+flowchart TD
+    ANSWER[模型实际 answer] --> REVIEW[原文与实际产物核查]
+    REVIEW --> QUALITY[引用 工具失败 收尾与 coverage]
+    QUALITY --> PASS{满足报告发布条件}
+    PASS -->|是| REPORT[ReportIR 与当前正文版本]
+    PASS -->|否| DRAFT[blocked_report 与原因]
+    REPORT --> INDEX[授权报告索引]
+    DRAFT --> MESSAGE[私有助手消息及 blocks]
+    INDEX --> MESSAGE
+    MESSAGE --> SAVE[权威事务提交]
+    SAVE --> DONE[终态与 persistence_status]
+    REVIEW -->|有界修订| VERSION[content.revised 保留原版]
+    VERSION --> REVIEW
 ```
 
-也兼容 `labels + values`、`labels + datasets` 或直接 `xAxis/yAxis/series`，前端会补成 ECharts option。
+ReportIR 包含 report_id、title、sections、citations、report_quality 与 meta 中的实际 runtime/model/run/artifacts。正文由模型实际答案构成，citation_refs 按来源账本解析。当前没有独立校准的方向和置信度时保持 unknown/null；模型自述“有信心”不能填成统计概率。
 
-## 对话标签
+报告索引失败与助手消息保存失败均属于持久化问题，不能因浏览器已有完整正文就宣称可分享或恢复。公开分享只投影允许的报告字段，供应商思考、私密模型配置、控制回执和核查内部推理不进入公开报告。
 
-- `<chart>`：小型内联数据；必须来自本轮证据，不允许模型编造。
-- `<chart_ref>`：引用后端真实数据或已生成 artifact；推荐用于行情、财务和回测。
+## 历史格式兼容
 
-价格语义是强约束：`line_price`、K 线/量价等价格图，以及标题、series 名或精确币种单位明确表示“股价/收盘价/价格走势”的普通 `line`，前端必须改走真实 K 线接口，不能消费 `<chart>` 内的模型数组。价格线展示收盘价，不得把累计收益率伪装成金额；收益率图必须明确使用 `%` 单位。
+已有 ReportIR chart、数据型 ECharts option、旧 chart/chart_ref 文本格式可按历史展示合同读取；这不是原生模型的新工具协议。当前含 blocks 的研究消息只渲染文本与 artifact，前端不因正文出现图表标记就补取行情或改变正文。无 blocks 的旧消息仍保留既有展示兼容。
 
-引用对象至少包含可解析的资源/series 标识、图表类型、标题和单位。找不到引用时显示明确错误/降级文本，不用示例数据顶替。
+历史格式的价格图仍不得使用模型编造数组，需真实行情或已验证产物；缺失显示不可用。历史共享报告与归档数据不因新协议批量改写。
 
-## 安全与质量
+## 验收与边界
 
-- `citation_refs` 必须指向报告 citations 中存在的 source id。
-- 所有时间序列标明时区/as-of、币种、单位和复权口径（适用时）。
-- 财务序列保留实际财期、单季/累计频率与指标定义；不能把非日历财年改成日历季末，也不能混画季度与年度值而不说明。
-- 多标的图表逐项核对发行人和证据绑定；官方 URL 不等于已核验属于目标公司。
-- 前端不得执行任意函数、HTML 或由模型提供的 JavaScript；只接受数据型 ECharts option。
-- 限制点数、series 数和字符串长度；超大数据在后端抽样/聚合。
-- 缺失值使用 `null`，不要用 0 冒充。
-- 图表说明不得与 series 数值或引用证据冲突。
-- tooltip 与坐标轴必须按币种/百分比格式化并限制小数位，不显示二进制浮点长尾。
-- 客户端异步注入的图表标记不属于服务器权威正文，不能通过整份会话快照覆盖已保存回复；需要刷新可恢复的图表应使用服务器 artifact 或明确的持久视图数据。
+数据与表格逐值一致、引用可解析、权限、严格字段、缺失、真实计算、版本恢复和浏览器显示分别验证。单位测试及布局 fixture 不等于真实金融答案通过；报告发布需正文、产物、核查与保存闭环。
 
-修改合同必须同步后端 ReportIR/schema、前端 SmartChart/报告渲染、OpenAPI/TypeScript 类型和单测。
+历史真实图表证据保留在 [REAL_CHARTS](reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md)，不改判历史失败。当前 M3/M4 评测、48 项产品验收和部署后真实会话状态统一见[运行手册](11_PRODUCTION_RUNBOOK.md)。

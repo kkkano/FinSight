@@ -1,6 +1,6 @@
 # FinSight RAG 架构
 
-更新时间：2026-11-07。默认值、源码实现与生产实测分别记录；agent-20261107-8b809bee23e0已发布，RAG full_ready/2228 semantic_ready/pending0。详细边界见 [实施记录](reports/2026-11-07_agent_runtime_implementation.md)。
+当前接线校准：2026-11-13。本文以当前 `backend/rag/` 和原生工具注册表为准，区分源码默认、显式托管配置和实际索引状态。新候选尚未部署；本轮聊天模型切换不修改 RAG 模型、向量身份或既有知识库。历史真实检索和迁移结果保留在[原实施记录](reports/2026-11-07_agent_runtime_implementation.md)，不能代替当前评估。
 
 ## 1. 默认运行与可选语义能力
 
@@ -8,13 +8,13 @@
 - 默认 RAG_EMBEDDING=lexical、RAG_RERANKER=none，不加载或下载本地模型。
 - 托管模型选择 remote_api；自建 BGE worker 仅由 local-ml Compose profile 显式启用。
 - backend/rag/tools.py 提供按需 search_knowledge、read_document、search_memory。作用域由认证运行时创建，模型不能传 owner 或任意 collection。
-- 新研究运行时调用这些工具；既有 execution_pipeline 仍保留兼容，不要求每轮把工具结果向量化后重新检索。
-- 普通追问复用同owner/session已取得且逐记录TTL仍有效的原始资料，不因新run续期，也不把默认保存的provider思考写入知识库或金融证据。
+- 原生 registry 的 search_memory 组合当前用户的知识检索与会话轻记忆，read_data 回读授权票据；旧 execution_pipeline 仅作历史评测参考，不是生产兼容入口。不要求每轮把工具结果向量化后重新检索。
+- 普通追问复用同owner/session已取得且逐记录TTL仍有效的原始资料，不因新run续期；供应商思考与核查内部推理不写入知识库或金融证据。
 - 观测记录真实发生的摄取/检索；不为生成观测指标额外执行模型。
 
 ~~~mermaid
 flowchart LR
-    QUERY[Agent 按需查询] --> TOOLS[KnowledgeTools / owner与session]
+    QUERY[原生 registry 按需查询] --> TOOLS[KnowledgeTools / owner与session]
     TOOLS --> LEX[词法检索]
     TOOLS -->|按配置| API[托管 embedding API]
     API --> ID[模型 / 代次 / 维度身份]
@@ -52,6 +52,40 @@ KnowledgeTools 在构造时接受服务器提供的 owner/session/allowed_collec
 - search_memory 可以读取当前运行传入的轻记忆快照；密钥、token、密码字段不进入输出。
 - 所有返回正文标记为不可信来源数据，不能成为工具指令或用户授权。
 
+### 存储层与运行时资料的分工
+
+| 内容 | 入口与用途 | 访问约束 |
+|---|---|---|
+| 会话轻记忆 | `build_thread_memory_collection`、`KnowledgeTools.search_memory` | 当前 owner/session；敏感字段不进入模型投影 |
+| 当前任务 working set | `build_thread_working_set_collection`、`hybrid_search_many` | 按线程/任务范围与元数据再校验 |
+| 标的或宏观 KB | `build_stock_kb_collection`、显式 entity | 公开标记、当前 owner 或服务器明确授权 |
+| 原生运行的工具原文 | `RunData.record/read/save/restore` | 同 owner/session、原记录 TTL；不要求先入向量库 |
+| 知识回读票据 | `KnowledgeTools._ticket/read_document` | 绑定 owner/session、collection、source 与内容 hash |
+
+collection 命名提供分层语义，不能代替权限。相同股票的知识也可能属于不同用户；旧 KB 缺少可证明的 owner 或公开标记时拒绝跨用户读取。当前线程已获取资料优先按句柄复用，持久知识仅在模型需要时检索。
+
+```mermaid
+sequenceDiagram
+    participant RT as 已认证研究运行
+    participant KT as KnowledgeTools
+    participant PG as scoped 文档与索引
+    participant RR as 可选托管重排
+    RT->>KT: query 与显式 entity 或时间范围
+    KT->>PG: 有限 collection 的混合检索
+    PG-->>KT: 候选及元数据
+    KT->>KT: 校验 owner 权限 TTL 日期 来源及父文档
+    opt 显式启用且有候选
+        KT->>RR: 过滤后的有界候选
+        RR-->>KT: 排序或明确不可用
+    end
+    KT-->>RT: 摘要 来源及作用域票据
+    RT->>KT: 使用票据分页回读
+    KT->>PG: 重新读取及核对内容 hash
+    KT-->>RT: 真实原文片段或明确失效
+```
+
+检索参数只允许 query、entity、limit、time_range 和 sources 等有限机器字段；不接受模型传来的任意 owner/collection。搜索过滤与原文回读都检查范围，票据不是永久授权。不同运行恢复资料时不刷新旧 TTL。
+
 ## 3. 托管 API 配置
 
 接口使用 OpenAI 风格 embeddings JSON；重排使用独立的 query/documents/results 协议，不假设聊天接口具备这两项能力。API URL 是完整端点，禁止重定向转发凭据。
@@ -60,7 +94,7 @@ KnowledgeTools 在构造时接受服务器提供的 owner/session/allowed_collec
 
 2026-11-06 核对的 [官方价格页](https://www.siliconflow.cn/pricing) 将 BAAI/bge-m3 和 BAAI/bge-reranker-v2-m3 标为免费。免费模型仍需要单独的 SiliconFlow 账户/API Key，并受平台实际配额与可用性约束；价格与规则可能变化。
 
-不把其他域名的聊天密钥发送给 SiliconFlow。当前生产使用用户提供的独立托管embedding/重排安全配置，并已完成下方真实验收；仍不把“价格标免费”当成质量、无限配额或永久免费的承诺。
+不把其他域名的聊天密钥发送给 SiliconFlow。2026-11-07 历史生产记录使用独立托管embedding/重排安全配置，并完成下方限定范围的真实验收；当前部署需重新核对，不把“价格标免费”当成质量、无限配额或永久免费的承诺。
 
 可采用如下服务端配置，密钥仅由安全环境注入：
 
@@ -104,6 +138,12 @@ Dense 查询只匹配相同 identity。词法查询使用中英文词元，中�
 
 长原文与索引单元分开：原文全文可用票据分页回读，父原文向量为空，片段最大6000 UTF-8字节，能无损重组。来源展示仅保存有界metadata/data_ref，不把完整行情大表复制到每条引用。原文hash/owner/父子关系或片段内容变动须整批拒绝，回滚包保留原文/旧向量守卫，不能覆盖发布后的无关写入。
 
+### 索引更新与回滚
+
+改 embedding 模型、版本或编码配置时，先盘点原文、片段、权限、TTL 和现有 identity，再选择可恢复的离线重算或影子代次。备份需要包含旧向量及其身份，只有源代码回滚不能恢复被原位覆盖的向量。
+
+验证至少覆盖：原文 hash 未变、父子片段可无损重组、权限/时点未改变、不同身份不进入 Dense、未完成索引仍可词法查询。切换后只更新已核对的索引字段；回滚不能覆盖发布后的无关业务写入。模型或聊天密钥替换不触发自动重索引。
+
 ## 5. 默认镜像与可选 worker
 
 | 文件 | 用途 |
@@ -120,7 +160,7 @@ Compose 默认不运行 rag-inference，API 不挂 model_cache。需要自建模
 
 私网 worker 仍保留令牌校验、批次限制、推理锁、实际模型 revision、宿主/cgroup 内存检查及资源上限；缺 token 时启动失败。worker不公开宿主端口，模型缓存仅挂在该可选服务。
 
-本次142个运行依赖解析不含Torch、Transformers、sentence-transformers、FlagEmbedding、chromadb或ragas；后续真实Linux API镜像构建也确认local_ml_absent。该事实不等于启用了本地推理，也不证明目标机可容纳双模型峰值；当前生产使用托管API，停用本地BGE权重已清理，再启local-ml需重新下载并验收资源。
+默认运行依赖和 API 镜像排除 Torch、Transformers、sentence-transformers、FlagEmbedding、chromadb 与 ragas；重型本地推理和评估各用独立 requirements。镜像能导入不等于模型推理可用；启用 local-ml 前必须验证真实 worker、身份和资源峰值，不能在额外 QA 进程加载同一组模型来凑验收。
 
 ## 6. 就绪与真实能力
 
@@ -131,6 +171,15 @@ Compose 默认不运行 rag-inference，API 不挂 model_cache。需要自建模
 - none 重排是主动关闭，不应阻止服务就绪。
 - ready=true 不等于语义索引覆盖全部文档；index.pending 与 full_ready 单独报告。
 
+| 观察 | 正确解释 |
+|---|---|
+| lexical_ready=true | 受限范围内的持久词法读取可用 |
+| semantic_ready=true | 当前检索使用过可验证的向量模型身份 |
+| pending 大于零或 full_ready=false | 索引覆盖未完成，不能宣称全部知识可语义检索 |
+| remote_api 尚未真实调用 | 语义能力未验证，不能仅凭配置标为成功 |
+| local-ml resource_limited | 资源保护生效；本地推理未验证 |
+| PostgreSQL 生产连接不可用 | readiness 失败，不能用内存库冒充持久服务 |
+
 ## 7. 验证入口
 
 当前聚焦测试：
@@ -140,7 +189,7 @@ Compose 默认不运行 rag-inference，API 不挂 model_cache。需要自建模
 - backend/tests/test_rag_v2_service.py：现有存储、排序与维度合同。
 - backend/tests/test_health_and_validation.py：服务就绪语义。
 
-已完成的真实证据（保留范围边界）：
+2026-11-07 已完成的历史真实证据（保留原范围和结果，不代表新运行时验收）：
 
 | 验证 | 结果与限制 |
 |---|---|

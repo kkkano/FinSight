@@ -1,10 +1,10 @@
-# FinSight LangGraph 兼容流程
+# FinSight LangGraph 历史流程
 
-更新时间：2026-11-07
+历史流程记录日期：2026-11-07。历史定位校准：2026-11-12。
 
-默认研究运行时是 `backend/agent_runtime/` 的原生工具调用循环，见 [架构](01_ARCHITECTURE.md) 和 [Agent 指南](AGENTS_GUIDE.md)。本页只描述显式 `FINSIGHT_RESEARCH_RUNTIME=legacy` 的兼容路径；旧深入说明和设计硬约束已移至 [2026-11-07归档](archive/2026-11-07_agent-runtime-design-closeout/README.md)，不作为默认运行事实源。
+当前研究只使用 `backend/agent_runtime/`，见 [架构](../../01_ARCHITECTURE.md) 和 [Agent 指南](../../AGENTS_GUIDE.md)。本页保留旧六节点流程用于理解历史记录，不提供生产切换或启用方式。退役源码仅作 `tests/agent_eval/reference/` 评测参考；旧深入说明和设计硬约束在 [2026-11-07归档](../2026-11-07_agent-runtime-design-closeout/README.md)。新运行时未部署不代表旧图仍是新代码的可选入口。
 
-`backend/graph/runner.py` 是 legacy 图结构唯一事实源。该图固定为六个节点，不注册旧兼容节点、confirmation loop、alert action 或 research debate；原生运行时的操作确认由执行 API 单独处理。
+以下 `backend/graph/runner.py` 等名称均指历史来源位置，具体保留位置和哈希以评测 reference manifest 为准。下方 Mermaid 与六节点语义保留历史样貌；原生核查、修订和终态以当前事件合同为准。
 
 ```mermaid
 flowchart TD
@@ -63,8 +63,8 @@ flowchart LR
 
 ## SSE 边界
 
-原生与 legacy 的 Chat/Report 执行均只使用 `POST /api/execute`。`GET /api/execute/runs/{run_id}` 读取持久状态，`/events` 续传或恢复终态，`/cancel` 取消当前进程中的执行。前端不得建立第二个执行流。
+历史上原生与 legacy 通过同一 `POST /api/execute` 交付；当前该入口只接原生 runtime。`GET /api/execute/runs/{run_id}`、`/events`、`/cancel` 的现行行为以事件合同为准，前端不得建立第二个执行流。
 
 登录请求先保存问题及助手占位，最终回复事务提交后才发送完成；`done` 分别携带内容质量、运行状态与 `persistence_status`。进程重启后的读取不会重跑付费调用；失联租约转为 `interrupted`，重新生成需要新的 run ID。原生路径另支持 blocks/checkpoint、追加要求、操作确认和同会话续研，详见 [执行事件合同](execution-event-contract.md)。
 
-本轮新增的 `content_phase=progress/answer`、一次禁工具修正、图表 coverage 与 prior_artifacts 属于默认原生运行时，不是在此六节点图后新增修正节点。前端对旧的无 phase 文本按 answer 兼容；不能因共享 SSE 入口就宣称 legacy 也执行了原生检查或获得相同验收结果。
+旧原生版本的一次禁工具修正、图表 coverage 与 prior_artifacts 也属于历史实现，不能由本页推断当前核查行为。当前 M4 使用只读核查、追加或保留版本的报告修订；旧无 phase 消息仅做展示兼容，不追认新的验收结果。

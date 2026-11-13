@@ -1,8 +1,55 @@
 # FinSight 生产发布 Runbook
 
-更新时间：2026-11-10 UTC（回答核验截断修复已部署）
+更新：2026-11-13。以下区分当前源码、发布候选和实际生产观测。新运行时候选已本地构建验证，完整质量对照正在执行，尚未切换生产；48 项产品验收逐项收口后记录真实结果。
 
-本文是当前唯一生产运维规范。当前前后端均为 `agent-20261110-2a5de207900b`，代码基线 `4c0deafb` 加未提交修复，运行内容 SHA-256 `2a5de207900baa850bb19fbaf0092ea54ec5bd0fd9294a96d8b2c4c92b980ea9`。独立 compute 仍为 `python-20261107-a0b8e1d70e82`。本次见[回答核验截断验收](archive/2026-11-10_answer_completion/README.md)，此前展示修复见[新闻与来源记录](archive/2026-11-10_news_presentation/README.md)。
+## 本次恢复与发布状态（2026-11-13）
+
+两个中断会话已在当前工作树接手。此前 Vectide 返回周额度耗尽；用户最初提供的 gpt-6-luna 在 Chat Completions/Responses 均明确 model_not_found，之后由用户重新指定 gpt-6.1-terra。新密钥只在忽略的私密配置和部署安全环境中使用。
+
+| 范围 | 当前事实 |
+|---|---|
+| 研究模型 | APIKL https://apikl.ai/v1，gpt-6.1-terra；真实原生 tools 与 SSE 成功 |
+| 运行预算 | context 131072 / max_output 16384；显式预算，未实测供应商最大窗口 |
+| 独立评分 | 实际 gpt-6.1-sol，模型身份与被测 terra 不同；评分绑定问题、回答与实际资料 |
+| 本地质量 | 60 题 current/baseline 各 record+replay 与独立评分正在执行，不能提前判通过 |
+| 核查 | Terra 24 条正确/注错配对已完整采集；独立语义评审与误报统计另列 |
+| 候选后端 | source SHA-256 a26301162d…；当前 source 与冻结/退役范围及依赖核对通过 |
+| 候选前端/compute | 分别按 manifest 核对实际镜像和文件 hash，不混用旧 release 标签 |
+| 生产观测 | SSH 可用；当前 backend step5-api-20261111-a147e695613e，frontend 仍为 agent-20261110-2a5de207900b |
+| 容量与活动 | 当次盘点约 5.7 GiB 磁盘可用、281 MiB 物理可用内存；研究/预测/计算活动为 0。切换前重新测量 |
+| 身份验收 | 用户已在 Edge 用 GitHub 登录；模拟身份仅用于隔离测试，截图不能代替同 run 保存/恢复实测 |
+| 部署与观察 | 完整质量门槛前不切换；上线后记录健康、真实页面/会话、T+0/30m/2h/6h/12h/24h |
+
+```mermaid
+flowchart TD
+    SOURCE[当前源码及冻结清单] --> BUILD[候选镜像与精确文件 hash]
+    BUILD --> LOCAL[本地依赖 源码 退役范围验证]
+    LOCAL --> QUALITY[同模型 同资料 60 题及独立评分]
+    QUALITY --> CAPACITY[当次容量 活动任务 备份与回滚点]
+    CAPACITY --> ROLLOUT[清单锁定供应商和镜像后发布]
+    ROLLOUT --> READY[readyz RAG build ID 与运行身份]
+    READY --> USER[真实账号 页面 SSE 保存恢复]
+    USER --> OBSERVE[逐项验收及定时观察]
+    READY -->|失败| ROLLBACK[恢复完整旧发布]
+    USER -->|失败| ROLLBACK
+```
+
+发布脚本支持显式 provider，后续阶段读取清单中的 model_provider；旧 Vectide 清单不能临时换 APIKL 配置。研究模型字段从指定评测配置映射，不覆盖 OPENAI_COMPATIBLE、Step Plan 或固定 US20 的原模型。模型/driver/runtime 摘要变化必须重新 prepare，不能绕过 stale guard。
+
+文档、图片和报告不是密钥载体；发布源码和镜像分别扫描安全配置，不上传本机 env、评测资料库或测试参考包。文档归档见[归档说明](archive/2026-11-13_documentation_refresh/README.md)，当前文档完整检查见[审查记录](reports/2026-11-13_documentation_refresh/README.md)。
+
+## 既有生产发布记录
+
+本文是当前唯一生产运维规范。最近保存的 2026-11-11 发布记录中，后端为 `step5-api-20261111-a147e695613e`，在既有 `agent-20261110-2a5de207900b` 镜像上仅增加 Step 5 按量模型选项的五个 Python 文件变更。前端与预测 watchdog 仍为 `agent-20261110-2a5de207900b`，独立 compute 仍为 `python-20261107-a0b8e1d70e82`；这些容器未重建。既有运行内容 SHA-256 为 `2a5de207900baa850bb19fbaf0092ea54ec5bd0fd9294a96d8b2c4c92b980ea9`，原修复见[回答核验截断验收](archive/2026-11-10_answer_completion/README.md)。本次后端通过 `BACKEND_IMAGE_TAG` 独立指定，未切换默认研究模型或部署本轮新运行时，未执行数据库迁移，冻结预测代码及参数保持不变。
+
+该次发布给研究模型目录新增 `stepfun-api:step-5-preview`，显示为“Step 5 Preview（按量）”，使用官方 `https://api.stepfun.com/v1`。密钥只通过安全配置 `FINSIGHT_AGENT_STEPFUN_API_KEY` 提供；原 `STEPFUN_API_KEY` 和 Step Plan 入口保留。显式选择后的模型上下文为 1M、运行输出预算为 16384，支持 low/medium/high 推理档位。默认模型未变，公开模型目录不返回凭据；该次记录已验证鉴权选择、同源目录及服务器原生工具调用，立即回滚点为上一发布目录。
+
+## 0. 当前工作树与待发布状态
+
+- 生产入口只接 `backend/agent_runtime`，旧研究实现不再有选择开关；退役源码及测试只作 `tests/agent_eval/reference/` 对照并排除生产镜像，27 个冻结预测依赖按 manifest 保留。
+- M4 在代码中对数据回答默认核查、报告必核查；只读核查最多 4 轮/45 秒，报告保留原版后最多修订一次，未交付事项最多追加一次。该默认行为已实现，不等于核查准确率完成验收。
+- M4 的 Step 5 配对测量与独立评审已完成：语义检出 12/12，原答案误报 1/12，不可用 1/24；核查意见另有单位/方向说明瑕疵。完整 M3 质量/耗时对比、48 项最终验收、真实登录浏览器及上线观察仍待收口。
+- 新源码、新前端及新 compute 计算库尚未作为这一整套运行时部署。下方旧镜像、数据库与 RAG 探针保留原日期和边界，不能当作本次上线证明。
 
 ## 1. 发布不变量
 
@@ -21,10 +68,10 @@ flowchart TB
 
 - 会话、权威消息、研究 checkpoint/终态、Watchlist、报告、用户 Prediction/Outcome 的业务事实源是 PostgreSQL；schema 由 Alembic 管理，应用启动不执行 DDL。
 - 生产必须启用 Supabase 认证；Chat、History、Prediction、Watchlist、Monitor 和私有报告不得通过伪造 owner 或匿名写入绕过鉴权。
-- 默认 `FINSIGHT_RESEARCH_RUNTIME=agent`。主研究员和专业角色共用原生工具循环、所选模型、预算与资料合同；只有主研究员可委托任务，不嵌套派发。原确定性 Collector 和六节点图仅适用于显式 legacy 路径。
-- 本轮授权默认供应商 reasoning 展示，并将单 run 含子 Agent 最多 20,000 字符保存到 owner 所属消息/checkpoint，历史可展开；不进入金融证据、引用、普通正文、公开报告或日志。没有真实字段不编造，旧 opt-in/仅页面内存策略已替代。
-- 工具 display 逐项注册，seq 穿插正文与活动；7 项真实 manifest 可由用户 `/` 菜单及主/专业 Agent `use_skill` 加载，技能不扩权或改预算。普通追问继承同会话有效资料且逐记录 TTL 不续期，不添加常驻继续 CTA。
-- `progress` 只作过程说明，最终 `answer/response` 用于正文、复制、摘要和后续回答历史；最多一次禁工具修正共享原预算。删除旧候选不生成成批撤回占位，但真实失败和质量缺口仍须保留。
+- 待发布代码仅保留 `backend/agent_runtime` 一套研究实现，不再提供旧运行时选择开关。主研究员与专业角色共用工具循环、预算和资料合同；仅主研究员可分工。历史源码与测试对照仅位于 `tests/agent_eval`，被生产镜像排除。当前已部署版本仍以上文独立发布记录为准，新实现通过验收后再发布。
+- 供应商 reasoning 按当前账号的结构化显示设置处理，默认关闭；允许展示的单 run 含子 Agent 最多 20,000 字符保存到 owner 所属消息/checkpoint，历史可展开，不进入金融证据、普通正文或公开报告。核查员内部推理不公开。
+- 工具 display 由统一信封按 kind 生成，seq 穿插正文与活动；用户 `/` 菜单与主/专业 Agent load_skill 共用真实 Markdown 目录，技能不扩权或改预算。普通追问继承同会话有效资料，逐记录 TTL 不续期。
+- progress 只作过程说明，answer/response 用于正文、复制与后续历史。只读核查不能删除或替换已显示原文；报告修订使用新块和 revision_of，聊天用户修订使用 review_revision 新轮关联，真实失败与缺口分别保留。
 - 固定 US20 Technical/Risk forecast、公开账本及独立 watchdog 与用户研究分开；不修改冻结预测算法、模型配置、采集预算或统计口径。公开账本文件继续保存在 backend_data 持久卷中。
 - Prediction 只接收可信 provider 的真实 K 线；错误、缺失和日收盘数据必须保留来源、时间与口径，不生成替代行情或假预测。
 - 原生短期资料、额度租约和操作收据位于持久目录；文件/SQLite 辅助存储不替代业务 PostgreSQL。不能把这些文件或公开预测账本当作过时垃圾删除。
@@ -45,11 +92,11 @@ flowchart TB
 |---|---|
 | 生产身份 | `APP_MODE=production`、`SUPABASE_AUTH_REQUIRED=true`；Supabase URL/公开配置与前端匹配，认证域名和 verifier 实际可用 |
 | 核心数据库 | `FINSIGHT_POSTGRES_DSN` 与 PostgreSQL 用户/库配置；实际 migration head 匹配镜像，生产不使用内存存储 fallback |
-| 原生研究 | `FINSIGHT_RESEARCH_RUNTIME=agent`、`FINSIGHT_AGENT_API_BASE/MODEL/API_KEY`；模型通过真实原生工具预检，用户显式选择不静默改用系统模型 |
+| 原生研究 | `FINSIGHT_AGENT_API_BASE/MODEL/API_KEY`；唯一研究实现，模型通过真实原生工具预检，用户显式选择不静默改用系统模型 |
 | 预算与并发 | `FINSIGHT_AGENT_TOKEN_BUDGET/MAX_TURNS/MAX_ACTIVE_RUNS/MODEL_CONCURRENCY` 和 provider RPM/TPM 按实际额度配置；保留独立预测容量 |
 | 持久辅助目录 | `FINSIGHT_ARTIFACT_DIR`、`FINSIGHT_ACTION_STORE`、`FINSIGHT_RUNTIME_QUOTA_DB` 位于 backend_data；owner/session/run 与过期边界不变 |
 | RAG 存储 | `RAG_V2_BACKEND=postgres`、`RAG_V2_ALLOW_MEMORY_FALLBACK=false`；生产文档、索引状态、向量 identity 一致 |
-| Checkpointer | 生产 PostgreSQL checkpointer 与持久 DSN；原生 checkpoint 保存于权威消息 JSON，不新建运行时表 |
+| 研究快照 | 原生 checkpoint、review/revision 与终态保存于既有权威消息 JSON；本次不新建运行时表，旧图 checkpoint 仅保留历史数据用途 |
 | Prediction/Monitor | 保留已授权开关、可信 K 线 provider、原模型及 Outcome/Monitor 配置；不因研究模型切换开启 US20 采集或发送测试告警 |
 | 可选图片 | 只对实际验证图片输入的模型启用 `FINSIGHT_AGENT_VISION`；当前轮 PNG 不进入普通历史或原始资料缓存 |
 | 新研究节流 | 新发布核对 `FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS` 和实际 provider 额度；首增量前 429 有界退避与结构修复共享截止时间，不重复启动业务工具 |
@@ -59,7 +106,7 @@ flowchart TB
 ### RAG 的三种模式
 
 1. 默认 `RAG_EMBEDDING=lexical`、`RAG_RERANKER=none`：不拉取模型、不启动 `rag-inference`。
-2. 托管模型：显式 `RAG_EMBEDDING=remote_api`，配置独立 embedding URL/model/key/dimension；重排需 `RAG_RERANKER=remote_api` 和独立 URL/model/key。当前生产使用 SiliconFlow BGE-M3 1024 维与 BGE reranker。identity/维数不匹配、配置或调用失败必须明确降级，不把 hash 或旧未知身份标为真实 BGE。
+2. 托管模型：显式 `RAG_EMBEDDING=remote_api`，配置独立 embedding URL/model/key/dimension；重排需 `RAG_RERANKER=remote_api` 和独立 URL/model/key。历史生产记录使用 SiliconFlow BGE-M3 1024 维与 BGE reranker；发布前重新核对实际配置。identity/维数不匹配、配置或调用失败必须明确降级，不把 hash 或旧未知身份标为真实 BGE。
 3. 本地模型：仅在已验证物理内存足够并显式选择 `local-ml` profile 时启用独立 `Dockerfile.rag` worker，配置 URL/token。该模式不是默认发布依赖；目前生产停用，本地 BGE 缓存已清理，再启用需重新下载并实际编码验收。
 
 本地 worker 原有 3000 MiB 内存、3600 MiB 内存加 swap、1 CPU、128 PID 与至少 2400 MiB 可用物理内存保护仍适用。不能调低保护或借 swap 冒充模型容量。托管模式无需启动本地模型；真实语义与 rerank 是否可用以实际请求、提交向量和回读证明。
@@ -99,7 +146,7 @@ compute `/health` 分别报告 `ready/error/available_memory_mb/job_memory_mb/ca
 
 作业输入最大 4 MiB、代码最大 16000 字符、结果最大 1 MiB、最长 60 秒。`stdout/stderr` 合并为最多 16 KiB 的 `logs`，超出带 `logs_truncated=true`；`code_error` 只包含受限异常类型、最多 500 字符的消息和可得的代码行号，不传完整宿主堆栈。日志仅为诊断，不作为金融结果或公开报告资料。
 
-`datasets` 保留授权原始包，环境预置 `pd/np/get_frame`。`get_frame(data_ref)`、`get_frame(datasets[data_ref])` 或显式行列表可生成 DataFrame；具名表使用实际 `table` 键，必要时先从原包选择正确层级。SEC 平行数组包额外支持 `table="companyfacts"`，与 inspect 暴露的表名一致；财期/指标数组仍需等长。
+`datasets` 保留授权原始包，环境预置 `pd/np/get_frame/frames/finsight`。`get_frame(data_ref)`、`get_frame(datasets[data_ref])` 或显式行列表可生成 DataFrame；具名表使用实际 `table` 键，必要时先从原包选择正确层级。SEC 平行数组包额外支持 `table="companyfacts"`，与 read_data 暴露的实际表名一致；财期/指标数组仍需等长。
 
 对于 SEC 平行数组，DataFrame 保留原 `period_ends/periods` 列，增加 `period_end/period` 别名；没有 periods 时 period 使用原 period_ends。原包中已有且为标量的 `ticker/market/source/source_url/as_of/currency/frequency` 也保留为上下文列，不填造缺失字段。多表不猜选、文本或未知结构不强行造表；该入口不自动排序、换单位或补缺值，原始 datasets 不变。
 
@@ -109,9 +156,15 @@ compute `/health` 分别报告 `ready/error/available_memory_mb/job_memory_mb/ca
 
 该版本已有原失败代码/原 SEC 数据不变的生产重放证据：两段小作业都在 256 MiB 分配、128 MiB 保留下返回正确季度收入差额及变化率，见[受限验证记录](reports/2026-11-07_natural_response_compute/production-sec-replay.json)。这证明相同输入的数据适配与计算通道修复，不代表任意 Python 容量或主模型多会话答案已经通过。
 
-### Legacy 预算与网络边界
+### 原生预算与网络边界
 
-原生与 legacy 均继承 `RunContext` 累计截止时间（研究 180 秒、报告 300 秒），原生另有工具循环/token 预留与租约。以下语义理解、结构修复和确定性超时投影专属于 legacy：理解阶段不超过 60 秒及整轮余量三分之一；纠错共享阶段截止时间，投影/终态保存的 3 秒/2 秒上限不代表原生流程拥有同一节点。
+研究与报告使用 FINSIGHT_RUN_TIMEOUT_SECONDS/FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS 等明确配置，未配置时兼容原预算名称。主模型、专业角色、压缩和有界补交共享本轮 token/配额与累计截止时间，核查最多 45 秒且服务集成受剩余收尾时间限制。
+
+`backend/analysis_worker/finsight.py` 随 compute job 镜像交付，提供 drawdown_episodes、consecutive_declines、moving_averages、series_statistics、compare_series、financial_ratios、valuation_scenarios；财务纯函数由同镜像的 financial_math.py 提供。新增库与 frames 注入需要匹配的新 job 镜像，旧 compute healthy 不证明已经包含这些函数。API 或 dispatcher 单独重启不更新旧 job 镜像。本机完整库的五项真实作业检查见[证据](../tests/agent_eval/results/m3_compute_library_complete_health.json)，线上镜像尚未更新。
+
+### 历史预算记录
+
+旧图曾使用语义理解、结构修复和确定性超时投影；这些历史阶段不再是当前生产研究入口。旧预算名称可作为配置兼容输入，但不恢复六节点流程。研究和冻结预测的实际调用预算分别核对。
 
 `LANGGRAPH_EXECUTE_LIVE_TOOLS`、`LANGGRAPH_SYNTHESIZE_MODE`、`FINSIGHT_STRUCTURED_SYNTHESIS` 与旧合成输出额度属于 legacy 配置，不作为原生角色或模型循环的硬合同。预测时限与冻结配置继续独立保留。
 
@@ -123,7 +176,7 @@ Git 提交发布可用精确 commit SHA；用户明确授权发布未提交实�
 
 未提交源码发布需记录基线、runtime manifest、dirty 范围与镜像身份；前端、后端和独立服务更新分别追溯。文档 overlay 单独列出路径，不修改业务源码或 runtime manifest，不能将任一补丁描述为全部文件仍匹配旧清单。
 
-按受影响范围执行并记录：原生工具/权限/预算/交付聚焦、legacy 兼容回归、真实 PG 事务/RLS/checkpoint、RAG 身份/过滤/长文回读、计算隔离、OpenAPI/前端类型、单测、构建及关键浏览器交互。仅导入模块、HTTP 200、mock 供应商或 `done` 字符串不足以证明真实质量。检查不能访问私有配置或把密钥写入产物。
+按受影响范围执行并记录：原生循环/信封/核查/权限/预算/交付聚焦、冻结预测与评测参考隔离、真实 PG 事务/RLS/checkpoint、RAG 身份/过滤/长文回读、计算隔离、OpenAPI/前端类型、单测、构建及关键浏览器交互。仅导入模块、HTTP 200、mock 供应商或 `done` 字符串不足以证明真实质量。检查不能访问私有配置或把密钥写入产物。
 
 验证分类至少包括前后端回归、真实 PostgreSQL、隔离 Docker、浏览器和真实模型任务；范围、跳过项、源码版本与结果记录在[复验报告](reports/2026-11-07_natural_response_compute/README.md)。测试数量有重叠时不相加，候选构建/export smoke 和服务器 prepared 状态不能代替正式启动或完整答案验收。
 
@@ -143,12 +196,12 @@ Git 提交发布可用精确 commit SHA；用户明确授权发布未提交实�
 
 每次操作先记录当前容器实际镜像、Compose labels、发布目录/软链接、持久卷、活跃研究、资源和回滚点。使用明确 `-p finsight`、release 的 `--env-file` 与 `-f docker-compose.yml`；不要输出完整 Compose 展开配置，它可能含密钥。
 
-以下是配置校验形式，路径须来自正在操作的精确 release。文档核对不访问生产配置、不重跑启动或回滚；compute 为可选 profile，只有实际部署它时另行启用。
+以下是配置校验形式，`FINSIGHT_RELEASE_DIR` 须预先设为已经核对的精确 release 绝对路径。文档核对不访问生产配置、不重跑启动或回滚；compute 为可选 profile，只有实际部署它时另行启用。
 
 ```bash
 docker compose -p finsight \
-  --env-file /home/ubuntu/finsight-releases/agent-20261108-365a20081c6b/.env.server \
-  -f /home/ubuntu/finsight-releases/agent-20261108-365a20081c6b/docker-compose.yml \
+  --env-file "$FINSIGHT_RELEASE_DIR/.env.server" \
+  -f "$FINSIGHT_RELEASE_DIR/docker-compose.yml" \
   --profile predictions config --quiet
 ```
 
@@ -174,14 +227,14 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 1. 核对 release manifest、实际镜像 ID、安全配置、Compose 项目/卷和兼容回滚点；有活跃研究时先按合同排空，不直接切走运行。
 2. 如有迁移，停止会写入相关数据的本轮服务，执行经过验证的事务；失败回滚并恢复旧服务，不继续使用半迁移数据。
-3. 沿用第 4 节 Compose 前缀，以 `up -d --no-build --no-deps backend` 启动新后端。该后缀已在本轮部署执行；不在小内存生产机重新构建镜像。
+3. 沿用第 4 节 Compose 前缀，以 `up -d --no-build --no-deps backend` 启动新后端。这是获授权发布时的操作形式；本轮新运行时尚未执行部署，不在小内存生产机重新构建镜像。
 4. 正常健康发布必须后端直连与同源代理 `/readyz` 均通过，再依次启动前端及已授权的独立 profile 服务。当前角色与预测开关不因发布自动改变。
-5. `compute` 只有明确配置/资源允许才作为可选服务启动；本轮 dispatcher 启动但资源门禁拒绝作业。默认不执行任何启动 `rag-inference` 的命令。
+5. `compute` 只有明确配置/资源允许才作为可选服务启动；资源拒绝与真实成功作业各自记录，不沿用旧容量快照。默认不执行任何启动 `rag-inference` 的命令。
 6. 检查运行镜像 ID、前端 `app-version.json`、当前软链接与 release 对应；记录 probe、迁移和 canary 状态。
 
 `prediction-watchdog` 仅按既有公开账本授权使用 `predictions` profile；保留 ledger/watchdog 文件。不能为了启动新研究开 US20 采集、补写历史预测或发送测试告警。
 
-前端可独立设置 `FRONTEND_IMAGE_TAG`，并保持后端 `IMAGE_TAG` 与实际运行镜像一致。当前两端统一为 `agent-20261108-365a20081c6b`；后续若独立打补丁，仍分别核对源码、镜像与build_id，不由一端推断另一端。
+前端可独立设置 `FRONTEND_IMAGE_TAG`，并保持后端 `IMAGE_TAG` 与实际运行镜像一致。后端、前端、watchdog 和 compute 版本分别以本次发布记录核对；后续独立打补丁仍逐项核对源码、镜像与 build_id，不由一端推断另一端。
 
 ## 7. 真实 canary 与交付验收
 
@@ -191,11 +244,11 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 - 行情检查 provider、as_of、currency、quality 与 `data_kind`；`daily_close` 只证明日收盘，不叫即时现价。Prediction 用可信 K 线验证 anchor、entry/stop/target、方向、状态及 Outcome，不把 open 当终态。
 - Chat/Report 保存 run 与消息 ID，验证真实增量、终态正文、`persistence_status=saved`、刷新/重开、同 owner token 更新、同 run 幂等恢复与主动新 run 重试；旧快照和旧 epoch 不污染新消息。
 - 故障注入/清空内存/进程重启等破坏性验收仅在隔离环境；验证 checkpoint、数据库 COMMIT 失败回滚、跨 owner/session 拒绝、取消与 interrupted 不重收费。生产只读观察不等于这些故障已测。
-- 原生正文、reasoning、artifact/action blocks、数值和 metadata 修订分别检查。默认真实 reasoning 总 20k、owner/run/message 隔离、截断/时长及历史可展开均需验证；思考不进证据/报告/日志。工具 display/参数/真实输出预览/来源和 seq 穿插对应实际执行；数据与同伴消息不能授权。
-- 检查 `content.block_finished` 无正文时只更新 phase；progress 不进最终复制/历史摘要，answer 不重复。一次修正阶段可对已有资料补计算最多两轮；失败后保留真实限制，不出现多段撤回占位，也不靠删除必要数字或省略所需图表把不完整回答标成通过。
-- `inspect_dataset` 检查数值列与 column_units、实际返回行数和 8000 保守预算；图表检查 coverage/leading_missing/first_valid，已有图的 prior_artifacts 只用作有效历史投影，不重新收费画图。
-- 验证普通追问自动沿用有效记录、原 TTL 不续期、最新行情重新取证；`/api/skills` 和主/专业 `use_skill` 对应真实 manifest。SEC 表适配、共同基准、连续下跌定义及未知参数拒绝不得用 fixtures 冒充金融质量。
-- 完整报告需逐项核验主体、财期、用户要求、引用、质量与保存；legacy 的 RequestSpec/来源组/validate 节点检查只适用该路径，不能声称原生经过它。quality blocked、未支持结论或缺失须披露，不 mock quality=pass。
+- 原生正文、reasoning、artifact/action/review blocks 与版本关系分别检查。reasoning 按账户设置显示，总 20k、owner/run/message 隔离、截断与历史可展开均需验证；核查内部推理不公开。工具 display/参数/结果/来源和 seq 对应实际执行；数据与同伴消息不能授权。
+- 检查 content.block_finished 无正文时只更新 phase，answer.completed 后正文立即可读，review.* 独立展示。quote 逐字定位、重复事件幂等；报告 revision_of 和用户 review_revision 保留旧文与来源关系，云恢复不裁剪原文。
+- read_data 检查真实列、分页游标、单位及原文；render_chart/render_table 按句柄返回真实数值。核查 coverage 描述交付事项，图表 coverage 描述数值覆盖；旧产物只作历史参照。
+- 验证普通追问自动沿用有效记录、原 TTL 不续期、最新行情重新取证；`/api/skills` 和主/专业 load_skill 对应真实 Markdown 目录。SEC 表适配、共同基准、连续下跌定义及未知参数拒绝不得用 fixtures 冒充金融质量。
+- 完整报告需逐项核验主体、财期、用户要求、引用、质量与保存；最终核查 pass 且无 findings/缺项、完整收尾才可发布。核查 timeout/unavailable/insufficient 分开，不伪造 quality=pass 或改写正文掩盖失败。
 - RAG 分别记录语义、词法、重排、identity、权限/TTL/日期/实体过滤和原文回读；本地小合成指标不能外推生产质量。计算须分别验证 health、真实成功作业和低资源拒绝，健康 dispatcher 不能代替成功作业。
 - Monitor lease 按当前标的释放，检查实际 comment 与外部 I/O；验收所需 Prediction/Outcome/Report/usage 记录只输出脱敏 ID/计数，RLS 查询绑定真实 owner。
 
@@ -227,12 +280,44 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 | 服务 | 当前已确认上线版本 | 边界 |
 | --- | --- | --- |
-| 主后端 | `agent-20261108-365a20081c6b` | 已部署healthy；受保护会话canary未执行 |
-| 前端 | `agent-20261108-365a20081c6b` | 公网build_id/原Logo/GitHub入口通过，pageErrors=0 |
+| 主后端 | `step5-api-20261111-a147e695613e` | 最近保存的 Step 5 按量目录发布；本地 Agentic/M4 重构尚未发布 |
+| 前端 | `agent-20261110-2a5de207900b` | 新闻/来源与截断修复的已发布版本；本地展示合同尚未发布 |
 | 独立 compute | `python-20261107-a0b8e1d70e82` | 已确认 healthy；更新它未重启主后端，健康不代表任意研究任务成功 |
 
-当前运行行为遵循本文与[事件合同](execution-event-contract.md)。发布过程、候选、分类回归、真实 before/after、源码/镜像哈希和待验项集中在[本次复验记录](reports/2026-11-07_natural_response_compute/README.md)；此前迁移、公网验证和清理事实保留在[原实施报告](reports/2026-11-07_agent_runtime_implementation.md)，不作为即时资源证明。
+当前工作树的目标运行行为遵循本文与[事件合同](execution-event-contract.md)，并不表示上表旧镜像已包含这些改动。历史候选、真实 before/after、源码/镜像哈希和验收边界见[旧复验记录](reports/2026-11-07_natural_response_compute/README.md)与[原实施报告](reports/2026-11-07_agent_runtime_implementation.md)，不作为本次即时资源或新实现证明。
 
 每次正式发布必须记录：授权和 Git/manifest 源码身份；各服务镜像与安全配置匹配情况；需要的备份/迁移/RLS与回滚包；范围明确的真实模型、RAG、行情和计算结果；登录、SSE、正文保存/恢复与跨用户边界；公网/宽窄/亮暗页面检查；资源、清理与观察期。缺失项保持待验，已启动、HTTP200、fixture 或正确图表不等于所有问题完整通过。
 
 不重跑已经提交的旧 RAG 迁移，不删除当前或唯一兼容回滚点；文档验证不执行生产启动、清理或回滚命令。Git 提交仍需明确授权。
+
+## 11. Agentic 重构的本地实施与发布门槛
+
+线上未提交运行内容已保存为 `891824cfcd974434a5adc3151c19642d7ae3eb03`，标签 `baseline/research-completeness-20261111`。评测目录 `tests/agent_eval/baseline_runtime` 另保存与 M1 实测源码 SHA 一致的 20 个 Python 文件及 3 个词表资产；不编辑冻结副本。
+
+- 工具结果采用 `ToolResult` 的 `status/kind/data/sources/as_of/notes/error` 信封；失败只读取结构化状态。原始数据留在账本，模型投影按类型分页，原文游标仅按实际交付字符推进。
+- `settings.py` 按 runtime/limits/providers/storage/features/auth 校验；启动先检查模型三元组、参数冲突、凭据公开配置与持久目录可写性。校验错误只包含字段名和错误码，密钥/DSN 不进入公开 metadata。
+- 原生 Chat/Brief/Report 使用 `FINSIGHT_RUN_TIMEOUT_SECONDS`、`FINSIGHT_RUN_TIMEOUT_BRIEF_SECONDS`、`FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS`；缺失新名时回退原有 `LANGGRAPH_*` 对应预算。原生 API 的报告晋升沿用原始起点，冻结预测的 `run_context.py` 与预算入口保持不变。
+- 原生服务启动不预构建或加载旧研究图，生产请求不能导入 tests/agent_eval/reference。清单中 27 个冻结预测依赖保留，旧数据库资料不因代码迁移被删除；核心 PostgreSQL、认证、行情、LLM 和 RAG 按实际就绪要求核验。
+- 自选增删免确认来自当前登录用户的结构化布尔设置，默认关闭；换账号不复用其他账号的授权。供应商原始推理显示默认关闭，公开摘要与原始字段分别处理。
+- 公开战绩响应提供实际 `metadata.window_days`，`null` 表示未按天数截取；不把公开 84 天筛选改写为个人 90 天口径。分享发布时间来自已有 `reports.shared_at`，与报告生成时间分开；分享读取不是冻结快照。
+
+当前仍为一个 API 进程/副本。额度租约、操作收据和 US20 公开账本的 SQLite 路径必须可写且持久化；增加副本前须提供 limits/actions/prediction_store 共享存储、全站额度与执行任务路由。多副本迁移作为条件性工作项，不直接打开 workers 或新增 PostgreSQL 表。
+
+本地协议测试与浏览器夹具不构成真实模型质量或线上验收。固定题集的同资料回放对比、M4 注错/误报评测、唯一计划第 12 节的 48 条产品验收及稳定观察分别留证。代码中 M4 已默认接入；评测正在进行，未测项目继续标为待验，不把默认启用等同质量验收。
+
+本轮代码与配置未部署。正式发布需重建前端，并重启后端以加载新配置域；模型额度、来源配置、冻结回归及现有持久数据需按发布前检查逐项确认。
+
+### 上线前与上线后待填清单
+
+| 项目 | 当前状态 | 待填证据 |
+|---|---|---|
+| M3 完整固定题集质量与耗时对比 | 待收口 | 题集/工具回放版本、baseline/after、独立评分、耗时中位数和失败原文 |
+| M4 注错检出率与未注错误报率 | Vectide 恢复批次 24/24 完成；检出 12/12、原答案误报 0/12 | [测量](../tests/agent_eval/results/m4_vectide_review_recovery.json)、[语义评审](../tests/agent_eval/results/m4_vectide_review_recovery_adjudication.json)；另有 1 项附带过度要求，前轮失败独立保留 |
+| 48 项产品验收 | 未执行 | 每项实际输入、期望/结果、失败及证据链接；不能只给总勾选 |
+| 浏览器和真实账号 | 待验 | 明/暗/390px、原文/核查/修订/恢复、真实请求路径、OAuth 与跨 owner 拒绝 |
+| 新运行时部署 | 未执行 | 发布授权、源码/镜像 manifest、后端/前端/compute 标签与冻结文件哈希 |
+| 新 compute 计算库 | 本机五项通过，线上待部署 | [完整库作业证据](../tests/agent_eval/results/m3_compute_library_complete_health.json)；生产另核对镜像、资源与拒绝路径 |
+| 生产持久闭环 | 待部署后验证 | 同源 SSE、review/revision 保存、刷新/重开、同 run 幂等、报告发布及草稿 |
+| 上线观察 | 未开始 | T+0/30m/2h/6h/12h/24h、错误/用量/资源与回滚条件 |
+
+上述状态不修改历史报告中的已通过、未执行或失败事实。完成后只填入本次真实证据与日期，不批量改写归档记录。

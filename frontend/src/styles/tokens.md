@@ -1,24 +1,21 @@
-# TERMINAL Token 速查（08 设计语言）
+# FinSight 样式与 Token 说明
 
-## 背景四层（由外到内）
-`bg-t-bg`(页面底) → `bg-t-surface`(面板) → `bg-t-card`(卡片) → `bg-t-elevated`(卡内嵌块)
+更新：2026-11-13。实际值以 [index.css](../index.css)、[Tailwind 配置](../../tailwind.config.js)和[设计合同](../../../DESIGN.md)为准。当前采用统一研究工作区主题，历史 TERMINAL 橙色说明不再适用。
 
-## 文字三层
-`text-t-text`(正文) / `text-t-text2`(辅助说明) / `text-t-text3`(元信息、时间戳、标签)
+| 用途 | Token |
+|---|---|
+| 页面与面板 | --t-bg、--t-bg-2、--t-surface、--t-card、--t-elevated |
+| 文字层级 | --t-text、--t-text-2、--t-text-3 |
+| 品牌与主操作 | --t-accent、--t-accent-hi、--t-accent-soft |
+| 边框与分隔 | --t-border、--t-divider、--t-line、--t-line-2 |
+| 行情方向 | --t-up、--t-down，随红涨绿跌/国际模式切换 |
+| 执行语义 | --t-success、--t-error、--t-warning、--t-info，不随行情模式反转 |
+| 图表 | --t-chart-grid；真实数据色沿图表规范 |
 
-## 语义色
-- 涨跌**必须**用 `text-t-up` / `text-t-down`（跟随 A股/国际配色开关），禁止 text-green-*/text-red-*
-- `t-accent`（终端橙）只用于：主操作按钮、焦点态、进行中状态、品牌标识——不做大面积底色
-- 提示/警告/信息：`t-warning` / `t-info`
+浅色品牌主色 #3b5bdb，--t-accent 保存 RGB 分量；浅色正文 #0f172a，背景 #ffffff。深色与行情模式覆盖同一组变量。组件不新建颜色体系，旧 --fin-* 只作兼容别名。
 
-## 圆角
-卡片 `rounded-lg`(8px) / 控件按钮 `rounded-md`(6px) / chip 标签 `rounded`(4px)。对话与卡片区禁用 rounded-xl。
+正文使用 Geist Variable 和中文系统字体回退，数值/代码使用 JetBrains Mono，num 提供等宽数字。fs-prose 控制正文标题、列表、表格、引用和代码，不重新叠加旧 typography 规则。
 
-## 数字
-一切数值（价格/百分比/时间戳）挂 `num` 类（mono + tabular-nums）。
+间距、字号、圆角和阴影以现有 CSS/设计合同为准。复杂表格和图表在自身容器横滚，390px 不造成整页溢出。骨架、流式光标与价格闪动遵循 prefers-reduced-motion，关动画后仍能操作。
 
-## 工具类
-`t-caret`(流式光标) / `t-flash-up|down`(价格闪动) / `t-skeleton`(骨架屏，>300ms 加载必用)
-
-## 兼容
-旧 `--fin-*` 全部别名到新 token，存量代码不用改；新代码一律用 `t-*`。
+验收覆盖浅/深色、两种涨跌色、桌面/平板/390px、键盘焦点、中文组合输入和读屏活动。配色切换不让成功变失败；图表懒加载显示实际加载态，不显示模拟曲线。

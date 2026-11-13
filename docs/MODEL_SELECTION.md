@@ -1,51 +1,94 @@
 # 统一模型选择
 
-更新时间：2026-11-07。默认原生研究由`backend/agent_runtime/config.py`解析本轮所选模型；用户显式选择优先，其次研究专属`FINSIGHT_AGENT_*`配置，再取系统目录默认。独立预测的服务端默认与冻结forecast配置保持分离。研究必需真实原生工具能力预检；不能静默替不支持工具的模型执行研究。
+文档校准：2026-11-13。以下为当前工作树的请求选择、供应商凭据、能力与评测合同。用户已选择 APIKL 的 `gpt-6.1-terra`，真实原生工具与 SSE 探针通过，完整 60 题配对对照进行中；新候选尚未部署。历史发布与实际服务状态以[运行手册](11_PRODUCTION_RUNBOOK.md)为准。
 
-下方系统目录、用户连接/effort与认证边界继续有效；旧LangGraph合成超时、65536输出额度、JSON合成和总预算说明只适用于相应legacy/预测调用点，不是原生循环的统一输出承诺。原生循环沿用RunContext截止时间、token预留和provider节流，默认思考owner私有20k合同见 [Agent指南](AGENTS_GUIDE.md)。
+## 研究模型解析
 
-登录用户可从聊天输入区模型按钮或设置页选择系统内置模型、自带OpenAI兼容服务，并恢复系统默认。选择作用于后续`/api/execute`（含新run的resume_from_run_id）与`/api/predictions/generate`；已开始任务和同run重连保留开始时选择，续传不重跑模型。
+`backend/agent_runtime/config.py` 优先采用用户本轮显式选择，其次使用研究专属 `FINSIGHT_AGENT_API_BASE/MODEL/API_KEY`，再采用系统目录默认。已开始任务保留创建时模型，同 run 重连只恢复内容，不重新解析模型或启动付费调用。
 
-## 系统内置模型
+主研究员、专业角色和只读核查默认共享本轮模型；调用方可显式指定角色模型，但仍使用同 owner、用量与运行预算，不能静默借用另一用户、另一服务或冻结预测凭据。配置失败明确报错，不在公开输出后透明拼接另一个端点。
 
-首个内置模型为 Step 5 Preview，服务端从 `STEPFUN_API_KEY` 读取凭据。配置此 key 后，Step 是服务端实际默认模型，旧的兼容代理配置不再优先覆盖它。`/api/models` 返回 `default_model_id`，界面显示真实默认名称。没有 Step 配置时才使用服务端兼容端点，并在目录明确返回该模型。系统 key 和地址不下发，系统选择不能覆盖 URL 或 key。
+研究必须通过原生 tools/tool_calls 能力预检。缓存与实际探针结果区分，不凭“OpenAI-compatible”标签猜能力；不支持时拒绝研究，不能由应用替模型执行工具。预检成功不保证后续网络和工具调用成功。
 
-- [官方模型能力](https://platform.stepfun.com/docs/zh/guides/models/step-5-preview)：`reasoning_effort` 为 low、medium、high，界面显式选择 medium。
-- [官方 Step Plan 接入](https://platform.stepfun.com/docs/zh/step-plan/integrations/reasoning-api)：base URL 为 `https://api.stepfun.com/step_plan/v1`。
-- 图标使用官方文档 favicon 的本地副本。未知自定义模型不猜测 effort 档位，采用供应商默认。
+```mermaid
+flowchart TD
+    REQUEST[已认证模型生成请求] --> EXPLICIT{显式用户选择}
+    EXPLICIT -->|系统目录项| SYSTEM[服务端目录与安全凭据]
+    EXPLICIT -->|自带服务| CUSTOM[地址校验 能力测试 上下文确认]
+    EXPLICIT -->|无| RESEARCH{研究专属配置}
+    RESEARCH -->|有| AGENT[FINSIGHT_AGENT 配置]
+    RESEARCH -->|无| DEFAULT[系统默认模型]
+    SYSTEM --> RUN[固定本轮 ModelConfig]
+    CUSTOM --> RUN
+    AGENT --> RUN
+    DEFAULT --> RUN
+    RUN --> PROBE[原生工具能力准入]
+    PROBE --> TEAM[主研究员 专业角色 核查共享身份及预算]
+    RUN --> REPLAY[重连只回放 不重选模型]
+```
 
-## 自定义服务与数据边界
+## 系统目录与研究模型选项
 
-用户填写公共 HTTPS API 地址、自己的 key 和模型 ID，测试成功后应用。应用前必须确认：外部服务会收到完整研究上下文，包括请求、系统提示词、RAG 检索结果和付费数据源内容。后端要求 `context_acknowledged: true`。地址、模型或 key 改变后须重新测试与确认；连接测试仅发送固定测试消息。
+`/api/models` 返回可用目录和实际 default_model_id，前端按目录显示，不硬编码默认名称。系统项不下发密钥，用户不能给系统模型选择覆写 URL/key。
 
-系统模型 ID 和 effort 按账号保存在本地偏好，刷新后恢复。自带服务只保存地址、模型名及 effort；key 与上下文授权确认仍仅保存在页面内存，不写入 localStorage、sessionStorage、数据库或服务端端点池。自带模型刷新后显示待补填 key，恢复前阻断主动模型请求，不静默改用默认。退出或切换账号会移除当前页面凭据并按新账号恢复自己的偏好；同一账号刷新 token 不清除页面凭据。
+| 选项 | 配置与边界 |
+|---|---|
+| 原 Step 5 / Step Plan | 保留既有 STEPFUN_API_KEY 与 Step Plan 入口，独立服务默认遵循原配置 |
+| Step 5 Preview（按量） | ID 为 stepfun-api:step-5-preview；独立 FINSIGHT_AGENT_STEPFUN_API_KEY；官方 https://api.stepfun.com/v1 |
+| qwen3.8-flash | ID 为 qwen-api:qwen3.8-flash；独立 FINSIGHT_AGENT_QWEN_API_KEY；用户授权的 https://api.kunyou.asia/v1；使用供应商默认推理设置 |
+| 研究专属模型 | FINSIGHT_AGENT_* 三元组，不能影响固定 US20 模型 |
+| 自带兼容服务 | 已认证用户显式测试并确认上下文发送后使用，凭据不进入持久偏好 |
 
-完整 `/chat/completions` 地址去掉终点后缀，纯域名补 `/v1`，StepFun `/step_plan` 补 `/step_plan/v1`，其它完整兼容路径保留。只允许公共 HTTPS 443，拒绝内网和共享地址空间，不跟随 HTTP 重定向。DNS 检查与连接的时间窗尚未采用 IP 固定连接。
+Step 5 支持 low/medium/high effort；其原生研究上下文为 1M，运行 max_output 默认为 16384。模型官方上限与每次运行的输出预算不同，不能把官方 65536 上限写成所有调用点固定输出。未知模型默认使用 32768 上下文、8192 输出，实际显式配置由启动校验核对。
 
-## 认证、预算与隔离
+相关官方资料：[Step 5 能力](https://platform.stepfun.com/docs/zh/guides/models/step-5-preview)、[Step Plan 接入](https://platform.stepfun.com/docs/zh/step-plan/integrations/reasoning-api)。实际支持范围仍以本轮目录和探针为准。
 
-`/api/models`、`/api/models/capabilities` 公开且受普通限流；显式选择与 `/api/models/test` 要求服务端验证的非匿名 Supabase 身份，内部 API key 可用于受信任管理请求。连接测试每个已验证用户每分钟最多 3 次，并占用生成并发槽。供应商认证、限流、网络及格式错误统一返回安全提示，不回显供应商错误正文。
+### APIKL 当前接入与预算
 
-`X-FinSight-Model` 只随聊天、报告、手动个股判断的生成请求发送；数据读取、测试、目录、取消和重放请求不携带模型密钥。base64 不是加密，生产必须使用 HTTPS。Axios 错误对象中的模型头及连接测试请求体会清除，避免客户端日志泄露。
+API 基址为 `https://apikl.ai/v1`，`/keys` 是密钥管理页面，不是聊天接口。拟发布模型为 `gpt-6.1-terra`；此前请求的 `gpt-6-luna` 未作为当前生产默认配置。新的接口必须按原生 tools/tool_calls 与 SSE 实测准入，不能只因为 `/models` 返回名称就认定完整能力。
 
-模型选择通过 ContextVar 进入当前 LLM 调用链，包括未携带选择头时的实际默认模型。一次任务锁定同一端点，不能修改全局轮换池或回退到别人的模型。所选模型只允许一次供应商尝试；自定义 SDK 单次上限 1200 秒，整次自定义后台任务上限 3600 秒。任务持有并关闭自己的 HTTP 客户端。
+研究专属配置由服务端安全环境提供：
 
-聊天与手动个股判断会在检查身份及额度后、创建任务和启动工具图之前调用当前模型进行连接检查。检查只发送固定短消息，保留用户 effort，输出预算 65536，前置检查总上限 60 秒，无重试。失败返回 HTTP 503 与 `model_unavailable`，不启动研究。完成事件若没有正文或报告，前端显示失败及重试入口，不显示空白的成功回复。检查通过后仍可能发生中途上游故障，因此不是后续每次调用成功的保证。
+```dotenv
+FINSIGHT_AGENT_API_BASE=https://apikl.ai/v1
+FINSIGHT_AGENT_MODEL=gpt-6.1-terra
+FINSIGHT_AGENT_CONTEXT_WINDOW=131072
+FINSIGHT_AGENT_MAX_OUTPUT_TOKENS=16384
+# FINSIGHT_AGENT_API_KEY 只由安全环境注入。
+```
 
-Step 5 Preview 的推理和正文共享输出预算。前台及实时研究调用统一使用官方 64k 输出上限（65536），不再被节点原来的 256、3000、6000 等参数压低；普通合成默认 1200 秒，整轮聊天 3600 秒、报告 7200 秒，个人预测总计 1800 秒。较小的意图分类独立时限为 120 秒，可配置。未知模型仍需符合其供应商能力，不承诺无限输出。
+上方 131072/16384 是此次显式运行预算，与评测配置一致；未实测供应商上下文极限，不当作模型官方规格。`config.py` 对未知模型的默认预算仍为 32768/8192；研究专属模型使用显式 runtime 设置，匹配该配置的系统选择沿用设置。配置预算、模型官方上限、返回 usage 和实测完整上下文窗口是四种不同事实。
 
-生产 `LLM_REQUEST_TOKEN_BUDGET=0` 与 `USER_DAILY_COST_LIMIT_USD=0` 关闭 FinSight 自设的总 token 和日费用门槛，供应商计费、账户额度和限速仍生效。有限重试、最终超时及交易窗口继续生效。
+评测使用单独前缀 `FINSIGHT_EVAL_APIKL_API_BASE/MODEL/API_KEY/CONTEXT_WINDOW/MAX_OUTPUT`，由 `tests/agent_eval/run.py --provider apikl` 读取。评测选项不修改生产默认或冻结 US20 配置。发布清单固定 `model_provider=apikl`，validate/deploy/rollback 沿用清单；显式供应商不一致时拒绝，不能回退旧 Vectide 密钥。模型、端点与预算必须与完整质量报告一致后才能发布。
 
-合成只使用最终正文，忽略思考块；检查 `finish_reason=length`，记录结束原因、模型、输出 token 与正文长度。截断、空正文、格式错误、超时和额度拒绝分别给出提示，不再统一说“LLM 不可用”。Step 合成通过官方 JSON Mode 请求可解析 JSON；这不替代证据与业务校验。
+## 预算与失败
 
-SDK 在 JSON 解析阶段直接抛出的长度异常同样归为截断，从异常携带的原始 completion 记录安全诊断与已计费用量，不冷却端点或自动重试；思考正文和密钥不会进入诊断字段。
+原生研究按 RuntimeSettings 使用 FINSIGHT_RUN_TIMEOUT_SECONDS、FINSIGHT_RUN_TIMEOUT_BRIEF_SECONDS、FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS；未配置新名时兼容原预算名称，通常为研究 180 秒、报告 300 秒。模型上下文、输出额度、轮数、整 run token 与 provider RPM/TPM 分别约束。
 
-Step 的聊天合成使用官方 JSON Schema，要求非空的结论和分析字段。空 JSON 对象或仅包含未知字段的对象不能被标记为模型生成成功。
+循环截断后在剩余预算内续写；供应商 429 的有界退避、模型探针、工具、压缩与核查各有真实成本记录。主回答最多预留 45 秒用于核查，循环依据上一轮实际模型耗时安排无工具的最后一轮；阶段切换不延长原截止时间。M4 核查最多 4 轮/45 秒，缺少结构化提交时在剩余轮数内要求模型提交，代码不代填结论；超时或无效结果不能伪装通过。具体调用次数和费用以 usage 为准，不以角色数量推定。
 
-个人异步预测把创建时的选择保留在任务内存中；模型身份的非敏感指纹隔离同标的旧结果，不把地址或 key 写入预测。服务重启后无法恢复选定凭据的旧任务明确取消，请求者重新生成，不能静默换用默认模型。
+原 LangGraph 合成的 JSON Mode、长超时和节点级参数属于历史调用点，不是当前工具循环预算。固定 US20 的 4096 输出、60 秒尝试和冻结交易窗口继续独立；用户 Prediction 的预算与后端接口合同另行管理，不被新研究设置批量覆盖。
 
-现有执行链已经停用全站共享报告缓存，报告仍按用户归档。US20 是固定模型的公开评测，由定时任务使用预先登记的系统策略，显式清除浏览用户选择，不能调用用户自带服务或 key；历史已发布记录不会随个人设置修改。该评测显式保留 4096 输出、60 秒与冻结交易窗口，不继承前台研究的大预算。
+## 自带服务与数据边界
 
-## 验证入口
+用户输入公共 HTTPS 服务地址、模型 ID 和自己的 key，测试成功后应用。应用前确认外部服务会收到研究上下文，包括用户问题、系统提示词、RAG 结果与数据源内容；后端要求 context_acknowledged。地址、模型或 key 改变后重新测试。
 
-后端模型选择测试覆盖真实应用鉴权接线、单独端点池、当前调用链、超时、流式后台任务、凭据隔离与公开路由顺序。前端单测和浏览器流程覆盖登录、effort、完整上下文确认、凭据生命周期、请求头范围及恢复默认。测试只使用占位凭据。
+系统模型 ID/effort 和自定义非敏感地址、模型名可按账号保存；key 与上下文确认仅在页面/请求内存中，不写入浏览器持久存储、数据库或服务端端点池。刷新后缺少 key 时阻断新请求，不能静默切默认。退出或换账号清除凭据，同账号 token 刷新不丢失仍有效的页面状态。
+
+只允许经过校验的公共 HTTPS 地址，不接受内网地址、重定向或由模型提供的任意新端点。标准兼容路径归一是机器格式处理，不推断用户自然语言意图。
+
+## 认证、请求头与隔离
+
+目录和能力查询可公开只读，显式模型选择与连接测试要求已验证身份，测试受账户限流。X-FinSight-Model 只随模型生成请求发送，不随行情读取、目录、取消、重放或公开战绩请求发送；base64 不是加密，传输必须使用 HTTPS。
+
+供应商原始错误、模型头和连接测试体不进入普通日志。公开 metadata 仅投影非敏感模型信息。核查员内部推理不向用户公开，主研究员的供应商原始推理按账户开关和私有消息合同处理。
+
+个人异步 Prediction 保留创建时选择与非敏感模型指纹；重启后不能恢复用户凭据的旧任务明确结束，不换用他人或默认模型继续。固定 US20 则使用冻结系统策略，清除浏览用户选择，与用户自带 key 无关。
+
+## 验证
+
+模型目录、认证、请求头范围、凭据生命周期、未知模型预算、工具能力探针、角色/核查同 owner 额度及冻结预测边界分别测试。成功连接不能代替真实研究质量或端到端登录验收。历史 Vectide 配对核查测量已完成；当前 APIKL 同资料完整对照、48 项产品验收及新候选部署仍待收口。
+
+旧 `--provider vectide` 与其私有 `FINSIGHT_EVAL_VECTIDE_*` 前缀保留供历史复现；周额度耗尽、HTTP 502、超时和恢复批次均保留原结果。新旧供应商使用同题、同资料、同运行预算口径的配对评测，独立评分与传输错误分别记录。能力探针只能证明被测请求可用，不能证明完整研究质量或服务稳定性。
+
+模型切换的完成证据包括：实际模型标识与安全 metadata、原生工具/SSE、完整质量报告及 runtime 摘要、持久化与取消、普通账号请求和浏览器显示。目录、页面选择、服务端实际运行模型和部署清单需要一致；不能仅修改前端标签就汇报切换完成。

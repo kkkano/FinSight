@@ -1,12 +1,49 @@
-# 预测账本 v1：运行与验收
+# 用户预测与 US20 公开账本：运行与验收
 
-更新时间：2026-11-07。下方固定forecast/采集/结算核心合同保持不变；新增只读范围视图由`prediction_report_view.py`按days/ticker/type和确认cohort聚合，累计曲线与频率、阈值、时点、版本、下一对账日期均取metadata，不改forecast算法或混合未知模型成绩。页面使用普通人文案，个人Prediction与公共账本仍分开，缺失/样本不足不填假数字。当前只读展示与部署状态见 [实施记录](reports/2026-11-07_agent_runtime_implementation.md)。
+文档校准：2026-11-13。本文区分已认证用户的异步 Prediction/Outcome 与固定 US20 公开评估。下方 forecast、采集、窗口与结算核心合同保持冻结；研究模型切为 APIKL `gpt-6.1-terra` 不更改公开基准模型或策略。新原生研究候选未部署，完整模型与产品验收尚未完成，实际运行状态见[运行手册](11_PRODUCTION_RUNBOOK.md)。
 
-最终发布agent-20261107-8b809bee23e0的生产28日视图HTTP200、metadata正常，但当前预测/已对账/等待均0、daily_series为空、下一对账日期null；保留真实空态，不生成示例曲线或命中率。
+历史快照：agent-20261107-8b809bee23e0 发布时的生产28日视图HTTP200、metadata正常，当时预测/已对账/等待均0、daily_series为空、下一对账日期null；这些计数不代表当前状态，不生成示例曲线或命中率。
+
+研究重构边界：新候选尚未部署；固定公开账本和用户 PostgreSQL Prediction/Outcome 继续分开。27 个冻结预测依赖按评测参考清单保留，M4 的轮数、模型选择与只读核查不改变下方 forecast/采集/结算合同。
 
 公开页面 `/track-record`、只读 API `/api/benchmarks/us20-v1/track-record`。这两个入口不要求登录，仅展示固定公开样本，不包含用户聊天或自定义模型凭据。旧 API `/api/predictions/track-record` 仅保留为隐藏兼容入口，新客户端使用独立的 benchmark 地址。明细支持 `limit` / `offset` 翻页，汇总始终覆盖全部样本。
 
-## 采集与评分
+## 两类数据的边界
+
+| 项目 | 用户 Prediction/Outcome | 固定 US20 公开账本 |
+|---|---|---|
+| 触发 | 已认证用户主动生成 | 显式启用的交易日后台采集 |
+| API | `/api/predictions/generate`、runs、latest、history、stats、详情 | `/api/benchmarks/us20-v1/track-record` |
+| 数据范围 | 当前 owner 的标的与预测 | 固定股票池、方向与回撤判断 |
+| 模型 | 创建时的请求选择及非敏感指纹 | 冻结服务端配置，清除浏览用户选择 |
+| 存储 | PostgreSQL 的运行、Prediction 与 Outcome | 独立持久 `prediction_ledger.db` |
+| 评分 | 预测自身 anchor、入场、失效、目标/止损或区间 | 固定五交易日窗口、阈值与简单基准 |
+| 访问 | owner 隔离，历史/重算/详情均校验归属 | 公开字段白名单，不包含用户聊天或凭据 |
+
+```mermaid
+flowchart TD
+    USER[已认证用户] --> PERSONAL[异步 PredictionService]
+    PERSONAL --> PSQL[(用户 PostgreSQL 运行与预测)]
+    PSQL --> OUTCOME[按预测合同重新评估 Outcome]
+    OUTCOME --> PRIVATE[当前用户历史与统计]
+    SCHEDULE[交易日采集窗口] --> FREEZE[冻结行情及 ForecastContext]
+    FREEZE --> FORECAST[固定 Technical 与 Risk forecast]
+    FORECAST --> LEDGER[(US20 独立账本)]
+    LEDGER --> SETTLE[自然经过五交易日结算]
+    SETTLE --> PUBLIC[公开 cohort 与简单基准]
+    WATCH[独立 watchdog] --> HEALTH[只读健康与告警条件]
+    HEALTH --> ALERT[明确收件配置及持久投递去重]
+```
+
+## 用户异步预测
+
+`POST /api/predictions/generate` 当前接受 `symbol` 和 `timeframe=1d`，返回 202 与运行视图、created、idempotent_reuse。后台运行状态为 queued/running/succeeded/unavailable/failed/cancelled，预测对象的 waiting/open/triggered/invalidated/hit_target/hit_stop/held_range/broke_range 属于另一层状态，不可混用。
+
+生成需可信历史 K 线，数据不足或模型失败明确保存失败原因，不伪造预测对象。Prediction 保留 anchor、方向、thesis、入场/止损/目标或区间、情景、提示版本与数据时点；Outcome 另保存实际评估时间、行情来源及 algorithm_version。模型 confidence 是预测字段，不是经公开样本校准的准确率。
+
+`GET /runs/{run_id}` 读取任务，latest/history/stats/详情按 owner 查询；`POST /outcomes/recompute` 只重新评价授权范围内已有预测，不重新生成模型判断。运行创建时捕获模型选择；用户自带 key 仅在内存，重启后无法恢复的旧任务明确终止，不能借默认或其他用户凭据继续。
+
+## US20 采集与评分
 
 固定 `us20-v1` 股票池，共 20 只股票。每个交易日美东 08:45 开始、09:20 截止；Technical 预测五日上涨/下跌/横盘，Risk 预测五日按收盘序列计算的最大回撤是否至少 5%。两个 Agent 使用同一份截至前一交易日收盘的冻结数据；结果不确定时允许明确弃权。
 
@@ -34,10 +71,10 @@ PREDICTION_ALERT_EMAIL=your-own-alert-address@example.com
 
 独立 watchdog 使用标准 SMTP 客户端读取 SMTP_SERVER / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / EMAIL_FROM，587 使用 STARTTLS、465 使用 TLS。收件人必须明确配置，不能根据提交邮箱或聊天内容推断。模型使用服务端已有端点配置；没有其它配置时可用 STEPFUN_API_KEY。后台预测显式清除请求级用户模型选择，不使用浏览器自定义 key。
 
-部署命令示例（需在 push/部署前完成用户要求的汇报）：
+watchdog 配置与独立启动示例（完整发布沿运行手册执行）：
 
 ```bash
-IMAGE_TAG="$release_sha" docker compose --env-file .env.server --profile predictions up -d --build backend frontend prediction-watchdog
+docker compose --env-file .env.server --profile predictions up -d --no-build prediction-watchdog
 ```
 
 `prediction-watchdog` 是独立容器进程，复用后端构建配置与 SMTP，后端停止时仍会检查。后端维持单 worker；v1 不支持多个采集实例同时运行。数据写入 backend_data 卷内的 prediction_ledger.db，告警去重状态写入 prediction_watchdog.json。关闭/重启不得删除这些文件。

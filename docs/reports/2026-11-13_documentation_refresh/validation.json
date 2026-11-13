@@ -1,0 +1,353 @@
+{
+  "updated_at": "2026-11-13T17:25:32.147Z",
+  "current_documents": 23,
+  "utf8": [
+    {
+      "file": "README.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "README_CN.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "CHANGELOG.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "DESIGN.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "AGENTS.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "frontend/README.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "frontend/src/styles/tokens.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "backend/analysis_worker/README.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "backend/agent_runtime/assets/README.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/01_ARCHITECTURE.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/05_RAG_ARCHITECTURE.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/11_PRODUCTION_RUNBOOK.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/AGENTS.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/AGENTS_GUIDE.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/DOCS_INDEX.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/execution-event-contract.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/HALLUCINATION_MITIGATION.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/MODEL_SELECTION.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/PREDICTION_TRACK_RECORD.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/rag-evaluation-guide.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/REPORT_CHART_SPEC.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+      "valid": true,
+      "replacement_character": false
+    }
+  ],
+  "links_checked": 135,
+  "missing_links": [],
+  "mermaid": {
+    "passed": 17,
+    "failed": 0,
+    "total": 17,
+    "browser": "existing Microsoft Edge headless",
+    "cases": [
+      {
+        "file": "README.md",
+        "number": 1,
+        "line": 53,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 460.65625,
+        "nodes": 18,
+        "edges": 22,
+        "svg": "01-README-1.svg",
+        "screenshot": "01-README-1.png"
+      },
+      {
+        "file": "frontend/README.md",
+        "number": 1,
+        "line": 21,
+        "status": "passed",
+        "parsed": true,
+        "width": 1440.46875,
+        "height": 226,
+        "nodes": 10,
+        "edges": 10,
+        "svg": "02-README-1.svg",
+        "screenshot": "02-README-1.png"
+      },
+      {
+        "file": "docs/01_ARCHITECTURE.md",
+        "number": 1,
+        "line": 13,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 602.34375,
+        "nodes": 19,
+        "edges": 21,
+        "svg": "03-01_ARCHITECTURE-1.svg",
+        "screenshot": "03-01_ARCHITECTURE-1.png"
+      },
+      {
+        "file": "docs/01_ARCHITECTURE.md",
+        "number": 2,
+        "line": 56,
+        "status": "passed",
+        "parsed": true,
+        "width": 1333.5,
+        "height": 729,
+        "nodes": 0,
+        "edges": 0,
+        "svg": "04-01_ARCHITECTURE-2.svg",
+        "screenshot": "04-01_ARCHITECTURE-2.png"
+      },
+      {
+        "file": "docs/05_RAG_ARCHITECTURE.md",
+        "number": 1,
+        "line": 67,
+        "status": "passed",
+        "parsed": true,
+        "width": 1001,
+        "height": 696,
+        "nodes": 0,
+        "edges": 0,
+        "svg": "05-05_RAG_ARCHITECTURE-1.svg",
+        "screenshot": "05-05_RAG_ARCHITECTURE-1.png"
+      },
+      {
+        "file": "docs/11_PRODUCTION_RUNBOOK.md",
+        "number": 1,
+        "line": 23,
+        "status": "passed",
+        "parsed": true,
+        "width": 451.203125,
+        "height": 1045.96875,
+        "nodes": 10,
+        "edges": 10,
+        "svg": "06-11_PRODUCTION_RUNBOOK-1.svg",
+        "screenshot": "06-11_PRODUCTION_RUNBOOK-1.png"
+      },
+      {
+        "file": "docs/11_PRODUCTION_RUNBOOK.md",
+        "number": 2,
+        "line": 56,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 565.390625,
+        "nodes": 10,
+        "edges": 9,
+        "svg": "07-11_PRODUCTION_RUNBOOK-2.svg",
+        "screenshot": "07-11_PRODUCTION_RUNBOOK-2.png"
+      },
+      {
+        "file": "docs/11_PRODUCTION_RUNBOOK.md",
+        "number": 3,
+        "line": 131,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 213.359375,
+        "nodes": 9,
+        "edges": 10,
+        "svg": "08-11_PRODUCTION_RUNBOOK-3.svg",
+        "screenshot": "08-11_PRODUCTION_RUNBOOK-3.png"
+      },
+      {
+        "file": "docs/AGENTS_GUIDE.md",
+        "number": 1,
+        "line": 25,
+        "status": "passed",
+        "parsed": true,
+        "width": 1065.390625,
+        "height": 726,
+        "nodes": 10,
+        "edges": 12,
+        "svg": "09-AGENTS_GUIDE-1.svg",
+        "screenshot": "09-AGENTS_GUIDE-1.png"
+      },
+      {
+        "file": "docs/execution-event-contract.md",
+        "number": 1,
+        "line": 11,
+        "status": "passed",
+        "parsed": true,
+        "width": 1212,
+        "height": 704,
+        "nodes": 0,
+        "edges": 0,
+        "svg": "10-execution-event-contract-1.svg",
+        "screenshot": "10-execution-event-contract-1.png"
+      },
+      {
+        "file": "docs/execution-event-contract.md",
+        "number": 2,
+        "line": 167,
+        "status": "passed",
+        "parsed": true,
+        "width": 706.03125,
+        "height": 321.984375,
+        "nodes": 8,
+        "edges": 0,
+        "svg": "11-execution-event-contract-2.svg",
+        "screenshot": "11-execution-event-contract-2.png"
+      },
+      {
+        "file": "docs/HALLUCINATION_MITIGATION.md",
+        "number": 1,
+        "line": 7,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 135.25,
+        "nodes": 13,
+        "edges": 16,
+        "svg": "12-HALLUCINATION_MITIGATION-1.svg",
+        "screenshot": "12-HALLUCINATION_MITIGATION-1.png"
+      },
+      {
+        "file": "docs/MODEL_SELECTION.md",
+        "number": 1,
+        "line": 13,
+        "status": "passed",
+        "parsed": true,
+        "width": 1021.046875,
+        "height": 982,
+        "nodes": 11,
+        "edges": 13,
+        "svg": "13-MODEL_SELECTION-1.svg",
+        "screenshot": "13-MODEL_SELECTION-1.png"
+      },
+      {
+        "file": "docs/PREDICTION_TRACK_RECORD.md",
+        "number": 1,
+        "line": 23,
+        "status": "passed",
+        "parsed": true,
+        "width": 876.625,
+        "height": 694.40625,
+        "nodes": 14,
+        "edges": 11,
+        "svg": "14-PREDICTION_TRACK_RECORD-1.svg",
+        "screenshot": "14-PREDICTION_TRACK_RECORD-1.png"
+      },
+      {
+        "file": "docs/rag-evaluation-guide.md",
+        "number": 1,
+        "line": 40,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 190.90625,
+        "nodes": 9,
+        "edges": 9,
+        "svg": "15-rag-evaluation-guide-1.svg",
+        "screenshot": "15-rag-evaluation-guide-1.png"
+      },
+      {
+        "file": "docs/REPORT_CHART_SPEC.md",
+        "number": 1,
+        "line": 7,
+        "status": "passed",
+        "parsed": true,
+        "width": 1552,
+        "height": 325.453125,
+        "nodes": 11,
+        "edges": 13,
+        "svg": "16-REPORT_CHART_SPEC-1.svg",
+        "screenshot": "16-REPORT_CHART_SPEC-1.png"
+      },
+      {
+        "file": "docs/REPORT_CHART_SPEC.md",
+        "number": 2,
+        "line": 79,
+        "status": "passed",
+        "parsed": true,
+        "width": 668.109375,
+        "height": 1101.96875,
+        "nodes": 11,
+        "edges": 12,
+        "svg": "17-REPORT_CHART_SPEC-2.svg",
+        "screenshot": "17-REPORT_CHART_SPEC-2.png"
+      }
+    ]
+  },
+  "production_test": false
+}

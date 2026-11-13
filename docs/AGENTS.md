@@ -11,7 +11,7 @@
 ## 当前事实源
 
 - 架构：`01_ARCHITECTURE.md`
-- 默认研究：`AGENTS_GUIDE.md`、`execution-event-contract.md`；显式legacy：`LANGGRAPH_FLOW.md`（旧深入说明/设计规范已归档）
+- 当前研究：`AGENTS_GUIDE.md`、`execution-event-contract.md`；`LANGGRAPH_FLOW.md` 仅作历史定位，不是可选生产执行路径
 - Agent：`AGENTS_GUIDE.md`
 - RAG：`05_RAG_ARCHITECTURE.md`、`rag-evaluation-guide.md`
 - 契约：`execution-event-contract.md`、`REPORT_CHART_SPEC.md`、`HALLUCINATION_MITIGATION.md`
