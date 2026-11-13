@@ -248,7 +248,8 @@ jobs:
 
   stage7-e2e:
     name: Stage 7 - E2E
-    runs-on: ubuntu-latest
+    # 当前锁定Playwright浏览器支持Ubuntu24.04；避免ubuntu-latest升级26.04后安装失败。
+    runs-on: ubuntu-24.04
     # E2E depends only on a successful frontend build, never on retrieval-gate.
     needs: [stage6-frontend-build]
     steps:
