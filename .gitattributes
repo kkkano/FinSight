@@ -53,3 +53,17 @@ tests/agent_eval/contract_fixtures/379e7c4c72cfbb34210c6ca58145e5ac44c3972b3724f
 # 图表原件与来源账本按完整原字节核验，不在Git中转码。
 frontend/e2e/contract_fixtures/real_charts/**/*.json -text -diff
 docs/reports/2026-11-13_ci_e2e/*.json -text whitespace=cr-at-eol
+
+# 完整冻结provider与分页评分实现按评测清单原字节绑定。
+tests/agent_eval/frozen_corpus_provider.py -text whitespace=cr-at-eol
+tests/agent_eval/frozen_offline_worker.py -text whitespace=cr-at-eol
+tests/agent_eval/run_frozen_eval.py -text whitespace=cr-at-eol
+tests/agent_eval/run_frozen_comparison.py -text whitespace=cr-at-eol
+tests/agent_eval/paged_judge.py -text whitespace=cr-at-eol
+tests/agent_eval/grade_apikl_budgeted.py -text whitespace=cr-at-eol
+tests/agent_eval/run_paged_grading.py -text whitespace=cr-at-eol
+tests/agent_eval/probe_terra_capacity_vision.py -text whitespace=cr-at-eol
+tests/agent_eval/test_frozen_corpus.py -text whitespace=cr-at-eol
+tests/agent_eval/test_frozen_offline_worker.py -text whitespace=cr-at-eol
+tests/agent_eval/test_judge_quota.py -text whitespace=cr-at-eol
+tests/agent_eval/test_paged_judge.py -text whitespace=cr-at-eol
