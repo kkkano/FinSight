@@ -124,7 +124,7 @@ for (const width of [1440, 390]) {
     await installFixtures(page, 'dark');
     await page.goto('/dashboard/AAPL');
     await page.getByTestId('context-panel-expand').click();
-    await page.getByTestId('context-panel').getByRole('button', { name: '1 年', exact: true }).click();
+    await page.getByTestId('context-panel').getByRole('button', { name: '1年', exact: true }).click();
     const trigger = page.getByRole('button', { name: '放大行情图', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'AAPL 行情' });
@@ -144,7 +144,7 @@ for (const width of [1440, 390]) {
         }
         const y = Math.floor(index / 4 / canvasElement.width);
         const x = (index / 4) % canvasElement.width;
-        if (data[index + 3] > 80 && data[index] > 120 && x > canvasElement.width * 0.2
+        if (data[index + 3] > 80 && Math.max(data[index], data[index + 1], data[index + 2]) - Math.min(data[index], data[index + 1], data[index + 2]) > 35 && x > canvasElement.width * 0.2
           && y > canvasElement.height * 0.7 && y < canvasElement.height * 0.88) volumeColorful++;
       }
       return { colorful, volumeColorful };
@@ -162,7 +162,9 @@ for (const width of [1440, 390]) {
 test('历史空状态不显示虚构命中率', async ({ page }) => {
   await installFixtures(page, 'light', true);
   await page.goto('/history?view=predictions');
-  await expect(page.getByText('暂无 AI 判断记录')).toBeVisible();
-  await expect(page.getByText('暂无已结算样本')).toBeVisible();
+  await expect(page.getByText('还没有 AI 判断记录。', { exact: true })).toBeVisible();
+  await expect(page.getByText('还没有结束的判断，暂时算不出命中率。', { exact: true })).toBeVisible();
+  await expect(page.getByText('--', { exact: true })).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('0.0%');
   await expectNoHorizontalOverflow(page);
 });

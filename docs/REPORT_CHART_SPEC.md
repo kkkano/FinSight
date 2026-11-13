@@ -107,3 +107,7 @@ ReportIR 包含 report_id、title、sections、citations、report_quality 与 me
 数据与表格逐值一致、引用可解析、权限、严格字段、缺失、真实计算、版本恢复和浏览器显示分别验证。单位测试及布局 fixture 不等于真实金融答案通过；报告发布需正文、产物、核查与保存闭环。
 
 历史真实图表证据保留在 [REAL_CHARTS](reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md)，不改判历史失败。当前 M3/M4 评测、48 项产品验收和部署后真实会话状态统一见[运行手册](11_PRODUCTION_RUNBOOK.md)。
+
+## 行情放大与键盘恢复
+
+当前右栏 RightPanelMarket 使用同一份已取得的行情、周期和来源生成小图与 MarketChartDialog 放大图；放大只改变绘制尺寸及成交量面板比例，不重新请求研究或替换数据。放大窗口展示实际收盘与来源时点，支持 Escape、焦点限制和关闭后恢复原按钮焦点。缺少行情时禁用放大入口。桌面和 390 px 浏览器验证同时检查可见行情线/柱、成交量、无横向溢出与关闭行为。

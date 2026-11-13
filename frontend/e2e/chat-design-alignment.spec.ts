@@ -60,9 +60,8 @@ async function prepare(page: Page, dark: boolean) {
     };
   }, { sessionId: E2E_SESSION_ID, userId: E2E_USER_ID, dark });
   await installAuthenticatedSession(page);
-  await page.route('**/api/**', async (route) => {
+  await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (!path.startsWith('/api/')) return route.fallback();
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (path === '/api/capabilities') return json({ ready: true, features: { retrieval: { mode: 'hybrid', full_ready: true } } });
     if (path === '/api/models') return json({ models: [{ id: 'system:server-default', model: 'test-model', label: '验收模型', provider: 'system', available: true, native_tool_calls: true, effort_options: [] }], default_model_id: 'system:server-default' });

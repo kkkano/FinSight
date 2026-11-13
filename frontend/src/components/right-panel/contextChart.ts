@@ -5,6 +5,7 @@ import type { ResearchPriceLevel } from '../../types/runtime';
 export function buildContextChart(rows: KlineData[], options: {
   line: boolean; dark: boolean; convention: 'cn' | 'intl';
   priceLevels?: ResearchPriceLevel[]; earningsDates?: string[]; ma20?: Array<number | null>;
+  expanded?: boolean;
 }): EChartsOption | null {
   if (!rows.length) return null;
   const { line, dark, convention } = options;
@@ -34,8 +35,8 @@ export function buildContextChart(rows: KlineData[], options: {
     symbol: 'none', connectNulls: false, lineStyle: { width: 1.4, color: dark ? '#f2a74b' : '#a85400' } });
   if (volume) series.push({ name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
     data: rows.map((row) => ({ value: row.volume ?? null, itemStyle: { color: row.close >= row.open ? up : down, opacity: .35 } })) });
-  return { animation: false, grid: [{ left: 0, right: 50, top: 8, bottom: volume ? 67 : 24 },
-    ...(volume ? [{ left: 0, right: 50, height: 38, bottom: 24 }] : [])],
+  return { animation: false, grid: [{ left: 0, right: 50, top: 8, bottom: volume ? (options.expanded ? '28%' : 67) : 24 },
+    ...(volume ? [{ left: 0, right: 50, height: options.expanded ? '18%' : 38, bottom: 24 }] : [])],
     tooltip: { trigger: 'axis', renderMode: 'richText', confine: true },
     xAxis: [{ type: 'category', data: labels, boundaryGap: !line,
       axisLine: { lineStyle: { color: grid } }, axisTick: { show: false }, axisLabel: { show: !volume, color: text, fontSize: 10 } },

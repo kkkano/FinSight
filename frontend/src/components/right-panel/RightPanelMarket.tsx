@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Maximize2, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import { useDashboardData } from '../../hooks/useDashboardData';
@@ -10,6 +10,7 @@ import type { ResearchPriceLevel } from '../../types/runtime';
 import { parseQuotePayload, type ParsedQuote } from '../../utils/quote';
 import { sourceDisplayName } from '../../utils/sourceDisplayName';
 import EChart from '../charts/EChart';
+import { MarketChartDialog } from './MarketChartDialog';
 import { CHART_RANGES, selectChartRange, type ChartRange } from './chartRange';
 import { buildKlineSmartChartData } from '../SmartChart';
 import { buildContextChart, movingAverage20 } from './contextChart';
@@ -38,6 +39,8 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
   const [range, setRange] = useState<ChartRange>('3m');
   const [line, setLine] = useState(false);
   const [hasPrediction, setHasPrediction] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const closeExpandedChart = useCallback(() => setExpanded(false), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,6 +94,9 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
     .filter((event) => event.type === 'earnings' && event.date).map((event) => event.date!), [dashboardData]);
   const chart = useMemo(() => buildContextChart(visible, { line, dark, convention, priceLevels, ma20, earningsDates }),
     [visible, line, dark, convention, priceLevels, ma20, earningsDates]);
+  const expandedChart = useMemo(() => expanded ? buildContextChart(visible,
+    { line, dark, convention, priceLevels, ma20, earningsDates, expanded: true }) : null,
+  [expanded, visible, line, dark, convention, priceLevels, ma20, earningsDates]);
   const last = rows.at(-1);
   const previous = rows.at(-2);
   const currentPrice = quote.price ?? last?.close;
@@ -132,6 +138,8 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
         <button type="button" aria-pressed={!line} className={`${styles.segment} ${!line ? styles.segmentActive : ''}`} onClick={() => setLine(false)}>K线</button>
         <button type="button" aria-pressed={line} className={`${styles.segment} ${line ? styles.segmentActive : ''}`} onClick={() => setLine(true)}>折线</button>
       </div>
+      <button type="button" className={styles.close} aria-label="放大行情图" disabled={!chart || loading}
+        onClick={() => setExpanded(true)}><Maximize2 size={16} /></button>
     </div>
     <figure className="m-0">
       {loading ? <div className={styles.skeleton} role="status" aria-label="正在加载行情" /> : chart ? <div className={styles.chart} data-testid="context-chart-surface">
@@ -148,5 +156,8 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
       <dt>{metric.label}</dt><dd className="num" title={metric.value === undefined ? dashboardData?.valuation_fallback_reason || '该指标暂无可用数据。' : undefined}>
         {metric.value === undefined ? '—' : metric.format(metric.value)}</dd></div>)}</dl>}
     {hasPrediction && <Link to={`/track-record?ticker=${encodeURIComponent(symbol)}&scope=personal`} className="text-xs text-t-accent">这只股票的预测记录 →</Link>}
+    <MarketChartDialog open={expanded} onClose={closeExpandedChart} symbol={symbol}
+      period={period} option={expandedChart} closePrice={last?.close}
+      source={`${date} · ${sourceDisplayName(source)} · 日线，非实时`} />
   </>;
 }

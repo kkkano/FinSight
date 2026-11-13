@@ -44,9 +44,8 @@ test.beforeEach(async ({ page }) => {
     };
   }, E2E_SESSION_ID);
   await installAuthenticatedSession(page);
-  await page.route('**/api/**', async (route) => {
+  await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    if (!pathname.startsWith('/api/')) return route.fallback();
     const body = pathname === '/api/models' ? { models: [{
       id: 'system:server-default', model: 'test-model', provider: 'system', label: '测试模型',
       available: true, vision: true, effort_options: [], default_effort: null, icon_url: null, docs_url: null,
