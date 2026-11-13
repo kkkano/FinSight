@@ -11,8 +11,7 @@ from .materialize import SecSnapshots, blocked_network, file_sha, materialize, o
 from .tapes import ToolTape, _hash, canonical_json
 
 
-SOURCE = (Path(__file__).parent / "fixtures/vectide-matched-20261113/facts-02"
-          / "379e7c4c72cfbb34210c6ca58145e5ac44c3972b3724f92c810eb895490325a3.json")
+SOURCE = Path(__file__).parent / "contract_fixtures/379e7c4c72cfbb34210c6ca58145e5ac44c3972b3724f92c810eb895490325a3.json"
 SNAPSHOT_DATE = date(2026, 11, 13)
 TOOL = "get_sec_company_facts_quarterly"
 

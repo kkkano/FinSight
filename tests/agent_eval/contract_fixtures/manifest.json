@@ -1,0 +1,38 @@
+{
+  "purpose": "deterministic contract tests from complete captured public-market/SEC responses",
+  "live_quality_acceptance": false,
+  "fixtures": [
+    {
+      "file": "052a9c0b9c84a9985f0acec5dc5865c517a5a524922e2225a550e9d1127bfbda.json",
+      "original_path": "tests/agent_eval/fixtures/archive-v1/tapes/052a9c0b9c84a9985f0acec5dc5865c517a5a524922e2225a550e9d1127bfbda.json",
+      "sha256": "f457f446770644380d9cbf85e4890de3ed07708249750853e6a6e4ed9a82444e",
+      "bytes": 49064,
+      "original_bytes_preserved": true,
+      "synthetic": false
+    },
+    {
+      "file": "07b132683b4cf975a9338cc7272f7eed8a00b47daa6c3740eef6961259910aea.json",
+      "original_path": "tests/agent_eval/fixtures/archive-v1/tapes/07b132683b4cf975a9338cc7272f7eed8a00b47daa6c3740eef6961259910aea.json",
+      "sha256": "dd67e789aa55bcf14ca2881b744c9281be88dd502ced01c809a3bf37ec663bdb",
+      "bytes": 106125,
+      "original_bytes_preserved": true,
+      "synthetic": false
+    },
+    {
+      "file": "0a7521e9fd35fc9d4b2c4810ce009d0df3890bcc512f23ed17d39fee10162207.json",
+      "original_path": "tests/agent_eval/fixtures/archive-v1/tapes/0a7521e9fd35fc9d4b2c4810ce009d0df3890bcc512f23ed17d39fee10162207.json",
+      "sha256": "1236b18e09c0b06eec8f300792d2934718f85ff817d8909aa3428ba4e5e58cf1",
+      "bytes": 1176703,
+      "original_bytes_preserved": true,
+      "synthetic": false
+    },
+    {
+      "file": "379e7c4c72cfbb34210c6ca58145e5ac44c3972b3724f92c810eb895490325a3.json",
+      "original_path": "tests/agent_eval/fixtures/vectide-matched-20261113/facts-02/379e7c4c72cfbb34210c6ca58145e5ac44c3972b3724f92c810eb895490325a3.json",
+      "sha256": "65ae65f9a7b344fb078e85c9bf68853acc90268c308fd37743220260b5e0d3e6",
+      "bytes": 5804929,
+      "original_bytes_preserved": true,
+      "synthetic": false
+    }
+  ]
+}

@@ -113,10 +113,10 @@ def test_search_uses_structured_provider_and_retains_full_result(monkeypatch):
 
 
 def _recorded(tool):
-    root = Path(__file__).resolve().parents[2] / "tests/agent_eval/fixtures/archive-v1/tapes"
+    root = Path(__file__).resolve().parents[2] / "tests/agent_eval/contract_fixtures"
     for path in sorted(root.glob("*.json")):
         record = json.loads(path.read_text(encoding="utf-8"))
-        if record["tool"] == tool:
+        if record.get("tool") == tool:
             return record
     raise AssertionError("缺少明确的真实录制")
 
