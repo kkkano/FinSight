@@ -1,0 +1,10 @@
+{
+  "original": "backend/tests/test_financial_ratio_snapshot.py",
+  "snapshot": "tests/agent_eval/reference_tests/test_financial_ratio_snapshot.py.reference",
+  "snapshot_sha256": "cd54d68069972b35dc8887f130008e5ec474af93376f9ea11eb5937d736bdc7a",
+  "retired_assertions": [
+    "test_latest_quarter_ratios_growth_and_lineage_use_actual_facts: validate_paragraph 数值语义断言",
+    "test_same_ticker_market_inputs_remain_original_and_join_source_lineage: validate_paragraph 数值语义断言"
+  ],
+  "retained": "原有财务计算、单位、期间、正基数、市场输入、数值来源和原始数据未变断言全部保留；两处正文正则核验退役，新增只验证数字引用协议的断言，不把协议断言声称为语义核查。"
+}

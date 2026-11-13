@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.agents.macro_agent import MacroAgent
 from backend.tools import macro, macro_official
 
 
@@ -128,133 +127,7 @@ def _agent_tools(fred, official=None):
         get_market_sentiment=lambda: "", get_economic_events=lambda: "", search=lambda query: "")
 
 
-@pytest.mark.asyncio
-async def test_macro_agent_contract_selector_persons_evidence_and_clock_reset(monkeypatch):
-    _fred_source(monkeypatch)
-    calls = []
-    def fred(**kwargs):
-        calls.append(kwargs)
-        return macro.get_fred_data(**kwargs)
-    agent = MacroAgent(None, None, _agent_tools(fred))
-    output = await agent.research("核对官方就业指标", "N/A", indicators=["nonfarm_payroll_change", "unemployment"], as_of="2026-10-04")
-    assert calls == [{"indicators": ["nonfarm_payroll_change", "unemployment"], "as_of": "2026-10-04"}]
-    payroll = next(item for item in output.evidence if item.meta.get("indicator_key") == "nonfarm_payroll_change")
-    assert payroll.meta["unit"] == "persons"
-    assert payroll.meta["usage"] == "fact"
-    assert payroll.timestamp == "2026-10-02T12:45:00+00:00"
-    assert payroll.meta["published_at"] is None
-    assert payroll.meta["period_end"] == "2026-09-30"
-    assert payroll.url == "https://fred.stlouisfed.org/series/PAYEMS"
-    assert "250,000 人" in payroll.text and "%" not in payroll.text
-    assert "原始发布时刻尚未核验" in output.summary
-    assert output.chart_specs == []
-    assert agent._indicator_request.get() == (None, None)
-
-
-@pytest.mark.asyncio
-async def test_bls_verified_values_can_supply_missing_fred_without_promoting_rss(monkeypatch):
-    monkeypatch.setattr(macro_official, "fetch_url_document", lambda url, **kwargs: {"final_url": url, "content": _bls_body()})
-    item = macro_official._read_bls_employment_release(_release())
-    agent = MacroAgent(None, None, _agent_tools(lambda **kwargs: {"status": "data_unavailable"},
-        lambda **kwargs: {"releases": [item]}))
-    output = await agent.research("就业报告", "N/A", indicators=["nonfarm_payroll_change", "unemployment"], as_of="2026-10-04")
-    evidence = next(item for item in output.evidence if item.meta.get("metric") == "nonfarm_payroll_change")
-    assert evidence.meta["value"] == 250_000
-    assert evidence.timestamp == "2026-10-02T12:30:00+00:00"
-    assert output.fallback_used is False
-    assert "新增非农" in output.summary
-
-
-@pytest.mark.asyncio
-async def test_matching_bls_report_can_add_release_time_without_overwriting_fred_update_time(monkeypatch):
-    _fred_source(monkeypatch)
-    monkeypatch.setattr(macro_official, "fetch_url_document", lambda url, **kwargs: {"final_url": url, "content": _bls_body()})
-    release = macro_official._read_bls_employment_release(_release())
-    agent = MacroAgent(None, None, _agent_tools(macro.get_fred_data, lambda **kwargs: {"releases": [release]}))
-    output = await agent.research("就业事实", "N/A", indicators=["nonfarm_payroll_change", "unemployment"], as_of="2026-10-04")
-    item = next(item for item in output.evidence if item.meta.get("metric") == "nonfarm_payroll_change")
-    assert item.timestamp == "2026-10-02T12:30:00+00:00"
-    assert item.meta["published_at"] == item.timestamp
-    assert item.meta["source_updated_at"] == "2026-10-02T12:45:00+00:00"
-    assert item.meta["publication_source_url"] == _release()["url"]
-    assert item.meta["timestamp_semantics"] == "publication"
-
-
-@pytest.mark.asyncio
-async def test_other_report_month_does_not_supply_latest_fred_publication_time(monkeypatch):
-    _fred_source(monkeypatch)
-    monkeypatch.setattr(macro_official, "fetch_url_document", lambda url, **kwargs: {"final_url": url, "content": _bls_body()})
-    release = macro_official._read_bls_employment_release(_release())
-    release["employment_report"]["report_month"] = "2026-08"
-    agent = MacroAgent(None, None, _agent_tools(macro.get_fred_data, lambda **kwargs: {"releases": [release]}))
-    output = await agent.research("就业事实", "N/A", indicators=["nonfarm_payroll_change", "unemployment"], as_of="2026-10-04")
-    item = next(item for item in output.evidence if item.meta.get("metric") == "nonfarm_payroll_change")
-    assert item.meta["published_at"] is None
-    assert item.timestamp == "2026-10-02T12:45:00+00:00"
-    assert not item.meta.get("publication_source_url")
-
-
-@pytest.mark.asyncio
-async def test_future_bls_release_cannot_satisfy_past_as_of(monkeypatch):
-    monkeypatch.setattr(macro_official, "fetch_url_document", lambda url, **kwargs: {"final_url": url, "content": _bls_body()})
-    release = macro_official._read_bls_employment_release(_release())
-    agent = MacroAgent(None, None, _agent_tools(lambda **kwargs: {"status": "data_unavailable"}, lambda **kwargs: {"releases": [release]}))
-    output = await agent.research("就业事实", "N/A", indicators=["nonfarm_payroll_change", "unemployment"], as_of="2026-09-30")
-    assert not any(item.meta.get("metric") == "nonfarm_payroll_change" for item in output.evidence)
-    assert output.fallback_used is True
-
-
-def test_raw_payroll_level_cannot_enter_macro_net_change_metrics():
-    agent = object.__new__(MacroAgent)
-    assert "nonfarm_payroll_change" not in agent._extract_numeric_metrics({"nonfarm_payroll_change": 159250})
-    assert "nonfarm_payroll_change" not in agent._extract_numeric_metrics({"nonfarm_payroll_change": 159250,
-        "indicator_metadata": {"nonfarm_payroll_change": {"unit": "thousands_of_persons", "definition": "employment_level"}}})
-
-
 def test_fred_selector_and_official_body_flags_registered_for_direct_planning():
     from backend.langchain_tools import get_tool_by_name
     assert get_tool_by_name("get_fred_data").args_schema(indicators=["nonfarm_payroll_change", "unemployment"]).indicators
     assert get_tool_by_name("get_official_macro_releases").args_schema(include_content=True).include_content
-
-
-def test_collector_adapter_preserves_macro_only_contract_kwargs(monkeypatch):
-    import backend.agents.macro_agent as agent_module
-    from backend.graph.adapters.collector_adapter import build_collector_invokers
-    calls = []
-    class DummyMacro:
-        def __init__(self, *args):
-            pass
-        async def research(self, **kwargs):
-            calls.append(kwargs)
-            return {"summary": "官方就业事实", "confidence": .8, "evidence": [], "data_sources": []}
-    monkeypatch.setattr(agent_module, "MacroAgent", DummyMacro)
-    invokers = build_collector_invokers(allowed_collectors=["macro_agent"], state={"query": "就业", "subject": {}})
-    asyncio.run(invokers["macro_agent"]({"query": "就业", "indicators": ["nonfarm_payroll_change", "unemployment"], "as_of": "2026-10-04"}))
-    assert calls[0]["indicators"] == ["nonfarm_payroll_change", "unemployment"]
-    assert calls[0]["as_of"] == "2026-10-04"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("query", ["最近一份就业报告", "最近一份就业报告 employment situation"])
-async def test_planned_and_agent_official_query_are_identical_and_share_one_fetch(query):
-    from backend.graph.execution.request_data import RequestData, SharedToolView
-    from backend.tools.macro_official import official_macro_query
-
-    selectors = ["nonfarm_payroll_change", "unemployment"]
-    original_selectors = list(selectors)
-    calls = []
-    def official(query="", max_results=10, include_content=False):
-        calls.append({"query": query, "max_results": max_results, "include_content": include_content})
-        return {"releases": []}
-    data = RequestData()
-    shared = SharedToolView(_agent_tools(lambda **kwargs: {"status": "data_unavailable"}, official), data)
-    planned = {"query": official_macro_query(query, selectors), "max_results": 8, "include_content": True}
-    shared.get_official_macro_releases(**planned)
-    agent = MacroAgent(None, None, shared)
-    await agent.research(query, "N/A", indicators=selectors, as_of="2026-10-04")
-
-    assert calls == [planned]
-    assert data.reused == 1
-    assert selectors == original_selectors
-    assert agent._current_query == query
-    assert official_macro_query(planned["query"], selectors) == planned["query"]

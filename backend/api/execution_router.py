@@ -16,13 +16,12 @@ from typing import Any, AsyncIterable, Awaitable, Callable, Literal, Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.api.schemas import ChatContext, ChatMessage, ChatOptions
+from backend.agent_runtime.verifier import ReviewFinding, Coverage
 from backend.api.session_context import SessionOwnershipError, _resolve_owned_thread_id
 from backend.api.stream_replay import replay_buffer
-from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
-from backend.services.model_preflight import ensure_model_available
 from backend.services.run_context import RunContext, run_context_scope
 from backend.services.research_run_store import (
     HEARTBEAT_SECONDS, PostgresResearchRunStore, ResearchRunConflict,
@@ -33,10 +32,25 @@ from backend.services.research_run_store import (
 _SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _STREAM_TASKS: set[asyncio.Task[Any]] = set()
 _STREAM_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
-_ENTRY_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
 _RUN_OWNERS: OrderedDict[str, str] = OrderedDict()
 _MAX_RUN_OWNERS = 256
 logger = logging.getLogger(__name__)
+
+
+class NativeRunContext(RunContext):
+    """原生预算适配保留共享预测RunContext源码及其协议。"""
+    def select_entry(self, entry: str) -> None:
+        if self.entry not in {"chat", "brief", "investment_report"} or entry not in {"chat", "brief", "investment_report"}:
+            return
+        normalized = entry
+        if normalized == self.entry:
+            return
+        from backend.config.settings import native_budget_seconds
+        self.guard()
+        self.entry = normalized
+        self.deadline = self.started_monotonic + native_budget_seconds(normalized)
+        if self.deadline_timer is not None:
+            self.deadline_timer.reschedule(asyncio.get_running_loop().time() + self.remaining_seconds)
 
 
 class ResearchImage(BaseModel):
@@ -49,6 +63,17 @@ class ResearchImage(BaseModel):
         from backend.agent_runtime.vision import validate_png_data_url
         validate_png_data_url(value)
         return value
+
+
+class ReviewRevision(BaseModel):
+    """用户点击修订时携带的原文与核查记录；只作为结构化请求。"""
+    source_message_id: str = Field(min_length=1, max_length=128)
+    source_run_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    review_id: str = Field(min_length=1, max_length=128)
+    answer: str = Field(min_length=1, max_length=100000)
+    findings: list[ReviewFinding] = Field(max_length=100)
+    coverage: list[Coverage] = Field(max_length=100)
+    model_config = {"extra": "forbid"}
 
 
 class ExecuteRequest(BaseModel):
@@ -69,8 +94,9 @@ class ExecuteRequest(BaseModel):
     budget: int | None = Field(None, ge=1, le=10)
     source: str | None = None
     trace_raw: bool | None = None
-    show_provider_reasoning: bool = True
+    show_provider_reasoning: bool = False
     resume_from_run_id: str | None = Field(None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    review_revision: ReviewRevision | None = None
     images: list[ResearchImage] = Field(default_factory=list, max_length=3)
     skill_ids: list[str] = Field(default_factory=list, max_length=3)
 
@@ -80,19 +106,27 @@ class ExecuteRequest(BaseModel):
         from backend.agent_runtime.skills import validate_skill_ids
         return validate_skill_ids(value)
 
+    @model_validator(mode="after")
+    def valid_review_parent(self):
+        if self.review_revision and self.review_revision.source_run_id != self.resume_from_run_id:
+            raise ValueError("review_parent_mismatch")
+        return self
+
     model_config = {"extra": "ignore"}
 
 
 @dataclass(frozen=True)
 class ExecutionRouterDeps:
-    get_graph_runner: Callable[[], Awaitable[Any]]
     resolve_thread_id: Callable[[Optional[str]], str]
     schedule_report_index: Callable[..., None]
     update_session_context: Callable[..., None]
-    redact_sensitive_payload: Callable[[Any], Any]
-    is_raw_trace_event: Callable[[dict[str, Any]], bool]
-    contract_info: Callable[[], dict[str, str]]
-    sse_event_schema_version: str
+
+
+@dataclass(frozen=True)
+class RuntimeDeliveryDeps:
+    schedule_report_index: Callable[..., Any]
+    update_session_context: Callable[..., Any]
+    persist_run_event: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 class InstructionRequest(BaseModel):
@@ -105,15 +139,10 @@ class ActionConfirmation(BaseModel):
     confirmed: bool
 
 
-def _build_execution_deps(deps: ExecutionRouterDeps, persist_run_event=None) -> ExecutionDeps:
-    return ExecutionDeps(
-        get_graph_runner=deps.get_graph_runner,
+def _build_execution_deps(deps: ExecutionRouterDeps, persist_run_event) -> RuntimeDeliveryDeps:
+    return RuntimeDeliveryDeps(
         schedule_report_index=deps.schedule_report_index,
         update_session_context=deps.update_session_context,
-        redact_sensitive_payload=deps.redact_sensitive_payload,
-        is_raw_trace_event=deps.is_raw_trace_event,
-        contract_info=deps.contract_info,
-        sse_event_schema_version=deps.sse_event_schema_version,
         persist_run_event=persist_run_event,
     )
 
@@ -413,10 +442,14 @@ def _request_ui_context(request: ExecuteRequest, user_id: str) -> dict[str, Any]
     if request.analysis_depth:
         ui_context["analysis_depth"] = request.analysis_depth
     ui_context["__user_id"] = user_id
-    ui_context["show_provider_reasoning"] = request.show_provider_reasoning
+    configured_reasoning = ui_context.get("show_provider_reasoning")
+    ui_context["show_provider_reasoning"] = request.show_provider_reasoning if configured_reasoning is None else configured_reasoning
+    ui_context.setdefault("watchlist_auto_confirm", False)
     ui_context["skill_ids"] = request.skill_ids
     if request.resume_from_run_id:
         ui_context["resume_from_run_id"] = request.resume_from_run_id
+    if request.review_revision:
+        ui_context["review_revision"] = request.review_revision.model_dump()
     if request.images:
         ui_context["images"] = [image.model_dump(exclude_none=True) for image in request.images]
     return ui_context
@@ -434,6 +467,10 @@ async def _native_pipeline_with_preflight(**kwargs):
                 "title": "正在验证模型工具能力", "summary": "正在确认所选模型能否调用研究工具。验证成功后会复用结果，继续回答。"}}
             try:
                 await preflight(context)
+            except asyncio.CancelledError:
+                context.finish("cancelled")
+                await context.archive_usage()
+                raise
             except HTTPException as exc:
                 context.finish("failed")
                 detail = exc.detail if isinstance(exc.detail, dict) else {}
@@ -490,6 +527,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             "context": request.context.model_dump(exclude_none=True) if request.context else None,
             "history": [message.model_dump() for message in (request.history or [])],
             "resume_from_run_id": request.resume_from_run_id,
+            **({"review_revision": request.review_revision.model_dump()} if request.review_revision else {}),
             **({"skill_ids": request.skill_ids} if request.skill_ids else {}),
             "image_hashes": [__import__("hashlib").sha256(image.data_url.encode()).hexdigest() for image in request.images],
             "model": {"source": selected.source, "model": selected.model, "endpoint": selected.base_url,
@@ -512,16 +550,29 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             parent = await _load_run(store, request.resume_from_run_id, user_id) if store is not None else None
             if parent is None or parent["session_id"] != thread_id:
                 raise HTTPException(404, detail={"code": "parent_run_not_found", "message": "续研资料不属于当前会话或已不可用。"})
+            if request.review_revision:
+                import hashlib
+                revision = request.review_revision
+                saved = public_run(parent).get("result") or {}
+                reviews = [block["review"] for block in saved.get("blocks", []) if block.get("kind") == "review"]
+                matched = next((review for review in reviews if review.get("review_id") == revision.review_id), None)
+                if (parent.get("assistant_message_id") != revision.source_message_id or matched is None
+                        or matched.get("answer_sha256") != hashlib.sha256(revision.answer.encode("utf-8")).hexdigest()
+                        or matched.get("findings") != [item.model_dump() for item in revision.findings]
+                        or matched.get("coverage") != [item.model_dump() for item in revision.coverage]):
+                    raise HTTPException(409, detail={"code": "review_revision_conflict", "message": "续研资料不属于当前会话或已不可用。"})
         if not _generation_enabled():
             raise HTTPException(status_code=503, detail={"code": "generation_disabled", "message": "生成服务维护中"})
         _enforce_user_quota(http_request)
         if request.images:
-            from backend.agent_runtime.config import enabled as agent_runtime_enabled, resolve_model
-            from backend.services.model_selection import model_capabilities
+            from backend.agent_runtime.config import resolve_model
+            from backend.agent_runtime.model_options import model_capabilities
             chosen = resolve_model()
-            if not agent_runtime_enabled() or model_capabilities(chosen.model, chosen.base_url).get("vision") is not True:
+            if model_capabilities(chosen.model, chosen.base_url).get("vision") is not True:
                 raise HTTPException(422, detail={"code": "model_vision_unverified", "message": "该模型图片能力尚未确认，请移除图片或选择已验证模型。"})
-        run_context = RunContext.create(owner=user_id, entry=output_mode or "chat", run_id=run_id)
+        from backend.config.settings import native_budget_seconds
+        run_context = NativeRunContext.create(owner=user_id, entry=output_mode or "chat", run_id=run_id,
+                                              budget_seconds=native_budget_seconds(output_mode or "chat"))
         if store is not None:
             try:
                 existing, created = await asyncio.to_thread(
@@ -537,42 +588,14 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
                 return existing_response()
         _register_run_owner(run_id, user_id)
 
-        run_key = _run_key(run_id, user_id)
-        entry_task = asyncio.current_task()
-        if entry_task is not None:
-            _ENTRY_TASKS_BY_RUN[run_key] = entry_task
-        with run_context_scope(run_context):
-            try:
-                from backend.agent_runtime.config import enabled as agent_runtime_enabled
-                if not agent_runtime_enabled():
-                    await ensure_model_available()
-            except BaseException as exc:
-                cancelled = isinstance(exc, asyncio.CancelledError)
-                run_context.finish("cancelled" if cancelled else "failed")
-                detail = exc.detail if isinstance(exc, HTTPException) and isinstance(exc.detail, dict) else {}
-                payload = {"type": "cancelled" if cancelled else "error", "publishable": False,
-                    "answer_status": "unavailable", "error_code": detail.get("code", "model_preflight_failed"),
-                    "message": "已停止生成，可重新生成。" if cancelled else detail.get("message", "模型前置检查未完成。"),
-                    "metrics": run_context.usage.summary()}
-                if store is not None:
-                    await _persist_callback(store, run_id, user_id)(payload)
-                await run_context.archive_usage()
-                raise
-            finally:
-                if _ENTRY_TASKS_BY_RUN.get(run_key) is entry_task:
-                    _ENTRY_TASKS_BY_RUN.pop(run_key, None)
-
-        from backend.agent_runtime.config import enabled as agent_runtime_enabled
-        pipeline_factory = run_graph_pipeline
-        pipeline_extra = {}
-        if agent_runtime_enabled():
-            pipeline_factory = _native_pipeline_with_preflight
-            pipeline_extra["message_id"] = (existing or {}).get("assistant_message_id") or request.client_assistant_message_id
-            if store is not None:
-                async def checkpoint(snapshot):
-                    return await asyncio.to_thread(store.checkpoint, run_id, snapshot, user_id=user_id)
-                pipeline_extra["checkpoint"] = checkpoint
-        pipeline = pipeline_factory(
+        pipeline_extra = {
+            "message_id": (existing or {}).get("assistant_message_id") or request.client_assistant_message_id,
+        }
+        if store is not None:
+            async def checkpoint(snapshot):
+                return await asyncio.to_thread(store.checkpoint, run_id, snapshot, user_id=user_id)
+            pipeline_extra["checkpoint"] = checkpoint
+        pipeline = _native_pipeline_with_preflight(
             deps=_build_execution_deps(deps, _persist_callback(store, run_id, user_id)),
             query=request.query,
             thread_id=thread_id,
@@ -624,7 +647,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         row = await _load_run(store, normalized, user_id) if store is not None else None
         if row is None:
             _authorize_run(normalized, user_id)
-        task = _STREAM_TASKS_BY_RUN.get(_run_key(normalized, user_id)) or _ENTRY_TASKS_BY_RUN.get(_run_key(normalized, user_id))
+        task = _STREAM_TASKS_BY_RUN.get(_run_key(normalized, user_id))
         if task is None or task.done():
             raise HTTPException(status_code=409, detail={"code": "run_not_active", "message": "run is not active"})
         task.cancel()

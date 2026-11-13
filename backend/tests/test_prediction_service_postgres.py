@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.services.database import normalize_sync_postgres_dsn
 from backend.services.prediction_service import PredictionRunStore
 

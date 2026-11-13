@@ -19,8 +19,8 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 
-from backend.agents.prediction_contract import AgentPrediction
-from backend.agents.prediction_submit import (
+from backend.common.prediction_contract import AgentPrediction
+from backend.common.prediction_submit import (
     build_prediction,
     prediction_json_from_llm_content,
 )

@@ -493,12 +493,13 @@ def render_chart(data: RunData, dataset_ref: str, title: str, chart_type: str,
 
 
 async def run_analysis_code(data: RunData, code: str, dataset_refs: list[str], *, timeout: float) -> dict:
+    """只提交隔离 worker；空引用表示纯假设计算。作业内可用 finsight 纯计算库。"""
     url = os.getenv("FINSIGHT_ANALYSIS_WORKER_URL", "").strip().rstrip("/")
     key = os.getenv("FINSIGHT_ANALYSIS_WORKER_TOKEN", "")
     if not url or not key:
         return {"status": "unavailable", "error": "analysis_worker_unconfigured",
                 "summary": "计算服务还没配置好，仍可使用现有的指标和图表。"}
-    if len(code) > 16000 or not dataset_refs or len(dataset_refs) > 8:
+    if len(code) > 16000 or len(dataset_refs) > 8:
         raise ValueError("analysis_request_too_large")
     if any(ref not in data.records for ref in dataset_refs):
         raise ValueError("dataset_not_found_in_this_run")

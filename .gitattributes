@@ -5,3 +5,41 @@ readme_cn.md text eol=lf
 
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# 冻结评测和运行版本按原始字节绑定 SHA256，禁止 Git 换行转换。
+tests/agent_eval/baseline_runtime/** -text
+tests/agent_eval/reference/** -text
+backend/agent_runtime/** -text
+tests/agent_eval/reference_code/** -text
+tests/agent_eval/reference_tests/** -text
+tests/agent_eval/reference_assets/** -text
+tests/agent_eval/**/*.json -text
+backend/agents/technical_agent.py -text
+backend/agents/risk_agent.py -text
+backend/agents/base_agent.py -text
+backend/agents/chart_specs.py -text
+backend/agents/chart_specs_extra.py -text
+backend/tools/technical.py -text
+backend/tools/yfinance_client.py -text
+backend/research/forecasting.py -text
+backend/research/prediction_contract.py -text
+backend/utils/llm_json.py -text
+backend/services/prediction_runner.py -text
+backend/services/prediction_market.py -text
+backend/services/prediction_calendar.py -text
+backend/services/prediction_store.py -text
+backend/services/prediction_settlement.py -text
+backend/services/llm_retry.py -text
+backend/services/model_selection.py -text
+backend/services/run_context.py -text
+backend/llm_config.py -text
+backend/orchestration/trace_emitter.py -text
+backend/orchestration/trace_schema.py -text
+backend/orchestration/__init__.py -text
+requirements.txt -text
+backend/services/circuit_breaker.py -text
+backend/utils/quote.py -text
+backend/research/agent_quality_contract.py -text
+backend/research/agent_research_loop.py -text
+backend/analysis_worker/financial_math.py -text
+backend/report/quality_engine.py -text

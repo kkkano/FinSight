@@ -11,8 +11,8 @@ from sqlalchemy import text
 
 from backend.services.database import create_core_engine, resolve_core_postgres_dsn
 
-from backend.agents.prediction_contract import AgentPrediction, PredictionDraft
-from backend.agents.prediction_submit import _crossed_entry
+from backend.common.prediction_contract import AgentPrediction, PredictionDraft
+from backend.common.prediction_submit import _crossed_entry
 
 
 TERMINAL_OUTCOMES = frozenset({"hit_target", "hit_stop", "held_range", "broke_range", "invalidated"})

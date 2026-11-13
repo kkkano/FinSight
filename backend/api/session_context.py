@@ -11,8 +11,7 @@ from uuid import uuid4
 from backend.api.schemas import ChatRequest
 from backend.contracts import contract_manifest
 from backend.conversation.context import ContextManager
-from backend.graph.checkpointer import adelete_graph_thread
-from backend.orchestration.tools_bridge import get_global_orchestrator
+from backend.common.checkpoint_store import adelete_graph_thread
 from backend.rag import get_rag_observability_store
 from backend.services.report_index import get_report_index_store
 from backend.utils.env import env_bool as _env_bool
@@ -480,10 +479,3 @@ def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
 
 def _contract_info() -> Dict[str, str]:
     return contract_manifest()
-
-def _get_orchestrator_safe():
-    try:
-        return get_global_orchestrator()
-    except Exception:
-        logger.exception("failed to initialize orchestrator")
-        return None

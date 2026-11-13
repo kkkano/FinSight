@@ -1,0 +1,832 @@
+{
+  "schema_version": "2026-11-11.agent-review-eval.v1",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "review-number-01",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_number_01",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 的报价为 42 美元。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 的报价为 420 美元。[1]",
+        "injection": {
+          "kind": "number",
+          "before": "42",
+          "after": "420"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 的报价为 420 美元。[1]",
+              "issue": "资料中的报价为 42 美元，不是 420 美元。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-number-02",
+      "query": "合成标的 TEST_A 最新季度营收是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度财务",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2026Q3 营收为 120 百万美元。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2026Q3 营收为 210 百万美元。[1]",
+        "injection": {
+          "kind": "number",
+          "before": "120",
+          "after": "210"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2026Q3 营收为 210 百万美元。[1]",
+              "issue": "同财期营收原值为 120 百万美元。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-number-03",
+      "query": "合成标的 TEST_A 最新季度经营现金流是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_03",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "operating_cash_flow": 18,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2026Q3 经营现金流为 18 百万美元。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2026Q3 经营现金流为 81 百万美元。[1]",
+        "injection": {
+          "kind": "number",
+          "before": "18",
+          "after": "81"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2026Q3 经营现金流为 81 百万美元。[1]",
+              "issue": "经营现金流原值为 18 百万美元，答案交换了数字顺序。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-number-04",
+      "query": "合成标的 TEST_A 最新季度毛利率是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_number_04",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "gross_margin_pct": 23.5,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成毛利率",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2026Q3 毛利率为 23.5%。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2026Q3 毛利率为 32.5%。[1]",
+        "injection": {
+          "kind": "number",
+          "before": "23.5",
+          "after": "32.5"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2026Q3 毛利率为 32.5%。[1]",
+              "issue": "毛利率原值为 23.5%，不是 32.5%。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-direction-01",
+      "query": "合成标的 TEST_A 的这次价格变化方向是什么",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_direction_01",
+          "data": {
+            "rows": [
+              {
+                "date": "2026-11-09",
+                "close": 100
+              },
+              {
+                "date": "2026-11-10",
+                "close": 98,
+                "period_return_pct": -2
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成价格序列",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 11 月 10 日相较前一收盘下跌 2%。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+        "injection": {
+          "kind": "direction",
+          "before": "下跌",
+          "after": "上涨"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 11 月 10 日相较前一收盘上涨 2%。[1]",
+              "issue": "价格从 100 降至 98，收益为 -2%，方向应为下跌。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-direction-02",
+      "query": "合成标的 TEST_A 的自由现金流同比怎样变化",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_02",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "free_cash_flow_yoy_pct": -8,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成现金流变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2026Q3 自由现金流同比下降 8%。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+        "injection": {
+          "kind": "direction",
+          "before": "下降",
+          "after": "增长"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2026Q3 自由现金流同比增长 8%。[1]",
+              "issue": "自由现金流同比原值为 -8%，不能写成增长。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-direction-03",
+      "query": "合成标的 TEST_A 的 EPS 预期修正方向是什么",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_03",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "forecast_period": "2027FY",
+                "eps_revision_pct": 5,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成预期修正",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2027FY EPS 预期上调 5%。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2027FY EPS 预期下调 5%。[1]",
+        "injection": {
+          "kind": "direction",
+          "before": "上调",
+          "after": "下调"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2027FY EPS 预期下调 5%。[1]",
+              "issue": "EPS 预期修正原值为正 5%，应表述为上调。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-direction-04",
+      "query": "合成标的 TEST_A 的季度营收同比怎样变化",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_direction_04",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue_yoy_pct": -12,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成营收变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2026Q3 营收同比下降 12%。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2026Q3 营收同比增长 12%。[1]",
+        "injection": {
+          "kind": "direction",
+          "before": "下降",
+          "after": "增长"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2026Q3 营收同比增长 12%。[1]",
+              "issue": "营收同比原值为 -12%，增长方向与资料相反。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-source-01",
+      "query": "合成标的 TEST_A 的报价是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_source_01a",
+          "data": {
+            "ticker": "TEST_A",
+            "price": 42,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        },
+        {
+          "status": "ok",
+          "kind": "quote",
+          "handle": "h_review_source_01b",
+          "data": {
+            "ticker": "TEST_B",
+            "price": 70,
+            "currency": "USD"
+          },
+          "sources": [
+            {
+              "id": 2,
+              "title": "TEST_B 合成报价",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 的报价为 42 美元。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 的报价为 42 美元。[2]",
+        "injection": {
+          "kind": "source",
+          "before": "[1]",
+          "after": "[2]"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 的报价为 42 美元。[2]",
+              "issue": "来源 [2] 是 TEST_B 报价，不能支持 TEST_A 的报价。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-source-02",
+      "query": "合成标的 TEST_A 的财务表现怎样",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_02a",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "revenue": 120,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成季度披露",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        },
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_02b",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_B",
+                "period": "2026Q3",
+                "revenue": 350,
+                "unit": "million USD"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 2,
+              "title": "TEST_B 合成季度披露",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 2026Q3 营收为 120 百万美元。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 2026Q3 营收为 120 百万美元。[2]",
+        "injection": {
+          "kind": "source",
+          "before": "[1]",
+          "after": "[2]"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 2026Q3 营收为 120 百万美元。[2]",
+              "issue": "来源 [2] 对应 TEST_B，不支持 TEST_A 的季度营收。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-source-03",
+      "query": "合成标的 TEST_A 在 2026Q3 披露的 EPS 是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_03a",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "period": "2026Q3",
+                "eps": 1.2,
+                "unit": "USD/share",
+                "basis": "reported"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成已披露 EPS",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        },
+        {
+          "status": "ok",
+          "kind": "table",
+          "handle": "h_review_source_03b",
+          "data": {
+            "rows": [
+              {
+                "ticker": "TEST_A",
+                "forecast_period": "2027Q1",
+                "eps_estimate": 1.5,
+                "unit": "USD/share",
+                "basis": "forecast"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 2,
+              "title": "TEST_A 合成未来 EPS 预期",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+        "injection": {
+          "kind": "source",
+          "before": "[1]",
+          "after": "[2]"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 已披露的 2026Q3 EPS 为每股 1.2 美元。[2]",
+              "issue": "来源 [2] 是未来财期预期，不能支持已披露的 2026Q3 EPS。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-source-04",
+      "query": "合成标的 TEST_A 本次股价变化的幅度是多少",
+      "fixtures": [
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_source_04a",
+          "data": {
+            "ticker": "TEST_A",
+            "rows": [
+              {
+                "date": "2026-11-10",
+                "period_return_pct": -2,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 1,
+              "title": "TEST_A 合成股价变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        },
+        {
+          "status": "ok",
+          "kind": "series",
+          "handle": "h_review_source_04b",
+          "data": {
+            "ticker": "TEST_MARKET",
+            "rows": [
+              {
+                "date": "2026-11-10",
+                "period_return_pct": -1,
+                "unit": "percent"
+              }
+            ]
+          },
+          "sources": [
+            {
+              "id": 2,
+              "title": "TEST_MARKET 合成市场变化",
+              "publisher": "合成评测样本",
+              "url": null,
+              "published_at": "2026-11-10T00:00:00Z"
+            }
+          ],
+          "as_of": "2026-11-10T00:00:00Z",
+          "notes": [
+            "合成评测样本，不是真实市场数据。"
+          ],
+          "error": null
+        }
+      ],
+      "clean": {
+        "answer": "TEST_A 11 月 10 日下跌 2%。[1]",
+        "expected": {
+          "verdict": "pass",
+          "findings": []
+        }
+      },
+      "injected": {
+        "answer": "TEST_A 11 月 10 日下跌 2%。[2]",
+        "injection": {
+          "kind": "source",
+          "before": "[1]",
+          "after": "[2]"
+        },
+        "expected": {
+          "verdict": "revise",
+          "findings": [
+            {
+              "quote": "TEST_A 11 月 10 日下跌 2%。[2]",
+              "issue": "来源 [2] 是市场参照，不支持 TEST_A 的具体跌幅。",
+              "evidence_source_id": 1
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,11 +1,10 @@
-"""同会话切换标的仍须保留取证能力，旧资料不能触发本轮提前收尾。"""
+"""同会话切换标的仍能调用真实工具，并向模型保留完整问题与追加要求。"""
 from dataclasses import replace
-
 import pytest
-
 from backend.agent_runtime.context import dumps
+from backend.agent_runtime.envelope import ToolResult
 from backend.agent_runtime.loop import AgentRuntime
-from backend.agent_runtime.tools import ToolSpec, schema
+from backend.agent_runtime.registry import ToolSpec, schema
 from backend.services.run_context import RunContext
 from backend.tests.test_agent_runtime import FakeModel, call, finish
 
@@ -56,113 +55,52 @@ async def test_inherited_evidence_does_not_stop_discovery_before_new_subject_fet
     invoked = []
     price = ToolSpec("get_stock_price", "获取行情", schema({"ticker": {"type": "string"}}, ["ticker"]),
         lambda args: (invoked.append(args["ticker"]), {"price": 100, "source": "测试报价"})[1], True)
-    clock = ToolSpec("get_current_datetime", "当前时间", schema({}, []), lambda _: "2026-11-08", True)
-    preparation = [call("get_current_datetime", {}), call("discover_skills", {})] if check_time else []
-    model = ToolAwareModel([*preparation, call("discover_tools", {}), call("enable_tools", {"names": ["get_stock_price"]}),
-        call("get_stock_price", {"ticker": "NVDA"}), finish("已经查询英伟达。")])
-    runtime = make_runtime(model, tools={price.name: price, clock.name: clock})
-    # 测试工具流不回报usage，预留足够预算以单独验证提前收尾边界。
-    runtime.budget.maximum = 400_000
+    clock = ToolSpec("get_current_datetime", "当前时间", schema({}, []), lambda _: ToolResult(status="ok", kind="control", data={"date":"2026-11-08"}))
+    preparation = [call("get_current_datetime", {})] if check_time else []
+    model = ToolAwareModel([*preparation, call("get_stock_price", {"ticker": "NVDA"}), finish("已经查询英伟达。")])
+    rt = make_runtime(model, tools={price.name: price, clock.name: clock})
     try:
-        await runtime.run_agent("root", "research_lead", runtime.query)
-        assert invoked == ["NVDA"]
-        assert "get_stock_price" in model.tool_names[len(preparation) + 2]
-        assert '"active_symbol": "INTC"' not in model.inputs[0][0]["content"]
+        result = await rt.run_agent()
+        assert result["stopped"] == "completed" and invoked == ["NVDA"]
+        assert all("get_stock_price" in tools for tools in model.tool_names)
+        assert rt.query in dumps(model.inputs[0])
+        assert rt.observed_tickers == ["NVDA"]
+        assert any(record["inputs"].get("ticker") == "INTC" for record in rt.data.records.values())
     finally:
-        await runtime.close()
+        await rt.close()
 
 
 @pytest.mark.asyncio
 async def test_long_conversation_compacts_history_without_disabling_research():
-    from backend.agent_runtime.tools import financial_tools
-
     invoked = []
-    tools = financial_tools()
-    tools["get_stock_price"] = replace(tools["get_stock_price"],
-        invoke=lambda args: (invoked.append(args["ticker"]), {"price": 100, "source": "测试报价"})[1])
+    price = ToolSpec("get_stock_price", "行情", schema({"ticker": {"type": "string"}}, ["ticker"]),
+        lambda args: (invoked.append(args["ticker"]), {"price": 100, "currency": "USD"})[1], True)
     history = [{"role": role, "content": "英特尔此前的经营现金流和市场表现。" * 400}
                for _ in range(5) for role in ("user", "assistant")]
-    model = ToolAwareModel([call("get_stock_price", {"ticker": "NVDA"}), finish("已取得英伟达报价。")])
-    runtime = make_runtime(model, history=history, tools=tools)
-    runtime.instruct("只核实公开报道，保持简短。", "current-correction")
+    notes = {"known_facts": [], "unresolved_questions": [], "user_requirements": ["保留历史口径"]}
+    class HistoryModel(ToolAwareModel):
+        def __init__(self):
+            super().__init__([call("get_stock_price", {"ticker": "NVDA"}), finish("已取得英伟达报价。")])
+            self.summaries = []
+        async def stream(self, messages, tools, **kwargs):
+            if not tools:
+                self.summaries.append(messages)
+                for chunk in finish(dumps(notes)):
+                    yield chunk
+            else:
+                async for chunk in super().stream(messages, tools, **kwargs):
+                    yield chunk
+    model = HistoryModel()
+    model.config = replace(model.config, context_window=90000, max_output=2048)
+    rt = make_runtime(model, history=history, tools={price.name: price})
+    rt.instruct("只核实公开报道，保持简短。", "current-correction")
+    # 工具调用夹具不返回 usage，预留估算预算以单独验证上下文与工具能力。
+    rt.budget.maximum = 400_000
     try:
-        await runtime.run_agent("root", "research_lead", runtime.query)
-        assert invoked == ["NVDA"]
-        assert "get_stock_price" in model.tool_names[0]
-        assert runtime.query in dumps(model.inputs[0])
-        assert "只核实公开报道，保持简短。" in dumps(model.inputs[0])
+        result = await rt.run_agent()
+        assert result["stopped"] == "completed" and invoked == ["NVDA"]
+        assert "get_stock_price" in model.tool_names[0] and len(model.summaries) == 1
+        assert rt.query in dumps(model.inputs[0]) and "只核实公开报道，保持简短。" in dumps(model.inputs[0])
+        assert all(message in model.inputs[0] for message in history if message["role"] == "user")
     finally:
-        await runtime.close()
-
-
-@pytest.mark.parametrize("query", ["现在取", "重新取数英伟达", "重新获取英伟达数据"])
-def test_fetch_followup_targets_latest_explicit_company(query):
-    from backend.agent_runtime.completeness import ResearchCompleteness
-
-    history = [{"role": "user", "content": "英特尔最新财报"},
-               {"role": "user", "content": "英伟达的黄仁勋最近新闻有什么影响"},
-               {"role": "assistant", "content": "目前只有英特尔 INTC 的资料。"}]
-    check = ResearchCompleteness(query, history, {"active_symbol": "INTC"})
-    assert check.tickers == ["NVDA"]
-    assert check.refresh
-    assert "news" in check.facets and "fresh_search" in check.facets
-    assert "filings" not in check.facets
-    calls = check.recovery_calls(check.missing(type("Data", (), {"records": {}, "artifacts": []})(), []),
-        [], {"search": object(), "get_company_news": object()})
-    assert any(name == "search" and "NVDA" in args["query"] and "黄仁勋" in args["query"] for name, args in calls)
-
-
-@pytest.mark.asyncio
-async def test_search_only_switch_updates_session_subject_and_frontend_focus(monkeypatch):
-    from backend.agent_runtime.data import RunData
-    from backend.tests.test_runtime_completeness import run, tool
-
-    previous = RunData("completeness-user", "completion-session", "intc-parent", "英特尔最新新闻")
-    previous.record("get_stock_price", {"ticker": "INTC"}, {"price": 42, "source": "测试报价"})
-    previous.save()
-    calls = []
-
-    def search(args):
-        calls.append(args)
-        return [{"title": "NVIDIA announces public update", "url": "https://nvidianews.nvidia.com/news/test-update",
-                 "published_date": "2026-11-08", "summary": "NVIDIA published an update."}]
-
-    events, _ = await run(monkeypatch, "英伟达最新新闻", {"search": tool("search", search)},
-        history=[{"role": "user", "content": "英特尔最新新闻"}], resume="intc-parent",
-        turns=[call("search", {"query": "NVDA latest news"}), finish("已查询英伟达公开消息。")])
-    done = events[-1]
-    assert calls and all("NVDA" in args["query"] for args in calls)
-    assert done["tickers"] == ["NVDA"] and done["current_focus"] == "NVDA"
-    assert done["answer_status"] == "answered"
-
-
-def test_refresh_does_not_import_previous_company_financial_task():
-    from backend.agent_runtime.completeness import ResearchCompleteness
-
-    check = ResearchCompleteness("重新取数英伟达", [{"role": "user", "content": "英特尔最新财报"}], {})
-    assert check.tickers == ["NVDA"] and check.facets == ["fresh_search"]
-
-
-def test_short_fetch_keeps_latest_company_question_even_with_unrecognized_facet():
-    from backend.agent_runtime.completeness import ResearchCompleteness
-
-    topic = "英伟达的黄仁勋最近开闻有什么影响"
-    check = ResearchCompleteness("现在取", [
-        {"role": "user", "content": "英特尔最近交易日的股价是多少"},
-        {"role": "user", "content": topic},
-        {"role": "user", "content": "重新取数英伟达"},
-    ], {"active_symbol": "INTC"})
-    assert check.tickers == ["NVDA"]
-    assert topic in check.query
-
-
-def test_intervening_pronoun_followup_does_not_restore_stale_dashboard_ticker():
-    from backend.agent_runtime.completeness import ResearchCompleteness
-
-    check = ResearchCompleteness("现在取", [
-        {"role": "user", "content": "英特尔最近表现"},
-        {"role": "user", "content": "英伟达最近消息"},
-        {"role": "user", "content": "它的估值呢"},
-    ], {"active_symbol": "INTC"})
-    assert check.tickers == ["NVDA"]
-    assert "它的估值呢" in check.query and "valuation" in check.facets
+        await rt.close()

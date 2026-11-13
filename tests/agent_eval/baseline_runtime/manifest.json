@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "head": "891824cfcd974434a5adc3151c19642d7ae3eb03",
+  "runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "source": "M1 recorded runtime before M2 integration",
+  "files": {
+    "__init__.py": "a5f6847b2ac096915561ee154edd858b417eebc6099c667260911c2b0aff3d47",
+    "actions.py": "1d0ffd620002a7f7526fbb6268c7a0759c92e32c1a0a4af37a4758e0ff575d7a",
+    "analysis.py": "610595bf7413eb26a48c45a710cec22c5c68dc40ec65e6016f9ab8b5e65fabfe",
+    "assets/LICENSE.tiktoken": "418cb499b436128d653d79941333a5437b7be2ea9213dcc2f04d15d5d2c51d86",
+    "assets/README.md": "009ef949d676ab8c9de4c62ba4f2466b276e292404f5b22b8971115c3783971f",
+    "assets/cl100k_base.tiktoken": "223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7",
+    "completeness.py": "dbc50bc67bea86dfe4ad137b13c0328c5e4a6fb9d7ecc221f29e544d07af4fec",
+    "config.py": "6d92e4b6c702a0a704c721e44ceab69e35e0567602ce2fb78e9013969c5defb1",
+    "context.py": "2c7a45034640575c3bdd87f5d5a79a70d6d7d53f151982106b6dcaabcb264b7b",
+    "data.py": "b9359712e19a22507b0316ad5924758d5a524601b84f5f88a3382c61880eb50b",
+    "diagnostics.py": "8ac50106d98219251827bfde9c124d9b343d08c2e521805a5190d11344261924",
+    "fact_answer.py": "06cb8753b5e107725fe808f7e951bf5b332a4d4601535e2a785932608ca39d75",
+    "grounding.py": "8d951eeb16fc005d05af38830b72432a720486f702ee481d8ee9a1da4b32204b",
+    "limits.py": "624ae1bb40bd24d59bf9ed334291e25acbe5156ae0a6975ca26e7af5934925d7",
+    "loop.py": "d4a83124af7107ad452e6d15b47774eee2de432cf5b55c968fb5826d624e8ad0",
+    "model.py": "9b2353fc306ad960e985eb73c6e563f633eed81e6edcf9fabeb670dd6ce83479",
+    "permissions.py": "c3124638ede73ef448c97f09761be53ade1053f5e45296334174b5bc4a3ac6c4",
+    "presentation.py": "2dd05a82de3f8e7b47340551bc61913a1f26ac12fd47c908a829dd711c9154c1",
+    "service.py": "e264f355f95b9021494b75872e6d5f9bb3b2b532592ed0bca2113c938e16f528",
+    "skills.py": "1f7e700dc1dd19a430c47b5bd638ff1c33d8b659e3755e40cf3781b5ddd381fc",
+    "tool_display.py": "2cfe566ff3db84e66d4f54604a65352fec0a0a2be36589f8354dee6cba6a9f85",
+    "tools.py": "a50baf4bcd0ce7e11a3ba30ac6281b8afd92fb0e243022fa474ba72cd27a2f99",
+    "vision.py": "7a141d02a64dc6f9757e873a14b7912f83413d88d412b6053757a8863c2e1d37"
+  }
+}

@@ -411,6 +411,8 @@ async def _run_pipeline_for_case(
             side_effect=_injected_execute_plan_stub,
         ):
             # 导入必须在 patch context 内完成，确保 runner 使用 patched 版本
+            from tests.agent_eval.reference.loader import activate
+            activate()
             from backend.graph.runner import GraphRunner
             runner = GraphRunner.create()
 

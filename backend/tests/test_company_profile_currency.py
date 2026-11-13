@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.agents.fundamental_agent import FundamentalAgent
+from backend.agent_runtime.adapters import invoke_adapter
 from backend.tools import financial
 
 
@@ -16,8 +16,9 @@ def test_yahoo_market_cap_uses_quote_currency_not_financial_currency(monkeypatch
     assert f"- Market Cap: {currency} 4,000,000,000" in result
     assert f"- Currency: {currency}" in result
     assert "$" not in result and "EUR" not in result
-    parsed = object.__new__(FundamentalAgent)._parse_company_info(result)
-    assert parsed["market_cap"] == f"{currency} 4,000,000,000"
+    envelope = invoke_adapter("get_company_info", {"ticker": ticker}, lambda _: result)
+    assert envelope.data["marketCap"] == 4_000_000_000
+    assert envelope.data["currency"] == currency
 
 
 @pytest.mark.parametrize("profile", [

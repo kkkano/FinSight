@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.agents.prediction_submit import (
+from backend.common.prediction_submit import (
     evaluate_prediction_bars,
     submit_prediction_with_async_correction,
     submit_prediction,

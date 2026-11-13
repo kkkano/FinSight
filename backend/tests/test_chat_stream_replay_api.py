@@ -19,27 +19,27 @@ def _events(response) -> list[dict]:
 
 
 def _client(monkeypatch) -> TestClient:
-    async def available_model():
-        return None
+    from backend.agent_runtime import service
+    from backend.api.stream_replay import ReplayBuffer
+    from collections import OrderedDict
 
-    monkeypatch.setattr(execution_router, "ensure_model_available", available_model)
+    monkeypatch.setattr(service, "cached_model_capability", lambda: {"tool_calling": True})
     async def fake_pipeline(**kwargs):
         run_id = kwargs["run_id"]
         yield {"type": "token", "content": "A", "run_id": run_id}
         yield {"type": "token", "content": "B", "run_id": run_id}
         yield {"type": "done", "response": "AB", "run_id": run_id}
 
-    monkeypatch.setattr(execution_router, "run_graph_pipeline", fake_pipeline)
+    monkeypatch.setattr(service, "run_agent_pipeline", fake_pipeline)
+    monkeypatch.setattr(execution_router, "_store_for_user", lambda _owner: None)
     monkeypatch.setattr(
         execution_router,
         "_enforce_user_quota",
         lambda request: str(getattr(request.state, "user_id", "public")),
     )
-    execution_router._RUN_OWNERS.clear()
-    execution_router._STREAM_TASKS_BY_RUN.clear()
-
-    async def unused_runner():
-        raise AssertionError("流重放 API 测试不应启动真实图或 LLM")
+    monkeypatch.setattr(execution_router, "_RUN_OWNERS", OrderedDict())
+    monkeypatch.setattr(execution_router, "_STREAM_TASKS_BY_RUN", {})
+    monkeypatch.setattr(execution_router, "replay_buffer", ReplayBuffer())
 
     app = FastAPI()
 
@@ -51,14 +51,9 @@ def _client(monkeypatch) -> TestClient:
     app.include_router(
         create_execution_router(
             ExecutionRouterDeps(
-                get_graph_runner=unused_runner,
                 resolve_thread_id=session_context._resolve_thread_id,
                 schedule_report_index=lambda **_kwargs: None,
                 update_session_context=lambda **_kwargs: None,
-                redact_sensitive_payload=lambda value: value,
-                is_raw_trace_event=lambda _event: False,
-                contract_info=lambda: {},
-                sse_event_schema_version="test",
             )
         )
     )
@@ -111,12 +106,13 @@ def test_execute_rejects_unknown_run(monkeypatch):
 
 def test_stream_pump_redacts_upstream_exception(monkeypatch):
     client = _client(monkeypatch)
+    from backend.agent_runtime import service
 
     async def leaking_pipeline(**_kwargs):
         raise RuntimeError("postgresql://user:password@db.example/finsight?token=secret")
         yield  # pragma: no cover
 
-    monkeypatch.setattr(execution_router, "run_graph_pipeline", leaking_pipeline)
+    monkeypatch.setattr(service, "run_agent_pipeline", leaking_pipeline)
     response = client.post(
         "/api/execute",
         json={"query": "stream failure", "run_id": "stream-error"},
@@ -181,13 +177,14 @@ def test_execute_confines_anonymous_session_namespace(monkeypatch):
 
 def test_execute_ignores_forged_user_id_in_request_context(monkeypatch):
     client = _client(monkeypatch)
+    from backend.agent_runtime import service
     captured: dict = {}
 
     async def capture_pipeline(**kwargs):
         captured.update(kwargs)
         yield {"type": "done", "response": "ok", "run_id": kwargs["run_id"]}
 
-    monkeypatch.setattr(execution_router, "run_graph_pipeline", capture_pipeline)
+    monkeypatch.setattr(service, "run_agent_pipeline", capture_pipeline)
     response = client.post(
         "/api/execute",
         json={
@@ -203,38 +200,45 @@ def test_execute_ignores_forged_user_id_in_request_context(monkeypatch):
     assert captured["ui_context"]["__user_id"] == "user-a"
 
 
-def test_execute_rejects_unavailable_model_before_starting_graph_or_run(monkeypatch):
+def test_execute_unavailable_model_emits_replayable_failure_without_starting_runtime(monkeypatch):
     client = _client(monkeypatch)
-    graph_calls: list[dict] = []
+    from backend.agent_runtime import service
+    runtime_calls: list[dict] = []
 
-    async def unavailable_model():
+    async def unavailable_model(_context):
         raise HTTPException(503, detail={"code": "model_unavailable", "message": "所选模型暂时无法连接，请稍后重试。"})
 
-    async def unexpected_graph(**kwargs):
-        graph_calls.append(kwargs)
+    async def unexpected_runtime(**kwargs):
+        runtime_calls.append(kwargs)
         yield {"type": "done"}
 
-    monkeypatch.setattr(execution_router, "ensure_model_available", unavailable_model)
-    monkeypatch.setattr(execution_router, "run_graph_pipeline", unexpected_graph)
+    monkeypatch.setattr(service, "cached_model_capability", lambda: None)
+    monkeypatch.setattr(service, "preflight", unavailable_model)
+    monkeypatch.setattr(service, "run_agent_pipeline", unexpected_runtime)
     response = client.post("/api/execute", json={"query": "AAPL report", "run_id": "unavailable-model"})
 
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "model_unavailable"
-    assert graph_calls == []
-    assert "unavailable-model" not in execution_router._RUN_OWNERS
+    assert response.status_code == 200
+    terminal = _events(response)[-1]
+    assert terminal["type"] == "error" and terminal["error_code"] == "model_unavailable"
+    assert terminal["publishable"] is False
+    assert runtime_calls == []
+    replay = client.get("/api/execute/runs/unavailable-model/events")
+    assert _events(replay)[-1] == terminal
 
 
 def test_execute_model_preflight_follows_quota_check(monkeypatch):
     client = _client(monkeypatch)
+    from backend.agent_runtime import service
     preflight_calls: list[bool] = []
 
-    async def preflight():
+    async def preflight(_context):
         preflight_calls.append(True)
 
     def reject_quota(_request):
         raise HTTPException(429, detail={"code": "llm_quota_exceeded", "message": "额度不足"})
 
-    monkeypatch.setattr(execution_router, "ensure_model_available", preflight)
+    monkeypatch.setattr(service, "cached_model_capability", lambda: None)
+    monkeypatch.setattr(service, "preflight", preflight)
     monkeypatch.setattr(execution_router, "_enforce_user_quota", reject_quota)
     response = client.post("/api/execute", json={"query": "AAPL report"})
 

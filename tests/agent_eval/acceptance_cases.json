@@ -1,0 +1,2702 @@
+{
+  "schema_version": 2,
+  "source": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+  "plan_sha256": "23219d5c4bbe85e8ba75e7e3b5fa984570a55ad01a41979094c3312711c248a7",
+  "rule": "第12节输入和期望逐字保留；第7节逐字问题仅作为前置。协议检查与独立内容/覆盖评审分开，任何M6/M8 mock或本地单测均不能计为线上通过。",
+  "cases": [
+    {
+      "id": "A1",
+      "input": "「什么是自由现金流」",
+      "expected": "直接回答，不调数据工具；无工具行",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A1",
+      "source_line": 1347,
+      "query": "什么是自由现金流",
+      "query_sha256": "03010897c6b6e710cfaa5a88cb2587fe1e0f9a68b447872f06107f2ba74f2b1b",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": false,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "no_tool_calls"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "直接回答，不调数据工具；无工具行",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A2",
+      "input": "「AAPL 现在多少钱」",
+      "expected": "真实报价，带来源/币种/时点；无随机兜底",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A2",
+      "source_line": 1348,
+      "query": "AAPL 现在多少钱",
+      "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "真实报价，带来源/币种/时点；无随机兜底",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A3",
+      "input": "「0700.HK 最近财报怎么样」",
+      "expected": "港股主体 + 本地公告路径；财期/币种正确",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A3",
+      "source_line": 1349,
+      "query": "0700.HK 最近财报怎么样",
+      "query_sha256": "d19195dc1123156c138129c6ac2577b313ff74de7aab1dcaf2b2e3d6a8912a5c",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "港股主体 + 本地公告路径；财期/币种正确",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A4",
+      "input": "「NVDA 财报对股价影响」",
+      "expected": "复合需求被拆解（财报+价格），不缩成纯报价",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A4",
+      "source_line": 1350,
+      "query": "NVDA 财报对股价影响",
+      "query_sha256": "e21f4d09a32f6dcb9149625876a30e6d4f74a6a8015e61616123bdc6a25ffd69",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "复合需求被拆解（财报+价格），不缩成纯报价",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A5",
+      "input": "「比较 AAPL 和 MSFT 的现金流」",
+      "expected": "两标的同口径财期；专业任务按需并行",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A5",
+      "source_line": 1351,
+      "query": "比较 AAPL 和 MSFT 的现金流",
+      "query_sha256": "20e37b76e91a952a0ca5c958c1c1e23eb57d27c7da380e6ef48e02982a3a1766",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "两标的同口径财期；专业任务按需并行",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A6",
+      "input": "「不要新闻，只看技术面」",
+      "expected": "后续调用尊重限制",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A6",
+      "source_line": 1352,
+      "query": "不要新闻，只看技术面",
+      "query_sha256": "4d54bdaf807a3a1391df9f0ba83c4752c30f8888a2cea003a2eefdebfd18d631",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "multiturn-03",
+            "turn_index": 0,
+            "query": "分析 AAPL 的基本面和消息",
+            "query_sha256": "23b1658c698043d31774bc2db8707a46ac0b8133181ecdde73149ee6dd916ff7"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "后续调用尊重限制",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A7",
+      "input": "先问 TSLA 再问「换成 NVDA」",
+      "expected": "主体切换；旧主体证据不混入新结论",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A7",
+      "source_line": 1353,
+      "query": "换成 NVDA",
+      "query_sha256": "f26015e7d68012196331913a86783fe6beb65cd0353a46f16d254cc11449373f",
+      "ui_steps_exact": [
+        "先问 TSLA 再问「换成 NVDA」"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "multiturn-02",
+            "turn_index": 0,
+            "query": "TSLA 现在怎么看",
+            "query_sha256": "117e1ef648a698b80d4e119215f1b978c274f60da581c5192a0fedcf380b4eba"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "主体切换；旧主体证据不混入新结论",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "A8",
+      "input": "运行中输入「再补一个毛利率对比」",
+      "expected": "有受理回执；下一调度边界纳入；不重复创建 run",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "A8",
+      "source_line": 1354,
+      "query": "再补一个毛利率对比",
+      "query_sha256": "cd778b4c3fab6021bb51d27d76c0751f897dc208e895f159eaf8722dbe153c22",
+      "ui_steps_exact": [
+        "运行中输入「再补一个毛利率对比」"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "same_run_instruction",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "multiturn-04",
+            "turn_index": 0,
+            "query": "比较 AAPL 和 MSFT 的现金流",
+            "query_sha256": "20e37b76e91a952a0ca5c958c1c1e23eb57d27c7da380e6ef48e02982a3a1766"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "same_run_instruction_ack"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "有受理回执；下一调度边界纳入；不重复创建 run",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "题集multiturn-04的首问作为实际运行中任务；原文追加要求通过同一个run的instructions入口发送。"
+      }
+    },
+    {
+      "id": "B1",
+      "input": "「画 SOXX 历史上连续下跌 5 周以上的区间」",
+      "expected": "从真实数据算事件并出图；区间编号与主图对应",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B1",
+      "source_line": 1360,
+      "query": "画 SOXX 历史上连续下跌 5 周以上的区间",
+      "query_sha256": "137e02b822b92fd2af40dc65d58fbea3de059975937fbd394f9d73339a7553c6",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "从真实数据算事件并出图；区间编号与主图对应",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "B2",
+      "input": "「按不同 EPS/PE 假设画 NVDA 估值情景」",
+      "expected": "假设与事实分开；表/图/文一致",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B2",
+      "source_line": 1361,
+      "query": "按不同 EPS/PE 假设画 NVDA 估值情景",
+      "query_sha256": "a27f419075433a21f55f9d197048c1686c062efb2ccce85596aea400b0d05f25",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "假设与事实分开；表/图/文一致",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "B3",
+      "input": "「加一条 20 日均线重画」",
+      "expected": "复用同一 dataset；方法字段记录参数",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B3",
+      "source_line": 1362,
+      "query": "加一条 20 日均线重画",
+      "query_sha256": "31101ac011fe4fd5199bbba4be09d61ce7bc95c53e1c2276ab867378b591cd8b",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "statistics-02",
+            "turn_index": 0,
+            "query": "画 NVDA 最近一年的收盘价",
+            "query_sha256": "71c7eb91460ca975b92c1f0edc3624d7ca7cdf9b501e44bd5bd83734467ab4ff"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "复用同一 dataset；方法字段记录参数",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "B4",
+      "input": "「两只股票今年以来的走势对比」",
+      "expected": "同一起点归一化，口径写明",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B4",
+      "source_line": 1363,
+      "query": "两只股票今年以来的走势对比",
+      "query_sha256": "09089442b1e2a234d171f797747757a2d3b91c1ef08714b66c72cc91a56d0fd0",
+      "ui_steps_exact": [],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "comparison-01",
+            "turn_index": 0,
+            "query": "比较 AAPL 和 MSFT 今年以来的走势",
+            "query_sha256": "b968d63dd3e030e1869bf71d0262dee4e28b3cbc103a720e5653706ece10eef8"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "同一起点归一化，口径写明",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "B5",
+      "input": "对数坐标图表",
+      "expected": "明确标注对数轴",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B5",
+      "source_line": 1364,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "对数坐标图表"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "statistics-03",
+            "turn_index": 0,
+            "query": "画 AAPL 最近三个月价格，用对数坐标",
+            "query_sha256": "a5b4e55fbdc4683a97bcc343f5320c1a022301af2e06f91c5bebc20564b87469"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "明确标注对数轴",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "直接复用statistics-03的逐字问题生成QA真实对数图，不能用M6/M8示意图。"
+      }
+    },
+    {
+      "id": "B6",
+      "input": "图表「查看数据 / 下载」",
+      "expected": "数据表可展开、可下载；无假按钮",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B6",
+      "source_line": 1365,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "图表「查看数据 / 下载」"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "B1"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "download_nonempty"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "数据表可展开、可下载；无假按钮",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "B7",
+      "input": "代码超时（注入）",
+      "expected": "作业终止，正文保留，说明失败与重试",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B7",
+      "source_line": 1366,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "代码超时（注入）"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "qa_fault_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "failures-04",
+            "turn_index": 0,
+            "query": "统计 TSLA 最大回撤并说明计算结果",
+            "query_sha256": "e9ebd216557bd27134244c401302ef4ef95996c9000e0612f4ec5544e5f1bc34"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "actual_job_terminated"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "作业终止，正文保留，说明失败与重试",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": "隔离QA计算作业真实超时及终止记录；不得用假tool错误代替作业终止。",
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "B8",
+      "input": "上传一张 K 线截图问「怎么看」",
+      "expected": "描述可读事实与不确定性；不杜撰精确数值；模型无视觉能力时明确提示",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "B8",
+      "source_line": 1367,
+      "query": "怎么看",
+      "query_sha256": "cd6224591fadb5d47aee16d1b7bc5457113ff0e100bfc94df93a9882fcdd3ead",
+      "ui_steps_exact": [
+        "上传一张 K 线截图问「怎么看」"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "query_then_browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "描述可读事实与不确定性；不杜撰精确数值；模型无视觉能力时明确提示",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "使用QA自选或真实采集行情生成的PNG；记录图片SHA256、来源与采集时点。"
+      }
+    },
+    {
+      "id": "C1",
+      "input": "某数据源超时",
+      "expected": "工具行显示失败原因 + 改用其他来源或明说缺口",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C1",
+      "source_line": 1373,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "某数据源超时"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "qa_fault_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "failures-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱，主报价源超时时能否继续核实",
+            "query_sha256": "b51930c795c174905be6c9958cf7d339dd647be0aaf3672371bab4ff62aabfad"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "工具行显示失败原因 + 改用其他来源或明说缺口",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": "隔离QA数据源/自选URL真实超时；禁止全站关闭供应商。",
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "C2",
+      "input": "核心数据缺失",
+      "expected": "部分结果 + 缺口说明；不生成可发布报告",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C2",
+      "source_line": 1374,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "核心数据缺失"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "qa_fault_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "failures-03",
+            "turn_index": 0,
+            "query": "MSFT 最新一季营收和自由现金流是多少",
+            "query_sha256": "cef3146c5c7ffb1ea2e74028529661bbeeb1ae203bfe91b4ecf4592e5f5e658e"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "not_publishable"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "部分结果 + 缺口说明；不生成可发布报告",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": "隔离QA选定的真实缺失数据/披露期；保留原始空结果和不可发布证据。",
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "C3",
+      "input": "模型确证不支持工具调用",
+      "expected": "发送前/服务端拒绝，给「更换模型」；无问答降级",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C3",
+      "source_line": 1375,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "模型确证不支持工具调用"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "facts-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱",
+            "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": false,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "发送前/服务端拒绝，给「更换模型」；无问答降级",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "从真实模型目录/探针选择已确证不支持工具的模型；无此分支时保持pending。"
+      }
+    },
+    {
+      "id": "C4",
+      "input": "断线 30 秒后重连",
+      "expected": "恢复原消息，不重复正文，不假完成",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C4",
+      "source_line": 1376,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "断线 30 秒后重连"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "reconnect_30_seconds",
+        "same_message_identity",
+        "terminal_once"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "恢复原消息，不重复正文，不假完成",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "允许真实浏览器离线30秒后恢复网络，不伪造SSE响应。"
+      }
+    },
+    {
+      "id": "C5",
+      "input": "运行中停止",
+      "expected": "「已停止，保留已生成内容」；迟到的工具结果不追加结论",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C5",
+      "source_line": 1377,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "运行中停止"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "cancelled_terminal",
+        "late_text_not_appended"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "「已停止，保留已生成内容」；迟到的工具结果不追加结论",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "C6",
+      "input": "保存失败（注入）",
+      "expected": "「回答已生成，但未保存成功」；可导出；历史不假成功",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C6",
+      "source_line": 1378,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "保存失败（注入）"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "qa_fault_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "persistence_failure",
+        "not_publishable"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "「回答已生成，但未保存成功」；可导出；历史不假成功",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": "隔离QA运行的真实保存失败；浏览器快照失败不能代替服务器终态保存失败。",
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "C7",
+      "input": "预算耗尽",
+      "expected": "partial 状态 + 缺口说明，不显示「分析完成」",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "C7",
+      "source_line": 1379,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "预算耗尽"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "qa_fault_then_browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "partial_budget_exhaustion"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "partial 状态 + 缺口说明，不显示「分析完成」",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": "隔离QA运行真实达到既有预算限制；禁止修改生产全局预算。",
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "D1",
+      "input": "今日",
+      "expected": "报价真实、缺失标记；90 天命中率带分母",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D1",
+      "source_line": 1385,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "今日"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/today",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "报价真实、缺失标记；90 天命中率带分母",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "D2",
+      "input": "看板",
+      "expected": "卡片带数据时点与来源；「问 AI」带结构化上下文进对话",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D2",
+      "source_line": 1386,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "看板"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/dashboard/AAPL",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "structured_handoff"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "卡片带数据时点与来源；「问 AI」带结构化上下文进对话",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "D3",
+      "input": "历史",
+      "expected": "报告/判断分类清晰；详情带来源；错误态可重试",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D3",
+      "source_line": 1387,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "历史"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/history",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "报告/判断分类清晰；详情带来源；错误态可重试",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "复用QA自己的reports-01报告及个人判断；没有QA个人判断时该分支保持pending，不读取别人的记录。"
+      }
+    },
+    {
+      "id": "D4",
+      "input": "战绩",
+      "expected": "US20 metadata 与后端一致；方向/回撤分开；未结算不混分母",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D4",
+      "source_line": 1388,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "战绩"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/track-record",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "public_metadata_consistent"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "US20 metadata 与后端一致；方向/回撤分开；未结算不混分母",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "D5",
+      "input": "右栏",
+      "expected": "跟随当前会话标的；用户固定后不被自动切换；引用跳转高亮",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D5",
+      "source_line": 1389,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "右栏"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "A2",
+          "A5"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "跟随当前会话标的；用户固定后不被自动切换；引用跳转高亮",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "D6",
+      "input": "欢迎页",
+      "expected": "未配置 GitHub 时无假按钮；「示例」标记在位；登录后回原页",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D6",
+      "source_line": 1390,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "欢迎页"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/welcome",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "未配置 GitHub 时无假按钮；「示例」标记在位；登录后回原页",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "按实际公开provider配置验证；未配置GitHub分支无法安全复现时如实pending，不改生产provider配置。"
+      }
+    },
+    {
+      "id": "D7",
+      "input": "设置",
+      "expected": "主题/红涨绿跌/免确认开关即时生效并持久化",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D7",
+      "source_line": 1391,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "设置"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "setting_persistence"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "主题/红涨绿跌/免确认开关即时生效并持久化",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "D8",
+      "input": "分享页",
+      "expected": "未登录可读公开报告；只读标记；无私有数据",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "D8",
+      "source_line": 1392,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "分享页"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "{qa_share_path}",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "anonymous_read_only"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "未登录可读公开报告；只读标记；无私有数据",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "只分享QA自己的可发布报告；不发邮件。公开页面用新的未登录浏览器上下文。"
+      }
+    },
+    {
+      "id": "E1",
+      "input": "390px 宽",
+      "expected": "无整页横向溢出；表格/图表容器内横滚",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "E1",
+      "source_line": 1398,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "390px 宽"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "B1",
+          "B2"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "viewport_no_page_overflow"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "无整页横向溢出；表格/图表容器内横滚",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "E2",
+      "input": "中文输入法组合输入 Enter",
+      "expected": "不误发送",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "E2",
+      "source_line": 1399,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "中文输入法组合输入 Enter"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "composition_enter_no_send"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "不误发送",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "记录真实输入法composition/key事件；合成DOM事件不能充当线上输入法通过。"
+      }
+    },
+    {
+      "id": "E3",
+      "input": "纯键盘操作",
+      "expected": "折叠/展开/停止/发送/引用跳转可完成；焦点可见",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "E3",
+      "source_line": 1400,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "纯键盘操作"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "facts-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱",
+            "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "keyboard_actions_recorded"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "折叠/展开/停止/发送/引用跳转可完成；焦点可见",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "E4",
+      "input": "读屏",
+      "expected": "状态区 aria-live 只播报活动/终态，不逐 token",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "E4",
+      "source_line": 1401,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "读屏"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "reports-01",
+            "turn_index": 0,
+            "query": "生成 AAPL 深度投资报告，覆盖财报、估值和风险",
+            "query_sha256": "af346aba855c3031135b25c6951fda0d50855ed99afa8e6b9a588af7010b77b5"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "aria_live_mutation_log"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "状态区 aria-live 只播报活动/终态，不逐 token",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "自动采集aria-live变化只是协议证据，实际播报行为由独立原生/人工无障碍评审确认。"
+      }
+    },
+    {
+      "id": "E5",
+      "input": "prefers-reduced-motion",
+      "expected": "无动画仍可完成全部操作",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "E5",
+      "source_line": 1402,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "prefers-reduced-motion"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "facts-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱",
+            "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "reduced_motion_effective"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "无动画仍可完成全部操作",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "F1",
+      "input": "报价卡片",
+      "expected": "来源/时点/币种/延迟口径可见",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "F1",
+      "source_line": 1408,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "报价卡片"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/dashboard/AAPL",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "A2",
+          "D1"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "来源/时点/币种/延迟口径可见",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "F2",
+      "input": "财报数字",
+      "expected": "财期、单位、本币/美元标注正确",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "F2",
+      "source_line": 1409,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "财报数字"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "A3",
+          "A5"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "财期、单位、本币/美元标注正确",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "F3",
+      "input": "切换账号",
+      "expected": "会话/自选/私有预测按 user_id 隔离",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "F3",
+      "source_line": 1410,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "切换账号"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "two_qa_owners_isolated"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "会话/自选/私有预测按 user_id 隔离",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "两个预先指定的隔离QA身份；自选数据和测试会话均由各QA账号自行创建。"
+      }
+    },
+    {
+      "id": "F4",
+      "input": "未登录看公开战绩",
+      "expected": "可读统计；请求不带任何模型凭据",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "F4",
+      "source_line": 1411,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "未登录看公开战绩"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/track-record",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "public_request_no_model_credentials"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "可读统计；请求不带任何模型凭据",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "F5",
+      "input": "自定义模型",
+      "expected": "凭据仅存内存；不出现在消息/日志/公开请求",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "F5",
+      "source_line": 1412,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "自定义模型"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "concepts-01",
+            "turn_index": 0,
+            "query": "什么是自由现金流",
+            "query_sha256": "03010897c6b6e710cfaa5a88cb2587fe1e0f9a68b447872f06107f2ba74f2b1b"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "model_secret_not_persisted_or_logged"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "凭据仅存内存；不出现在消息/日志/公开请求",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用QA自己的自定义模型凭据；按已知秘密的精确值检测泄漏，证据中只保留布尔值/哈希。"
+      }
+    },
+    {
+      "id": "F6",
+      "input": "换模型后重新提问",
+      "expected": "使用实际选择的模型；界面显示与请求一致",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "F6",
+      "source_line": 1413,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "换模型后重新提问"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "facts-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱",
+            "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "selected_model_matches_request"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "使用实际选择的模型；界面显示与请求一致",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "G1",
+      "input": "完成态",
+      "expected": "过程收为一行「已处理 N 秒 · M 次工具调用」；数字真实",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "G1",
+      "source_line": 1419,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "完成态"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "A4"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "actual_duration_and_tool_count"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "过程收为一行「已处理 N 秒 · M 次工具调用」；数字真实",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "G2",
+      "input": "展开过程",
+      "expected": "工具单行、对象独立成列、详情参数/结果/来源",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "G2",
+      "source_line": 1420,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "展开过程"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "A4"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "工具单行、对象独立成列、详情参数/结果/来源",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "G3",
+      "input": "来源列表",
+      "expected": "≤6 项单层可折叠；编号与正文引用一致",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "G3",
+      "source_line": 1421,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "来源列表"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "A4"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "citation_ids_resolve"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "≤6 项单层可折叠；编号与正文引用一致",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "仅使用部署后真实应用与QA自选数据。"
+      }
+    },
+    {
+      "id": "G4",
+      "input": "供应商推理三态",
+      "expected": "公开摘要默认折叠；原始字段默认关（可开）；无字段不伪造",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "G4",
+      "source_line": 1422,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "供应商推理三态"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "facts-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱",
+            "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "公开摘要默认折叠；原始字段默认关（可开）；无字段不伪造",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "用真实模型能力/已有真实采集分别覆盖公开摘要、原始字段、无字段；不可捏造缺失分支。"
+      }
+    },
+    {
+      "id": "G5",
+      "input": "能力验证",
+      "expected": "成功不出现过程列表；失败/超 2 秒才显示",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "G5",
+      "source_line": 1423,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "能力验证"
+      ],
+      "requires_real_model": true,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/chat",
+        "setup_queries": [
+          {
+            "source": "tests/agent_eval/cases.json",
+            "case_id": "facts-01",
+            "turn_index": 0,
+            "query": "AAPL 现在多少钱",
+            "query_sha256": "7fdd1fee30966b1abe68807a1073df3c5ef941236f7441852679d789fe84fd6a"
+          }
+        ],
+        "reuse_acceptance_cases": [],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": true,
+        "terminal_required": true,
+        "original_answer_sha256": true,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "terminal_once",
+        "run_session_binding",
+        "sequence_per_attempt",
+        "citation_ids_resolve",
+        "artifact_source_refs",
+        "persisted_answer_hash",
+        "actual_capability_probe_result"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "成功不出现过程列表；失败/超 2 秒才显示",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "复用模型目录/真实探针及实际耗时；不凭模型名字猜能力。"
+      }
+    },
+    {
+      "id": "G6",
+      "input": "示例数据扫描",
+      "expected": "非演示区无「示例/示意/mock」残留；`trackRecord.fixtures` 不在产物",
+      "status": "pending",
+      "evidence": [],
+      "case_id": "G6",
+      "source_line": 1424,
+      "query": null,
+      "query_sha256": null,
+      "ui_steps_exact": [
+        "示例数据扫描"
+      ],
+      "requires_real_model": false,
+      "requires_real_data_or_prior_live_result": true,
+      "execution": {
+        "mode": "browser",
+        "route": "/welcome",
+        "setup_queries": [],
+        "reuse_acceptance_cases": [
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D6",
+          "D8"
+        ],
+        "selected_data_scope": "isolated_qa_only"
+      },
+      "capture": {
+        "viewports": [
+          "desktop",
+          "mobile"
+        ],
+        "screenshots_required": true,
+        "sse_required": false,
+        "terminal_required": false,
+        "original_answer_sha256": false,
+        "full_raw_reasoning_saved": false
+      },
+      "protocol_checks": [
+        "deployed_fixture_module_manifest"
+      ],
+      "review": {
+        "status": "pending",
+        "required": "native_independent",
+        "expected_exact": "非演示区无「示例/示意/mock」残留；`trackRecord.fixtures` 不在产物",
+        "copy_rules_section": "11",
+        "protocol_pass_is_not_acceptance_pass": true
+      },
+      "prerequisites": {
+        "status": "pending",
+        "real_fault_required": null,
+        "notes": "资产是否含trackRecord.fixtures以部署构建module manifest为证；文本命中只供原生评审，不自动打质量分。"
+      }
+    }
+  ],
+  "section_hashes": {
+    "11": "1120d3c52948e11d1bae05ecea26991c12e7bc4fc96a7fafcf8a6f7f7437919c",
+    "12": "8bd182f22941b59bb491ae6e8a8a873702b3d0b7afdd134264aafb7b2cb33084"
+  },
+  "prepared_at": "2026-11-13T07:57:35.317568+00:00",
+  "copy_rules_verbatim": "## 11. 文案整改\n\n### 11.1 四条原则\n\n1. **状态说事实。** 没发生的阶段不显示（「正在读取证据」只在真的读证据时出现）；能说清对象和动作（「正在读取 NVIDIA 财报」优于「正在分析」）。\n2. **错误说人话。** 用户可见位置只出现中文说明；错误码、工具名、英文原文进诊断详情。\n3. **开发字段不出现在正文。** `dataset_xxx`、工具函数名、`run_id`、`PlanIR`、REST/SDK 等只在「本轮详情」里出现。\n4. **数字带口径。** 日期、币种、单位、时点、样本量随数字出现；估算与实测分开标注。\n\n### 11.2 逐条替换表\n\n| 位置 | 现状 | 改为 | 原因 |\n|---|---|---|---|\n| `ChatList.tsx:119-121` | 失败重试按钮「重新研究」；`chatMessageActions.ts` 同动作 title 为「重试回答」 | 统一为「重新研究」 | 同一动作两个名字 |\n| `TurnActivity.tsx:281` | 停止后 caption「已停止」 | 「已停止，保留已生成内容」 | DESIGN 交互状态表原文 |\n| `TurnActivity.tsx:292` | 「有些资料没能获取，展开查看原因。」 | 保留 | 已符合原则 |\n| `TurnActivity.tsx:238` | 能力检查行「正在确认所选模型能否调用研究工具，完成后继续回答。」 | 成功路径不再展示（8.5）；失败路径保留并附「更换模型」按钮 | DESIGN：只在需要检查时展示 |\n| `ChatInput.tsx:157` | 「当前模型不支持工具调用，请换一个模型再试。」 | 同句 + 行内「更换模型」按钮（打开模型选择） | DESIGN 要求给操作 |\n| `ChatList.tsx:112` | `msg.error` 原样渲染 | 渲染前过错误码映射（`researchFailureMessage` 或同表）；原始文本进诊断详情 | 用户可见英文/堆栈 |\n| `zh.ts` `suggestions.*Label` | 「> NVDA 技术面」「> AAPL 对比 MSFT」等带 `>` 前缀 | 去掉 `>`，只留「NVDA 技术面」「AAPL 对比 MSFT」 | 终端风格装饰，DESIGN 避免 |\n| `zh.ts` `callingTool/toolStarted` | 「正在调用工具：get_stock_price…」（原始函数名） | 走中文标签表（`TurnActivity.labels`）：「正在获取行情…」 | 开发字段泄漏 |\n| `zh.ts` `analyzingShort` | 「正在分析」 | 删除（随 LoadingDots 一起，8.5）；保留 `analyzing` | 与 TurnActivity 实时行重复 |\n| `zh.execution.*` 整组 | 旧执行 UI 文案 | 随 9.3(2) 一起删除 | 旧链路 |\n| `TodayPage.tsx:321` | 「只显示接口返回的真实报价；缺失时明确标记。」 | 「只显示真实报价；暂时取不到的会明确标出。」 | 「接口」是开发词 |\n| `TodayPage.tsx:283` | 「……系统不会猜测或展示其他人的内容。」 | 「……不会展示其他人的内容。」 | 拟人化+冗余 |\n| `TodayPage.tsx:405` | 「最近 90 天：N 条研究判断 · M 条已复盘 · 历史命中率 X%」 | 「最近 90 天：N 条研究判断 · 已复盘 M 条 · 命中率 X%（M 条已结算）」 | 命中率必须带分母 |\n| `PredictionTrack.tsx:122-139` | 「正在创建生成任务…」「任务已排队，等待分析…」「正在读取证据并生成判断…」「正在校验行情来源…」 | 由真实事件驱动；无事件时统一「正在生成…」；完成「判断已生成」；失败带原因 | 编造阶段 |\n| `PredictionTrack.tsx:207` | 「模型自报置信度 N%」 | 保留 + title「由模型自报，不是统计概率」 | 防止误读为胜率 |\n| `BenchmarkTrackRecord.tsx` 全组 | 「和\"永远猜涨\"打平」「比\"永远猜涨\"高 X 个百分点」「没预警却大跌，最该改进」 | 保留 | 已符合「敢对答案」的直白语气 |\n| `RightPanel.tsx:45` | 「聊到股票时，这里会显示走势、关键数据和参考来源。」 | 保留 | 已符合 |\n| `WelcomePage.tsx:182-183` | 「你只管问，剩下的交给 FinSight。」「它会自己查行情、翻财报、写代码算账、画图给你看。每个数字都标着出处，数据不够就直说。」 | 保留 | 与 DESIGN Content voice 一致 |\n| `WelcomePage.tsx:185` | 演示区角标「示意」 | 「示例」 | 与 DESIGN 术语统一 |\n| `WelcomePage.tsx:196` | 「登录后，对话、自选和研究记录都会帮你存好。」 | 保留 | 准确 |\n| `WelcomePage.tsx:204` | 「先逛逛，行情和战绩不用登录也能看」 | 保留 | 准确（对话/历史需登录，措辞未越界） |\n| `WelcomePage.tsx:73,105` | 「授权被取消，或者链接过期了，再试一次就好。」「登录没成功，稍后再试一次。」 | 保留 | 口语但准确 |\n| `HistoryPage.tsx:124,162,232` | 「点左边任意一条，查看当时怎么判断的、后来怎么走的。」等 | 保留 | 已符合复盘语气 |\n| `Sidebar.tsx:190,207` | 「搜索/命令…」「最近对话」「查看全部 N 条 →」 | 保留 | — |\n| `ChatWorkspace.tsx:131` | 无对话时副标题「问清问题，查看依据」 | 「输入问题，查看依据」 | 语序别扭 |\n\n### 11.3 规则级整改（不是替换单句）\n\n1. **工具名只出现在诊断详情。** 正文、过程行、错误提示一律经中文标签表（`TurnActivity.labels` 已有 40+ 条，补齐新增工具）；新增工具必须同时加标签，测试断言「正文不含 `[a-z]+_[a-z]+` 形式的工具名」。\n2. **错误码 → 中文映射单一入口。** 现状 `researchFailureMessage`（`store/researchStream.ts`）已存在；把 `ChatList` 的 `msg.error`、`ChatInput` 的 `png.error`、看板错误态全部过同一入口，映射表里每个错误码给出：一句人话 + 可操作建议 + 是否可重试。原始文本保留在诊断详情（`AgentLogPanel`/「本轮详情」）。\n3. **能力三态文案统一**：「支持」（不展示）、「未验证」（发送时验证，界面只显示「正在验证模型能力…」）、「不支持」（明确拒绝 + 更换模型入口）。三态判定来自后端 capability probe 结果，前端不猜。\n4. **示例标记统一**：演示/静态样例只允许出现在带「示例」标签的区块内；扫描规则：`fixtures`、`mock`、`示例数据`、`示意` 字样不得出现在非演示组件。\n5. **文案收口到 `zh.ts`**：对话相关状态文案统一进 `locales/zh.ts`（现状部分内联、部分集中）；**不引入 i18n 框架**，只做单文件集中，方便后续校对。\n\n### 11.4 明确不做\n\n- 不引入多语言框架或语言切换（当前只有 `zh.ts`，108 行）。\n- 不改后端 API 的错误码定义（只加前端映射）。\n- 不把后端 metadata（预测频率、样本口径）硬编码成文案（11.2 的 `frequencyText` 已是正确做法，保持）。\n\n---\n",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "basis": "采集约定，不添加验收要求"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "basis": "E1原文规定390px；高度为采集约定"
+    }
+  },
+  "status": "prepared_pending_online_execution",
+  "total": 48,
+  "passed": 0,
+  "local_development_evidence": {
+    "path": "frontend/test-results/m6-native/final-contract/evidence.json",
+    "may_count_as_online_pass": false
+  }
+}

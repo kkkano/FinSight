@@ -36,6 +36,41 @@ def _contains_key(value, prohibited: set[str]) -> bool:
     return False
 
 
+def test_shared_metadata_uses_publication_field_and_preserves_null_without_inference():
+    for published_at in ("2026-11-11T12:30:00+00:00", None):
+        class Store:
+            def get_shared_report_with_metadata(self, *, token):
+                return {"report": {"report_id": "fixture", "generated_at": "2026-11-10T00:00:00Z",
+                        "published_at": "must-not-be-used"}, "published_at": published_at}
+
+        response = _client(Store(), user_id="public").get("/api/reports/shared/" + "t" * 32)
+        assert response.status_code == 200
+        assert response.json()["published_at"] == published_at
+        assert "published_at" not in response.json()["report"]
+
+
+def test_metadata_reader_returning_none_does_not_fall_back_to_old_reader():
+    class Store:
+        def get_shared_report_with_metadata(self, *, token):
+            return None
+
+        def get_shared_report(self, *, token):
+            raise AssertionError("失效的分享不能回退读取旧内容")
+
+    response = _client(Store(), user_id="public").get("/api/reports/shared/" + "t" * 32)
+    assert response.status_code == 404
+
+
+def test_old_share_reader_remains_compatible_with_unknown_publication_time():
+    class Store:
+        def get_shared_report(self, *, token):
+            return {"report_id": "fixture", "generated_at": "2026-11-10T00:00:00Z"}
+
+    response = _client(Store(), user_id="public").get("/api/reports/shared/" + "t" * 32)
+    assert response.status_code == 200
+    assert response.json()["published_at"] is None
+
+
 def test_report_share_create_anonymous_read_revoke_and_redact():
     store = FakeReportStore()
     store.add(

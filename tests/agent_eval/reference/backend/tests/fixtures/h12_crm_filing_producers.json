@@ -1,0 +1,64 @@
+{
+  "provenance": {
+    "source": "regression-v1/h12_crm_report.json",
+    "sha256": "0cdcd90a4b7bfb238cf8187b79201b76023af30982cd1935d2114727230dd5d9",
+    "request_utc": "2026-10-04T08:18:26.657508+00:00",
+    "fixture_scope": "filing_body_propagation_short_excerpts",
+    "excerpt_note": "保留真实申报身份和章节字段，仅保存短摘录；完整原始双生产者响应及其来源哈希留在本机验收目录。"
+  },
+  "step_outputs": {
+    "s7": "{\"ticker\": \"CRM\", \"market\": \"US\", \"source\": \"sec_edgar\", \"company_name\": \"Salesforce, Inc.\", \"cik\": \"0001108524\", \"forms_filter\": [\"10-K\", \"10-Q\"], \"filings\": [{\"form\": \"10-Q\", \"filing_date\": \"2026-08-27\", \"report_date\": \"2026-07-31\", \"acceptance_datetime\": \"2026-08-26T22:54:46.000Z\", \"accession_number\": \"0001108524-26-000190\", \"primary_document\": \"crm-20260731.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852426000190/crm-20260731.htm\", \"content_read\": true, \"content_sections\": {\"management_discussion\": \"ITEM 2. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS This Quarterly Report on Form 10-Q contains forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995. All statements other than statements of\", \"competition\": \"Table of Contents factors, including customer dissatisfaction, customers’ spending levels, mix of customer base, decreases in the number of users at our customers, customer mergers and acquisitions, competition, pricing increases or changes, such as the increased prevalence of consumption-based pricing models and economic downturns. Additionally, our transition toward more complex pricing structures, including AI-driven consumption models, may make it more\"}, \"content_excerpt\": \"management_discussion: ITEM 2. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS This Quarterly Report on Form 10-Q contains forward-looking statements within the meaning of the Private Securities Litigation Reform Act of 1995. All statements other than statements of\\n\\ncompetition: Table of Contents factors, including customer dissatisfaction, customers’ spending levels, mix of customer base, decreases in the number of users at our customers, customer mergers and acquisitions, competition, pricing increases or changes, such as the increased prevalence of consumption-based pricing models and economic downturns. Additionally, our transition toward more complex pricing structures, including AI-driven consumption models, may make it more\"}, {\"form\": \"10-Q\", \"filing_date\": \"2026-05-28\", \"report_date\": \"2026-04-30\", \"acceptance_datetime\": \"2026-05-27T22:15:51.000Z\", \"accession_number\": \"0001108524-26-000127\", \"primary_document\": \"crm-20260430.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852426000127/crm-20260430.htm\"}, {\"form\": \"10-K\", \"filing_date\": \"2026-03-02\", \"report_date\": \"2026-01-31\", \"acceptance_datetime\": \"2026-03-02T21:24:59.000Z\", \"accession_number\": \"0001108524-26-000060\", \"primary_document\": \"crm-20260131.htm\", \"primary_doc_description\": \"10-K\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852426000060/crm-20260131.htm\", \"content_read\": true, \"content_sections\": {\"business\": \"ITEM 1. BUSINESS Overview Salesforce, Inc. (“Salesforce,” the “Company,” “we” or “our”) is a global leader in customer relationship management (“CRM”) technology, helping organizations of any size become agentic enterprises. Founded in 1999, we bring humans, agents, applications, and data together on a trusted, unified platform to unlock growth and innovation. Our artificial intelligence (“AI”) powered Agentforce 360 Platform unites our offerings — spanning sales, service, marketing, commerce, collaboration, data management, integration, analytics, IT service, industry verticals and more —\", \"management_discussion\": \"ITEM 7. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS The following discussion contains forward-looking statements, including, without limitation, our expectations and statements regarding our outlook and future revenues, expenses, results of operations, liquidity, plans, strategies and\", \"competition\": \"m acquisitions. Performance, functional depth, security, usability, ease of integration and configuration and sustainability of our solutions influence our technology decisions and product direction. Competition The market for our service offerings is highly competitive, rapidly evolving and fragmented, and subject to changing technology with low barriers to entry, shifting customer needs and frequent introductions of new products and services. Our\"}, \"content_excerpt\": \"business: ITEM 1. BUSINESS Overview Salesforce, Inc. (“Salesforce,” the “Company,” “we” or “our”) is a global leader in customer relationship management (“CRM”) technology, helping organizations of any size become agentic enterprises. Founded in 1999, we bring humans, agents, applications, and data together on a trusted, unified platform to unlock growth and innovation. Our artificial intelligence (“AI”) powered Agentforce 360 Platform unites our offerings — spanning sales, service, marketing, commerce, collaboration, data management, integration, analytics, IT service, industry verticals and more —\\n\\nmanagement_discussion: ITEM 7. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS The following discussion contains forward-looking statements, including, without limitation, our expectations and statements regarding our outlook and future revenues, expenses, results of operations, liquidity, plans, strategies and\\n\\ncompetition: m acquisitions. Performance, functional depth, security, usability, ease of integration and configuration and sustainability of our solutions influence our technology decisions and product direction. Competition The market for our service offerings is highly competitive, rapidly evolving and fragmented, and subject to changing technology with low barriers to entry, shifting customer needs and frequent introductions of new products and services. Our\"}, {\"form\": \"10-Q\", \"filing_date\": \"2025-12-04\", \"report_date\": \"2025-10-31\", \"acceptance_datetime\": \"2025-12-03T23:47:15.000Z\", \"accession_number\": \"0001108524-25-000238\", \"primary_document\": \"crm-20251031.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852425000238/crm-20251031.htm\"}], \"error\": null}",
+    "s15": "{\"ticker\": \"CRM\", \"market\": \"US\", \"source\": \"sec_edgar\", \"company_name\": \"Salesforce, Inc.\", \"cik\": \"0001108524\", \"forms_filter\": [\"10-K\", \"10-Q\"], \"filings\": [{\"form\": \"10-Q\", \"filing_date\": \"2026-08-27\", \"report_date\": \"2026-07-31\", \"acceptance_datetime\": \"2026-08-26T22:54:46.000Z\", \"accession_number\": \"0001108524-26-000190\", \"primary_document\": \"crm-20260731.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852426000190/crm-20260731.htm\"}, {\"form\": \"10-Q\", \"filing_date\": \"2026-05-28\", \"report_date\": \"2026-04-30\", \"acceptance_datetime\": \"2026-05-27T22:15:51.000Z\", \"accession_number\": \"0001108524-26-000127\", \"primary_document\": \"crm-20260430.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852426000127/crm-20260430.htm\"}, {\"form\": \"10-K\", \"filing_date\": \"2026-03-02\", \"report_date\": \"2026-01-31\", \"acceptance_datetime\": \"2026-03-02T21:24:59.000Z\", \"accession_number\": \"0001108524-26-000060\", \"primary_document\": \"crm-20260131.htm\", \"primary_doc_description\": \"10-K\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852426000060/crm-20260131.htm\"}, {\"form\": \"10-Q\", \"filing_date\": \"2025-12-04\", \"report_date\": \"2025-10-31\", \"acceptance_datetime\": \"2025-12-03T23:47:15.000Z\", \"accession_number\": \"0001108524-25-000238\", \"primary_document\": \"crm-20251031.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852425000238/crm-20251031.htm\"}, {\"form\": \"10-Q\", \"filing_date\": \"2025-09-04\", \"report_date\": \"2025-07-31\", \"acceptance_datetime\": \"2025-09-04T01:41:22.000Z\", \"accession_number\": \"0001108524-25-000088\", \"primary_document\": \"crm-20250731.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852425000088/crm-20250731.htm\"}, {\"form\": \"10-Q\", \"filing_date\": \"2025-05-29\", \"report_date\": \"2025-04-30\", \"acceptance_datetime\": \"2025-05-28T22:52:02.000Z\", \"accession_number\": \"0001108524-25-000030\", \"primary_document\": \"crm-20250430.htm\", \"primary_doc_description\": \"10-Q\", \"filing_url\": \"https://www.sec.gov/Archives/edgar/data/1108524/000110852425000030/crm-20250430.htm\"}], \"error\": null}"
+  },
+  "plan_steps": [
+    {
+      "id": "s7",
+      "kind": "tool",
+      "name": "get_sec_filings",
+      "inputs": {
+        "ticker": "CRM",
+        "forms": "10-K,10-Q",
+        "limit": 4,
+        "include_content": true
+      },
+      "task_id": "task_1",
+      "task_ids": [
+        "task_1"
+      ],
+      "subject_tickers": [
+        "CRM"
+      ],
+      "evidence_kinds": [
+        "filing_context"
+      ],
+      "parallel_group": "request_task_1",
+      "depends_on": [],
+      "data_dependencies": [],
+      "why": "CRM evidence contract: SEC filings.",
+      "optional": true
+    },
+    {
+      "id": "s15",
+      "kind": "tool",
+      "name": "get_sec_filings",
+      "inputs": {
+        "ticker": "CRM",
+        "forms": "10-K,10-Q",
+        "limit": 6
+      },
+      "task_id": "task_1",
+      "task_ids": [
+        "task_1"
+      ],
+      "subject_tickers": [
+        "CRM"
+      ],
+      "evidence_kinds": [],
+      "parallel_group": "report_evidence",
+      "depends_on": [],
+      "data_dependencies": [],
+      "why": "研报模式：补充 SEC EDGAR 10-K/10-Q filing evidence。",
+      "optional": true
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-"""运行级不可变资料引用；证据归一化继续复用金融合同。"""
+"""运行级不可变资料与来源账本；口径来自工具声明和结构字段。"""
 from __future__ import annotations
 
 import hashlib
@@ -30,12 +30,19 @@ _SEC_METRICS = ("revenue", "gross_profit", "operating_income", "net_income", "ep
 _ROW_CONTEXT = ("ticker", "market", "source", "source_url", "as_of", "source_latest_filed",
                 "currency", "unit", "units", "frequency")
 _SOURCE_FIELDS = {"id", "source_id", "data_ref", "title", "url", "snippet", "summary", "source", "source_name", "published_date", "as_of",
-                  "confidence", "type", "kind", "reliability", "quality", "currency", "unit", "period", "price_basis", "dividends_included", "metadata", "meta", "limitations"}
+                  "confidence", "type", "kind", "reliability", "quality", "currency", "unit", "period", "frequency", "price_basis", "dividends_included",
+                  "market_session", "source_timestamp", "source_time_precision", "source_time_status", "metadata", "meta", "limitations"}
+_PROVENANCE_FIELDS = ("url", "link", "source_url", "source", "source_name", "publisher", "provider")
+_PROVENANCE_CONTAINERS = ("sources", "news", "articles", "results", "filings", "evidence", "items", "transcripts",
+                          "data", "quote", "document", "structured_data", "result", "output")
+_LEDGER_KINDS = {"quote": "price_snapshot", "series": "price_history", "table": "fundamental_snapshot",
+                 "news": "news_context", "document": "document_context", "computation": "computation", "chart": "chart"}
 
 
 def fact_metadata_preview(metadata: dict) -> dict:
     """保留财务口径及差分输入，不重复嵌套的申报全文。"""
-    fields = {"unit", "concept", "period_start", "period_end", "reporting_basis", "derivation", "derived_from", "capital_expenditures_concept"}
+    fields = {"unit", "concept", "period_start", "period_end", "filed", "form", "accession",
+              "reporting_basis", "derivation", "derived_from", "capital_expenditures_concept"}
     result = {}
     for metric, fact in metadata.items():
         if not isinstance(fact, dict):
@@ -71,6 +78,11 @@ def _companyfacts_rows(payload: dict) -> list[dict]:
              **{key: values[index] for key, values in metrics.items()},
              "fact_metadata": {key: values[index] for key, values in metadata.items()}}
             for index, period in enumerate(periods)]
+    fiscal_context = payload.get("latest_filing_fiscal_context")
+    if isinstance(fiscal_context, dict):
+        for row in rows:
+            if row["period_end"] == fiscal_context.get("period_end"):
+                row["fiscal_context"] = deepcopy(fiscal_context)
     return _rows_with_context(rows, payload, "companyfacts")
 
 
@@ -82,9 +94,21 @@ def _locked(method):
     return call
 
 
+def _parent_refs(inputs: dict) -> list[str]:
+    refs = []
+    for key in ("dataset_refs", "handles", "input_refs", "data_refs", "dataset_ref", "handle", "data_ref"):
+        value = inputs.get(key)
+        refs.extend([value] if isinstance(value, str) else value if isinstance(value, list) else [])
+    return list(dict.fromkeys(ref for ref in refs if isinstance(ref, str)))
+
+
 class RunData:
     def __init__(self, owner: str, session_id: str, run_id: str, query: str):
         self.owner, self.session_id, self.run_id, self.query = owner, session_id, run_id, query
+        self.source_aliases: dict[str, str] = {}
+        self.handle_aliases: dict[str, str] = {}
+        self._source_identities: dict[str, str] = {}
+        self._next_source_number = 1
         self._lock = RLock()
         self.records: dict[str, dict] = {}
         self.record_expires_at: dict[str, float] = {}
@@ -97,46 +121,120 @@ class RunData:
         self.storage_dir = Path(os.getenv("FINSIGHT_ARTIFACT_DIR", str(Path(__file__).resolve().parents[2] / "data/agent_artifacts")))
 
     @_locked
-    def record(self, tool: str, inputs: dict, output: Any, *, status: str = "success") -> str:
+    def record(self, tool: str, inputs: dict, output: Any, *, status: str = "success", envelope=None, kind: str | None = None) -> str:
         # 财务空值和NumPy标量必须能进入标准JSON/JSONB；缺失不伪装成0。
         output = json.loads(dumps(output), parse_constant=lambda _value: None)
-        encoded = dumps({"tool": tool, "inputs": inputs, "output": output, "status": status})
-        ref = "dataset_" + hashlib.sha256(encoded.encode()).hexdigest()[:18]
-        if ref in self.records:
+        declaration = None
+        if envelope is not None:
+            from .envelope import ToolResult
+            declaration = ToolResult.model_validate(envelope).model_dump(mode="json", exclude={"data"})
+            kind = declaration["kind"]
+            if declaration["kind"] == "control":
+                status = "control"
+            elif status == "success" and declaration["status"] != "ok":
+                status = "empty" if declaration["status"] == "empty" else "unavailable"
+        elif kind == "control":
+            status = "control"
+        elif status == "success" and isinstance(output, dict):
+            declared_status = output.get("status")
+            if declared_status in {"error", "failed", "unavailable", "empty"}:
+                status = "empty" if declared_status == "empty" else "unavailable"
+        identity = {"tool": tool, "inputs": dict(inputs), "output": output, "status": status}
+        # 来源声明不改变原始资料句柄；同一份原始资料只分配一个句柄。
+        ref = "h_" + hashlib.sha256(dumps(identity).encode()).hexdigest()[:18]
+        record = dict(identity)
+        if declaration is not None:
+            record["envelope"] = declaration
+        if kind is not None:
+            record["kind"] = kind
+        encoded = dumps(record)
+        existing = ref in self.records
+        if existing and declaration is None:
             return ref
         if len(encoded.encode()) > 5_000_000:
             raise ValueError("tool_result_too_large")
         if sum(len(dumps(row)) for row in self.records.values()) + len(encoded) > 20_000_000:
             raise ValueError("run_data_budget_exhausted")
-        self.records[ref] = {"tool": tool, "inputs": dict(inputs), "output": output, "status": status}
-        self.record_expires_at[ref] = time.time() + 12 * 3600
-        step = {"id": ref, "kind": "tool", "name": tool, "inputs": inputs, "task_ids": ["research"]}
-        self.steps.append(step)
-        self.results[ref] = {"output": output, "status": status}
+        if not existing:
+            self.records[ref] = record
+            self.record_expires_at[ref] = time.time() + 12 * 3600
+            step = {"id": ref, "kind": "tool", "name": tool, "inputs": inputs, "task_ids": ["research"]}
+            self.steps.append(step)
+            self.results[ref] = {"output": output, "status": status}
+        else:
+            self.records[ref].setdefault("envelope", declaration)
+            if kind is not None:
+                self.records[ref].setdefault("kind", kind)
         if status != "success" or output is None or output == "" or output == [] or output == {}:
             return ref
-        try:
-            from backend.graph.execution.evidence_pipeline import normalize_execution_evidence
-            state = {"query": self.query, "subject": {"subject_type": "company", "tickers": [inputs["ticker"]] if inputs.get("ticker") else []}}
-            evidence, _, _ = normalize_execution_evidence(
-                state=state, plan_ir={"steps": [step]}, artifacts={"step_results": {ref: self.results[ref]}},
-                enrich_snippets=False)
-        except (ValueError, TypeError, KeyError):
-            evidence = []
-        for item in evidence:
-            self.add_source(item, ref)
-        self._extract_sources(output, tool, ref)
+        parents = _parent_refs(inputs)
+        declared_refs = [
+            sid for value in (inputs.get("source_refs"), output.get("source_refs") if isinstance(output, dict) else None)
+            if isinstance(value, list) for sid in value if isinstance(sid, (str, int))]
+        inherited = [sid for parent in parents for sid in self.source_refs(parent)]
+        inherited.extend(self.source_aliases.get(str(sid), str(sid)) for sid in declared_refs)
+        if inherited:
+            self._source_links[ref] = list(dict.fromkeys(
+                sid for sid in [*self._source_links.get(ref, []), *inherited] if sid in self.sources))
+        if parents or declared_refs or kind == "computation" or tool in {"run_analysis_code", "run_python"}:
+            # 计算结果只能继承声明的输入来源，不能把结果内容变成新的金融出处。
+            return ref
+        if declaration is not None:
+            for source in declaration["sources"]:
+                item = {key: value for key, value in source.items() if value is not None}
+                if item.get("publisher"):
+                    item["source_name"] = item["publisher"]
+                    item["source"] = item["publisher"]
+                if item.get("published_at"):
+                    item["published_date"] = item["published_at"]
+                self.add_source(item, ref)
+        # 只读取协议对象，原文中的链接、数字和公司名不参与账本生成。
+        self._extract_declared_sources(output, ref)
         self._complete_source_metadata(ref)
         return ref
 
+    def _extract_declared_sources(self, value: Any, ref: str, depth: int = 0) -> None:
+        if depth > 6:
+            return
+        if isinstance(value, dict):
+            if any(value.get(key) for key in _PROVENANCE_FIELDS):
+                item = dict(value)
+                if item.get("published_at") and not item.get("published_date"):
+                    item["published_date"] = item["published_at"]
+                self.add_source(item, ref)
+            for key in _PROVENANCE_CONTAINERS:
+                if isinstance(value.get(key), (dict, list)):
+                    self._extract_declared_sources(value[key], ref, depth + 1)
+            metadata = value.get("fact_metadata")
+            if isinstance(metadata, dict):
+                for facts in metadata.values():
+                    if isinstance(facts, (dict, list)):
+                        self._extract_declared_sources(facts, ref, depth + 1)
+        elif isinstance(value, list):
+            for item in value[:100]:
+                if isinstance(item, (dict, list)):
+                    self._extract_declared_sources(item, ref, depth + 1)
+
+    @_locked
     def add_source(self, item: dict, ref: str) -> str:
         from .diagnostics import clean_text, safe_preview
+        item = dict(item)
+        if item.get("published_at") and not item.get("published_date"):
+            item["published_date"] = item["published_at"]
+        if isinstance(item.get("publisher"), str):
+            item.setdefault("source_name", item["publisher"])
+            item.setdefault("source", item["publisher"])
         url = item.get("url") or item.get("link") or item.get("source_url")
-        identity = str(url or item.get("source_id") or ref) + ref
-        source_id = "S" + hashlib.sha256(identity.encode()).hexdigest()[:10]
+        identity = str(url or item.get("source_id") or ref)
+        source_id = self._source_identities.get(identity)
+        if source_id is None:
+            source_id = str(self._next_source_number)
+            self._next_source_number += 1
+            self._source_identities[identity] = source_id
         # 引用账本只保存来源投影；完整行情/财报仍由data_ref回读，不能在每个引用里复制整张表。
         citation = {key: item[key] for key in ("source", "source_name", "published_date", "as_of", "confidence", "type", "kind",
-                    "reliability", "quality", "currency", "unit", "period", "price_basis", "dividends_included") if key in item}
+                    "reliability", "quality", "currency", "unit", "period", "frequency", "price_basis", "dividends_included",
+                    "market_session", "source_timestamp", "source_time_precision", "source_time_status") if key in item}
         if item.get("limitations"):
             citation["limitations"] = safe_preview(item["limitations"], max_chars=1200)
         previous = {key: value for key, value in self.sources.get(source_id, {}).items() if key in _SOURCE_FIELDS}
@@ -154,31 +252,11 @@ class RunData:
             citation["snippet"] = clean_text(snippet, 1500)
         self.sources[source_id] = {**previous, **citation, "source_id": source_id, "title": clean_text(str(title), 300),
                                    "url": clean_text(url, 4096) if isinstance(url, str) and url.startswith(("http://", "https://")) else None,
-                                   "data_ref": ref}
+                                   "data_ref": previous.get("data_ref", ref)}
         links = self._source_links.setdefault(ref, [])
         if source_id not in links:
             links.append(source_id)
         return source_id
-
-    def _extract_sources(self, value: Any, tool: str, ref: str, depth: int = 0) -> None:
-        if depth > 6:
-            return
-        if isinstance(value, dict):
-            if value.get("url") or value.get("source_url") or value.get("source") or value.get("as_of"):
-                self.add_source(value, ref)
-            for child in value.values():
-                if isinstance(child, (dict, list)):
-                    self._extract_sources(child, tool, ref, depth + 1)
-        elif isinstance(value, list):
-            for item in value[:100]:
-                self._extract_sources(item, tool, ref, depth + 1)
-        elif isinstance(value, str) and depth == 0:
-            # 搜索/公司资料的旧工具仍返回文本；真实链接也必须进入引用账本。
-            for line in value.splitlines():
-                for url in re.findall(r"https?://[^\s<>\"]+", line):
-                    self.add_source({"title": tool, "url": url.rstrip(".,，。；;）)]}"), "snippet": line}, ref)
-        if depth == 0 and not any(x.get("data_ref") == ref for x in self.sources.values()):
-            self.add_source({"title": tool, "source": tool, "limitations": ["来源时点以原始工具结果为准"]}, ref)
 
     def _complete_source_metadata(self, ref: str) -> None:
         """同一次工具的无链接摘要继承其唯一真实出处，并保留输入参数供用户核对。"""
@@ -190,11 +268,23 @@ class RunData:
         inputs = {key: value for key, value in record["inputs"].items()
                   if key in {"ticker", "period", "interval", "operation", "window", "frequency", "limit"}}
         metadata = {"tool": record["tool"], "parameters": inputs}
+        from .adapters.catalog import TOOL_KINDS
+        kind = record.get("kind") or TOOL_KINDS.get(record["tool"])
+        if kind is not None:
+            metadata["tool_kind"] = kind
+        fields = ("as_of", "observed_at", "currency", "unit", "period", "frequency", "price_basis", "dividends_included",
+                  "market_session", "source_timestamp", "source_time_precision", "source_time_status", "source_latest_filed")
         if isinstance(output, dict):
             if output.get("derived_fields"):
                 from .diagnostics import safe_preview
                 metadata["derived_fields"] = safe_preview(output["derived_fields"], max_chars=1200)
-            for key in ("as_of", "observed_at", "currency", "unit", "period", "price_basis", "dividends_included"):
+            for payload in [output, *[output[key] for key in ("data", "quote", "structured_data") if isinstance(output.get(key), dict)]]:
+                for key in fields:
+                    if key in payload:
+                        metadata[key] = payload[key]
+            if not metadata.get("as_of") and metadata.get("source_timestamp"):
+                metadata["as_of"] = metadata["source_timestamp"]
+            for key in ("period_ends", "periods", "column_units"):
                 if key in output:
                     metadata[key] = output[key]
             if isinstance(output.get("method"), dict):
@@ -202,7 +292,22 @@ class RunData:
                 metadata["method"] = safe_preview({key: value for key, value in output["method"].items()
                     if key not in {"code", "code_hash", "input_hash"}}, max_chars=1600)
         for source in entries:
+            if isinstance(output, dict):
+                from .diagnostics import safe_preview
+                for key in ("metadata", "meta"):
+                    if isinstance(output.get(key), dict):
+                        shared = safe_preview(output[key], max_chars=3000)
+                        previous = source.get(key) if isinstance(source.get(key), dict) else {}
+                        source[key] = {**shared, **previous}
+                        if output[key].get("subject_binding") == "unverified" or previous.get("subject_binding") == "unverified":
+                            source[key]["subject_binding"] = "unverified"
             source["metadata"] = {**metadata, **(source.get("metadata") or {})}
+            if not source.get("kind"):
+                source["kind"] = "company_profile" if record["tool"] in {"get_company_info", "get_company_profile"} else _LEDGER_KINDS.get(kind, "unknown")
+            source.setdefault("type", "tool")
+            for key in fields:
+                if key in source["metadata"] and source.get(key) is None:
+                    source[key] = source["metadata"][key]
             provided_source = output.get("source") or output.get("provider") if isinstance(output, dict) else None
             if isinstance(provided_source, str) and provided_source:
                 from .diagnostics import clean_text
@@ -288,22 +393,26 @@ class RunData:
         return find(self.records[ref]["output"])
 
     def source_refs(self, data_ref: str, _seen: set[str] | None = None) -> list[str]:
+        data_ref = self.handle_aliases.get(data_ref, data_ref)
         seen = set(_seen or ())
         if data_ref in seen:
             return []
         seen.add(data_ref)
         refs = list(self._source_links.get(data_ref, []))
         inputs = self.records.get(data_ref, {}).get("inputs", {})
-        parents = inputs.get("dataset_refs") or ([inputs["dataset_ref"]] if inputs.get("dataset_ref") else [])
-        for parent in parents:
+        for parent in _parent_refs(inputs):
             refs.extend(self.source_refs(parent, seen))
         return list(dict.fromkeys(refs))
 
     @_locked
     def snapshot(self) -> dict:
-        return deepcopy({"records": self.records, "sources": self.sources, "artifacts": self.artifacts,
+        snapshot = {"records": self.records, "sources": self.sources, "artifacts": self.artifacts,
                          "prior_artifacts": self.prior_artifacts,
-                         "source_links": self._source_links, "record_expires_at": self.record_expires_at})
+                         "source_links": self._source_links, "record_expires_at": self.record_expires_at}
+        snapshot.update(reference_style="integer", source_aliases=self.source_aliases,
+                        handle_aliases=self.handle_aliases, source_identities=self._source_identities,
+                        next_source_number=self._next_source_number)
+        return deepcopy(snapshot)
 
     def _path(self, run_id: str) -> Path:
         scope = hashlib.sha256((self.owner + ":" + self.session_id).encode()).hexdigest()[:32]
@@ -350,26 +459,68 @@ class RunData:
         if (payload.get("owner") != self.owner or payload.get("session_id") != self.session_id
                 or payload.get("run_id") != parent_run_id or payload.get("expires_at", 0) < time.time()):
             return False
+        return self._restore_records(payload)
+
+    def _restore_records(self, payload: dict) -> bool:
+        """只迁移已声明的引用字段；历史正文与原始金融数值不做替换。"""
+        records = {}
         expiries = payload.get("record_expires_at") or {}
-        records = payload.get("records") or {}
-        from .completeness import output_status
-        records = {ref: record for ref, record in records.items()
-                   if record.get("status") == "success" and output_status(record.get("output")) == "success"}
-        now = time.time()
-        self.record_expires_at = {ref: float(expiries.get(ref, payload["expires_at"])) for ref in records
-                                  if float(expiries.get(ref, payload["expires_at"])) > now}
-        self.records = {ref: record for ref, record in records.items() if ref in self.record_expires_at}
-        self.sources = {sid: {key: value for key, value in source.items() if key in _SOURCE_FIELDS} for sid, source in (payload.get("sources") or {}).items()
-                        if source.get("data_ref") in self.records}
-        self._source_links = {ref: [sid for sid in links if sid in self.sources]
-                              for ref, links in (payload.get("source_links") or {}).items() if ref in self.records}
-        # 只保留历史图表的可核验投影，不把旧图当作新产物重复交付。
+        for ref, record in (payload.get("records") or {}).items():
+            declared = record.get("envelope") or record.get("output")
+            status = declared.get("status") if isinstance(declared, dict) else None
+            if (record.get("status") == "success" and status not in {"error", "failed", "unavailable", "empty"}
+                    and float(expiries.get(ref, payload["expires_at"])) > time.time()):
+                records[ref] = record
+        handles = {ref: ref if ref.startswith("h_") else "h_" + (ref[8:] if ref.startswith("dataset_") else hashlib.sha256(ref.encode()).hexdigest()[:18])
+                   for ref in records}
+        linked_ids = {sid for ref, ids in (payload.get("source_links") or {}).items() if ref in records for sid in ids}
+        sources = {str(sid): source for sid, source in (payload.get("sources") or {}).items()
+                   if source.get("data_ref") in records or sid in linked_ids}
+        numbered = payload.get("reference_style") == "integer"
+        ids = {sid: sid if numbered else str(index) for index, sid in enumerate(sources, 1)}
+        self._next_source_number = max(int(payload.get("next_source_number", 1)),
+            max((int(sid) for sid in (payload.get("sources") or {})), default=0) + 1 if numbered else len(ids) + 1)
+        self.source_aliases = {key: ids.get(value, value) for key, value in (payload.get("source_aliases") or {}).items()
+                               if value in ids}
+        self.source_aliases.update({key: value for key, value in ids.items() if key != value})
+        self.handle_aliases = {key: handles.get(value, value) for key, value in (payload.get("handle_aliases") or {}).items()
+                               if value in handles}
+        self.handle_aliases.update({key: value for key, value in handles.items() if key != value})
+        handle_fields = {"handle", "handles", "data_ref", "data_refs", "dataset_ref", "dataset_refs", "input_refs"}
+        source_fields = {"source_id", "source_refs", "evidence_refs"}
+
+        def references(value):
+            if isinstance(value, list):
+                return [references(item) for item in value]
+            if not isinstance(value, dict):
+                return value
+            result = {}
+            for key, item in value.items():
+                mapping = handles if key in handle_fields else ids if key in source_fields else None
+                if mapping is not None and isinstance(item, str):
+                    result[key] = mapping.get(item, item)
+                elif mapping is not None and isinstance(item, list):
+                    result[key] = [mapping.get(entry, entry) if isinstance(entry, str) else entry for entry in item]
+                else:
+                    result[key] = references(item)
+            return result
+
+        self.records = {handles[ref]: references(record) for ref, record in records.items()}
+        self.record_expires_at = {handles[ref]: float(expiries.get(ref, payload["expires_at"])) for ref in records}
+        self.sources = {ids[sid]: references({key: value for key, value in source.items() if key in _SOURCE_FIELDS})
+                        for sid, source in sources.items()}
+        self._source_links = {handles[ref]: [ids[sid] for sid in links if sid in ids]
+                              for ref, links in (payload.get("source_links") or {}).items() if ref in handles}
+        self._source_identities = {identity: ids[sid] for identity, sid in (payload.get("source_identities") or {}).items()
+                                   if sid in ids}
+        for sid, source in self.sources.items():
+            self._source_identities.setdefault(str(source.get("url") or source.get("data_ref")), sid)
         prior = {}
         for artifact in [*(payload.get("prior_artifacts") or []), *(payload.get("artifacts") or [])]:
             refs = artifact.get("dataset_refs") or []
-            if artifact.get("kind") == "chart" and refs and all(ref in self.records for ref in refs):
-                prior[artifact["artifact_id"]] = {key: artifact[key] for key in
-                    ("artifact_id", "kind", "title", "dataset_refs", "source_refs", "spec", "coverage", "method", "limitations") if key in artifact}
+            if artifact.get("kind") in {"chart", "table"} and refs and all(ref in handles for ref in refs):
+                prior[artifact["artifact_id"]] = references({key: artifact[key] for key in
+                    ("artifact_id", "kind", "title", "dataset_refs", "source_refs", "spec", "coverage", "method", "limitations") if key in artifact})
         self.prior_artifacts = list(prior.values())[-30:]
         return bool(self.records)
 

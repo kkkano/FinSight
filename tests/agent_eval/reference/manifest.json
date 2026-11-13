@@ -1,0 +1,2485 @@
+{
+  "schema_version": 1,
+  "scope_sha256": "9b106c01466dc271a76bbe3c11b877d573612cd528aac11078dc619d7d4afbf7",
+  "files": {
+    "backend/agents/deep_search_agent.py": {
+      "sha256": "bda9fc94bb1104593a1db96e44fa30c9b774a8988d035db6f0dbf021e17834f9",
+      "role": "retired_production",
+      "origin": "backend/agents/deep_search_agent.py"
+    },
+    "backend/agents/deepagents_bridge.py": {
+      "sha256": "7e4b8af6a05681ffdcec5df39a49b5d3d6b6e082db919615000984aea5c11897",
+      "role": "retired_production",
+      "origin": "backend/agents/deepagents_bridge.py"
+    },
+    "backend/agents/fundamental_agent.py": {
+      "sha256": "af888c3e3d8d12a1889891366476027854594bd2ecd4fa4a600bbae7e2739021",
+      "role": "retired_production",
+      "origin": "backend/agents/fundamental_agent.py"
+    },
+    "backend/agents/macro_agent.py": {
+      "sha256": "e7ca25e98a65deb895d6d21a73ee29bd42f90115d40db6a2d542aad11cf46413",
+      "role": "retired_production",
+      "origin": "backend/agents/macro_agent.py"
+    },
+    "backend/agents/news_agent.py": {
+      "sha256": "6ca8bc1e789ca3f7ab5e1adaf96822885b51cbce53caa39a4a4c50ab74e4dc5d",
+      "role": "retired_production",
+      "origin": "backend/agents/news_agent.py"
+    },
+    "backend/agents/prediction_contract.py": {
+      "sha256": "2c066bbf448e5c2e9589aaf61ef5646babc0a453b367f1d67f41320d3d033f4e",
+      "role": "retired_production",
+      "origin": "backend/agents/prediction_contract.py"
+    },
+    "backend/agents/prediction_submit.py": {
+      "sha256": "7ede884bf74dfe6ca9be2b40a0e278c5755900d49d6fd25ef34a709c060bc008",
+      "role": "retired_production",
+      "origin": "backend/agents/prediction_submit.py"
+    },
+    "backend/agents/price_agent.py": {
+      "sha256": "5468121ee63c5d83bd5b6004f9752de621d3421d63536e7baa8fac84b197c1a2",
+      "role": "retired_production",
+      "origin": "backend/agents/price_agent.py"
+    },
+    "backend/agents/profiles.py": {
+      "sha256": "ac6ecdd00fd667121d73ee7ed700958297125f71131186d948de11a06ecbe962",
+      "role": "retired_production",
+      "origin": "backend/agents/profiles.py"
+    },
+    "backend/agents/search_convergence.py": {
+      "sha256": "e6cdf67ffaccbad42f1a7b22ed9108625fc0a1f75a9ac321fb0fc2e26a9c3619",
+      "role": "retired_production",
+      "origin": "backend/agents/search_convergence.py"
+    },
+    "backend/agents/sentiment_brief.py": {
+      "sha256": "e1d73d5e9ad9dfec0871f682b28c59e07b1a283b4f9f7e8c0335adbc50764bf9",
+      "role": "retired_production",
+      "origin": "backend/agents/sentiment_brief.py"
+    },
+    "backend/graph/__init__.py": {
+      "sha256": "b45afb11c01b7de08c9fb0056544d4faf8bb2436acee71c6cd5c33d73bc0263c",
+      "role": "retired_production",
+      "origin": "backend/graph/__init__.py"
+    },
+    "backend/graph/adapters/__init__.py": {
+      "sha256": "468e126e66e724057cd095c1c465bf9d870c7b618e7e61d55c2e70b079d3265a",
+      "role": "retired_production",
+      "origin": "backend/graph/adapters/__init__.py"
+    },
+    "backend/graph/adapters/collector_adapter.py": {
+      "sha256": "f8c65eb609a420af5e930f60421573374fe30f8efa8a4a51b1bff2520a914b43",
+      "role": "retired_production",
+      "origin": "backend/graph/adapters/collector_adapter.py"
+    },
+    "backend/graph/adapters/tool_adapter.py": {
+      "sha256": "e760d53b875f6cb96c4ecf350818cffb0dd03b4faf227ab41bd7c04619ce2e9e",
+      "role": "retired_production",
+      "origin": "backend/graph/adapters/tool_adapter.py"
+    },
+    "backend/graph/cancellation.py": {
+      "sha256": "46e9ce6a1b393b6220b9763ef44e8b21dd50c560e24109427ab7cb93dcccbb73",
+      "role": "retired_production",
+      "origin": "backend/graph/cancellation.py"
+    },
+    "backend/graph/capability_registry.py": {
+      "sha256": "5594527374c8529da71ecd542bc5dca1952d18c28a990be17e5a6eaaf673d957",
+      "role": "retired_production",
+      "origin": "backend/graph/capability_registry.py"
+    },
+    "backend/graph/checkpointer.py": {
+      "sha256": "92b18c7c16eccad6e29760d1493bc1b02fb7cfc85078f0592d6ddcf657cf773b",
+      "role": "retired_production",
+      "origin": "backend/graph/checkpointer.py"
+    },
+    "backend/graph/coverage_validator.py": {
+      "sha256": "968bbeda5ec175fd65d82a5d1245023a24449cabb9cdcb96e4fff8df3d242dec",
+      "role": "retired_production",
+      "origin": "backend/graph/coverage_validator.py"
+    },
+    "backend/graph/dag_executor.py": {
+      "sha256": "70bd89323c70120f4611ed60007cdd20a10307cfec8c3b6a65229c5ed340df2e",
+      "role": "retired_production",
+      "origin": "backend/graph/dag_executor.py"
+    },
+    "backend/graph/earnings_intent.py": {
+      "sha256": "89aa08579e2780c967f548458db227d1c15f8d2f2387aa2bb46a193b02899905",
+      "role": "retired_production",
+      "origin": "backend/graph/earnings_intent.py"
+    },
+    "backend/graph/event_bus.py": {
+      "sha256": "707e37287a92e09af65be49f81763658986808d19b3431cee4d7f80849d51017",
+      "role": "retired_production",
+      "origin": "backend/graph/event_bus.py"
+    },
+    "backend/graph/evidence_dependencies.py": {
+      "sha256": "73cedab3b9d931a9488c0f95818c3002d5834d3ad88b832ca28a513b541f6792",
+      "role": "retired_production",
+      "origin": "backend/graph/evidence_dependencies.py"
+    },
+    "backend/graph/execution/__init__.py": {
+      "sha256": "6e8da2173422849c1a288af5dd6368f7f0a7483c6804dba2804e31af3a69aaf2",
+      "role": "retired_production",
+      "origin": "backend/graph/execution/__init__.py"
+    },
+    "backend/graph/execution/evidence_pipeline.py": {
+      "sha256": "bb717b5efcd68b0160fa3ea140d43b3514c3d38be6883a442cabd0cb51d62307",
+      "role": "retired_production",
+      "origin": "backend/graph/execution/evidence_pipeline.py"
+    },
+    "backend/graph/execution/evidence_tools.py": {
+      "sha256": "086de218956334ff73675fddc8821ea889cdc03e5175e2088689a234e59c2445",
+      "role": "retired_production",
+      "origin": "backend/graph/execution/evidence_tools.py"
+    },
+    "backend/graph/execution/partial_delivery.py": {
+      "sha256": "ad08a4b8f27aa59b0f0a8ed40c9e007fe8f22008d281215a822f778276524b82",
+      "role": "retired_production",
+      "origin": "backend/graph/execution/partial_delivery.py"
+    },
+    "backend/graph/execution/plan_pipeline.py": {
+      "sha256": "4e0e9807cc9d9678f49934cb9eb811997c2d001950b6b87637e535fa9561f0ed",
+      "role": "retired_production",
+      "origin": "backend/graph/execution/plan_pipeline.py"
+    },
+    "backend/graph/execution/request_data.py": {
+      "sha256": "0bb79f38e73980e88eca8e3eaa1923be9dee11dda7201fe9c1c84bf3bd460dec",
+      "role": "retired_production",
+      "origin": "backend/graph/execution/request_data.py"
+    },
+    "backend/graph/executor.py": {
+      "sha256": "ea87aa99bc62487988abe5aefe60eb29165538cef8530f5fcbeaade949ead1f2",
+      "role": "retired_production",
+      "origin": "backend/graph/executor.py"
+    },
+    "backend/graph/failure.py": {
+      "sha256": "8e3335322bc4aa76f8ad2bbd0ec926b8d473a4efc79b660669348be0620beaeb",
+      "role": "retired_production",
+      "origin": "backend/graph/failure.py"
+    },
+    "backend/graph/intent/__init__.py": {
+      "sha256": "1c3a5bdc3cded00437e0a32ae6605ec6a5c09dab4ece0381da008265435511c7",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/__init__.py"
+    },
+    "backend/graph/intent/decision.py": {
+      "sha256": "ad422908cf7a584a106ed77aa34c33507b0798da7befea4f43ba121bd496aff8",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/decision.py"
+    },
+    "backend/graph/intent/deterministic_engine.py": {
+      "sha256": "544ea85792e65cd2febdf3b739a6d79dd52e8bf3ace40491c250f69ed8412985",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/deterministic_engine.py"
+    },
+    "backend/graph/intent/direct_reply.py": {
+      "sha256": "c9dcf0c3797e8017c3c8fa837f26cf56b733a140607891ede643fda5a485fe95",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/direct_reply.py"
+    },
+    "backend/graph/intent/financial_terms.py": {
+      "sha256": "d6ec0b513384bd082bf8aaf1af2fdaa511245c6efd050d14df7cb780a2c1ce7a",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/financial_terms.py"
+    },
+    "backend/graph/intent/frame.py": {
+      "sha256": "086b4f28356a1ac676c9bb216baa64879147b032566ff8a1742afa967a51647a",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/frame.py"
+    },
+    "backend/graph/intent/keywords.py": {
+      "sha256": "2e1c4ada12abcce9a6c5bc0bca934454bc28fe953257189f577179782d1c6d42",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/keywords.py"
+    },
+    "backend/graph/intent/operations.py": {
+      "sha256": "a110a603c62de3683f3d24e180a785b5344fc8ff375fddec0292eaf659d53d1d",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/operations.py"
+    },
+    "backend/graph/intent/predicates.py": {
+      "sha256": "062d54abca6ecb27fd6790053ab1a172b2d2b7d0158f90499ac3822986579c7b",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/predicates.py"
+    },
+    "backend/graph/intent/priorities.py": {
+      "sha256": "226d2b5e46710ebf41a8e26453a379689907fb8912f810dce62ac5c60c0451e2",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/priorities.py"
+    },
+    "backend/graph/intent/signals.py": {
+      "sha256": "0b614cfc9773087a6965a2fb97838d0305322ebc694be211a9c5b83fc0e5918a",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/signals.py"
+    },
+    "backend/graph/intent/task_builders.py": {
+      "sha256": "43a83e6cf9448a84e2411d7cb34d2e7d5fe2e1ede95ed380b7a10fbb0be24679",
+      "role": "retired_production",
+      "origin": "backend/graph/intent/task_builders.py"
+    },
+    "backend/graph/intent_contract.py": {
+      "sha256": "521f42d80ce2a15f834ca90a0ef14fe2ad7c06faee0d5453eb6a610b0042d87d",
+      "role": "retired_production",
+      "origin": "backend/graph/intent_contract.py"
+    },
+    "backend/graph/investment_intent.py": {
+      "sha256": "0d8a8a384d8ea76432fa34b8eefb6edc180d97511990db5ef51c11a1ed77a6f5",
+      "role": "retired_production",
+      "origin": "backend/graph/investment_intent.py"
+    },
+    "backend/graph/json_utils.py": {
+      "sha256": "20b098d62762057dd2e419e2891fcdfc84a29911a64ef3a70e60afda0dc25b72",
+      "role": "retired_production",
+      "origin": "backend/graph/json_utils.py"
+    },
+    "backend/graph/memory_scope.py": {
+      "sha256": "ab19f5e8088183efcb8515b90bf2772a5eb3b067f57f24fd41aef3026c0f3d79",
+      "role": "retired_production",
+      "origin": "backend/graph/memory_scope.py"
+    },
+    "backend/graph/memory_snapshot.py": {
+      "sha256": "643bfbb372d7dda6b85f0316b5a6b006c59846a601e971288eaca6925c365bde",
+      "role": "retired_production",
+      "origin": "backend/graph/memory_snapshot.py"
+    },
+    "backend/graph/nodes/__init__.py": {
+      "sha256": "77e2f9dfd9fac082408a098538e771689e9bf4ceadab5db7388aadb2ec1c8553",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/__init__.py"
+    },
+    "backend/graph/nodes/analyze.py": {
+      "sha256": "a2646b300e2f2d214e1d1efb2e467a8c0d7b9561464dacb6ae46c14f3f2c65ac",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/analyze.py"
+    },
+    "backend/graph/nodes/build_initial_state.py": {
+      "sha256": "79ef5f34f4c0cafbd0a854e86f9bc767a83c4a68b524d8065aea151686641f1b",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/build_initial_state.py"
+    },
+    "backend/graph/nodes/chat_respond.py": {
+      "sha256": "3d1dffdfb9600caac40344f6ee33e1f054815fe7f5a0f767e7afde69da50128d",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/chat_respond.py"
+    },
+    "backend/graph/nodes/clarify.py": {
+      "sha256": "2ad3f72858eb7f70531e36cc64598744429db143f25478c0cc283e8e3b897ab8",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/clarify.py"
+    },
+    "backend/graph/nodes/collect_evidence.py": {
+      "sha256": "8507f02269ce76f9843631a981007c9a31d333b615e661a203e15a674e08d499",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/collect_evidence.py"
+    },
+    "backend/graph/nodes/compare_gate.py": {
+      "sha256": "1b593ed6809c36338afe584c20ffd19720ab13a9d3f824b84aaee14fae466d60",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/compare_gate.py"
+    },
+    "backend/graph/nodes/decide_output_mode.py": {
+      "sha256": "0dfc9031cf63f4b6f1b3a723cca51dd797882c300d348054ff2877fa2392d8de",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/decide_output_mode.py"
+    },
+    "backend/graph/nodes/execute_plan_node.py": {
+      "sha256": "b2bdc5d6dfc5791bae57cc4a3328bcc7be3c465412fe6d538c88f8e67470fdc7",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/execute_plan_node.py"
+    },
+    "backend/graph/nodes/normalize_ui_context.py": {
+      "sha256": "8c7ac4f3adfd1b88bca9a4244808c35b4447267b8e37f786fce57fcaaf3b1a44",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/normalize_ui_context.py"
+    },
+    "backend/graph/nodes/parse_operation.py": {
+      "sha256": "1070554c527a650a5ff843a1788783e068d35f9c3957dab0930b26d480339c88",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/parse_operation.py"
+    },
+    "backend/graph/nodes/policy_gate.py": {
+      "sha256": "c97d9e71d581471fb3aaeb5f7dad33966baad92d0b602bf166241b6d346ca948",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/policy_gate.py"
+    },
+    "backend/graph/nodes/prepare_context.py": {
+      "sha256": "efa1abf94cd5926c5b186fce026fe876406d3649b00287aa26937179c50394bd",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/prepare_context.py"
+    },
+    "backend/graph/nodes/query_intent.py": {
+      "sha256": "5328f380440d4cd0d2edf785dc84e5ba981ae52fab472dbe114ee373c9adab6f",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/query_intent.py"
+    },
+    "backend/graph/nodes/render.py": {
+      "sha256": "01a6932ab3449f8d0fb4c27bea67ed354067babaad79381df8799d409a71cea2",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/render.py"
+    },
+    "backend/graph/nodes/render_node.py": {
+      "sha256": "2828ed6acb69a6bff4ed6830ee9b72dcbc353f711b3181773a326138bc549d04",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/render_node.py"
+    },
+    "backend/graph/nodes/reset_turn_state.py": {
+      "sha256": "c9b0c67aac7fc556d3e5079871b8abc30bed01f68ba07c8ba6e5c14775d0a329",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/reset_turn_state.py"
+    },
+    "backend/graph/nodes/resolve_subject.py": {
+      "sha256": "c1e2ca90d769de21df3b0daf3a26e31e7fa3b382023010e22a3996b56c81327a",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/resolve_subject.py"
+    },
+    "backend/graph/nodes/route_request.py": {
+      "sha256": "8c41f0fb9e0d1e823b6633b482164965a455f3ef6992d65a4885ca3b35d90aad",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/route_request.py"
+    },
+    "backend/graph/nodes/summarize_history.py": {
+      "sha256": "737c72fe51ec6d866d3d83c270703cd8c6acfa984f4cbce09c84816171b9b3bd",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/summarize_history.py"
+    },
+    "backend/graph/nodes/synthesize.py": {
+      "sha256": "27f4b627b657c48b62838ec52563d45b3f6ffa89dd2d03a453ed40421ecf5558",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/synthesize.py"
+    },
+    "backend/graph/nodes/trim_conversation_history.py": {
+      "sha256": "7a46d014acc34c84146c03f5e9f96c8dd7a6ef729638f018559d765d95b3ee47",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/trim_conversation_history.py"
+    },
+    "backend/graph/nodes/validate.py": {
+      "sha256": "8b05d5eadbf94ad45e162bdb0ef01881b2c8cca14913f2d46ab7dce3a73de9c3",
+      "role": "retired_production",
+      "origin": "backend/graph/nodes/validate.py"
+    },
+    "backend/graph/plan_ir.py": {
+      "sha256": "f5ad8ec30191f891724a8081b3bc358cf52e698d0ae0bd62018f9be93f783eba",
+      "role": "retired_production",
+      "origin": "backend/graph/plan_ir.py"
+    },
+    "backend/graph/planner_prompt.py": {
+      "sha256": "f09d87066eb5eec8a39f52fe08532a4cf92db2a0d8bea926d125bc8de86e8c9c",
+      "role": "retired_production",
+      "origin": "backend/graph/planner_prompt.py"
+    },
+    "backend/graph/planning/__init__.py": {
+      "sha256": "232944c0a94bc50a8d488db86ea3e61b2a6150dd096005670461c9ed1fa89ac3",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/__init__.py"
+    },
+    "backend/graph/planning/builders/__init__.py": {
+      "sha256": "1205508b4a73c57f89a8fcb2e2be2e072488bdae6eee149879b1e872b9f9338f",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/__init__.py"
+    },
+    "backend/graph/planning/builders/company.py": {
+      "sha256": "21ea93d8e4b61e1c3e9eccd1d646a5b14eedf18fb33ae7d1c953824a61b9677f",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/company.py"
+    },
+    "backend/graph/planning/builders/earnings.py": {
+      "sha256": "35edf33fee867fefa3e4d55cdb12168d36fdc8e0d09f7f3d6f7827b08568e4a8",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/earnings.py"
+    },
+    "backend/graph/planning/builders/evidence.py": {
+      "sha256": "b0b35e8b749c65b76138d2491b582daae875f88896a64c29b5d8fc781b076e64",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/evidence.py"
+    },
+    "backend/graph/planning/builders/holdings.py": {
+      "sha256": "c922c32ae19af2d510e10d8c744a3d13153bb99164e084a0274f9180a1cf8488",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/holdings.py"
+    },
+    "backend/graph/planning/builders/macro.py": {
+      "sha256": "f614f43e53f326310115a76787ddc1b10635372200f261dd4c0d73ca69ff5925",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/macro.py"
+    },
+    "backend/graph/planning/builders/theme.py": {
+      "sha256": "fca64746aef05979bda118e5322c6f9841e578be79c173c53a4a556c72c1e25b",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/theme.py"
+    },
+    "backend/graph/planning/builders/url_docs.py": {
+      "sha256": "21f8f6cf87c57c24a152cb91dc9a3676c55e16ba676fdeb81c3ed1d2e2b7d9dc",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/url_docs.py"
+    },
+    "backend/graph/planning/builders/valuation.py": {
+      "sha256": "211583937f83e21310540052ce2e2e425d5986f3e33da8db751e6c38cb7b7933",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/builders/valuation.py"
+    },
+    "backend/graph/planning/context.py": {
+      "sha256": "d1c73c814de5c936dc027bee2c6c607199fb11f5db2bdf1f0d80561f03c0a0ab",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/context.py"
+    },
+    "backend/graph/planning/diagnostics.py": {
+      "sha256": "19ab300c691cf872c9ce447becb16eac0bee147672b96244edd03cc4cc32030d",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/diagnostics.py"
+    },
+    "backend/graph/planning/frames.py": {
+      "sha256": "58fd18b1c27d7e56e012526027884d7a4e0cf6bf08f9d61c15de6a1b60c2ad83",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/frames.py"
+    },
+    "backend/graph/planning/lane_selector.py": {
+      "sha256": "3f6bd7a3e9579e58c75d6da10f6a9f53c9eaf5c4f5026f3574012f2aee168feb",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/lane_selector.py"
+    },
+    "backend/graph/planning/llm_output.py": {
+      "sha256": "5155020983f0879783b99e539ee7b275ad04e17cd3fb85b5e28812a042ba7094",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/llm_output.py"
+    },
+    "backend/graph/planning/policy_enforcement.py": {
+      "sha256": "10dfa877177e649167857ef616b72db34f12430402972ae29c13d2f417186051",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/policy_enforcement.py"
+    },
+    "backend/graph/planning/report_mode.py": {
+      "sha256": "383f3fe4f670d3f79a239cecc4e2aa7bafe4080846bfcb9c38ffdc27884c2797",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/report_mode.py"
+    },
+    "backend/graph/planning/roles.py": {
+      "sha256": "2b525ff61171e508a989b25b9a3dfeaea4f4b2d8f33bd31db92d605da39bae7a",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/roles.py"
+    },
+    "backend/graph/planning/rule_planner.py": {
+      "sha256": "e0325fce5e69526cac5560534196d083f20d80f57e9d402bb97b2f48184bbc6c",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/rule_planner.py"
+    },
+    "backend/graph/planning/steps.py": {
+      "sha256": "f1bd1051d1d8dbc343f5b8539c912057a4a0b836778ce8f9f86560e3eb6b4d74",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/steps.py"
+    },
+    "backend/graph/planning/util.py": {
+      "sha256": "2c87ac9f874992dc95c3963dcf1482e6c837ba62c30c6fd67e4d6d8559ec0b62",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/util.py"
+    },
+    "backend/graph/planning/validation.py": {
+      "sha256": "723b3b16728897c9cbb0fee79d1da30373f6336d846623f964e15f47b36fb9ad",
+      "role": "retired_production",
+      "origin": "backend/graph/planning/validation.py"
+    },
+    "backend/graph/policy/__init__.py": {
+      "sha256": "7dfe3ff14f4924f79b687350482246baa0009dc462e442f70bfed0ebdfeb4a9b",
+      "role": "retired_production",
+      "origin": "backend/graph/policy/__init__.py"
+    },
+    "backend/graph/policy/runtime.py": {
+      "sha256": "c2b2545d976d4c07ea2fdea9d45a32c0d5cb50d6da2f4bb8de9de66a915a9724",
+      "role": "retired_production",
+      "origin": "backend/graph/policy/runtime.py"
+    },
+    "backend/graph/policy/tools.py": {
+      "sha256": "43deb6149446373c20b688c60aae8c1122b4858915dcadd0addddc33d5a1eb6f",
+      "role": "retired_production",
+      "origin": "backend/graph/policy/tools.py"
+    },
+    "backend/graph/render_vars/__init__.py": {
+      "sha256": "4be88b570221c5f598b18e31c1523e9fa77c7530230fa44ed16f288ae9a811f7",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/__init__.py"
+    },
+    "backend/graph/render_vars/access.py": {
+      "sha256": "24201e076c0802beb4f6b24cdec90a126ba3c1e3a31ff5b5811a34162ed595c7",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/access.py"
+    },
+    "backend/graph/render_vars/compare.py": {
+      "sha256": "7e54784944f79952093d8751a44bff23ceb70dc41c9a6c18501a36b9ad3e26c9",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/compare.py"
+    },
+    "backend/graph/render_vars/context.py": {
+      "sha256": "1adeb773d807c906d760fc1ca5666d3443631de779e9946db2e622453eb7ff57",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/context.py"
+    },
+    "backend/graph/render_vars/macro.py": {
+      "sha256": "7fce3c837e6b008ec7f14166d8d897a4d1b249cc1eb3a8d5fd077d81f7451f9b",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/macro.py"
+    },
+    "backend/graph/render_vars/model.py": {
+      "sha256": "45275d579a4660d7046bcc96f5b73b591e66f2dc55e5a7cc08f69bfc2b338226",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/model.py"
+    },
+    "backend/graph/render_vars/news.py": {
+      "sha256": "05ec4f5a996600230d92b410a5f50ca501558ee6d576259bcbd52d8f3ff46d78",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/news.py"
+    },
+    "backend/graph/render_vars/price.py": {
+      "sha256": "b4d64d92cc05b20102c74bb6a28dfda29b00d5cd60840235efe0a27bb99a0be6",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/price.py"
+    },
+    "backend/graph/render_vars/report_agents.py": {
+      "sha256": "6f720493b988d5d60f8e20f43548c181bb4bda34b2231952eab6be10261cc5b9",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/report_agents.py"
+    },
+    "backend/graph/render_vars/technical.py": {
+      "sha256": "884209920a28f045971a344808852b6d675f7e60778bc202c8ab58c5078bb0df",
+      "role": "retired_production",
+      "origin": "backend/graph/render_vars/technical.py"
+    },
+    "backend/graph/renderers/__init__.py": {
+      "sha256": "5588278cca13c1afa262c97dc8667de183d8b9fd281b85bf150fe0f9bce94804",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/__init__.py"
+    },
+    "backend/graph/renderers/compare.py": {
+      "sha256": "47ee865e92d99a38001566bc6bf11d8a0af8412eefb28f7e10c988925ead806b",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/compare.py"
+    },
+    "backend/graph/renderers/content_selection.py": {
+      "sha256": "3919d6a5431a3fe405f5292fb65e3bacc9cb2301fd4422653506635ea3bbfb20",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/content_selection.py"
+    },
+    "backend/graph/renderers/earnings.py": {
+      "sha256": "978adc943f3888ece166e9f8bafdfed7af69d50fdfd5c21dd3d8f46c5a8a4c98",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/earnings.py"
+    },
+    "backend/graph/renderers/fact_formatters.py": {
+      "sha256": "1592e4aa56ab719a0f25442dfee1034eab6eb6a16c1a57d11f392913a77b2679",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/fact_formatters.py"
+    },
+    "backend/graph/renderers/holdings.py": {
+      "sha256": "ea587c73ecbc201ce571f75c40c687faf53175cdfe666f5437c31fbc7aec3771",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/holdings.py"
+    },
+    "backend/graph/renderers/macro.py": {
+      "sha256": "1bd4e99261c00f0d0b3dcedba04c67eab16f2d224220056e800edb7fed981bf9",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/macro.py"
+    },
+    "backend/graph/renderers/misc.py": {
+      "sha256": "dc35538a9fa454bf69702963c269e8a7b168868bca252e3a0ad53289aa5305a2",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/misc.py"
+    },
+    "backend/graph/renderers/news.py": {
+      "sha256": "30d7449a95b184c3222292c64c120645c2b2512a9512cc983d42aaee2bb34e75",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/news.py"
+    },
+    "backend/graph/renderers/news_fallback.py": {
+      "sha256": "a2f1329eb623a4eaf251a4f171f4445c32abd4bce5cd218c3931827e6c48750f",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/news_fallback.py"
+    },
+    "backend/graph/renderers/news_items.py": {
+      "sha256": "c16e3bc3bc2b90a5a28159a85dbf12ffc9fc8e1539b5cdce85f22620e3ce2d26",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/news_items.py"
+    },
+    "backend/graph/renderers/news_snapshot.py": {
+      "sha256": "fcaf3b6c870d7ada2f5e03b4fc878d911b0a6d73e757404286b663ec17d550f2",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/news_snapshot.py"
+    },
+    "backend/graph/renderers/opinion.py": {
+      "sha256": "9144e520ad9aeecf02eb477c84ce03c0cd107de2d9fce51b177c5844c2d1bd8d",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/opinion.py"
+    },
+    "backend/graph/renderers/price.py": {
+      "sha256": "8951283e6acfb83f337540800aa5dec610799f9ee054c935fd07f138eaa3d271",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/price.py"
+    },
+    "backend/graph/renderers/registry.py": {
+      "sha256": "a877cdc8816f81f0dd87e0637b3edc9fc679eaa029259e7836c4299937ab175b",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/registry.py"
+    },
+    "backend/graph/renderers/research_report.py": {
+      "sha256": "5fd79ef62412d2a765630c908d4f8ee7d50e2c449a3c82c241553ba068ba5ca0",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/research_report.py"
+    },
+    "backend/graph/renderers/shared.py": {
+      "sha256": "625604eed7d0808b3371a52782f8a6c531bfb98be2712a940565088abdf5e880",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/shared.py"
+    },
+    "backend/graph/renderers/synthesis_vars.py": {
+      "sha256": "5c85e2b3521f30ecf7cbea724dee8400ab0e5caedfdd3a11b289834f3d6efd4e",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/synthesis_vars.py"
+    },
+    "backend/graph/renderers/url_fetch.py": {
+      "sha256": "449b57688024fd1d1542deb6e39a10831309d3cf5b3e82004f9db719aca3aaa3",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/url_fetch.py"
+    },
+    "backend/graph/renderers/valuation.py": {
+      "sha256": "4abcc1ef9f52f64e2044cfe3bf9af9db4d11922b73c85d5ffe3c24c0cf2fc1d5",
+      "role": "retired_production",
+      "origin": "backend/graph/renderers/valuation.py"
+    },
+    "backend/graph/report_builder.py": {
+      "sha256": "40a95639360ec7a36c81c937c521e2a2135f75bb4bac31e690d95a27022851b5",
+      "role": "retired_production",
+      "origin": "backend/graph/report_builder.py"
+    },
+    "backend/graph/request_compiler.py": {
+      "sha256": "624add1c92bd121c35b9091a2ebc6e5ffda7864a565faf5082510d8d34ccd59c",
+      "role": "retired_production",
+      "origin": "backend/graph/request_compiler.py"
+    },
+    "backend/graph/request_constraints.py": {
+      "sha256": "a80d1a032b3a0f00ac6f0f8a6945dbc97e0848f2456148004c88edabd87f6f47",
+      "role": "retired_production",
+      "origin": "backend/graph/request_constraints.py"
+    },
+    "backend/graph/request_facets.py": {
+      "sha256": "1f9b3d2e761871b64b605756c683bd0e13e1f1732c726bb929f7e3db09f28d70",
+      "role": "retired_production",
+      "origin": "backend/graph/request_facets.py"
+    },
+    "backend/graph/request_frame.py": {
+      "sha256": "a6e1946570418b2a870215ae6709168d0e4ab212b5054455c7cc51ca35d72ed9",
+      "role": "retired_production",
+      "origin": "backend/graph/request_frame.py"
+    },
+    "backend/graph/request_spec.py": {
+      "sha256": "06623b46efeda39330a0c46de8d5cc686fc2bbb3e46e20b6b503c8be94e83469",
+      "role": "retired_production",
+      "origin": "backend/graph/request_spec.py"
+    },
+    "backend/graph/request_task_contract.py": {
+      "sha256": "ecbc53d2407a62e31c66c02d88b6deb62cdff28857be11f5690a1fac396d228d",
+      "role": "retired_production",
+      "origin": "backend/graph/request_task_contract.py"
+    },
+    "backend/graph/research_capabilities.py": {
+      "sha256": "70350f385fe37bece29e5f081b09cfb6d65a13b929623bc12130b1e68be7387d",
+      "role": "retired_production",
+      "origin": "backend/graph/research_capabilities.py"
+    },
+    "backend/graph/runner.py": {
+      "sha256": "91d8a4bf2fdd5b30bf012711a3d7712070419bd9002bb12f1fd52ae98a5f0217",
+      "role": "retired_production",
+      "origin": "backend/graph/runner.py"
+    },
+    "backend/graph/semantic_requirements.py": {
+      "sha256": "41c4898dd72802c27a25cd455f47524cde0f267854441b18b140672e8bc5746a",
+      "role": "retired_production",
+      "origin": "backend/graph/semantic_requirements.py"
+    },
+    "backend/graph/state.py": {
+      "sha256": "e48e65dc9f85469686d1fc12d47597e894f5770ebce60f1a59520e083caa293b",
+      "role": "retired_production",
+      "origin": "backend/graph/state.py"
+    },
+    "backend/graph/synthesis/__init__.py": {
+      "sha256": "af5da75eab7aac5f88197f6fa2f593db805769cc2482715c7cfec3d39b70875c",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/__init__.py"
+    },
+    "backend/graph/synthesis/analysis_requirements.py": {
+      "sha256": "683ac4262e5c3525c5d3809d7a5630e5602d253cc9697ff3f4bb0d29231fd873",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/analysis_requirements.py"
+    },
+    "backend/graph/synthesis/contracts.py": {
+      "sha256": "a38725d6cf6ad78ce647e0570de01df1463152595c1c78bd8bf688b60fa5c979",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/contracts.py"
+    },
+    "backend/graph/synthesis/narrative.py": {
+      "sha256": "6366cff788a790ba904175fe543c6b24165e4604d2b930831cc725a228bec78b",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/narrative.py"
+    },
+    "backend/graph/synthesis/normalization.py": {
+      "sha256": "9ae621d70f4967f343b35eca23c872b75d1700860205fe9d0a8c74df01e4f750",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/normalization.py"
+    },
+    "backend/graph/synthesis/opinion_readiness.py": {
+      "sha256": "b605a68e20ba3bbee6e36d82c94e231989fde937de387090885c3c28dfbc8605",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/opinion_readiness.py"
+    },
+    "backend/graph/synthesis/requirement_support.py": {
+      "sha256": "931fb4dd41fe35d05daec2d180eb195862305f4db4e59ae5cbc0885d7e04dd4f",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/requirement_support.py"
+    },
+    "backend/graph/synthesis/requirement_validation.py": {
+      "sha256": "c5b8de8e71dde85de7334d2c0e7a3d4353f9a6b17bc462dddc07ff36e855d7ca",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/requirement_validation.py"
+    },
+    "backend/graph/synthesis/research_synthesis.py": {
+      "sha256": "5b13b1de1a5d17b9ce1f682c6df5779f0511c1a3290b5ced2442da9626f4a6a3",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/research_synthesis.py"
+    },
+    "backend/graph/synthesis/structured_orchestration.py": {
+      "sha256": "a0f615c1121538e4ebc9ced2a4b4b62ea377428531d264095e523d764dafea21",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/structured_orchestration.py"
+    },
+    "backend/graph/synthesis/task_outcomes.py": {
+      "sha256": "98c42341d1f739e943f2ea3ea0431ab1ca9d0eb7f3cd733de64220d676d7cdd5",
+      "role": "retired_production",
+      "origin": "backend/graph/synthesis/task_outcomes.py"
+    },
+    "backend/graph/templates/company_brief.md": {
+      "sha256": "ef0613a9f8e11f93aad8c5c40087fc30281f66c03cb2f9ce5447f826fdac2cc6",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/company_brief.md"
+    },
+    "backend/graph/templates/company_compare_brief.md": {
+      "sha256": "f40e0e95319eff98e3ce30d94d60284d618a7fba9e861025b39ecfc98c6ba0aa",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/company_compare_brief.md"
+    },
+    "backend/graph/templates/company_compare_report.md": {
+      "sha256": "f4875b4722dcc2e3bc7b905a22a1c8d2b8e0eb9e7400a2768ede69d7c526a76c",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/company_compare_report.md"
+    },
+    "backend/graph/templates/company_news_brief.md": {
+      "sha256": "c70e1691a23fd59202d81fa19733f0f299475b1b355931807fcded3fdaad0f1f",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/company_news_brief.md"
+    },
+    "backend/graph/templates/company_news_report.md": {
+      "sha256": "609a0f90edf03eee4292f250428f97042839e619914ea4ef562ee02c7816e0b8",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/company_news_report.md"
+    },
+    "backend/graph/templates/company_report.md": {
+      "sha256": "dce7c7524a9dbe8e196e2709b6af5b6c0188097535c40f6f2a17743a9961b9dc",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/company_report.md"
+    },
+    "backend/graph/templates/filing_brief.md": {
+      "sha256": "ba99e2ae467aa713121b72edb25dd40040c92605b2ba04d6cf6a55ddce02a28e",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/filing_brief.md"
+    },
+    "backend/graph/templates/filing_report.md": {
+      "sha256": "af374315287d7c503b12ba2c7c8975bb84aac058d81914f540259dd48b8449f9",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/filing_report.md"
+    },
+    "backend/graph/templates/news_brief.md": {
+      "sha256": "175eb3c6e199be3179f07c6faa34ea3118739b3a17c7e3de78d4940f567facd4",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/news_brief.md"
+    },
+    "backend/graph/templates/news_report.md": {
+      "sha256": "9cac4eac3bfd01cd25494ddf2f72930d7340f1c3b5fdad96a62c8ce4685d10b7",
+      "role": "retired_production",
+      "origin": "backend/graph/templates/news_report.md"
+    },
+    "backend/graph/trace.py": {
+      "sha256": "71b14ecddfb28772171f917f62a705110daeee1edb9bac8d01ddb6bc8e19b379",
+      "role": "retired_production",
+      "origin": "backend/graph/trace.py"
+    },
+    "backend/graph/understanding_v2.py": {
+      "sha256": "f1a8c540bfc84c9f56a800f9878ae3cf213a6066628028cf45aa7a9b6fca8191",
+      "role": "retired_production",
+      "origin": "backend/graph/understanding_v2.py"
+    },
+    "backend/orchestration/tools_bridge.py": {
+      "sha256": "c120db2ebf238a2332806a9b63ae86fc5945780e0661e8a67a2b616ee8cbb210",
+      "role": "retired_production",
+      "origin": "backend/orchestration/tools_bridge.py"
+    },
+    "backend/orchestration/trace.py": {
+      "sha256": "23ebc772b8bad9f76de39f96b718e551818dc15f883c0e179a21c8f7c9869fb0",
+      "role": "retired_production",
+      "origin": "backend/orchestration/trace.py"
+    },
+    "backend/rag/execution_observability.py": {
+      "sha256": "e5050dde3e0feeebe09f673e1640e2135e079e787d417e7caa2993f1a0e765b1",
+      "role": "retired_production",
+      "origin": "backend/rag/execution_observability.py"
+    },
+    "backend/rag/execution_pipeline.py": {
+      "sha256": "77081afef6ca2df1aec04622133fa075e37007ec28c8b982dbec51bf4723219b",
+      "role": "retired_production",
+      "origin": "backend/rag/execution_pipeline.py"
+    },
+    "backend/rag/execution_support.py": {
+      "sha256": "bdcf3d3b7928846827032d51bdfc0147d7a53483bb67c0fd756f880012257ce7",
+      "role": "retired_production",
+      "origin": "backend/rag/execution_support.py"
+    },
+    "backend/rag/ingestion.py": {
+      "sha256": "56e486ae7adc62753dd2d2199d449ee623f92b3ad948eeb797bfed5ef7dcb96f",
+      "role": "retired_production",
+      "origin": "backend/rag/ingestion.py"
+    },
+    "backend/report/agent_formatters.py": {
+      "sha256": "b78fbc786b6aa96eb889bec56d3d3fc3e303c59f56d82815480f4e04747350a6",
+      "role": "retired_production",
+      "origin": "backend/report/agent_formatters.py"
+    },
+    "backend/report/grounding.py": {
+      "sha256": "ac96c42af5ea7b0d6ceabbcb1dc563eff75882a137153af606fde9f9077e4669",
+      "role": "retired_production",
+      "origin": "backend/report/grounding.py"
+    },
+    "backend/report/verifier.py": {
+      "sha256": "0524d6b23725400eaed1d86032dfbcd64d6fcb482950727567c126e6f724672d",
+      "role": "retired_production",
+      "origin": "backend/report/verifier.py"
+    },
+    "backend/services/execution_service.py": {
+      "sha256": "fd9e8f2f04f5e417b517edd7defe3171596bc87f49f7b287576a125e61a777f1",
+      "role": "retired_production",
+      "origin": "backend/services/execution_service.py"
+    },
+    "backend/services/health_probe.py": {
+      "sha256": "bd5bfc14156b637c672f9c7ab9fac38c47010eac4cec1ae6db6c9d9d9164b658",
+      "role": "retired_production",
+      "origin": "backend/services/health_probe.py"
+    },
+    "scripts/agent_quality_eval.py": {
+      "sha256": "98349649dadd2b28f7722b14c13a4e2b09dbc6c2c29282416334a6091cb7b459",
+      "role": "retired_production",
+      "origin": "scripts/agent_quality_eval.py"
+    },
+    "scripts/chat_regression_queries_2026_05_03.py": {
+      "sha256": "fa231757d375c256140dbdf6409d6bd68091268bc8e3493127fef5231d651257",
+      "role": "retired_production",
+      "origin": "scripts/chat_regression_queries_2026_05_03.py"
+    },
+    "scripts/chat_ux_router_eval.py": {
+      "sha256": "55a16fb1f9e6dbbcd38ccd0d113cc1bb83325838e755b32f1435f972b2b026af",
+      "role": "retired_production",
+      "origin": "scripts/chat_ux_router_eval.py"
+    },
+    "scripts/check_quotes.py": {
+      "sha256": "d5502998375858961b03b580d8233b6caf84cd5212ff908c2326581d2b098d3b",
+      "role": "retired_production",
+      "origin": "scripts/check_quotes.py"
+    },
+    "scripts/probe_answer_format_fix.py": {
+      "sha256": "ca7ada6dcb680fb7ac6eb01027b54eb52113baad5302ea4514add5d9a1d69ca8",
+      "role": "retired_production",
+      "origin": "scripts/probe_answer_format_fix.py"
+    },
+    "scripts/request_understanding_probe.py": {
+      "sha256": "dc170d7bb3a9e30f57673800ffb77f425f9da08224e661cfb25b053cfea3fff0",
+      "role": "retired_production",
+      "origin": "scripts/request_understanding_probe.py",
+      "original_sha256": "c3564d999cc058bbc11f5f3817f2a268d96d1018788e8d0c1bc17698c956caa9",
+      "portability_change": "原目标模块已在归档前不存在；改为旧图现存route_request同签名入口。"
+    },
+    "scripts/run_query_matrix.py": {
+      "sha256": "514e1d515f981f62b07fa1cb17f5cbfc0917918911d8c1750a3d3dc815d41ba8",
+      "role": "retired_production",
+      "origin": "scripts/run_query_matrix.py"
+    },
+    "scripts/skill_python_eval.py": {
+      "sha256": "c8793fa5d823c92b825ee4b85df12046d4fe18ae2a1880e02d2bfdad90e54293",
+      "role": "retired_production",
+      "origin": "scripts/skill_python_eval.py"
+    },
+    "scripts/synthesize_original.py": {
+      "sha256": "f01cb507666b87d1a117318f99802864710f0c8cd71b7bc63d07f1ca0c76bce9",
+      "role": "retired_production",
+      "origin": "scripts/synthesize_original.py"
+    },
+    "scripts/test_full_depth_graph.py": {
+      "sha256": "337a4d451e90f157cfa2dd613eb1e69140a47dce6d5ceb223f891ec4b376647d",
+      "role": "retired_production",
+      "origin": "scripts/test_full_depth_graph.py"
+    },
+    "scripts/test_full_graph.py": {
+      "sha256": "618375f7163e876407acaab11f39275277e38aa049992b25c4fdd20a36c236bd",
+      "role": "retired_production",
+      "origin": "scripts/test_full_graph.py"
+    },
+    "backend/report/quality_engine.py": {
+      "sha256": "378951fb5cb4e08c620ef3fccc43c774ef5f24f94ef20fe5c8c32651f2c6b268",
+      "role": "retired_function_host",
+      "origin": "backend/report/quality_engine.py"
+    },
+    "backend/tests/conftest.py": {
+      "sha256": "944e3509295866cf330e29f427a753e170b9718c515e5e30bc5ac894d41a263b",
+      "role": "split_fixture",
+      "origin": "backend/tests/conftest.py"
+    },
+    "backend/tests/fixtures/render_vars_legacy.py": {
+      "sha256": "7aa58b0f35e17b7b20300f370ba80ca485e1a96c88802fa7d310c393533ac4dd",
+      "role": "reference_fixture",
+      "origin": "backend/tests/fixtures/render_vars_legacy.py"
+    },
+    "backend/tests/semantic_request_fixtures.py": {
+      "sha256": "aa636040093a51402f53843e34db0c80d3f1fa1f24d59ac7a74e656fb013fe75",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/semantic_request_fixtures.py"
+    },
+    "backend/tests/test_agent_capability_audit.py": {
+      "sha256": "70acc464ad5a2d6fd380d9821b6fd26f30dc5971409420010645937d1710df38",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_agent_capability_audit.py"
+    },
+    "backend/tests/test_agent_chart_specs.py": {
+      "sha256": "939da8cc65b5204583f9571a25720812451936985facf6e1c9f1cd4ee770bb4b",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_agent_chart_specs.py"
+    },
+    "backend/tests/test_agent_chinese_output_contract.py": {
+      "sha256": "a782ce22fdd7022b589a00012120b5623c8ddac18a06ca03838c16c28194b271",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_agent_chinese_output_contract.py"
+    },
+    "backend/tests/test_agent_claim_extractor.py": {
+      "sha256": "eafe585bc64975ccf40ceadcd55d0609d9b3a91cdc37cac99d11e6a65576c90c",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_agent_claim_extractor.py"
+    },
+    "backend/tests/test_agent_native_claims.py": {
+      "sha256": "b0f3c58aa6b032a04326489ae2942c5a22a276390f68921c567eae625dc74939",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_agent_native_claims.py"
+    },
+    "backend/tests/test_agent_nonblocking_io.py": {
+      "sha256": "5aa45f9fe92a58d7c141d3052f834430410fae5f8cfd7e5f1a09b3b07a46e5ec",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_agent_nonblocking_io.py"
+    },
+    "backend/tests/test_agent_profiles.py": {
+      "sha256": "87d46cd31ca1b52525ff09d63c176d8000aa33700000d5108cb6e29238804fbf",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_agent_profiles.py"
+    },
+    "backend/tests/test_agent_quality_eval_smoke.py": {
+      "sha256": "e884ff8548e7472003403bc9b27c82b8ecee4d0f5805a028566cba2ea58c5086",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_agent_quality_eval_smoke.py"
+    },
+    "backend/tests/test_agents.py": {
+      "sha256": "00e72ac0fe021003e82b541f3929c36e9d5b454a4d6179318bbe12dbf2821c90",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_agents.py"
+    },
+    "backend/tests/test_ai_message_persistence.py": {
+      "sha256": "46e372391650038603301dd2e9cc9060129e979007596b260f36eebd0cc0dc4d",
+      "role": "migrate_business_protocol_and_archive_legacy",
+      "origin": "backend/tests/test_ai_message_persistence.py"
+    },
+    "backend/tests/test_build_initial_state_dashboard.py": {
+      "sha256": "31215b033baa99d78d3d5f145a2f5aca4566f20fcbfef303aac723a9a73efa90",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_build_initial_state_dashboard.py"
+    },
+    "backend/tests/test_capability_input_groups.py": {
+      "sha256": "002b7ee968fd3da184046df06525f77fee86a8b9976d3f5fb350a20b753bd661",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_capability_input_groups.py"
+    },
+    "backend/tests/test_capability_registry.py": {
+      "sha256": "1b694201fe9326189772ebc21ebfbf7a9a7953dcee84e15f333b890b959ced6e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_capability_registry.py"
+    },
+    "backend/tests/test_chat_news_brief_integration.py": {
+      "sha256": "dd16dabe27a100388c26895043d51b020b66f7bdc684b8b79f1f6bbc00f300d6",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_chat_news_brief_integration.py"
+    },
+    "backend/tests/test_chat_response_contract.py": {
+      "sha256": "a9c3e65e36851a3266ce7c3ca107caabec1413a53776f9a365d30cf2f7da7a77",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_chat_response_contract.py"
+    },
+    "backend/tests/test_chat_task_outcomes.py": {
+      "sha256": "6e98ea777d3af655e0f031c21f4969d195e828e62d10a6c4cef6ddea31576282",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_chat_task_outcomes.py"
+    },
+    "backend/tests/test_chat_url_renderer.py": {
+      "sha256": "b1ce11fc6444d495052868d4e58d2ab0fde26c0bde40563a3b62309c14d76622",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_chat_url_renderer.py"
+    },
+    "backend/tests/test_checkpointer_messages.py": {
+      "sha256": "0fb399fee22f5809934259871b2c34f8c1e303ed3025f5e4423a1e2b3d1514c2",
+      "role": "migrate_business_protocol_and_archive_legacy",
+      "origin": "backend/tests/test_checkpointer_messages.py"
+    },
+    "backend/tests/test_clarify_node.py": {
+      "sha256": "cf4f67bbcce2c81b52508b708256ab5ce7cef53e92cea1c48a12e6daad70af67",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_clarify_node.py"
+    },
+    "backend/tests/test_collector_adapter_resilience.py": {
+      "sha256": "49cdc774253b80c49bdeafbdc0d62e4d2ff57b82bd1065bf0f3fdde1a3f3dd41",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_collector_adapter_resilience.py"
+    },
+    "backend/tests/test_company_profile_currency.py": {
+      "sha256": "7164c510fc84821521348a6df4a3716ff2f0fc0fb907a646a15be5bc20e789fd",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_company_profile_currency.py"
+    },
+    "backend/tests/test_compare_gate.py": {
+      "sha256": "c089ab2448006ba0bd96117d6a8e78eda764ef0c6cc09569b0d98c134fc820e1",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_compare_gate.py"
+    },
+    "backend/tests/test_conversation_degradation_contract.py": {
+      "sha256": "6f69f6845ebbc1b1515d1f8ce9ea624934d5a0320c124974a41d8d16027b7b1d",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_conversation_degradation_contract.py"
+    },
+    "backend/tests/test_core_viewpoints.py": {
+      "sha256": "a826ed1f1c823b73a01accf081bb7dc1641b5eae12f516659e15b597171d65cf",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_core_viewpoints.py"
+    },
+    "backend/tests/test_dag_executor.py": {
+      "sha256": "c6bb60d1889211999a4dbf79f191ab72b7733dc3685a7a13aa8316fc20b0afa4",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_dag_executor.py"
+    },
+    "backend/tests/test_deep_research.py": {
+      "sha256": "20012d94adf5572bb41e1aa258aa946e996eabcccfad6b2e262f1a95c7ba7fc7",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_deep_research.py"
+    },
+    "backend/tests/test_direct_technical_snapshot.py": {
+      "sha256": "ae3726d880a9ebd074041162857a05dfd7832ce8230b15cd4866a0d07ba109f1",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_direct_technical_snapshot.py"
+    },
+    "backend/tests/test_disclosure_financial_facts.py": {
+      "sha256": "53c491ee4fff2532c11988f9cf6df748838dba6798dc261758ae1ef7730e4f0d",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_disclosure_financial_facts.py"
+    },
+    "backend/tests/test_document_financial_bridge.py": {
+      "sha256": "b480a1fd57bac50f473552fd0d64e7a9669cd793d3b5a906642fbed098eac6b5",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_document_financial_bridge.py"
+    },
+    "backend/tests/test_earnings_intent.py": {
+      "sha256": "a500219c300d6408fb6cb8a638184f8d9c13f8285825c37a6f14c0bb5e419fe6",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_earnings_intent.py"
+    },
+    "backend/tests/test_evidence_diagnostics_gate.py": {
+      "sha256": "3ead63b13a6050c0eb6d9c47f109f7ad4e26835a025668470112cd96f0b02bdb",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_evidence_diagnostics_gate.py"
+    },
+    "backend/tests/test_evidence_input_contract_repair.py": {
+      "sha256": "203e389234c00ba0ea1ab221807bc24e1d1d8c5492a7d5d480d5baa4637dfe50",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_evidence_input_contract_repair.py"
+    },
+    "backend/tests/test_evidence_ledger_execute_plan.py": {
+      "sha256": "473f593e246bbf0b545b662f8cb7063ecb9b78cc9ed7dbfa9b81c347f085170b",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_evidence_ledger_execute_plan.py"
+    },
+    "backend/tests/test_evidence_pool.py": {
+      "sha256": "c2eba227cb1c75c49f2022d890b938f5382af011ffda503666acee6d9c653d32",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_evidence_pool.py"
+    },
+    "backend/tests/test_execution_cancel.py": {
+      "sha256": "208268629dafeb85f2553140ff9d8074152e95156307d65ee270f37249f9c6d5",
+      "role": "migrate_business_protocol_and_archive_legacy",
+      "origin": "backend/tests/test_execution_cancel.py"
+    },
+    "backend/tests/test_execution_evidence_metadata.py": {
+      "sha256": "6c2729507e91008d7d4e659ef504b88e93f6c87090729fa612f71e44daaf3b01",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_execution_evidence_metadata.py"
+    },
+    "backend/tests/test_execution_failure_vs_quality_block.py": {
+      "sha256": "c9733e8c25133d79c8e3a155ad070a236fc10ceda921ec10c15870c2ff10d5a0",
+      "role": "migrate_business_protocol_and_archive_legacy",
+      "origin": "backend/tests/test_execution_failure_vs_quality_block.py"
+    },
+    "backend/tests/test_execution_quality_gate.py": {
+      "sha256": "e8c55181409d4cda1dfc4eba517113501bfdd76b5d1f95c588c88cce22670f98",
+      "role": "migrate_business_protocol_and_archive_legacy",
+      "origin": "backend/tests/test_execution_quality_gate.py"
+    },
+    "backend/tests/test_execution_stage_events.py": {
+      "sha256": "acc11dd02e07ef75009e866b9a0f8e491e5acbaaa410ffed51b313a132a932c5",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_execution_stage_events.py"
+    },
+    "backend/tests/test_executor.py": {
+      "sha256": "7e41303e3cba73d6374ff0ac34c5eaf24051152063568ece25c09f3265b65b38",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_executor.py"
+    },
+    "backend/tests/test_explicit_company_listing.py": {
+      "sha256": "397b9e274ea9652066207f9f8af541a1d51fdeb4e498e632def2b8be3504c1e0",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_explicit_company_listing.py"
+    },
+    "backend/tests/test_fact_check_exposure.py": {
+      "sha256": "d84f248d6821e2871ad4aba4a40ef018b4731c0a11e4b6301a5a6de11d854e2e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_fact_check_exposure.py"
+    },
+    "backend/tests/test_filing_body_merge_regression.py": {
+      "sha256": "4bc02d9f0071739da3974af02779f952e84c4cb6eaed104c50e9c8ad0a2ce1db",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_filing_body_merge_regression.py"
+    },
+    "backend/tests/test_financial_fact_contract.py": {
+      "sha256": "7d49f19e721efb33cbcbd838101a9d33b4102aa240fcb178c270ddb6ab5b017a",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_financial_fact_contract.py"
+    },
+    "backend/tests/test_financial_intent.py": {
+      "sha256": "2a96f3e304bcd6d01cf4bccd04a60f19f12e9a9d3a4a635b9b1885df255b694e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_financial_intent.py"
+    },
+    "backend/tests/test_financial_period_calculations.py": {
+      "sha256": "9ec62163379cc85a7522e14750438a39a41696b0323028e5be9a89d7d9346219",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_financial_period_calculations.py"
+    },
+    "backend/tests/test_financial_terms.py": {
+      "sha256": "b0818fa06c79b4bc60ebe4519123034c7a5506531bde79ca136111aed63a3821",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_financial_terms.py"
+    },
+    "backend/tests/test_foundation_analysis_pipeline.py": {
+      "sha256": "e4a8021bdfd812966e359ca9b9c810d89c16bdde71bffb14688709afd9d36698",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_analysis_pipeline.py"
+    },
+    "backend/tests/test_foundation_content_selection.py": {
+      "sha256": "3d23ed2319060ec9d625d260798839a1f2d206788b2d1afe47f1346fb8e547de",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_content_selection.py"
+    },
+    "backend/tests/test_foundation_fact_formatters.py": {
+      "sha256": "97010c2f7c6ca9b4c1f88d5e58f24d0e064aba1fac57950343eaa69e425056f8",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_fact_formatters.py"
+    },
+    "backend/tests/test_foundation_planning.py": {
+      "sha256": "2d3ef80edb4e1a36d4ea64331479fe0b97e2ae48b5e3b928dd79496fa204d4f5",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_planning.py"
+    },
+    "backend/tests/test_foundation_quality.py": {
+      "sha256": "726640c5a93f6322e5358a981835467a828e82c72417e85b2685096283528f17",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_quality.py"
+    },
+    "backend/tests/test_foundation_research_result.py": {
+      "sha256": "bc027470a8fd6f9b4a5ca9308194b4fad7d0b76833fff9e2139a8ff4eb5baef8",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_research_result.py"
+    },
+    "backend/tests/test_foundation_structured_diagnostics.py": {
+      "sha256": "a9cb0f64524110d38feaf6d640f84988ef231609f18d8987beaa148388cb0dce",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_structured_diagnostics.py"
+    },
+    "backend/tests/test_foundation_valuation_units.py": {
+      "sha256": "091429b33cb0b4be427561a6714862352a5c5a85b6a7443ae0937934f446f1bb",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_foundation_valuation_units.py"
+    },
+    "backend/tests/test_frame_task_bindings.py": {
+      "sha256": "d78347720993bd159abeee11fab958d775829592fd76bdda0b613eabeaba7d8e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_frame_task_bindings.py"
+    },
+    "backend/tests/test_graph_node_order.py": {
+      "sha256": "92d096b45bc1f1b2ada880e562da3d01a791e6efe9952f9ee031911c9b9c3f71",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_graph_node_order.py"
+    },
+    "backend/tests/test_intent_frame.py": {
+      "sha256": "0e424f759de2c007fecd61fc8940d8a1d3701c14067ac538a172110125fea13e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_intent_frame.py"
+    },
+    "backend/tests/test_intent_signals.py": {
+      "sha256": "789c203653f9184ceefb5905631c6667bdd40ef39401170299db427c4d11e596",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_intent_signals.py"
+    },
+    "backend/tests/test_investment_intent.py": {
+      "sha256": "07eca51db7ad4b96a62f3d04d5ca7132dcf033d05a46d1c3ddd29e1176deebda",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_investment_intent.py"
+    },
+    "backend/tests/test_langgraph_skeleton.py": {
+      "sha256": "1589328a6e2260ad7345446e45b0b92af74698b26f95ef69bfc22ee83ab523ed",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_langgraph_skeleton.py"
+    },
+    "backend/tests/test_live_synthesis_binding_regression.py": {
+      "sha256": "031036d1bb6ee0fd07b62f949bdaa0ee902602f821446413ffb5b4779b1ab30d",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_live_synthesis_binding_regression.py"
+    },
+    "backend/tests/test_live_tools_evidence.py": {
+      "sha256": "f6bbc0ea945aa3005f3a439a94783c3d7bdd36a38cce20c2a3b44eae7d66c0be",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_live_tools_evidence.py"
+    },
+    "backend/tests/test_macro_employment_data.py": {
+      "sha256": "fd5ea4099b29d7cd4f3c9dd5c2d3926d5a722dfe5015c98cf379fc0961d39563",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_macro_employment_data.py"
+    },
+    "backend/tests/test_macro_evidence_boundary.py": {
+      "sha256": "e09b0299613e87264f1e004cbd41627fb936e8696fdecad71a7cc6b8e6299400",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_macro_evidence_boundary.py"
+    },
+    "backend/tests/test_macro_requirement_evidence.py": {
+      "sha256": "76e60e4b12817e9c3c597f6b1780f6c5fff64f93397bba0b9220d66758147005",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_macro_requirement_evidence.py"
+    },
+    "backend/tests/test_macro_requirement_selector.py": {
+      "sha256": "711cb5ee893bdb8eb83ed102d1bf94e157dac368eb5b3093c1e73e8cc5bc4416",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_macro_requirement_selector.py"
+    },
+    "backend/tests/test_memory_snapshot.py": {
+      "sha256": "7667d1b3806fd54bcc7503e4881efbe064c9b685fa0882f908338959df43f295",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_memory_snapshot.py"
+    },
+    "backend/tests/test_multi_task_sections.py": {
+      "sha256": "810778fff2c946a724b4b1941e0550719f326faf7deaf7233a3bcceac5cbc41f",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_multi_task_sections.py"
+    },
+    "backend/tests/test_multidimension_intent_contract.py": {
+      "sha256": "d2ca299ad126ccada8dfe66f931d91dc8055ef004052b53050db53f2607999fe",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_multidimension_intent_contract.py"
+    },
+    "backend/tests/test_news_agent_truthfulness.py": {
+      "sha256": "bafd8536219b04ff29092fa41af1890823331d922a47a07b11e0dcfed5a96f73",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_news_agent_truthfulness.py"
+    },
+    "backend/tests/test_news_event_quality.py": {
+      "sha256": "7229f42f3cd1fac318e00474fad556b9184b4aff07ffb0a7dac8ea8d83d3373c",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_news_event_quality.py"
+    },
+    "backend/tests/test_no_fake_confidence.py": {
+      "sha256": "b6e3dc7166e77f4976ae9cbd225a2c69004a7fe43f61abb592393939e1da053f",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_no_fake_confidence.py"
+    },
+    "backend/tests/test_opinion_readiness.py": {
+      "sha256": "d2bb8f6f170ca2d8f0c26cf21266821c314bf479d23dfcb2c80e8c535f2db779",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_opinion_readiness.py"
+    },
+    "backend/tests/test_original_requirement_gate.py": {
+      "sha256": "d68c13182b9c1fe39235a9c746db3853dc5270bf5dc396967437b0cf0deacc3c",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_original_requirement_gate.py"
+    },
+    "backend/tests/test_p0_unit.py": {
+      "sha256": "58ee87112d0f9684e17b343fb2362d1cc5e0eacfacb71834fb0447963dbd5fa8",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_p0_unit.py"
+    },
+    "backend/tests/test_p7_extensions.py": {
+      "sha256": "cce4e77e8b55ea8a185f6a6d0725089c00d9283a4d35f967fe44e8862985c2d7",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_p7_extensions.py"
+    },
+    "backend/tests/test_parse_operation.py": {
+      "sha256": "0fcf26bdf471f18e2921be196f33d1088811e840fe7d15ad63981cb5f50ec976",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_parse_operation.py"
+    },
+    "backend/tests/test_partial_delivery.py": {
+      "sha256": "f1887ab144bd0d9ed097836bb63d042f7a4ca416f91ab72a2ef1f2ee46050843",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_partial_delivery.py"
+    },
+    "backend/tests/test_phase3_acceptance.py": {
+      "sha256": "43088da760fda856451dbed47c596319beb172f7522c3cc84512f51e1278101e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_phase3_acceptance.py"
+    },
+    "backend/tests/test_plan_dependencies.py": {
+      "sha256": "2312c56f114c5ff01d69a090e105933d929a3e6fe6be62672624d9e9be8ea4a5",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_plan_dependencies.py"
+    },
+    "backend/tests/test_plan_ir_validation.py": {
+      "sha256": "9b04711008104583c1456b8e5423b8bc1464579cf8e6e9fa2d232ddef001121f",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_plan_ir_validation.py"
+    },
+    "backend/tests/test_planner_constraints.py": {
+      "sha256": "88e023875a9a86dfd08307e89b441163885451eb9eb23011f044adc2b58ac3ef",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_planner_constraints.py"
+    },
+    "backend/tests/test_planner_lane.py": {
+      "sha256": "6c470577372f8d46ff91ec8c3a922863b861a85f6041c15b46f5e89fd0648503",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_planner_lane.py"
+    },
+    "backend/tests/test_planner_prompt.py": {
+      "sha256": "6ba631cfeff33cd0d97d80718e178cfaf07f899c402db8458dfed2c5d89723ad",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_planner_prompt.py"
+    },
+    "backend/tests/test_policy_gate.py": {
+      "sha256": "0268eafb04482204f73802e928ea74d302c5c29d7d5cc725289bff9d7be2b45c",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_policy_gate.py"
+    },
+    "backend/tests/test_prediction_report_archive.py": {
+      "sha256": "e8e5db164b406da993d5623018b96866f94e5131924a84a914253ed72f9e82b1",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_prediction_report_archive.py"
+    },
+    "backend/tests/test_prepare_context.py": {
+      "sha256": "6864e32f9dc9bea6f55c76c8da9c4fe9bcb0a82a7d11d007993f1ac31a36e8be",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_prepare_context.py"
+    },
+    "backend/tests/test_price_quote_metadata_contract.py": {
+      "sha256": "d36886dbd144b77bb01a9d49a8af14ce8a16be7d121c19cd1eda3ee2e97368c7",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_price_quote_metadata_contract.py"
+    },
+    "backend/tests/test_query_coverage_contract.py": {
+      "sha256": "5d779704ac390656ea97a2a0a3fc4b7a80bdcafb0e3dc6ffbf7d2bc0f619b5cd",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_query_coverage_contract.py"
+    },
+    "backend/tests/test_query_intent.py": {
+      "sha256": "3c9900a8a73e44f34b12b314f39ddf24ea13f8ee57e34cb08b97975fed7142d5",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_query_intent.py"
+    },
+    "backend/tests/test_rag_eval_patch_target.py": {
+      "sha256": "4a145ef2a3fd070660b8a1ee5ef1f766cf5d88e0494b8511b8be52a8d763dbc6",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_rag_eval_patch_target.py"
+    },
+    "backend/tests/test_rag_observability_execute_plan.py": {
+      "sha256": "50dd8c45a9f5abbba0d8349c5948c6bed56e207e19cdb8478d2ca9079033b94b",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_rag_observability_execute_plan.py"
+    },
+    "backend/tests/test_render_vars_keys.py": {
+      "sha256": "9515d1ff25bafbc24739e7e003a81d4b7f1b1c27c08de4caa726a47ca313178b",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_render_vars_keys.py"
+    },
+    "backend/tests/test_report_builder_quality_gate.py": {
+      "sha256": "68a60a45f9e77ef49dfb6f270d4e4e0fa23a1988d1f779dffb788ac34963d7a2",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_report_builder_quality_gate.py"
+    },
+    "backend/tests/test_report_builder_synthesis_report.py": {
+      "sha256": "e96495cbd83be8003fb1c25682feb948fa78cdfdf18db3aa2abae6c70562adbc",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_report_builder_synthesis_report.py"
+    },
+    "backend/tests/test_report_cache.py": {
+      "sha256": "5a3c6dc07270e2b5bd976724672f7d283d840bebd8234684cbb723e12dcd9622",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_report_cache.py"
+    },
+    "backend/tests/test_report_run_result.py": {
+      "sha256": "de76406d4d2eac7bf87c77540881263ad13d6651ea19bdc9484f7349302ac076",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_report_run_result.py"
+    },
+    "backend/tests/test_report_verifier.py": {
+      "sha256": "6d60fea4acd6b2291c408b808a87b1bd390573a1e36be380297b27847e0ad0a7",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_report_verifier.py"
+    },
+    "backend/tests/test_request_attribute_ownership.py": {
+      "sha256": "87031b5392548470c8e5b5cf934dc57e55066e4179fec8cf484c8925f41a748b",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_attribute_ownership.py"
+    },
+    "backend/tests/test_request_compiler_acceptance.py": {
+      "sha256": "499903fda88c90e38ce7fcb24add9e35f79cea6882b9e9e4faa68a62471e390d",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_compiler_acceptance.py"
+    },
+    "backend/tests/test_request_data_sharing.py": {
+      "sha256": "5319b32bb2ce027915643ff6f1839c12cfdee80d9ed208fbf01bd02e85d1bf61",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_data_sharing.py"
+    },
+    "backend/tests/test_request_facets.py": {
+      "sha256": "8c7f21747de134a6f8aa7cfcc782f2cc89a16db39465f02f509ff602657b9f7f",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_facets.py"
+    },
+    "backend/tests/test_request_frame_golden_queries.py": {
+      "sha256": "34df7eccfe32571ccd33f39b0b6d7030ee90c5c473f19c0499a74b6a15b0507e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_frame_golden_queries.py"
+    },
+    "backend/tests/test_request_semantic_regressions.py": {
+      "sha256": "b11035894e605cc8b51510f96c34b3f74e0735240bcb3482eae2f06ecdb50810",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_semantic_regressions.py"
+    },
+    "backend/tests/test_request_spec.py": {
+      "sha256": "c934af64bc3d9648e252fe6f851989cc63b7cf627fbd91773f5b5081a9350402",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_request_spec.py"
+    },
+    "backend/tests/test_requirement_source_relevance_gate.py": {
+      "sha256": "c75b81b84b5d126798b004750976d437d74fde6aef949c9d8b313184cbb8d852",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_requirement_source_relevance_gate.py"
+    },
+    "backend/tests/test_research_capability_contract.py": {
+      "sha256": "927f09d2b7f60f96529e919233f24144e098c766e5257b434aeb082566c9da9c",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_research_capability_contract.py"
+    },
+    "backend/tests/test_research_public_text.py": {
+      "sha256": "77059208e87c6f8207655d959b6303bb0b8f2386683a75506ce3e4229c91aa76",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_research_public_text.py"
+    },
+    "backend/tests/test_research_quality_followup.py": {
+      "sha256": "bb7ebdd706cc88a4cfaf6a31c4e37eecafb83eedc09ce9587199ecdb1c72bd1b",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_research_quality_followup.py"
+    },
+    "backend/tests/test_research_synthesis_contract.py": {
+      "sha256": "31d3362820108b525513520eed66aafe38d96712c2b5d2d475cfb18a0770009d",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_research_synthesis_contract.py"
+    },
+    "backend/tests/test_resolve_subject.py": {
+      "sha256": "a07058272d59e5efecc755c8cef5a9a48da8c72b2245bc306fa06cd25aae4ba5",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_resolve_subject.py"
+    },
+    "backend/tests/test_run_context.py": {
+      "sha256": "16a54fa474928f9719c192baf8b51154c5c879c84ab1159846a834547a5b945e",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_run_context.py"
+    },
+    "backend/tests/test_runtime_lazy_startup.py": {
+      "sha256": "b277904495dd3d4c7d3e20ed799344bd4c6b11dc81a290bb13ab711a3460fd32",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_runtime_lazy_startup.py"
+    },
+    "backend/tests/test_runtime_neutral_contracts.py": {
+      "sha256": "afb888cb0a96a93cffbc743b67dd1980fee2e869d4aeb2ca5a62546675fc0ad1",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_runtime_neutral_contracts.py"
+    },
+    "backend/tests/test_safe_llm_failure_diagnostics.py": {
+      "sha256": "609f3c1ddfdb80af36632106d09cefa96e58f476c5f4580583ffee69be234fc4",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_safe_llm_failure_diagnostics.py"
+    },
+    "backend/tests/test_search_convergence.py": {
+      "sha256": "bdbfccdded1cb82969d7bb29cd90c76c8af4f6b2284b807ce6ba0abd02f8096e",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_search_convergence.py"
+    },
+    "backend/tests/test_selected_model_synthesis_repair.py": {
+      "sha256": "f82d605332dbb6ebb55633075fb669dbfb4407c6f6e3a7e5d96262018bce077a",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_selected_model_synthesis_repair.py"
+    },
+    "backend/tests/test_semantic_request_requirements.py": {
+      "sha256": "db08d5b5b6afc4238fb3241663985019ee1933ecb1721b3602f07bc5800237e5",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_semantic_request_requirements.py"
+    },
+    "backend/tests/test_semantic_stage_budget.py": {
+      "sha256": "77409fa8c4cf5965fbc6e494c48e0b21df7bd2269a3cda94a7274f154dbc09eb",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_semantic_stage_budget.py"
+    },
+    "backend/tests/test_sentiment_brief.py": {
+      "sha256": "40f651667f8f58115fa67d317aa2b84e2aba22af743e4bbc1c20b6d9dd5f0c48",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_sentiment_brief.py"
+    },
+    "backend/tests/test_skill_perspective.py": {
+      "sha256": "10e949210b394b0eed98414c29a3521395be3c3e81fc57feee38ce6a1c73a18e",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_skill_perspective.py"
+    },
+    "backend/tests/test_skill_policy_integration.py": {
+      "sha256": "0f55da9b7026381d0c0465432433e969ddfeb040e661fac69e8b4400660665fd",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_skill_policy_integration.py"
+    },
+    "backend/tests/test_skill_python_eval_gate.py": {
+      "sha256": "78f9a86bb12bdefd6f6ab161e93003437ebaa00b9ee75dd8afc6241431193eb9",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_skill_python_eval_gate.py"
+    },
+    "backend/tests/test_structure.py": {
+      "sha256": "3201659c47ce9d6ea87c8ce8ea8e1172afae3af5c42e0ecd2f96670a7981ce51",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_structure.py"
+    },
+    "backend/tests/test_structured_report_uncertainty.py": {
+      "sha256": "d67fd3bcc67250f6e0666a09090eb0fdb8adc7b7626309621f21a51738cb2c0b",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_structured_report_uncertainty.py"
+    },
+    "backend/tests/test_summarize_history.py": {
+      "sha256": "1b0e7e5374b9d50990bf9f63cfe88798ee61485814a1dc419d4c0700f16be9c9",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_summarize_history.py"
+    },
+    "backend/tests/test_synthesis_acceptance_repair.py": {
+      "sha256": "629b01a9ced4db47d28dd894a6240179ec7c968a81e5f9ce2b50e82d2d1f1e11",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_synthesis_acceptance_repair.py"
+    },
+    "backend/tests/test_synthesis_completion.py": {
+      "sha256": "d3fe5930ecf3318b1fc5908cbfef92336a92c094fb6f35a2a77a6661d141e44a",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_synthesis_completion.py"
+    },
+    "backend/tests/test_synthesize_hallucination.py": {
+      "sha256": "7229092c5e97554a0a45622883717981c410d2c8aa73af01c6427b514543ce18",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_synthesize_hallucination.py"
+    },
+    "backend/tests/test_synthesize_node.py": {
+      "sha256": "7e2ef80e677ac18ed2d00ef27700638995ff32ffd5a9d2cf4e03c866e4d511a8",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_synthesize_node.py"
+    },
+    "backend/tests/test_task_request_synthesis_prompt.py": {
+      "sha256": "2b55fb03346393ec82618a841148a69fa26864ad46ff401101842fe1b705c1aa",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_task_request_synthesis_prompt.py"
+    },
+    "backend/tests/test_technical_fundamental_agents.py": {
+      "sha256": "bd29f2b835f21add461658c60ca8c9839204b17c16684d8c1449bca24bf377ee",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_technical_fundamental_agents.py"
+    },
+    "backend/tests/test_technical_renderer_priority.py": {
+      "sha256": "f9095cc9500cef9f72893fd5cbecdaa501c6c1fad99f6a92690ab349f3c4c107",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_technical_renderer_priority.py"
+    },
+    "backend/tests/test_templates_render.py": {
+      "sha256": "af9e2d4d138bc916311eaef68d90ce1bebe0d1442c5549fa598cf51b265e0c9f",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_templates_render.py"
+    },
+    "backend/tests/test_tool_fallback_propagation.py": {
+      "sha256": "45f1cc12abbd443b2db69b6e149a48fb21cbbf0005f43e36e893aadadaa9dc1d",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_tool_fallback_propagation.py"
+    },
+    "backend/tests/test_trace_and_session_security.py": {
+      "sha256": "a67a39deda0489efc3bddff1cf10b40d3dcf4138643ae3398272c44de34f0902",
+      "role": "split_live_contract_and_reference",
+      "origin": "backend/tests/test_trace_and_session_security.py"
+    },
+    "backend/tests/test_trace_v2_observability.py": {
+      "sha256": "f718dcf9a351fa41d37fc7ce67660f8bd5d1a1addf0aa4fd4a6fa4f942f5e85a",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_trace_v2_observability.py"
+    },
+    "backend/tests/test_trim_conversation_history.py": {
+      "sha256": "caee6a516a3cf7aaa33ec10b42a621cc08870f4dff707f6cc86935cae0ec21b1",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_trim_conversation_history.py"
+    },
+    "backend/tests/test_understanding_v2_contract.py": {
+      "sha256": "2b6a98fa172afcb42ccc14f34a45e4942beaa810b56702395984718da71b05fb",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_understanding_v2_contract.py"
+    },
+    "backend/tests/test_wp6_graph_contract.py": {
+      "sha256": "caaf89ac438989d2d394ab916b8285cb1f59868e8d67e400e1dabc4a98d3fc91",
+      "role": "archive_reference_suite",
+      "origin": "backend/tests/test_wp6_graph_contract.py"
+    },
+    "tests/unit/test_news_analysis_fallback.py": {
+      "sha256": "6937b6b9ba82bd5bdc937f0dcaf17538c263e2f63ea8d38a7d6760fbbddb6e4f",
+      "role": "archive_reference_suite",
+      "origin": "tests/unit/test_news_analysis_fallback.py"
+    },
+    "tests/golden/__init__.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "role": "reference_golden",
+      "origin": "tests/golden/__init__.py"
+    },
+    "tests/golden/conftest.py": {
+      "sha256": "69c6bdfe59cea2c9688511eede4d96c3645ef5d9152ec8738dad1fe76690fe64",
+      "role": "reference_golden",
+      "origin": "tests/golden/conftest.py"
+    },
+    "tests/golden/snapshots/cn_ticker.json": {
+      "sha256": "35566a2a4db0468c7cc25ba9304a34a214c1f0e9971e61bfafb4de3686e31234",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/cn_ticker.json"
+    },
+    "tests/golden/snapshots/compare.json": {
+      "sha256": "04e3aae06b5ba701cc3dd32b5f150d899b029c2165c0c4d5ffe09fb81a6d4bf0",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/compare.json"
+    },
+    "tests/golden/snapshots/greeting.json": {
+      "sha256": "a457a61e2b0a828f63aa846aa042f7d9f93da6e4f8fafba310fddfc5f879b0bf",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/greeting.json"
+    },
+    "tests/golden/snapshots/macro_only.json": {
+      "sha256": "df68d9e2afec0b2faf5c16f7dbb3d223656ed1000dc5d0eb6ee986ce0f26c8ad",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/macro_only.json"
+    },
+    "tests/golden/snapshots/multi_question.json": {
+      "sha256": "04e3aae06b5ba701cc3dd32b5f150d899b029c2165c0c4d5ffe09fb81a6d4bf0",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/multi_question.json"
+    },
+    "tests/golden/snapshots/news_impact.json": {
+      "sha256": "e76ca8515f492c8a3e1c5fe412dd99c770f944aa275489a3836db14731e813e7",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/news_impact.json"
+    },
+    "tests/golden/snapshots/single_price.json": {
+      "sha256": "49032ea40efb9f73e03cd37cbdb403a38188f38f0b94d03d4723da3a5f0a441c",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/single_price.json"
+    },
+    "tests/golden/snapshots/single_report.json": {
+      "sha256": "f0c4b36cd2109410fead11c3b055610320629ec24f1d886a3dfb90d884fbaddf",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/single_report.json"
+    },
+    "tests/golden/snapshots/url_doc.json": {
+      "sha256": "df68d9e2afec0b2faf5c16f7dbb3d223656ed1000dc5d0eb6ee986ce0f26c8ad",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/url_doc.json"
+    },
+    "tests/golden/snapshots/vague_no_subject.json": {
+      "sha256": "ad3bb3b9160b867e63b73b11a5669697783a1314a6b2045f9be60980bd553047",
+      "role": "reference_golden",
+      "origin": "tests/golden/snapshots/vague_no_subject.json"
+    },
+    "tests/golden/test_golden_pipeline.py": {
+      "sha256": "2a71760924580cd6b970f40e4594727d0c07b6ebf7fda5ba6f2c14d80a639ed0",
+      "role": "reference_golden",
+      "origin": "tests/golden/test_golden_pipeline.py"
+    },
+    "backend/tests/fixtures/h01_orcl_earnings_normalized.json": {
+      "sha256": "1e1769a7626e32ac5177457196201bcbb44f2e5fc4e72487d0425450b6b34bd5",
+      "role": "reference_fixture",
+      "origin": "backend/tests/fixtures/h01_orcl_earnings_normalized.json"
+    },
+    "backend/tests/fixtures/h12_crm_filing_producers.json": {
+      "sha256": "e5bb6f2600a09130c62204b705e35243eeb795a399647977e903ded6fbb01187",
+      "role": "reference_fixture",
+      "origin": "backend/tests/fixtures/h12_crm_filing_producers.json"
+    },
+    "backend/tests/fixtures/h12_requirement_gate_projection.json": {
+      "sha256": "7da5536a9e287bb9411a7a6b42469fa7cf41f19bf562d51ffe6e8edb2a9bc1af",
+      "role": "reference_fixture",
+      "origin": "backend/tests/fixtures/h12_requirement_gate_projection.json"
+    },
+    "backend/tests/__init__.py": {
+      "sha256": "12ce5dd78bfa56e5f451111187c17c7b725b06b75ca85329e28904f6244b97b1",
+      "role": "reference_fixture",
+      "origin": "backend/tests/__init__.py"
+    },
+    "tests/rag_quality/run_layer3_e2e.py": {
+      "sha256": "66ac1276fa37a3fb3aa5d77e6d29d5ed5724aadbd1244f97042b43e47de08de8",
+      "role": "reference_eval_cli",
+      "origin": "tests/rag_quality/run_layer3_e2e.py"
+    },
+    "tests/rag_quality/debug_layer3_single.py": {
+      "sha256": "9b86f32305457cf8f60fd063e79e86710f96984a15a6896961d839732203115b",
+      "role": "reference_eval_cli",
+      "origin": "tests/rag_quality/debug_layer3_single.py"
+    },
+    "tests/rag_qualityV2/run_layer3_v2.py": {
+      "sha256": "74e46e2105e479fa033e017cabcca51d5732ade9920b8e28394f40849657ff1b",
+      "role": "reference_eval_cli",
+      "origin": "tests/rag_qualityV2/run_layer3_v2.py"
+    },
+    "backend/tests/test_execute_plan_architecture.py": {
+      "sha256": "51811aad2c6e5df42a478abf9cc59f1c03fce70760ee8e3e17d286177fd368c3",
+      "origin": "backend/tests/test_execute_plan_architecture.py",
+      "role": "source_architecture_reference"
+    },
+    "backend/tests/test_llm_callsite_contract.py": {
+      "sha256": "7353ff1e6f5b1b0b1502b45e851d6a5d41bb0f7534b4112f45b676cdec73410f",
+      "origin": "backend/tests/test_llm_callsite_contract.py",
+      "role": "source_architecture_reference",
+      "original_sha256": "618eb2ce826f7da0a6e53c4de606f8715a8d61623c0075669d26a7328cf8ac24",
+      "portability_change": "仅共享/归档源码定位，断言不变。"
+    },
+    "backend/tests/test_report_prompt_structure.py": {
+      "sha256": "472f8549d25683340c0bb0f921af5a4564deb7fcd916c37bb8312d35627ed10e",
+      "origin": "backend/tests/test_report_prompt_structure.py",
+      "role": "source_architecture_reference"
+    },
+    "role_catalog.json": {
+      "sha256": "92ee4ab431a216ddc18f42abc657800ccd52359c05f189a8dd2acc2559348982",
+      "role": "reference_metadata",
+      "origin": "role_catalog.json"
+    },
+    "live_contract_map.json": {
+      "sha256": "10d5bbfca377060db526447184970f025a9cb250fb44249364369da30fd275cb",
+      "role": "reference_metadata",
+      "origin": "live_contract_map.json"
+    },
+    "retirement_scope.json": {
+      "sha256": "9b106c01466dc271a76bbe3c11b877d573612cd528aac11078dc619d7d4afbf7",
+      "role": "reference_metadata",
+      "origin": "retirement_scope.json"
+    }
+  },
+  "modules": {
+    "backend.agents.deep_search_agent": "backend/agents/deep_search_agent.py",
+    "backend.agents.deepagents_bridge": "backend/agents/deepagents_bridge.py",
+    "backend.agents.fundamental_agent": "backend/agents/fundamental_agent.py",
+    "backend.agents.macro_agent": "backend/agents/macro_agent.py",
+    "backend.agents.news_agent": "backend/agents/news_agent.py",
+    "backend.agents.prediction_contract": "backend/agents/prediction_contract.py",
+    "backend.agents.prediction_submit": "backend/agents/prediction_submit.py",
+    "backend.agents.price_agent": "backend/agents/price_agent.py",
+    "backend.agents.profiles": "backend/agents/profiles.py",
+    "backend.agents.search_convergence": "backend/agents/search_convergence.py",
+    "backend.agents.sentiment_brief": "backend/agents/sentiment_brief.py",
+    "backend.graph": "backend/graph/__init__.py",
+    "backend.graph.adapters": "backend/graph/adapters/__init__.py",
+    "backend.graph.adapters.collector_adapter": "backend/graph/adapters/collector_adapter.py",
+    "backend.graph.adapters.tool_adapter": "backend/graph/adapters/tool_adapter.py",
+    "backend.graph.cancellation": "backend/graph/cancellation.py",
+    "backend.graph.capability_registry": "backend/graph/capability_registry.py",
+    "backend.graph.checkpointer": "backend/graph/checkpointer.py",
+    "backend.graph.coverage_validator": "backend/graph/coverage_validator.py",
+    "backend.graph.dag_executor": "backend/graph/dag_executor.py",
+    "backend.graph.earnings_intent": "backend/graph/earnings_intent.py",
+    "backend.graph.event_bus": "backend/graph/event_bus.py",
+    "backend.graph.evidence_dependencies": "backend/graph/evidence_dependencies.py",
+    "backend.graph.execution": "backend/graph/execution/__init__.py",
+    "backend.graph.execution.evidence_pipeline": "backend/graph/execution/evidence_pipeline.py",
+    "backend.graph.execution.evidence_tools": "backend/graph/execution/evidence_tools.py",
+    "backend.graph.execution.partial_delivery": "backend/graph/execution/partial_delivery.py",
+    "backend.graph.execution.plan_pipeline": "backend/graph/execution/plan_pipeline.py",
+    "backend.graph.execution.request_data": "backend/graph/execution/request_data.py",
+    "backend.graph.executor": "backend/graph/executor.py",
+    "backend.graph.failure": "backend/graph/failure.py",
+    "backend.graph.intent": "backend/graph/intent/__init__.py",
+    "backend.graph.intent.decision": "backend/graph/intent/decision.py",
+    "backend.graph.intent.deterministic_engine": "backend/graph/intent/deterministic_engine.py",
+    "backend.graph.intent.direct_reply": "backend/graph/intent/direct_reply.py",
+    "backend.graph.intent.financial_terms": "backend/graph/intent/financial_terms.py",
+    "backend.graph.intent.frame": "backend/graph/intent/frame.py",
+    "backend.graph.intent.keywords": "backend/graph/intent/keywords.py",
+    "backend.graph.intent.operations": "backend/graph/intent/operations.py",
+    "backend.graph.intent.predicates": "backend/graph/intent/predicates.py",
+    "backend.graph.intent.priorities": "backend/graph/intent/priorities.py",
+    "backend.graph.intent.signals": "backend/graph/intent/signals.py",
+    "backend.graph.intent.task_builders": "backend/graph/intent/task_builders.py",
+    "backend.graph.intent_contract": "backend/graph/intent_contract.py",
+    "backend.graph.investment_intent": "backend/graph/investment_intent.py",
+    "backend.graph.json_utils": "backend/graph/json_utils.py",
+    "backend.graph.memory_scope": "backend/graph/memory_scope.py",
+    "backend.graph.memory_snapshot": "backend/graph/memory_snapshot.py",
+    "backend.graph.nodes": "backend/graph/nodes/__init__.py",
+    "backend.graph.nodes.analyze": "backend/graph/nodes/analyze.py",
+    "backend.graph.nodes.build_initial_state": "backend/graph/nodes/build_initial_state.py",
+    "backend.graph.nodes.chat_respond": "backend/graph/nodes/chat_respond.py",
+    "backend.graph.nodes.clarify": "backend/graph/nodes/clarify.py",
+    "backend.graph.nodes.collect_evidence": "backend/graph/nodes/collect_evidence.py",
+    "backend.graph.nodes.compare_gate": "backend/graph/nodes/compare_gate.py",
+    "backend.graph.nodes.decide_output_mode": "backend/graph/nodes/decide_output_mode.py",
+    "backend.graph.nodes.execute_plan_node": "backend/graph/nodes/execute_plan_node.py",
+    "backend.graph.nodes.normalize_ui_context": "backend/graph/nodes/normalize_ui_context.py",
+    "backend.graph.nodes.parse_operation": "backend/graph/nodes/parse_operation.py",
+    "backend.graph.nodes.policy_gate": "backend/graph/nodes/policy_gate.py",
+    "backend.graph.nodes.prepare_context": "backend/graph/nodes/prepare_context.py",
+    "backend.graph.nodes.query_intent": "backend/graph/nodes/query_intent.py",
+    "backend.graph.nodes.render": "backend/graph/nodes/render.py",
+    "backend.graph.nodes.render_node": "backend/graph/nodes/render_node.py",
+    "backend.graph.nodes.reset_turn_state": "backend/graph/nodes/reset_turn_state.py",
+    "backend.graph.nodes.resolve_subject": "backend/graph/nodes/resolve_subject.py",
+    "backend.graph.nodes.route_request": "backend/graph/nodes/route_request.py",
+    "backend.graph.nodes.summarize_history": "backend/graph/nodes/summarize_history.py",
+    "backend.graph.nodes.synthesize": "backend/graph/nodes/synthesize.py",
+    "backend.graph.nodes.trim_conversation_history": "backend/graph/nodes/trim_conversation_history.py",
+    "backend.graph.nodes.validate": "backend/graph/nodes/validate.py",
+    "backend.graph.plan_ir": "backend/graph/plan_ir.py",
+    "backend.graph.planner_prompt": "backend/graph/planner_prompt.py",
+    "backend.graph.planning": "backend/graph/planning/__init__.py",
+    "backend.graph.planning.builders": "backend/graph/planning/builders/__init__.py",
+    "backend.graph.planning.builders.company": "backend/graph/planning/builders/company.py",
+    "backend.graph.planning.builders.earnings": "backend/graph/planning/builders/earnings.py",
+    "backend.graph.planning.builders.evidence": "backend/graph/planning/builders/evidence.py",
+    "backend.graph.planning.builders.holdings": "backend/graph/planning/builders/holdings.py",
+    "backend.graph.planning.builders.macro": "backend/graph/planning/builders/macro.py",
+    "backend.graph.planning.builders.theme": "backend/graph/planning/builders/theme.py",
+    "backend.graph.planning.builders.url_docs": "backend/graph/planning/builders/url_docs.py",
+    "backend.graph.planning.builders.valuation": "backend/graph/planning/builders/valuation.py",
+    "backend.graph.planning.context": "backend/graph/planning/context.py",
+    "backend.graph.planning.diagnostics": "backend/graph/planning/diagnostics.py",
+    "backend.graph.planning.frames": "backend/graph/planning/frames.py",
+    "backend.graph.planning.lane_selector": "backend/graph/planning/lane_selector.py",
+    "backend.graph.planning.llm_output": "backend/graph/planning/llm_output.py",
+    "backend.graph.planning.policy_enforcement": "backend/graph/planning/policy_enforcement.py",
+    "backend.graph.planning.report_mode": "backend/graph/planning/report_mode.py",
+    "backend.graph.planning.roles": "backend/graph/planning/roles.py",
+    "backend.graph.planning.rule_planner": "backend/graph/planning/rule_planner.py",
+    "backend.graph.planning.steps": "backend/graph/planning/steps.py",
+    "backend.graph.planning.util": "backend/graph/planning/util.py",
+    "backend.graph.planning.validation": "backend/graph/planning/validation.py",
+    "backend.graph.policy": "backend/graph/policy/__init__.py",
+    "backend.graph.policy.runtime": "backend/graph/policy/runtime.py",
+    "backend.graph.policy.tools": "backend/graph/policy/tools.py",
+    "backend.graph.render_vars": "backend/graph/render_vars/__init__.py",
+    "backend.graph.render_vars.access": "backend/graph/render_vars/access.py",
+    "backend.graph.render_vars.compare": "backend/graph/render_vars/compare.py",
+    "backend.graph.render_vars.context": "backend/graph/render_vars/context.py",
+    "backend.graph.render_vars.macro": "backend/graph/render_vars/macro.py",
+    "backend.graph.render_vars.model": "backend/graph/render_vars/model.py",
+    "backend.graph.render_vars.news": "backend/graph/render_vars/news.py",
+    "backend.graph.render_vars.price": "backend/graph/render_vars/price.py",
+    "backend.graph.render_vars.report_agents": "backend/graph/render_vars/report_agents.py",
+    "backend.graph.render_vars.technical": "backend/graph/render_vars/technical.py",
+    "backend.graph.renderers": "backend/graph/renderers/__init__.py",
+    "backend.graph.renderers.compare": "backend/graph/renderers/compare.py",
+    "backend.graph.renderers.content_selection": "backend/graph/renderers/content_selection.py",
+    "backend.graph.renderers.earnings": "backend/graph/renderers/earnings.py",
+    "backend.graph.renderers.fact_formatters": "backend/graph/renderers/fact_formatters.py",
+    "backend.graph.renderers.holdings": "backend/graph/renderers/holdings.py",
+    "backend.graph.renderers.macro": "backend/graph/renderers/macro.py",
+    "backend.graph.renderers.misc": "backend/graph/renderers/misc.py",
+    "backend.graph.renderers.news": "backend/graph/renderers/news.py",
+    "backend.graph.renderers.news_fallback": "backend/graph/renderers/news_fallback.py",
+    "backend.graph.renderers.news_items": "backend/graph/renderers/news_items.py",
+    "backend.graph.renderers.news_snapshot": "backend/graph/renderers/news_snapshot.py",
+    "backend.graph.renderers.opinion": "backend/graph/renderers/opinion.py",
+    "backend.graph.renderers.price": "backend/graph/renderers/price.py",
+    "backend.graph.renderers.registry": "backend/graph/renderers/registry.py",
+    "backend.graph.renderers.research_report": "backend/graph/renderers/research_report.py",
+    "backend.graph.renderers.shared": "backend/graph/renderers/shared.py",
+    "backend.graph.renderers.synthesis_vars": "backend/graph/renderers/synthesis_vars.py",
+    "backend.graph.renderers.url_fetch": "backend/graph/renderers/url_fetch.py",
+    "backend.graph.renderers.valuation": "backend/graph/renderers/valuation.py",
+    "backend.graph.report_builder": "backend/graph/report_builder.py",
+    "backend.graph.request_compiler": "backend/graph/request_compiler.py",
+    "backend.graph.request_constraints": "backend/graph/request_constraints.py",
+    "backend.graph.request_facets": "backend/graph/request_facets.py",
+    "backend.graph.request_frame": "backend/graph/request_frame.py",
+    "backend.graph.request_spec": "backend/graph/request_spec.py",
+    "backend.graph.request_task_contract": "backend/graph/request_task_contract.py",
+    "backend.graph.research_capabilities": "backend/graph/research_capabilities.py",
+    "backend.graph.runner": "backend/graph/runner.py",
+    "backend.graph.semantic_requirements": "backend/graph/semantic_requirements.py",
+    "backend.graph.state": "backend/graph/state.py",
+    "backend.graph.synthesis": "backend/graph/synthesis/__init__.py",
+    "backend.graph.synthesis.analysis_requirements": "backend/graph/synthesis/analysis_requirements.py",
+    "backend.graph.synthesis.contracts": "backend/graph/synthesis/contracts.py",
+    "backend.graph.synthesis.narrative": "backend/graph/synthesis/narrative.py",
+    "backend.graph.synthesis.normalization": "backend/graph/synthesis/normalization.py",
+    "backend.graph.synthesis.opinion_readiness": "backend/graph/synthesis/opinion_readiness.py",
+    "backend.graph.synthesis.requirement_support": "backend/graph/synthesis/requirement_support.py",
+    "backend.graph.synthesis.requirement_validation": "backend/graph/synthesis/requirement_validation.py",
+    "backend.graph.synthesis.research_synthesis": "backend/graph/synthesis/research_synthesis.py",
+    "backend.graph.synthesis.structured_orchestration": "backend/graph/synthesis/structured_orchestration.py",
+    "backend.graph.synthesis.task_outcomes": "backend/graph/synthesis/task_outcomes.py",
+    "backend.graph.trace": "backend/graph/trace.py",
+    "backend.graph.understanding_v2": "backend/graph/understanding_v2.py",
+    "backend.orchestration.tools_bridge": "backend/orchestration/tools_bridge.py",
+    "backend.orchestration.trace": "backend/orchestration/trace.py",
+    "backend.rag.execution_observability": "backend/rag/execution_observability.py",
+    "backend.rag.execution_pipeline": "backend/rag/execution_pipeline.py",
+    "backend.rag.execution_support": "backend/rag/execution_support.py",
+    "backend.rag.ingestion": "backend/rag/ingestion.py",
+    "backend.report.agent_formatters": "backend/report/agent_formatters.py",
+    "backend.report.grounding": "backend/report/grounding.py",
+    "backend.report.verifier": "backend/report/verifier.py",
+    "backend.services.execution_service": "backend/services/execution_service.py",
+    "backend.services.health_probe": "backend/services/health_probe.py",
+    "scripts.agent_quality_eval": "scripts/agent_quality_eval.py",
+    "scripts.chat_regression_queries_2026_05_03": "scripts/chat_regression_queries_2026_05_03.py",
+    "scripts.chat_ux_router_eval": "scripts/chat_ux_router_eval.py",
+    "scripts.check_quotes": "scripts/check_quotes.py",
+    "scripts.probe_answer_format_fix": "scripts/probe_answer_format_fix.py",
+    "scripts.request_understanding_probe": "scripts/request_understanding_probe.py",
+    "scripts.run_query_matrix": "scripts/run_query_matrix.py",
+    "scripts.skill_python_eval": "scripts/skill_python_eval.py",
+    "scripts.synthesize_original": "scripts/synthesize_original.py",
+    "scripts.test_full_depth_graph": "scripts/test_full_depth_graph.py",
+    "scripts.test_full_graph": "scripts/test_full_graph.py",
+    "backend.report.quality_engine": "backend/report/quality_engine.py",
+    "backend.tests.conftest": "backend/tests/conftest.py",
+    "backend.tests.fixtures.render_vars_legacy": "backend/tests/fixtures/render_vars_legacy.py",
+    "backend.tests.semantic_request_fixtures": "backend/tests/semantic_request_fixtures.py",
+    "backend.tests.test_agent_capability_audit": "backend/tests/test_agent_capability_audit.py",
+    "backend.tests.test_agent_chart_specs": "backend/tests/test_agent_chart_specs.py",
+    "backend.tests.test_agent_chinese_output_contract": "backend/tests/test_agent_chinese_output_contract.py",
+    "backend.tests.test_agent_claim_extractor": "backend/tests/test_agent_claim_extractor.py",
+    "backend.tests.test_agent_native_claims": "backend/tests/test_agent_native_claims.py",
+    "backend.tests.test_agent_nonblocking_io": "backend/tests/test_agent_nonblocking_io.py",
+    "backend.tests.test_agent_profiles": "backend/tests/test_agent_profiles.py",
+    "backend.tests.test_agent_quality_eval_smoke": "backend/tests/test_agent_quality_eval_smoke.py",
+    "backend.tests.test_agents": "backend/tests/test_agents.py",
+    "backend.tests.test_ai_message_persistence": "backend/tests/test_ai_message_persistence.py",
+    "backend.tests.test_build_initial_state_dashboard": "backend/tests/test_build_initial_state_dashboard.py",
+    "backend.tests.test_capability_input_groups": "backend/tests/test_capability_input_groups.py",
+    "backend.tests.test_capability_registry": "backend/tests/test_capability_registry.py",
+    "backend.tests.test_chat_news_brief_integration": "backend/tests/test_chat_news_brief_integration.py",
+    "backend.tests.test_chat_response_contract": "backend/tests/test_chat_response_contract.py",
+    "backend.tests.test_chat_task_outcomes": "backend/tests/test_chat_task_outcomes.py",
+    "backend.tests.test_chat_url_renderer": "backend/tests/test_chat_url_renderer.py",
+    "backend.tests.test_checkpointer_messages": "backend/tests/test_checkpointer_messages.py",
+    "backend.tests.test_clarify_node": "backend/tests/test_clarify_node.py",
+    "backend.tests.test_collector_adapter_resilience": "backend/tests/test_collector_adapter_resilience.py",
+    "backend.tests.test_company_profile_currency": "backend/tests/test_company_profile_currency.py",
+    "backend.tests.test_compare_gate": "backend/tests/test_compare_gate.py",
+    "backend.tests.test_conversation_degradation_contract": "backend/tests/test_conversation_degradation_contract.py",
+    "backend.tests.test_core_viewpoints": "backend/tests/test_core_viewpoints.py",
+    "backend.tests.test_dag_executor": "backend/tests/test_dag_executor.py",
+    "backend.tests.test_deep_research": "backend/tests/test_deep_research.py",
+    "backend.tests.test_direct_technical_snapshot": "backend/tests/test_direct_technical_snapshot.py",
+    "backend.tests.test_disclosure_financial_facts": "backend/tests/test_disclosure_financial_facts.py",
+    "backend.tests.test_document_financial_bridge": "backend/tests/test_document_financial_bridge.py",
+    "backend.tests.test_earnings_intent": "backend/tests/test_earnings_intent.py",
+    "backend.tests.test_evidence_diagnostics_gate": "backend/tests/test_evidence_diagnostics_gate.py",
+    "backend.tests.test_evidence_input_contract_repair": "backend/tests/test_evidence_input_contract_repair.py",
+    "backend.tests.test_evidence_ledger_execute_plan": "backend/tests/test_evidence_ledger_execute_plan.py",
+    "backend.tests.test_evidence_pool": "backend/tests/test_evidence_pool.py",
+    "backend.tests.test_execution_cancel": "backend/tests/test_execution_cancel.py",
+    "backend.tests.test_execution_evidence_metadata": "backend/tests/test_execution_evidence_metadata.py",
+    "backend.tests.test_execution_failure_vs_quality_block": "backend/tests/test_execution_failure_vs_quality_block.py",
+    "backend.tests.test_execution_quality_gate": "backend/tests/test_execution_quality_gate.py",
+    "backend.tests.test_execution_stage_events": "backend/tests/test_execution_stage_events.py",
+    "backend.tests.test_executor": "backend/tests/test_executor.py",
+    "backend.tests.test_explicit_company_listing": "backend/tests/test_explicit_company_listing.py",
+    "backend.tests.test_fact_check_exposure": "backend/tests/test_fact_check_exposure.py",
+    "backend.tests.test_filing_body_merge_regression": "backend/tests/test_filing_body_merge_regression.py",
+    "backend.tests.test_financial_fact_contract": "backend/tests/test_financial_fact_contract.py",
+    "backend.tests.test_financial_intent": "backend/tests/test_financial_intent.py",
+    "backend.tests.test_financial_period_calculations": "backend/tests/test_financial_period_calculations.py",
+    "backend.tests.test_financial_terms": "backend/tests/test_financial_terms.py",
+    "backend.tests.test_foundation_analysis_pipeline": "backend/tests/test_foundation_analysis_pipeline.py",
+    "backend.tests.test_foundation_content_selection": "backend/tests/test_foundation_content_selection.py",
+    "backend.tests.test_foundation_fact_formatters": "backend/tests/test_foundation_fact_formatters.py",
+    "backend.tests.test_foundation_planning": "backend/tests/test_foundation_planning.py",
+    "backend.tests.test_foundation_quality": "backend/tests/test_foundation_quality.py",
+    "backend.tests.test_foundation_research_result": "backend/tests/test_foundation_research_result.py",
+    "backend.tests.test_foundation_structured_diagnostics": "backend/tests/test_foundation_structured_diagnostics.py",
+    "backend.tests.test_foundation_valuation_units": "backend/tests/test_foundation_valuation_units.py",
+    "backend.tests.test_frame_task_bindings": "backend/tests/test_frame_task_bindings.py",
+    "backend.tests.test_graph_node_order": "backend/tests/test_graph_node_order.py",
+    "backend.tests.test_intent_frame": "backend/tests/test_intent_frame.py",
+    "backend.tests.test_intent_signals": "backend/tests/test_intent_signals.py",
+    "backend.tests.test_investment_intent": "backend/tests/test_investment_intent.py",
+    "backend.tests.test_langgraph_skeleton": "backend/tests/test_langgraph_skeleton.py",
+    "backend.tests.test_live_synthesis_binding_regression": "backend/tests/test_live_synthesis_binding_regression.py",
+    "backend.tests.test_live_tools_evidence": "backend/tests/test_live_tools_evidence.py",
+    "backend.tests.test_macro_employment_data": "backend/tests/test_macro_employment_data.py",
+    "backend.tests.test_macro_evidence_boundary": "backend/tests/test_macro_evidence_boundary.py",
+    "backend.tests.test_macro_requirement_evidence": "backend/tests/test_macro_requirement_evidence.py",
+    "backend.tests.test_macro_requirement_selector": "backend/tests/test_macro_requirement_selector.py",
+    "backend.tests.test_memory_snapshot": "backend/tests/test_memory_snapshot.py",
+    "backend.tests.test_multi_task_sections": "backend/tests/test_multi_task_sections.py",
+    "backend.tests.test_multidimension_intent_contract": "backend/tests/test_multidimension_intent_contract.py",
+    "backend.tests.test_news_agent_truthfulness": "backend/tests/test_news_agent_truthfulness.py",
+    "backend.tests.test_news_event_quality": "backend/tests/test_news_event_quality.py",
+    "backend.tests.test_no_fake_confidence": "backend/tests/test_no_fake_confidence.py",
+    "backend.tests.test_opinion_readiness": "backend/tests/test_opinion_readiness.py",
+    "backend.tests.test_original_requirement_gate": "backend/tests/test_original_requirement_gate.py",
+    "backend.tests.test_p0_unit": "backend/tests/test_p0_unit.py",
+    "backend.tests.test_p7_extensions": "backend/tests/test_p7_extensions.py",
+    "backend.tests.test_parse_operation": "backend/tests/test_parse_operation.py",
+    "backend.tests.test_partial_delivery": "backend/tests/test_partial_delivery.py",
+    "backend.tests.test_phase3_acceptance": "backend/tests/test_phase3_acceptance.py",
+    "backend.tests.test_plan_dependencies": "backend/tests/test_plan_dependencies.py",
+    "backend.tests.test_plan_ir_validation": "backend/tests/test_plan_ir_validation.py",
+    "backend.tests.test_planner_constraints": "backend/tests/test_planner_constraints.py",
+    "backend.tests.test_planner_lane": "backend/tests/test_planner_lane.py",
+    "backend.tests.test_planner_prompt": "backend/tests/test_planner_prompt.py",
+    "backend.tests.test_policy_gate": "backend/tests/test_policy_gate.py",
+    "backend.tests.test_prediction_report_archive": "backend/tests/test_prediction_report_archive.py",
+    "backend.tests.test_prepare_context": "backend/tests/test_prepare_context.py",
+    "backend.tests.test_price_quote_metadata_contract": "backend/tests/test_price_quote_metadata_contract.py",
+    "backend.tests.test_query_coverage_contract": "backend/tests/test_query_coverage_contract.py",
+    "backend.tests.test_query_intent": "backend/tests/test_query_intent.py",
+    "backend.tests.test_rag_eval_patch_target": "backend/tests/test_rag_eval_patch_target.py",
+    "backend.tests.test_rag_observability_execute_plan": "backend/tests/test_rag_observability_execute_plan.py",
+    "backend.tests.test_render_vars_keys": "backend/tests/test_render_vars_keys.py",
+    "backend.tests.test_report_builder_quality_gate": "backend/tests/test_report_builder_quality_gate.py",
+    "backend.tests.test_report_builder_synthesis_report": "backend/tests/test_report_builder_synthesis_report.py",
+    "backend.tests.test_report_cache": "backend/tests/test_report_cache.py",
+    "backend.tests.test_report_run_result": "backend/tests/test_report_run_result.py",
+    "backend.tests.test_report_verifier": "backend/tests/test_report_verifier.py",
+    "backend.tests.test_request_attribute_ownership": "backend/tests/test_request_attribute_ownership.py",
+    "backend.tests.test_request_compiler_acceptance": "backend/tests/test_request_compiler_acceptance.py",
+    "backend.tests.test_request_data_sharing": "backend/tests/test_request_data_sharing.py",
+    "backend.tests.test_request_facets": "backend/tests/test_request_facets.py",
+    "backend.tests.test_request_frame_golden_queries": "backend/tests/test_request_frame_golden_queries.py",
+    "backend.tests.test_request_semantic_regressions": "backend/tests/test_request_semantic_regressions.py",
+    "backend.tests.test_request_spec": "backend/tests/test_request_spec.py",
+    "backend.tests.test_requirement_source_relevance_gate": "backend/tests/test_requirement_source_relevance_gate.py",
+    "backend.tests.test_research_capability_contract": "backend/tests/test_research_capability_contract.py",
+    "backend.tests.test_research_public_text": "backend/tests/test_research_public_text.py",
+    "backend.tests.test_research_quality_followup": "backend/tests/test_research_quality_followup.py",
+    "backend.tests.test_research_synthesis_contract": "backend/tests/test_research_synthesis_contract.py",
+    "backend.tests.test_resolve_subject": "backend/tests/test_resolve_subject.py",
+    "backend.tests.test_run_context": "backend/tests/test_run_context.py",
+    "backend.tests.test_runtime_lazy_startup": "backend/tests/test_runtime_lazy_startup.py",
+    "backend.tests.test_runtime_neutral_contracts": "backend/tests/test_runtime_neutral_contracts.py",
+    "backend.tests.test_safe_llm_failure_diagnostics": "backend/tests/test_safe_llm_failure_diagnostics.py",
+    "backend.tests.test_search_convergence": "backend/tests/test_search_convergence.py",
+    "backend.tests.test_selected_model_synthesis_repair": "backend/tests/test_selected_model_synthesis_repair.py",
+    "backend.tests.test_semantic_request_requirements": "backend/tests/test_semantic_request_requirements.py",
+    "backend.tests.test_semantic_stage_budget": "backend/tests/test_semantic_stage_budget.py",
+    "backend.tests.test_sentiment_brief": "backend/tests/test_sentiment_brief.py",
+    "backend.tests.test_skill_perspective": "backend/tests/test_skill_perspective.py",
+    "backend.tests.test_skill_policy_integration": "backend/tests/test_skill_policy_integration.py",
+    "backend.tests.test_skill_python_eval_gate": "backend/tests/test_skill_python_eval_gate.py",
+    "backend.tests.test_structure": "backend/tests/test_structure.py",
+    "backend.tests.test_structured_report_uncertainty": "backend/tests/test_structured_report_uncertainty.py",
+    "backend.tests.test_summarize_history": "backend/tests/test_summarize_history.py",
+    "backend.tests.test_synthesis_acceptance_repair": "backend/tests/test_synthesis_acceptance_repair.py",
+    "backend.tests.test_synthesis_completion": "backend/tests/test_synthesis_completion.py",
+    "backend.tests.test_synthesize_hallucination": "backend/tests/test_synthesize_hallucination.py",
+    "backend.tests.test_synthesize_node": "backend/tests/test_synthesize_node.py",
+    "backend.tests.test_task_request_synthesis_prompt": "backend/tests/test_task_request_synthesis_prompt.py",
+    "backend.tests.test_technical_fundamental_agents": "backend/tests/test_technical_fundamental_agents.py",
+    "backend.tests.test_technical_renderer_priority": "backend/tests/test_technical_renderer_priority.py",
+    "backend.tests.test_templates_render": "backend/tests/test_templates_render.py",
+    "backend.tests.test_tool_fallback_propagation": "backend/tests/test_tool_fallback_propagation.py",
+    "backend.tests.test_trace_and_session_security": "backend/tests/test_trace_and_session_security.py",
+    "backend.tests.test_trace_v2_observability": "backend/tests/test_trace_v2_observability.py",
+    "backend.tests.test_trim_conversation_history": "backend/tests/test_trim_conversation_history.py",
+    "backend.tests.test_understanding_v2_contract": "backend/tests/test_understanding_v2_contract.py",
+    "backend.tests.test_wp6_graph_contract": "backend/tests/test_wp6_graph_contract.py",
+    "tests.unit.test_news_analysis_fallback": "tests/unit/test_news_analysis_fallback.py",
+    "tests.golden": "tests/golden/__init__.py",
+    "tests.golden.conftest": "tests/golden/conftest.py",
+    "tests.golden.test_golden_pipeline": "tests/golden/test_golden_pipeline.py",
+    "backend.tests": "backend/tests/__init__.py"
+  },
+  "protected_files": [
+    {
+      "file": "backend/agents/technical_agent.py",
+      "expected_sha256": "53244d85a59f79cc3ec49558cd72d76e7cb1772c31ff33be596eced469f070d3",
+      "actual_sha256": "53244d85a59f79cc3ec49558cd72d76e7cb1772c31ff33be596eced469f070d3",
+      "unchanged": true
+    },
+    {
+      "file": "backend/agents/risk_agent.py",
+      "expected_sha256": "8ed87f7ee635b6d4ef017ab1d03588179756010e96a4e6fa29116d27479e38bf",
+      "actual_sha256": "8ed87f7ee635b6d4ef017ab1d03588179756010e96a4e6fa29116d27479e38bf",
+      "unchanged": true
+    },
+    {
+      "file": "backend/agents/base_agent.py",
+      "expected_sha256": "fde659c7e96687215058f800dacbbd7322f92f45c11a16211037b5629acfe808",
+      "actual_sha256": "fde659c7e96687215058f800dacbbd7322f92f45c11a16211037b5629acfe808",
+      "unchanged": true
+    },
+    {
+      "file": "backend/agents/chart_specs.py",
+      "expected_sha256": "ee301acabb3d98dfb11c86dd45052e21a41c0ff4c7e96fc71482d4fe8df0a2b3",
+      "actual_sha256": "ee301acabb3d98dfb11c86dd45052e21a41c0ff4c7e96fc71482d4fe8df0a2b3",
+      "unchanged": true
+    },
+    {
+      "file": "backend/agents/chart_specs_extra.py",
+      "expected_sha256": "5d9c948cfdeb63deb518df64b4abcfba506a5587b8f8e5af65b2e05ff3694c2a",
+      "actual_sha256": "5d9c948cfdeb63deb518df64b4abcfba506a5587b8f8e5af65b2e05ff3694c2a",
+      "unchanged": true
+    },
+    {
+      "file": "backend/tools/technical.py",
+      "expected_sha256": "5eebfd7d0a7fd6cc9847352a2eb90b7fa969c904981053f3f60bb0cf5e0c64b7",
+      "actual_sha256": "5eebfd7d0a7fd6cc9847352a2eb90b7fa969c904981053f3f60bb0cf5e0c64b7",
+      "unchanged": true
+    },
+    {
+      "file": "backend/tools/yfinance_client.py",
+      "expected_sha256": "51b79659775dd79b05b29d743b27c88346a367d6d5c2e2d8e790436226866e4b",
+      "actual_sha256": "51b79659775dd79b05b29d743b27c88346a367d6d5c2e2d8e790436226866e4b",
+      "unchanged": true
+    },
+    {
+      "file": "backend/research/forecasting.py",
+      "expected_sha256": "4596f519a6fc6769d6b2d1aff9cd5224b9ffb8bb3fceb51eacf961f3da02fab6",
+      "actual_sha256": "4596f519a6fc6769d6b2d1aff9cd5224b9ffb8bb3fceb51eacf961f3da02fab6",
+      "unchanged": true
+    },
+    {
+      "file": "backend/research/prediction_contract.py",
+      "expected_sha256": "4ab6280062d7680e3642ad7329905fcdec9a7b90aaa534bc8980f4ca4d3a334f",
+      "actual_sha256": "4ab6280062d7680e3642ad7329905fcdec9a7b90aaa534bc8980f4ca4d3a334f",
+      "unchanged": true
+    },
+    {
+      "file": "backend/utils/llm_json.py",
+      "expected_sha256": "6cc5b3aa9ecaf5528796bc4b866cbd55556cd881802846d77203064da77c9566",
+      "actual_sha256": "6cc5b3aa9ecaf5528796bc4b866cbd55556cd881802846d77203064da77c9566",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/prediction_runner.py",
+      "expected_sha256": "92d5613c1d0eb92e52c924b8cafbf373729d7f4ef07ee3e5b73a6f70c0f181a8",
+      "actual_sha256": "92d5613c1d0eb92e52c924b8cafbf373729d7f4ef07ee3e5b73a6f70c0f181a8",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/prediction_market.py",
+      "expected_sha256": "f0f829b5ac9cc6060ed3c6dfb9c504efd0af3a1ac0b81054047f1a6e198cbde0",
+      "actual_sha256": "f0f829b5ac9cc6060ed3c6dfb9c504efd0af3a1ac0b81054047f1a6e198cbde0",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/prediction_calendar.py",
+      "expected_sha256": "4c866031eb7f018c6c5dcb0c743b9b313c41514ef1bd024850b64b66be26b414",
+      "actual_sha256": "4c866031eb7f018c6c5dcb0c743b9b313c41514ef1bd024850b64b66be26b414",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/prediction_store.py",
+      "expected_sha256": "d161511f9b5de5808c3da38ce36fae34d6d4d498e8818b8d1df97cd2c228e5a3",
+      "actual_sha256": "d161511f9b5de5808c3da38ce36fae34d6d4d498e8818b8d1df97cd2c228e5a3",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/prediction_settlement.py",
+      "expected_sha256": "e32b5d758554d5b11553c3990f1461a17745c680c3e97d9e2dcd0134b98fdeff",
+      "actual_sha256": "e32b5d758554d5b11553c3990f1461a17745c680c3e97d9e2dcd0134b98fdeff",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/llm_retry.py",
+      "expected_sha256": "c6e53cbc708e0421e9a2b9440cbe19f06c4040521445aa5911c1bb38882221ad",
+      "actual_sha256": "c6e53cbc708e0421e9a2b9440cbe19f06c4040521445aa5911c1bb38882221ad",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/model_selection.py",
+      "expected_sha256": "c6ba957e64749eebd4e7eb625c76e0dbc6953c98379487bab803453462915ec7",
+      "actual_sha256": "c6ba957e64749eebd4e7eb625c76e0dbc6953c98379487bab803453462915ec7",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/run_context.py",
+      "expected_sha256": "d1264fa8e90d7118b1b93972a9789e772a337544f8a8eb799e45a31284414f2a",
+      "actual_sha256": "d1264fa8e90d7118b1b93972a9789e772a337544f8a8eb799e45a31284414f2a",
+      "unchanged": true
+    },
+    {
+      "file": "backend/llm_config.py",
+      "expected_sha256": "9236dc73e55fe1522ef0a6c11b0a6c06da1129d7d764cd64c568a49b2c178421",
+      "actual_sha256": "9236dc73e55fe1522ef0a6c11b0a6c06da1129d7d764cd64c568a49b2c178421",
+      "unchanged": true
+    },
+    {
+      "file": "backend/orchestration/trace_emitter.py",
+      "expected_sha256": "381a9c43f89a71448b760c29f03c42d0b8f860c367d8129400977ca1c38f1914",
+      "actual_sha256": "381a9c43f89a71448b760c29f03c42d0b8f860c367d8129400977ca1c38f1914",
+      "unchanged": true
+    },
+    {
+      "file": "backend/orchestration/trace_schema.py",
+      "expected_sha256": "1492192249eaa7c2d93f90d14452d866cdcf4c8a0376b46c17d1720d81847779",
+      "actual_sha256": "1492192249eaa7c2d93f90d14452d866cdcf4c8a0376b46c17d1720d81847779",
+      "unchanged": true
+    },
+    {
+      "file": "backend/orchestration/__init__.py",
+      "expected_sha256": "5403fdf65e35dfc24528682dc47af2a58f5a720c03d2396a9ee40b5ab467ea97",
+      "actual_sha256": "5403fdf65e35dfc24528682dc47af2a58f5a720c03d2396a9ee40b5ab467ea97",
+      "unchanged": true
+    },
+    {
+      "file": "requirements.txt",
+      "expected_sha256": "ee6b6c6cbcff4fb3290feb2981f967b5fc5001f1153ee22cb3bb92c7d578d128",
+      "actual_sha256": "ee6b6c6cbcff4fb3290feb2981f967b5fc5001f1153ee22cb3bb92c7d578d128",
+      "unchanged": true
+    },
+    {
+      "file": "backend/services/circuit_breaker.py",
+      "expected_sha256": "786a005596aeffa15275c855953b2ca5b5ca5b817361d597a7226a8726ac5849",
+      "actual_sha256": "786a005596aeffa15275c855953b2ca5b5ca5b817361d597a7226a8726ac5849",
+      "unchanged": true
+    },
+    {
+      "file": "backend/utils/quote.py",
+      "expected_sha256": "2a9b6148c50559312140ff50d72494ddaf593a03ee33cbfdfaee5f71161b31c9",
+      "actual_sha256": "2a9b6148c50559312140ff50d72494ddaf593a03ee33cbfdfaee5f71161b31c9",
+      "unchanged": true
+    },
+    {
+      "file": "backend/research/agent_quality_contract.py",
+      "expected_sha256": "351942a389f26927ebbe4639a9e845aaf82becbf5981695b1098c1341d3b340f",
+      "actual_sha256": "351942a389f26927ebbe4639a9e845aaf82becbf5981695b1098c1341d3b340f",
+      "unchanged": true
+    },
+    {
+      "file": "backend/research/agent_research_loop.py",
+      "expected_sha256": "c969ae16c3c242ebc3c27d04d480c5991dd78f3166db029a544e845d72e6ebd4",
+      "actual_sha256": "c969ae16c3c242ebc3c27d04d480c5991dd78f3166db029a544e845d72e6ebd4",
+      "unchanged": true
+    }
+  ],
+  "baseline_runtime_sha256": "3421e5da50b3b0394742d8f5af658a31fc901fe1ce9df077a6555968776208cb",
+  "source_deletion_performed": true,
+  "reference_test_selection": [
+    "backend/tests/test_agent_capability_audit.py::test_price_collector_has_no_dynamic_tool_registry_or_llm",
+    "backend/tests/test_agent_chart_specs.py::test_price_agent_snapshot_output_contains_smart_chart_specs",
+    "backend/tests/test_agent_chart_specs.py::test_news_agent_sentiment_snapshot_output_contains_pie_and_line_specs",
+    "backend/tests/test_agent_chart_specs.py::test_fundamental_agent_output_contains_bar_and_waterfall_specs",
+    "backend/tests/test_agent_chart_specs.py::test_macro_agent_format_output_attaches_chart_specs",
+    "backend/tests/test_agent_chart_specs.py::test_deep_search_agent_format_output_attaches_chart_specs",
+    "backend/tests/test_agent_chart_specs.py::test_deep_search_agent_format_output_no_data_chart_specs_empty",
+    "backend/tests/test_agent_chinese_output_contract.py",
+    "backend/tests/test_agent_claim_extractor.py",
+    "backend/tests/test_agent_native_claims.py::test_fundamental_agent_outputs_supported_native_claims",
+    "backend/tests/test_agent_native_claims.py::test_news_agent_outputs_catalyst_noise_and_calendar_claims",
+    "backend/tests/test_agent_native_claims.py::test_news_agent_outputs_aggregate_sentiment_snapshot_claims",
+    "backend/tests/test_agent_native_claims.py::test_price_agent_outputs_price_behavior_native_claims",
+    "backend/tests/test_agent_nonblocking_io.py",
+    "backend/tests/test_agent_profiles.py",
+    "backend/tests/test_agent_quality_eval_smoke.py",
+    "backend/tests/test_agents.py",
+    "backend/tests/test_ai_message_persistence.py",
+    "backend/tests/test_build_initial_state_dashboard.py",
+    "backend/tests/test_capability_input_groups.py",
+    "backend/tests/test_capability_registry.py",
+    "backend/tests/test_chat_news_brief_integration.py",
+    "backend/tests/test_chat_response_contract.py",
+    "backend/tests/test_chat_task_outcomes.py",
+    "backend/tests/test_chat_url_renderer.py",
+    "backend/tests/test_checkpointer_messages.py",
+    "backend/tests/test_clarify_node.py",
+    "backend/tests/test_collector_adapter_resilience.py",
+    "backend/tests/test_compare_gate.py",
+    "backend/tests/test_conversation_degradation_contract.py",
+    "backend/tests/test_core_viewpoints.py",
+    "backend/tests/test_dag_executor.py",
+    "backend/tests/test_deep_research.py",
+    "backend/tests/test_direct_technical_snapshot.py",
+    "backend/tests/test_disclosure_financial_facts.py::test_financial_evidence_is_separate_from_announcement_metadata",
+    "backend/tests/test_disclosure_financial_facts.py::test_numeric_local_financial_requirement_enables_original_table_extraction",
+    "backend/tests/test_document_financial_bridge.py::test_fundamental_evidence_preserves_original_amount_without_rounding",
+    "backend/tests/test_document_financial_bridge.py::test_deepsearch_reuses_read_official_document_and_retains_fact_contract",
+    "backend/tests/test_document_financial_bridge.py::test_shared_documents_do_not_claim_research_ticker_or_fake_publication_date",
+    "backend/tests/test_document_financial_bridge.py::test_explicit_period_ranks_matching_document_before_older_source",
+    "backend/tests/test_document_financial_bridge.py::test_local_and_deepsearch_share_two_document_extraction_budget",
+    "backend/tests/test_document_financial_bridge.py::test_frontmatter_publication_date_is_historical_but_fiscal_year_stays_unknown",
+    "backend/tests/test_document_financial_bridge.py::test_inline_frontmatter_date_does_not_promote_financial_dates_or_ambiguous_headers",
+    "backend/tests/test_earnings_intent.py",
+    "backend/tests/test_evidence_diagnostics_gate.py",
+    "backend/tests/test_evidence_input_contract_repair.py::test_company_profile_business_description_and_provenance_survive_tool_normalization",
+    "backend/tests/test_evidence_input_contract_repair.py::test_sec_disclosure_body_is_required_and_retained_through_answer_rendering",
+    "backend/tests/test_evidence_input_contract_repair.py::test_news_applied_window_remains_bounded_after_execution_and_synthesis",
+    "backend/tests/test_evidence_input_contract_repair.py::test_calendar_request_parameters_do_not_substitute_for_observed_provider_window",
+    "backend/tests/test_evidence_input_contract_repair.py::test_daily_close_quote_session_and_date_precision_survive_actual_input_path",
+    "backend/tests/test_evidence_ledger_execute_plan.py",
+    "backend/tests/test_evidence_pool.py",
+    "backend/tests/test_execution_cancel.py",
+    "backend/tests/test_execution_evidence_metadata.py",
+    "backend/tests/test_execution_failure_vs_quality_block.py",
+    "backend/tests/test_execution_quality_gate.py",
+    "backend/tests/test_execution_stage_events.py",
+    "backend/tests/test_executor.py",
+    "backend/tests/test_explicit_company_listing.py",
+    "backend/tests/test_fact_check_exposure.py",
+    "backend/tests/test_filing_body_merge_regression.py",
+    "backend/tests/test_financial_fact_contract.py::test_accounting_alias_priority_rejects_cost_ebitda_and_alternate_net_income",
+    "backend/tests/test_financial_fact_contract.py::test_unsupported_accounting_rows_do_not_become_facts_or_claims",
+    "backend/tests/test_financial_fact_contract.py::test_growth_is_aligned_by_real_dates_and_not_by_column_position",
+    "backend/tests/test_financial_fact_contract.py::test_two_quarters_do_not_have_year_over_year_growth",
+    "backend/tests/test_financial_fact_contract.py::test_missing_intermediate_quarter_does_not_become_qoq",
+    "backend/tests/test_financial_fact_contract.py::test_cross_frequency_cashflow_is_missing_even_if_end_matches",
+    "backend/tests/test_financial_fact_contract.py::test_news_search_parser_preserves_title_url_and_unverified_date_hint",
+    "backend/tests/test_financial_fact_contract.py::test_macro_agent_never_interprets_untyped_cpi_index_as_percent",
+    "backend/tests/test_financial_intent.py",
+    "backend/tests/test_financial_period_calculations.py::test_growth_keeps_two_inputs_and_cannot_be_satisfied_by_amount_only",
+    "backend/tests/test_financial_period_calculations.py::test_explicit_year_and_future_disclosure_are_rejected",
+    "backend/tests/test_financial_period_calculations.py::test_compiler_rejects_component_field_names_and_separates_presentation",
+    "backend/tests/test_financial_period_calculations.py::test_planner_keeps_annual_and_quarterly_calculations_separate",
+    "backend/tests/test_financial_period_calculations.py::test_unknown_fact_does_not_inherit_a_seeded_investment_report",
+    "backend/tests/test_financial_period_calculations.py::test_comparison_reuses_both_companies_annual_calculations",
+    "backend/tests/test_financial_period_calculations.py::test_qualitative_components_trigger_semantic_repair_and_unknown_metric_remains",
+    "backend/tests/test_financial_period_calculations.py::test_single_requested_listing_expansion_gets_one_semantic_repair",
+    "backend/tests/test_financial_period_calculations.py::test_explicit_comparison_or_multiple_requested_subjects_are_kept",
+    "backend/tests/test_financial_period_calculations.py::test_standard_window_return_operator_conflict_gets_one_semantic_repair",
+    "backend/tests/test_financial_period_calculations.py::test_data_obligations_disguised_as_empty_constraints_are_rejected",
+    "backend/tests/test_financial_period_calculations.py::test_relational_explanation_binds_known_inputs_without_forcing_numeric_analysis",
+    "backend/tests/test_financial_period_calculations.py::test_market_financial_numeric_floor_preserves_structured_source",
+    "backend/tests/test_financial_terms.py",
+    "backend/tests/test_foundation_analysis_pipeline.py",
+    "backend/tests/test_foundation_content_selection.py",
+    "backend/tests/test_foundation_fact_formatters.py",
+    "backend/tests/test_foundation_planning.py",
+    "backend/tests/test_foundation_quality.py",
+    "backend/tests/test_foundation_research_result.py",
+    "backend/tests/test_foundation_structured_diagnostics.py",
+    "backend/tests/test_foundation_valuation_units.py",
+    "backend/tests/test_frame_task_bindings.py",
+    "backend/tests/test_graph_node_order.py",
+    "backend/tests/test_intent_frame.py",
+    "backend/tests/test_intent_signals.py",
+    "backend/tests/test_investment_intent.py",
+    "backend/tests/test_langgraph_skeleton.py",
+    "backend/tests/test_live_synthesis_binding_regression.py",
+    "backend/tests/test_live_tools_evidence.py",
+    "backend/tests/test_macro_employment_data.py::test_macro_agent_contract_selector_persons_evidence_and_clock_reset",
+    "backend/tests/test_macro_employment_data.py::test_bls_verified_values_can_supply_missing_fred_without_promoting_rss",
+    "backend/tests/test_macro_employment_data.py::test_matching_bls_report_can_add_release_time_without_overwriting_fred_update_time",
+    "backend/tests/test_macro_employment_data.py::test_other_report_month_does_not_supply_latest_fred_publication_time",
+    "backend/tests/test_macro_employment_data.py::test_future_bls_release_cannot_satisfy_past_as_of",
+    "backend/tests/test_macro_employment_data.py::test_raw_payroll_level_cannot_enter_macro_net_change_metrics",
+    "backend/tests/test_macro_employment_data.py::test_collector_adapter_preserves_macro_only_contract_kwargs",
+    "backend/tests/test_macro_employment_data.py::test_planned_and_agent_official_query_are_identical_and_share_one_fetch",
+    "backend/tests/test_macro_evidence_boundary.py",
+    "backend/tests/test_macro_requirement_evidence.py",
+    "backend/tests/test_macro_requirement_selector.py",
+    "backend/tests/test_memory_snapshot.py",
+    "backend/tests/test_multi_task_sections.py",
+    "backend/tests/test_multidimension_intent_contract.py",
+    "backend/tests/test_news_agent_truthfulness.py",
+    "backend/tests/test_news_event_quality.py::test_query_ticker_in_url_or_summary_does_not_upgrade_another_issuers_headline",
+    "backend/tests/test_news_event_quality.py::test_verified_issuer_names_stay_phrases_and_sec_name_can_bind_its_own_news",
+    "backend/tests/test_news_event_quality.py::test_tool_gateway_execution_and_synthesis_keep_news_quality",
+    "backend/tests/test_news_event_quality.py::test_unknown_or_old_reports_cannot_become_catalysts_in_either_snapshot",
+    "backend/tests/test_news_event_quality.py::test_news_agent_evidence_preserves_discovery_role_and_provenance",
+    "backend/tests/test_news_event_quality.py::test_unrelated_news_is_diagnostic_only_for_company_but_kept_for_market",
+    "backend/tests/test_news_event_quality.py::test_summary_only_news_remains_an_explicit_discovery",
+    "backend/tests/test_news_event_quality.py::test_authoritative_tool_to_normalized_evidence_preserves_opinion_boundary",
+    "backend/tests/test_news_event_quality.py::test_news_agent_authoritative_supplement_cannot_erase_search_provenance",
+    "backend/tests/test_no_fake_confidence.py",
+    "backend/tests/test_opinion_readiness.py",
+    "backend/tests/test_original_requirement_gate.py",
+    "backend/tests/test_p0_unit.py",
+    "backend/tests/test_p7_extensions.py::test_cn_research_skill_selects_for_a_share_research_but_not_price_only",
+    "backend/tests/test_p7_extensions.py::test_deepagents_bridge_requires_explicit_enablement",
+    "backend/tests/test_parse_operation.py",
+    "backend/tests/test_partial_delivery.py",
+    "backend/tests/test_phase3_acceptance.py",
+    "backend/tests/test_plan_dependencies.py",
+    "backend/tests/test_plan_ir_validation.py",
+    "backend/tests/test_planner_constraints.py",
+    "backend/tests/test_planner_lane.py",
+    "backend/tests/test_planner_prompt.py",
+    "backend/tests/test_policy_gate.py",
+    "backend/tests/test_prediction_report_archive.py",
+    "backend/tests/test_prepare_context.py",
+    "backend/tests/test_price_quote_metadata_contract.py",
+    "backend/tests/test_query_coverage_contract.py",
+    "backend/tests/test_query_intent.py",
+    "backend/tests/test_rag_eval_patch_target.py",
+    "backend/tests/test_rag_observability_execute_plan.py",
+    "backend/tests/test_render_vars_keys.py",
+    "backend/tests/test_report_builder_quality_gate.py",
+    "backend/tests/test_report_builder_synthesis_report.py",
+    "backend/tests/test_report_cache.py::TestCacheTickerResolution::test_single_ticker_override_resolved",
+    "backend/tests/test_report_cache.py::TestCacheTickerResolution::test_multi_ticker_not_cached",
+    "backend/tests/test_report_cache.py::TestCacheTickerResolution::test_non_report_mode_not_cached",
+    "backend/tests/test_report_cache.py::TestCacheTickerResolution::test_no_ticker_override_not_cached",
+    "backend/tests/test_report_cache.py::TestPipelineCacheIntegration::test_legacy_cache_entry_is_not_replayed_to_another_user",
+    "backend/tests/test_report_run_result.py",
+    "backend/tests/test_report_verifier.py",
+    "backend/tests/test_request_attribute_ownership.py",
+    "backend/tests/test_request_compiler_acceptance.py",
+    "backend/tests/test_request_data_sharing.py",
+    "backend/tests/test_request_facets.py",
+    "backend/tests/test_request_frame_golden_queries.py",
+    "backend/tests/test_request_semantic_regressions.py",
+    "backend/tests/test_request_spec.py",
+    "backend/tests/test_requirement_source_relevance_gate.py",
+    "backend/tests/test_research_capability_contract.py",
+    "backend/tests/test_research_public_text.py",
+    "backend/tests/test_research_quality_followup.py",
+    "backend/tests/test_research_synthesis_contract.py",
+    "backend/tests/test_resolve_subject.py",
+    "backend/tests/test_run_context.py::test_deadline_partial_response_is_the_same_persisted_terminal_event",
+    "backend/tests/test_safe_llm_failure_diagnostics.py",
+    "backend/tests/test_search_convergence.py",
+    "backend/tests/test_selected_model_synthesis_repair.py",
+    "backend/tests/test_semantic_request_requirements.py",
+    "backend/tests/test_semantic_stage_budget.py",
+    "backend/tests/test_sentiment_brief.py",
+    "backend/tests/test_skill_perspective.py::test_synthesize_injects_skill_perspective",
+    "backend/tests/test_skill_perspective.py::test_synthesize_perspective_empty_without_skill",
+    "backend/tests/test_skill_policy_integration.py",
+    "backend/tests/test_skill_python_eval_gate.py",
+    "backend/tests/test_structured_report_uncertainty.py",
+    "backend/tests/test_summarize_history.py",
+    "backend/tests/test_synthesis_acceptance_repair.py",
+    "backend/tests/test_synthesis_completion.py",
+    "backend/tests/test_synthesize_hallucination.py",
+    "backend/tests/test_synthesize_node.py",
+    "backend/tests/test_task_request_synthesis_prompt.py",
+    "backend/tests/test_technical_fundamental_agents.py::test_fundamental_agent_financials",
+    "backend/tests/test_technical_fundamental_agents.py::test_fundamental_agent_quarterly_growth_consistency",
+    "backend/tests/test_technical_renderer_priority.py",
+    "backend/tests/test_templates_render.py",
+    "backend/tests/test_tool_fallback_propagation.py",
+    "backend/tests/test_trace_v2_observability.py",
+    "backend/tests/test_trim_conversation_history.py",
+    "backend/tests/test_understanding_v2_contract.py",
+    "backend/tests/test_wp6_graph_contract.py",
+    "tests/unit/test_news_analysis_fallback.py",
+    "tests/golden/test_golden_pipeline.py",
+    "backend/tests/test_execute_plan_architecture.py",
+    "backend/tests/test_llm_callsite_contract.py",
+    "backend/tests/test_report_prompt_structure.py"
+  ]
+}

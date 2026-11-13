@@ -253,11 +253,19 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         normalized = str(token or "").strip()
         if not _SHARE_TOKEN_PATTERN.fullmatch(normalized):
             raise HTTPException(status_code=404, detail="shared report not found")
-        report = deps.get_report_index_store().get_shared_report(token=normalized)
+        store = deps.get_report_index_store()
+        reader = getattr(store, "get_shared_report_with_metadata", None)
+        if callable(reader):
+            shared = reader(token=normalized)
+            report = shared["report"] if shared else None
+            published_at = shared.get("published_at") if shared else None
+        else:
+            report = store.get_shared_report(token=normalized)
+            published_at = None
         if not report:
             raise HTTPException(status_code=404, detail="shared report not found")
         response.headers["Cache-Control"] = "private, no-store"
-        return {"report": _public_shared_report(report)}
+        return {"report": _public_shared_report(report), "published_at": published_at}
 
     return router
 

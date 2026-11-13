@@ -23,19 +23,44 @@ def test_security_gate_rejects_missing_api_key_when_enabled(monkeypatch):
     assert response.json().get("detail") == "Unauthorized"
 
 
-def test_security_gate_returns_503_when_auth_enabled_without_keys(monkeypatch):
+def test_security_gate_rejects_startup_when_auth_enabled_without_keys(monkeypatch):
     from backend.api import main
+    from backend.config.settings import RuntimeConfigurationError, clear_settings_caches
 
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.delenv("API_AUTH_KEYS", raising=False)
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
-    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    clear_settings_caches()
+    with pytest.raises(RuntimeConfigurationError, match="required_api_auth_key_missing"):
+        with TestClient(main.app):
+            pass
 
-    with TestClient(main.app) as client:
+
+def test_security_gate_returns_503_for_missing_keys_at_request_boundary(monkeypatch):
+    from backend.api import security_gate
+    from backend.config.settings import clear_settings_caches
+
+    monkeypatch.setenv("API_AUTH_ENABLED", "true")
+    monkeypatch.delenv("API_AUTH_KEYS", raising=False)
+    monkeypatch.delenv("API_AUTH_KEY", raising=False)
+    clear_settings_caches()
+    monkeypatch.setattr(security_gate, "_rate_limiter", security_gate.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    app = FastAPI()
+    app.middleware("http")(security_gate.security_gate)
+    calls = []
+
+    @app.get("/api/user/profile")
+    async def profile():
+        calls.append("protected_handler")
+        return {"private": "must-not-be-returned"}
+
+    with TestClient(app) as client:
         response = client.get("/api/user/profile", params={"user_id": "auth-empty-keys"})
 
     assert response.status_code == 503
     assert "no keys configured" in str(response.json().get("detail", "")).lower()
+    assert calls == []
+    assert "must-not-be-returned" not in response.text
 
 
 def test_security_gate_allowlisted_path_bypasses_auth(monkeypatch):

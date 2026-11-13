@@ -4,12 +4,12 @@ from __future__ import annotations
 import logging
 import asyncio
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from backend.api.security_gate import _env_bool, validate_runtime_auth_configuration
-from backend.graph import aget_graph_runner, reset_graph_runner
 from backend.services.database import assert_core_schema_current
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 
@@ -20,6 +20,8 @@ _schedulers: list[object] = []
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    from backend.config.settings import validate_startup_settings
+    validate_startup_settings()
     validate_runtime_auth_configuration()
     schema_status = assert_core_schema_current()
     if schema_status.configured:
@@ -84,12 +86,6 @@ async def lifespan(_app: FastAPI):
             if scheduler:
                 _schedulers.append(scheduler)
 
-    try:
-        await aget_graph_runner()
-        logger.info("[GraphRunner] initialized in lifespan")
-    except Exception as exc:
-        logger.exception("[GraphRunner] initialization failed in lifespan: %s", exc)
-
     from backend.services.prediction_runner import enabled, run_prediction_cycle
     if enabled():
         from backend.services.scheduler_runner import start_interval_scheduler
@@ -125,12 +121,12 @@ async def lifespan(_app: FastAPI):
             logger.debug("[LangFuse] flush/shutdown error", exc_info=True)
 
         try:
-            from backend.graph.checkpointer import areset_checkpointer_caches
-
-            await areset_checkpointer_caches()
-            reset_graph_runner()
+            checkpoint = sys.modules.get("backend.common.checkpoint_store")
+            cleanup = getattr(checkpoint, "areset_checkpointer_caches", None)
+            if cleanup is not None:
+                await cleanup()
         except Exception as exc:
-            logger.warning("[GraphRunner] shutdown cleanup error: %s", exc)
+            logger.warning("[Checkpoint] 关闭清理失败：%s", exc)
 
 
 __all__ = ["lifespan"]

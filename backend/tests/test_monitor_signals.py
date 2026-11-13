@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.services.monitor_signals import (
     MarketSnapshot,
     detect_triggers,

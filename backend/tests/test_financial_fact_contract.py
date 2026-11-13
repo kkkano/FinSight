@@ -4,9 +4,6 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from backend.agents.fundamental_agent import FundamentalAgent
-from backend.agents.macro_agent import MacroAgent
-from backend.agents.news_agent import NewsAgent
 from backend.tools import financial, local_disclosure, macro, sec
 from backend.tools.financial_facts import search_line_is_noise
 
@@ -74,64 +71,6 @@ def _table(names, values, *, columns=None, frequency="quarterly", currency="USD"
     return {"columns": columns, "index": names, "data": [dict(zip(columns, row)) for row in values], "frequency": frequency, "currency": currency}
 
 
-@pytest.mark.parametrize("reverse", [False, True])
-def test_accounting_alias_priority_rejects_cost_ebitda_and_alternate_net_income(reverse):
-    rows = [
-        ("Reconciled Cost Of Revenue", [24, 20]), ("Total Revenue", [88, 80]),
-        ("Net Income From Continuing Operations", [59, 55]), ("Net Income", [57, 52]),
-        ("EBITDA", [65, 60]), ("Operating Income", [61, 58]),
-    ]
-    if reverse:
-        rows.reverse()
-    agent = object.__new__(FundamentalAgent)
-    result = agent._build_normalized_metrics({"financials": _table([name for name, _ in rows], [value for _, value in rows])})["metrics"]
-    assert [result[key]["latest"] for key in ("revenue", "net_income", "operating_income")] == [88, 57, 61]
-
-
-def test_unsupported_accounting_rows_do_not_become_facts_or_claims():
-    agent = object.__new__(FundamentalAgent)
-    normalized = agent._build_normalized_metrics({"financials": _table(["Reconciled Cost Of Revenue", "EBITDA"], [[24, 20], [65, 60]])})
-    assert normalized["metrics"]["revenue"]["latest"] is None
-    assert normalized["metrics"]["operating_income"]["latest"] is None
-    assert agent._build_native_claims(query="财报", ticker="NVDA", normalized=normalized, evidence=[], risks=[], confidence=0.8, source_ids=[]) == []
-    assert "[数据缺失]" in agent._deterministic_summary({"financials": {"financials": _table(["EBITDA"], [[65, 60]])}})
-
-
-def test_growth_is_aligned_by_real_dates_and_not_by_column_position():
-    agent = object.__new__(FundamentalAgent)
-    columns = ["2026-08-01", "2025-08-02", "2026-05-02"]
-    result = agent._build_normalized_metrics({"financials": _table(["Total Revenue"], [[150, 100, 120]], columns=columns)})["metrics"]["revenue"]
-    assert result["latest_period"] == "2026-08-01"
-    assert result["yoy"] == pytest.approx(0.5)
-    assert result["qoq"] == pytest.approx(0.25)
-    assert result["yoy_period"] == "2025-08-02"
-
-
-def test_two_quarters_do_not_have_year_over_year_growth():
-    agent = object.__new__(FundamentalAgent)
-    result = agent._build_normalized_metrics({"financials": _table(["Total Revenue"], [[150, 120]])})["metrics"]["revenue"]
-    assert result["qoq"] == pytest.approx(0.25)
-    assert result["yoy"] is None and result["yoy_period"] is None
-
-
-def test_missing_intermediate_quarter_does_not_become_qoq():
-    agent = object.__new__(FundamentalAgent)
-    result = agent._build_normalized_metrics({"financials": _table(["Total Revenue"], [[150, 100]], columns=["2026-08-01", "2026-02-01"])})["metrics"]["revenue"]
-    assert result["qoq"] is None
-
-
-def test_cross_frequency_cashflow_is_missing_even_if_end_matches():
-    agent = object.__new__(FundamentalAgent)
-    result = agent._build_normalized_metrics({
-        "financials": _table(["Total Revenue"], [[150, 120]], currency="CNY"),
-        "cashflow": _table(["Operating Cash Flow"], [[300, 200]], columns=["2026-08-01", "2025-08-02"], frequency="annual"),
-    })["metrics"]
-    assert result["operating_cash_flow"]["latest"] is None
-    assert result["operating_cash_flow"]["missing_reason"] == "statement_frequency_mismatch"
-    assert "CNY" in agent._format_metric_sentence("营收", result["revenue"])
-    assert "$" not in agent._format_metric_sentence("营收", result["revenue"])
-
-
 def test_yfinance_statement_frequency_is_explicit_and_prefers_quarters(monkeypatch):
     table = pd.DataFrame({pd.Timestamp("2026-08-01"): [50]}, index=["Total Revenue"])
     ticker = SimpleNamespace(quarterly_income_stmt=table, quarterly_balance_sheet=table, quarterly_cashflow=table, info={"financialCurrency": "HKD"})
@@ -185,18 +124,6 @@ def test_disclosure_original_fetch_is_bounded_and_closes_response(monkeypatch, o
 @pytest.mark.parametrize("line", ["Search Results (Exa):", "搜索结果：", "------------------------", "URL:"])
 def test_search_format_lines_are_not_news(line):
     assert search_line_is_noise(line)
-    assert object.__new__(NewsAgent)._parse_search_results(line, "AAOI") == []
-
-
-def test_news_search_parser_preserves_title_url_and_unverified_date_hint():
-    raw = "Search Results (Exa):\n======================\n1. AAOI announces new production agreement\nPublished 2026-10-02\nhttps://example.com/aaoi\n"
-    result = object.__new__(NewsAgent)._parse_search_results(raw, "AAOI")
-    assert len(result) == 1
-    assert result[0]["title"] == "AAOI announces new production agreement"
-    assert result[0]["url"] == "https://example.com/aaoi"
-    assert result[0]["date_hint"] == "2026-10-02"
-    assert result[0]["published_at"] is None
-    assert result[0]["event_quality"]["verification"] == "discovery_only"
 
 
 def test_fred_cpi_requests_yoy_transformation_and_preserves_unit_date(monkeypatch):
@@ -211,12 +138,4 @@ def test_fred_cpi_requests_yoy_transformation_and_preserves_unit_date(monkeypatc
     assert result["indicator_metadata"]["cpi"]["definition"] == "inflation_yoy"
     assert result["indicator_metadata"]["cpi"]["period_end"] == "2026-08-01"
     assert "同比" in result["cpi_formatted"]
-    assert object.__new__(MacroAgent)._extract_numeric_metrics(result)["cpi"] == 3.2
-
-
-def test_macro_agent_never_interprets_untyped_cpi_index_as_percent():
-    agent = object.__new__(MacroAgent)
-    assert "cpi" not in agent._extract_numeric_metrics({"cpi": 329.4})
-    assert "cpi" not in agent._extract_numeric_metrics({"cpi": 329.4, "indicator_metadata": {"cpi": {"unit": "index", "definition": "price_index"}}})
-    assert "cpi" not in agent._extract_numeric_metrics_from_text("CPI increased 0.3% this month")
-    assert agent._extract_numeric_metrics_from_text("CPI inflation 3.2% year-over-year")["cpi"] == 3.2
+    assert result["cpi"] == 3.2

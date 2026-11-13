@@ -1,0 +1,1621 @@
+{
+  "scope": "runtime-test-retirement-2026-11-12",
+  "records": [
+    {
+      "original": "backend/tests/test_research_recovery_context.py",
+      "reference": "tests/agent_eval/reference_tests/test_research_recovery_context.py.reference",
+      "sha256": "8ebd81d869936f3939a8f010bad9e31fb15d8a1e9f1b5f3f6e79f379b88a6f12",
+      "original_tests": [
+        "test_final_research_turn_still_fetches_missing_required_evidence",
+        "test_verification_can_compute_missing_return_from_existing_evidence",
+        "test_inspect_financials_returns_latest_periods_in_descending_data",
+        "test_complete_episode_list_precedes_sampled_price_rows",
+        "test_explicit_chart_cannot_pass_with_computed_table_only",
+        "test_missing_streak_chart_recovers_computation_before_rendering",
+        "test_weekly_completion_uses_exchange_close_and_keeps_streak_status_separate",
+        "test_latest_completed_transaction_can_be_archived_after_long_followup",
+        "test_explicit_readback_keeps_content_and_advances_only_returned_characters",
+        "test_context_archive_retains_financial_values_and_citations",
+        "test_explicit_source_footnote_can_bind_multiple_rows_of_a_table",
+        "test_repeated_successful_reads_converge_to_answer_with_real_facts",
+        "test_final_transport_explicitly_disables_tools_without_schemas",
+        "test_output_length_recovery_uses_existing_facts_without_replaying_tools",
+        "test_complete_financial_facts_survive_bad_model_rewording",
+        "test_factual_fallback_does_not_replace_valuation_judgment",
+        "test_incomplete_week_explanation_is_not_an_unfinished_tool_task",
+        "test_valuation_recovery_calculates_ratios_once_and_retains_market_lineage",
+        "test_historical_returns_are_computed_and_do_not_bridge_missing_closes",
+        "test_redaction_preserves_markdown_links_and_sentence_endings",
+        "test_financial_snapshot_uses_actual_ytd_derivation_instead_of_model_guess",
+        "test_completion_context_includes_already_created_chart_status",
+        "test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries",
+        "test_question_about_quoted_decline_keeps_its_negative_magnitude",
+        "test_streak_fact_delivery_matches_real_calculation_and_created_chart",
+        "test_repair_feedback_keeps_the_actual_error_beyond_a_short_chinese_prefix",
+        "test_price_cause_requires_targeted_search_beyond_generic_company_news",
+        "test_report_completion_is_not_replaced_by_short_chat_instructions",
+        "test_cause_delivery_keeps_sourced_explanation_with_programmatic_price_facts",
+        "test_search_text_links_and_provider_metadata_are_clickable_sources",
+        "test_feedback_keeps_latest_financial_numbers_instead_of_metadata",
+        "test_news_repair_feedback_keeps_the_actual_cause_in_long_summary"
+      ],
+      "migration_note": "退役自动补查、自动选择计算、领域优先预览、事实模板替换与正文修复；仍有效的数据读回、计算、来源和脱敏另有保留。",
+      "active_tests": [
+        "test_weekly_completion_uses_exchange_close_and_keeps_streak_status_separate",
+        "test_final_transport_explicitly_disables_tools_without_schemas",
+        "test_historical_returns_are_computed_and_do_not_bridge_missing_closes",
+        "test_redaction_preserves_markdown_links_and_sentence_endings",
+        "test_inspect_financials_returns_latest_periods_in_descending_data",
+        "test_explicit_readback_keeps_content_and_advances_only_returned_characters",
+        "test_complete_episode_list_is_readable_without_sampling_the_stored_result",
+        "test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries",
+        "test_streak_calculation_and_chart_keep_exchange_close_and_ongoing_status"
+      ],
+      "dispositions": [
+        {
+          "test": "test_final_research_turn_still_fetches_missing_required_evidence",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_verification_can_compute_missing_return_from_existing_evidence",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_inspect_financials_returns_latest_periods_in_descending_data",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_inspect_financials_returns_latest_periods_in_descending_data"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_complete_episode_list_precedes_sampled_price_rows",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_complete_episode_list_is_readable_without_sampling_the_stored_result"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_explicit_chart_cannot_pass_with_computed_table_only",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_missing_streak_chart_recovers_computation_before_rendering",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_weekly_completion_uses_exchange_close_and_keeps_streak_status_separate",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_weekly_completion_uses_exchange_close_and_keeps_streak_status_separate"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_latest_completed_transaction_can_be_archived_after_long_followup",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_compactor.py::test_archive_registered_envelope_keeps_recent_turns_and_raw_history"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_explicit_readback_keeps_content_and_advances_only_returned_characters",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_explicit_readback_keeps_content_and_advances_only_returned_characters"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_context_archive_retains_financial_values_and_citations",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_explicit_source_footnote_can_bind_multiple_rows_of_a_table",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_repeated_successful_reads_converge_to_answer_with_real_facts",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_final_transport_explicitly_disables_tools_without_schemas",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_final_transport_explicitly_disables_tools_without_schemas"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_output_length_recovery_uses_existing_facts_without_replaying_tools",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py::test_length_continuation_keeps_prior_history_and_joins_at_exact_character"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_complete_financial_facts_survive_bad_model_rewording",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_factual_fallback_does_not_replace_valuation_judgment",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_incomplete_week_explanation_is_not_an_unfinished_tool_task",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_valuation_recovery_calculates_ratios_once_and_retains_market_lineage",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_historical_returns_are_computed_and_do_not_bridge_missing_closes",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_historical_returns_are_computed_and_do_not_bridge_missing_closes"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_redaction_preserves_markdown_links_and_sentence_endings",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_redaction_preserves_markdown_links_and_sentence_endings"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_financial_snapshot_uses_actual_ytd_derivation_instead_of_model_guess",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_completion_context_includes_already_created_chart_status",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_question_about_quoted_decline_keeps_its_negative_magnitude",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_streak_fact_delivery_matches_real_calculation_and_created_chart",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_research_recovery_context.py::test_streak_calculation_and_chart_keep_exchange_close_and_ongoing_status"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_repair_feedback_keeps_the_actual_error_beyond_a_short_chinese_prefix",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_price_cause_requires_targeted_search_beyond_generic_company_news",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_report_completion_is_not_replaced_by_short_chat_instructions",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_cause_delivery_keeps_sourced_explanation_with_programmatic_price_facts",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_search_text_links_and_provider_metadata_are_clickable_sources",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_feedback_keeps_latest_financial_numbers_instead_of_metadata",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_news_repair_feedback_keeps_the_actual_cause_in_long_summary",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_answer_completion.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_answer_completion.py.reference",
+      "sha256": "097d07fdfa12032a1d406aaf2c742ecc2c8a81524d4fefc04144a715aab325ef",
+      "original_tests": [
+        "test_incomplete_repair_keeps_the_completed_original",
+        "test_complete_repair_can_replace_original",
+        "test_context_pruning_preserves_the_full_answer_under_review",
+        "test_repair_feedback_does_not_slice_a_normal_paragraph_mid_sentence",
+        "test_invalid_section_has_an_explicit_gap_instead_of_an_empty_heading"
+      ],
+      "migration_note": "退役第二次核验调用、段落拼接补洞与替换原稿；保留模型原文和 finish_reason 长度续写协议。",
+      "active_tests": [
+        "test_context_compaction_preserves_the_full_answer_under_review"
+      ],
+      "dispositions": [
+        {
+          "test": "test_incomplete_repair_keeps_the_completed_original",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_complete_repair_can_replace_original",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_context_pruning_preserves_the_full_answer_under_review",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_completion.py::test_context_compaction_preserves_the_full_answer_under_review"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_repair_feedback_does_not_slice_a_normal_paragraph_mid_sentence",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_invalid_section_has_an_explicit_gap_instead_of_an_empty_heading",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_answer_verification.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_answer_verification.py.reference",
+      "sha256": "fa4d5a439502f94f64673daa213d722c85e6299d3cdf84fb6208227544dddcea",
+      "original_tests": [
+        "test_wrong_progress_does_not_poison_correct_final_answer",
+        "test_final_answer_gets_one_tool_free_repair_with_same_identity",
+        "test_failed_repair_keeps_verified_paragraphs_and_one_gap",
+        "test_repair_cannot_execute_supplier_tool_calls",
+        "test_repair_transport_failure_keeps_original_verified_results",
+        "test_optional_failed_tool_is_process_history_not_delivery_gap",
+        "test_actual_declared_tool_gap_still_marks_partial",
+        "test_invalid_draft_citation_does_not_block_correct_answer",
+        "test_unverified_metadata_cannot_hide_inside_unit_bullet",
+        "test_error_paragraph_is_not_salvaged_from_unrelated_numeric_matches",
+        "test_missing_evidence_does_not_approve_closed_book_market_numbers",
+        "test_data_age_does_not_verify_provider_delay_in_either_word_order",
+        "test_repair_is_bounded_even_at_last_research_turn",
+        "test_empty_repair_does_not_discard_verified_original_result",
+        "test_data_basis_caveat_does_not_turn_optional_news_failure_into_gap",
+        "test_negative_change_supports_positive_magnitude_with_decline_direction",
+        "test_wrong_direction_is_not_approved_by_absolute_value_match",
+        "test_direction_normalization_does_not_change_destination_price_or_period_count",
+        "test_unknown_reference_length_does_not_hide_invalid_citation",
+        "test_real_source_url_in_chinese_markdown_parenthesis_is_not_rejected",
+        "test_repair_feedback_projects_related_successful_results_not_other_subjects",
+        "test_successful_python_result_can_bind_original_sources_without_exposing_code_numbers",
+        "test_latest_two_period_computation_binds_real_difference_and_change",
+        "test_absolute_path_claims_check_actual_comparison_statistics",
+        "test_qualified_or_supported_comparison_claims_are_preserved",
+        "test_algorithm_window_counts_are_definition_but_market_percentages_still_need_evidence",
+        "test_repair_heading_is_removed_from_public_answer_only",
+        "test_warmup_claim_uses_actual_missing_prefix_not_any_matching_number",
+        "test_prior_chart_coverage_is_checked_without_republishing_chart",
+        "test_explicit_percent_series_unit_is_grounded_without_scaling_counts",
+        "test_neutral_change_label_does_not_turn_positive_change_into_decline",
+        "test_percent_unit_applies_to_values_not_observation_counts",
+        "test_formatted_daily_close_is_not_realtime_even_if_provider_is_fast",
+        "test_honest_realtime_limitations_are_preserved",
+        "test_explicit_realtime_provider_flag_supports_realtime_claim",
+        "test_crossover_count_and_last_date_match_actual_native_series",
+        "test_legacy_comparison_rechecks_crossovers_without_modifying_original_record",
+        "test_repair_feedback_has_utf8_cap_and_keeps_verified_crossover_facts",
+        "test_two_observations_do_not_prove_each_period_grew",
+        "test_period_contract_does_not_change_distinct_metric_or_qualified_statements",
+        "test_incomplete_chart_has_partial_state_with_real_gap",
+        "test_explicit_large_money_units_match_actual_market_cap",
+        "test_financial_table_amount_header_scales_only_its_amount_column",
+        "test_common_table_unit_applies_to_amount_fields_but_not_eps_dates_or_multiples",
+        "test_amount_unit_does_not_verify_uncomputed_growth_or_margin",
+        "test_english_news_direction_verifies_chinese_percent_magnitude",
+        "test_numeric_count_and_wrong_sign_do_not_substitute_for_signed_percent",
+        "test_news_percent_direction_is_not_inherited_across_explicit_reversal",
+        "test_known_tracking_parameters_do_not_make_real_article_link_unknown",
+        "test_tracking_equivalence_does_not_ignore_document_identity_or_path",
+        "test_tracking_equivalence_keeps_original_nontracking_query_parameters",
+        "test_large_money_unit_cannot_borrow_another_tickers_source",
+        "test_percentage_with_following_decline_word_preserves_signed_news_magnitude",
+        "test_following_decline_probability_is_not_normalized_as_negative_return",
+        "test_explicitly_limited_news_absence_does_not_assert_exhaustive_coverage",
+        "test_additive_money_formula_shares_trailing_unit_without_recomputing_result",
+        "test_negative_money_formula_result_and_multiplication_factor_keep_their_units",
+        "test_computed_source_can_restate_declared_inputs_but_not_unrelated_amounts",
+        "test_successful_financial_ratio_fields_and_explicit_percent_container_support_percent_text",
+        "test_numeric_ratio_without_known_percentage_role_does_not_verify_margin",
+        "test_explicit_scaled_usd_fields_are_amounts_without_guessing_unlabelled_scale",
+        "test_iso_timestamp_is_not_an_arithmetic_expression_with_trillion_unit",
+        "test_primary_sec_reference_authorizes_financial_ratio_projection_without_market_data",
+        "test_aggregate_financial_ratio_reference_authorizes_declared_market_parents",
+        "test_other_multi_input_computations_still_need_all_declared_inputs"
+      ],
+      "migration_note": "退役 grounding/verified_text 对自然语言数字、方向、单位、来源作用域、实时声明和正文结构的匹配核验及自动修补；计算数据和声明来源由结构化合同检验。",
+      "active_tests": [
+        "test_latest_two_period_computation_binds_real_difference_and_change",
+        "test_comparison_statistics_keep_path_direction_and_percentage_units",
+        "test_crossover_count_and_last_date_match_actual_native_series",
+        "test_comparison_crossovers_can_be_recomputed_without_modifying_original_record",
+        "test_warmup_coverage_uses_actual_missing_prefix_and_first_valid_date",
+        "test_incomplete_chart_retains_actual_gap_and_does_not_interpolate",
+        "test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources",
+        "test_wrong_progress_does_not_poison_correct_final_answer",
+        "test_failed_optional_tool_preserves_original_answer_and_reports_structured_failure",
+        "test_unknown_citation_marks_nonpublishable_without_changing_model_text"
+      ],
+      "dispositions": [
+        {
+          "test": "test_wrong_progress_does_not_poison_correct_final_answer",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_wrong_progress_does_not_poison_correct_final_answer"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_final_answer_gets_one_tool_free_repair_with_same_identity",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_failed_repair_keeps_verified_paragraphs_and_one_gap",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_repair_cannot_execute_supplier_tool_calls",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_repair_transport_failure_keeps_original_verified_results",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_optional_failed_tool_is_process_history_not_delivery_gap",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_failed_optional_tool_preserves_original_answer_and_reports_structured_failure"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_actual_declared_tool_gap_still_marks_partial",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_failed_optional_tool_preserves_original_answer_and_reports_structured_failure"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_invalid_draft_citation_does_not_block_correct_answer",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_unverified_metadata_cannot_hide_inside_unit_bullet",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_error_paragraph_is_not_salvaged_from_unrelated_numeric_matches",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_missing_evidence_does_not_approve_closed_book_market_numbers",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_data_age_does_not_verify_provider_delay_in_either_word_order",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_repair_is_bounded_even_at_last_research_turn",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_empty_repair_does_not_discard_verified_original_result",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_data_basis_caveat_does_not_turn_optional_news_failure_into_gap",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_failed_optional_tool_preserves_original_answer_and_reports_structured_failure"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_negative_change_supports_positive_magnitude_with_decline_direction",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_wrong_direction_is_not_approved_by_absolute_value_match",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_direction_normalization_does_not_change_destination_price_or_period_count",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_unknown_reference_length_does_not_hide_invalid_citation",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_unknown_citation_marks_nonpublishable_without_changing_model_text"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_real_source_url_in_chinese_markdown_parenthesis_is_not_rejected",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_repair_feedback_projects_related_successful_results_not_other_subjects",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_successful_python_result_can_bind_original_sources_without_exposing_code_numbers",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_latest_two_period_computation_binds_real_difference_and_change",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_latest_two_period_computation_binds_real_difference_and_change"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_absolute_path_claims_check_actual_comparison_statistics",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_comparison_statistics_keep_path_direction_and_percentage_units"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_qualified_or_supported_comparison_claims_are_preserved",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_comparison_statistics_keep_path_direction_and_percentage_units"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_algorithm_window_counts_are_definition_but_market_percentages_still_need_evidence",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_repair_heading_is_removed_from_public_answer_only",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_warmup_claim_uses_actual_missing_prefix_not_any_matching_number",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_warmup_coverage_uses_actual_missing_prefix_and_first_valid_date"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_prior_chart_coverage_is_checked_without_republishing_chart",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_previous_chart_coverage_is_retained_for_verification_without_republishing"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_explicit_percent_series_unit_is_grounded_without_scaling_counts",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_comparison_statistics_keep_path_direction_and_percentage_units"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_neutral_change_label_does_not_turn_positive_change_into_decline",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_percent_unit_applies_to_values_not_observation_counts",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_formatted_daily_close_is_not_realtime_even_if_provider_is_fast",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_honest_realtime_limitations_are_preserved",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_explicit_realtime_provider_flag_supports_realtime_claim",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_crossover_count_and_last_date_match_actual_native_series",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_crossover_count_and_last_date_match_actual_native_series"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_legacy_comparison_rechecks_crossovers_without_modifying_original_record",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_comparison_crossovers_can_be_recomputed_without_modifying_original_record"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_repair_feedback_has_utf8_cap_and_keeps_verified_crossover_facts",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_two_observations_do_not_prove_each_period_grew",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_latest_two_period_computation_binds_real_difference_and_change"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_period_contract_does_not_change_distinct_metric_or_qualified_statements",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_latest_two_period_computation_binds_real_difference_and_change"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_incomplete_chart_has_partial_state_with_real_gap",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_incomplete_chart_retains_actual_gap_and_does_not_interpolate"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_explicit_large_money_units_match_actual_market_cap",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_financial_table_amount_header_scales_only_its_amount_column",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_common_table_unit_applies_to_amount_fields_but_not_eps_dates_or_multiples",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_amount_unit_does_not_verify_uncomputed_growth_or_margin",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_english_news_direction_verifies_chinese_percent_magnitude",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_numeric_count_and_wrong_sign_do_not_substitute_for_signed_percent",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_news_percent_direction_is_not_inherited_across_explicit_reversal",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_known_tracking_parameters_do_not_make_real_article_link_unknown",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_tracking_equivalence_does_not_ignore_document_identity_or_path",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_tracking_equivalence_keeps_original_nontracking_query_parameters",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_large_money_unit_cannot_borrow_another_tickers_source",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_percentage_with_following_decline_word_preserves_signed_news_magnitude",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_following_decline_probability_is_not_normalized_as_negative_return",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_explicitly_limited_news_absence_does_not_assert_exhaustive_coverage",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_additive_money_formula_shares_trailing_unit_without_recomputing_result",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_negative_money_formula_result_and_multiplication_factor_keep_their_units",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_computed_source_can_restate_declared_inputs_but_not_unrelated_amounts",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_successful_financial_ratio_fields_and_explicit_percent_container_support_percent_text",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_numeric_ratio_without_known_percentage_role_does_not_verify_margin",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_explicit_scaled_usd_fields_are_amounts_without_guessing_unlabelled_scale",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_iso_timestamp_is_not_an_arithmetic_expression_with_trillion_unit",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_primary_sec_reference_authorizes_financial_ratio_projection_without_market_data",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_aggregate_financial_ratio_reference_authorizes_declared_market_parents",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_other_multi_input_computations_still_need_all_declared_inputs",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_answer_verification.py::test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_chart_followup.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_chart_followup.py.reference",
+      "sha256": "f6a3a49a1fc3419cd6ba8b865ab3e3738f24097091efea09c237bf418ef78a38",
+      "original_tests": [
+        "test_context_estimate_counts_tokens_offline_instead_of_utf8_bytes",
+        "test_natural_chart_request_can_recover_from_existing_history",
+        "test_plain_price_chart_cannot_substitute_for_unrequested_or_specialized_chart",
+        "test_live_chart_instruction_produces_artifact_before_answer",
+        "test_last_model_turn_delivers_existing_price_chart_before_closing",
+        "test_causal_answer_with_chart_uses_verified_price_delivery"
+      ],
+      "migration_note": "退役从问法或末轮文本猜绘图需求并自动补图；绘图只由模型显式调用 render_chart。",
+      "active_tests": [
+        "test_context_estimate_counts_tokens_offline_instead_of_utf8_bytes",
+        "test_live_chart_instruction_produces_artifact_before_answer"
+      ],
+      "dispositions": [
+        {
+          "test": "test_context_estimate_counts_tokens_offline_instead_of_utf8_bytes",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_chart_followup.py::test_context_estimate_counts_tokens_offline_instead_of_utf8_bytes"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_natural_chart_request_can_recover_from_existing_history",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_plain_price_chart_cannot_substitute_for_unrequested_or_specialized_chart",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_live_chart_instruction_produces_artifact_before_answer",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_chart_followup.py::test_live_chart_instruction_produces_artifact_before_answer"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_last_model_turn_delivers_existing_price_chart_before_closing",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_causal_answer_with_chart_uses_verified_price_delivery",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_completeness.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_completeness.py.reference",
+      "sha256": "e824aef61a5ccad09ddcf3f2979683bd0a26b85e11a6d3f73c2a92764b79204e",
+      "original_tests": [
+        "test_valuation_cannot_finish_without_fetching_valuation_and_financials",
+        "test_failed_required_research_stays_partial_after_real_attempt",
+        "test_explicit_search_followup_performs_new_search",
+        "test_empty_financial_result_is_not_cached_as_success",
+        "test_restore_rejects_legacy_empty_and_failed_success_records",
+        "test_other_company_and_calendar_do_not_satisfy_financial_results",
+        "test_explanatory_followup_does_not_force_unrequested_research",
+        "test_companyfacts_preview_exposes_real_financial_fields_before_long_metadata",
+        "test_two_large_recent_readbacks_keep_protocol_and_fit_window"
+      ],
+      "migration_note": "退役 ResearchCompleteness 问法分面、必需工具推断与自动补查；状态只读取声明字段。",
+      "active_tests": [
+        "test_empty_financial_result_is_not_cached_as_success",
+        "test_restore_rejects_declared_empty_and_failed_records",
+        "test_companyfacts_preview_exposes_real_financial_fields_before_long_metadata",
+        "test_two_large_recent_readbacks_keep_protocol_and_fit_window",
+        "test_explicit_search_followup_performs_new_search"
+      ],
+      "dispositions": [
+        {
+          "test": "test_valuation_cannot_finish_without_fetching_valuation_and_financials",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_failed_required_research_stays_partial_after_real_attempt",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_explicit_search_followup_performs_new_search",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_completeness.py::test_explicit_search_followup_performs_new_search"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_empty_financial_result_is_not_cached_as_success",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_completeness.py::test_empty_financial_result_is_not_cached_as_success"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_restore_rejects_legacy_empty_and_failed_success_records",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_completeness.py::test_restore_rejects_declared_empty_and_failed_records"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_other_company_and_calendar_do_not_satisfy_financial_results",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_explanatory_followup_does_not_force_unrequested_research",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_companyfacts_preview_exposes_real_financial_fields_before_long_metadata",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_completeness.py::test_companyfacts_preview_exposes_real_financial_fields_before_long_metadata"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_two_large_recent_readbacks_keep_protocol_and_fit_window",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_completeness.py::test_two_large_recent_readbacks_keep_protocol_and_fit_window"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_news_presentation.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_news_presentation.py.reference",
+      "sha256": "e23da403fcf41a2c64f655237d428671d81582773e54561cce57c0df4e6b1930",
+      "original_tests": [
+        "test_headline_and_existing_article_title_survive_source_metadata",
+        "test_readback_ui_shows_the_source_preview_without_changing_model_input",
+        "test_local_news_verification_failure_keeps_chinese_explanation",
+        "test_raw_news_catalogue_requires_an_explicit_list_request",
+        "test_cached_capability_does_not_emit_a_fake_probe_card",
+        "test_probe_failure_settles_the_visible_activity"
+      ],
+      "migration_note": "退役新闻模板触发和数值匹配后正文剔除；新闻资料、模型输出和 UI 投影分别遵守显式合同。",
+      "active_tests": [
+        "test_headline_and_existing_article_title_survive_source_metadata",
+        "test_cached_capability_does_not_emit_a_fake_probe_card",
+        "test_probe_failure_settles_the_visible_activity",
+        "test_readback_ui_shows_the_source_preview_without_changing_model_input"
+      ],
+      "dispositions": [
+        {
+          "test": "test_headline_and_existing_article_title_survive_source_metadata",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_news_presentation.py::test_headline_and_existing_article_title_survive_source_metadata"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_readback_ui_shows_the_source_preview_without_changing_model_input",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_news_presentation.py::test_readback_ui_shows_the_source_preview_without_changing_model_input"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_local_news_verification_failure_keeps_chinese_explanation",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_raw_news_catalogue_requires_an_explicit_list_request",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_cached_capability_does_not_emit_a_fake_probe_card",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_news_presentation.py::test_cached_capability_does_not_emit_a_fake_probe_card"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_probe_failure_settles_the_visible_activity",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_news_presentation.py::test_probe_failure_settles_the_visible_activity"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_topic_switch.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_topic_switch.py.reference",
+      "sha256": "eee01a7b05550eeb67c0b83763743f3f2c5489efb0fbea2d7df68bcaf3ac0523",
+      "original_tests": [
+        "test_inherited_evidence_does_not_stop_discovery_before_new_subject_fetch",
+        "test_long_conversation_compacts_history_without_disabling_research",
+        "test_fetch_followup_targets_latest_explicit_company",
+        "test_search_only_switch_updates_session_subject_and_frontend_focus",
+        "test_refresh_does_not_import_previous_company_financial_task",
+        "test_short_fetch_keeps_latest_company_question_even_with_unrecognized_facet",
+        "test_intervening_pronoun_followup_does_not_restore_stale_dashboard_ticker"
+      ],
+      "migration_note": "退役从自然语言猜 ticker/refresh/facet、自动发现启用工具和自动切换前端标的；当前问题、用户要求和工具参数直接进入模型及注册表。",
+      "active_tests": [
+        "test_inherited_evidence_does_not_stop_discovery_before_new_subject_fetch",
+        "test_long_conversation_compacts_history_without_disabling_research"
+      ],
+      "dispositions": [
+        {
+          "test": "test_inherited_evidence_does_not_stop_discovery_before_new_subject_fetch",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_topic_switch.py::test_inherited_evidence_does_not_stop_discovery_before_new_subject_fetch"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_long_conversation_compacts_history_without_disabling_research",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_topic_switch.py::test_long_conversation_compacts_history_without_disabling_research"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_fetch_followup_targets_latest_explicit_company",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_search_only_switch_updates_session_subject_and_frontend_focus",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_refresh_does_not_import_previous_company_financial_task",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_short_fetch_keeps_latest_company_question_even_with_unrecognized_facet",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        },
+        {
+          "test": "test_intervening_pronoun_followup_does_not_restore_stale_dashboard_ticker",
+          "status": "retired_mechanism",
+          "coverage": [
+            "backend/tests/test_runtime_loop_contract.py",
+            "backend/tests/test_runtime_event_contract.py",
+            "tests/agent_eval/cases.json"
+          ],
+          "note": "该活动断言绑定已授权删除的规则机制。协议回归验证新运行时边界；60题真实评估负责模型语义质量，离线协议通过不代表旧语义规则等价通过。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_observability_context.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_observability_context.py.reference",
+      "sha256": "81c4bc3111aae476ad7edd49383090f26d717ee76638574c412e4e81d6530d5a",
+      "original_tests": [
+        "test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections",
+        "test_archive_retains_readback_for_compact_single_ref_and_grouped_tool_results",
+        "test_uncompressible_system_user_and_latest_transaction_fail_without_mutating_input",
+        "test_preview_never_exposes_nested_credentials_or_private_reasoning",
+        "test_preview_removes_url_query_credentials_userinfo_and_fragment",
+        "test_preview_size_stays_bounded_even_when_json_escaping_expands_content",
+        "test_error_diagnostics_keep_actionable_capacity_reason_without_provider_secrets"
+      ],
+      "migration_note": "旧 prune_messages 归档规则迁移到 Compactor；最近三轮完整保留、旧完整事务按结构归档，预算不足显式失败。",
+      "active_tests": [
+        "test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections",
+        "test_archive_retains_readback_for_single_ref_and_grouped_tool_results",
+        "test_uncompressible_system_user_and_latest_transaction_fail_without_mutating_input",
+        "test_preview_never_exposes_nested_credentials_or_private_reasoning",
+        "test_preview_removes_url_query_credentials_userinfo_and_fragment",
+        "test_preview_size_stays_bounded_even_when_json_escaping_expands_content",
+        "test_error_diagnostics_keep_actionable_capacity_reason_without_provider_secrets"
+      ],
+      "dispositions": [
+        {
+          "test": "test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_archive_retains_readback_for_compact_single_ref_and_grouped_tool_results",
+          "status": "migrated_contract",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_archive_retains_readback_for_single_ref_and_grouped_tool_results"
+          ],
+          "note": "保留其中的数据、计算、权限、输出或失败场景；旧自然语言判定与自动改写断言退出，替代项不宣称等价覆盖正文质量。"
+        },
+        {
+          "test": "test_uncompressible_system_user_and_latest_transaction_fail_without_mutating_input",
+          "status": "migrated",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_uncompressible_system_user_and_latest_transaction_fail_without_mutating_input"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_preview_never_exposes_nested_credentials_or_private_reasoning",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_preview_never_exposes_nested_credentials_or_private_reasoning"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_preview_removes_url_query_credentials_userinfo_and_fragment",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_preview_removes_url_query_credentials_userinfo_and_fragment"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_preview_size_stays_bounded_even_when_json_escaping_expands_content",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_preview_size_stays_bounded_even_when_json_escaping_expands_content"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_error_diagnostics_keep_actionable_capacity_reason_without_provider_secrets",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_observability_context.py::test_error_diagnostics_keep_actionable_capacity_reason_without_provider_secrets"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        }
+      ]
+    },
+    {
+      "original": "backend/tests/test_runtime_followup.py",
+      "reference": "tests/agent_eval/reference_tests/test_runtime_followup.py.reference",
+      "sha256": "f0fc4860646add8a9da0cc50daff2e95283a9f2e846c642f889f78aa6ea36313",
+      "original_tests": [
+        "test_followup_saves_do_not_extend_inherited_record_expiry",
+        "test_previous_chart_coverage_is_retained_for_verification_without_republishing",
+        "test_followup_keeps_fresh_records_after_inherited_records_expire",
+        "test_followup_rejects_records_at_or_after_expiry",
+        "test_followup_rejects_other_owner_or_session_even_if_snapshot_is_copied",
+        "test_followup_rejects_snapshot_with_different_run_identity",
+        "test_legacy_v1_snapshot_retains_original_expiry_across_followup"
+      ],
+      "migration_note": "TTL、owner/session/run身份校验和历史图表覆盖不变，全部继续执行。",
+      "active_tests": [
+        "test_followup_saves_do_not_extend_inherited_record_expiry",
+        "test_previous_chart_coverage_is_retained_for_verification_without_republishing",
+        "test_followup_keeps_fresh_records_after_inherited_records_expire",
+        "test_followup_rejects_records_at_or_after_expiry",
+        "test_followup_rejects_other_owner_or_session_even_if_snapshot_is_copied",
+        "test_followup_rejects_snapshot_with_different_run_identity",
+        "test_legacy_v1_snapshot_retains_original_expiry_across_followup"
+      ],
+      "dispositions": [
+        {
+          "test": "test_followup_saves_do_not_extend_inherited_record_expiry",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_followup_saves_do_not_extend_inherited_record_expiry"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_previous_chart_coverage_is_retained_for_verification_without_republishing",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_previous_chart_coverage_is_retained_for_verification_without_republishing"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_followup_keeps_fresh_records_after_inherited_records_expire",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_followup_keeps_fresh_records_after_inherited_records_expire"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_followup_rejects_records_at_or_after_expiry",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_followup_rejects_records_at_or_after_expiry"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_followup_rejects_other_owner_or_session_even_if_snapshot_is_copied",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_followup_rejects_other_owner_or_session_even_if_snapshot_is_copied"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_followup_rejects_snapshot_with_different_run_identity",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_followup_rejects_snapshot_with_different_run_identity"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        },
+        {
+          "test": "test_legacy_v1_snapshot_retains_original_expiry_across_followup",
+          "status": "preserved",
+          "coverage": [
+            "backend/tests/test_runtime_followup.py::test_legacy_v1_snapshot_retains_original_expiry_across_followup"
+          ],
+          "note": "原有有效场景继续执行；必要时改用 registry/read_data/Compactor 或结构化 fixture。"
+        }
+      ]
+    }
+  ],
+  "migration_policy": "reference 原始字节和 SHA 不变；仅迁移活动测试。不得据离线协议结果声称通过真实 M1 质量验收；不修改 baseline_runtime、真实结果或评分。"
+}

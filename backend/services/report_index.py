@@ -471,12 +471,19 @@ class ReportIndexStore:
         return bool(result.rowcount)
 
     def get_shared_report(self, *, token: str) -> dict[str, Any] | None:
+        shared = self.get_shared_report_with_metadata(token=token)
+        return shared["report"] if shared is not None else None
+
+    def get_shared_report_with_metadata(self, *, token: str) -> dict[str, Any] | None:
+        """同一次受限读取取得报告和分享生效时点，生成时间不代替发布时间。"""
         with self._engine.connect() as conn:
-            value = conn.execute(
-                text("SELECT report FROM reports WHERE share_token=:token AND publishable=true"),
+            row = conn.execute(
+                text("SELECT report,shared_at FROM reports WHERE share_token=:token AND publishable=true"),
                 {"token": token},
-            ).scalar()
-        return _json_value(value, {}) if value is not None else None
+            ).mappings().first()
+        if row is None:
+            return None
+        return {"report": _json_value(row["report"], {}), "published_at": _iso_value(row.get("shared_at"))}
 
     def delete_session(self, *, session_id: str, user_id: str | None = None) -> dict[str, int]:
         owner = _report_owner(session_id, user_id)

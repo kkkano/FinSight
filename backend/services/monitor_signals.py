@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 
 
 @dataclass(frozen=True)

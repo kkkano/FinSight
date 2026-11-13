@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.services.agent_prediction_store import AgentPredictionStore
 from backend.services.agent_run_archive import AgentRunArchive
 from backend.services.database import assert_core_schema_current

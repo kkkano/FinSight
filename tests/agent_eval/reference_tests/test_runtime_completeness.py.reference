@@ -1,0 +1,153 @@
+"""证据缺口必须触发真实补查，失败不能冒充当前问题已经完成。"""
+from types import SimpleNamespace
+
+import pytest
+
+from backend.agent_runtime import service
+from backend.agent_runtime.completeness import ResearchCompleteness
+from backend.agent_runtime.data import RunData
+from backend.agent_runtime.loop import AgentRuntime
+from backend.agent_runtime.tools import ToolSpec, schema
+from backend.agent_runtime.context import compact_result, prune_messages, tokens
+from backend.services.run_context import RunContext
+from backend.tests.test_agent_runtime import FakeModel, cfg, finish
+
+
+@pytest.fixture(autouse=True)
+def isolated(monkeypatch, tmp_path):
+    monkeypatch.setenv("FINSIGHT_ARTIFACT_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("FINSIGHT_ACTION_STORE", str(tmp_path / "actions.sqlite"))
+    monkeypatch.setenv("FINSIGHT_RUNTIME_QUOTA_DB", str(tmp_path / "quota.sqlite"))
+    monkeypatch.setenv("FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS", "0")
+
+
+def tool(name, callback):
+    key = "query" if name == "search" else "ticker"
+    return ToolSpec(name, name, schema({key: {"type": "string"}}, [key]), callback, True)
+
+
+def financials(_args):
+    return {"source": "SEC", "source_url": "https://www.sec.gov/Archives/filing", "period_ends": ["2026-06-30"],
+            "revenue": [100], "net_income": [10], "operating_cash_flow": [12], "free_cash_flow": [8]}
+
+
+async def run(monkeypatch, query, tools, *, history=None, resume=None, turns=None):
+    model = FakeModel(turns or [finish("现有资料不足。"), finish("已根据披露数据核对，仍需结合未来增长判断。")])
+    monkeypatch.setattr(service, "resolve_model", cfg)
+    monkeypatch.setattr(service, "ModelTransport", lambda _: model)
+    monkeypatch.setattr(service, "AgentRuntime", lambda **kwargs: AgentRuntime(**kwargs, tools=tools))
+    context = RunContext.create(owner="completeness-user", entry="chat", budget_seconds=90)
+    context.quota_checker = lambda _: None
+    async def archive():
+        pass
+    context.archive_usage = archive
+    deps = SimpleNamespace(schedule_report_index=lambda **_: True, update_session_context=lambda **_: None, persist_run_event=None)
+    events = [e async for e in service.run_agent_pipeline(deps=deps, query=query, thread_id="completion-session",
+        run_id=context.run_id, run_context=context, ui_context={"session_history": history or [], "resume_from_run_id": resume})]
+    return events, model
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ticker", ["INTC", "AAPL", "NVDA"])
+async def test_valuation_cannot_finish_without_fetching_valuation_and_financials(monkeypatch, ticker):
+    invoked = []
+    tools = {
+        "get_company_info": tool("get_company_info", lambda args: (invoked.append(("valuation", args["ticker"])), {"status": "ok", "forwardPE": 20.0})[1]),
+        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", lambda args: (invoked.append(("filings", args["ticker"])), financials(args))[1]),
+    }
+    events, model = await run(monkeypatch, f"{ticker}现在估值健康吗", tools)
+    assert set(invoked) == {("valuation", ticker), ("filings", ticker)}
+    done = events[-1]
+    assert done["answer_status"] == "answered" and done["quality"]["state"] == "pass"
+    assert done["metrics"]["research_recovery_rounds"] == 1
+    assert done["metrics"]["tool_calls"] == 2 and len(model.inputs) == 2
+
+
+@pytest.mark.asyncio
+async def test_failed_required_research_stays_partial_after_real_attempt(monkeypatch):
+    failing = lambda _: {"error": "tool_timeout", "status": "unavailable"}
+    tools = {name: tool(name, failing) for name in ("get_company_info", "get_sec_company_facts_quarterly")}
+    events, _ = await run(monkeypatch, "INTC估值健康吗", tools)
+    done = events[-1]
+    assert done["metrics"]["tool_calls"] == 2
+    assert done["answer_status"] == "partial" and done["quality"]["state"] == "block"
+    assert any(r["code"] == "research_incomplete" for r in done["quality"]["reasons"])
+    assert "尚未核实" in done["response"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_search_followup_performs_new_search(monkeypatch):
+    old = RunData("completeness-user", "completion-session", "old", "INTC最新新闻")
+    old.record("get_company_news", {"ticker": "INTC"}, [])
+    old.save()
+    invoked = []
+    def search(args):
+        invoked.append(args)
+        return [{"title": "Intel results", "url": "https://www.intc.com/news-events/press-releases/detail/1",
+                 "published_date": "2026-11-07", "summary": "Intel reported earnings."}]
+    events, _ = await run(monkeypatch, "你去搜啊", {"search": tool("search", search)},
+        history=[{"role": "user", "content": "INTC最新新闻"}], resume="old")
+    assert len(invoked) == 1 and "INTC" in invoked[0]["query"]
+    assert events[-1]["answer_status"] == "answered"
+    assert events[-1]["metrics"]["tool_calls"] == 1
+
+
+@pytest.mark.asyncio
+async def test_empty_financial_result_is_not_cached_as_success(monkeypatch):
+    invoked = []
+    spec = tool("get_company_news", lambda args: (invoked.append(args), [])[1])
+    context = RunContext.create(owner="completeness-user", entry="chat", budget_seconds=90)
+    context.quota_checker = lambda _: None
+    async def emit(*_):
+        pass
+    runtime = AgentRuntime(context=context, session_id="s", query="INTC新闻", model=FakeModel([]), emit=emit, tools={spec.name: spec})
+    try:
+        for cid in ("a", "b"):
+            result = await runtime.executor.execute(spec.name, {"ticker": "INTC"}, cid, "root", {spec.name: spec})
+            assert result["status"] == "empty" and not result["source_refs"]
+        assert len(invoked) == 2
+    finally:
+        await runtime.close()
+
+
+def test_restore_rejects_legacy_empty_and_failed_success_records():
+    old = RunData("u", "s", "old", "INTC")
+    old.record("get_company_news", {"ticker": "INTC"}, [])
+    old.record("get_company_info", {"ticker": "INTC"}, {"error": "timeout"})
+    old.save()
+    followup = RunData("u", "s", "new", "继续")
+    assert not followup.restore("old")
+    assert not followup.records and not followup.sources
+
+
+def test_other_company_and_calendar_do_not_satisfy_financial_results():
+    data = RunData("u", "s", "r", "INTC财报")
+    data.record("get_sec_company_facts_quarterly", {"ticker": "NVDA"}, financials({}))
+    data.record("get_event_calendar", {"ticker": "INTC"}, {"earnings_date": "2026-10-22", "source": "fixture"})
+    check = ResearchCompleteness("INTC财报表现", [], {})
+    assert [g["facet"] for g in check.missing(data, [])] == ["filings"]
+
+
+@pytest.mark.parametrize("query", ["什么是市盈率", "刚才营收单位是什么", "刚才均线怎么算", "你好"])
+def test_explanatory_followup_does_not_force_unrequested_research(query):
+    check = ResearchCompleteness(query, [{"role": "user", "content": "INTC估值"}], {})
+    assert check.facets == []
+
+
+def test_companyfacts_preview_exposes_real_financial_fields_before_long_metadata():
+    payload = financials({})
+    payload["fact_metadata"] = {"revenue": [{"unit": "USD", "description": "申报元数据" * 1000}]}
+    preview = compact_result({"status": "ok", "result": payload, "data_refs": ["dataset_1"], "source_refs": ["S1"]}, "dataset_1")
+    assert '"net_income": 10' in preview and '"free_cash_flow": 8' in preview
+    assert tokens(preview) < 5000 and "dataset_1" in preview
+
+
+def test_two_large_recent_readbacks_keep_protocol_and_fit_window():
+    messages = [{"role": "system", "content": "规则" * 500}]
+    for i in range(2):
+        messages.extend([{"role": "assistant", "tool_calls": [{"id": str(i), "function": {"name": "read_evidence", "arguments": "{}"}}]},
+                         {"role": "tool", "tool_call_id": str(i), "content": '{"data_ref":"dataset_' + str(i) + '","content":"' + "原文" * 3000 + '"}'}])
+    result = prune_messages(messages, [], context_window=16000, output_reserve=2000)
+    assert tokens(result) < 14000
+    calls = {call["id"] for message in result for call in message.get("tool_calls", [])}
+    assert calls == {message["tool_call_id"] for message in result if message.get("role") == "tool"}

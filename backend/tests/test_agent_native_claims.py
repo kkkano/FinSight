@@ -3,9 +3,6 @@ from __future__ import annotations
 
 import pytest
 
-from backend.agents.fundamental_agent import FundamentalAgent
-from backend.agents.news_agent import NewsAgent
-from backend.agents.price_agent import PriceAgent
 from backend.agents.risk_agent import RiskAgent
 
 
@@ -203,73 +200,6 @@ def _assert_claims_are_supported(output) -> None:
     assert output.evidence_quality["agent_quality"]["status"] == "pass"
     assert output.evidence_quality["agent_self_check"]["status"] == "pass"
     assert output.evidence_quality["agent_quality"]["metrics"]["claim_source_ratio"] == 1.0
-
-
-@pytest.mark.asyncio
-async def test_fundamental_agent_outputs_supported_native_claims() -> None:
-    output = await FundamentalAgent(None, _Cache(), _FundamentalTools()).research(
-        "AAPL 估值、风险、未来三个月看什么？",
-        "AAPL",
-    )
-
-    assert len(output.claims) >= 3
-    assert any(claim.get("metadata", {}).get("claim_type") == "growth_quality" for claim in output.claims)
-    assert any(claim.get("metadata", {}).get("claim_type") == "eps_revision" for claim in output.claims)
-    _assert_claims_are_supported(output)
-
-
-@pytest.mark.asyncio
-async def test_news_agent_outputs_catalyst_noise_and_calendar_claims(monkeypatch) -> None:
-    from datetime import UTC, datetime
-    monkeypatch.setattr("backend.research.news_event_quality.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
-    monkeypatch.setattr("backend.agents.news_agent.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
-    output = await NewsAgent(None, _Cache(), _NewsTools()).research(
-        "AAPL 最近新闻哪些是真的催化剂，哪些只是噪音？",
-        "AAPL",
-    )
-
-    claim_types = {claim.get("metadata", {}).get("claim_type") for claim in output.claims}
-    assert {"catalyst_candidate", "noise_or_secondary_signal", "event_calendar"}.issubset(claim_types)
-    _assert_claims_are_supported(output)
-
-
-@pytest.mark.asyncio
-async def test_news_agent_outputs_aggregate_sentiment_snapshot_claims(monkeypatch) -> None:
-    from datetime import UTC, datetime
-    monkeypatch.setattr("backend.research.news_event_quality.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
-    monkeypatch.setattr("backend.agents.news_agent.utc_now", lambda: datetime(2026, 5, 18, tzinfo=UTC))
-    output = await NewsAgent(None, _Cache(), _NewsSentimentTools()).research(
-        "AAPL 最近整体舆情、催化事件和价格反应怎么看？",
-        "AAPL",
-    )
-
-    snapshot_evidence = [item for item in output.evidence if item.source == "news_sentiment_snapshot"]
-    assert snapshot_evidence
-    snapshot = snapshot_evidence[0].meta.get("snapshot")
-    assert snapshot["ticker"] == "AAPL"
-    assert snapshot["sentiment_bias"]["label"] == "bullish"
-    assert snapshot["sentiment_bias"]["positive_ratio"] > snapshot["sentiment_bias"]["negative_ratio"]
-    assert snapshot["heat"]["news_count"] >= 2
-    assert snapshot["catalyst_events"]["count"] >= 1
-    assert snapshot["price_transmission"]["status"] == "divergence"
-
-    claim_types = {claim.get("metadata", {}).get("claim_type") for claim in output.claims}
-    assert {"sentiment_bias", "catalyst_events", "sentiment_price_divergence"}.issubset(claim_types)
-    _assert_claims_are_supported(output)
-
-
-@pytest.mark.asyncio
-async def test_price_agent_outputs_price_behavior_native_claims() -> None:
-    output = await PriceAgent(None, _Cache(), _PriceTools()).research(
-        "AAPL 价格行为、相对强弱和关键价位风险怎么看？",
-        "AAPL",
-    )
-
-    claim_types = {claim.get("metadata", {}).get("claim_type") for claim in output.claims}
-    assert {"price_momentum", "relative_strength", "volume_confirmation", "volatility_regime", "key_level_risk"}.issubset(claim_types)
-    assert "【价格状态】" in output.summary
-    assert "【风险提示】" in output.summary
-    _assert_claims_are_supported(output)
 
 
 @pytest.mark.asyncio

@@ -54,6 +54,32 @@ def record(payload, tool):
     return data, ref
 
 
+def test_fiscal_context_matches_only_its_declared_period_and_survives_model_projection():
+    from backend.agent_runtime.envelope import ToolResult, to_model
+
+    fiscal = {"period_end": "2026-09-30", "fiscal_year": 2027, "fiscal_period": "Q1",
+              "filed": "2026-10-28", "accession": "fixture-filing"}
+    payload = {"source": "sec_companyfacts", "period_ends": ["2026-09-30", "2026-06-30"], "revenue": [92, 90],
+               "latest_filing_fiscal_context": fiscal}
+    before = deepcopy(payload)
+    data, ref = record(payload, "get_sec_company_facts_quarterly")
+    rows = data.rows(ref)
+    assert rows[0]["fiscal_context"] == fiscal
+    assert "fiscal_context" not in rows[1]
+    text = to_model(ToolResult(status="ok", kind="table", data=payload), 2000)
+    assert '"fiscal_year":2027' in text and '"fiscal_period":"Q1"' in text
+    rows[0]["fiscal_context"]["fiscal_year"] = 1900
+    assert payload == before and data.rows(ref)[0]["fiscal_context"] == fiscal
+
+
+def test_financial_metadata_preview_preserves_selected_fact_filing_date():
+    from backend.agent_runtime.data import fact_metadata_preview
+
+    fact = {"unit": "USD", "period_end": "2026-09-30", "filed": "2026-10-28",
+            "form": "10-Q", "accession": "fixture-filing", "audit": "verbose details"}
+    assert fact_metadata_preview({"revenue": fact}) == {"revenue": {key: value for key, value in fact.items() if key != "audit"}}
+
+
 def test_sec_tool_payload_becomes_rows_without_losing_period_units_or_missing_values(sec_payload):
     data, ref = record(sec_payload, "get_sec_company_facts_quarterly")
     before = deepcopy(data.records[ref])
@@ -216,14 +242,20 @@ def test_comparison_crossover_ignores_initial_tie_and_returns_to_same_leader():
                                                         'dates': ['2026-01-05', '2026-01-07'], 'dates_truncated': False}]
 
 
-def test_compact_comparison_preserves_short_crossover_date_list():
+def test_bounded_comparison_projection_preserves_full_crossover_dates_for_readback():
     import json
-    from backend.agent_runtime.context import compact_result
+    from backend.agent_runtime.context import tokens
+    from backend.agent_runtime.envelope import ToolResult, to_model
     dates = ['2026-01-06', '2026-01-13', '2026-02-05', '2026-03-19']
     output = {'rows': [{'date': f'2026-01-{i%28+1:02d}', 'a': i, 'b': i+1} for i in range(215)],
               'comparison_stats': {'crossovers': [{'left': 'NVDA', 'right': 'AMD', 'count': 4, 'dates': dates, 'dates_truncated': False}]}}
-    result = json.loads(compact_result({'result': output, 'data_refs': ['real-comparison']}, 'real-comparison'))
-    assert result['preview']['comparison_stats']['crossovers'][0]['dates'] == dates
+    data, ref = record(output, 'run_analysis_code')
+    result = ToolResult(status='ok', kind='computation', data=output)
+    projection = to_model(result, 1000, handle=ref)
+    assert tokens(projection) <= 1000 and ref in projection
+    assert result.data['comparison_stats']['crossovers'][0]['dates'] == dates
+    raw = ''.join(data.read(ref, offset, 8000)['content'] for offset in range(0, data.read(ref)['total_chars'], 8000))
+    assert json.loads(raw)['output']['comparison_stats']['crossovers'][0]['dates'] == dates
 
 
 def test_chart_reports_leading_gaps_without_filling_them():
@@ -237,8 +269,8 @@ def test_chart_reports_leading_gaps_without_filling_them():
 
 
 @pytest.mark.asyncio
-async def test_inspect_financial_rows_omits_large_nested_metadata_but_keeps_units(tmp_path, monkeypatch):
-    from backend.tests.test_agent_runtime import runtime
+async def test_read_financial_rows_preserves_metadata_and_bounds_model_projection(tmp_path, monkeypatch):
+    from backend.tests.test_agent_runtime import execute, runtime
     from backend.agent_runtime.context import tokens
     monkeypatch.setenv('FINSIGHT_ACTION_STORE', str(tmp_path / 'actions.sqlite'))
     rt, _ = runtime(tmp_path, [])
@@ -246,13 +278,15 @@ async def test_inspect_financial_rows_omits_large_nested_metadata_but_keeps_unit
         'source': 'sec_companyfacts', 'period_ends': ['2026-07-26', '2026-04-26'],
         'revenue': [96221000000, 81615000000], 'fact_metadata': {'revenue': [
             {'unit': 'USD', 'audit': 'x' * 20000}, {'unit': 'USD', 'audit': 'x' * 20000}]}})
-    inspector = rt.available_tools('root', 'research_lead')['inspect_dataset']
-    result = inspector.invoke({'data_ref': ref})
-    assert result['status'] == 'ok' and tokens(result) < 2000
-    assert result['column_units']['revenue'] == ['USD']
-    assert 'fact_metadata' not in result['rows'][0]
-    metadata = inspector.invoke({'data_ref': ref, 'columns': ['fact_metadata']})
-    assert metadata['status'] == 'ok' and tokens(metadata) < 2000
-    assert metadata['rows'][0]['fact_metadata']['revenue'] == {'unit': 'USD'}
-    assert 'audit' not in str(metadata['rows'])
+    original = deepcopy(rt.data.records[ref])
+    result = await execute(rt, 'read_data', {'handle': ref})
+    projection = rt.registry.model_text(result, 2000)
+    assert result.status == 'ok' and tokens(projection) <= 2000
+    assert 'revenue (USD)' in projection and '96221000000' in projection
+    assert 'audit' not in projection
+    assert result.data['rows'][0]['fact_metadata']['revenue']['audit'] == 'x' * 20000
+    metadata = await execute(rt, 'read_data', {'handle': ref, 'columns': ['fact_metadata']})
+    assert metadata.status == 'ok'
+    assert metadata.data['rows'][0]['fact_metadata']['revenue'] == {'unit': 'USD', 'audit': 'x' * 20000}
+    assert rt.data.records[ref] == original
     await rt.close()

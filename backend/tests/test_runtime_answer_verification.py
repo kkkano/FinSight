@@ -1,676 +1,151 @@
-"""最终交付与过程草稿分离，校正有界且不绕过工具或事实校验。"""
-from types import SimpleNamespace
-
+"""以真实计算与来源账本验证金额、区间、交叉和图表缺失，旧正文匹配核验已退役。"""
+from copy import deepcopy
+import json
 import pytest
 
-from backend.agent_runtime import service
+from backend.agent_runtime.analysis import analyze_dataset, comparison_crossovers, render_chart
 from backend.agent_runtime.data import RunData
-from backend.agent_runtime.model import ModelProtocolError
-from backend.agent_runtime.tools import ToolSpec, schema
-from backend.agent_runtime.analysis import analyze_dataset, render_chart
-from backend.agent_runtime.grounding import validate_paragraph
-from backend.agent_runtime.presentation import clean_public_text
-from backend.services.run_context import RunContext
-from backend.tests.test_agent_runtime import FakeModel, call, cfg, finish
+from backend.agent_runtime.envelope import ToolError, ToolResult
+from backend.tests.test_agent_runtime import call, finish
+from backend.tests.test_runtime_completeness import isolated, review_pass, run, tool
 
 
-@pytest.fixture(autouse=True)
-def isolate(monkeypatch, tmp_path):
-    monkeypatch.setenv("FINSIGHT_ACTION_STORE", str(tmp_path / "actions.sqlite"))
-    monkeypatch.setenv("FINSIGHT_ARTIFACT_DIR", str(tmp_path / "artifacts"))
-    monkeypatch.setenv("FINSIGHT_RUNTIME_QUOTA_DB", str(tmp_path / "quota.sqlite"))
-    monkeypatch.setenv("FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS", "0")
+@pytest.fixture
+def data(tmp_path):
+    value = RunData("u", "s", "r", "计算核对")
+    value.storage_dir = tmp_path
+    return value
 
 
-def quote_tool():
-    return ToolSpec("get_stock_price", "取得真实报价",
-        schema({"ticker": {"type": "string"}}, ["ticker"]),
-        lambda _: {"price": 42, "currency": "USD", "source": "fixture", "as_of": "2026-11-06"}, True)
+
+def recorded(data, name, ticker, output):
+    return data.record(name, {"ticker": ticker}, output, envelope=ToolResult(status="ok", kind="table", data=output,
+        sources=[{"title": ticker+"原始数据", "url": f"https://example.com/{ticker}/{name}"}]))
 
 
-async def pipeline(monkeypatch, turns, tools=None, query="查AAPL价格", **options):
-    model = turns if isinstance(turns, FakeModel) else FakeModel(turns)
-    monkeypatch.setattr(service, "resolve_model", cfg)
-    monkeypatch.setattr(service, "ModelTransport", lambda _: model)
-    real_runtime = service.AgentRuntime
-    monkeypatch.setattr(service, "AgentRuntime", lambda **kwargs: real_runtime(**kwargs,
-        tools=tools or {"get_stock_price": quote_tool()}))
-    context = RunContext.create(owner="verification-user", entry="chat", budget_seconds=20)
-    context.quota_checker = lambda _: None
-    async def archive():
-        pass
-    context.archive_usage = archive
-    deps = SimpleNamespace(schedule_report_index=lambda **_: True,
-        update_session_context=lambda **_: None, persist_run_event=None)
-    events = [event async for event in service.run_agent_pipeline(deps=deps, query=query,
-        thread_id="verification-session", run_id=context.run_id, run_context=context, **options)]
-    return events, model
+def test_latest_two_period_computation_binds_real_difference_and_change(data):
+    ref = recorded(data, "get_sec_company_facts_quarterly", "NVDA", {
+        "source": "sec_companyfacts", "currency": "USD", "period_ends": ["2026-07-26", "2026-04-26", "2025-07-27"],
+        "revenue": [96221000000, 81615000000, 46743000000]})
+    before = deepcopy(data.records[ref])
+    result = analyze_dataset(data, ref, "series_statistics", {"date": "period_end", "value": "revenue", "latest_n": 2})
+    row = result["rows"][0]
+    assert row["difference"] == 14606000000
+    assert row["return_ratio"] == pytest.approx(96221000000 / 81615000000 - 1)
+    assert row["observations"] == 2
+    assert row["first"] == 81615000000 and row["last"] == 96221000000
+    assert data.source_refs(result["data_refs"][0]) == data.source_refs(ref)
+    assert data.source_refs(ref)
+    assert data.records[ref] == before
+
+
+def comparisons(data):
+    refs = [recorded(data, "get_stock_historical_data", ticker, {
+        "rows": [{"date": f"2026-01-0{i+1}", "close": value} for i, value in enumerate(prices)]})
+        for ticker, prices in [("NVDA", [100, 110, 105]), ("AMD", [100, 105, 120])]]
+    return analyze_dataset(data, refs[0], "indexed_comparison", {"other_dataset_refs": [refs[1]]})
+
+
+def test_comparison_statistics_keep_path_direction_and_percentage_units(data):
+    result = comparisons(data)
+    stats = result["comparison_stats"]
+    assert stats["observations"] == 3
+    assert stats["series"]["NVDA"]["declining_periods"] == 1
+    assert stats["series"]["AMD"]["declining_periods"] == 0
+    assert stats["series"]["NVDA"]["end_return_pct"] == pytest.approx(5)
+    assert stats["series"]["AMD"]["end_return_pct"] == pytest.approx(20)
+    assert stats["strictly_increasing"] == {"NVDA": False, "AMD": True}
+    assert stats["lead_days"] == {"NVDA": 1, "AMD": 1, "tie": 1}
+    assert result["method"]["unit"] == "%"
+
+
+def test_crossover_count_and_last_date_match_actual_native_series(data):
+    result = comparisons(data)
+    crossovers = result["comparison_stats"]["crossovers"]
+    assert len(crossovers) == 1
+    assert crossovers[0]["count"] == 1
+    assert crossovers[0]["dates"][-1].startswith("2026-01-03")
+
+
+def test_comparison_crossovers_can_be_recomputed_without_modifying_original_record(data):
+    result = comparisons(data)
+    before = deepcopy(data.records)
+    assert comparison_crossovers(result["rows"], result["series"]) == result["comparison_stats"]["crossovers"]
+    assert data.records == before
+
+
+def test_warmup_coverage_uses_actual_missing_prefix_and_first_valid_date(data):
+    rows = [{"date": f"2026-01-{i+1:02}", "close": 100+i,
+             "ma20": None if i < 19 else 100+i-9.5} for i in range(23)]
+    ref = recorded(data, "get_stock_historical_data", "AAPL", {"rows": rows})
+    chart = render_chart(data, ref, "AAPL 20日均线", "line", "date", [{"field": "close"}, {"field": "ma20"}])
+    assert chart["coverage"]["ma20"] == {"points": 23, "valid": 4, "missing": 19,
+        "leading_missing": 19, "first_valid": "2026-01-20", "last_valid": "2026-01-23"}
+    assert chart["coverage"]["close"]["missing"] == 0
+    assert chart["data"]["rows"] == rows
+    assert chart["source_refs"] == data.source_refs(ref)
+
+
+def test_incomplete_chart_retains_actual_gap_and_does_not_interpolate(data):
+    rows = [{"date": "2026-01-01", "close": 100}, {"date": "2026-01-02", "close": None}, {"date": "2026-01-03", "close": 110}]
+    ref = recorded(data, "get_stock_historical_data", "AAPL", {"rows": rows})
+    chart = render_chart(data, ref, "已有收盘价", "line", "date", [{"field": "close"}])
+    assert chart["coverage"]["close"]["missing"] == 1
+    assert chart["coverage"]["close"]["valid"] == 2
+    assert chart["data"]["rows"][1]["close"] is None and data.rows(ref) == rows
+
+
+def test_computation_inherits_all_declared_inputs_without_borrowing_unrelated_sources(data):
+    primary = recorded(data, "get_sec_company_facts_quarterly", "NVDA", {"revenue": 1000, "gross_profit": 700})
+    quote = recorded(data, "get_stock_price", "NVDA", {"price": 186.64})
+    other = recorded(data, "get_stock_price", "AMD", {"price": 99})
+    raw = {"rows": [{"gross_margin_pct": 70, "market_price": 186.64}], "method": {"code": "unrelated = 999999"}}
+    derived = data.record("run_analysis_code", {"dataset_refs": [primary, quote]}, raw)
+    assert data.source_refs(derived) == [*data.source_refs(primary), *data.source_refs(quote)]
+    assert not set(data.source_refs(other)).intersection(data.source_refs(derived))
+    assert data.records[derived]["output"] == raw
+    assert data.source_refs(primary) == ["1"] and len(data.sources) == 3
 
 
 @pytest.mark.asyncio
 async def test_wrong_progress_does_not_poison_correct_final_answer(monkeypatch):
-    events, model = await pipeline(monkeypatch, [finish("先确认，AAPL股价999美元。") +
-        call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL股价42美元。")])
+    tools = {"get_stock_price": tool("get_stock_price", lambda _: {"price": 42, "currency": "USD"})}
+    turns = [finish("先确认，AAPL股价999美元。") + call("get_stock_price", {"ticker": "AAPL"}),
+             finish("AAPL股价42美元。"), review_pass("核实AAPL当前价格")]
+    events, model = await run(monkeypatch, "查AAPL价格", tools, turns=turns)
     done = events[-1]
-    assert done["type"] == "done" and done["answer_status"] == "answered"
-    assert done["quality"]["state"] == "pass" and done["response"] == "AAPL股价42美元。"
-    assert len(model.inputs) == 2
-    blocks = [block for block in done["blocks"] if block["kind"] == "text"]
-    assert blocks[0]["content"] == "" and blocks[0]["content_phase"] == "progress"
-    assert blocks[0]["validation_issues"] == ["explanation_contains_unbound_number"]
-    assert blocks[-1]["content_phase"] == "answer" and blocks[-1]["content"] == done["response"]
-    assert "已撤回" not in str(done)
+    assert done["response"] == "AAPL股价42美元。" and done["answer_status"] == "answered"
+    assert len(model.inputs) == 3 and model.turns == [] and done["metrics"]["tool_calls"] == 1
+    assert any(event.get("content") == "先确认，AAPL股价999美元。" for event in events)
+    review = next(event["payload"] for event in events if event["type"] == "review.finished")
+    assert review["status"] == "completed" and review["verdict"] == "pass"
+    review_inputs = [json.loads(message["content"]) for message in model.inputs[-1] if message["role"] == "user"]
+    assert [item["answer"] for item in review_inputs if "answer" in item] == [done["response"]]
 
 
 @pytest.mark.asyncio
-async def test_final_answer_gets_one_tool_free_repair_with_same_identity(monkeypatch):
-    events, model = await pipeline(monkeypatch, [call("get_stock_price", {"ticker": "AAPL"}),
-        finish("AAPL股价999美元。"), finish("AAPL股价42美元。")])
+async def test_failed_optional_tool_preserves_original_answer_and_reports_structured_failure(monkeypatch):
+    failure = ToolResult(status="error", kind="news", error=ToolError(code="tool_timeout", user_message="新闻源超时", retryable=True))
+    tools = {"get_company_news": tool("get_company_news", lambda _: failure),
+             "get_stock_price": tool("get_stock_price", lambda _: {"price": 42, "currency": "USD"})}
+    answer = "AAPL股价42美元。新闻来源本次超时，消息面仍待核实。"
+    events, model = await run(monkeypatch, "查AAPL", tools, turns=[call("get_company_news", {"ticker": "AAPL"}),
+        call("get_stock_price", {"ticker": "AAPL"}), finish(answer), review_pass("说明价格并披露新闻来源超时")])
     done = events[-1]
-    assert done["answer_status"] == "answered" and done["quality"]["state"] == "pass"
-    assert done["metrics"]["answer_repair_attempted"] is True
-    assert len(model.inputs) == 3 and "需核对的段落" in model.inputs[-1][-1]["content"]
-    assert done["response"] == "AAPL股价42美元。"
-    assert "999" not in str(done["blocks"])
-    assert any(event.get("payload", {}).get("activity_id") == "answer_check" for event in events)
-    numbered = [event for event in events if "seq" in event]
-    assert len({event["seq"] for event in numbered}) == len(numbered)
-    assert {event["run_id"] for event in numbered} == {done["run_id"]}
+    assert done["response"] == answer and done["quality"]["state"] == "warn"
+    assert done["answer_status"] == "partial"
+    assert {reason["code"] for reason in done["quality"]["reasons"]} == {"partial_tool_failure"}
+    assert done["metrics"]["tool_calls"] == 2
+    review = next(event["payload"] for event in events if event["type"] == "review.finished")
+    assert review["status"] == "completed" and review["verdict"] == "pass"
+    assert len(model.inputs) == 4 and model.turns == []
 
 
 @pytest.mark.asyncio
-async def test_failed_repair_keeps_verified_paragraphs_and_one_gap(monkeypatch):
-    invalid = "AAPL股价42美元。\n\n涨幅999%。\n\n后续还会涨777%。"
-    events, model = await pipeline(monkeypatch, [call("get_stock_price", {"ticker": "AAPL"}),
-        finish(invalid), finish(invalid)])
+async def test_unknown_citation_marks_nonpublishable_without_changing_model_text(monkeypatch):
+    answer = "数据尚需核对。[999]"
+    events, _ = await run(monkeypatch, "查AAPL", {}, turns=[finish(answer)])
     done = events[-1]
-    assert len(model.inputs) == 3
+    assert done["response"] == answer and done["publishable"] is False
     assert done["answer_status"] == "partial" and done["quality"]["state"] == "block"
-    assert done["response"] == "AAPL股价42美元。\n\n部分结论还缺少可靠依据，暂时无法确认。"
-    assert done["response"].count("暂时无法确认") == 1 and "已撤回" not in str(done)
-    assert "999" not in str(done["blocks"]) and "777" not in str(done["blocks"])
-    assert len(done["quality"]["reasons"]) == 1
-
-
-@pytest.mark.asyncio
-async def test_repair_cannot_execute_supplier_tool_calls(monkeypatch):
-    invoked = []
-    tool = quote_tool()
-    original = tool.invoke
-    tool.invoke = lambda args: (invoked.append(args), original(args))[1]
-    events, _ = await pipeline(monkeypatch, [call("get_stock_price", {"ticker": "AAPL"}),
-        finish("AAPL股价999美元。"), call("get_stock_price", {"ticker": "NVDA"}) + finish("股价777美元。")],
-        {"get_stock_price": tool})
-    assert invoked == [{"ticker": "AAPL"}]
-    assert events[-1]["answer_status"] == "partial"
-    assert events[-1]["metrics"]["tool_calls"] == 1
-
-
-@pytest.mark.asyncio
-async def test_repair_transport_failure_keeps_original_verified_results(monkeypatch):
-    class InterruptedRepair(FakeModel):
-        async def stream(self, messages, tools, **kwargs):
-            if len(self.inputs) == 2:
-                self.inputs.append(messages)
-                yield {"choices": [{"delta": {"content": "半截校正报价888美元"}, "finish_reason": None}]}
-                raise ModelProtocolError("model_incomplete_stream")
-            async for chunk in super().stream(messages, tools, **kwargs):
-                yield chunk
-    model = InterruptedRepair([call("get_stock_price", {"ticker": "AAPL"}),
-        finish("AAPL股价42美元。\n\n预计上涨999%。")])
-    events, _ = await pipeline(monkeypatch, model)
-    done = events[-1]
-    assert done["type"] == "done" and done["answer_status"] == "partial"
-    assert "股价42美元" in done["response"] and "888" not in str(done["blocks"])
-    assert any(event.get("payload", {}).get("activity_id") == "answer_check" and
-        event["payload"].get("status") == "failed" for event in events)
-
-
-@pytest.mark.asyncio
-async def test_optional_failed_tool_is_process_history_not_delivery_gap(monkeypatch):
-    news = ToolSpec("get_company_news", "获取新闻", schema({"ticker": {"type": "string"}}, ["ticker"]),
-        lambda _: {"status": "unavailable", "error": "tool_timeout", "summary": "新闻源超时"}, True)
-    events, _ = await pipeline(monkeypatch, [call("get_company_news", {"ticker": "AAPL"}),
-        call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL股价42美元。")],
-        {"get_company_news": news, "get_stock_price": quote_tool()})
-    done = events[-1]
-    assert any(event.get("runtime_type") == "tool.failed" for event in events)
-    assert done["answer_status"] == "answered" and done["quality"]["state"] == "pass"
-
-
-@pytest.mark.asyncio
-async def test_actual_declared_tool_gap_still_marks_partial(monkeypatch):
-    news = ToolSpec("get_company_news", "获取新闻", schema({"ticker": {"type": "string"}}, ["ticker"]),
-        lambda _: {"status": "unavailable", "error": "tool_timeout", "summary": "新闻源超时"}, True)
-    events, _ = await pipeline(monkeypatch, [call("get_company_news", {"ticker": "AAPL"}),
-        call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL股价42美元。\n\n本轮未能获取新闻。")],
-        {"get_company_news": news, "get_stock_price": quote_tool()})
-    done = events[-1]
-    assert done["answer_status"] == "partial" and done["quality"]["state"] == "warn"
-    assert done["quality"]["reasons"][0]["code"] == "partial_tool_failure"
-
-
-@pytest.mark.asyncio
-async def test_invalid_draft_citation_does_not_block_correct_answer(monkeypatch):
-    events, _ = await pipeline(monkeypatch, [finish("先看这里 https://invented.example/aapl 。") +
-        call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL股价42美元。")])
-    done = events[-1]
-    assert done["answer_status"] == "answered" and "invented.example" not in str(done["blocks"])
-
-
-def test_unverified_metadata_cannot_hide_inside_unit_bullet():
-    data = RunData("u", "s", "r", "AAPL")
-    data.record("get_stock_historical_data", {"ticker": "AAPL"}, {"source": "fixture",
-        "price_basis": None, "dividends_included": None, "rows": [{"date": "2026-11-06", "close": 42}]})
-    text = "- 单位：美元，价格为未复权原始收盘价。"
-    assert service.paragraph_issues(text, data) == ["explanation_adjustment_unverified"]
-
-
-def test_error_paragraph_is_not_salvaged_from_unrelated_numeric_matches():
-    data = RunData("u", "s", "r", "走势")
-    data.record("get_stock_price", {"ticker": "AAPL"}, {"source": "fixture", "price": 42})
-    text = "上涨999%。\n- 在42个区间中全部出现V型修复。"
-    safe, issues = service.verified_text(text, data)
-    assert safe == "" and issues == ["explanation_contains_unbound_number"]
-
-
-def test_missing_evidence_does_not_approve_closed_book_market_numbers():
-    data = RunData("u", "s", "r", "报价")
-    assert service.paragraph_issues("AAPL股价999美元。", data) == ["missing_factual_evidence"]
-    assert service.paragraph_issues("假设股价为999美元，下面只解释计算方法。", data) == []
-
-
-@pytest.mark.parametrize("text", ["行情延迟约1.7天。", "数据截止昨日（约1.7天延迟）。"])
-def test_data_age_does_not_verify_provider_delay_in_either_word_order(text):
-    data = RunData("u", "s", "r", "报价")
-    data.record("get_stock_price", {"ticker": "AAPL"}, {"source": "fixture", "price": 1.7,
-        "freshness_seconds": 146880})
-    assert service.paragraph_issues(text, data) == ["explanation_delivery_delay_unverified"]
-
-
-@pytest.mark.asyncio
-async def test_repair_is_bounded_even_at_last_research_turn(monkeypatch):
-    monkeypatch.setenv("FINSIGHT_AGENT_MAX_TURNS", "2")
-    events, model = await pipeline(monkeypatch, [call("get_stock_price", {"ticker": "AAPL"}),
-        finish("AAPL股价999美元。"), finish("AAPL股价888美元。")])
-    assert len(model.inputs) == 3
-    assert events[-1]["type"] == "done" and events[-1]["answer_status"] == "partial"
-
-
-@pytest.mark.asyncio
-async def test_empty_repair_does_not_discard_verified_original_result(monkeypatch):
-    events, _ = await pipeline(monkeypatch, [call("get_stock_price", {"ticker": "AAPL"}),
-        finish("AAPL股价42美元。\n\n预计上涨999%。"), call("get_stock_price", {"ticker": "NVDA"})])
-    done = events[-1]
-    assert done["type"] == "done" and done["answer_status"] == "partial"
-    assert "股价42美元" in done["response"] and "999" not in done["response"]
-
-
-@pytest.mark.asyncio
-async def test_data_basis_caveat_does_not_turn_optional_news_failure_into_gap(monkeypatch):
-    news = ToolSpec("get_company_news", "获取新闻", schema({"ticker": {"type": "string"}}, ["ticker"]),
-        lambda _: {"status": "unavailable", "error": "tool_timeout", "summary": "新闻源超时"}, True)
-    events, _ = await pipeline(monkeypatch, [call("get_company_news", {"ticker": "AAPL"}),
-        call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL股价42美元。\n\n复权与股息处理口径无法确认。")],
-        {"get_company_news": news, "get_stock_price": quote_tool()})
-    assert events[-1]["answer_status"] == "answered"
-
-
-@pytest.mark.parametrize("claim", ["AAPL下跌 $1.80，跌幅0.52%。", "AAPL下降1.80美元。", "AAPL减少1.80 USD。", "AAPL下跌 **$1.80**。", "AAPL跌 $1.80。"])
-def test_negative_change_supports_positive_magnitude_with_decline_direction(claim):
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},{"source":"fixture","price":342.37,"change":-1.8,"change_percent":"-0.52%","currency":"USD"})
-    assert validate_paragraph(claim,data)==[]
-
-
-@pytest.mark.parametrize("claim", ["AAPL上涨1.80美元。", "AAPL下跌+1.80美元。", "AAPL上涨-1.80美元。"])
-def test_wrong_direction_is_not_approved_by_absolute_value_match(claim):
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},{"source":"fixture","price":342.37,"change":-1.8,"currency":"USD"})
-    assert validate_paragraph(claim,data)
-
-
-def test_direction_normalization_does_not_change_destination_price_or_period_count():
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},{"source":"fixture","price":1.8,"periods":5,"currency":"USD"})
-    assert validate_paragraph("AAPL下跌至1.80美元，连续下跌5周。",data)==[]
-
-
-@pytest.mark.parametrize("source_id", ["S1","Sdbf67a99636931dade","SABCDEF123456789012345678"])
-def test_unknown_reference_length_does_not_hide_invalid_citation(source_id):
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},{"source":"fixture","price":42})
-    assert "unverified_citation" in service.paragraph_issues(f"AAPL股价42。[{source_id}]",data)
-
-
-def test_real_source_url_in_chinese_markdown_parenthesis_is_not_rejected():
-    data=RunData("u","s","r","NVDA")
-    url="https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json"
-    data.record("get_sec_company_facts_quarterly",{"ticker":"NVDA"},{"source":"sec_companyfacts","source_url":url,"revenue":42})
-    assert service.paragraph_issues(f"NVDA营收42（[SEC companyfacts]({url})）。",data)==[]
-    assert service.paragraph_issues(f"NVDA营收42（[SEC]({url})）。",data)==[]
-    assert service.paragraph_issues(f"NVDA营收42（[SEC] ({url})）。",data)==[]
-    assert service.paragraph_issues("NVDA营收42（[SEC](https://invented.example/facts)）。",data)==["unverified_citation"]
-    sid=data.source_refs(next(iter(data.records)))[0]
-    assert service.paragraph_issues(f"来源：{url}（[{sid}]）。",data)==[]
-    assert "unverified_citation" in service.paragraph_issues(f"来源：{url}/invented。",data)
-    assert "unverified_citation" in service.paragraph_issues(f"来源：{url}.invented。",data)
-
-
-def test_repair_feedback_projects_related_successful_results_not_other_subjects():
-    data=RunData("u","s","r","AAPL")
-    aapl=data.record("get_stock_historical_data",{"ticker":"AAPL"},{"source":"fixture","rows":[{"date":"2026-10-01","close":100},{"date":"2026-11-06","close":125}]})
-    amd=data.record("get_stock_historical_data",{"ticker":"AMD"},{"source":"fixture","rows":[{"date":"2026-10-01","close":100},{"date":"2026-11-06","close":180}]})
-    analyze_dataset(data,aapl,"series_statistics");analyze_dataset(data,amd,"series_statistics")
-    sid=data.source_refs(aapl)[0]
-    feedback=service.answer_feedback(f"AAPL区间涨幅999%。[{sid}]",data)
-    assert "25.00%" in feedback and sid in feedback and "AMD" not in feedback
-    assert '"tool": "run_analysis_code"' not in feedback and "source_id" in feedback
-
-
-def test_successful_python_result_can_bind_original_sources_without_exposing_code_numbers():
-    data=RunData("u","s","r","均值")
-    original=data.record("get_stock_historical_data",{"ticker":"AAPL"},{"source":"fixture","rows":[{"date":"2026-10-01","close":100},{"date":"2026-11-06","close":125}]})
-    data.record("run_analysis_code",{"dataset_refs":[original]},{"mean":112.5,"method":{"kind":"derived","code":"unrelated=999999"}})
-    sid=data.source_refs(original)[0]
-    assert validate_paragraph(f"AAPL平均收盘价112.5。[{sid}]",data)==[]
-    assert validate_paragraph(f"AAPL平均收盘价999999。[{sid}]",data)==["explanation_contains_unbound_number"]
-
-
-def test_latest_two_period_computation_binds_real_difference_and_change():
-    data=RunData("u","s","r","营收变化")
-    ref=data.record("get_sec_company_facts_quarterly",{"ticker":"NVDA"},{"source":"sec_companyfacts","currency":"USD",
-        "periods":["2026-07-26","2026-04-26","2025-07-27"],"period_ends":["2026-07-26","2026-04-26","2025-07-27"],"revenue":[96221000000,81615000000,46743000000]})
-    analyze_dataset(data,ref,"series_statistics",{"date":"period_end","value":"revenue","latest_n":2})
-    sid=data.source_refs(ref)[0]
-    assert validate_paragraph(f"NVDA营收增加146.06亿美元，环比增长17.90%。[{sid}]",data)==[]
-    assert validate_paragraph(f"NVDA营收增加146.06亿美元，环比增长25%。[{sid}]",data)
-
-
-def comparisons():
-    data=RunData("u","s","r","比较")
-    refs=[]
-    for ticker,prices in [("NVDA",[100,110,105]),("AMD",[100,105,120])]:
-        refs.append(data.record("get_stock_historical_data",{"ticker":ticker},{"source":"fixture","rows":[{"date":f"2026-01-0{i+1}","close":value} for i,value in enumerate(prices)]}))
-    analyze_dataset(data,refs[0],"indexed_comparison",{"other_dataset_refs":[refs[1]]})
-    return data
-
-
-@pytest.mark.parametrize("claim", ["AMD始终领先NVDA。","NVDA从未反超AMD。","AMD领先关系全年保持，未出现NVDA累计涨幅反超AMD。","NVDA累计涨幅持续向上。"])
-def test_absolute_path_claims_check_actual_comparison_statistics(claim):
-    assert validate_paragraph(claim,comparisons())==["explanation_comparison_path_mismatch"]
-
-
-@pytest.mark.parametrize("claim", ["AMD期末涨幅较高。","NVDA未呈现持续上行。","不能断言AMD始终领先NVDA。","AMD累计涨幅持续向上。"])
-def test_qualified_or_supported_comparison_claims_are_preserved(claim):
-    assert validate_paragraph(claim,comparisons())==[]
-
-
-def test_algorithm_window_counts_are_definition_but_market_percentages_still_need_evidence():
-    data=RunData("u","s","r","均线怎么算")
-    text="用rolling(20).mean()计算，每个点取20个收盘价。前面19个点为空，20指20个交易日而非20个日历日。"
-    assert validate_paragraph(text,data)==[]
-    assert validate_paragraph(text+"股票上涨20%。",data)==["missing_factual_evidence"]
-    assert validate_paragraph("股票平均收盘价20美元。用rolling(20).mean()计算。",data)==["missing_factual_evidence"]
-
-
-def test_repair_heading_is_removed_from_public_answer_only():
-    assert clean_public_text("核对后的段落：\n\n计算方法如下。") == "计算方法如下。"
-    assert clean_public_text("以下修正后的结论仅基于价格资料：") == "以下结论仅基于价格资料："
-    assert clean_public_text("```python\nprint('核对后的段落：')\n```") == "```python\nprint('核对后的段落：')\n```"
-    assert clean_public_text("这条数据 session 为 regular_close，Time precision: date。") == "这条数据 常规时段收盘，时间仅精确到日期。"
-    assert clean_public_text("引用详情含 source_id 和 data_ref。") == "引用详情含 引用来源 和 资料引用。"
-    assert clean_public_text("```json\n{\"session\":\"regular_close\"}\n```") == "```json\n{\"session\":\"regular_close\"}\n```"
-
-
-def incomplete_average_chart():
-    data=RunData("u","s","r","AAPL")
-    rows=[{"date":f"2026-01-{i+1:02d}","close":100+i,"ma20":None if i<19 else 100+i-9.5} for i in range(23)]
-    original=data.record("get_stock_historical_data",{"ticker":"AAPL"},{"source":"fixture","rows":[{k:v for k,v in row.items() if k!='ma20'} for row in rows]})
-    computed=data.record("run_analysis_code",{"dataset_refs":[original]},{"rows":rows})
-    render_chart(data,computed,"AAPL一个月与20日均线","line","date",[{"field":"close","name":"收盘价"},{"field":"ma20","name":"20日均线"}])
-    return data
-
-
-def test_warmup_claim_uses_actual_missing_prefix_not_any_matching_number():
-    data=incomplete_average_chart()
-    assert validate_paragraph("20日均线前3天无法计算。",data)==["explanation_chart_coverage_mismatch"]
-    assert validate_paragraph("20日均线前19天为空。",data)==[]
-    assert validate_paragraph("20日均线从2026-01-20开始有值。",data)==[]
-    assert validate_paragraph("20日均线从2026-01-12开始有值。",data)==["explanation_chart_coverage_mismatch"]
-
-
-def test_prior_chart_coverage_is_checked_without_republishing_chart():
-    data=incomplete_average_chart();artifact=data.artifacts[0]
-    data.prior_artifacts=[{k:artifact[k] for k in ['title','dataset_refs','source_refs','spec','coverage']}]
-    data.artifacts=[]
-    assert validate_paragraph("20日均线前3天无法计算。",data)==["explanation_chart_coverage_mismatch"]
-    feedback=service.answer_feedback("AAPL20日均线前3天无法计算。",data)
-    assert 'leading_missing' in feedback and '19' in feedback and not data.artifacts
-    data.prior_artifacts[0].pop('coverage')
-    assert validate_paragraph("20日均线最早3个交易日为空。",data)==["explanation_chart_coverage_mismatch"]
-
-
-def test_explicit_percent_series_unit_is_grounded_without_scaling_counts():
-    data=comparisons()
-    assert validate_paragraph("AMD区间最高涨幅20%。",data)==[]
-    assert validate_paragraph("AMD区间最高涨幅−20%。",data)
-    assert validate_paragraph("AMD区间涨幅300%。",data)
-
-
-def test_neutral_change_label_does_not_turn_positive_change_into_decline():
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},{"source":"fixture","change":"+1.80%","currency":"USD"})
-    assert validate_paragraph("AAPL涨跌幅+1.80%。",data)==[]
-
-
-def test_percent_unit_applies_to_values_not_observation_counts():
-    data=RunData("u","s","r","宏观")
-    data.record("get_fred_data",{}, {"source":"fixture","unit":"Percent","observations":3,"rows":[{"date":"2026-01-01","value":5.25}]})
-    assert validate_paragraph("利率5.25%。",data)==[]
-    assert validate_paragraph("利率300%。",data)==["explanation_contains_unbound_number"]
-
-
-@pytest.mark.parametrize("claim", ["AAPL的实时报价数据包已取得。", "这是AAPL实时行情。"])
-def test_formatted_daily_close_is_not_realtime_even_if_provider_is_fast(claim):
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},"AAPL Current Price: $342.37 | Session: regular_close | Time precision: date | Price basis: unknown | Dividends included: unknown | Currency: USD")
-    assert validate_paragraph(claim,data)==["explanation_realtime_unverified"]
-
-
-@pytest.mark.parametrize("claim", ["AAPL这条收盘价不代表实时行情。", "没有AAPL实时逐笔数据。", "AAPL无法取得实时暗盘净流入。"])
-def test_honest_realtime_limitations_are_preserved(claim):
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},"AAPL Current Price: $342.37 | Session: regular_close | Time precision: date")
-    assert validate_paragraph(claim,data)==[]
-
-
-def test_explicit_realtime_provider_flag_supports_realtime_claim():
-    data=RunData("u","s","r","AAPL")
-    data.record("get_stock_price",{"ticker":"AAPL"},{"source":"fixture","is_realtime":True})
-    assert validate_paragraph("AAPL这条是实时行情。",data)==[]
-
-
-def test_crossover_count_and_last_date_match_actual_native_series():
-    data=comparisons()
-    assert validate_paragraph("NVDA和AMD两条曲线共交叉1次，最后一次交叉在2026-01-03。",data)==[]
-    assert validate_paragraph("NVDA和AMD两条曲线共交叉2次。",data)==["explanation_crossover_mismatch"]
-    assert validate_paragraph("最后一次交叉在2026-01-02。",data)==["explanation_crossover_mismatch"]
-
-
-def test_legacy_comparison_rechecks_crossovers_without_modifying_original_record():
-    from copy import deepcopy
-    data=comparisons()
-    native=next(record for record in data.records.values() if record['tool']=='analyze_dataset')
-    native['output']['comparison_stats'].pop('crossovers')
-    original=deepcopy(data.records)
-    assert validate_paragraph("两条曲线交叉3次。",data)==["explanation_crossover_mismatch"]
-    feedback=service.answer_feedback("NVDA和AMD两条曲线交叉3次。",data)
-    assert 'crossovers' in feedback and data.records==original
-
-
-def test_repair_feedback_has_utf8_cap_and_keeps_verified_crossover_facts():
-    from backend.agent_runtime.context import tokens
-    data=comparisons()
-    for i in range(10):
-        data.record('fixture',{'ticker':'NVDA'},{'source':'fixture','summary':'很长的历史资料'*600,'value':i})
-    text='NVDA和AMD两条曲线交叉3次。\n\n'+'\n\n'.join('说明'+('未经计算的内容'*500)+str(99900+i)+'美元。' for i in range(6))
-    feedback=service.answer_feedback(text,data)
-    assert tokens(feedback)<=service.MAX_REPAIR_FEEDBACK_BYTES
-    assert 'crossovers' in feedback and '2026-01-03' in feedback
-
-
-def period_statistics():
-    data=RunData('u','s','r','NVDA营收')
-    ref=data.record('get_sec_company_facts_quarterly',{'ticker':'NVDA'},{'source':'sec_companyfacts','currency':'USD',
-        'periods':['2026-07-26','2026-04-26'],'period_ends':['2026-07-26','2026-04-26'],'revenue':[96221000000,81615000000]})
-    analyze_dataset(data,ref,'series_statistics',{'value':'revenue','date':'period_end','latest_n':2})
-    return data
-
-
-@pytest.mark.parametrize('claim',['NVDA最新两个已公布财季的营收均为增长。','NVDA两期收入均增长。'])
-def test_two_observations_do_not_prove_each_period_grew(claim):
-    assert validate_paragraph(claim,period_statistics())==['explanation_period_trend_unverified']
-
-
-@pytest.mark.parametrize('claim',['NVDA这两期相比，后一期营收更高。','不能断言NVDA两个财季营收均增长。','NVDA两期毛利和营收均增长。'])
-def test_period_contract_does_not_change_distinct_metric_or_qualified_statements(claim):
-    assert validate_paragraph(claim,period_statistics())==[]
-
-
-@pytest.mark.asyncio
-async def test_incomplete_chart_has_partial_state_with_real_gap(monkeypatch):
-    data=RunData("u","s","r","AAPL")
-    output={"source":"fixture","rows":[{"date":"2026-01-01","close":100},{"date":"2026-01-02","close":None},{"date":"2026-01-03","close":110}]}
-    ref=data.record("get_stock_historical_data",{"ticker":"AAPL"},output)
-    tool=ToolSpec("get_stock_historical_data","行情",schema({"ticker":{"type":"string"}},["ticker"]),lambda _:output,True)
-    events,_=await pipeline(monkeypatch,[call("get_stock_historical_data",{"ticker":"AAPL"}),
-        call("render_chart",{"dataset_ref":ref,"title":"已有收盘价","chart_type":"line","x":"date","series":[{"field":"close","name":"收盘价"}]}),
-        finish("图展示已有收盘价，部分数据缺失。")],{"get_stock_historical_data":tool}, query="AAPL历史收盘价画图")
-    done=events[-1]
-    assert done["answer_status"]=="partial" and done["quality"]["state"]=="warn"
-    assert any(reason["code"]=="partial_chart_data" for reason in done["quality"]["reasons"])
-
-
-@pytest.mark.parametrize("amount", ["4.975 万亿美元", "4.975 trillion USD", "4,975.38301952 billion USD", "4,975,383.01952 million USD"])
-def test_explicit_large_money_units_match_actual_market_cap(amount):
-    data=RunData("u","s","r","AAPL估值")
-    data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","currency":"USD","market_cap":4_975_383_019_520})
-    assert validate_paragraph("AAPL市值约"+amount+"。",data)==[]
-    assert validate_paragraph("AAPL市值9.975万亿美元。",data)==["explanation_contains_unbound_number"]
-
-
-def test_financial_table_amount_header_scales_only_its_amount_column():
-    data=RunData("u","s","r","INTC财报")
-    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
-        "periods":["2026-09-26"],"revenue":[16_513_000_000],"net_income":[3_320_000_000],"eps":[.6]})
-    table="| 指标 | 金额（USD，百万） | 说明 |\n|---|---|---|\n| 营收 | 16,513 | 截至2026-09-26 |\n| 净利润 | 3,320 | EPS 0.60 |"
-    assert validate_paragraph(table,data)==[]
-    assert validate_paragraph(table.replace("16,513","16,999"),data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph(table.replace("EPS 0.60","EPS 16,513"),data)==["explanation_contains_unbound_number"]
-
-
-@pytest.mark.parametrize("unit,amount", [("百万美元","16,513"),("USD billions","16.513")])
-def test_common_table_unit_applies_to_amount_fields_but_not_eps_dates_or_multiples(unit, amount):
-    data=RunData("u","s","r","INTC")
-    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
-        "periods":["2026-09-26"],"revenue":[16_513_000_000],"eps":[.6],"forwardPE":12.5})
-    table=f"单位：{unit}\n\n| 财期 | 营收 | EPS | P/E倍数 |\n|---|---|---|---|\n| 2026-09-26 | {amount} | 0.60 | 12.5 |"
-    assert validate_paragraph(table,data)==[]
-    assert validate_paragraph(table.replace("0.60","16,513"),data)==["explanation_contains_unbound_number"]
-
-
-def test_amount_unit_does_not_verify_uncomputed_growth_or_margin():
-    data=RunData("u","s","r","INTC财报")
-    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
-        "revenue":[16_513_000_000,16_128_000_000],"gross_profit":[8_000_000_000]})
-    assert validate_paragraph("INTC营收165.13亿美元，环比增长2.39%。",data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph("INTC营收165.13亿美元，毛利率48.45%。",data)==["explanation_contains_unbound_number"]
-
-
-@pytest.mark.parametrize("source,claim", [
-    ("Shares cratered nearly 30% after guidance.","INTC股价下跌约30%。"),
-    ("Shares cratered nearly 30% after guidance.","INTC股价跌近30%。"),
-    ("Dell stock fell approximately 16% during the week.","DELL股价下跌16%。"),
-    ("Intel projected PC unit declines of approximately 12% in 2026.","INTC预计2026年PC出货下滑12%。"),
-    ("Intel projected PC unit declines of approximately 12% in 2026 and 10% in 2027.","INTC预计2026年PC出货下滑12%，2027年下滑10%。"),
-    ("AMD shares are up 10% today after a 17% plunge.","AMD此前下跌17%，本日上涨10%。"),
-])
-def test_english_news_direction_verifies_chinese_percent_magnitude(source,claim):
-    data=RunData("u","s","r","新闻")
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":source})
-    assert validate_paragraph(claim,data)==[]
-    assert validate_paragraph(claim.replace("下跌","上涨").replace("下滑","增长").replace("跌近","涨近"),data)
-
-
-def test_numeric_count_and_wrong_sign_do_not_substitute_for_signed_percent():
-    data=RunData("u","s","r","新闻")
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":"Shares cratered nearly 30%.","articles":30})
-    assert validate_paragraph("INTC上涨30%。",data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph("INTC下跌+30%。",data)==["explanation_direction_mismatch"]
-
-
-@pytest.mark.parametrize("source", [
-    "Units decline 12% in 2026 and +10% in 2027.",
-    "Units decline 12% in 2026 and growth of 10% in 2027.",
-])
-def test_news_percent_direction_is_not_inherited_across_explicit_reversal(source):
-    data=RunData("u","s","r","INTC")
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":source})
-    assert validate_paragraph("INTC预计2027年下滑10%。",data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph("INTC预计2027年增长10%。",data)==[]
-
-
-def test_known_tracking_parameters_do_not_make_real_article_link_unknown():
-    from backend.agent_runtime.grounding import cited_sources,source_urls
-    data=RunData("u","s","r","INTC新闻")
-    base="https://www.tikr.com/blog/intel-pc-warning"
-    saved=base+"?ref=yahoofinance&tlnk=yf-261106-example&.tsrc=rss&utm_source=yahoo"
-    ref=data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","source_url":saved,"summary":"已取得原文"})
-    assert source_urls(f"[报道]({base})。",data)==[saved]
-    assert cited_sources(f"[报道]({base})。",data)==data.source_refs(ref)
-    assert service.paragraph_issues(f"来源：[报道]({base})。",data)==[]
-
-
-@pytest.mark.parametrize("changed", ["?id=other", "?ref=another-document", "/invented", "#different-section"])
-def test_tracking_equivalence_does_not_ignore_document_identity_or_path(changed):
-    data=RunData("u","s","r","新闻")
-    base="https://www.tikr.com/blog/intel-pc-warning"
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","source_url":base+"?utm_source=yahoo"})
-    assert service.paragraph_issues(f"来源：[报道]({base+changed})。",data)==["unverified_citation"]
-
-
-def test_tracking_equivalence_keeps_original_nontracking_query_parameters():
-    from backend.agent_runtime.grounding import _source_url_identity
-    data=RunData("u","s","r","新闻")
-    base="https://example.com/article"
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","source_url":base+"?id=42&doc=publication&ref=original&utm_source=yahoo"})
-    assert service.paragraph_issues(f"来源：[报道]({base}?ref=original&doc=publication&id=42)。",data)==[]
-    assert service.paragraph_issues(f"来源：[报道]({base})。",data)==["unverified_citation"]
-    assert _source_url_identity(base+"?token=publication") != _source_url_identity(base)
-
-
-def test_large_money_unit_cannot_borrow_another_tickers_source():
-    data=RunData("u","s","r","AAPL估值")
-    ref=data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","currency":"USD","market_cap":4_975_383_019_520})
-    data.record("get_company_info",{"ticker":"AMD"},{"source":"fixture","currency":"USD","market_cap":9_975_383_019_520})
-    sid=data.source_refs(ref)[0]
-    assert validate_paragraph(f"AAPL市值4.975万亿美元。[{sid}]",data)==[]
-    assert validate_paragraph(f"AAPL市值9.975万亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
-
-
-@pytest.mark.parametrize("claim", ["INTC出现近30%的急剧下跌。", "INTC出现30%的跌幅。", "INTC发生30%的单日下跌。", "INTC单日出现近30%暴跌。"])
-def test_percentage_with_following_decline_word_preserves_signed_news_magnitude(claim):
-    data=RunData("u","s","r","INTC")
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","summary":"Shares cratered nearly 30% after guidance."})
-    assert validate_paragraph(claim,data)==[]
-    assert validate_paragraph(claim.replace("下跌","上涨").replace("跌幅","涨幅").replace("暴跌","暴涨"),data)==["explanation_contains_unbound_number"]
-
-
-def test_following_decline_probability_is_not_normalized_as_negative_return():
-    data=RunData("u","s","r","INTC")
-    data.record("fixture",{"ticker":"INTC"},{"source":"fixture","probability_pct":30})
-    assert validate_paragraph("INTC有30%的下跌概率。",data)==[]
-    assert validate_paragraph("INTC出现30%的急剧下跌。",data)==["explanation_contains_unbound_number"]
-
-
-@pytest.mark.parametrize("claim", [
-    "新闻库只核对了部分条目，不能排除还有其他报道；但就现有证据，未发现公司层面的硬催化。",
-    "在已取得的报道中，未发现公司层面的新增催化。",
-])
-def test_explicitly_limited_news_absence_does_not_assert_exhaustive_coverage(claim):
-    data=RunData("u","s","r","INTC")
-    data.record("get_company_news",{"ticker":"INTC"},{"source":"fixture","coverage_window":{"exhaustive":False}})
-    assert validate_paragraph(claim,data)==[]
-    assert validate_paragraph("最近一周没有看到英特尔公司层面的新催化。",data)==["explanation_unsupported_window_absence"]
-
-
-@pytest.mark.parametrize("expression", ["5,082 − 4,024 = 1,058 百万美元", "5,082-4,024=1,058（百万美元）", "5,082 -4,024 = 1,058 million USD"])
-def test_additive_money_formula_shares_trailing_unit_without_recomputing_result(expression):
-    data=RunData("u","s","r","INTC财报")
-    data.record("get_sec_company_facts_quarterly",{"ticker":"INTC"},{"source":"fixture","currency":"USD",
-        "operating_cash_flow":[5_082_000_000],"capital_expenditures":[4_024_000_000],"free_cash_flow":[1_058_000_000]})
-    assert validate_paragraph("INTC自由现金流："+expression+"。",data)==[]
-    assert validate_paragraph("INTC自由现金流："+expression.replace("1,058","1,059")+"。",data)==["explanation_contains_unbound_number"]
-
-
-def test_negative_money_formula_result_and_multiplication_factor_keep_their_units():
-    data=RunData("u","s","r","INTC")
-    data.record("fixture",{"ticker":"INTC"},{"source":"fixture","currency":"USD","ocf":-100_000_000,"capex":20_000_000,"fcf":-120_000_000})
-    assert validate_paragraph("INTC自由现金流：-100 − 20 = -120 百万美元。",data)==[]
-    assert validate_paragraph("INTC自由现金流：-100 − 20 = 120 百万美元。",data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph("INTC自由现金流：100 × 20 = 2,000 百万美元。",data)==["explanation_contains_unbound_number"]
-
-
-def test_computed_source_can_restate_declared_inputs_but_not_unrelated_amounts():
-    data=RunData("u","s","r","AAPL财报")
-    original=data.record("get_sec_company_facts_quarterly",{"ticker":"AAPL"},{"source":"fixture","currency":"USD",
-        "operating_cash_flow":[28_101_000_000],"capital_expenditures":[2_242_000_000]})
-    computed=data.record("run_analysis_code",{"dataset_refs":[original]},{"check_ocf_minus_capex":25_859_000_000})
-    data.record("get_sec_company_facts_quarterly",{"ticker":"AMD"},{"source":"fixture","currency":"USD","operating_cash_flow":[99_000_000_000]})
-    sid=data.source_refs(computed)[0]
-    assert validate_paragraph(f"AAPL经营现金流281.01亿美元，资本支出22.42亿美元，差额258.59亿美元。[{sid}]",data)==[]
-    assert validate_paragraph(f"AAPL经营现金流990亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
-
-
-@pytest.mark.parametrize("output", [
-    {"gross_margin":.7498,"operating_margin":.6624,"net_margin":.6203,"liab_to_assets":.285},
-    {"ratios_pct":{"gross_margin":74.98,"operating_margin":66.24,"net_margin":62.03,"liab_to_assets":28.5}},
-])
-def test_successful_financial_ratio_fields_and_explicit_percent_container_support_percent_text(output):
-    data=RunData("u","s","r","NVDA")
-    data.record("run_analysis_code",{},output)
-    assert validate_paragraph("NVDA毛利率75.0%、营业利润率66.2%、净利率62.0%、资产负债率28.5%。",data)==[]
-    assert validate_paragraph("NVDA毛利率99%。",data)==["explanation_contains_unbound_number"]
-
-
-def test_numeric_ratio_without_known_percentage_role_does_not_verify_margin():
-    data=RunData("u","s","r","NVDA")
-    data.record("run_analysis_code",{},{"quality_score":.75,"observations":75,"ratios_pct":{"observations":75}})
-    assert validate_paragraph("NVDA毛利率75%。",data)==["explanation_contains_unbound_number"]
-
-
-def test_explicit_scaled_usd_fields_are_amounts_without_guessing_unlabelled_scale():
-    data=RunData("u","s","r","NVDA")
-    data.record("run_analysis_code",{},{"currency":"USD","annualized_revenue_usd_bn":384.88,"implied_ttm_revenue_usd":302.88})
-    assert validate_paragraph("NVDA单季营收年化3848.8亿美元。",data)==[]
-    assert validate_paragraph("NVDA隐含TTM营收3028.8亿美元。",data)==["explanation_contains_unbound_number"]
-
-
-def test_iso_timestamp_is_not_an_arithmetic_expression_with_trillion_unit():
-    data=RunData("u","s","r","AAPL")
-    data.record("get_company_info",{"ticker":"AAPL"},{"source":"fixture","as_of":"2026-11-08T14:28:22Z"})
-    assert validate_paragraph("AAPL资料取于2026-11-08T14:28:22Z。",data)==[]
-
-
-def scoped_financial_ratios():
-    data=RunData("u","s","r","NVDA估值")
-    primary=data.record("get_sec_company_facts_quarterly",{"ticker":"NVDA"},{"source":"fixture","currency":"USD","revenue":1000,"gross_profit":700})
-    profile=data.record("get_company_info",{"ticker":"NVDA"},{"source":"fixture","currency":"USD","trailingPE":23.6,"marketCap":4_507_000_000_000})
-    quote=data.record("get_stock_price",{"ticker":"NVDA"},{"source":"fixture","currency":"USD","price":186.64,"change_percent":"2.78%"})
-    result=data.record("analyze_dataset",{"operation":"financial_ratios","dataset_ref":primary,"dataset_refs":[primary,profile,quote]},
-        {"rows":[{"gross_margin_pct":70}],"calculations":[{"value":70,"unit":"%"}],"method":{"kind":"financial_ratios"},
-         "market_context":[{"output":data.records[profile]["output"]},{"output":data.records[quote]["output"]}]})
-    return data,primary,result,quote
-
-
-def test_primary_sec_reference_authorizes_financial_ratio_projection_without_market_data():
-    data,primary,_,_=scoped_financial_ratios()
-    sid=data.source_refs(primary)[0]
-    assert validate_paragraph(f"NVDA毛利率70%。[{sid}]",data)==[]
-    assert validate_paragraph(f"NVDA股价186.64美元。[{sid}]",data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph(f"NVDA市值4.507万亿美元。[{sid}]",data)==["explanation_contains_unbound_number"]
-    assert validate_paragraph(f"NVDA涨幅2.78%。[{sid}]",data)==["explanation_contains_unbound_number"]
-
-
-def test_aggregate_financial_ratio_reference_authorizes_declared_market_parents():
-    data,_,result,_=scoped_financial_ratios()
-    sid=data.source_refs(result)[0]
-    assert validate_paragraph(f"NVDA毛利率70%，市值4.507万亿美元，股价186.64美元，TTM市盈率23.6倍。[{sid}]",data)==[]
-
-
-def test_other_multi_input_computations_still_need_all_declared_inputs():
-    data,primary,_,quote=scoped_financial_ratios()
-    data.record("run_analysis_code",{"dataset_refs":[primary,quote]},{"custom_return_pct":99})
-    sid=data.source_refs(primary)[0]
-    assert validate_paragraph(f"NVDA收益率99%。[{sid}]",data)==["explanation_contains_unbound_number"]
+    assert done["quality"]["reasons"] == [{"code": "unknown_citations", "severity": "warn", "source_ids": ["999"]}]

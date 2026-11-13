@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 import pytest
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.services.prediction_service import (
     MARKET_DATA_UNAVAILABLE,
     PREDICTION_VALIDATION_FAILED,

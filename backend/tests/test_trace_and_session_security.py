@@ -242,8 +242,8 @@ def test_session_context_keeps_multiple_explicit_compare_tickers(monkeypatch):
 
 
 def test_rag_collection_name_uses_session_key_shape():
-    exec_node = importlib.import_module('backend.graph.execution.plan_pipeline')
+    from backend.rag.layering import build_thread_working_set_collection
 
-    assert exec_node._collection_from_thread_id("tenant1:user1:thread-1") == "ws:thread:tenant1:user1:thread-1"
-    assert exec_node._collection_from_thread_id("tenant 1:user/1:thread@1") == "ws:thread:tenant_1:user_1:thread_1"
-    assert exec_node._collection_from_thread_id("just-thread") == "ws:thread:just-thread"
+    assert build_thread_working_set_collection("tenant1:user1:thread-1") == "ws:thread:tenant1:user1:thread-1"
+    assert build_thread_working_set_collection("tenant 1:user/1:thread@1") == "ws:thread:tenant_1:user_1:thread_1"
+    assert build_thread_working_set_collection("just-thread") == "ws:thread:just-thread"

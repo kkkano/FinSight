@@ -63,34 +63,6 @@ preferred_agents:
 
 # --- synthesize 层：perspective 注入合成 prompt ---
 
-def test_synthesize_injects_skill_perspective():
-    from backend.graph.nodes.synthesize import _skill_perspective_block
-
-    state = {
-        "policy": {
-            "skill_selection": {
-                "selected_skill": "chan-theory",
-                "display_name": "缠论",
-                "perspective": "识别笔、线段、中枢级别，给出操作级别与买卖点。",
-            }
-        }
-    }
-    block = _skill_perspective_block(state)
-    assert "<analysis_perspective>" in block
-    assert "缠论" in block
-    assert "中枢" in block
-
-
-def test_synthesize_perspective_empty_without_skill():
-    """无 skill / 无 perspective → 空串，合成 prompt 与原本一致（向后兼容）。"""
-    from backend.graph.nodes.synthesize import _skill_perspective_block
-
-    assert _skill_perspective_block({}) == ""
-    assert _skill_perspective_block({"policy": {}}) == ""
-    assert _skill_perspective_block({"policy": {"skill_selection": {}}}) == ""
-    # 选中 skill 但无 perspective（如现有研究型 skill）→ 仍为空，不注入
-    assert _skill_perspective_block({"policy": {"skill_selection": {"selected_skill": "valuation-sanity-check"}}}) == ""
-
 
 # --- builtin 视角型 skill：真实 registry 加载 + 显式选择 + 不自动抢占 ---
 

@@ -1,0 +1,32 @@
+[
+  {
+    "path": "backend/agent_runtime/completeness.py",
+    "reference": "tests/agent_eval/reference_code/completeness.py.reference",
+    "sha256": "8bc8c5c70299b0660b5acc6b96992fe467f0d9c7ba03f5d37180111de21beb35"
+  },
+  {
+    "path": "backend/agent_runtime/fact_answer.py",
+    "reference": "tests/agent_eval/reference_code/fact_answer.py.reference",
+    "sha256": "06cb8753b5e107725fe808f7e951bf5b332a4d4601535e2a785932608ca39d75"
+  },
+  {
+    "path": "backend/agent_runtime/grounding.py",
+    "reference": "tests/agent_eval/reference_code/grounding.py.reference",
+    "sha256": "8d951eeb16fc005d05af38830b72432a720486f702ee481d8ee9a1da4b32204b"
+  },
+  {
+    "path": "backend/agent_runtime/permissions.py",
+    "reference": "tests/agent_eval/reference_code/permissions.py.reference",
+    "sha256": "c3124638ede73ef448c97f09761be53ade1053f5e45296334174b5bc4a3ac6c4"
+  },
+  {
+    "path": "backend/agent_runtime/tool_display.py",
+    "reference": "tests/agent_eval/reference_code/tool_display.py.reference",
+    "sha256": "2cfe566ff3db84e66d4f54604a65352fec0a0a2be36589f8354dee6cba6a9f85"
+  },
+  {
+    "path": "backend/agent_runtime/tools.py",
+    "reference": "tests/agent_eval/reference_code/tools.py.reference",
+    "sha256": "4756313c3dd6cfeef47a98f8ef486f1dc2acd7ac876ed38891f7f1da0d25dd95"
+  }
+]

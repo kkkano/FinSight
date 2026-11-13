@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from backend.agents.prediction_contract import PredictionAnchor, PredictionDraft
+from backend.common.prediction_contract import PredictionAnchor, PredictionDraft
 
 
 def _long_payload() -> dict:

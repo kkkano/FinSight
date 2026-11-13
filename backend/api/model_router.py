@@ -10,8 +10,9 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 
 from backend.services.model_selection import (
-    ModelSelectionError, model_capabilities, resolve_selection, system_models, require_model_user, default_model_id,
+    ModelSelectionError, require_model_user, default_model_id,
 )
+from backend.agent_runtime.model_options import model_capabilities, resolve_selection, system_models
 
 router = APIRouter(prefix="/api/models", tags=["Models"])
 PROVIDER_FAILURE_MESSAGE = "连接未成功，请检查配置或稍后重试"
@@ -84,7 +85,8 @@ async def test_model(request: Request):
         from backend.agent_runtime.model import ModelTransport, ModelProtocolError, verify_tool_capability
         from backend.agent_runtime.limits import LeaseLimiter, CapacityExceeded
         try:
-            transport = ModelTransport(ModelConfig(selected.model, selected.base_url, selected.api_key, selected.endpoint_name))
+            transport = ModelTransport(ModelConfig(selected.model, selected.base_url, selected.api_key,
+                                                   selected.endpoint_name, effort=selected.effort))
             async with LeaseLimiter().slot("model", str(user["user_id"]), 2, timeout=10, ttl=80):
                 verified = await verify_tool_capability(transport, timeout=65)
             return {"success": True, "model": selected.model, "native_tool_calls": True,

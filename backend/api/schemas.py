@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 from backend.contracts import CHAT_REQUEST_SCHEMA_VERSION
 
@@ -31,6 +31,20 @@ class SelectionContext(BaseModel):
         return "doc" if normalized == "report" else normalized
 
 
+class MetricSelectionContext(BaseModel):
+    """界面显式选中指标的原值与口径，不构成数据读取授权。"""
+    id: str = Field(min_length=1, max_length=128)
+    label: str | None = Field(None, max_length=256)
+    value: float | str | bool | None
+    unit: str | None = Field(None, max_length=128)
+
+
+class TimeRangeContext(BaseModel):
+    start: str | None = Field(None, max_length=128)
+    end: str | None = Field(None, max_length=128)
+    period: str | None = Field(None, max_length=128)
+
+
 class ChatContext(BaseModel):
     active_symbol: str | None = None
     view: str | None = None
@@ -43,6 +57,11 @@ class ChatContext(BaseModel):
     )
     selection: SelectionContext | None = None
     selections: list[SelectionContext] | None = None
+    watchlist_auto_confirm: StrictBool = False
+    show_provider_reasoning: bool | None = None
+    selected_metric: MetricSelectionContext | None = None
+    time_range: TimeRangeContext | None = None
+    data_refs: list[str] | None = Field(None, max_length=32)
 
 
 class ChatOptions(BaseModel):

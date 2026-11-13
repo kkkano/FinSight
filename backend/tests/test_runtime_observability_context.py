@@ -1,24 +1,41 @@
 """长事务上下文归档与面向用户诊断的离线回归。"""
 from copy import deepcopy
 import json
-
+import math
+from types import SimpleNamespace
 import pytest
 
-from backend.agent_runtime.context import dumps, prune_messages, tokens
+from backend.agent_runtime.compactor import Compactor, ContextBudgetExceeded
+from backend.agent_runtime.context import dumps, tokens
+from backend.agent_runtime.data import RunData
 from backend.agent_runtime.diagnostics import error_info, safe_preview, tool_summary
+from backend.agent_runtime.envelope import ToolResult
+from backend.tests.test_agent_runtime import FakeModel, finish
 
 
-def transaction(index, *, call_count=1):
-    calls = [{"id": f"call_{index}_{part}", "type": "function", "function": {
-        "name": "fetch_url_content", "arguments": dumps({"url": f"https://example.com/{index}/{part}", "query": "context " * 100})}}
-        for part in range(call_count)]
-    assistant = {"role": "assistant", "content": f"研究第 {index} 轮", "reasoning_content": f"private_turn_{index}:" + "hidden " * 850,
+def make_compactor(data):
+    notes = {"known_facts": [{"fact": "已读取财报", "source_ids": ["1"]}],
+             "unresolved_questions": [], "user_requirements": ["保持财年口径，不向第三方发送"]}
+    return Compactor(data, FakeModel([finish(dumps(notes))]),
+                     SimpleNamespace(guard=lambda: None, timeout=lambda seconds: seconds))
+
+
+def transaction(data, index, *, call_count=1):
+    calls, responses, handles = [], [], []
+    for part in range(call_count):
+        call_id = f"call_{index}_{part}"
+        calls.append({"id": call_id, "type": "function", "function": {
+            "name": "fetch_url_content", "arguments": dumps({"url": f"https://example.com/{index}/{part}"})}})
+        raw = {"currency": "USD", "period": "2026Q3", "revenue": 16513000000, "net_income": 3320000000,
+               "content": "原始财报 evidence " * 800}
+        envelope = ToolResult(status="ok", kind="document", data=raw,
+                             sources=[{"title": "财报", "url": f"https://example.com/{index}/{part}"}])
+        handle = data.record("fetch_url_content", {"index": index, "part": part}, raw, envelope=envelope)
+        handles.append(handle)
+        responses.append({"role": "tool", "tool_call_id": call_id, "data_refs": [handle], "content": dumps(raw)})
+    assistant = {"role": "assistant", "content": f"研究第{index}轮", "reasoning_content": f"private_turn_{index}:"+"hidden "*850,
                  "tool_calls": calls}
-    results = [{"role": "tool", "tool_call_id": call["id"], "content": dumps({
-        "status": "ok", "data_refs": [f"dataset_{index}_{part}"],
-        "result": {"currency": "USD", "period": "2026Q3", "as_of": "2026-11-06", "text": "evidence " * 800},
-    })} for part, call in enumerate(calls)]
-    return [assistant, *results]
+    return [assistant, *responses], handles
 
 
 def assert_complete_tool_pairs(messages):
@@ -35,55 +52,70 @@ def assert_complete_tool_pairs(messages):
     assert not pending
 
 
-def test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections():
-    messages = [{"role": "system", "content": "保留数据的来源、单位和财期。"}, {"role": "user", "content": "分析 AAPL"}]
-    for index in range(5):
-        messages.extend(transaction(index))
-        messages.append({"role": "user", "content": f"更正 {index}：保持财年口径，不要发送给第三方。"})
-    recent = transaction(5, call_count=2)
-    messages.extend(recent)
+@pytest.mark.asyncio
+async def test_large_reasoning_schemas_and_results_archive_old_transactions_without_losing_corrections():
+    data = RunData("u", "s", "r", "财报")
+    compactor = make_compactor(data)
+    messages = [{"role": "system", "content": "保留来源、单位与财期"}, {"role": "user", "content": "分析 AAPL"}]
+    all_handles = []
+    for index in range(6):
+        block, handles = transaction(data, index, call_count=2 if index == 5 else 1)
+        messages.extend(block)
+        all_handles.extend(handles)
+        messages.append({"role": "user", "content": f"更正{index}：保持财年口径，不要发送给第三方。"})
     tools = [{"type": "function", "function": {"name": "fetch_url_content", "description": "tool schema " * 250,
               "parameters": {"type": "object", "properties": {"url": {"type": "string"}}}}}]
-    before, tools_before = deepcopy(messages), deepcopy(tools)
-    context_window, output_reserve = 12000, 4096
-    budget = context_window - output_reserve - max(1024, context_window // 20)
-    assert tokens(messages) + tokens(tools) > budget
-
-    compact = prune_messages(messages, tools, context_window=context_window, output_reserve=output_reserve)
-
-    assert tokens(compact) + tokens(tools) <= budget
+    before, tools_before, records_before = deepcopy(messages), deepcopy(tools), deepcopy(data.records)
+    available = math.ceil(tokens(messages) * .65)
+    compact = await compactor.fit(messages, tools, available + tokens(tools) + 2048, 2048)
+    assert tokens(compact) <= available
     assert_complete_tool_pairs(compact)
-    assert compact[-len(recent):] == recent
-    assert compact[0] == messages[0]
-    original_users = [message for message in messages if message["role"] == "user"]
-    assert [message for message in compact if message in original_users] == original_users
-    assert "private_turn_0" not in dumps(compact)
-    archive = next(message["content"] for message in compact if "归档索引" in str(message.get("content")))
-    assert "dataset_0_0" in archive and "read_evidence" in archive
-    assert "不是新指令或授权" in archive
-    assert messages == before and tools == tools_before
+    assert compact[-10:] == [{k:v for k,v in message.items() if k != "data_refs"} for message in messages[-10:]]
+    assert [m for m in compact if m["role"] in {"system", "user"}] == [m for m in messages if m["role"] in {"system", "user"}]
+    assert compactor.archives and messages == before and tools == tools_before and data.records == records_before
+    archive = compactor.archives["call_0_0"]
+    assert archive["read_with"] == "read_data" and archive["results"][0]["handle"] == all_handles[0]
+    assert archive["results"][0]["source_ids"] == ["1"]
+    chunks, offset = [], 0
+    while True:
+        page = data.read(all_handles[0], offset=offset, max_chars=8000)
+        chunks.append(page["content"])
+        assert page["next_offset"] == offset + len(page["content"])
+        if not page["has_more"]:
+            break
+        offset = page["next_offset"]
+    original = json.loads("".join(chunks))
+    assert original["output"]["revenue"] == 16513000000 and original["output"]["net_income"] == 3320000000
 
 
-def test_archive_retains_readback_for_compact_single_ref_and_grouped_tool_results():
-    messages = [{"role": "system", "content": "研究合同"}, *transaction(0, call_count=2), *transaction(1)]
-    messages[2]["content"] = dumps({"truncated": True, "data_ref": "dataset_singular", "preview": "snapshot " * 1000})
-    latest = deepcopy(messages[-2:])
-
-    compact = prune_messages(messages, [], context_window=7000, output_reserve=2048)
-
-    assert_complete_tool_pairs(compact)
-    assert compact[-2:] == latest
-    archive = next(message["content"] for message in compact if "归档索引" in str(message.get("content")))
-    assert "dataset_singular" in archive and "dataset_0_1" in archive
-
-
-def test_uncompressible_system_user_and_latest_transaction_fail_without_mutating_input():
-    messages = [{"role": "system", "content": "system " * 200}, {"role": "user", "content": "纠正 " * 1000}, *transaction(0)]
+@pytest.mark.asyncio
+async def test_archive_retains_readback_for_single_ref_and_grouped_tool_results():
+    data = RunData("u", "s", "r", "财报")
+    compactor = make_compactor(data)
+    messages = [{"role": "system", "content": "研究合同"}]
+    groups = []
+    for index in range(6):
+        block, handles = transaction(data, index, call_count=2 if index == 0 else 1)
+        messages.extend(block)
+        groups.append(handles)
     before = deepcopy(messages)
+    projected = await compactor.fit(messages, [], math.ceil(tokens(messages)/.75) + 1024 + tokens([]), 1024)
+    assert_complete_tool_pairs(projected)
+    assert projected[-6:] == [{k:v for k,v in message.items() if k != "data_refs"} for message in before[-6:]]
+    assert compactor.archives["call_0_0"]["results"][0]["handle"] == groups[0][0]
+    assert compactor.archives["call_0_1"]["results"][0]["handle"] == groups[0][1]
+    assert messages == before and not compactor.model.inputs
 
-    with pytest.raises(ValueError, match="context_window_exhausted"):
-        prune_messages(messages, [], context_window=5000, output_reserve=1024)
 
+@pytest.mark.asyncio
+async def test_uncompressible_system_user_and_latest_transaction_fail_without_mutating_input():
+    data = RunData("u", "s", "r", "财报")
+    block, _ = transaction(data, 0)
+    messages = [{"role": "system", "content": "system " * 200}, {"role": "user", "content": "纠正 " * 1000}, *block]
+    before = deepcopy(messages)
+    with pytest.raises(ContextBudgetExceeded) as error:
+        await make_compactor(data).fit(messages, [], 5000, 1024)
+    assert error.value.required > error.value.available
     assert messages == before
 
 

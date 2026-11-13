@@ -5,20 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PRODUCTION_CALLSITES = (
-    "backend/graph/nodes/synthesize.py",
-    "backend/agents/base_agent.py",
-    "backend/agents/deep_search_agent.py",
-    "backend/agents/news_agent.py",
-    "backend/services/monitor_commentator.py",
-    "backend/services/prediction_service.py",
-    "backend/graph/synthesis/narrative.py",
-    "backend/graph/synthesis/research_synthesis.py",
-    "backend/report/verifier.py",
-    "backend/services/model_preflight.py",
-    "backend/tools/disclosure_financial_facts.py",
-    "backend/research/forecasting.py",
-)
+PRODUCTION_CALLSITES = ('backend/agents/base_agent.py', 'backend/services/monitor_commentator.py', 'backend/services/prediction_service.py', 'backend/services/model_preflight.py', 'backend/tools/disclosure_financial_facts.py', 'backend/research/forecasting.py')
 
 
 def _attribute_name(node: ast.AST) -> str | None:

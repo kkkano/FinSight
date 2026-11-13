@@ -5,8 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.agents.news_agent import NewsAgent
-from backend.agents.sentiment_brief import build_light_snapshot, render_stock_brief
 from backend.research import news_event_quality as quality
 from backend.services.market_data_gateway import validate_news_items
 from backend.tools import news
@@ -17,7 +15,6 @@ NOW = datetime(2026, 10, 3, 12, tzinfo=UTC)
 @pytest.fixture(autouse=True)
 def _fixed_clock(monkeypatch):
     monkeypatch.setattr(quality, "utc_now", lambda: NOW)
-    monkeypatch.setattr("backend.agents.news_agent.utc_now", lambda: NOW)
 
 
 def article(**fields):
@@ -33,25 +30,6 @@ def test_separately_listed_companies_cannot_share_a_short_brand_match():
     assert quality.news_subject_match("GE", "GE Aerospace announces an engine order") == "headline"
     assert quality.news_subject_match("GE", "GE Vernova and GE Aerospace announce a partnership") == "headline"
     assert quality.news_source_tier("https://www.geaerospace.com/news/order", "GE") == "primary"
-
-
-def test_query_ticker_in_url_or_summary_does_not_upgrade_another_issuers_headline():
-    from backend.graph.synthesis.research_synthesis import _news_bound_to_subject
-    assert not _news_bound_to_subject({"title": "GE Vernova wins an energy contract",
-        "snippet": "Search results for GE", "url": "https://example.invalid/search?q=GE"}, "GE", {})
-    assert not _news_bound_to_subject({"title": "Unrelated earnings announcement",
-        "snippet": "AAPL query matches", "url": "https://example.invalid/?ticker=AAPL"}, "AAPL", {})
-
-
-def test_verified_issuer_names_stay_phrases_and_sec_name_can_bind_its_own_news():
-    from backend.graph.synthesis.research_synthesis import _news_bound_to_subject, _subject_names
-    steps = [{"id": "company", "name": "get_company_info", "inputs": {"ticker": "IBM"}},
-             {"id": "filing", "name": "get_sec_company_facts_quarterly", "inputs": {"ticker": "ORCL"}}]
-    names = _subject_names(steps, {"company": {"name": "International Business Machines Corp."},
-        "filing": '{"ticker":"ORCL","company_name":"ORACLE CORP"}'})
-    assert "Business" not in names["IBM"] and "International" not in names["IBM"]
-    assert not _news_bound_to_subject({"title": "International business confidence improves"}, "IBM", names)
-    assert _news_bound_to_subject({"title": "Oracle announces a new customer contract"}, "ORCL", names)
 
 
 def test_three_clocks_are_not_interchangeable():
@@ -111,36 +89,6 @@ def test_search_retrieval_kind_survives_gateway():
     row = quality.prepare_news_items(rows, ticker="AAPL")[0]
     assert row["event_quality"]["content_kind"] == "discovery"
     assert row["event_quality"]["usable_as_catalyst"] is False
-
-
-def test_tool_gateway_execution_and_synthesis_keep_news_quality(monkeypatch):
-    from backend.graph.execution.evidence_pipeline import normalize_execution_evidence
-    from backend.graph.synthesis.research_synthesis import normalize_evidence
-    from backend.graph.synthesis.task_outcomes import TaskDescriptor
-
-    rows, as_of = validate_news_items([
-        article(published_at="2026-07-01"),
-        article(published_at="2026-10-03", retrieval_kind="search_snippet"),
-    ])
-    gateway = SimpleNamespace(get_news=lambda *args, **kwargs: {"data": rows, "provider": "fixture", "as_of": as_of.isoformat()})
-    monkeypatch.setattr("backend.services.market_data_gateway.get_market_data_gateway", lambda: gateway)
-    output = news.get_company_news("AAPL")
-    task = {"id": "task", "tickers": ["AAPL"], "required_evidence": ["news_context"]}
-    step = {"id": "news", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "AAPL"},
-            "subject_tickers": ["AAPL"], "task_ids": ["task"], "evidence_kinds": ["news_context"]}
-    state = {"subject": {"tickers": ["AAPL"]}, "tasks": [task], "artifacts": {"step_results": {"news": {"output": output}}}}
-    normalize_execution_evidence(state=state, plan_ir={"tasks": [task], "steps": [step]}, artifacts=state["artifacts"])
-    descriptor = TaskDescriptor(task_id="task", title="AAPL 新闻", priority=0, order_index=0, operation="news_impact",
-                                subject_label="AAPL", tickers=["AAPL"], request_frame_id="frame", render_kind="single",
-                                render_group_id="frame", intent_status="ready", required_step_ids=["news"],
-                                required_evidence=["news_context"], error_codes=[])
-    result = normalize_evidence(task_descriptors=[descriptor], plan_steps=[step], agent_outputs={},
-                                raw_evidence_by_task=state["artifacts"]["evidence_by_task"])
-    evidence = list(result.evidence_index.values())
-    assert len(evidence) == 2  # 同URL跨日内容不能在执行层被吞掉。
-    assert all(item.usage == "raw" for item in evidence)
-    assert {item.metadata["event_quality"]["freshness"] for item in evidence} == {"fresh", "stale"}
-    assert all(item.metadata["event_quality"]["published_precision"] == "date" for item in evidence)
 
 
 def test_search_date_hint_cannot_become_publication_or_occurrence_date():
@@ -211,59 +159,6 @@ def test_followup_and_next_day_republication_remain_distinct():
     ], ticker="AAPL")
     assert len(rows) == 3
     assert len({row["event_quality"]["event_id"] for row in rows}) == 3
-
-
-def test_unknown_or_old_reports_cannot_become_catalysts_in_either_snapshot():
-    rows = [article(published_at=None), article(title="Apple reports record earnings", published_at="2026-07-01")]
-    annotated = quality.prepare_news_items(rows, ticker="AAPL")
-    agent = NewsAgent(None, None, SimpleNamespace())
-    agent._current_ticker = "AAPL"
-    assert agent._build_catalyst_events(annotated)["count"] == 0
-    snapshot = build_light_snapshot("AAPL", rows)
-    assert snapshot["catalyst_events"]["count"] == 0
-    assert snapshot["heat"]["news_count"] == 0
-    md = render_stock_brief(snapshot, rows, None)
-    assert "旧闻背景" in md and "发布时间未知" in md
-
-
-def test_news_agent_evidence_preserves_discovery_role_and_provenance():
-    agent = NewsAgent(None, None, SimpleNamespace())
-    agent._current_ticker = "AAPL"
-    agent._current_query = "AAPL最近新闻"
-    output = agent._format_output("测试摘要", [article(published_at=None)])
-    evidence = output.evidence[0]
-    assert evidence.title == "Apple announces new product launch"
-    assert evidence.meta["event_quality"]["freshness"] == "unknown"
-    assert evidence.meta["verification"] == "discovery_only"
-    assert evidence.meta["usage"] == "raw"
-    assert evidence.meta["subject"] == "AAPL"
-    assert not any(claim["metadata"]["claim_type"] == "catalyst_candidate" for claim in output.claims)
-
-
-def test_unrelated_news_is_diagnostic_only_for_company_but_kept_for_market():
-    agent = NewsAgent(None, None, SimpleNamespace())
-    agent._current_ticker = "0700.HK"
-    agent._current_query = "腾讯最近新闻"
-    rows = [article(title="Nike quarterly earnings decline", url="https://www.reuters.com/nike"),
-            article(title="G7 leaders discuss trade", url="https://www.reuters.com/g7")]
-    retained = agent._prepare_news_items(rows, "0700.HK")
-    assert retained == []
-    output = agent._format_output("未找到相关新闻。", retained)
-    assert output.evidence == [] and output.claims == []
-    assert "Nike" not in output.summary and "G7" not in output.summary
-    diagnostic = next(event for event in output.trace if event["event_type"] == "news_quality_filter")
-    assert diagnostic["metadata"]["excluded_count"] == 2
-    assert all(item["reason"] == "subject_unrelated" for item in diagnostic["metadata"]["excluded"])
-    assert len(agent._prepare_news_items(rows, "")) == 2
-    assert len(agent._prepare_news_items(rows, "^GSPC")) == 2
-
-
-def test_summary_only_news_remains_an_explicit_discovery():
-    agent = NewsAgent(None, None, SimpleNamespace())
-    rows = agent._prepare_news_items([article(title="Market review includes gaming sector", snippet="Tencent issued a trading update")], "0700.HK")
-    assert len(rows) == 1
-    assert rows[0]["event_quality"]["subject_match"] == "summary_only"
-    assert rows[0]["event_quality"]["evidence_role"] == "discovery"
 
 
 def test_empty_calendar_does_not_invent_three_macro_events(monkeypatch):
@@ -350,54 +245,3 @@ def test_authoritative_multi_ticker_query_keeps_each_actual_subject_and_shared_r
     assert set(shared["subject_tickers"]) == {"AAPL", "NVDA"}
     assert shared["ticker"] == ""
     assert shared["subject_matches"] == {"AAPL": "headline", "NVDA": "headline"}
-
-
-def test_authoritative_tool_to_normalized_evidence_preserves_opinion_boundary(monkeypatch):
-    from backend.tools import authoritative_feeds
-    from backend.graph.execution.evidence_pipeline import normalize_execution_evidence
-    from backend.graph.synthesis.research_synthesis import normalize_evidence
-    from backend.graph.synthesis.task_outcomes import TaskDescriptor
-
-    rows = [{"title": "Is AAOI becoming an AI networking leader?", "url": "https://finance.yahoo.com/news/aaoi-opinion",
-             "source": "Yahoo Finance", "published_date": "2026-10-03", "is_authoritative": True}]
-    monkeypatch.setattr(authoritative_feeds, "search_authoritative_feeds", lambda *args, **kwargs: rows)
-    payload = authoritative_feeds.get_authoritative_media_news("AAOI recent news")
-    task = {"id": "news", "tickers": ["AAOI"], "required_evidence": ["news_context"]}
-    step = {"id": "s2", "kind": "tool", "name": "get_authoritative_media_news", "inputs": {"query": "AAOI recent news"},
-            "subject_tickers": ["AAOI"], "task_ids": ["news"], "evidence_kinds": ["news_context"]}
-    state = {"subject": {"tickers": ["AAOI"]}, "tasks": [task], "artifacts": {"step_results": {"s2": {"output": payload}}}}
-    normalize_execution_evidence(state=state, plan_ir={"tasks": [task], "steps": [step]}, artifacts=state["artifacts"])
-    descriptor = TaskDescriptor(task_id="news", title="AAOI 新闻", priority=0, order_index=0, operation="news_impact",
-                                subject_label="AAOI", tickers=["AAOI"], request_frame_id="frame", render_kind="single",
-                                render_group_id="frame", intent_status="ready", required_step_ids=["s2"],
-                                required_evidence=["news_context"], error_codes=[])
-    result = normalize_evidence(task_descriptors=[descriptor], plan_steps=[step], agent_outputs={},
-                                raw_evidence_by_task=state["artifacts"]["evidence_by_task"])
-    evidence = list(result.evidence_index.values())
-    assert len(evidence) == 1
-    assert evidence[0].title == rows[0]["title"]
-    assert evidence[0].usage == "raw"
-    assert evidence[0].metadata["verification"] == "discovery_only"
-    assert evidence[0].metadata["event_quality"]["content_kind"] == "opinion"
-
-
-@pytest.mark.asyncio
-async def test_news_agent_authoritative_supplement_cannot_erase_search_provenance(monkeypatch):
-    monkeypatch.setenv("NEWS_STRICT_FINANCE_SOURCES", "true")
-    candidates = quality.prepare_news_items([
-        article(published_at="2026-10-03", retrieval_kind="search"),
-        article(published_at="2026-10-03", retrieval_kind="search", url="https://www.cnbc.com/apple-launch", source="CNBC"),
-    ], ticker="AAPL")
-    cache = SimpleNamespace(get=lambda key: None, set=lambda *args: None)
-    fake_tools = SimpleNamespace(get_company_news=lambda ticker: [],
-                                 get_authoritative_media_news=lambda **kwargs: {"articles": candidates})
-    agent = NewsAgent(None, cache, fake_tools)
-    result = await agent._initial_search("AAPL earnings report", "AAPL")
-    assert len(result) == 1
-    row = result[0]
-    assert row["retrieval_kind"] == "search"
-    assert row["published_at_precision"] == "date"
-    assert row["event_quality"]["evidence_role"] == "discovery"
-    assert row["event_quality"]["usable_as_catalyst"] is False
-    assert row["event_quality"]["observed_at"] == candidates[0]["event_quality"]["observed_at"]
-    assert len(row["supporting_reports"]) == 2

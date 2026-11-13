@@ -18,6 +18,9 @@ venv/
 env/
 
 # Tests & reports
+tests/
+backend/tests/
+*.reference
 tests/rag_quality/reports/
 tests/rag_qualityV2/reports/
 tests/retrieval_eval/reports/

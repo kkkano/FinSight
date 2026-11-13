@@ -236,6 +236,8 @@ async def _run_pipeline_for_case(case: dict[str, Any], output_mode: str, ticker:
             "backend.graph.runner.collect_evidence",
             side_effect=_injected_execute_plan_stub,
         ):
+            from tests.agent_eval.reference.loader import activate
+            activate()
             from backend.graph.runner import GraphRunner
 
             runner = GraphRunner.create()

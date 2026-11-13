@@ -1,0 +1,25 @@
+{
+  "test_execution_cancel.py": [
+    "test_research_run_delivery.py::test_cancelling_streamed_preflight_saves_terminal_state",
+    "test_chat_stream_replay_api.py::test_execute_run_is_not_visible_or_cancellable_across_users"
+  ],
+  "test_execution_failure_vs_quality_block.py": [
+    "test_research_run_delivery.py::test_store_failure_prevents_runtime_and_failed_save_preserves_preview",
+    "test_research_run_delivery.py::test_pipeline_awaits_final_commit_before_exposing_done"
+  ],
+  "test_execution_quality_gate.py": [
+    "test_research_run_delivery.py::test_chat_quality_block_is_not_replaced_by_empty_report_success"
+  ],
+  "test_ai_message_persistence.py": [
+    "test_research_run_delivery.py::test_terminal_saved_and_duplicate_post_never_restarts_runtime",
+    "test_research_run_delivery.py::test_snapshot_cannot_overwrite_server_reply_and_retry_is_in_place"
+  ],
+  "test_checkpointer_messages.py": [
+    "test_research_run_delivery.py::test_persistent_run_owner_is_enforced_after_restart",
+    "test_research_run_delivery.py::test_completed_run_recovers_after_in_memory_replay_and_owner_cache_lost"
+  ],
+  "financial_document_news_input_contracts": [
+    "test_evidence_input_contract_repair.py::test_supplier_fact_fields_survive_adapter_and_authoritative_data_record",
+    "test_evidence_input_contract_repair.py::test_financial_amount_and_filing_identity_do_not_round_or_inherit_other_issuer"
+  ]
+}

@@ -55,15 +55,14 @@ def test_health_endpoint_exposes_only_core_readiness(client):
         "authentication",
         "database",
         "market_data",
-        "langgraph_runner",
-        "checkpointer",
+        "research_runtime",
         "llm",
         "prediction_collection",
     }
     assert all(set(component).issubset({"status", "error_code"}) for name, component in components.items()
-               if name != "prediction_collection")
+               if name not in {"prediction_collection", "research_runtime"})
     assert "status" in components["prediction_collection"]
-    assert components["checkpointer"]["status"] in ("ok", "initializing", "error")
+    assert components["research_runtime"] == {"status": "ok", "engine": "agent_runtime"}
     serialized = repr(data).lower()
     for forbidden in ("embedding_model", "vector_dim", "doc_count", "fallback_reason", "recent_runs"):
         assert forbidden not in serialized
@@ -89,8 +88,6 @@ def _build_system_health_client(
             SystemRouterDeps(
                 metrics_enabled=False,
                 metrics_payload=lambda: ("", "text/plain"),
-                graph_runner_ready=lambda: True,
-                get_graph_checkpointer_info=lambda: {"backend": "postgres"},
                 get_startup_result=lambda: SimpleNamespace(
                     llm_available=llm_available,
                     **({"llm_required": llm_required} if llm_required is not None else {}),
@@ -144,8 +141,6 @@ def test_livez_does_not_probe_dependencies():
             SystemRouterDeps(
                 metrics_enabled=False,
                 metrics_payload=lambda: ("", "text/plain"),
-                graph_runner_ready=lambda: calls.append("graph") or False,
-                get_graph_checkpointer_info=lambda: calls.append("checkpoint") or {},
                 get_startup_result=lambda: calls.append("llm") or None,
                 get_authentication_health=lambda: calls.append("auth") or {"status": "error"},
                 get_database_health=lambda: calls.append("db") or {"status": "error"},
@@ -158,6 +153,38 @@ def test_livez_does_not_probe_dependencies():
 
     assert response.status_code == 200
     assert response.json()["status"] == "alive"
+    assert calls == []
+
+
+@pytest.mark.parametrize("endpoint", ["/health", "/readyz", "/api/capabilities"])
+@pytest.mark.parametrize("retired_value", ["legacy", "agent2"])
+def test_health_reports_single_runtime_without_probing_retired_runner(monkeypatch, endpoint, retired_value):
+    monkeypatch.setenv("FINSIGHT_RESEARCH_RUNTIME", retired_value)
+    monkeypatch.setenv("FINSIGHT_RUNTIME_PROFILE", "test")
+    from fastapi import FastAPI
+    from backend.api.system_router import SystemRouterDeps, create_system_router
+    calls = []
+
+    def legacy_probe():
+        calls.append("legacy")
+        raise AssertionError("研究健康检查不得构建旧运行图")
+
+    monkeypatch.setitem(sys.modules, "backend.graph.runner", SimpleNamespace(graph_runner_ready=legacy_probe))
+    monkeypatch.setitem(sys.modules, "backend.graph.checkpointer", SimpleNamespace(get_graph_checkpointer_info=legacy_probe))
+
+    application = FastAPI()
+    application.include_router(create_system_router(SystemRouterDeps(
+        metrics_enabled=False, metrics_payload=lambda: ("", "text/plain"),
+        get_startup_result=lambda: SimpleNamespace(llm_available=True, llm_required=False),
+        get_authentication_health=lambda: {"status": "ok"},
+        get_database_health=lambda: {"status": "ok"},
+        get_market_data_health=lambda: {"status": "ok"})))
+    with TestClient(application) as test_client:
+        response = test_client.get(endpoint)
+    assert response.status_code == 200
+    components = response.json()["components"]
+    assert components["research_runtime"] == {"status": "ok", "engine": "agent_runtime"}
+    assert "langgraph_runner" not in components and "checkpointer" not in components
     assert calls == []
 
 

@@ -186,6 +186,8 @@ def tool_summary(output) -> str:
     return clean_text(str(output), 240) or "工具已执行。"
 
 
-def display_tool(name: str, args: dict, output=None) -> dict[str, str]:
-    from .tool_display import display_tool as format_display
-    return format_display(name, args, output)
+def display_tool(name: str, args: dict, output=None) -> dict:
+    """调用详情统一使用信封投影，错误只读取工具声明。"""
+    from .adapters import adapt_result
+    from .envelope import to_ui
+    return to_ui(adapt_result(name, output, args), name, args)

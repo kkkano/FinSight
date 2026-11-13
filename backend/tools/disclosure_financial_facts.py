@@ -12,7 +12,7 @@ from .financial_facts import duration_frequency, fact_date, fact_number, normali
 logger = logging.getLogger(__name__)
 
 # 指标定义沿用研究合同；模型负责识别不同语言的会计表述。
-from backend.graph.research_capabilities import FINANCIAL_DEFINITIONS as _METRICS, financial_metric_inputs
+from backend.common.financial_inputs import FINANCIAL_DEFINITIONS as _METRICS, financial_metric_inputs
 _PAGE_RE = re.compile(r"\[Page (\d+)\]\n")
 
 

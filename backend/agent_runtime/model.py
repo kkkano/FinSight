@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from typing import AsyncIterator
 
 import httpx
 
 from .config import ModelConfig
+from .context import tokens
 
 
 class ModelProtocolError(RuntimeError):
@@ -137,7 +139,7 @@ async def verify_tool_capability(transport: ModelTransport, *, timeout: float = 
             async for chunk in transport.stream(
                 [{"role": "user", "content": "Call capability_probe with value=7. This is a synthetic compatibility test."}],
                 [schema], max_tokens=1024,
-                tool_choice={"type": "function", "function": {"name": "capability_probe"}}, timeout=timeout,
+                tool_choice="auto", timeout=timeout,
             ):
                 usage = chunk.get("usage") or usage
                 for choice in chunk.get("choices", []):
@@ -167,3 +169,54 @@ async def verify_tool_capability(transport: ModelTransport, *, timeout: float = 
             _LOCKS.pop(oldest, None)
         return dict(result)
 
+
+
+class BudgetedModel:
+    def __init__(self, runtime, spec):
+        self.runtime, self.spec = runtime, spec
+        self.target = spec.model or runtime.model
+        self.config = self.target.config
+
+    async def stream(self, messages, tools, **kwargs):
+        rt, usage, reservation, started_network, finished = self.runtime, None, None, False, False
+        started, status = time.monotonic(), "error"
+        amount = await rt.budget.reserve(tokens(messages) + tokens(tools) + kwargs.get("max_tokens", self.config.max_output))
+        try:
+            async with rt.limiter.slot("model", rt.context.owner,
+                    max(1, int(os.getenv("FINSIGHT_AGENT_MODEL_CONCURRENCY", "2"))),
+                    timeout=rt.context.remaining_seconds, ttl=rt.context.remaining_seconds + 15):
+                spacing = max(0, float(os.getenv("FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS", "0")))
+                while spacing and await asyncio.to_thread(rt.limiter.reserve_window,
+                        "pace:" + self.config.provider_identity(), 0, maximum=1, requests=1, window=spacing) is None:
+                    rt.context.guard()
+                    await asyncio.sleep(min(1, rt.context.remaining_seconds))
+                reservation = await asyncio.to_thread(rt.limiter.reserve_window,
+                    "provider:" + self.config.provider_identity(), amount,
+                    maximum=int(os.getenv("FINSIGHT_AGENT_TPM_LIMIT", "250000")),
+                    requests=int(os.getenv("FINSIGHT_AGENT_RPM_LIMIT", "30")))
+                if reservation is None:
+                    raise ModelProtocolError("provider_local_quota_exhausted")
+                kwargs["timeout"] = rt.context.timeout(min(90, kwargs.get("timeout", 90)))
+                started_network = True
+                async for chunk in self.target.stream(messages, tools, **kwargs):
+                    rt.context.guard()
+                    usage = chunk.get("usage") or usage
+                    finished |= any(choice.get("finish_reason") is not None for choice in chunk.get("choices", []))
+                    yield chunk
+                if not finished:
+                    raise ModelProtocolError("model_incomplete_response")
+                status = "success"
+        finally:
+            if status == "success":
+                rt.model_duration_seconds[self.spec.agent_id] = time.monotonic() - started
+            prompt, completion = int((usage or {}).get("prompt_tokens", 0)), int((usage or {}).get("completion_tokens", 0))
+            actual = prompt + completion if usage is not None else None if started_network else 0
+            await rt.budget.settle(amount, actual)
+            if reservation is not None:
+                await asyncio.to_thread(rt.limiter.settle_window, reservation, actual)
+            if started_network:
+                from backend.services.llm_usage import LLMAttribution
+                rt.context.usage.add(self.config.model, prompt, completion)
+                rt.context.usage.add_attributed_attempt(model=self.config.model, status=status,
+                    duration_ms=int((time.monotonic() - started) * 1000), prompt=prompt, completion=completion,
+                    attribution=LLMAttribution(agent=self.spec.role, layer="agent_runtime"), usage_reported=usage is not None)

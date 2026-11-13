@@ -17,7 +17,6 @@ from backend.api.session_context import (
     _clear_session_context,
     _clear_thread_rag_artifacts,
     _contract_info,
-    _get_orchestrator_safe,
     _get_session_context,
     _is_raw_trace_event,
     _list_session_contexts,
@@ -34,7 +33,6 @@ from backend.api.session_context import (
     _summarize_session_context,
     _update_session_context,
 )
-from backend.graph import aget_graph_runner
 from backend.services.report_index import get_report_index_store
 
 

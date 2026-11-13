@@ -36,8 +36,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
+          pip install -r requirements-dev.txt pytest-cov
       - name: Set deterministic backend test profile
         run: |
           echo "APP_MODE=development" >> "$GITHUB_ENV"
@@ -56,7 +55,7 @@ jobs:
           --cov-report=term-missing
           --cov-report=xml
           --cov-fail-under=75
-          backend/tests tests/golden
+          backend/tests tests/agent_eval
       - name: Upload backend coverage
         uses: actions/upload-artifact@v4
         with:
@@ -78,7 +77,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
       - name: Run retrieval eval runner tests
         run: pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py
       - name: Run rag_qualityV2 fast tests
@@ -110,7 +109,8 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -r requirements-dev.txt -r requirements-local-ml.txt
       - name: Enable pgvector extension
         run: |
           python - <<'PY'
@@ -136,6 +136,7 @@ jobs:
           PY
           python -m alembic upgrade head
           pytest -q backend/tests/test_rag_postgres_isolation.py backend/tests/test_research_run_postgres.py backend/tests/test_prediction_service_postgres.py backend/tests/test_report_directory_postgres.py
+      # 重型推理依赖只装在显式语义检索 gate，不进入 API/常规测试环境。
       - name: Verify retrieval dependency versions
         run: |
           python - <<'PY'

@@ -5,7 +5,7 @@ import pytest
 
 from backend.agent_runtime.analysis import analyze_dataset
 from backend.agent_runtime.data import RunData
-from backend.agent_runtime.grounding import validate_paragraph
+from backend.agent_runtime.citations import references
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ def test_latest_quarter_ratios_growth_and_lineage_use_actual_facts(payload):
     assert "fact_metadata" not in result["financial_context"]
     assert set(data.source_refs(ref)).issubset(data.source_refs(result["data_refs"][0]))
     sid = data.source_refs(result["data_refs"][0])[0]
-    assert validate_paragraph(f"NVDA毛利率75.0%、营业利润率66.2%、净利率62.0%、负债率28.5%。[{sid}]", data) == []
+    assert references(f"财务比率计算结果 [{sid}]", data.sources) == {"resolved": [sid], "unknown": []}
 
 
 @pytest.mark.parametrize("change", ["unit", "end", "start"])
@@ -150,7 +150,7 @@ def test_same_ticker_market_inputs_remain_original_and_join_source_lineage(paylo
     assert result["market_context"] == [{"tool": data.records[key]["tool"], "data_ref": key, "output": data.records[key]["output"]} for key in (profile, quote)]
     assert set(data.source_refs(ref) + data.source_refs(profile) + data.source_refs(quote)).issubset(data.source_refs(computed))
     sid = data.source_refs(computed)[0]
-    assert validate_paragraph(f"NVDA股价186.64美元，TTM市盈率23.6倍，毛利率75%。[{sid}]", data) == []
+    assert references(f"财务与市场计算结果 [{sid}]", data.sources) == {"resolved": [sid], "unknown": []}
 
 
 @pytest.mark.parametrize("tool,ticker,status", [("get_stock_price", "AAPL", "success"), ("search", "NVDA", "success"), ("get_company_info", "NVDA", "unavailable")])

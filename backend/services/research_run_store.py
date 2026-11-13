@@ -257,8 +257,8 @@ class PostgresResearchRunStore:
     ) -> dict[str, Any]:
         payload = dict(event)
         status = terminal_status(payload)
-        content = str(payload.get("response") or payload.get("message") or "").strip()
-        if not content:
+        content = str(payload.get("response") or payload.get("message") or "")
+        if not content.strip():
             content = "本次生成已停止，请重新生成。" if status == "cancelled" else "本轮未返回可用回答，请重新生成。"
         failed = status in {"failed", "cancelled", "interrupted", "persistence_failed"}
         message = {
@@ -291,6 +291,8 @@ class PostgresResearchRunStore:
             message["artifacts"] = payload["artifacts"]
         if isinstance(payload.get("actions"), list):
             message["actions"] = payload["actions"]
+        if isinstance(payload.get("review_revision"), dict):
+            message["review_revision"] = payload["review_revision"]
         self._insert_message(conn, owner, row, message, finalize=True)
         messages = _merge_messages(current["messages"], [], _canonical_messages(conn, owner, row["session_id"]))
         thread = _write_thread(conn, owner, row["session_id"], current, messages)

@@ -114,12 +114,24 @@ def test_postgres_share_write_is_tenant_scoped_and_shared_read_is_token_scoped()
     assert all("user_id=:user_id" in sql for sql, _ in write_engine.connection.calls)
     assert all(params["user_id"] == "alice" for _, params in write_engine.connection.calls)
 
-    read_engine = _Engine(_Result(scalar={"report_id": "rpt-1"}))
+    read_engine = _Engine(_Result(rows=[{"report": {"report_id": "rpt-1"}, "shared_at": None}]))
     shared = ReportIndexStore(engine=read_engine).get_shared_report(token=token)
     sql, params = read_engine.connection.calls[0]
     assert shared == {"report_id": "rpt-1"}
     assert "share_token=:token AND publishable=true" in sql
     assert params == {"token": token}
+
+
+def test_shared_report_publication_time_comes_from_shared_at_in_one_parameterized_read():
+    shared_at = datetime(2026, 11, 11, 12, 30, tzinfo=timezone.utc)
+    report = {"report_id": "rpt-1", "generated_at": "2026-11-10T10:00:00Z"}
+    engine = _Engine(_Result(rows=[{"report": report, "shared_at": shared_at}]))
+    result = ReportIndexStore(engine=engine).get_shared_report_with_metadata(token="fixture-token")
+    assert result == {"report": report, "published_at": shared_at.isoformat()}
+    assert len(engine.connection.calls) == 1
+    sql, params = engine.connection.calls[0]
+    assert "share_token=:token AND publishable=true" in sql
+    assert params == {"token": "fixture-token"}
 
 
 def test_postgres_delete_session_removes_only_authenticated_tenant_rows():

@@ -14,8 +14,6 @@ from fastapi.responses import JSONResponse, Response
 class SystemRouterDeps:
     metrics_enabled: bool
     metrics_payload: Callable[[], tuple[str, str]]
-    graph_runner_ready: Callable[[], bool]
-    get_graph_checkpointer_info: Callable[[], dict[str, Any]]
     get_startup_result: Callable[[], Any]
     get_authentication_health: Callable[[], dict[str, str]]
     get_database_health: Callable[[], dict[str, str]]
@@ -66,11 +64,6 @@ def _runtime_profile() -> str:
         return "production"
     if raw in {"test", "testing", "ci"} or _env_truthy("FINSIGHT_TEST_PROFILE"):
         return "test"
-    # A deterministic graph is useful without an LLM in local/stub runs. Do
-    # not apply this shortcut to production, even if someone sets stub flags.
-    synth_mode = str(os.getenv("LANGGRAPH_SYNTHESIZE_MODE") or "").strip().lower()
-    if synth_mode in {"stub", "dry_run", "off"} and not _env_truthy("LANGGRAPH_EXECUTE_LIVE_TOOLS"):
-        return "stub"
     return raw or "development"
 
 
@@ -150,6 +143,7 @@ def _readiness_components(deps: SystemRouterDeps) -> tuple[dict[str, dict[str, A
     allow_degraded = not production
     components: dict[str, dict[str, Any]] = {}
     failures: list[str] = []
+    components["research_runtime"] = {"status": "ok", "engine": "agent_runtime"}
 
     checks = (
         ("authentication", deps.get_authentication_health, "authentication_health_failed", production),
@@ -167,48 +161,6 @@ def _readiness_components(deps: SystemRouterDeps) -> tuple[dict[str, dict[str, A
         components[name] = normalized
         if not ready:
             failures.append(name)
-
-    try:
-        runner_ready = bool(deps.graph_runner_ready())
-        component = {"status": "ok" if runner_ready else "initializing"}
-    except Exception:
-        runner_ready = False
-        component = {"status": "error", "error_code": "graph_unavailable"}
-    components["langgraph_runner"] = component
-    if not runner_ready:
-        failures.append("langgraph_runner")
-
-    try:
-        raw_info = deps.get_graph_checkpointer_info() or {}
-        checkpointer = dict(raw_info)
-        backend = str(checkpointer.get("backend") or "unknown").strip().lower()
-        persistent = bool(checkpointer.get("persistent"))
-        fallback_used = bool(checkpointer.get("fallback_used"))
-        fallback_reason = str(checkpointer.get("fallback_reason") or "").strip()
-        if backend == "unknown":
-            component = {"status": "initializing"}
-        elif production and backend != "postgres":
-            component = {"status": "error", "error_code": "checkpointer_not_postgres", "backend": backend}
-        elif production and not persistent:
-            component = {"status": "error", "error_code": "checkpointer_not_persistent", "backend": backend}
-        elif production and (fallback_used or fallback_reason):
-            component = {"status": "error", "error_code": "checkpointer_memory_fallback", "backend": backend}
-        elif fallback_used or fallback_reason:
-            component = {
-                "status": "degraded",
-                "reason": fallback_reason or "checkpointer_fallback",
-                "backend": backend,
-            }
-        else:
-            component = {"status": "ok", "backend": backend, "persistent": persistent}
-    except Exception:
-        component = {"status": "error", "error_code": "checkpointer_health_failed"}
-    components["checkpointer"] = component
-    allowed_statuses = {"ok", "disabled"}
-    if allow_degraded:
-        allowed_statuses.add("degraded")
-    if component["status"] not in allowed_statuses:
-        failures.append("checkpointer")
 
     startup = deps.get_startup_result()
     llm_required = production
@@ -303,6 +255,7 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
     def health_check():
         status = "healthy"
         components: dict[str, dict[str, Any]] = {}
+        components["research_runtime"] = {"status": "ok", "engine": "agent_runtime"}
         from backend.services.prediction_runner import prediction_health
         components["prediction_collection"] = prediction_health()
 
@@ -316,27 +269,6 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
             components[name] = component
             if component["status"] not in {"ok", "disabled"}:
                 status = "degraded"
-
-        try:
-            runner_ready = bool(deps.graph_runner_ready())
-            components["langgraph_runner"] = {"status": "ok" if runner_ready else "initializing"}
-            if not runner_ready:
-                status = "degraded"
-        except Exception:
-            components["langgraph_runner"] = {"status": "error", "error_code": "graph_unavailable"}
-            status = "degraded"
-
-        try:
-            checkpointer = deps.get_graph_checkpointer_info()
-            backend = str(checkpointer.get("backend") or "unknown")
-            components["checkpointer"] = {
-                "status": "ok" if backend != "unknown" else "initializing",
-            }
-            if backend == "unknown":
-                status = "degraded"
-        except Exception:
-            components["checkpointer"] = {"status": "error", "error_code": "store_unavailable"}
-            status = "degraded"
 
         startup = deps.get_startup_result()
         if startup is None:

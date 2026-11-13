@@ -172,7 +172,7 @@ def growth_rate(latest: Any, previous: Any) -> float | None:
 
 
 def derive_cash_flow_facts(facts: list[dict[str, Any]], metrics: list[str]) -> list[dict[str, Any]]:
-    from backend.graph.research_capabilities import FINANCIAL_INPUTS
+    from backend.common.financial_inputs import FINANCIAL_INPUTS
     groups: dict[tuple, dict[str, dict]] = {}
     for fact in facts:
         key = tuple(fact.get(name) for name in ("subject", "period_start", "period_end", "frequency", "unit", "reporting_basis", "source_url"))

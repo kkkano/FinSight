@@ -4,7 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.services.prediction_outcomes import (
     OUTCOME_ALGORITHM_VERSION,
     PredictionOutcomeStore,

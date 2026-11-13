@@ -3,7 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.graph.execution.evidence_tools import append_tool_evidence
 from backend.tools import local_disclosure
 from backend.tools.disclosure_financial_facts import _table_context, validate_financial_facts
 
@@ -125,22 +124,6 @@ def test_ungrounded_amount_page_unit_currency_and_year_are_rejected(changes):
     assert _extract({**ROW, **changes}) == []
 
 
-def test_financial_evidence_is_separate_from_announcement_metadata():
-    facts = _extract(ROW)
-    quarterly = {**facts[0], "period_start": "2026-01-01", "period_end": "2026-03-31", "frequency": "quarterly", "value": 30}
-    pool = []
-    append_tool_evidence(pool, "get_local_market_filings", "s1", {
-        "ticker": "600519.SS", "market": "CN", "filings": [{
-            "filing_url": facts[0]["source_url"], "issuer_verified": True,
-            "issuer_ticker": "600519.SS", "financial_facts": [*facts, quarterly],
-        }],
-    })
-    assert len(pool) == 3
-    assert [item["frequency"] for item in pool[1:]] == ["annual", "quarterly"]
-    assert pool[1]["kind"] == "capital_allocation"
-    assert pool[1]["structured_data"]["metrics"]["operating_cash_flow"]["value"] == pytest.approx(123_456_700)
-
-
 def test_disclosure_pdf_reads_financial_pages_beyond_identity_frontmatter(monkeypatch):
     response = SimpleNamespace(status_code=200, iter_content=lambda **_: iter([b"%PDF fixture"]), close=lambda: None)
     monkeypatch.setattr(local_disclosure, "_http_get_no_retry", lambda *_, **__: response)
@@ -201,22 +184,3 @@ def test_financial_mode_keeps_already_read_late_pages_for_downstream_reuse(monke
     monkeypatch.setattr(disclosure_financial_facts, "extract_financial_facts", lambda *_, **__: [])
     result = local_disclosure.get_local_market_filings("600519.SS", include_financial_facts=True)
     assert result["filings"][0]["content"] == body
-
-
-@pytest.mark.parametrize("ticker", ["600519.SS", "0700.HK"])
-def test_numeric_local_financial_requirement_enables_original_table_extraction(ticker):
-    from backend.graph.nodes.policy_gate import policy_gate
-    from backend.graph.planning.rule_planner import rule_based_planner
-    from backend.graph.request_compiler import compile_semantic_contract
-
-    query = "最近完整年度经营现金流是多少？"
-    semantic = {"subjects": [{"id": "company", "type": "company", "label": ticker, "tickers": [ticker]}],
-                "requirements": [{"source_text": query, "description": query, "kind": "fact_attribute",
-                                  "metric": "operating_cash_flow", "subject": ticker, "subject_refs": ["company"],
-                                  "time_scope": {"kind": "fiscal_year", "count": 1}}]}
-    state = {"query": query, "output_mode": "chat", "understanding": {"original_query": query}}
-    state.update(compile_semantic_contract(state, semantic, {}))
-    state.update(policy_gate(state))
-    state.update(rule_based_planner(state))
-    local_step = next(step for step in state["plan_ir"]["steps"] if step["name"] == "get_local_market_filings")
-    assert local_step["inputs"]["include_financial_facts"] is True

@@ -71,8 +71,40 @@ async def test_public_filter_api_normalizes_ticker_and_rejects_invalid_filters(t
         assert data["enabled"] is False
         assert data["pagination"]["total"] == len(data["records"]) == 1
         assert data["records"][0]["ticker"] == "AAPL"
-        assert data["summary"]["opportunities"] == 8
+        # API按标的/任务类型投影分母；status只筛记录，不能把未结算机会移出分母。
+        assert data["summary"]["opportunities"] == 2
+        assert data["metadata"]["status_filter_scope"] == "records_only"
+        unfiltered = (await client.get("/api/benchmarks/us20-v1/track-record")).json()
+        same_cohort = (await client.get("/api/benchmarks/us20-v1/track-record?ticker=AAPL&prediction_type=direction")).json()
+        pending = (await client.get("/api/benchmarks/us20-v1/track-record?ticker=AAPL&prediction_type=direction&status=pending")).json()
+        assert unfiltered["summary"]["opportunities"] == 8
+        assert same_cohort["summary"] == pending["summary"] == data["summary"]
+        assert same_cohort["groups"] == pending["groups"] == data["groups"]
+        assert same_cohort["pagination"]["total"] == 2
+        assert pending["pagination"]["total"] == 1
         for private in ("private-fixture", "private.example", "api_key", "endpoint_url"):
             assert private not in response.text
-        for suffix in ("status=not-real", "prediction_type=price", "ticker=%27%3BDROP", "offset=-1"):
+        for suffix in ("status=not-real", "prediction_type=price", "ticker=%27%3BDROP", "offset=-1", "days=0", "days=3661"):
             assert (await client.get("/api/benchmarks/us20-v1/track-record?" + suffix)).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_public_filter_window_matches_summary_and_pagination(tmp_path, monkeypatch):
+    import backend.api.prediction_router as module
+    from backend.services import prediction_report_view
+
+    store = await sample_store(tmp_path)
+    window = window_for_date(date(2026, 10, 5))
+    monkeypatch.setattr(module, "get_prediction_store", lambda: store)
+    monkeypatch.setattr(module, "enabled", lambda: False)
+    monkeypatch.setattr(prediction_report_view, "utc_now", lambda: timestamp(window.collection_at))
+    app = FastAPI()
+    app.include_router(module.router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        first = (await client.get("/api/benchmarks/us20-v1/track-record?days=1&limit=1")).json()
+        second = (await client.get("/api/benchmarks/us20-v1/track-record?days=1&limit=1&offset=1")).json()
+    assert first["summary"] == second["summary"]
+    assert first["summary"]["opportunities"] == first["pagination"]["total"] == 4
+    assert first["metadata"]["window_days"] == 1
+    assert first["metadata"]["range"] == {"days": 1, "start": "2026-10-05", "end": "2026-10-05"}
+    assert first["records"][0]["id"] != second["records"][0]["id"]

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.services.database import create_core_engine, resolve_core_postgres_dsn
 
 

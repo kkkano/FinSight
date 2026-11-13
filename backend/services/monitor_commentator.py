@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.metrics import increment_monitor_comment
 from backend.services.monitor_comment_store import get_monitor_comment_store
 from backend.services.monitor_signals import MarketSnapshot, MonitorTrigger

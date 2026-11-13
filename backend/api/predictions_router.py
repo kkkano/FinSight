@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.agents.prediction_contract import PredictionAnchor, PredictionScenario
+from backend.common.prediction_contract import PredictionAnchor, PredictionScenario
 from backend.services.prediction_service import (
     PredictionRun,
     PredictionServiceUnavailable,

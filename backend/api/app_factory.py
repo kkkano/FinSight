@@ -23,7 +23,8 @@ from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.monitor_router import monitor_router
 from backend.api.model_router import router as model_router
 from backend.api.prediction_router import router as track_record_router
-from backend.services.model_selection import ModelSelectionMiddleware, require_model_access
+from backend.services.model_selection import require_model_access
+from backend.agent_runtime.model_options import ResearchModelSelectionMiddleware as ModelSelectionMiddleware
 from backend.api.predictions_router import PredictionsRouterDeps, create_predictions_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.security_gate import (
@@ -34,11 +35,8 @@ from backend.api.security_gate import (
 )
 from backend.api.session_context import (
     _clear_session_context,
-    _contract_info,
     _get_session_context,
-    _is_raw_trace_event,
     _list_session_contexts,
-    _redact_sensitive_payload,
     _resolve_thread_id,
     _schedule_report_index,
     _update_session_context,
@@ -46,8 +44,6 @@ from backend.api.session_context import (
 from backend.api.system_router import SystemRouterDeps, create_system_router
 from backend.api.user_router import create_user_router
 from backend.api.watchlist_router import WatchlistRouterDeps, create_watchlist_router
-from backend.contracts import SSE_EVENT_SCHEMA_VERSION
-from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.services.conversation_store import get_conversation_store
 from backend.dashboard.schemas import DashboardResponse
@@ -340,8 +336,6 @@ def create_app() -> FastAPI:
         SystemRouterDeps(
             metrics_enabled=METRICS_ENABLED,
             metrics_payload=metrics_payload,
-            graph_runner_ready=graph_runner_ready,
-            get_graph_checkpointer_info=get_graph_checkpointer_info,
             get_startup_result=get_startup_result,
             get_authentication_health=authentication_health,
             get_database_health=database_health,
@@ -384,14 +378,9 @@ def create_app() -> FastAPI:
     )
     execution_router = create_execution_router(
         ExecutionRouterDeps(
-            get_graph_runner=aget_graph_runner,
             resolve_thread_id=_resolve_thread_id,
             schedule_report_index=_schedule_report_index,
             update_session_context=_update_session_context,
-            redact_sensitive_payload=_redact_sensitive_payload,
-            is_raw_trace_event=_is_raw_trace_event,
-            contract_info=_contract_info,
-            sse_event_schema_version=SSE_EVENT_SCHEMA_VERSION,
         )
     )
     predictions_router = create_predictions_router(

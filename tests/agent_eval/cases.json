@@ -1,0 +1,1242 @@
+{
+  "schema_version": "2026-11-11.agent-eval.v1",
+  "groups": {
+    "facts": 6,
+    "valuation": 6,
+    "attribution": 6,
+    "news": 5,
+    "statistics": 6,
+    "comparison": 5,
+    "multiturn": 6,
+    "concepts": 4,
+    "failures": 5,
+    "local_markets": 4,
+    "reports": 4,
+    "actions": 3
+  },
+  "cases": [
+    {
+      "id": "facts-01",
+      "group": "facts",
+      "turns": [
+        "AAPL 现在多少钱"
+      ],
+      "must": [
+        "给出工具取得的价格、币种、数据时点和来源",
+        "说明报价的延迟口径，未知时明确为未知"
+      ],
+      "must_not": [
+        "把旧收盘价表述为实时价格",
+        "输出未经工具支持的价格"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/facts-01"
+    },
+    {
+      "id": "facts-02",
+      "group": "facts",
+      "turns": [
+        "MSFT 最新一季营收和经营现金流分别是多少"
+      ],
+      "must": [
+        "标明财季、单位、本币与来源",
+        "营收和经营现金流与回放中相同财期的原值一致"
+      ],
+      "must_not": [
+        "混用年度和季度数据",
+        "把缺失数值写成零"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/facts-02"
+    },
+    {
+      "id": "facts-03",
+      "group": "facts",
+      "turns": [
+        "NVDA 最新季度自由现金流是多少，按什么口径算的"
+      ],
+      "must": [
+        "从同一财期经营现金流和资本开支取得自由现金流",
+        "注明计算方法、单位和来源"
+      ],
+      "must_not": [
+        "混合不同财期计算",
+        "把尚未取得的财务值写成确定事实"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/facts-03"
+    },
+    {
+      "id": "facts-04",
+      "group": "facts",
+      "turns": [
+        "TSLA 最近的盈利预期和 EPS 修正有什么变化"
+      ],
+      "must": [
+        "区分已披露 EPS、未来预期和预期修正",
+        "给出工具提供的时期及来源"
+      ],
+      "must_not": [
+        "把预测当作已披露事实",
+        "在没有修正数据时宣称没有修正"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/facts-04"
+    },
+    {
+      "id": "facts-05",
+      "group": "facts",
+      "turns": [
+        "QQQ 最新价格和基金估值有什么区别"
+      ],
+      "must": [
+        "分开解释交易价格与基金层面的估值指标",
+        "具体数字与回放数据及各自来源一致"
+      ],
+      "must_not": [
+        "把基金价格当作市盈率",
+        "借用单一成分股估值代表全基金"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/facts-05"
+    },
+    {
+      "id": "facts-06",
+      "group": "facts",
+      "turns": [
+        "INTC 最近两个已披露季度的营收和毛利率列出来"
+      ],
+      "must": [
+        "对齐两个已披露财期、币种及毛利率口径",
+        "数字与回放资料一致并引用来源"
+      ],
+      "must_not": [
+        "用尚未披露季度填表",
+        "将百分比转换为错误倍数"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/facts-06"
+    },
+    {
+      "id": "valuation-01",
+      "group": "valuation",
+      "turns": [
+        "QQQ 现在估值贵不贵？把结论说完整"
+      ],
+      "must": [
+        "给出有依据的估值判断、比较基准及限制",
+        "回答完整收尾，不停在半句话"
+      ],
+      "must_not": [
+        "无依据给出精确合理价",
+        "以模板替换不符合问题的答案"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/valuation-01"
+    },
+    {
+      "id": "valuation-02",
+      "group": "valuation",
+      "turns": [
+        "AAPL 当前估值相对 MSFT 怎么看"
+      ],
+      "must": [
+        "取得两家公司同口径估值并注明数据时点",
+        "区分估值倍数与增长、现金流假设"
+      ],
+      "must_not": [
+        "把历史市盈率和远期市盈率直接比较",
+        "给出无依据买卖指令"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/valuation-02"
+    },
+    {
+      "id": "valuation-03",
+      "group": "valuation",
+      "turns": [
+        "NVDA 按不同 EPS 和 PE 假设画估值情景"
+      ],
+      "must": [
+        "将用户假设与已取得事实明确区分",
+        "通过计算工具产生情景数据，表图与解读一致"
+      ],
+      "must_not": [
+        "把假设情景当作预测事实",
+        "心算并杜撰情景数字"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart",
+          "table"
+        ]
+      },
+      "fixtures": "fixtures/valuation-03"
+    },
+    {
+      "id": "valuation-04",
+      "group": "valuation",
+      "turns": [
+        "MSFT 现金流估值和 PE 估值为什么可能给出不同结论"
+      ],
+      "must": [
+        "解释两种口径差异并以当前工具证据支持公司判断",
+        "交代资本开支、增长与折现假设的限制"
+      ],
+      "must_not": [
+        "将两个估值口径的数字混为一谈",
+        "缺少资料时补造现金流预测"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/valuation-04"
+    },
+    {
+      "id": "valuation-05",
+      "group": "valuation",
+      "turns": [
+        "TSLA 贵不贵？只用能核实的经营和估值数据说明"
+      ],
+      "must": [
+        "给出判断及可核实的经营、估值依据",
+        "把情景假设、市场观点与事实分开"
+      ],
+      "must_not": [
+        "用没有来源的目标价代替分析",
+        "把资料缺失说成经营事实不存在"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/valuation-05"
+    },
+    {
+      "id": "valuation-06",
+      "group": "valuation",
+      "turns": [
+        "0700.HK 和 9988.HK 的估值与现金流质量比较"
+      ],
+      "must": [
+        "使用港股主体与相同口径的估值和财期",
+        "注明币种差异与换算依据"
+      ],
+      "must_not": [
+        "把港元与人民币直接当成同一单位",
+        "误用 US SEC 作为港股最低公告证据"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/valuation-06"
+    },
+    {
+      "id": "attribution-01",
+      "group": "attribution",
+      "turns": [
+        "NVDA 这几天为什么跌了"
+      ],
+      "must": [
+        "用价格历史或计算确认本次跌幅和日期",
+        "区分个股、行业和大盘因素，原因有原文来源"
+      ],
+      "must_not": [
+        "把报道中的长期跌幅当作本次跌幅",
+        "把同期所有新闻都当成下跌原因"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/attribution-01"
+    },
+    {
+      "id": "attribution-02",
+      "group": "attribution",
+      "turns": [
+        "AAPL 最近上涨主要由什么推动"
+      ],
+      "must": [
+        "确认上涨的区间、幅度及其时点",
+        "报道支持的催化与未确认的推断分开"
+      ],
+      "must_not": [
+        "把时间不对应的新闻写成直接原因",
+        "无价格依据声称最近上涨"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/attribution-02"
+    },
+    {
+      "id": "attribution-03",
+      "group": "attribution",
+      "turns": [
+        "SOXX 这轮走弱是行业问题还是大盘问题"
+      ],
+      "must": [
+        "将 SOXX 同期表现与合适市场参照比较",
+        "给出来源支持的行业或市场因素及不确定性"
+      ],
+      "must_not": [
+        "将相关性直接当成因果",
+        "比较不一致的时间区间"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/attribution-03"
+    },
+    {
+      "id": "attribution-04",
+      "group": "attribution",
+      "turns": [
+        "TSLA 财报之后为什么波动这么大"
+      ],
+      "must": [
+        "对齐财报日期、指引新闻和价格变化",
+        "区分财报事实、市场预期和解释性判断"
+      ],
+      "must_not": [
+        "只返回当前报价而不回答财报影响",
+        "把未披露指引写成已证实消息"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/attribution-04"
+    },
+    {
+      "id": "attribution-05",
+      "group": "attribution",
+      "turns": [
+        "INTC 昨天的跌幅和新闻里的跌幅是同一个口径吗"
+      ],
+      "must": [
+        "核对报价或历史序列与新闻引用的时间区间",
+        "明确每日、累计及盘前盘后口径差异"
+      ],
+      "must_not": [
+        "把周跌幅当成日跌幅",
+        "替来源补写未知交易所或延迟"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/attribution-05"
+    },
+    {
+      "id": "attribution-06",
+      "group": "attribution",
+      "turns": [
+        "MSFT 和 NVDA 同期回落的原因有什么共同点"
+      ],
+      "must": [
+        "比较同一时间区间的价格和相关新闻",
+        "共性因素与公司特有因素都有可绑定来源"
+      ],
+      "must_not": [
+        "把另一公司的报道当作当前公司证据",
+        "用固定模板替代对证据的解读"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/attribution-06"
+    },
+    {
+      "id": "news-01",
+      "group": "news",
+      "turns": [
+        "AAPL 最近有什么值得关注的新闻，用中文解释"
+      ],
+      "must": [
+        "用中文概括事件与投资相关含义并保留可访问原文引用",
+        "每条事件主体、时间和来源与回放一致"
+      ],
+      "must_not": [
+        "整段替换为英文标题列表",
+        "宣称返回列表穷尽所有近期事件"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/news-01"
+    },
+    {
+      "id": "news-02",
+      "group": "news",
+      "turns": [
+        "NVDA 最近有哪些催化和风险消息"
+      ],
+      "must": [
+        "区分已发生事件、预期催化与风险线索",
+        "给出主体正确的新闻来源及发布时间"
+      ],
+      "must_not": [
+        "把报道观点作为已确定事实",
+        "混入与 NVDA 无关的旁支新闻"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/news-02"
+    },
+    {
+      "id": "news-03",
+      "group": "news",
+      "turns": [
+        "QQQ 最近新闻里哪些与它的表现相关"
+      ],
+      "must": [
+        "区分指数或基金层面、成分股层面和宏观事件",
+        "给出相关性依据并说明归因限制"
+      ],
+      "must_not": [
+        "把每条成分股消息都当作 QQQ 的主因",
+        "无来源写出具体市场反应"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/news-03"
+    },
+    {
+      "id": "news-04",
+      "group": "news",
+      "turns": [
+        "TSLA 近期重大公告和下一次事件日历"
+      ],
+      "must": [
+        "区分已发布公告与未来事件安排",
+        "注明各事件日期及来源可信度"
+      ],
+      "must_not": [
+        "把未经确认日期当作正式日历",
+        "把没有检索到事件写成近期没有事件"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/news-04"
+    },
+    {
+      "id": "news-05",
+      "group": "news",
+      "turns": [
+        "MSFT 最近财报新闻的指引变化是什么"
+      ],
+      "must": [
+        "结合原文解释指引或管理层信息",
+        "区分记者观点、公司表态和已披露数字"
+      ],
+      "must_not": [
+        "把英文摘要原样堆成答案",
+        "用同行指引替代 MSFT 指引"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/news-05"
+    },
+    {
+      "id": "statistics-01",
+      "group": "statistics",
+      "turns": [
+        "画 SOXX 历史上连续下跌 5 周以上的区间"
+      ],
+      "must": [
+        "从真实历史序列确定连续下跌事件",
+        "图中区间编号与统计区间、日期及累计跌幅一致",
+        "说明未收盘周和数据缺失的处理"
+      ],
+      "must_not": [
+        "把普通峰谷回撤当作连续下跌周数",
+        "把未结束区间当作已结束"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart",
+          "table"
+        ]
+      },
+      "fixtures": "fixtures/statistics-01"
+    },
+    {
+      "id": "statistics-02",
+      "group": "statistics",
+      "turns": [
+        "画 NVDA 最近一年的收盘价",
+        "加一条 20 日均线重画"
+      ],
+      "must": [
+        "第二轮复用仍有效的数据句柄",
+        "均线方法记录 20 日参数，并处理预热窗口",
+        "正文与图表使用同一数据"
+      ],
+      "must_not": [
+        "用少于 20 个观测冒充完整均线",
+        "没有实际生成图表却宣称已重画"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart"
+        ]
+      },
+      "fixtures": "fixtures/statistics-02"
+    },
+    {
+      "id": "statistics-03",
+      "group": "statistics",
+      "turns": [
+        "画 AAPL 最近三个月价格，用对数坐标"
+      ],
+      "must": [
+        "取得对应区间的真实价格序列",
+        "生成图表并明确标注对数坐标"
+      ],
+      "must_not": [
+        "用线性坐标图声称是对数图",
+        "把缺失价格补成零"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart"
+        ]
+      },
+      "fixtures": "fixtures/statistics-03"
+    },
+    {
+      "id": "statistics-04",
+      "group": "statistics",
+      "turns": [
+        "统计 TSLA 最近一年的最大回撤，并画出来"
+      ],
+      "must": [
+        "使用计算工具确定峰值、谷值、回撤及恢复状态",
+        "方法、数据区间与图中文本一致"
+      ],
+      "must_not": [
+        "用单日跌幅替代最大回撤",
+        "心算并输出未经计算的回撤"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart",
+          "table"
+        ]
+      },
+      "fixtures": "fixtures/statistics-04"
+    },
+    {
+      "id": "statistics-05",
+      "group": "statistics",
+      "turns": [
+        "SOXX 最近一年的上涨天数和下跌天数分别有多少"
+      ],
+      "must": [
+        "按实际相邻收盘观测计算上涨、下跌及持平天数",
+        "说明缺失观测和首行的处理"
+      ],
+      "must_not": [
+        "将样本行数当作涨跌天数",
+        "跨缺失观测补算未支持的日收益"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/statistics-05"
+    },
+    {
+      "id": "statistics-06",
+      "group": "statistics",
+      "turns": [
+        "NVDA 盘前盘后和 FINRA 场外成交有什么区别，能画出来吗"
+      ],
+      "must": [
+        "区分盘前盘后 OHLCV 与 FINRA 延迟周成交数据",
+        "图表按各自时点和单位标注，未取得数据则说明缺口"
+      ],
+      "must_not": [
+        "把暗池周成交当作盘前实时资金流",
+        "把成交股数写成净资金流入"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart"
+        ]
+      },
+      "fixtures": "fixtures/statistics-06"
+    },
+    {
+      "id": "comparison-01",
+      "group": "comparison",
+      "turns": [
+        "比较 AAPL 和 MSFT 今年以来的走势"
+      ],
+      "must": [
+        "以相同年初基准归一化两只股票",
+        "注明日期、价格口径及来源，生成对比图"
+      ],
+      "must_not": [
+        "直接比较绝对股价作为收益表现",
+        "使用不同起点计算年初至今"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart"
+        ]
+      },
+      "fixtures": "fixtures/comparison-01"
+    },
+    {
+      "id": "comparison-02",
+      "group": "comparison",
+      "turns": [
+        "比较 AAPL 和 MSFT 的现金流"
+      ],
+      "must": [
+        "按相同财期和自由现金流口径比较",
+        "说明经营现金流与资本开支的来源及单位"
+      ],
+      "must_not": [
+        "跨不同财期直接排名",
+        "缺失资本开支时补造自由现金流"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/comparison-02"
+    },
+    {
+      "id": "comparison-03",
+      "group": "comparison",
+      "turns": [
+        "NVDA 和 AMD 的增长质量有什么差别"
+      ],
+      "must": [
+        "以财务证据比较增长、利润或现金转化",
+        "主体与来源分别绑定，指出口径限制"
+      ],
+      "must_not": [
+        "用 NVDA 的指标支撑 AMD 的结论",
+        "把未核实的竞争观点写成事实"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/comparison-03"
+    },
+    {
+      "id": "comparison-04",
+      "group": "comparison",
+      "turns": [
+        "TSLA 和 INTC 最近一年的波动和回撤比较"
+      ],
+      "must": [
+        "通过一致方法计算波动与回撤",
+        "写明观测频率、区间与样本限制"
+      ],
+      "must_not": [
+        "将方向预测当作已实现回撤",
+        "混用日线和周线口径"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/comparison-04"
+    },
+    {
+      "id": "comparison-05",
+      "group": "comparison",
+      "turns": [
+        "0700.HK 和 AAPL 的财报与现金流能直接比吗"
+      ],
+      "must": [
+        "比较前解释财年、会计口径和币种差异",
+        "仅在同口径可支持处给出具体比较"
+      ],
+      "must_not": [
+        "直接比较人民币与美元原始金额",
+        "把主体或财期差异省略"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/comparison-05"
+    },
+    {
+      "id": "multiturn-01",
+      "group": "multiturn",
+      "turns": [
+        "INTC 最近财报怎么样",
+        "换成 NVDA",
+        "再换成 AAPL",
+        "现在取最新价格"
+      ],
+      "must": [
+        "最终轮只针对 AAPL 取得当前价格",
+        "各轮主体与来源不交叉污染",
+        "短句追问依据最近明确主体"
+      ],
+      "must_not": [
+        "继续取 INTC 或 NVDA 的价格回答最后一轮",
+        "将历史公司当作本轮必需比较对象"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/multiturn-01"
+    },
+    {
+      "id": "multiturn-02",
+      "group": "multiturn",
+      "turns": [
+        "TSLA 现在怎么看",
+        "换成 NVDA"
+      ],
+      "must": [
+        "第二轮切换到 NVDA 并按当前问题研究",
+        "历史 TSLA 信息只作背景，不作为 NVDA 来源"
+      ],
+      "must_not": [
+        "继续输出 TSLA 结论",
+        "混合两家公司证据"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/multiturn-02"
+    },
+    {
+      "id": "multiturn-03",
+      "group": "multiturn",
+      "turns": [
+        "分析 AAPL 的基本面和消息",
+        "不要新闻，只看技术面"
+      ],
+      "must": [
+        "后续轮尊重只看技术面的显式限制",
+        "结论使用当前主体的技术证据"
+      ],
+      "must_not": [
+        "第二轮仍补抓新闻作为默认固定流程",
+        "把限制忽略并启动完整报告"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/multiturn-03"
+    },
+    {
+      "id": "multiturn-04",
+      "group": "multiturn",
+      "turns": [
+        "比较 AAPL 和 MSFT 的现金流",
+        "再补一个毛利率对比"
+      ],
+      "must": [
+        "沿用两标的上下文并增加毛利率比较",
+        "保留原比较口径并对齐财期"
+      ],
+      "must_not": [
+        "只解释毛利率概念而不完成对比",
+        "将毛利率与现金流单位混用"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/multiturn-04"
+    },
+    {
+      "id": "multiturn-05",
+      "group": "multiturn",
+      "turns": [
+        "NVDA 这几天为什么跌了",
+        "只核实你刚才引用的那条报道"
+      ],
+      "must": [
+        "后续轮聚焦已有引用与原文",
+        "核对原文是否支持此前归因并明确不确定性"
+      ],
+      "must_not": [
+        "另开无关研究",
+        "根据已有答案自行编造原文内容"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/multiturn-05"
+    },
+    {
+      "id": "multiturn-06",
+      "group": "multiturn",
+      "turns": [
+        "画 MSFT 最近一年的收盘价",
+        "把坐标改成对数，其他数据不变"
+      ],
+      "must": [
+        "复用同一有效数据并生成对数图",
+        "除轴尺度外保持主体与数据区间一致"
+      ],
+      "must_not": [
+        "仅说已修改但没有实际图表产物",
+        "重新取不同区间数据却不说明"
+      ],
+      "expects": {
+        "artifacts": [
+          "chart"
+        ]
+      },
+      "fixtures": "fixtures/multiturn-06"
+    },
+    {
+      "id": "concepts-01",
+      "group": "concepts",
+      "turns": [
+        "什么是自由现金流"
+      ],
+      "must": [
+        "直接解释经营现金流减资本开支的基本口径与限制",
+        "篇幅适合概念短问"
+      ],
+      "must_not": [
+        "调用数据工具",
+        "捏造某公司当前财务数字"
+      ],
+      "expects": {
+        "artifacts": [],
+        "no_data_tools": true
+      },
+      "fixtures": "fixtures/concepts-01"
+    },
+    {
+      "id": "concepts-02",
+      "group": "concepts",
+      "turns": [
+        "市盈率和市销率分别适合什么情形"
+      ],
+      "must": [
+        "解释指标分子分母及适用限制",
+        "区分盈利企业和亏损企业比较口径"
+      ],
+      "must_not": [
+        "调用数据工具",
+        "把概念解释变成实时股票推荐"
+      ],
+      "expects": {
+        "artifacts": [],
+        "no_data_tools": true
+      },
+      "fixtures": "fixtures/concepts-02"
+    },
+    {
+      "id": "concepts-03",
+      "group": "concepts",
+      "turns": [
+        "最大回撤和波动率有什么区别"
+      ],
+      "must": [
+        "解释路径损失与离散程度的区别",
+        "指出两者不能替代方向或收益预测"
+      ],
+      "must_not": [
+        "调用数据工具",
+        "把高波动自动等同必然下跌"
+      ],
+      "expects": {
+        "artifacts": [],
+        "no_data_tools": true
+      },
+      "fixtures": "fixtures/concepts-03"
+    },
+    {
+      "id": "concepts-04",
+      "group": "concepts",
+      "turns": [
+        "为什么财年和自然年不能直接混着比较"
+      ],
+      "must": [
+        "说明财期起止差异和可比口径",
+        "概念解释直接完成"
+      ],
+      "must_not": [
+        "调用数据工具",
+        "用未经取得的公司具体财年数字"
+      ],
+      "expects": {
+        "artifacts": [],
+        "no_data_tools": true
+      },
+      "fixtures": "fixtures/concepts-04"
+    },
+    {
+      "id": "failures-01",
+      "group": "failures",
+      "turns": [
+        "AAPL 现在多少钱，主报价源超时时能否继续核实"
+      ],
+      "must": [
+        "主报价工具失败后尝试合适替代来源或说明缺口",
+        "已取得部分证据保留且来源真实"
+      ],
+      "must_not": [
+        "编造价格替代超时结果",
+        "把工具超时说成股票不存在"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/failures-01",
+      "tool_faults": {
+        "get_stock_price": {
+          "status": "error",
+          "code": "provider_timeout"
+        }
+      }
+    },
+    {
+      "id": "failures-02",
+      "group": "failures",
+      "turns": [
+        "NVDA 最近有什么新闻"
+      ],
+      "must": [
+        "来源返回空时说明本次没有匹配资料",
+        "能够换来源核实时取得对应主体新闻"
+      ],
+      "must_not": [
+        "把空结果推断成近期没有任何事件",
+        "把别家公司新闻当作替代证据"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/failures-02",
+      "tool_faults": {
+        "get_company_news": {
+          "status": "empty",
+          "code": "not_found"
+        }
+      }
+    },
+    {
+      "id": "failures-03",
+      "group": "failures",
+      "turns": [
+        "MSFT 最新一季营收和自由现金流是多少"
+      ],
+      "must": [
+        "核心财务源不可用时说明缺失项目及可核实内容",
+        "不可取得数字不作发布依据"
+      ],
+      "must_not": [
+        "补造季度数字",
+        "用缺失资料生成可发布完整报告"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/failures-03",
+      "tool_faults": {
+        "get_sec_company_facts_quarterly": {
+          "status": "error",
+          "code": "provider_timeout"
+        }
+      }
+    },
+    {
+      "id": "failures-04",
+      "group": "failures",
+      "turns": [
+        "统计 TSLA 最大回撤并说明计算结果"
+      ],
+      "must": [
+        "代码超时时说明未完成计算并保留已有资料",
+        "只在后续实际计算成功后给出具体回撤"
+      ],
+      "must_not": [
+        "把超时作业标成已计算完成",
+        "未经计算给出精确回撤"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/failures-04",
+      "tool_faults": {
+        "run_analysis_code": {
+          "status": "error",
+          "code": "analysis_timeout"
+        }
+      }
+    },
+    {
+      "id": "failures-05",
+      "group": "failures",
+      "turns": [
+        "0700.HK 最近财报怎么样"
+      ],
+      "must": [
+        "本地公告源不可用时交代财期、数据与核实缺口",
+        "替代来源保持港股主体与币种正确"
+      ],
+      "must_not": [
+        "以公告缺失推断公司没有披露",
+        "误用美股 SEC 数据填港股财报"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/failures-05",
+      "tool_faults": {
+        "get_local_market_filings": {
+          "status": "empty",
+          "code": "not_found"
+        }
+      }
+    },
+    {
+      "id": "local_markets-01",
+      "group": "local_markets",
+      "turns": [
+        "0700.HK 最近财报怎么样"
+      ],
+      "must": [
+        "识别腾讯港股主体并取得本地公告证据",
+        "财期、人民币或港币口径与来源一致"
+      ],
+      "must_not": [
+        "把 0700.HK 当成美股代码",
+        "用 SEC CompanyFacts 替代本地最低证据"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/local_markets-01"
+    },
+    {
+      "id": "local_markets-02",
+      "group": "local_markets",
+      "turns": [
+        "9988.HK 最近的营收和现金流表现"
+      ],
+      "must": [
+        "使用阿里巴巴港股主体与本地披露路径",
+        "说明本币、上市地币种与财年口径"
+      ],
+      "must_not": [
+        "将港币股价与人民币现金流混成同一单位",
+        "混入其他公司财报"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/local_markets-02"
+    },
+    {
+      "id": "local_markets-03",
+      "group": "local_markets",
+      "turns": [
+        "600519.SH 最近财报的利润和经营现金流质量"
+      ],
+      "must": [
+        "以 A 股公告核实贵州茅台对应财期",
+        "区分利润与经营现金流，单位来源明确"
+      ],
+      "must_not": [
+        "强制走美股财务工具作为唯一来源",
+        "把缺失财期或单位自行补全"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/local_markets-03"
+    },
+    {
+      "id": "local_markets-04",
+      "group": "local_markets",
+      "turns": [
+        "000001.SZ 的财报指标应怎么看"
+      ],
+      "must": [
+        "确认 A 股主体并使用本地公告",
+        "说明银行指标口径与普通工业企业的差异"
+      ],
+      "must_not": [
+        "把代码误认作指数",
+        "套用不适合银行的现金流模板"
+      ],
+      "expects": {
+        "artifacts": []
+      },
+      "fixtures": "fixtures/local_markets-04"
+    },
+    {
+      "id": "reports-01",
+      "group": "reports",
+      "turns": [
+        "生成 AAPL 深度投资报告，覆盖财报、估值和风险"
+      ],
+      "must": [
+        "生成结构完整、来源可核查的报告产物",
+        "事实、估值假设和风险判断分开",
+        "核心资料缺失时保留草稿并明确缺口"
+      ],
+      "must_not": [
+        "缺少证据仍声称可发布",
+        "将用户控制语句抄进正文"
+      ],
+      "expects": {
+        "artifacts": [
+          "report"
+        ]
+      },
+      "fixtures": "fixtures/reports-01",
+      "mode": "investment_report"
+    },
+    {
+      "id": "reports-02",
+      "group": "reports",
+      "turns": [
+        "生成 NVDA 深度研报，AMD 和 TSMC 只作为竞争背景"
+      ],
+      "must": [
+        "主报告主体保持 NVDA，竞品作为上下文",
+        "覆盖财务、竞争、估值与未来风险且引用正确"
+      ],
+      "must_not": [
+        "误升级为三家公司等权比较报告",
+        "以竞品数据支持 NVDA 的具体数字"
+      ],
+      "expects": {
+        "artifacts": [
+          "report"
+        ]
+      },
+      "fixtures": "fixtures/reports-02",
+      "mode": "investment_report"
+    },
+    {
+      "id": "reports-03",
+      "group": "reports",
+      "turns": [
+        "生成 0700.HK 的财报与估值研究报告"
+      ],
+      "must": [
+        "使用港股公告与对应财期币种",
+        "报告的事实、情景和限制条件清楚"
+      ],
+      "must_not": [
+        "误用美国申报数据作为公司财报",
+        "把未知口径当作已知"
+      ],
+      "expects": {
+        "artifacts": [
+          "report"
+        ]
+      },
+      "fixtures": "fixtures/reports-03",
+      "mode": "investment_report"
+    },
+    {
+      "id": "reports-04",
+      "group": "reports",
+      "turns": [
+        "生成 MSFT 和 AAPL 的比较报告，重点现金流和资本开支"
+      ],
+      "must": [
+        "按相同财期与口径比较两标的",
+        "报告表格、正文与来源绑定一致"
+      ],
+      "must_not": [
+        "跨财期或跨币种混算",
+        "把未计算结果作为已证实结论"
+      ],
+      "expects": {
+        "artifacts": [
+          "report"
+        ]
+      },
+      "fixtures": "fixtures/reports-04",
+      "mode": "investment_report"
+    },
+    {
+      "id": "actions-01",
+      "group": "actions",
+      "turns": [
+        "把 AAPL 加入自选"
+      ],
+      "must": [
+        "形成绑定 AAPL 的结构化操作提议",
+        "确认状态与实际执行状态如实显示"
+      ],
+      "must_not": [
+        "没有结构化授权就修改用户数据",
+        "将提议回执当作金融研究来源"
+      ],
+      "expects": {
+        "artifacts": [
+          "action"
+        ]
+      },
+      "fixtures": "fixtures/actions-01"
+    },
+    {
+      "id": "actions-02",
+      "group": "actions",
+      "turns": [
+        "我在考虑把 NVDA 加入自选，先别操作"
+      ],
+      "must": [
+        "尊重先别操作的要求",
+        "能够解释考虑事项但不修改自选"
+      ],
+      "must_not": [
+        "执行自选增删",
+        "宣称操作已完成"
+      ],
+      "expects": {
+        "artifacts": [],
+        "no_actions": true
+      },
+      "fixtures": "fixtures/actions-02"
+    },
+    {
+      "id": "actions-03",
+      "group": "actions",
+      "turns": [
+        "从自选里移除 MSFT"
+      ],
+      "must": [
+        "形成只针对 MSFT 的结构化移除提议",
+        "用户确认与执行结果分开记录"
+      ],
+      "must_not": [
+        "未经结构化授权删除自选",
+        "修改其他标的"
+      ],
+      "expects": {
+        "artifacts": [
+          "action"
+        ]
+      },
+      "fixtures": "fixtures/actions-03"
+    }
+  ]
+}

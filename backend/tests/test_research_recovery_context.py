@@ -1,21 +1,15 @@
-"""真实验收暴露的预览、末轮补查和来源投影回归。"""
+"""保留真实资料读回、时间口径、确定性计算和脱敏边界。"""
 import json
 import httpx
-
 import pytest
 
-from backend.agent_runtime.context import compact_result, prune_messages, tokens
-from backend.agent_runtime.completeness import ResearchCompleteness
-from backend.agent_runtime.analysis import analyze_dataset
+from backend.agent_runtime.analysis import analyze_dataset, render_chart
+from backend.agent_runtime.context import tokens
 from backend.agent_runtime.data import RunData
-from backend.agent_runtime.loop import AgentRuntime
-from backend.agent_runtime.model import ModelTransport
-from backend.agent_runtime.tools import history_with_returns
 from backend.agent_runtime.diagnostics import clean_text
-from backend.agent_runtime.service import answer_feedback, verified_text
-from backend.services.run_context import RunContext
-from backend.tests.test_agent_runtime import FakeModel, call, finish, cfg
-from backend.tests.test_runtime_completeness import financials, run, tool
+from backend.agent_runtime.model import ModelTransport
+from backend.agent_runtime.registry import history_with_returns
+from backend.tests.test_agent_runtime import cfg, execute, runtime
 
 
 @pytest.fixture(autouse=True)
@@ -24,85 +18,6 @@ def isolated(monkeypatch, tmp_path):
     monkeypatch.setenv("FINSIGHT_ACTION_STORE", str(tmp_path / "actions.sqlite"))
     monkeypatch.setenv("FINSIGHT_RUNTIME_QUOTA_DB", str(tmp_path / "quota.sqlite"))
     monkeypatch.setenv("FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS", "0")
-
-
-@pytest.mark.asyncio
-async def test_final_research_turn_still_fetches_missing_required_evidence(monkeypatch):
-    monkeypatch.setenv("FINSIGHT_AGENT_MAX_TURNS", "1")
-    called = []
-    tools = {
-        "get_company_info": tool("get_company_info", lambda _: (called.append("valuation"), "Forward P/E: 20.0")[1]),
-        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", lambda a: (called.append("financials"), financials(a))[1]),
-    }
-    events, model = await run(monkeypatch, "INTC当前估值健康吗", tools)
-    assert set(called) == {"valuation", "financials"}
-    assert events[-1]["answer_status"] == "answered"
-    assert len(model.inputs) == 2
-
-
-@pytest.mark.asyncio
-async def test_verification_can_compute_missing_return_from_existing_evidence(monkeypatch):
-    payload = {"source": "fixture", "rows": [{"date": "2026-11-05", "close": 10}, {"date": "2026-11-06", "close": 12}]}
-    data = RunData("u", "s", "r", "AAPL")
-    ref = data.record("get_stock_historical_data", {"ticker": "AAPL"}, payload)
-    events, model = await run(monkeypatch, "AAPL区间表现", {
-        "get_stock_historical_data": tool("get_stock_historical_data", lambda _: payload),
-    }, turns=[call("get_stock_historical_data", {"ticker": "AAPL"}), finish("AAPL区间上涨25%。"),
-              call("analyze_dataset", {"dataset_ref": ref, "operation": "series_statistics"}), finish("AAPL区间上涨20%。")])
-    assert len(model.inputs) == 4
-    assert events[-1]["answer_status"] == "answered"
-    assert events[-1]["response"] == "AAPL区间上涨20%。"
-    assert events[-1]["metrics"]["tool_calls"] == 2
-
-
-@pytest.mark.asyncio
-async def test_inspect_financials_returns_latest_periods_in_descending_data():
-    context = RunContext.create(owner="recovery", entry="chat", budget_seconds=30)
-    async def emit(*_args):
-        pass
-    rt = AgentRuntime(context=context, session_id="s", query="INTC财报", model=FakeModel([]), emit=emit, tools={})
-    try:
-        ref = rt.data.record("get_sec_company_facts_quarterly", {"ticker": "INTC"}, {
-            "source": "sec_companyfacts", "period_ends": ["2026-09-26", "2026-06-27", "2026-03-28"],
-            "revenue": [16513000000, 16128000000, 10000000000], "net_income": [3320000000, -11033000000, 1],
-        })
-        result = rt.available_tools("root", "research_lead")["inspect_dataset"].invoke({"data_ref": ref, "limit": 2})
-        assert [row["period_end"] for row in result["rows"]] == ["2026-09-26", "2026-06-27"]
-        assert result["row_count"] == 3 and result["has_more"] is True
-    finally:
-        await rt.close()
-
-
-def test_complete_episode_list_precedes_sampled_price_rows():
-    episodes = [{"start": f"2026-01-{n:02}", "end": f"2026-02-{n:02}", "periods": 5, "return_pct": -.1} for n in range(1, 10)]
-    result = {"rows": [{"date": f"2026-01-{i % 28 + 1:02}", "close": i + 1} for i in range(1300)],
-              "episodes": episodes, "sample_count": 9, "method": {"kind": "consecutive_decline_streaks"}}
-    preview = json.loads(compact_result({"result": result, "data_refs": ["dataset_input"]}, "dataset_input"))["preview"]
-    assert preview["episodes"] == episodes
-    assert preview["sample_count"] == 9 and preview["row_count"] == 1300
-    assert preview["rows_sampled"] and len(preview["rows"]) == 2
-
-
-def test_explicit_chart_cannot_pass_with_computed_table_only():
-    data = RunData("u", "s", "r", "SOXX连续下跌画图")
-    ref = data.record("get_stock_historical_data", {"ticker": "SOXX"}, {
-        "source": "fixture", "rows": [{"date": f"2026-01-{day:02}", "close": 20-day} for day in range(1, 8)]})
-    analyze_dataset(data, ref, "historical_drawdown_episodes", {"frequency": "daily", "min_periods": 5})
-    check = ResearchCompleteness("SOXX连续至少5天下跌，画图", [], {})
-    gaps = check.missing(data, [])
-    assert gaps == [{"ticker": "SOXX", "facet": "chart", "label": "用户要求的图表"}]
-    calls = check.recovery_calls(gaps, [], {"render_chart": object()}, data)
-    assert calls[0][0] == "render_chart"
-    assert calls[0][1]["annotations"][0]["start"] == "2026-01-02T00:00:00+00:00"
-
-
-def test_missing_streak_chart_recovers_computation_before_rendering():
-    data = RunData("u", "s", "r", "SOXX连续下跌画图")
-    ref = data.record("get_stock_historical_data", {"ticker": "SOXX", "interval": "1wk"}, {
-        "source": "fixture", "rows": [{"date": "2026-01-05", "close": 20}]})
-    check = ResearchCompleteness("SOXX近25年连续至少5周下跌，画图", [], {})
-    calls = check.recovery_calls(check.missing(data, []), [], {"render_chart": object(), "analyze_dataset": object()}, data)
-    assert calls == [("analyze_dataset", {"dataset_ref": ref, "operation": "historical_drawdown_episodes", "parameters": {"frequency": "weekly", "min_periods": 5}})]
 
 
 @pytest.mark.parametrize("observed,closed,count", [("2026-11-04T20:00:00Z", False, 0), ("2026-11-08T12:00:00Z", True, 1)])
@@ -121,64 +36,6 @@ def test_weekly_completion_uses_exchange_close_and_keeps_streak_status_separate(
         assert output["method"]["latest_period_close"].startswith("2026-11-06")
 
 
-def test_latest_completed_transaction_can_be_archived_after_long_followup():
-    messages = [{"role": "system", "content": "研究规则"}, {"role": "user", "content": "你去搜啊"},
-        {"role": "assistant", "content": "旧回答" * 4000, "reasoning_content": "provider text " * 4000,
-         "tool_calls": [{"id": "c", "function": {"name": "search", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "c", "content": json.dumps({"data_refs": ["dataset_live"], "result": "真实报道" * 4000})},
-        {"role": "user", "content": "请根据新取得的结果回答"}]
-    compact = prune_messages(messages, [], context_window=16000, output_reserve=2000)
-    assert tokens(compact) < 14000 and "dataset_live" in str(compact)
-    assert not any(message.get("role") == "tool" for message in compact)
-
-
-def test_explicit_readback_keeps_content_and_advances_only_returned_characters():
-    original = {"data_ref": "dataset_news", "offset": 1000, "total_chars": 20000,
-                "content": "报道原文" * 1800, "next_offset": 8200, "has_more": True}
-    result = json.loads(compact_result({"result": original, "data_refs": ["dataset_news"]}, "dataset_news"))
-    assert len(result["content"]) > 5000
-    assert result["next_offset"] == 1000 + len(result["content"])
-    assert result["has_more"] is True
-
-
-def test_context_archive_retains_financial_values_and_citations():
-    result = {"data_refs": ["dataset_sec"], "source_refs": ["S123abc"], "result": {
-        "source": "sec_companyfacts", "currency": "USD", "period_ends": ["2026-09-26"],
-        "revenue": [16513000000], "net_income": [3320000000],
-        "fact_metadata": {"revenue": [{"audit": "x" * 20000}]}}}
-    messages = [{"role": "system", "content": "研究规则"}, {"role": "user", "content": "INTC财报"},
-        {"role": "assistant", "reasoning_content": "long provider context " * 2000,
-         "tool_calls": [{"id": "c", "function": {"name": "get_sec_company_facts_quarterly", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "c", "content": json.dumps(result)}]
-    compact = prune_messages(messages, [], context_window=16000, output_reserve=2000)
-    assert tokens(compact) < 14000
-    assert "16513000000" in str(compact) and "3320000000" in str(compact)
-    assert "S123abc" in str(compact) and "dataset_sec" in str(compact)
-
-
-def test_explicit_source_footnote_can_bind_multiple_rows_of_a_table():
-    data = RunData("u", "s", "r", "INTC新闻")
-    one = data.record("search", {"query": "INTC first"}, {"url": "https://example.com/first", "text": "shares fell 30%"})
-    two = data.record("search", {"query": "INTC second"}, {"url": "https://example.com/second", "text": "shares fell 45%"})
-    table = "|报道|跌幅|\n|---|---|\n|[第一篇](https://example.com/first)|下跌30%|\n|第二篇|下跌45%|"
-    note = f"两条新闻的日期与数字来源于取得的报道。[{data.source_refs(one)[0]}][{data.source_refs(two)[0]}]"
-    answer, issues = verified_text(table + "\n\n" + note, data)
-    assert not issues and table in answer
-    _, issues = verified_text(table + "\n\n另一件事。\n\n" + note, data)
-    assert "explanation_contains_unbound_number" in issues
-
-
-@pytest.mark.asyncio
-async def test_repeated_successful_reads_converge_to_answer_with_real_facts(monkeypatch):
-    events, model = await run(monkeypatch, "查看AAPL当前价格", {
-        "get_stock_price": tool("get_stock_price", lambda _: {"source": "fixture", "price": 42}),
-    }, turns=[call("get_stock_price", {"ticker": "AAPL"}), call("get_stock_price", {"ticker": "AAPL"}),
-              call("get_stock_price", {"ticker": "AAPL"}), finish("AAPL价格42。")])
-    assert events[-1]["answer_status"] == "answered"
-    assert "42" in str(model.inputs[-1])
-    assert not any(message.get("tool_calls") for message in model.inputs[-1])
-
-
 @pytest.mark.asyncio
 async def test_final_transport_explicitly_disables_tools_without_schemas():
     async def handler(request):
@@ -188,76 +45,6 @@ async def test_final_transport_explicitly_disables_tools_without_schemas():
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = [chunk async for chunk in ModelTransport(cfg(), client=client).stream([], [], tool_choice="none")]
     assert result[0]["choices"][0]["finish_reason"] == "stop"
-
-
-@pytest.mark.asyncio
-async def test_output_length_recovery_uses_existing_facts_without_replaying_tools(monkeypatch):
-    monkeypatch.setenv("FINSIGHT_AGENT_MAX_TURNS", "2")
-    truncated = [{"choices": [{"delta": {"content": "尚未写完的解释"}, "finish_reason": "length"}]}]
-    events, model = await run(monkeypatch, "AAPL当前价格", {
-        "get_stock_price": tool("get_stock_price", lambda _: {"source": "fixture", "price": 42}),
-    }, turns=[call("get_stock_price", {"ticker": "AAPL"}), truncated, finish("AAPL价格42。")])
-    assert events[-1]["answer_status"] == "answered" and events[-1]["metrics"]["tool_calls"] == 1
-    assert "尚未写完" not in events[-1]["response"]
-    assert len(model.inputs) == 3
-
-
-@pytest.mark.asyncio
-async def test_complete_financial_facts_survive_bad_model_rewording(monkeypatch):
-    events, _ = await run(monkeypatch, "INTC最新季度营收、净利润、经营现金流和自由现金流是多少", {
-        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", financials),
-    }, turns=[call("get_sec_company_facts_quarterly", {"ticker": "INTC"}),
-              finish("INTC营收999999美元。"), finish("INTC营收999999美元。")])
-    done = events[-1]
-    assert done["answer_status"] == "answered" and done["metrics"]["fact_fallback_used"]
-    assert "| 营收 | 100 |" in done["response"] and "| 净利润 | 10 |" in done["response"]
-    assert "999999" not in done["response"] and "2026-06-30" in done["response"]
-
-
-@pytest.mark.asyncio
-async def test_factual_fallback_does_not_replace_valuation_judgment(monkeypatch):
-    events, _ = await run(monkeypatch, "INTC估值健康吗", {
-        "get_company_info": tool("get_company_info", lambda _: "Forward P/E: 20.0"),
-        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", financials),
-    }, turns=[call("get_company_info", {"ticker": "INTC"}), call("get_sec_company_facts_quarterly", {"ticker": "INTC"}),
-              finish("INTC估值99999倍。"), finish("INTC估值99999倍。")])
-    assert events[-1]["answer_status"] == "partial"
-    assert not events[-1]["metrics"]["fact_fallback_used"]
-
-
-@pytest.mark.asyncio
-async def test_incomplete_week_explanation_is_not_an_unfinished_tool_task(monkeypatch):
-    events, _ = await run(monkeypatch, "AAPL当前价格", {
-        "get_company_news": tool("get_company_news", lambda _: {"status": "unavailable", "error": "tool_timeout"}),
-        "get_stock_price": tool("get_stock_price", lambda _: {"source": "fixture", "price": 42}),
-    }, turns=[call("get_company_news", {"ticker": "AAPL"}), call("get_stock_price", {"ticker": "AAPL"}),
-              finish("AAPL价格42。\n\n未完成周的处理：未完成周期不计入已经结束的历史样本。")])
-    assert events[-1]["answer_status"] == "answered" and events[-1]["quality"]["state"] == "pass"
-
-
-@pytest.mark.asyncio
-async def test_valuation_recovery_calculates_ratios_once_and_retains_market_lineage():
-    context = RunContext.create(owner="ratio-user", entry="chat", budget_seconds=90)
-    context.quota_checker = lambda _: None
-    async def emit(*_args):
-        pass
-    rt = AgentRuntime(context=context, session_id="s", query="INTC估值健康吗", model=FakeModel([]), emit=emit, tools={})
-    try:
-        market = rt.data.record("get_company_info", {"ticker": "INTC"}, {"forwardPE": 20, "source_url": "https://example.com/intc"})
-        fields = {"revenue": [100], "gross_profit": [40], "net_income": [10], "operating_cash_flow": [12], "free_cash_flow": [8]}
-        filing = rt.data.record("get_sec_company_facts_quarterly", {"ticker": "INTC"}, {
-            "source": "sec_companyfacts", "source_url": "https://www.sec.gov/Archives/intc", "currency": "USD", "frequency": "quarterly", "ticker": "INTC",
-            "period_ends": ["2026-09-26"], **fields,
-            "fact_metadata": {key: [{"unit": "USD", "subject": "INTC", "metric": key, "value": values[0],
-                "source": "sec_companyfacts", "frequency": "quarterly", "period_start": "2026-06-28", "period_end": "2026-09-26"}]
-                for key, values in fields.items()}})
-        assert await rt.recover_research([], "先核对估值和财报。", "draft")
-        computed = next(record for record in rt.data.records.values() if record.get("inputs", {}).get("operation") == "financial_ratios")
-        assert set(computed["inputs"]["dataset_refs"]) == {filing, market}
-        assert not await rt.recover_research([], "数据已齐。", "draft2")
-        assert rt.tool_count == 1
-    finally:
-        await rt.close()
 
 
 def test_historical_returns_are_computed_and_do_not_bridge_missing_closes():
@@ -279,160 +66,82 @@ def test_redaction_preserves_markdown_links_and_sentence_endings():
 
 
 @pytest.mark.asyncio
-async def test_financial_snapshot_uses_actual_ytd_derivation_instead_of_model_guess(monkeypatch):
-    def derived(args):
-        result = financials(args)
-        result["fact_metadata"] = {"operating_cash_flow": [{"derivation": "ytd_difference"}]}
-        return result
-    events, _ = await run(monkeypatch, "INTC最新季度营收、净利润、经营现金流和自由现金流是多少", {
-        "get_sec_company_facts_quarterly": tool("get_sec_company_facts_quarterly", derived),
-    }, turns=[call("get_sec_company_facts_quarterly", {"ticker": "INTC"}), finish("本次直接使用已披露的单季现金流。")])
-    assert events[-1]["answer_status"] == "answered"
-    assert "累计值相减" in events[-1]["response"]
-    assert "本次直接使用" not in events[-1]["response"]
-
-
-def test_completion_context_includes_already_created_chart_status():
-    context = RunContext.create(owner="chart-user", entry="chat", budget_seconds=90)
-    async def emit(*_args):
-        pass
-    rt = AgentRuntime(context=context, session_id="s", query="SOXX画图", model=FakeModel([]), emit=emit, tools={})
-    rt.data.artifacts.append({"kind": "chart", "title": "SOXX周线", "coverage": {"close": {"points": 1322}}, "source_refs": []})
-    summary = rt.completion_context({"role": "system", "content": "规则"}, "SOXX画图")
-    assert "SOXX周线" in str(summary) and "1322" in str(summary)
-    assert "已实际生成" in str(summary)
-
-
-def test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries():
-    rows = [{"time": f"2026-11-{index+1:02}", "close": 100+index} for index in range(20)]
-    payload = {"data": rows, "kline_data": rows, "provider": "fixture", "metadata_noise": "x" * 10000,
-               "price_basis": "split_adjusted_close"}
-    preview = json.loads(compact_result({"result": payload}, "dataset_history"))["preview"]
-    assert preview["row_count"] == 20 and preview["rows_sampled"] is True
-    assert preview["data"][-1]["close"] == 119 and "kline_data" not in preview
-    assert preview["last_observation"] == "2026-11-20"
-    assert preview["price_basis"] == "split_adjusted_close"
-
-
-def test_question_about_quoted_decline_keeps_its_negative_magnitude():
-    from backend.agent_runtime.grounding import validate_paragraph
-    data = RunData("u", "s", "r", "INTC下跌原因")
-    data.record("get_company_news", {"ticker": "INTC"}, {"source": "fixture", "text": "Shares cratered nearly 30% in a single session."})
-    assert validate_paragraph("报道未说明“近30%”是否为收盘还是盘中跌幅。", data) == []
-    assert validate_paragraph("报道未说明“近30%”是否为收盘还是盘中涨幅。", data) != []
-
-
-def test_streak_fact_delivery_matches_real_calculation_and_created_chart():
-    from types import SimpleNamespace
-    from backend.agent_runtime.analysis import render_chart
-    from backend.agent_runtime.fact_answer import factual_answer
-    query = "SOXX连续至少5周下跌有哪些阶段，画图"
-    data = RunData("u", "s", "r", query)
-    dates = ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26", "2026-11-02"]
-    ref = data.record("get_stock_historical_data", {"ticker": "SOXX", "interval": "1wk"}, {
-        "source": "fixture", "observed_at": "2026-11-08T12:00:00Z", "asset": {"calendar_name": "NYSE"},
-        "rows": [{"date": day, "close": 210-index*10} for index, day in enumerate(dates)]})
-    calculated = analyze_dataset(data, ref, "historical_drawdown_episodes", {"frequency": "weekly", "min_periods": 5})
-    render_chart(data, dataset_ref=calculated["data_refs"][0], title="SOXX周线", chart_type="line",
-                 x="date", series=[{"field": "close"}])
-    rt = SimpleNamespace(query=query, completeness=ResearchCompleteness(query, [], {}), data=data,
-                         report_title=None, executor=SimpleNamespace(attempts=[]))
-    answer = factual_answer(rt)
-    assert "生成走势图" in answer and "末周已收盘" in answer and "仍在延续" in answer
-    assert "2026-11-06 21:00:00 UTC" in answer
-    assert verified_text(answer, data)[1] == []
-    data.record("get_company_news", {"ticker": "SOXX"}, [{"title": "SOXX news", "url": "https://example.com/news", "published_at": "2026-11-06"}])
-    rt.query = "SOXX连续至少5周下跌有哪些阶段和新闻，画图"
-    rt.completeness = ResearchCompleteness(rt.query, [], {})
-    assert not rt.completeness.missing(data, [])
-    assert factual_answer(rt) == ""
-
-
-def test_repair_feedback_keeps_the_actual_error_beyond_a_short_chinese_prefix():
-    data = RunData("u", "s", "r", "AAPL估值")
-    data.record("get_company_info", {"ticker": "AAPL"}, {"source": "fixture", "forwardPE": 32.41})
-    paragraph = "需要结合公司经营与财务表现作出判断。" * 7 + "AAPL远期市盈率999999倍。"
-    feedback = answer_feedback(paragraph, data)
-    assert feedback and "999999" in feedback and "32.41" in feedback
-
-
-def test_price_cause_requires_targeted_search_beyond_generic_company_news():
-    data = RunData("u", "s", "r", "为什么英特尔突然暴跌")
-    data.record("get_company_news", {"ticker": "INTC"}, [{"title": "Intel commentary", "url": "https://example.com/intel", "published_date": "2026-11-06"}])
-    check = ResearchCompleteness("为什么英特尔突然暴跌", [], {})
-    gaps = check.missing(data, [])
-    assert [gap["facet"] for gap in gaps] == ["price_cause"]
-    calls = check.recovery_calls(gaps, [], {"search": object()}, data)
-    assert calls == [("search", {"query": "INTC stock price move earnings guidance latest"})]
-    ref = data.record("search", calls[0][1], "Intel guidance\nhttps://example.com/earnings\nShares fell after guidance.")
-    attempts = [{"name": "search", "inputs": calls[0][1], "status": "success", "data_ref": ref}]
-    assert not check.missing(data, attempts)
-
-
-def test_report_completion_is_not_replaced_by_short_chat_instructions():
-    context = RunContext.create(owner="report-user", entry="chat", budget_seconds=90)
-    async def emit(*_args):
-        pass
-    rt = AgentRuntime(context=context, session_id="s", query="INTC深度报告，解释估值和为什么暴跌", model=FakeModel([]), emit=emit, tools={})
-    rt.report_title = "INTC深度报告"
-    summary = str(rt.completion_context({"role": "system", "content": "规则"}, rt.query))
-    assert "估值观点短问" not in summary and "在400字内" not in summary
+async def test_inspect_financials_returns_latest_periods_in_descending_data(tmp_path):
+    rt, _ = runtime(tmp_path, [])
+    raw = {"source": "sec_companyfacts", "period_ends": ["2026-09-26", "2026-06-27", "2026-03-28"],
+           "revenue": [16513000000, 16128000000, 10000000000], "net_income": [3320000000, -11033000000, 1]}
+    ref = rt.data.record("get_sec_company_facts_quarterly", {"ticker": "INTC"}, raw)
+    try:
+        result = await execute(rt, "read_data", {"handle": ref, "limit": 2})
+        assert result.status == "ok"
+        assert [row["period_end"] for row in result.data["rows"]] == ["2026-09-26", "2026-06-27"]
+        assert [row["net_income"] for row in result.data["rows"]] == [3320000000, -11033000000]
+        assert result.data["row_count"] == 3 and result.data["has_more"] is True
+        assert rt.data.records[ref]["output"] == raw
+    finally:
+        await rt.close()
 
 
 @pytest.mark.asyncio
-async def test_cause_delivery_keeps_sourced_explanation_with_programmatic_price_facts(monkeypatch):
-    query = "为什么英特尔突然暴跌"
-    history = history_with_returns({"source": "fixture", "source_url": "https://example.com/prices", "currency": "USD", "data": [
-        {"time": "2026-11-04", "close": 100}, {"time": "2026-11-05", "close": 80}, {"time": "2026-11-06", "close": 84}]})
-    article = {"url": "https://example.com/news", "published_date": "2026-11-06", "text": "Intel shares fell after guidance missed expectations."}
-    args = {"query": "INTC stock price move earnings guidance latest"}
-    data = RunData("u", "s", "r", query)
-    ref = data.record("search", args, article)
-    sid = data.source_refs(ref)[0]
-    draft = f"**报道支持的触发因素（媒体归因，非因果证明）**：多家媒体报道，营收隐含下滑99999%，直接诱因是第四季度指引不及预期（[{sid}](https://example.com/news)）——有关数字仍需核实。"
-    events, _ = await run(monkeypatch, query, {
-        "get_stock_historical_data": tool("get_stock_historical_data", lambda _: history),
-        "search": tool("search", lambda _: article),
-    }, turns=[call("get_stock_historical_data", {"ticker": "INTC"}), call("search", args), finish(draft), finish(draft)])
-    done = events[-1]
-    assert done["answer_status"] == "answered" and done["metrics"]["fact_fallback_used"]
-    assert "指引不及预期" in done["response"] and "-20.00%" in done["response"]
-    assert "99999" not in done["response"] and "https://example.com/news" in str(done["evidence_pool"])
-    assert "多家媒体报道" not in done["response"]
-    assert "（）" not in done["response"] and "()" not in done["response"]
+async def test_explicit_readback_keeps_content_and_advances_only_returned_characters(tmp_path):
+    rt, _ = runtime(tmp_path, [])
+    original = "报道原文" * 5000
+    ref = rt.data.record("fetch_url_content", {}, original)
+    try:
+        result = await execute(rt, "read_data", {"handle": ref, "offset": 1000, "limit": 7200})
+        assert result.data["content"] == original[1000:8200]
+        assert result.data["next_offset"] == 8200 and result.data["has_more"] is True
+        projected = rt.registry.model_text(result, 1000)
+        page = json.loads(projected.split("\n\n")[-1])
+        assert page["content"] == original[1000:page["next_offset"]]
+        assert page["next_offset"] == 1000 + len(page["content"])
+        assert page["has_more"] is True and tokens(projected) <= 1000
+    finally:
+        await rt.close()
 
 
-def test_search_text_links_and_provider_metadata_are_clickable_sources():
-    data = RunData("u", "s", "r", "INTC新闻")
-    ref = data.record("search", {"query": "INTC latest"}, "Intel earnings\nhttps://www.intc.com/news-events/press-releases/detail/1\nReported results.")
-    assert any(data.sources[sid].get("url") == "https://www.intc.com/news-events/press-releases/detail/1" for sid in data.source_refs(ref))
-    ref = data.record("get_stock_historical_data", {"ticker": "INTC", "period": "1y", "interval": "1wk"}, {
-        "source": "Yahoo", "source_url": "https://finance.yahoo.com/quote/INTC/history/", "as_of": "2026-11-06",
-        "currency": "USD", "rows": [{"time": "2026-11-02", "close": 56.28}],
-    })
-    sources = [data.sources[sid] for sid in data.source_refs(ref)]
-    assert sources and all(source.get("url") for source in sources)
-    assert all(source["metadata"]["parameters"]["interval"] == "1wk" for source in sources)
+@pytest.mark.asyncio
+async def test_complete_episode_list_is_readable_without_sampling_the_stored_result(tmp_path):
+    rt, _ = runtime(tmp_path, [])
+    episodes = [{"start": f"2026-01-{i:02}", "end": f"2026-02-{i:02}", "periods": 5, "return_pct": -.1} for i in range(1, 10)]
+    raw = {"rows": [{"date": f"2026-01-{i % 28 + 1:02}", "close": i+1} for i in range(1300)],
+           "episodes": episodes, "sample_count": 9, "method": {"kind": "consecutive_decline_streaks"}}
+    ref = rt.data.record("run_analysis_code", {}, raw)
+    try:
+        result = await execute(rt, "read_data", {"handle": ref, "table": "episodes", "limit": 20})
+        assert result.status == "ok" and result.data["row_count"] == 9
+        assert result.data["rows"] == episodes
+        assert rt.data.records[ref]["output"] == raw
+    finally:
+        await rt.close()
 
 
-def test_feedback_keeps_latest_financial_numbers_instead_of_metadata():
-    data = RunData("u", "s", "r", "INTC财报")
-    payload = {"source": "sec_companyfacts", "source_url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000050863.json",
-        "ticker": "INTC", "currency": "USD", "period_ends": ["2026-09-26", "2026-06-27"],
-        "revenue": [16513000000, 16128000000], "net_income": [3320000000, -11033000000],
-        "fact_metadata": {"revenue": [{"description": "申报元数据" * 1000}, {}]}}
-    data.record("get_sec_company_facts_quarterly", {"ticker": "INTC"}, payload)
-    feedback = answer_feedback("INTC最新季度营收999999亿美元。", data)
-    assert feedback and "16513000000" in feedback and "3320000000" in feedback
-    assert "申报元数据" not in feedback
+@pytest.mark.asyncio
+async def test_history_aliases_do_not_hide_latest_rows_or_sampling_boundaries(tmp_path):
+    rt, _ = runtime(tmp_path, [])
+    rows = [{"time": f"2026-11-{i+1:02}", "close": 100+i} for i in range(20)]
+    raw = {"data": rows, "kline_data": rows, "price_basis": "split_adjusted_close", "metadata_noise": "x" * 10000}
+    ref = rt.data.record("get_stock_historical_data", {"ticker": "INTC"}, raw)
+    try:
+        result = await execute(rt, "read_data", {"handle": ref, "offset": 18, "limit": 2})
+        assert result.data["rows"][-1]["close"] == 119
+        assert result.data["rows"][-1]["time"] == "2026-11-20"
+        assert result.data["row_count"] == 20 and result.data["next_offset"] == 20
+        assert result.data["has_more"] is False and rt.data.records[ref]["output"] == raw
+    finally:
+        await rt.close()
 
 
-def test_news_repair_feedback_keeps_the_actual_cause_in_long_summary():
-    data = RunData("u", "s", "r", "INTC新闻")
-    snippet = "Intel market background. " * 17 + "Shares fell nearly 30% after disappointing fourth-quarter guidance."
-    data.record("get_company_news", {"ticker": "INTC"}, [{
-        "title": "Intel outlook", "url": "https://example.com/intel", "snippet": snippet,
-        "published_at": "2026-11-06", "metadata": {"audit": "x" * 20000}}])
-    feedback = answer_feedback("INTC股价上涨999%。", data)
-    assert feedback and "disappointing fourth-quarter guidance" in feedback
-    assert "https://example.com/intel" in feedback
+def test_streak_calculation_and_chart_keep_exchange_close_and_ongoing_status():
+    data = RunData("u", "s", "r", "SOXX连续下跌")
+    dates = ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26", "2026-11-02"]
+    ref = data.record("get_stock_historical_data", {"ticker": "SOXX", "interval": "1wk"}, {
+        "observed_at": "2026-11-08T12:00:00Z", "asset": {"calendar_name": "NYSE"},
+        "rows": [{"date": day, "close": 210-i*10} for i, day in enumerate(dates)]})
+    result = analyze_dataset(data, ref, "historical_drawdown_episodes", {"frequency": "weekly", "min_periods": 5})
+    assert result["sample_count"] == 1 and result["episodes"][0]["ongoing"] is True
+    assert result["method"]["latest_period_closed"] is True
+    assert result["method"]["latest_period_close"] == "2026-11-06T21:00:00+00:00"
+    chart = render_chart(data, result["data_refs"][0], "SOXX周线", "line", "date", [{"field": "close"}])
+    assert chart["method"] == result["method"]
+    assert chart["data"]["rows"] == data.rows(result["data_refs"][0])

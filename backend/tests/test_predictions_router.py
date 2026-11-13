@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
 import backend.api.predictions_router as predictions_router
-from backend.agents.prediction_contract import AgentPrediction
+from backend.common.prediction_contract import AgentPrediction
 from backend.api.predictions_router import PredictionsRouterDeps, create_predictions_router
 from backend.services.llm_usage_store import UserDailyCostLimitExceeded
 from backend.services.prediction_service import PredictionRun

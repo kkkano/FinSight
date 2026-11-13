@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from backend.graph import checkpointer as checkpointer_mod
+from backend.common import checkpoint_store as checkpointer_mod
 
 
 def _reset_bundle() -> None:
