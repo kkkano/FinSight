@@ -351,7 +351,7 @@ async def test_http_disconnect_waits_for_cancellation_cleanup():
     assert any(args[:2] == ["volume", "rm"] for args, _ in cli.calls)
 
 
-@pytest.mark.parametrize("changes", [{"path": "/etc/passwd"}, {"code": "a" * 16001}, {"datasets": {}},
+@pytest.mark.parametrize("changes", [{"path": "/etc/passwd"}, {"code": "a" * 16001}, {"datasets": []},
                                     {"timeout_seconds": 61}, {"timeout_seconds": True}, {"timeout_seconds": 0}])
 def test_request_validation(changes):
     payload = {"code": "result = 1", "datasets": {"dataset_a": [1]}, **changes}
@@ -362,6 +362,11 @@ def test_request_validation(changes):
 def test_non_finite_json_is_not_accepted():
     with pytest.raises(AnalysisError, match="analysis_request_invalid"):
         JobRequest.from_bytes(b'{"code":"result=1","datasets":{"x":NaN}}')
+
+
+def test_explicit_hypothetical_calculation_accepts_no_datasets():
+    request = JobRequest.from_bytes(b'{"code":"result=2*3","datasets":{}}')
+    assert request.datasets == {} and request.code == "result=2*3"
 
 
 @pytest.mark.parametrize("settings_value", [Settings(), settings(token="short"), settings(enabled=False)])

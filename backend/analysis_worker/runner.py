@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import traceback
+from collections.abc import Mapping
 from pathlib import Path
 
 # -I 不信任调用方 PYTHONPATH；这里只加入镜像内只读的协议目录。
@@ -48,6 +49,7 @@ def stage() -> None:
 
 
 def run() -> dict:
+    import finsight
     import numpy as np
     import pandas as pd
 
@@ -59,7 +61,18 @@ def run() -> dict:
             if isinstance(value, pd.Timestamp):
                 return value.isoformat()
             return super().default(value)
-    scope = {"datasets": request.datasets, "pd": pd, "np": np, "__name__": "__analysis__",
+    class Frames(Mapping):
+        def __getitem__(self, ref):
+            return get_frame(request.datasets, ref)
+
+        def __iter__(self):
+            return iter(request.datasets)
+
+        def __len__(self):
+            return len(request.datasets)
+
+    scope = {"datasets": request.datasets, "pd": pd, "np": np, "finsight": finsight,
+             "frames": Frames(), "__name__": "__analysis__",
              "get_frame": lambda ref, table=None: get_frame(request.datasets, ref, table)}
     log = BoundedLog()
     try:

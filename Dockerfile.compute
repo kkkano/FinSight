@@ -9,7 +9,7 @@ COPY requirements-compute.txt /tmp/requirements-compute.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-compute.txt \
     && mkdir -p /input \
     && chmod 0555 /input
-COPY backend/analysis_worker/protocol.py backend/analysis_worker/runner.py backend/analysis_worker/data_access.py ./
+COPY backend/analysis_worker/protocol.py backend/analysis_worker/runner.py backend/analysis_worker/data_access.py backend/analysis_worker/finsight.py backend/analysis_worker/financial_math.py ./
 USER 65532:65532
 ENTRYPOINT ["python", "-I", "/opt/analysis/runner.py"]
 

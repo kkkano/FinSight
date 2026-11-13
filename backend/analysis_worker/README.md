@@ -1,5 +1,7 @@
 # 独立计算作业
 
+更新：2026-11-13。当前 dispatcher/job 源码、默认配置和实际发布分别记录；生产身份及本轮候选见[运行手册](../../docs/11_PRODUCTION_RUNBOOK.md)。
+
 HTTP 调度器不运行用户 Python。它为每次请求创建独立 Docker 输入卷，通过可信初始化容器只写入 JSON，再让非 root 作业容器只读挂载输入。用户代码在 `datasets`、`pd` 和 `np` 可用的命名空间中赋值 `result`，结果必须可序列化为有限数值 JSON。图表仍经过主服务的声明式 artifact 校验，不能提交可执行 HTML/JS 文件。
 
 默认仅允许一个任务、15 秒总预算、512 MB 内存、1 CPU、64 PID。网络关闭、根目录只读、capabilities 全部删除、禁止提权，使用 Docker 内置 seccomp、私有 PID/IPC/cgroup namespace 和独立 64 MB `/tmp`。代码最多 16000 字符，请求最多 4 MiB，结果最多 1 MiB，日志保留最多 16 KiB。直接写文件描述符造成的输出淹没会触发取消。
@@ -14,7 +16,9 @@ HTTP 调度器不运行用户 Python。它为每次请求创建独立 Docker 输
 
 在安全部署配置中提供至少 32 字符的随机 `FINSIGHT_ANALYSIS_WORKER_TOKEN`。主服务需要设置 `FINSIGHT_ANALYSIS_WORKER_URL=http://compute-dispatcher:8020` 并持有相同 token；调度器通过 compose 的显式 environment 获得该 token，不读取主服务的完整 env_file。示例不包含实际密钥。
 
-可通过 `FINSIGHT_ANALYSIS_JOB_MEMORY_MB` 调整单作业内存上限，通过 `FINSIGHT_ANALYSIS_MEMORY_RESERVE_MB` 调整宿主保留余量；默认分别为 512 和 256，配置错误或超出边界会关闭服务。单并发限制保持不变。实测小作业可在 192/256 MiB 下运行，建议保守使用 256 MiB 作业上限和至少 256 MiB 保留余量；这仍要求实际 `MemAvailable >= 512 MiB`，不能在仅约 263 MiB 余量的宿主上强行启用计算。
+`FINSIGHT_ANALYSIS_JOB_MEMORY_MB` 和 `FINSIGHT_ANALYSIS_MEMORY_RESERVE_MB` 默认分别为 512/256 MiB，`FINSIGHT_ANALYSIS_ADAPTIVE_MEMORY=false`。固定模式要求当次 `MemAvailable >= job + reserve`，配置错误或超出边界会关闭服务。
+
+显式启用 adaptive 时，作业内存为 `min(max_job, floor((MemAvailable - reserve) / 64) * 64)` MiB，低于 `FINSIGHT_ANALYSIS_MIN_JOB_MEMORY_MB` 拒绝。最小值默认 128 MiB；当前低内存发布配置可显式选择 min/max/reserve=128/256/128，仍需当次实际物理容量，不计 swap。单并发、无网络和清理约束不变。默认值、显式配置与历史小算例峰值不能互相替代。
 
 ```bash
 docker compose --env-file .env.server --profile compute build compute-job-image compute-dispatcher
@@ -26,6 +30,8 @@ docker compose --env-file .env.server --profile compute up -d compute-dispatcher
 只有调度器持有 Docker socket，这等同于管理计算宿主的权限。不要把该 HTTP 服务或 Docker socket 暴露到公网；生产推荐专用计算宿主。公开业务 API 和作业容器均不能接触 socket。业务 API 跨宿主连接时应通过私网 TLS 保护 HTTP 调度链路，调度器仍与它使用的 daemon 同宿主。调度器不信任模型指定的镜像、路径、命令参数。
 
 ## HTTP 合同
+
+作业环境提供 `datasets`、`frames`、`get_frame`、`pd`、`np` 和 `finsight`。`get_frame` 从本请求授权资料生成表；SEC CompanyFacts 可用具名 `companyfacts` 表，完整字段/单位/财期仍来自原数据。`finsight` 提供均线、统计、连续下跌、回撤事件、共同起点比较、估值情景和财务比率；函数结果与假设、方法及来源关系返回主运行时，日志不作为金融证据。
 
 `POST /jobs` 使用 `Authorization: Bearer <token>` 和 `Content-Type: application/json`：
 

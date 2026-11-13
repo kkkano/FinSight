@@ -63,7 +63,7 @@ class JobRequest:
         code, datasets = value.get("code"), value.get("datasets")
         if not isinstance(code, str) or not code.strip() or len(code) > MAX_CODE_CHARS:
             raise AnalysisError("analysis_code_invalid")
-        if not isinstance(datasets, dict) or not 1 <= len(datasets) <= 8:
+        if not isinstance(datasets, dict) or len(datasets) > 8:
             raise AnalysisError("analysis_datasets_invalid")
         if any(not isinstance(ref, str) or not ref or len(ref) > 256 for ref in datasets):
             raise AnalysisError("analysis_datasets_invalid")

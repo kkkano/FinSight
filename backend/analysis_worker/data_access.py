@@ -3,7 +3,8 @@ from __future__ import annotations
 
 TABLE_NAMES = ("earnings_estimate", "eps_trend", "eps_revisions")
 SEC_METRICS = ("revenue", "gross_profit", "operating_income", "net_income", "eps", "total_assets",
-               "total_liabilities", "operating_cash_flow", "capital_expenditures", "free_cash_flow")
+               "total_liabilities", "cash_and_equivalents", "long_term_debt",
+               "operating_cash_flow", "capital_expenditures", "free_cash_flow")
 
 
 def get_frame(datasets: dict, ref: str | dict | list, table: str | None = None):
