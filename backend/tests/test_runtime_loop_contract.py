@@ -4,6 +4,7 @@ from __future__ import annotations
 import ast
 import asyncio
 from copy import deepcopy
+from dataclasses import replace
 import inspect
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ import pytest_asyncio
 from backend.agent_runtime import loop
 from backend.agent_runtime.config import ModelConfig
 from backend.agent_runtime.envelope import ToolResult
-from backend.agent_runtime.limits import LeaseLimiter
+from backend.agent_runtime.limits import CapacityExceeded, LeaseLimiter
 from backend.agent_runtime.model import ModelProtocolError
 from backend.agent_runtime.registry import ToolSpec, schema
 from backend.services.run_context import RunContext
@@ -191,6 +192,67 @@ async def test_last_allowed_model_turn_has_no_tool_schemas(make_runtime):
     assert all(item["tools"] for item in model.inputs[:-1])
     assert model.inputs[-1]["tools"] == []
     assert runtime.tool_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("spent,reserved", [(124705, 0), (100000, 30000)])
+async def test_budget_too_small_for_tools_finishes_with_existing_messages(make_runtime, spent, reserved):
+    from backend.agent_runtime.context import tokens
+
+    invoked = []
+    tool = ToolSpec("fixture_large", "合成的大型有限参数集合",
+        schema({"value": {"type": "string", "enum": [str(index) for index in range(6000)]}}, ["value"]),
+        lambda args: invoked.append(args))
+    history = [{"role": "user", "content": f"保留合成记录 {index} 和原数字 42.123"} for index in range(27)]
+    runtime, model, events = make_runtime([text_turn(RAW_ANSWER)], tools={tool.name: tool}, history=history)
+    model.config = replace(model.config, context_window=131072, max_output=16384)
+    runtime.budget.maximum, runtime.budget.spent, runtime.budget.reserved = 160000, spent, reserved
+    remaining = 160000 - spent - reserved
+    assert tokens([tool.openai()]) + model.config.max_output > remaining
+
+    result = await runtime.run_agent()
+
+    assert result["stopped"] == "completed" and runtime.root_content == RAW_ANSWER
+    assert model.inputs[0]["tools"] == [] and invoked == []
+    assert model.inputs[0]["messages"][1:28] == history
+    assert "".join(payload["delta"] for kind, payload, _ in events if kind == "content.delta") == RAW_ANSWER
+    assert runtime.budget.spent == spent + 40 and runtime.budget.reserved == reserved
+    assert runtime.budget.spent + runtime.budget.reserved <= runtime.budget.maximum
+
+
+@pytest.mark.asyncio
+async def test_budget_finalization_keeps_structured_submission_tool(make_runtime):
+    optional = ToolSpec("fixture_large", "合成的大型有限参数集合",
+        schema({"value": {"type": "string", "enum": [str(index) for index in range(6000)]}}, ["value"]),
+        lambda _args: pytest.fail("不应继续调用可选工具"))
+    submitted = []
+    terminal = control_tool("submit_review", lambda args: submitted.append(args) or ToolResult(status="ok", kind="control"))
+    runtime, model, _events = make_runtime([tool_turn(("submit", "submit_review", {"value": "pass"}))])
+    model.config = replace(model.config, context_window=131072, max_output=16384)
+    runtime.budget.maximum, runtime.budget.spent = 160000, 124705
+    runtime._answer_parts.append((RAW_ANSWER, "stop"))
+    spec = loop.AgentSpec(agent_id="reviewer", role="reviewer", max_turns=4,
+        tools={optional.name: optional, terminal.name: terminal}, terminal_tools=(terminal.name,))
+
+    result = await loop.run(runtime, spec, "核对已有合成资料并提交结论")
+
+    assert result["stopped"] == "completed" and submitted == [{"value": "pass"}]
+    assert [item["function"]["name"] for item in model.inputs[0]["tools"]] == ["submit_review"]
+    assert runtime.root_content == RAW_ANSWER
+    assert runtime.budget.spent == 124745 and runtime.budget.reserved == 0
+
+
+@pytest.mark.asyncio
+async def test_budget_still_rejects_when_final_answer_cannot_fit(make_runtime):
+    runtime, model, _events = make_runtime([text_turn("不能发起的回答")])
+    model.config = replace(model.config, context_window=131072, max_output=16384)
+    runtime.budget.maximum, runtime.budget.spent = 160000, 159000
+
+    with pytest.raises(CapacityExceeded, match="run_token_budget_exhausted"):
+        await runtime.run_agent()
+
+    assert model.inputs == [] and runtime.root_content == ""
+    assert runtime.budget.spent == 159000 and runtime.budget.reserved == 0
 
 
 @pytest.mark.asyncio

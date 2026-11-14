@@ -177,10 +177,18 @@ class BudgetedModel:
         self.target = spec.model or runtime.model
         self.config = self.target.config
 
+    def reservation_tokens(self, messages, tools, **kwargs):
+        return tokens(messages) + tokens(tools) + kwargs.get("max_tokens", self.config.max_output)
+
+    def fits_run_budget(self, messages, tools, **kwargs):
+        """只读预检；最终并发预算仍由 reserve 的原子检查决定。"""
+        budget = self.runtime.budget
+        return budget.spent + budget.reserved + self.reservation_tokens(messages, tools, **kwargs) <= budget.maximum
+
     async def stream(self, messages, tools, **kwargs):
         rt, usage, reservation, started_network, finished = self.runtime, None, None, False, False
         started, status = time.monotonic(), "error"
-        amount = await rt.budget.reserve(tokens(messages) + tokens(tools) + kwargs.get("max_tokens", self.config.max_output))
+        amount = await rt.budget.reserve(self.reservation_tokens(messages, tools, **kwargs))
         try:
             async with rt.limiter.slot("model", rt.context.owner,
                     max(1, int(os.getenv("FINSIGHT_AGENT_MODEL_CONCURRENCY", "2"))),

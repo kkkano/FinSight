@@ -18,6 +18,8 @@ from .registry import financial_tools
 from .compactor import Compactor
 from .registry import ToolRegistry
 
+FINAL_INSTRUCTION = "这是本次运行最后一轮，不再提供工具。请基于已有资料完成回答，说明尚未取得的资料。表格使用普通 Markdown，不要生成工具调用或在正文模拟工具调用。"
+
 
 @dataclass(frozen=True)
 class AgentSpec:
@@ -138,8 +140,13 @@ async def run(rt, spec, task, handles=None, transcript=None):
         last = turn == spec.max_turns - 1 or rt.context.remaining_seconds < response_margin
         schemas = [tool.openai() for name, tool in tools.items() if not last or name in spec.terminal_tools]
         if last and not spec.terminal_tools:
-            messages.append({"role": "user", "content": "这是本次运行最后一轮，不再提供工具。请基于已有资料完成回答，说明尚未取得的资料。表格使用普通 Markdown，不要生成工具调用或在正文模拟工具调用。"})
+            messages.append({"role": "user", "content": FINAL_INSTRUCTION})
         fitted = await compactor.fit(messages, schemas, model.config.context_window, model.config.max_output)
+        if not last and not model.fits_run_budget(fitted, schemas):
+            schemas = [tool.openai() for name, tool in tools.items() if name in spec.terminal_tools]
+            if not spec.terminal_tools:
+                messages.append({"role": "user", "content": FINAL_INSTRUCTION})
+            fitted = await compactor.fit(messages, schemas, model.config.context_window, model.config.max_output)
         calls, text, reasoning, finish = {}, "", "", None
         block = spec.agent_id + "_text_" + uuid.uuid4().hex
         rt.stages[spec.agent_id] = "model_response"

@@ -20,7 +20,7 @@ from agent_eval.run import evaluation_artifact_root
 RESULTS = ROOT / "tests/agent_eval/results"
 SUFFIX = "20261113_isolated"
 CORPUS = "fixtures/apikl-frozen-provider-20261113"
-PILOT_CASES = ["facts-02", "news-01", "statistics-01", "comparison-01", "concepts-01"]
+PILOT_CASES = ["facts-02", "news-01", "statistics-01", "comparison-01", "concepts-01", "valuation-03"]
 
 
 def report_path(runtime, *, pilot=False, graded=False):
@@ -103,6 +103,9 @@ def main(args):
                 if pilot["harness_config"]["frozen_provider"]["driver_source_sha256"] != binding["run_frozen_eval.py"]:
                     raise ValueError("pilot_driver_changed")
                 check_phase_configuration(pilot, args)
+                if not any(row.get("id") == "valuation-03" and row.get("structure", {}).get("completed")
+                           for row in pilot["results"]):
+                    raise ValueError("pilot_budget_finalization_boundary_failed_before_full")
         for runtime in ("current", "baseline"):
             command = [sys.executable, "-B", "-X", "utf8", "tests/agent_eval/run_frozen_eval.py",
                 "--provider", "apikl", "--runtime", runtime, "--mode", "replay", "--jobs", "2",
