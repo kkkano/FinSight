@@ -34,7 +34,7 @@ flowchart LR
 
 `Review` 包含 `verdict: pass | revise | insufficient`、`findings` 与结构化 `coverage`。每条 finding 包含 `quote/issue/evidence/suggestion`，quote 必须逐字存在于本次答案；coverage 每条为 `requirement/met`。三种模型均禁止额外字段，不允许通过 submit_review 提交重写后的 answer。
 
-核查员使用父运行身份、数据、用量和预算，默认同一模型；显式不同模型仍受相同 owner 与额度边界。最多 4 轮、45 秒，仅有 `read_data/run_python/submit_review`，不得新增金融取数、改自选、派发任务或画图，内部推理不公开。
+核查员使用父运行身份、数据、用量和预算，默认同一模型；显式不同模型仍受相同 owner 与额度边界。最多 4 轮、90 秒，仅有 `read_data/run_python/submit_review`，不得新增金融取数、改自选、派发任务或画图，内部推理不公开。
 
 | 状态 | 含义与交付 |
 |---|---|

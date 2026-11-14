@@ -42,7 +42,7 @@ npm run dev --prefix frontend
 | 工具与技能 | `ToolResult` 统一信封；Markdown 技能目录供用户选择及模型 `load_skill`，技能不增加权限 |
 | 资料与来源 | 原始记录按 owner/session/run 隔离，来源采用整数编号；`read_data` 分页回读，`run_python` 在隔离计算服务重算 |
 | 图表与表格 | `render_chart`、`render_table` 从真实句柄生成产物；数值直接来自保存的数据，不依赖模型重抄 |
-| 只读核查 | 数据回答默认核查，报告必须核查；核查员只提交 findings/coverage，最多 4 轮、45 秒，不改已显示正文 |
+| 只读核查 | 数据回答默认核查，报告必须核查；核查员只提交 findings/coverage，最多 4 轮、90 秒，不改已显示正文 |
 | 修订与补交 | 聊天问题标注后由用户点“按核查意见修订”；缺少交付事项可自动追加一次，报告可在发布前修订一次并保留旧版本 |
 | 过程与交付 | 正文、工具、产物和核查按真实事件展示；正文完成先可读，核查与持久化结束后交付唯一终态 |
 | 预测战绩 | 用户 Prediction/Outcome 与固定 US20 公开账本分别采样、存储和评分；冻结预测协议不随研究重构改变 |
@@ -100,7 +100,7 @@ flowchart LR
 
 ## 验证与阅读入口
 
-评估位于 `tests/agent_eval/`：固定题集和工具回放、独立内容评分、核查员注错与未注错样本分开计分。M3 的质量与耗时对比、M4 检出率/误报率、浏览器验收和真实生产会话必须分别提供证据。原始 before 不因新代码或 fixture 通过而改判。
+评估位于 `tests/agent_eval/`：固定题集和工具回放、独立内容评分、核查员注错与未注错样本分开计分。按用户最新要求，M3 保持答案质量与完整性门槛，耗时保留统计但不再要求优于基线；M4 检出率/误报率、浏览器验收和真实生产会话必须分别提供证据。原始 before 不因新代码或 fixture 通过而改判。
 
 - [当前架构](docs/01_ARCHITECTURE.md) · [Agent 指南](docs/AGENTS_GUIDE.md) · [事件合同](docs/execution-event-contract.md)
 - [只读核查与事实治理](docs/HALLUCINATION_MITIGATION.md) · [报告与图表](docs/REPORT_CHART_SPEC.md)

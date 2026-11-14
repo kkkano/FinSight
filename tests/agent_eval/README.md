@@ -72,14 +72,21 @@ $evalArgs = @('--provider','apikl','--jobs','2','--request-interval','6.1',
 
 `frozen_offline_worker.py` 为每个研究评测进程维护一个专用离线解析子进程；生产函数、其内部线程和 socket 阻断都在该子进程内，模型连接与 Windows asyncio self-pipe 保持在父进程。子进程不接收供应商密钥或用户凭据。完整快照与相同实际参数仍由原生产函数处理，缺完整来源继续返回 gap。每次调用绑定子进程隔离器的源文件 SHA；隔离器变化后，双方须使用新同版本批次。
 
-`run_frozen_comparison.py` 依次运行可复核的 `pilot`、`full`、`grade`、`compare` 阶段，安全加载 `.env.runtime.local`，固定本轮双方模型/语料/调度。阶段状态与 PID、实际命令、输出摘要分别保留；不会把未判分的非零退出当崩溃，也不会覆写中断测量。完整评分后的原 `compare()` 门槛保持不变，失败必须公开保留。
+`run_frozen_comparison.py` 依次运行可复核的 `pilot`、`full`、`grade`、`compare` 阶段，安全加载 `.env.runtime.local`，固定本轮双方模型/语料/调度。阶段状态与 PID、实际命令、输出摘要、时间预算与耗时策略分别保留；不会把未判分的非零退出当崩溃，也不会覆写中断测量。默认 `non_regression` 保持原 `compare()` 门槛；用户最新质量优先要求使用显式 `report_only`，只把耗时退步改为观察项，其余输入、独立评分与质量门槛不变。旧报告缺省仍按原严格策略解释，失败必须公开保留。
 
-```powershell
-chcp 65001 > $null
-python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase pilot
-python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase full
-python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase grade
-python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase compare
+正式对照在已核验的生产 Linux 镜像内执行；不能用宿主 Windows 系统 Python 直接运行下列批次。`environment_preflight.py` 核对父子进程解释器、生产分发版本与模块导入，`offline_network_isolation.py` 在离线工具进程导入生产者前安装 `no_new_privs` 与 seccomp，同时阻断 Python 和 C/libcurl 的 IPv4/IPv6 socket。模型父进程仍可访问供应商与独立计算服务。原始录制目录、冻结语料和安全配置均只读挂载；跨平台路径由显式 mount manifest 映射，原件及数据库不修改。
+
+下面命令在容器内 `/app` 执行，三个 manifest 必须来自同一轮真实预检。每次隔离器、provider 或 driver 改动使用新的 `--generation`；不覆盖旧失败或混用不同环境的成绩。
+
+```bash
+eval_args=(--generation 20261114_quality_priority_linux --timeout 300 --latency-policy report_only
+  --source-git-metadata /app/tmp/r261113/linux-eval/host-git-metadata-20261114.json
+  --mount-manifest /app/tmp/r261113/linux-eval/mount-manifest.json
+  --environment-manifest /app/tmp/r261113/linux-eval/environment-preflight.json)
+python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase pilot "${eval_args[@]}"
+python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase full "${eval_args[@]}"
+python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase grade "${eval_args[@]}"
+python -B -X utf8 tests/agent_eval/run_frozen_comparison.py --phase compare "${eval_args[@]}"
 ```
 
 ```powershell
@@ -102,3 +109,5 @@ python -B -X utf8 tests/agent_eval/run_paged_grading.py --source tests/agent_eva
 每题的工件、动作、配额与公开事件位于 `tmp/agent-eval/<run_id>/<case_id>/`；评测自选和知识库不访问生产用户数据，用量不写生产数据库。完整资料带来源和采集时点；回放报价不能作为当前实时行情。供应商原始推理正文不写评测产物，只保留结构化用量和传输耗时。
 
 协议与资产测试使用 `tests/agent_eval/test_*.py`；它们验证录制、回放、绑定、共享配额与配置隔离，不给自然语言答案质量打分。历史模型拒绝、断流、超时及之前的评分都保存在 `results/`，历史状态以对应文件时点为准。
+
+显式 `FINSIGHT_EVAL_ARTIFACT_ROOT` 可将每题完整事件、模型请求、分页评分资料和离线日志保存到专用磁盘；目录必须挂载到两方及评分进程的同一路径，并写入测量元数据。默认目录保持兼容，外部引用只允许落在配置的产物根内。当前大产物在 D 盘，原冻结资料仍只读保留在原工作树，安全摘要与完整原件各有独立 SHA。上面的单独 `run_frozen_eval.py` 180 秒示例是旧预算重现入口，不代表当前质量优先正式批次。

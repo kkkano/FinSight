@@ -13,3 +13,5 @@
 最终 [CI 43528829268](https://github.com/kkkano/FinSight/actions/runs/43528829268) 的 8 个阶段全部通过，对应提交 7bd85853。该 CI 还包含新版冻结 provider/分页评分合同测试；这里只证明自动验证通过，真实质量评分与上线验收保持独立。逐项结果见 [ci-proof.json](ci-proof.json)。
 
 CI 通过后的来源核对补齐了混合供应商场景：报价与历史行情的 provenance 分开，放大图保留自己的历史来源/时点/币种，两个宽度定向 E2E 通过。该增量需按新源码重新构建并复验 CI，不沿用旧前端源码身份。
+
+2026-11-14 UTC，提交 `6ace1e6c` 的 [CI 43561030393](https://github.com/kkkano/FinSight/actions/runs/43561030393) 全 8 阶段通过：后端 2295 passed / 44 skipped，前端单测 560 passed；E2E 121 项直接通过、1 项重试后通过，详见 [本次 CI 收据](ci-proof-6ace1e6c.json)。该重试的 trace 显示尚在页面模块加载阶段，`**/api/**` 拦截了 `/src/api/` 模块；技能选择测试已收窄到 URL pathname 的真实 `/api/`，整份 3 项定向复验通过。之后新增的质量预算和 C6 保存失败修复需随新提交再验 CI；不把这次 CI 用于未包含的修改。

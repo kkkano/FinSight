@@ -86,7 +86,7 @@ flowchart TD
 本轮调用过数据工具的回答默认核查，报告模式与用户显式修订请求必须核查。核查员接收原问题、已生成答案、实际数据索引、来源及产物清单。
 
 - 独立 Runtime/RunContext 使用父运行的 owner、资料、预算和用量；默认父模型，可显式传入其他核查模型。
-- 最多 4 轮、45 秒，只开放 `read_data/run_python/submit_review`。
+- 最多 4 轮、90 秒，只开放 `read_data/run_python/submit_review`。
 - `Review/ReviewFinding/Coverage` 拒绝额外字段，verdict 只允许 pass/revise/insufficient。
 - finding.quote 必须在被核查答案中逐字存在；校验的是提交参数，不对自然语言意图做规则匹配。
 - 无提交、无效提交、模型失败和超时返回 unavailable/error_code，不能冒充 pass 或 insufficient；取消传播并清理核查运行。

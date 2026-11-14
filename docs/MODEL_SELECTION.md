@@ -65,9 +65,9 @@ FINSIGHT_AGENT_MAX_OUTPUT_TOKENS=16384
 
 ## 预算与失败
 
-原生研究按 RuntimeSettings 使用 FINSIGHT_RUN_TIMEOUT_SECONDS、FINSIGHT_RUN_TIMEOUT_BRIEF_SECONDS、FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS；未配置新名时兼容原预算名称，通常为研究 180 秒、报告 300 秒。模型上下文、输出额度、轮数、整 run token 与 provider RPM/TPM 分别约束。
+原生研究按 RuntimeSettings 使用 FINSIGHT_RUN_TIMEOUT_SECONDS、FINSIGHT_RUN_TIMEOUT_BRIEF_SECONDS、FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS；当前部署配置为研究/brief 300 秒、报告 600 秒；未配置新名时仍兼容旧预算名称及其默认值。模型上下文、输出额度、轮数、整 run token 与 provider RPM/TPM 分别约束。
 
-循环截断后在剩余预算内续写；供应商 429 的有界退避、模型探针、工具、压缩与核查各有真实成本记录。主回答最多预留 45 秒用于核查，循环依据上一轮实际模型耗时安排无工具的最后一轮；阶段切换不延长原截止时间。M4 核查最多 4 轮/45 秒，缺少结构化提交时在剩余轮数内要求模型提交，代码不代填结论；超时或无效结果不能伪装通过。具体调用次数和费用以 usage 为准，不以角色数量推定。
+循环截断后在剩余预算内续写；供应商 429 的有界退避、模型探针、工具、压缩与核查各有真实成本记录。主回答预留剩余时间的四分之一、最多 90 秒用于核查，循环依据上一轮实际模型耗时安排无工具的最后一轮；必要追加或保留原版的修订最多 120 秒，阶段切换不延长原截止时间。M4 核查最多 4 轮/90 秒，缺少结构化提交时在剩余轮数内要求模型提交，代码不代填结论；超时或无效结果不能伪装通过。具体调用次数和费用以 usage 为准，不以角色数量推定。
 
 原 LangGraph 合成的 JSON Mode、长超时和节点级参数属于历史调用点，不是当前工具循环预算。固定 US20 的 4096 输出、60 秒尝试和冻结交易窗口继续独立；用户 Prediction 的预算与后端接口合同另行管理，不被新研究设置批量覆盖。
 

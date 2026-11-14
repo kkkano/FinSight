@@ -1,0 +1,90 @@
+{
+  "run_id": 43561030393,
+  "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393",
+  "head_sha": "6ace1e6cddcdf72d025594e18ebf82d1d1f0782d",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "Stage 1 - Frontend Lint",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:20:15Z",
+      "completedAt": "2026-11-14T05:20:42Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132344519585"
+    },
+    {
+      "name": "Stage 2 - Backend Tests",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:20:45Z",
+      "completedAt": "2026-11-14T05:24:04Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132344651037"
+    },
+    {
+      "name": "Stage 5 - Frontend Unit (vitest)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:20:48Z",
+      "completedAt": "2026-11-14T05:21:25Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132344651042"
+    },
+    {
+      "name": "Stage 6 - Frontend Build",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:24:07Z",
+      "completedAt": "2026-11-14T05:24:36Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132345507768"
+    },
+    {
+      "name": "Stage 3 - Retrieval Eval Unit",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:24:07Z",
+      "completedAt": "2026-11-14T05:24:53Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132345507808"
+    },
+    {
+      "name": "Stage 7 - E2E",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:24:38Z",
+      "completedAt": "2026-11-14T05:27:45Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132345638324"
+    },
+    {
+      "name": "Stage 4 - Retrieval Gate",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:24:55Z",
+      "completedAt": "2026-11-14T05:27:23Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132345708167"
+    },
+    {
+      "name": "Stage 8 - Bundle Artifacts",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-14T05:27:48Z",
+      "completedAt": "2026-11-14T05:28:00Z",
+      "url": "https://github.com/kkkano/FinSight/actions/runs/43561030393/job/132346422985"
+    }
+  ],
+  "log_sha256": "999ef98bf721eee3a7e23ba8d95fff5bbc3cfba179060dff6377854cbd3a6719",
+  "test_summaries": [
+    "Stage 2 - Backend Tests\tRun backend pytest suite\t2026-11-14T05:24:01.5987357Z 2295 passed, 44 skipped, 1 warning in 150.77s (0:02:30)",
+    "Stage 5 - Frontend Unit (vitest)\tRun frontend unit tests\t2026-11-14T05:21:22.3418798Z  Test Files  81 passed (81)",
+    "Stage 3 - Retrieval Eval Unit\tRun retrieval eval runner tests\t2026-11-14T05:24:50.2184117Z 18 passed in 0.17s",
+    "Stage 3 - Retrieval Eval Unit\tRun rag_qualityV2 fast tests\t2026-11-14T05:24:51.1460874Z 13 passed in 0.39s",
+    "Stage 7 - E2E\tRun e2e tests\t2026-11-14T05:27:42.5552019Z   1 flaky",
+    "Stage 7 - E2E\tRun e2e tests\t2026-11-14T05:27:42.5553711Z   121 passed (2.2m)",
+    "Stage 4 - Retrieval Gate\tVerify isolated PostgreSQL contracts\t2026-11-14T05:26:46.8213642Z 15 passed, 1 skipped in 1.74s"
+  ],
+  "scope": "CI automation; does not assert model quality or production rollout",
+  "metrics": {
+    "backend_passed": 2295,
+    "backend_skipped": 44,
+    "frontend_unit_passed": 560,
+    "e2e_passed_first_attempt": 121,
+    "e2e_passed_after_retry": 1
+  }
+}

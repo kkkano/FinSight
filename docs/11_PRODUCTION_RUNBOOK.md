@@ -4,7 +4,7 @@
 
 ## 本次恢复与发布状态（2026-11-13）
 
-两个中断会话已在当前工作树接手。此前 Vectide 返回周额度耗尽；用户最初提供的 gpt-6-luna 在 Chat Completions/Responses 均明确 model_not_found，之后由用户重新指定 gpt-6.1-terra。新密钥只在忽略的私密配置和部署安全环境中使用。
+三个中断会话已在当前工作树接手。此前 Vectide 返回周额度耗尽；用户最初提供的 gpt-6-luna 在 Chat Completions/Responses 均明确 model_not_found，之后由用户重新指定 gpt-6.1-terra。新密钥只在忽略的私密配置和部署安全环境中使用。
 
 | 范围 | 当前事实 |
 |---|---|
@@ -15,9 +15,10 @@
 | 核查 | Terra 24/24 完整；独立 Sol 语义检出 12/12，未注错语义误报 0/12，不可用 0 |
 | 候选后端 | source SHA-256 af0ca3710e…，image 4a1ecd3d…；27 份冻结预测源码、184 份退役源码排除及依赖核对通过 |
 | 自动验证 | [CI 43528829268](https://github.com/kkkano/FinSight/actions/runs/43528829268) 全 8 阶段成功，E2E 122/122、0 flaky；独立质量评分仍待完成 |
-| 候选前端/compute | 前端 build agentic-20261113t234018z-9b17f5-4bb0ffb43a，image c1bc9d1a…；compute 沿用逐文件核验的两份镜像 |
+| 候选前端/compute | 前端 build agentic-20261114t001208z-2dcd09-a1faf24aae，image 58aeabd3…；compute 沿用逐文件核验的两份镜像 |
+| 发布预验证 | 2026-11-14 05:12 UTC，新清单 agentic-20261114-terra-77dd89b9-final 本地和远端验证通过，canonical SHA-256 7218e5bcc0868c691f5565d7952ff06fa7a550afa6b51cb69aade39d221e2332；仅预验证，尚未切换 |
 | 生产观测 | SSH 可用；当前 backend step5-api-20261111-a147e695613e，frontend 仍为 agent-20261110-2a5de207900b |
-| 容量与活动 | 23:46 UTC 精确旧上传去重后约 5.87 GiB、物理可用内存约 339 MiB、SwapFree 为 0；活动为 0，切换前再次采样 |
+| 容量与活动 | 2026-11-14 05:12 UTC 上传后磁盘约 5.55 GiB，活动为 0、健康接口正常；切换前再次采样 |
 | 身份验收 | 用户已在 Edge 用 GitHub 登录；模拟身份仅用于隔离测试，截图不能代替同 run 保存/恢复实测 |
 | 部署与观察 | 完整质量门槛前不切换；上线后记录健康、真实页面/会话、T+0/30m/2h/6h/12h/24h |
 
@@ -48,7 +49,7 @@ flowchart TD
 ## 0. 当前工作树与待发布状态
 
 - 生产入口只接 `backend/agent_runtime`，旧研究实现不再有选择开关；退役源码及测试只作 `tests/agent_eval/reference/` 对照并排除生产镜像，27 个冻结预测依赖按 manifest 保留。
-- M4 在代码中对数据回答默认核查、报告必核查；只读核查最多 4 轮/45 秒，报告保留原版后最多修订一次，未交付事项最多追加一次。该默认行为已实现，不等于核查准确率完成验收。
+- M4 在代码中对数据回答默认核查、报告必核查；只读核查最多 4 轮/90 秒，报告保留原版后最多修订一次，未交付事项最多追加一次。该默认行为已实现，不等于核查准确率完成验收。
 - M4 的 Step 5 配对测量与独立评审已完成：语义检出 12/12，原答案误报 1/12，不可用 1/24；核查意见另有单位/方向说明瑕疵。完整 M3 质量/耗时对比、48 项最终验收、真实登录浏览器及上线观察仍待收口。
 - 新源码、新前端及新 compute 计算库尚未作为这一整套运行时部署。下方旧镜像、数据库与 RAG 探针保留原日期和边界，不能当作本次上线证明。
 
@@ -159,7 +160,7 @@ compute `/health` 分别报告 `ready/error/available_memory_mb/job_memory_mb/ca
 
 ### 原生预算与网络边界
 
-研究与报告使用 FINSIGHT_RUN_TIMEOUT_SECONDS/FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS 等明确配置，未配置时兼容原预算名称。主模型、专业角色、压缩和有界补交共享本轮 token/配额与累计截止时间，核查最多 45 秒且服务集成受剩余收尾时间限制。
+研究与报告使用 FINSIGHT_RUN_TIMEOUT_SECONDS/FINSIGHT_RUN_TIMEOUT_REPORT_SECONDS 等明确配置，未配置时兼容原预算名称。主模型、专业角色、压缩和有界补交共享本轮 token/配额与累计截止时间，核查最多 90 秒且服务集成受剩余收尾时间限制。
 
 `backend/analysis_worker/finsight.py` 随 compute job 镜像交付，提供 drawdown_episodes、consecutive_declines、moving_averages、series_statistics、compare_series、financial_ratios、valuation_scenarios；财务纯函数由同镜像的 financial_math.py 提供。新增库与 frames 注入需要匹配的新 job 镜像，旧 compute healthy 不证明已经包含这些函数。API 或 dispatcher 单独重启不更新旧 job 镜像。本机完整库的五项真实作业检查见[证据](../tests/agent_eval/results/m3_compute_library_complete_health.json)，线上镜像尚未更新。
 
@@ -263,7 +264,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 核对前端镜像与 `app-version.json`，HTML/版本/Service Worker 缓存策略；生成中不自动重载。旧客户端可由用户使用 `/api/client-recovery` 修复，只清本站 SW/页面缓存，不清用户 localStorage、Cookie、模型设置或会话。
 
-健康发布后至少在 T+0、30m、2h、6h、12h、24h记录脱敏状态、错误、provider、LLM usage、Monitor I/O、物理内存/swap、磁盘和迁移 revision。目标延续既有 SLO：warm Dashboard p95 ≤2.5s、cold ≤8s，Prediction p95 ≤45s；Chat首段p95 ≤15s、完成p95 ≤90s；参考 Prediction 成功率 ≥95%，无 lease 时 Monitor I/O 为0。报告/复杂任务与降级单列，不能以增加超时宣称达到目标。
+健康发布后至少在 T+0、30m、2h、6h、12h、24h记录脱敏状态、错误、provider、LLM usage、Monitor I/O、物理内存/swap、磁盘和迁移 revision。目标延续既有 SLO：warm Dashboard p95 ≤2.5s、cold ≤8s，Prediction p95 ≤45s；Chat 首段 p95 ≤15s；原完成 p95 ≤90s 仅保留为历史性能参考，当前按用户要求以回答质量为主、耗时如实观测；参考 Prediction 成功率 ≥95%，无 lease 时 Monitor I/O 为0。报告/复杂任务与降级单列，不能以增加超时宣称达到目标。
 
 未完整观察则标待补；旧认证故障恢复不等于取得 24 小时 SLO 或新版本登录/研究端到端成绩。资源异常停止本轮 QA/作业并保留证据，不停其他项目；禁止在 API/QA 另开重型模型或整应用导出进程。观察日志不保存思考原文。
 
@@ -304,7 +305,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 
 当前仍为一个 API 进程/副本。额度租约、操作收据和 US20 公开账本的 SQLite 路径必须可写且持久化；增加副本前须提供 limits/actions/prediction_store 共享存储、全站额度与执行任务路由。多副本迁移作为条件性工作项，不直接打开 workers 或新增 PostgreSQL 表。
 
-本地协议测试与浏览器夹具不构成真实模型质量或线上验收。固定题集的同资料回放对比、M4 注错/误报评测、唯一计划第 12 节的 48 条产品验收及稳定观察分别留证。代码中 M4 已默认接入；评测正在进行，未测项目继续标为待验，不把默认启用等同质量验收。
+本地协议测试与浏览器夹具不构成真实模型质量或线上验收。固定题集的同资料回放对比、M4 注错/误报评测、唯一计划第 12 节的 48 条产品验收及稳定观察分别留证。代码中 M4 已默认接入；Terra 的 24 条合成配对核查与独立 Sol 语义评审已完成，不能据此推定所有真实金融问题均已验收。
 
 本轮代码与配置未部署。正式发布需重建前端，并重启后端以加载新配置域；模型额度、来源配置、冻结回归及现有持久数据需按发布前检查逐项确认。
 
@@ -313,7 +314,7 @@ Alembic 迁移先在隔离库验证旧 revision 到镜像 head、事务失败回
 | 项目 | 当前状态 | 待填证据 |
 |---|---|---|
 | M3 完整固定题集质量与耗时对比 | 待收口 | 题集/工具回放版本、baseline/after、独立评分、耗时中位数和失败原文 |
-| M4 注错检出率与未注错误报率 | Vectide 恢复批次 24/24 完成；检出 12/12、原答案误报 0/12 | [测量](../tests/agent_eval/results/m4_vectide_review_recovery.json)、[语义评审](../tests/agent_eval/results/m4_vectide_review_recovery_adjudication.json)；另有 1 项附带过度要求，前轮失败独立保留 |
+| M4 注错检出率与未注错误报率 | Terra 24/24 完成；独立 Sol 检出 12/12、未注错语义误报 0/12、不可用 0/24 | [Terra 测量](../tests/agent_eval/results/m4_apikl_terra_review_20261113.json)、[Sol 语义评审](../tests/agent_eval/results/m4_apikl_terra_adjudication_20261113.json)；合成样本，非盲评；此前供应商批次和失败独立保留 |
 | 48 项产品验收 | 未执行 | 每项实际输入、期望/结果、失败及证据链接；不能只给总勾选 |
 | 浏览器和真实账号 | 待验 | 明/暗/390px、原文/核查/修订/恢复、真实请求路径、OAuth 与跨 owner 拒绝 |
 | 新运行时部署 | 未执行 | 发布授权、源码/镜像 manifest、后端/前端/compute 标签与冻结文件哈希 |
