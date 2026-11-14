@@ -152,6 +152,13 @@ def to_model(result: ToolResult | dict, budget: int, handle=None, source_ids=Non
         header.append("来源编号：" + "、".join(f"[{number}]" for number in ids[len(result.sources):]))
     if result.status == "error":
         header.extend([result.error.user_message, result.error.suggestion or ""])
+        if result.kind == "computation" and isinstance(result.data, dict):
+            diagnostic = result.data.get("code_error")
+            if isinstance(diagnostic, dict):
+                details = {key: diagnostic[key] for key in ("type", "message", "line")
+                           if isinstance(diagnostic.get(key), (str, int))}
+                if details:
+                    header.append("计算代码诊断：" + _json(details))
         return _prefix("\n".join(filter(None, header)), budget)
     data = result.data
     rows = result_rows(result)

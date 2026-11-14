@@ -27,6 +27,8 @@ flowchart LR
 
 开放 Python 只交给独立 worker。datasets 保留原包，frames/get_frame 提供表格，finsight 提供回撤、连续下跌、均线、统计和共同基准比较。需返回的数据赋给 result；日志、只 print 或 worker healthy 不等于已有可展示计算结果。SEC 多表、财期、币种与缺失值均保持实际来源含义。
 
+DataFrame 结果按原始行记录转为 JSON，数值不舍入、不自动填零；索引默认不传输，需要时先 `reset_index()`。NaN/Infinity 和超过 1 MiB 的输出仍拒绝。模型能读取计算失败的具体类型、消息及行号；这些诊断用于修改代码，不能当作已完成的计算或图表。
+
 ### 声明式产物字段
 
 | 字段 | 含义与限制 |

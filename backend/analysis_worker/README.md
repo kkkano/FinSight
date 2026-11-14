@@ -2,7 +2,7 @@
 
 更新：2026-11-13。当前 dispatcher/job 源码、默认配置和实际发布分别记录；生产身份及本轮候选见[运行手册](../../docs/11_PRODUCTION_RUNBOOK.md)。
 
-HTTP 调度器不运行用户 Python。它为每次请求创建独立 Docker 输入卷，通过可信初始化容器只写入 JSON，再让非 root 作业容器只读挂载输入。用户代码在 `datasets`、`pd` 和 `np` 可用的命名空间中赋值 `result`，结果必须可序列化为有限数值 JSON。图表仍经过主服务的声明式 artifact 校验，不能提交可执行 HTML/JS 文件。
+HTTP 调度器不运行用户 Python。它为每次请求创建独立 Docker 输入卷，通过可信初始化容器只写入 JSON，再让非 root 作业容器只读挂载输入。用户代码在 `datasets`、`pd` 和 `np` 可用的命名空间中赋值 `result`，结果必须可序列化为有限数值 JSON。DataFrame（包括嵌套值）按 `to_dict(orient="records")` 转换，数值不变且不包含索引；有意义的索引应先 `reset_index()`。Series 仍需显式转换，非有限数值与 1 MiB 输出限制保持不变。图表仍经过主服务的声明式 artifact 校验，不能提交可执行 HTML/JS 文件。
 
 默认仅允许一个任务、15 秒总预算、512 MB 内存、1 CPU、64 PID。网络关闭、根目录只读、capabilities 全部删除、禁止提权，使用 Docker 内置 seccomp、私有 PID/IPC/cgroup namespace 和独立 64 MB `/tmp`。代码最多 16000 字符，请求最多 4 MiB，结果最多 1 MiB，日志保留最多 16 KiB。直接写文件描述符造成的输出淹没会触发取消。
 

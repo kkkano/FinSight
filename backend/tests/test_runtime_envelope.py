@@ -97,6 +97,30 @@ def test_error_projection_does_not_display_untrusted_exception_payload():
     assert "provider-secret-detail" not in str(to_ui(result, name="get_stock_price"))
 
 
+def test_compute_failure_keeps_actionable_code_diagnostics_for_model_only():
+    raw = {"status": "error", "error": "analysis_code_or_result_invalid", "logs": "private-job-log",
+           "code_error": {"type": "TypeError", "message": "Object of type DataFrame is not JSON serializable",
+                          "line": 3, "traceback": "private-traceback"}}
+    result = adapt_result("run_analysis_code", raw)
+    before = deepcopy(result.model_dump())
+    projection = to_model(result, 1000)
+    assert "TypeError" in projection and "DataFrame is not JSON serializable" in projection
+    assert '"line":3' in projection
+    assert "private-job-log" not in projection and "private-traceback" not in projection
+    display = json.dumps(to_ui(result, name="run_python"), ensure_ascii=False)
+    assert "DataFrame is not JSON serializable" not in display and "private-traceback" not in display
+    assert result.model_dump() == before
+
+
+@pytest.mark.parametrize("budget", [10, 64, 300])
+def test_compute_diagnostic_projection_stays_bounded_without_changing_original(budget):
+    result = adapt_result("run_analysis_code", {"status": "error", "error": "analysis_code_or_result_invalid",
+        "code_error": {"type": "ValueError", "message": "invalid_valuation_assumptions" * 100, "line": 1}})
+    before = deepcopy(result.model_dump())
+    assert tokens(to_model(result, budget)) <= budget
+    assert result.model_dump() == before
+
+
 def test_ui_projection_exposes_kind_true_counts_and_bounded_rows():
     result = ToolResult(status="ok", kind="table", data={"rows": [{"value": i} for i in range(12)]})
     display = to_ui(result, name="render_table", arguments={"ticker": "FIXTURE"})

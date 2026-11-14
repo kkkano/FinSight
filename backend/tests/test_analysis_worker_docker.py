@@ -221,3 +221,33 @@ result={'difference':b.revenue-a.revenue,'latest':b.period_end,'currency':b.curr
     assert invalid['status'] == 'error'
     await assert_no_job_resources(dispatcher)
     record_observation('financial-alias-and-scalars', {'calculation': result, 'nonfinite_rejected': invalid['status']=='error'})
+
+
+@pytest.mark.asyncio
+async def test_real_dataframe_results_preserve_values_and_output_limits():
+    dispatcher = Dispatcher(Settings(enabled=True, token="integration-test-token-00000000000",
+        image=os.getenv("FINSIGHT_ANALYSIS_JOB_IMAGE", "finsight-compute-job:local"),
+        memory_mb=128, reserve_memory_mb=128, worker_id="test-" + uuid.uuid4().hex))
+    await dispatcher.initialize()
+    assert dispatcher.ready, dispatcher.error
+    code = """result = pd.DataFrame({
+    'PE': [15,20,25,30,35], 'EPS_6': [90,120,150,180,210],
+    'EPS_8': [120,160,200,240,280], 'EPS_10': [150,200,250,300,350],
+    'EPS_12': [180,240,300,360,420],
+})"""
+    grid = await dispatcher.run(JobRequest(code, {}))
+    assert grid["status"] == "ok", grid
+    assert grid["result"] == [{"PE": pe, "EPS_6": 6 * pe, "EPS_8": 8 * pe,
+                               "EPS_10": 10 * pe, "EPS_12": 12 * pe} for pe in (15, 20, 25, 30, 35)]
+    nested = await dispatcher.run(JobRequest(
+        "result={'rows':[pd.DataFrame({'revenue':[np.int64(96221000000)], 'period_end':[pd.Timestamp('2026-07-26')]})]}", {}))
+    assert nested["status"] == "ok", nested
+    assert nested["result"] == {"rows": [[{"revenue": 96221000000, "period_end": "2026-07-26T00:00:00"}]]}
+    invalid = await dispatcher.run(JobRequest("result=pd.DataFrame({'value':[np.float64('nan')]})", {}))
+    assert invalid["status"] == "error" and invalid["error"] == "analysis_code_or_result_invalid"
+    oversized = await dispatcher.run(JobRequest("result=pd.DataFrame({'value':['x'*(1024*1024)]})", {}))
+    assert oversized["status"] == "error" and oversized["error"] == "analysis_output_limit"
+    await assert_no_job_resources(dispatcher)
+    record_observation("dataframe-result-encoding", {"grid": grid, "nested": nested,
+        "nonfinite_rejected": invalid["status"] == "error", "oversized_rejected": oversized["status"] == "error",
+        "remaining_job_resources": 0})

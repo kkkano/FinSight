@@ -77,3 +77,5 @@ tests/agent_eval/results/m0_apikl_terra_capacity_vision_20261113.json -text whit
 frontend/src/hooks/useChatStream.test.ts -text whitespace=cr-at-eol
 
 frontend/src/hooks/useChatStream.ts -text whitespace=cr-at-eol
+
+backend/agent_runtime/registry.py -text whitespace=cr-at-eol

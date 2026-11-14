@@ -60,6 +60,8 @@ def run() -> dict:
                 return value.item()
             if isinstance(value, pd.Timestamp):
                 return value.isoformat()
+            if isinstance(value, pd.DataFrame):
+                return value.to_dict(orient="records")
             return super().default(value)
     class Frames(Mapping):
         def __getitem__(self, ref):
