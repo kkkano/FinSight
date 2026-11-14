@@ -55,6 +55,9 @@ frontend/e2e/contract_fixtures/real_charts/**/*.json -text -diff
 docs/reports/2026-11-13_ci_e2e/*.json -text whitespace=cr-at-eol
 
 # 完整冻结provider与分页评分实现按评测清单原字节绑定。
+tests/agent_eval/run.py -text whitespace=cr-at-eol
+tests/agent_eval/environment_preflight.py -text whitespace=cr-at-eol
+tests/agent_eval/offline_network_isolation.py -text whitespace=cr-at-eol
 tests/agent_eval/frozen_corpus_provider.py -text whitespace=cr-at-eol
 tests/agent_eval/frozen_offline_worker.py -text whitespace=cr-at-eol
 tests/agent_eval/run_frozen_eval.py -text whitespace=cr-at-eol
