@@ -4,7 +4,12 @@ import json
 import os
 from pathlib import Path
 import socket
+import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 from unittest.mock import patch
+
+import pytest
 
 from .frozen_corpus_provider import build_corpus
 from .frozen_offline_worker import OfflineWorker
@@ -56,3 +61,35 @@ def test_offline_network_guard_does_not_break_parallel_parent_asyncio_socket_wak
         assert proof["kind"] == "structured_data_gap" and proof["network_access"] is False
     finally:
         worker.close()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="内核 seccomp 合同只在 Linux 验证；Windows 不宣称原生网络隔离")
+def test_linux_worker_denies_native_libc_libcurl_and_threads_but_preserves_parent_http_and_unix(tmp_path):
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"parent-network-positive-control")
+
+        def log_message(self, *_args):
+            pass
+
+    from urllib.request import urlopen
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    serving = Thread(target=server.serve_forever, daemon=True)
+    serving.start()
+    url = f"http://127.0.0.1:{server.server_port}/health"
+    worker = OfflineWorker(fixture(tmp_path))
+    try:
+        assert urlopen(url, timeout=5).status == 200
+        observed, proof = worker.retrieve("__network_guard_probe__", {"local_probe_url": url})
+        assert observed["passed"]
+        assert observed["libcurl_return"] == 7 and observed["libcurl_ffi_errno"] == 1
+        assert proof["kernel_network_guard"]["installed"]
+        assert proof["kernel_network_guard"]["kernel_status"]["NoNewPrivs"] == "1"
+        assert urlopen(url, timeout=5).status == 200
+    finally:
+        worker.close()
+        server.shutdown()
+        server.server_close()
+        serving.join(timeout=5)

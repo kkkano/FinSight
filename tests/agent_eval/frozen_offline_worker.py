@@ -34,6 +34,8 @@ class OfflineWorker:
         environment = {key: value for key, value in os.environ.items()
                        if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "LOCALAPPDATA"}}
         environment.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+        if os.getenv("FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST"):
+            environment["FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST"] = os.environ["FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST"]
         self.process = subprocess.Popen([sys.executable, "-B", "-X", "utf8", str(Path(__file__).resolve()),
                                         "--serve", str(self.corpus_root)], cwd=ROOT, env=environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log,
@@ -95,6 +97,8 @@ def serve(corpus_root: Path):
     sys.stdout = sys.stderr
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "tests"))
+    from agent_eval.offline_network_isolation import install_network_filter
+    network_guard = install_network_filter()
     from agent_eval.frozen_corpus_provider import FrozenCorpus
     from agent_eval.run import financial_tool_specs
     corpus = FrozenCorpus(corpus_root)
@@ -104,8 +108,16 @@ def serve(corpus_root: Path):
         response = {"request_id": request["request_id"]}
         try:
             name = request["tool"]
-            callback = specs[name].invoke
-            response["result"] = corpus.retrieve(name, request["arguments"], callback)
+            if name == "__environment_info__":
+                from agent_eval.environment_preflight import inspect_environment
+                response["result"] = inspect_environment(), corpus.marker({"kind": "readonly_environment_preflight"})
+            elif name == "__network_guard_probe__":
+                from agent_eval.offline_network_isolation import probe_network_filter
+                response["result"] = probe_network_filter(request["arguments"]["local_probe_url"]), corpus.marker({"kind": "kernel_network_guard_probe"})
+            else:
+                callback = specs[name].invoke
+                response["result"] = corpus.retrieve(name, request["arguments"], callback)
+            response["result"][1]["kernel_network_guard"] = network_guard
         except Exception as exc:
             response["error"] = "frozen_offline_execution_" + type(exc).__name__
         print(json.dumps(response, ensure_ascii=False), file=wire, flush=True)
