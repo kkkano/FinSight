@@ -1,134 +1,165 @@
 {
-  "updated_at": "2026-11-14T00:07:37.377428+00:00",
-  "current_documents": 25,
+  "updated_at": "2026-11-14T16:15:24.749788+00:00",
+  "current_documents": 26,
   "utf8": [
     {
-      "file": "README.md",
+      "file": "AGENTS.md",
       "valid": true,
-      "replacement_character": false
-    },
-    {
-      "file": "README_CN.md",
-      "valid": true,
-      "replacement_character": false
-    },
-    {
-      "file": "CONTRIBUTING.md",
-      "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "1df76516794dc4d5dc6ef41c51cdcbf395779517affd354d2664d9c61a50e4e4"
     },
     {
       "file": "CHANGELOG.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "3e947ae72cb8b83386e650739b6c324aae6c20607f4e31ac2c30d8f3d54cec58"
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "7e11924ef56cd7b720aeda7773dc73f49127c16de0da9e465a89f23199abea0d"
     },
     {
       "file": "DESIGN.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "1a7877148b4311d55127cd7ad055767437a68352752f384c022d199f0696ba0e"
     },
     {
-      "file": "AGENTS.md",
+      "file": "README.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "960bdda3e5ec6a77b27bcbde939bc65135710fee06616ff94fe5240410ac5f74"
     },
     {
-      "file": "frontend/README.md",
+      "file": "README_CN.md",
       "valid": true,
-      "replacement_character": false
-    },
-    {
-      "file": "frontend/src/styles/tokens.md",
-      "valid": true,
-      "replacement_character": false
-    },
-    {
-      "file": "backend/analysis_worker/README.md",
-      "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "ccf28cf0799d4e161590210dfc21381274872e7328ebaed045e964b36224f005"
     },
     {
       "file": "backend/agent_runtime/assets/README.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "009ef949d676ab8c9de4c62ba4f2466b276e292404f5b22b8971115c3783971f"
+    },
+    {
+      "file": "backend/analysis_worker/README.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "dc1ecd778a2d48af777a78c5c2094a3f3a07d0b875a533d2676240e77a7a2ac9"
     },
     {
       "file": "docs/01_ARCHITECTURE.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "b648b0b5378b5214416f0e52b0602105cf4b986674a18fa86660e310e7458b7d"
     },
     {
       "file": "docs/05_RAG_ARCHITECTURE.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "d55876ae56716786bfccbddfe39cfe3b75943c0430ffeb4500a0b6479e0cce16"
     },
     {
       "file": "docs/11_PRODUCTION_RUNBOOK.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "0330e685a944d5112d73ce292d83cfe423db700ca82dd2b969842c7935bf335e"
     },
     {
       "file": "docs/AGENTS.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "814da6e7dce324a7cbdfe31430dd2568f6de80c4b10d39f41429fb07c1ec483b"
     },
     {
       "file": "docs/AGENTS_GUIDE.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "7e7158173dfe81ac711ad3f92ef2b1eb4f60fc4a902ed0c4f954d6f35d8ba927"
     },
     {
       "file": "docs/DOCS_INDEX.md",
       "valid": true,
-      "replacement_character": false
-    },
-    {
-      "file": "docs/execution-event-contract.md",
-      "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "d3ccab727aaaca589c6b18aa9b56fd62267059f77fe1faaa25d1ea0d1db1f3d7"
     },
     {
       "file": "docs/HALLUCINATION_MITIGATION.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "f4cba7e6dbf0befe63173dcdd3915a52ec580df47d52e533bf0affe4f35cf66f"
     },
     {
       "file": "docs/MODEL_SELECTION.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "cba3f5832f8d769c3e13655a5f70452efb6cdc6f77ab7268279cb02ff77b03ab"
     },
     {
       "file": "docs/PREDICTION_TRACK_RECORD.md",
       "valid": true,
-      "replacement_character": false
-    },
-    {
-      "file": "docs/rag-evaluation-guide.md",
-      "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "14337356a9a0e2d7a9ae6fed42e9ea4733447e3d850589d54a2b49417fc8f87f"
     },
     {
       "file": "docs/REPORT_CHART_SPEC.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "cc78b843cdef7c5ee49efb4c24eebc26095bcac025240251947bc086208a68c3"
+    },
+    {
+      "file": "docs/execution-event-contract.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "7e90b3562ad3421f7c1cbca484012b44a40a2e8c69da274256d2ffa141a81806"
     },
     {
       "file": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "045e3876524ea89bec7dbd5f892ea3c4ab1a218e859c399f7489be0ef890747f"
     },
     {
-      "file": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "file": "docs/rag-evaluation-guide.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "002600d0a97a18f62762fa86f6d8286e737d7b16df6b1861adbb1fd88b556d6e"
     },
     {
       "file": "docs/reports/2026-11-13_ci_e2e/README.md",
       "valid": true,
-      "replacement_character": false
+      "replacement_character": false,
+      "sha256": "9382203d2ad4ca10331543680159ca9a53448550b0d56ef68caa0e2b0644eda4"
+    },
+    {
+      "file": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "866ef32d27bdb0dbab7394e4e8391171d3c62de60324a7c73dd5c6e4353e1456"
+    },
+    {
+      "file": "frontend/README.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "30255ed6d8848dc759ff30800bae2b4911c6f4e538b29274eeb5176c36eed5cd"
+    },
+    {
+      "file": "frontend/src/styles/tokens.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "d8535118ad394f9fb3658a1edead1a9b3b14b00cbaab491dcbff50db4f2a5c87"
+    },
+    {
+      "file": "tests/agent_eval/README.md",
+      "valid": true,
+      "replacement_character": false,
+      "sha256": "03bbbdffaaa1e42315e65ade9398b4f1ad237e75f7d607c9c70aa65084e07843"
     }
   ],
-  "links_checked": 143,
+  "links_checked": 163,
   "missing_links": [],
   "mermaid": {
     "passed": 17,
@@ -224,7 +255,7 @@
       {
         "file": "docs/11_PRODUCTION_RUNBOOK.md",
         "number": 1,
-        "line": 24,
+        "line": 26,
         "status": "passed",
         "parsed": true,
         "width": 451.203125,
@@ -241,7 +272,7 @@
       {
         "file": "docs/11_PRODUCTION_RUNBOOK.md",
         "number": 2,
-        "line": 57,
+        "line": 59,
         "status": "passed",
         "parsed": true,
         "width": 1552,
@@ -258,7 +289,7 @@
       {
         "file": "docs/11_PRODUCTION_RUNBOOK.md",
         "number": 3,
-        "line": 132,
+        "line": 134,
         "status": "passed",
         "parsed": true,
         "width": 1552,
@@ -275,7 +306,7 @@
       {
         "file": "docs/AGENTS_GUIDE.md",
         "number": 1,
-        "line": 25,
+        "line": 27,
         "status": "passed",
         "parsed": true,
         "width": 1065.390625,
@@ -309,7 +340,7 @@
       {
         "file": "docs/execution-event-contract.md",
         "number": 2,
-        "line": 167,
+        "line": 169,
         "status": "passed",
         "parsed": true,
         "width": 706.03125,
@@ -411,7 +442,7 @@
       {
         "file": "docs/REPORT_CHART_SPEC.md",
         "number": 2,
-        "line": 79,
+        "line": 81,
         "status": "passed",
         "parsed": true,
         "width": 668.109375,
@@ -426,13 +457,108 @@
         "screenshot_sha256": "4aa4a39e4ac1e69a90210ced4ff50953add0bd8ab87a4f7286eadac7bf3d2733"
       }
     ],
-    "revalidation": "17份已渲染原件及当前代码块SHA核对；图定义未变，未重复浏览器渲染"
+    "revalidation": "当前17图定义SHA与既有34份SVG/PNG各自SHA匹配；未改图，未重复渲染"
   },
   "production_test": false,
   "links": [
     {
+      "source": "CONTRIBUTING.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "backend/config/settings.py",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": ".env.example",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": ".env.server.example",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "tests/agent_eval/reference/manifest.json",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "tests/agent_eval/README.md",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "docs/DOCS_INDEX.md",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Main.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Streaming.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/ChatChart.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Dashboard.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/RightPanel.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/TrackRecord.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Welcome.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/canvas.json",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/source-manifest.json",
+      "exists": true
+    },
+    {
       "source": "README.md",
       "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "CONTRIBUTING.md",
       "exists": true
     },
     {
@@ -551,146 +677,6 @@
       "exists": true
     },
     {
-      "source": "CONTRIBUTING.md",
-      "target": "docs/11_PRODUCTION_RUNBOOK.md",
-      "exists": true
-    },
-    {
-      "source": "CONTRIBUTING.md",
-      "target": "backend/config/settings.py",
-      "exists": true
-    },
-    {
-      "source": "CONTRIBUTING.md",
-      "target": ".env.example",
-      "exists": true
-    },
-    {
-      "source": "CONTRIBUTING.md",
-      "target": ".env.server.example",
-      "exists": true
-    },
-    {
-      "source": "CONTRIBUTING.md",
-      "target": "tests/agent_eval/reference/manifest.json",
-      "exists": true
-    },
-    {
-      "source": "CONTRIBUTING.md",
-      "target": "tests/agent_eval/README.md",
-      "exists": true
-    },
-    {
-      "source": "CONTRIBUTING.md",
-      "target": "docs/DOCS_INDEX.md",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/11_PRODUCTION_RUNBOOK.md",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/Main.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/Streaming.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/ChatChart.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/Dashboard.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/RightPanel.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/TrackRecord.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/Welcome.dc.html",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/canvas.json",
-      "exists": true
-    },
-    {
-      "source": "DESIGN.md",
-      "target": "docs/design/2026-11-06_claude_agent_chat/source-manifest.json",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "../DESIGN.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "../docs/01_ARCHITECTURE.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "../tests/agent_eval/README.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "src/styles/tokens.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "../docs/execution-event-contract.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "../docs/REPORT_CHART_SPEC.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/README.md",
-      "target": "../docs/11_PRODUCTION_RUNBOOK.md",
-      "exists": true
-    },
-    {
-      "source": "frontend/src/styles/tokens.md",
-      "target": "../index.css",
-      "exists": true
-    },
-    {
-      "source": "frontend/src/styles/tokens.md",
-      "target": "../../tailwind.config.js",
-      "exists": true
-    },
-    {
-      "source": "frontend/src/styles/tokens.md",
-      "target": "../../../DESIGN.md",
-      "exists": true
-    },
-    {
       "source": "backend/analysis_worker/README.md",
       "target": "../../docs/11_PRODUCTION_RUNBOOK.md",
       "exists": true
@@ -737,6 +723,11 @@
     },
     {
       "source": "docs/05_RAG_ARCHITECTURE.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/05_RAG_ARCHITECTURE.md",
       "target": "reports/2026-11-07_agent_runtime_implementation.md",
       "exists": true
     },
@@ -748,6 +739,31 @@
     {
       "source": "docs/05_RAG_ARCHITECTURE.md",
       "target": "rag-evaluation-guide.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m4_apikl_terra_review_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m4_apikl_terra_adjudication_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-13_ci_e2e/ci-proof-913da509.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-13_ci_e2e/ci-proof-d9ab11a4.json",
       "exists": true
     },
     {
@@ -796,33 +812,8 @@
       "exists": true
     },
     {
-      "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "execution-event-contract.md",
-      "exists": true
-    },
-    {
-      "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "reports/2026-11-07_natural_response_compute/README.md",
-      "exists": true
-    },
-    {
-      "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "reports/2026-11-07_agent_runtime_implementation.md",
-      "exists": true
-    },
-    {
-      "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "../tests/agent_eval/results/m4_vectide_review_recovery.json",
-      "exists": true
-    },
-    {
-      "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "../tests/agent_eval/results/m4_vectide_review_recovery_adjudication.json",
-      "exists": true
-    },
-    {
-      "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "../tests/agent_eval/results/m3_compute_library_complete_health.json",
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
       "exists": true
     },
     {
@@ -1051,8 +1042,8 @@
       "exists": true
     },
     {
-      "source": "docs/execution-event-contract.md",
-      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "source": "docs/HALLUCINATION_MITIGATION.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
       "exists": true
     },
     {
@@ -1096,12 +1087,7 @@
       "exists": true
     },
     {
-      "source": "docs/rag-evaluation-guide.md",
-      "target": "archive/2026-10-03-foundation-refactor/README.md",
-      "exists": true
-    },
-    {
-      "source": "docs/rag-evaluation-guide.md",
+      "source": "docs/PREDICTION_TRACK_RECORD.md",
       "target": "11_PRODUCTION_RUNBOOK.md",
       "exists": true
     },
@@ -1116,8 +1102,48 @@
       "exists": true
     },
     {
+      "source": "docs/execution-event-contract.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/execution-event-contract.md",
+      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "docs/rag-evaluation-guide.md",
+      "target": "archive/2026-10-03-foundation-refactor/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/rag-evaluation-guide.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_ci_e2e/README.md",
+      "target": "ci-proof.json",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_ci_e2e/README.md",
+      "target": "ci-proof-6ace1e6c.json",
+      "exists": true
+    },
+    {
       "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
       "target": "../../11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "../../11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "../2026-11-13_ci_e2e/ci-proof-913da509.json",
       "exists": true
     },
     {
@@ -1141,9 +1167,216 @@
       "exists": true
     },
     {
-      "source": "docs/reports/2026-11-13_ci_e2e/README.md",
-      "target": "ci-proof.json",
+      "source": "frontend/README.md",
+      "target": "../DESIGN.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/01_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../tests/agent_eval/README.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "src/styles/tokens.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/REPORT_CHART_SPEC.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/src/styles/tokens.md",
+      "target": "../index.css",
+      "exists": true
+    },
+    {
+      "source": "frontend/src/styles/tokens.md",
+      "target": "../../tailwind.config.js",
+      "exists": true
+    },
+    {
+      "source": "frontend/src/styles/tokens.md",
+      "target": "../../../DESIGN.md",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m0_apikl_terra_probe_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m0_apikl_judge_probe_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m0_apikl_protocol_followup_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m4_apikl_terra_review_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m4_apikl_terra_adjudication_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/apikl_matched_execution_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/apikl_frozen_pilot_execution_20261113_isolated.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/apikl_frozen_remaining_execution_20261113_isolated.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m0_apikl_terra_metadata_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m0_apikl_terra_public_docs_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m0_apikl_terra_capacity_vision_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json",
       "exists": true
     }
-  ]
+  ],
+  "json_examples": [
+    {
+      "file": "backend/analysis_worker/README.md",
+      "block": 1,
+      "syntax": "passed",
+      "scope": "protocol_shapes_not_live_requests"
+    },
+    {
+      "file": "docs/execution-event-contract.md",
+      "block": 1,
+      "syntax": "passed",
+      "scope": "protocol_shapes_not_live_requests"
+    },
+    {
+      "file": "docs/execution-event-contract.md",
+      "block": 2,
+      "syntax": "passed",
+      "scope": "protocol_shapes_not_live_requests"
+    },
+    {
+      "file": "docs/execution-event-contract.md",
+      "block": 3,
+      "syntax": "passed",
+      "scope": "protocol_shapes_not_live_requests"
+    },
+    {
+      "file": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+      "block": 1,
+      "syntax": "passed",
+      "scope": "protocol_shapes_not_live_requests"
+    }
+  ],
+  "current_doc_audit": {
+    "source_head": "913da5099e3fcf08cfa579cce78a689d134a25a9",
+    "scope": "current_docs_only; no deployment or model_quality_claim",
+    "private_value_matches": 0,
+    "commands": [
+      {
+        "command": "scripts/run_agent_runtime.py --help",
+        "result": "passed",
+        "scope": "CLI parameters only; server not started"
+      },
+      {
+        "command": "python -m pip --version",
+        "result": "passed",
+        "scope": "version only; dependency installation not performed"
+      },
+      {
+        "command": "node --version",
+        "result": "passed",
+        "observed": "24.14.1"
+      },
+      {
+        "command": "npm --version",
+        "result": "passed",
+        "observed": "11.11.0"
+      },
+      {
+        "command": "npm run --prefix frontend",
+        "result": "passed",
+        "scope": "script names verified; dev/build not rerun"
+      },
+      {
+        "command": "private WSL docker compose version",
+        "result": "not_verified_locally",
+        "reason": "compose plugin absent"
+      },
+      {
+        "command": "private WSL docker compose config --quiet with example configuration",
+        "result": "not_verified_locally",
+        "reason": "compose plugin absent; no installation or production operation attempted"
+      }
+    ],
+    "adaptive_memory_examples": {
+      "passed": 7,
+      "total": 7,
+      "method": "actual Dispatcher.job_memory_mb; no Docker initialization"
+    },
+    "remaining_final_fields": [
+      "complete M3 paired grading and comparison",
+      "current-source 90-second M4 measurements",
+      "new release manifest/actual deployment",
+      "48-item real/controlled results",
+      "actual observation duration"
+    ],
+    "latest_known_ci": {
+      "run_id": 43574089889,
+      "source_head": "913da5099e3fcf08cfa579cce78a689d134a25a9",
+      "conclusion": "success",
+      "backend_passed": 2341,
+      "backend_skipped": 45,
+      "frontend_unit_passed": 563,
+      "e2e_first_pass": 119,
+      "e2e_retry_pass": 3
+    }
+  },
+  "closeout_verification": {
+    "invalid_json_examples": [],
+    "changed_mermaid_artifacts": [],
+    "private_value_scan": "tmp/r261113/closeout-secret-scan.json",
+    "production_contacted": false
+  }
 }

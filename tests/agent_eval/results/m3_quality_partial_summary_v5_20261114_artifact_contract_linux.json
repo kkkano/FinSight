@@ -1,0 +1,148 @@
+{
+  "at": "2026-11-14T16:14:26.958856+00:00",
+  "status": "partial_judge_quota_exhausted",
+  "reason": "APIKL key returned HTTP 429 API_KEY_QUOTA_EXHAUSTED for gpt-6.1-sol and gpt-6.1-terra",
+  "judge_model": "gpt-6.1-sol",
+  "subject_model": "gpt-6.1-terra",
+  "paired_cases": 37,
+  "paired_case_ids": [
+    "attribution-01",
+    "attribution-02",
+    "attribution-03",
+    "attribution-04",
+    "attribution-05",
+    "attribution-06",
+    "comparison-01",
+    "comparison-02",
+    "comparison-03",
+    "comparison-04",
+    "comparison-05",
+    "facts-01",
+    "facts-02",
+    "facts-03",
+    "facts-04",
+    "facts-05",
+    "facts-06",
+    "multiturn-01",
+    "multiturn-02",
+    "multiturn-03",
+    "multiturn-04",
+    "news-01",
+    "news-03",
+    "news-04",
+    "news-05",
+    "statistics-01",
+    "statistics-02",
+    "statistics-03",
+    "statistics-04",
+    "statistics-05",
+    "statistics-06",
+    "valuation-01",
+    "valuation-02",
+    "valuation-03",
+    "valuation-04",
+    "valuation-05",
+    "valuation-06"
+  ],
+  "paired": {
+    "current_better": 18,
+    "baseline_better": 5,
+    "tie": 14
+  },
+  "sides": {
+    "current": {
+      "input_sha256": "c7d48ef13cb4ad58735725f6547ee64c3fc7c18b6c1c5de3a6cf70ee88601fef",
+      "cases": 60,
+      "judged": 37,
+      "judge_errors": {
+        "model_stream_error": 1,
+        "model_http_429": 22
+      },
+      "normal_terminal_cases": 60,
+      "artifacts_met_cases": 56,
+      "full_score_cases_among_judged": 20,
+      "paired_mean": {
+        "answered": 1.5135135135135136,
+        "numbers": 1.7837837837837838,
+        "limitations": 0.8918918918918919,
+        "presentation": 1,
+        "no_internal_identifiers": 0.9459459459459459,
+        "total": 6.135135135135135
+      }
+    },
+    "baseline": {
+      "input_sha256": "466ec15702290fabfdd663e03c7f022180d2ba634acd08cc910fc3099c95fbf7",
+      "cases": 60,
+      "judged": 47,
+      "judge_errors": {
+        "model_http_429": 13
+      },
+      "normal_terminal_cases": 54,
+      "artifacts_met_cases": 52,
+      "full_score_cases_among_judged": 13,
+      "paired_mean": {
+        "answered": 1.3783783783783783,
+        "numbers": 1.5945945945945945,
+        "limitations": 0.7837837837837838,
+        "presentation": 0.8378378378378378,
+        "no_internal_identifiers": 0.7027027027027027,
+        "total": 5.297297297297297
+      }
+    }
+  },
+  "mean_total_difference_on_paired": 0.8378378378378377,
+  "current_worse_cases": [
+    {
+      "case_id": "attribution-02",
+      "current": 5,
+      "baseline": 6
+    },
+    {
+      "case_id": "attribution-06",
+      "current": 3,
+      "baseline": 5
+    },
+    {
+      "case_id": "comparison-04",
+      "current": 5,
+      "baseline": 6
+    },
+    {
+      "case_id": "facts-05",
+      "current": 6,
+      "baseline": 7
+    },
+    {
+      "case_id": "valuation-04",
+      "current": 5,
+      "baseline": 7
+    }
+  ],
+  "unjudged_current_cases": [
+    "actions-01",
+    "actions-02",
+    "actions-03",
+    "concepts-01",
+    "concepts-02",
+    "concepts-03",
+    "concepts-04",
+    "failures-01",
+    "failures-02",
+    "failures-03",
+    "failures-04",
+    "failures-05",
+    "local_markets-01",
+    "local_markets-02",
+    "local_markets-03",
+    "local_markets-04",
+    "multiturn-05",
+    "multiturn-06",
+    "news-02",
+    "reports-01",
+    "reports-02",
+    "reports-03",
+    "reports-04"
+  ],
+  "release_gate_satisfied": false,
+  "production_switched": false
+}

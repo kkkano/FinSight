@@ -1,0 +1,58 @@
+{
+  "databaseId": 43601915852,
+  "headSha": "d9ab11a4eb716c036f48247b64ec8d5fbed27bf5",
+  "status": "completed",
+  "conclusion": "success",
+  "url": "https://github.com/kkkano/FinSight/actions/runs/43601915852",
+  "jobs": [
+    {
+      "name": "Stage 1 - Frontend Lint",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 5 - Frontend Unit (vitest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 2 - Backend Tests",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 6 - Frontend Build",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 3 - Retrieval Eval Unit",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 7 - E2E",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 4 - Retrieval Gate",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stage 8 - Bundle Artifacts",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "verification": {
+    "backend_passed": 2372,
+    "backend_skipped": 45,
+    "frontend_unit_passed": 563,
+    "e2e_first_pass": 119,
+    "e2e_retry_pass": 3,
+    "e2e_flaky": 3,
+    "summary_log": "tmp/r261113/ci-d9ab11a4-test-summary.log"
+  }
+}

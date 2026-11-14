@@ -1,6 +1,6 @@
 # 用户预测与 US20 公开账本：运行与验收
 
-文档校准：2026-11-13。本文区分已认证用户的异步 Prediction/Outcome 与固定 US20 公开评估。下方 forecast、采集、窗口与结算核心合同保持冻结；研究模型切为 APIKL `gpt-6.1-terra` 不更改公开基准模型或策略。新原生研究候选未部署，完整模型与产品验收尚未完成，实际运行状态见[运行手册](11_PRODUCTION_RUNBOOK.md)。
+文档校准：2026-11-14。本文区分已认证用户的异步 Prediction/Outcome 与固定 US20 公开评估。forecast、采集、窗口与结算核心合同保持冻结；研究模型配置为 APIKL `gpt-6.1-terra` 不改变公开基准模型或策略。实际运行、质量与产品验收状态统一见[运行手册](11_PRODUCTION_RUNBOOK.md)。
 
 历史快照：agent-20261107-8b809bee23e0 发布时的生产28日视图HTTP200、metadata正常，当时预测/已对账/等待均0、daily_series为空、下一对账日期null；这些计数不代表当前状态，不生成示例曲线或命中率。
 
@@ -71,10 +71,13 @@ PREDICTION_ALERT_EMAIL=your-own-alert-address@example.com
 
 独立 watchdog 使用标准 SMTP 客户端读取 SMTP_SERVER / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / EMAIL_FROM，587 使用 STARTTLS、465 使用 TLS。收件人必须明确配置，不能根据提交邮箱或聊天内容推断。模型使用服务端已有端点配置；没有其它配置时可用 STEPFUN_API_KEY。后台预测显式清除请求级用户模型选择，不使用浏览器自定义 key。
 
-watchdog 配置与独立启动示例（完整发布沿运行手册执行）：
+watchdog 配置与独立启动示例：先按[运行手册](11_PRODUCTION_RUNBOOK.md)核对已部署的精确 `FINSIGHT_RELEASE_DIR`、镜像与配置；固定 Compose 项目为 `finsight`，避免 release 目录名改变项目和持久卷。以下为操作形式，本轮文档核对不启动服务：
 
 ```bash
-docker compose --env-file .env.server --profile predictions up -d --no-build prediction-watchdog
+docker compose -p finsight \
+  --env-file "$FINSIGHT_RELEASE_DIR/.env.server" \
+  -f "$FINSIGHT_RELEASE_DIR/docker-compose.yml" \
+  --profile predictions up -d --no-build --no-deps prediction-watchdog
 ```
 
 `prediction-watchdog` 是独立容器进程，复用后端构建配置与 SMTP，后端停止时仍会检查。后端维持单 worker；v1 不支持多个采集实例同时运行。数据写入 backend_data 卷内的 prediction_ledger.db，告警去重状态写入 prediction_watchdog.json。关闭/重启不得删除这些文件。

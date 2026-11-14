@@ -1,6 +1,6 @@
 # 研究执行事件合同
 
-文档校准：2026-11-13。当前研究入口只使用原生 runtime，旧事件仅保留历史展示兼容。核查与版本化交付已接入代码；APIKL 拟发布模型正在完整质量对照，新候选未部署，最终 48 项验收未执行。
+文档校准：2026-11-14。本文描述当前源码的原生研究事件、核查及版本化交付合同；旧事件只保留历史展示兼容。模型质量与实际发布状态统一见[运行手册](11_PRODUCTION_RUNBOOK.md)。
 
 ## 身份、顺序与终态
 
@@ -30,6 +30,8 @@ sequenceDiagram
 ```
 
 `answer.completed` 只表示正文已生成，可立即阅读；它不是最终 done，也不承诺核查或持久化完成。同一 SSE 持续到核查与保存结束。任何终态只能走一次；保存失败明确返回 persistence_failed/unconfirmed，不能用展示成功代替数据库提交。
+
+SSE 同时携带 `type=done/error/cancelled` 与 `runtime_type` 时，终态 `type` 优先；业务别名不能吞掉终态。例如保存失败的 `type=error` 与 `runtime_type=delivery.persistence_unconfirmed` 仍进入错误终态处理。客户端保留已生成正文，显示保存失败，并提供复制/导出；不能把流结束后的通用错误替代这条明确状态。
 
 ### 请求字段与权威身份
 

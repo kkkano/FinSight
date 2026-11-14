@@ -1,6 +1,6 @@
 # FinSight 当前架构
 
-文档校准：2026-11-13。本文描述当前工作树的唯一原生研究架构。用户已选择 APIKL 的 `gpt-6.1-terra`，真实原生工具调用与 SSE 探针通过，完整 60 题配对质量对照正在进行；新候选尚未部署，最终 48 项验收未执行。部署身份和历史成绩见[运行手册](11_PRODUCTION_RUNBOOK.md)，文档更新日期不代表上线日期。
+文档校准：2026-11-14。本文描述当前源码的唯一原生研究架构。用户已选择 APIKL 的 `gpt-6.1-terra`，原生 tools/SSE 探针已有实际证据；完整质量对照、候选及实际部署状态统一见[运行手册](11_PRODUCTION_RUNBOOK.md)。文档更新日期不代表上线日期。
 
 ## 1. 产品与入口
 
@@ -100,7 +100,7 @@ ticker、Dashboard 上下文和 history 是研究输入，不能覆盖资源归�
 
 ## 4. 核查、补交与发布
 
-`verifier.py` 在同一循环上创建只读核查运行：输入原问题、原答案、实际数据索引/来源/产物，只允许 read_data、run_python、submit_review，最多 4 轮和 45 秒。默认父模型，显式换模型仍共享 owner、数据、预算、取消与用量。Review/Finding/Coverage 禁止额外字段，quote 必须逐字存在；坏提交/超时返回 unavailable，核查推理不公开。
+`verifier.py` 在同一循环上创建只读核查运行：输入原问题、原答案、实际数据索引/来源/产物，只允许 read_data、run_python、submit_review，最多 4 轮和 90 秒。默认父模型，显式换模型仍共享 owner、数据、预算、取消与用量。Review/Finding/Coverage 禁止额外字段，quote 必须逐字存在；坏提交/超时返回 unavailable，核查推理不公开。
 
 `finalize.py` 对数据回答默认核查、对报告必核查，提前保留一部分原运行预算用于收尾。answer.completed 先让正文可读，review.* 独立更新。chat findings 只标注，用户显式 review_revision 新开一轮修订；coverage 缺交付可以追加一次。报告可自动修订一次，以新 content.revised 块保留 revision_of/review_id 和原文，再核查。
 
@@ -110,7 +110,7 @@ ticker、Dashboard 上下文和 history 是研究输入，不能覆盖资源归�
 
 行情网关规范化 quote/Kline/news/financials，保留 provider、源时间、抓取时间、币种及质量。日收盘不是即时行情，未知复权/股息/延迟不补成确定值。财务事实入口按发行人、指标、真实财期、频率与单位取值；累计与单季、财报时间与发布时间分开。
 
-开放代码只进入 `backend/analysis_worker/` 的独立 dispatcher/job，无网络和宿主凭据；未配置或资源不足明确不可用。环境提供 datasets、frames、get_frame、pd、np、finsight；后者提供回撤、连续下跌、均线、统计、共同基准比较。result 是计算交付，日志不能代替结果。数值和计算元数据从数据记录进入 artifact，不由模型任意 JS 绘制。
+开放代码只进入 `backend/analysis_worker/` 的独立 dispatcher/job，无网络和宿主凭据；未配置或资源不足明确不可用。环境提供 datasets、frames、get_frame、pd、np、finsight；后者提供回撤、连续下跌、均线、统计、共同基准比较。result 是计算交付，日志不能代替结果。DataFrame 按 records 传输，不包含索引；有意义的索引应先 reset_index。有限数值和 1 MiB 上限保持。数值和计算元数据从数据记录进入 artifact，不由模型任意 JS 绘制。
 
 研究使用共享金融工具并保留真实市场口径。固定 US20 的 Yahoo 单源、时限、模型和输入合同不随研究扩面改变；不要把用户多标的研究与公开固定评估合并统计。
 
@@ -157,6 +157,6 @@ PostgreSQL schema 由 Alembic 管理，应用启动只验证 revision。M4 的 r
 
 默认 Compose 运行 PostgreSQL、API 和前端；compute 与 local-ml 为显式可选 profile。API 镜像不安装本地重型推理库，不在 QA 子进程另开 BGE 副本。RAG 默认词法，可选独立托管 embedding/rerank 或私网 local-ml；相同维数不代表相同向量身份，语义不可用时明确词法降级。
 
-2026-11-13 的只读生产盘点确认现有服务仍是旧 backend、frontend、watchdog 与计算镜像组合；新候选已在本机完成源码、依赖、冻结预测文件和镜像核验，未上传或切换。服务 healthy 与新模型探针均不能替代完整研究质量、认证浏览器和发布后验收。
+本轮已确认的生产服务仍是旧 backend、frontend、watchdog 与计算镜像组合。最新源码候选已在本机完成依赖、冻结预测文件和镜像核验；早期候选有远端预验证记录，但在后续代码变更后已过时，不能用于切换。当前源码对应的正式质量对照、发布清单及部署后验收状态集中在运行手册。服务 healthy 与新模型探针均不能替代完整研究质量、认证浏览器和发布后验收。
 
 完整质量对比、核查检出/误报、48 项验收、真实登录与部署观察分别留证。旧图仅保留[历史定位](archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md)，新功能不能恢复其生产路由。发布、迁移、备份和回滚统一见[生产运行手册](11_PRODUCTION_RUNBOOK.md)；研究、检索、数值与事件细节分别见 [Agent 指南](AGENTS_GUIDE.md)、[RAG 架构](05_RAG_ARCHITECTURE.md)、[图表合同](REPORT_CHART_SPEC.md)和[事件合同](execution-event-contract.md)。

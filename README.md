@@ -4,11 +4,11 @@
 
 FinSight 用真实行情、财报、新闻和可回读来源支持提问、追问、股票比较、研究报告和预测复盘。主工作区为 Today、Dashboard、Chat、History，公开战绩和只读分享保持独立。组合管理、筛选、回测与自动交易不属于当前产品。
 
-更新：2026-11-13。本文与当前源码一致；研究模型已按用户选择配置为 APIKL `gpt-6.1-terra`，原生工具和 SSE 探针通过。完整同题回放、48 项产品验收和新运行时部署正在执行，实际发布身份与验证结果以[生产运行手册](docs/11_PRODUCTION_RUNBOOK.md)为准。
+更新：2026-11-14。本文与当前源码一致；研究模型已按用户选择配置为 APIKL `gpt-6.1-terra`，原生工具和 SSE 探针通过。完整同题回放与独立评分正在进行，受控故障验收已有证据；部署后真实 48 项产品验收和新运行时切换待完成，实际发布身份与验证结果以[生产运行手册](docs/11_PRODUCTION_RUNBOOK.md)为准。
 
 ## 开发与部署入口
 
-Python 3.11+、Node.js 20.19+ 或 22.12+；使用当前 npm 锁文件。真实配置放入被忽略的环境文件。
+Python 3.11+、Node.js 20.19+ 或 22.12+；先创建并激活项目虚拟环境，使用当前 npm 锁文件。数据库、认证及模型配置的准备步骤见[贡献指南](CONTRIBUTING.md)，真实配置放入被忽略的环境文件。
 
 ```bash
 python -m pip install -r requirements.txt
@@ -18,7 +18,7 @@ npm ci --prefix frontend
 npm run dev --prefix frontend
 ```
 
-服务端配置参考 `.env.server.example`，完整容器环境使用 `docker compose --env-file .env.server up -d --build`。生产发布还需要已迁移数据库、真实认证、质量/容量与回滚检查，详见[贡献指南](CONTRIBUTING.md)和[运行手册](docs/11_PRODUCTION_RUNBOOK.md)。默认配置不下载本地 embedding/reranker；开放代码由独立 compute profile 执行。
+容器部署需要 Docker 与 Compose v2。服务端配置参考 `.env.server.example`，完整容器环境使用 `docker compose --env-file .env.server up -d --build`。生产发布还需要已迁移数据库、真实认证、质量/容量与回滚检查，详见[贡献指南](CONTRIBUTING.md)和[运行手册](docs/11_PRODUCTION_RUNBOOK.md)。默认配置不下载本地 embedding/reranker；开放代码由独立 compute profile 执行。
 
 ## 源码与文档地图
 
@@ -76,7 +76,7 @@ flowchart LR
     BENCH --> LEDGER[(独立持久 SQLite)]
 ```
 
-当前生产入口只依赖 `backend/agent_runtime/`，不保留旧研究运行时选择开关。旧图与已退役源码用于 `tests/agent_eval/reference/` 对照，排除在生产镜像之外；27 个冻结预测依赖按清单保留，不能因目录名含旧架构就删除。
+当前源码的生产入口只依赖 `backend/agent_runtime/`，不保留旧研究运行时选择开关。旧图与已退役源码用于 `tests/agent_eval/reference/` 对照，排除在生产镜像之外；27 个冻结预测依赖按清单保留，不能因目录名含旧架构就删除。
 
 主研究员可以通过 `spawn_agents` 并行委派，专业角色不能嵌套。核查员复用同一循环但只开放 `read_data/run_python/submit_review`，使用同一用户身份和共享额度；换核查模型必须显式传入，不能借用其他用户凭据。
 
@@ -95,6 +95,8 @@ flowchart LR
 配置模板为 `.env.example` 与 `.env.server.example`。研究使用 `FINSIGHT_AGENT_API_BASE/MODEL/API_KEY`；Step 5 按量选项使用独立 `FINSIGHT_AGENT_STEPFUN_API_KEY`，不覆盖 Step Plan 或冻结预测默认。用户自带模型优先，未知模型使用保守预算，详情见[模型选择](docs/MODEL_SELECTION.md)。
 
 默认 Compose 运行 PostgreSQL、API 和前端；`compute`、`local-ml` 均为显式可选 profile。开放 Python 不回退到 API 进程；计算未配置、资源不足或缺少 result 都要如实返回。模型、认证与计算密钥只通过安全配置或环境变量提供，不写入仓库、镜像构建参数或公开诊断。
+
+本轮配置的研究/brief 时间上限为 300 秒、报告 600 秒；核查上限 90 秒，必要追加或保留版本修订最多 120 秒，始终受本轮总预算约束。
 
 本地运行入口为 `scripts/run_agent_runtime.py`；它显式加载本地配置。正式启动需要匹配的数据库 schema、认证及 provider 配置。镜像身份、迁移、容量检查、发布与回滚操作统一见[运行手册](docs/11_PRODUCTION_RUNBOOK.md)，文档更新不触发安装、迁移或重启。
 

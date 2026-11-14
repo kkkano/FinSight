@@ -2,8 +2,9 @@
   "schema_version": 1,
   "milestones": {
     "M0": {
-      "implementation": "baseline_saved",
-      "acceptance": "full_relay_context_boundary_unmeasured"
+      "implementation": "apikl_terra_tools_sse_large_input_and_png_measured",
+      "acceptance": "tested_101285_input_tokens_and_png_passed_official_maximum_unverified",
+      "evidence": "tests/agent_eval/results/m0_apikl_terra_capacity_vision_20261113.json"
     },
     "M1": {
       "implementation": "complete_corpus_record_replay_scoring_baseline",
@@ -23,16 +24,24 @@
     },
     "M3": {
       "implementation": "single_native_loop_compactor_skills_integer_citations_spawn_completed",
-      "acceptance": "vectide_matched_record_and_replay_running",
+      "acceptance": "paired_60_case_raw_collection_complete_independent_grading_v5_partial_judge_quota_exhausted",
       "loop_lines": 215,
       "failed_record": "tests/agent_eval/results/m3_current_record.json",
-      "smoke": "tests/agent_eval/results/m3_current_smoke.json"
+      "smoke": "tests/agent_eval/results/m3_current_smoke.json",
+      "evaluation": "tests/agent_eval/results/apikl_frozen_full_execution_20261114_artifact_contract_linux.json",
+      "previous_strict_failure": "tests/agent_eval/results/apikl_matched_execution_20261113.json",
+      "runtime_sha256": "65cdf5df20f722b0d8a1799dfd5b0883bcd7adb1ce16888e9d01666a79e04bc6",
+      "partial_quality_summary": "tests/agent_eval/results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json",
+      "judged": {
+        "current": 37,
+        "baseline": 47
+      }
     },
     "M4": {
       "implementation": "default_readonly_review_annotations_append_and_versioned_revision_integrated",
-      "acceptance": "vectide_full_paired_measurement_and_semantic_adjudication_completed",
-      "measurement": "tests/agent_eval/results/m4_vectide_review_recovery.json",
-      "adjudication": "tests/agent_eval/results/m4_vectide_review_recovery_adjudication.json",
+      "acceptance": "historical_45_second_results_retained_current_90_second_batch_pending",
+      "measurement": "tests/agent_eval/results/m4_apikl_terra_review_20261113.json",
+      "adjudication": "tests/agent_eval/results/m4_apikl_terra_adjudication_20261113.json",
       "protocol_followup": "tests/agent_eval/results/m4_step5_protocol_followup.json",
       "browser": "frontend/test-results/m4-native/evidence.json",
       "detections": 12,
@@ -137,10 +146,9 @@
     "local_followup": "Effort tuple membership guards malformed JSON types; not included in already-deployed a147e695613e overlay."
   },
   "next_steps": [
-    "完成当前/基线同模型同资料录制和冻结回放",
-    "完成独立逐题评分与质量/耗时对照",
-    "审查并执行已准备的唯一运行时发布",
-    "完成48项真实产品与登录隔离验收",
+    "恢复 APIKL 额度或更换密钥后 --resume 补齐 v5 独立评分（current 23 题、baseline 13 题）",
+    "新密钥需重新 validate 发布清单后执行 deploy（带自动回滚）",
+    "部署后完成 48 项真实账号验收与持续观察",
     "同步最终运行状态和有效文档"
   ],
   "latest_user_contract": {
@@ -150,5 +158,12 @@
     "frozen_forecast": "unchanged",
     "authorization": "user explicitly requires old implementation removal"
   },
-  "latest_reported_at": "2026-11-13T10:23:13.574703+00:00"
+  "latest_reported_at": "2026-11-13T10:23:13.574703+00:00",
+  "closeout_updated_at": "2026-11-14T16:15:19.907748+00:00",
+  "release_blocker": {
+    "reason": "apikl_key_quota_exhausted_for_subject_and_judge",
+    "observed_at": "2026-11-14T16:10:00+00:00",
+    "effect": "candidate model_provider=apikl; production smoke would fail and roll back; quality_gate needs current 60/60",
+    "unblock": "restore APIKL quota or provide a new key, re-run validate, resume v5 grading, then deploy"
+  }
 }
