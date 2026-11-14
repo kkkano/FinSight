@@ -142,7 +142,7 @@ async def test_review_reads_actual_data_and_calculates_with_shared_identity_with
 
     async def calculate(data, requested_code, handles, *, timeout):
         assert data is runtime.data and requested_code == code and handles == [handle]
-        assert 0 < timeout <= 45
+        assert 0 < timeout <= 90
         output = {"price": data.records[handle]["output"]["rows"][0]["price"]}
         ref = data.record("run_analysis_code", {"dataset_refs": handles}, output)
         calculated.append(ref)
@@ -159,7 +159,8 @@ async def test_review_reads_actual_data_and_calculates_with_shared_identity_with
     assert reviewer.context.run_id == runtime.context.run_id and reviewer.session_id == runtime.session_id
     assert reviewer.context.usage is runtime.context.usage and reviewer.context.cancelled is runtime.context.cancelled
     assert reviewer.data is runtime.data and reviewer.budget is runtime.budget and reviewer.limiter is runtime.limiter
-    assert reviewer.model is runtime.model and reviewer.context.deadline - reviewer.context.started_monotonic <= 45
+    assert reviewer.model is runtime.model
+    assert 45 < reviewer.context.deadline - reviewer.context.started_monotonic <= 90
     assert all(context is reviewer.context for context in runtime.model.contexts)
     assert runtime.budget.spent == 120 and runtime.budget.reserved == 0
     assert runtime.limiter.owners == [runtime.context.owner] * 3 and runtime.limiter.active == 0

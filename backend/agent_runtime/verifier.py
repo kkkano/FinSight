@@ -18,6 +18,8 @@ from .loop import AgentRuntime, AgentSpec, run
 from .model import ModelProtocolError
 from .registry import ToolSpec
 
+REVIEW_TIMEOUT_SECONDS = 90.0
+
 
 class ReviewFinding(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -51,10 +53,10 @@ def should_review(runtime: AgentRuntime) -> bool:
     return False
 
 
-async def review_answer(runtime: AgentRuntime, answer: str, model=None, max_seconds: float = 45) -> dict:
+async def review_answer(runtime: AgentRuntime, answer: str, model=None, max_seconds: float = REVIEW_TIMEOUT_SECONDS) -> dict:
     """核查独立计时，共享原运行身份、数据与用量，不解析其他用户的模型配置。"""
     review_id = "reviewer_" + uuid.uuid4().hex[:12]
-    seconds = max(0.0, min(45.0, max_seconds, runtime.context.remaining_seconds))
+    seconds = max(0.0, min(REVIEW_TIMEOUT_SECONDS, max_seconds, runtime.context.remaining_seconds))
     selected_model = runtime.model if model is None else model
     reviewer = None
     submitted = None

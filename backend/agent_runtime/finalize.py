@@ -10,7 +10,7 @@ from .citations import references
 from .context import dumps
 from .loop import AgentSpec, run
 from .limits import CapacityExceeded
-from .verifier import review_answer, should_review
+from .verifier import REVIEW_TIMEOUT_SECONDS, review_answer, should_review
 
 
 async def _within_budget(runtime, seconds, operation):
@@ -31,7 +31,7 @@ async def _within_budget(runtime, seconds, operation):
 
 async def initial_answer(runtime):
     remaining = runtime.context.remaining_seconds
-    reserve = min(45, remaining * .25)
+    reserve = min(REVIEW_TIMEOUT_SECONDS, remaining * .25)
     try:
         return await _within_budget(runtime, remaining - reserve, runtime.run_agent)
     except TimeoutError:
@@ -57,7 +57,7 @@ async def review_delivery(runtime, result, sink):
         runtime.accepting_instructions = False
         return result
     await runtime.emit("answer.completed", {"status": "completed", "review_pending": True})
-    review = await _review(runtime, runtime.root_content, min(45, runtime.context.remaining_seconds))
+    review = await _review(runtime, runtime.root_content, min(REVIEW_TIMEOUT_SECONDS, runtime.context.remaining_seconds))
     pending = runtime.drain("root")
     complete = review["status"] == "completed"
     missing = [item for item in review.get("coverage", []) if not item["met"]]
@@ -74,7 +74,7 @@ async def review_delivery(runtime, result, sink):
     if revise:
         runtime.compactors[agent_id] = runtime.compactors["root"]
     try:
-        continuation = await _within_budget(runtime, min(60, runtime.context.remaining_seconds * .65),
+        continuation = await _within_budget(runtime, min(120, runtime.context.remaining_seconds * .65),
             lambda: run(runtime, AgentSpec(agent_id=agent_id, max_turns=4,
                 tools=runtime.registry.available("root", "research_lead")), task, transcript=transcript))
     except TimeoutError:
@@ -94,7 +94,7 @@ async def review_delivery(runtime, result, sink):
             "revision_of": [key for key, block in sink.blocks.items()
                             if block["kind"] == "text" and block.get("content_phase") == "answer"]})
     answer = runtime.report_revision["content"] if runtime.report_revision else runtime.root_content
-    await _review(runtime, answer, min(45, runtime.context.remaining_seconds))
+    await _review(runtime, answer, min(REVIEW_TIMEOUT_SECONDS, runtime.context.remaining_seconds))
     return continuation
 
 
