@@ -57,7 +57,7 @@ async function installFixtures(page: Page, theme: 'dark' | 'light', empty = fals
     if (path === '/api/predictions/stats') return json(route, { stats: { predictions: empty ? 0 : 2, resolved: empty ? 0 : 2, hits: empty ? 0 : 1, misses: empty ? 0 : 1, invalidated: 0, hit_rate: empty ? null : 0.5 } });
     if (path === '/api/predictions/latest') return json(route, { prediction: empty ? null : prediction, outcome });
     if (path.startsWith('/api/predictions/runs/')) return json(route, { run });
-    if (path.startsWith('/api/stock/kline/')) return json(route, { data: { kline_data: bars, source: 'twelve_data', provider: 'twelve_data', quality: 'trusted', as_of: '2026-10-01T20:00:00Z' } });
+    if (path.startsWith('/api/stock/kline/')) return json(route, { data: { kline_data: bars, source: 'yfinance', provider: 'yfinance', currency: 'USD', quality: 'trusted', as_of: '2026-10-01T20:00:00Z' } });
     if (path === '/api/dashboard') return json(route, {
       state: { active_asset: { symbol: 'AAPL', display_name: 'Apple Inc.', type: 'equity' }, capabilities: {} },
       data: { snapshot: { price: 333.26, change_percent: -2.001 }, charts: {}, valuation: {} },
@@ -129,6 +129,9 @@ for (const width of [1440, 390]) {
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'AAPL 行情' });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Yahoo Finance');
+    await expect(dialog).toContainText('USD');
+    await expect(dialog).not.toContainText('Twelve Data');
     await expect(dialog.getByText('收盘', { exact: true })).toBeVisible();
     const canvas = dialog.locator('canvas').first();
     await expect(canvas).toBeVisible();

@@ -1,0 +1,117 @@
+{
+  "model": "gpt-6.1-terra",
+  "probes": [
+    {
+      "probe": "capacity",
+      "pattern": "alpha beta gamma delta epsilon zeta eta theta\n",
+      "repetitions": 9687,
+      "configured_input_token_estimate": 125998,
+      "input_utf8_bytes": 445713,
+      "input_sha256": "a02a8fc520a416b9e350f7526e32536102ff1dd21bde2f4110ca8785ce6b840e",
+      "sensitive_content": false,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 101285,
+        "completion_tokens": 5,
+        "total_tokens": 101290,
+        "prompt_tokens_details": {
+          "cached_tokens": 4224
+        }
+      },
+      "passed": true,
+      "actual_reported_input_tokens": 101285,
+      "largest_tested_input_only_not_official_maximum": true
+    },
+    {
+      "probe": "vision",
+      "width": 96,
+      "height": 96,
+      "image_bytes": 308,
+      "image_sha256": "50fa45bf5511a3c612bf7fb7ee914e97533355bebe807966450d18fbcc430d56",
+      "sensitive_content": false,
+      "finish_reason": "tool_calls",
+      "usage": {
+        "prompt_tokens": 235,
+        "completion_tokens": 36,
+        "total_tokens": 271
+      },
+      "actual_answer": {
+        "top_left": "blue",
+        "top_right": "yellow",
+        "bottom_left": "magenta",
+        "bottom_right": "cyan"
+      },
+      "expected_colors": {
+        "top_left": "blue",
+        "top_right": "yellow",
+        "bottom_left": "magenta",
+        "bottom_right": "cyan"
+      },
+      "passed": true
+    }
+  ],
+  "quota_attempts": [
+    {
+      "requested_model": "gpt-6.1-terra",
+      "request_sha256": "a98c8876458dbbf8d0a22552f7f43cc23cafd040ce59c2e33e7de05968d73105",
+      "provider_identity": "cf62edc93a49f4702b5334a51130c37a429e472a07eee8b52f702a135612a1df",
+      "events": [
+        {
+          "bucket": "provider:cf62edc93a49f4702b5334a51130c37a429e472a07eee8b52f702a135612a1df",
+          "reserved_tokens": 126064,
+          "maximum": 250000,
+          "requests": 30,
+          "reservation_succeeded": true,
+          "wait_seconds": 0.015
+        }
+      ],
+      "reported_models": [
+        "gpt-6.1-terra"
+      ],
+      "started_at": "2026-11-13T21:37:21.596561+00:00",
+      "usage": {
+        "prompt_tokens": 101285,
+        "completion_tokens": 5,
+        "total_tokens": 101290,
+        "prompt_tokens_details": {
+          "cached_tokens": 4224
+        }
+      },
+      "status": "completed",
+      "budget_spent": 101290,
+      "budget_reserved_remaining": 0,
+      "completed_at": "2026-11-13T21:37:27.858749+00:00"
+    },
+    {
+      "requested_model": "gpt-6.1-terra",
+      "request_sha256": "14913bcc2aa4e4e2f07954796bac1e98dab76b956ff55b3ab97f182f2f28cdee",
+      "provider_identity": "cf62edc93a49f4702b5334a51130c37a429e472a07eee8b52f702a135612a1df",
+      "events": [
+        {
+          "bucket": "provider:cf62edc93a49f4702b5334a51130c37a429e472a07eee8b52f702a135612a1df",
+          "reserved_tokens": 1287,
+          "maximum": 250000,
+          "requests": 30,
+          "reservation_succeeded": true,
+          "wait_seconds": 0.015
+        }
+      ],
+      "reported_models": [
+        "gpt-6.1-terra"
+      ],
+      "started_at": "2026-11-13T21:37:27.871855+00:00",
+      "usage": {
+        "prompt_tokens": 235,
+        "completion_tokens": 36,
+        "total_tokens": 271
+      },
+      "status": "completed",
+      "budget_spent": 271,
+      "budget_reserved_remaining": 0,
+      "completed_at": "2026-11-13T21:37:37.524550+00:00"
+    }
+  ],
+  "probe_source_sha256": "fd3b3837c06b817a63ba5c7847f75587c588f6082226b2685ac5f38aee6bd25a",
+  "official_context_output_or_image_limits_verified": false,
+  "financial_chart_ocr_accuracy_measured": false
+}

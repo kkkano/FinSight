@@ -33,6 +33,7 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
   const [asOf, setAsOf] = useState('');
   const [dataKind, setDataKind] = useState('');
   const [currency, setCurrency] = useState('');
+  const [historyProvenance, setHistoryProvenance] = useState({ source: '', asOf: '', currency: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
@@ -45,6 +46,7 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
   useEffect(() => {
     const controller = new AbortController();
     setRows([]); setQuote({}); setSource(''); setAsOf(''); setDataKind(''); setCurrency(''); setError(''); setLoading(true);
+    setHistoryProvenance({ source: '', asOf: '', currency: '' });
     void Promise.allSettled([apiClient.fetchKline(symbol, '1y', '1d', controller.signal),
       apiClient.fetchStockPrice(symbol, controller.signal)]).then(([history, current]) => {
       if (controller.signal.aborted) return;
@@ -52,6 +54,8 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
         const data = history.value.data;
         const values = (data?.kline_data ?? []).filter((row) => [row.open, row.close, row.high, row.low].every((value) => number(value) !== undefined));
         setRows(values);
+        setHistoryProvenance({ source: data?.source || data?.provider || '',
+          asOf: data?.as_of || values.at(-1)?.time || '', currency: data?.currency || '' });
         setSource(data?.source || data?.provider || '');
         setAsOf(data?.as_of || values.at(-1)?.time || '');
         setDataKind('daily_close');
@@ -158,6 +162,6 @@ export function RightPanelMarket({ symbol, priceLevels = [] }: { symbol: string;
     {hasPrediction && <Link to={`/track-record?ticker=${encodeURIComponent(symbol)}&scope=personal`} className="text-xs text-t-accent">这只股票的预测记录 →</Link>}
     <MarketChartDialog open={expanded} onClose={closeExpandedChart} symbol={symbol}
       period={period} option={expandedChart} closePrice={last?.close}
-      source={`${date} · ${sourceDisplayName(source)} · 日线，非实时`} />
+      source={`${historyProvenance.asOf || '时间未注明'} · ${sourceDisplayName(historyProvenance.source)} · ${historyProvenance.currency || '币种未注明'} · 日线，非实时`} />
   </>;
 }

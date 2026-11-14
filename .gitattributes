@@ -67,3 +67,6 @@ tests/agent_eval/test_frozen_corpus.py -text whitespace=cr-at-eol
 tests/agent_eval/test_frozen_offline_worker.py -text whitespace=cr-at-eol
 tests/agent_eval/test_judge_quota.py -text whitespace=cr-at-eol
 tests/agent_eval/test_paged_judge.py -text whitespace=cr-at-eol
+
+# M0实际测量收据保留原字节。
+tests/agent_eval/results/m0_apikl_terra_capacity_vision_20261113.json -text whitespace=cr-at-eol

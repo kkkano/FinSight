@@ -111,3 +111,5 @@ ReportIR 包含 report_id、title、sections、citations、report_quality 与 me
 ## 行情放大与键盘恢复
 
 当前右栏 RightPanelMarket 使用同一份已取得的行情、周期和来源生成小图与 MarketChartDialog 放大图；放大只改变绘制尺寸及成交量面板比例，不重新请求研究或替换数据。放大窗口展示实际收盘与来源时点，支持 Escape、焦点限制和关闭后恢复原按钮焦点。缺少行情时禁用放大入口。桌面和 390 px 浏览器验证同时检查可见行情线/柱、成交量、无横向溢出与关闭行为。
+
+历史 K 线和当前报价可能来自不同供应商；放大图只标注历史行情自己的来源、时点和币种，不用报价 metadata 覆盖。币种缺失时显示“币种未注明”。混合 Yahoo Finance 历史与 Twelve Data 报价的桌面/移动复验通过。

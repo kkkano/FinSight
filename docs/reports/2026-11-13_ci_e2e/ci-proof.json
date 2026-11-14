@@ -1,0 +1,12 @@
+{
+  "head": "7bd8585327b85cf083245c146b98f43122a997fa",
+  "run_id": 43528829268,
+  "url": "https://github.com/kkkano/FinSight/actions/runs/43528829268",
+  "conclusion": "success",
+  "stages_passed": 8,
+  "e2e_summary": [
+    "Stage 7 - E2E\tRun e2e tests\t2026-11-13T23:44:59.1330458Z Running 122 tests using 2 workers",
+    "Stage 7 - E2E\tRun e2e tests\t2026-11-13T23:47:48.4177267Z   122 passed (2.9m)"
+  ],
+  "observed_at": "2026-11-13T23:49:23.897084+00:00"
+}

@@ -9,14 +9,15 @@
 | 范围 | 当前事实 |
 |---|---|
 | 研究模型 | APIKL https://apikl.ai/v1，gpt-6.1-terra；真实原生 tools 与 SSE 成功 |
-| 运行预算 | context 131072 / max_output 16384；显式预算，未实测供应商最大窗口 |
+| 运行预算 | context 131072 / max_output 16384；M0 实测 101285 输入 tokens 与小 PNG 识别成功，仍未证明供应商最大窗口 |
 | 独立评分 | 实际 gpt-6.1-sol，模型身份与被测 terra 不同；评分绑定问题、回答与实际资料 |
-| 本地质量 | 60 题 current/baseline 各 record+replay 与独立评分正在执行，不能提前判通过 |
-| 核查 | Terra 24 条正确/注错配对已完整采集；独立语义评审与误报统计另列 |
-| 候选后端 | source SHA-256 a26301162d…；当前 source 与冻结/退役范围及依赖核对通过 |
-| 候选前端/compute | 分别按 manifest 核对实际镜像和文件 hash，不混用旧 release 标签 |
+| 本地质量 | 原严格回放和 Windows 解释器依赖污染结果独立保留；正式对照采用验证后端 Linux 镜像的 Python/依赖、共同冻结语料、同题/同预算双方各 60 题，同一 Sol 完整分页评分，尚未判通过 |
+| 核查 | Terra 24/24 完整；独立 Sol 语义检出 12/12，未注错语义误报 0/12，不可用 0 |
+| 候选后端 | source SHA-256 af0ca3710e…，image 4a1ecd3d…；27 份冻结预测源码、184 份退役源码排除及依赖核对通过 |
+| 自动验证 | [CI 43528829268](https://github.com/kkkano/FinSight/actions/runs/43528829268) 全 8 阶段成功，E2E 122/122、0 flaky；独立质量评分仍待完成 |
+| 候选前端/compute | 前端 build agentic-20261113t234018z-9b17f5-4bb0ffb43a，image c1bc9d1a…；compute 沿用逐文件核验的两份镜像 |
 | 生产观测 | SSH 可用；当前 backend step5-api-20261111-a147e695613e，frontend 仍为 agent-20261110-2a5de207900b |
-| 容量与活动 | 当次盘点约 5.7 GiB 磁盘可用、281 MiB 物理可用内存；研究/预测/计算活动为 0。切换前重新测量 |
+| 容量与活动 | 23:46 UTC 精确旧上传去重后约 5.87 GiB、物理可用内存约 339 MiB、SwapFree 为 0；活动为 0，切换前再次采样 |
 | 身份验收 | 用户已在 Edge 用 GitHub 登录；模拟身份仅用于隔离测试，截图不能代替同 run 保存/恢复实测 |
 | 部署与观察 | 完整质量门槛前不切换；上线后记录健康、真实页面/会话、T+0/30m/2h/6h/12h/24h |
 

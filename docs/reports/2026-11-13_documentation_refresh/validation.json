@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-11-13T17:25:32.147Z",
-  "current_documents": 23,
+  "updated_at": "2026-11-14T00:07:37.377428+00:00",
+  "current_documents": 25,
   "utf8": [
     {
       "file": "README.md",
@@ -116,9 +116,19 @@
       "file": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
       "valid": true,
       "replacement_character": false
+    },
+    {
+      "file": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "valid": true,
+      "replacement_character": false
+    },
+    {
+      "file": "docs/reports/2026-11-13_ci_e2e/README.md",
+      "valid": true,
+      "replacement_character": false
     }
   ],
-  "links_checked": 135,
+  "links_checked": 143,
   "missing_links": [],
   "mermaid": {
     "passed": 17,
@@ -137,7 +147,11 @@
         "nodes": 18,
         "edges": 22,
         "svg": "01-README-1.svg",
-        "screenshot": "01-README-1.png"
+        "screenshot": "01-README-1.png",
+        "source_sha256": "efb6febcdcfa074d37087af99566678d621825e56dc5d8e44a005f96486b771d",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "907fc90fc9d1404fd414283a75412e22814f6b73e5746fe015fd8dc032ea8619",
+        "screenshot_sha256": "2764408266b9e38e690676ec018c75d1a7d30f3cc15cecc2ab623458bad8c997"
       },
       {
         "file": "frontend/README.md",
@@ -150,7 +164,11 @@
         "nodes": 10,
         "edges": 10,
         "svg": "02-README-1.svg",
-        "screenshot": "02-README-1.png"
+        "screenshot": "02-README-1.png",
+        "source_sha256": "de47d5a0d9b8c3fa4506b968366daad5b9fc15fb660dc89a8ab3f3460fa8d040",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "3c79e73dd43a15fd265b6640a03c159d97b7081d3b724502069a48e4457395b2",
+        "screenshot_sha256": "2b0bfa30410380c21d12f58d9e2cf03d35ff894cd807c09af83efdf078d598f2"
       },
       {
         "file": "docs/01_ARCHITECTURE.md",
@@ -163,7 +181,11 @@
         "nodes": 19,
         "edges": 21,
         "svg": "03-01_ARCHITECTURE-1.svg",
-        "screenshot": "03-01_ARCHITECTURE-1.png"
+        "screenshot": "03-01_ARCHITECTURE-1.png",
+        "source_sha256": "d0829449c1c41a2b6b799debbab106406e83c5e729c29c5d8c77f5a59221aa4b",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "5e607854a80923ca798fb5d83c6946a5813e864dc4c18580bceaa34656143000",
+        "screenshot_sha256": "bc8689188e782936ecf92c6bcd130161a08cfc22b07fbbcec66ad461f29e21d5"
       },
       {
         "file": "docs/01_ARCHITECTURE.md",
@@ -176,7 +198,11 @@
         "nodes": 0,
         "edges": 0,
         "svg": "04-01_ARCHITECTURE-2.svg",
-        "screenshot": "04-01_ARCHITECTURE-2.png"
+        "screenshot": "04-01_ARCHITECTURE-2.png",
+        "source_sha256": "ea98a8e97bcc630267b5a676fe874ad908ebf1338c31a3a65c7d57a90f9e6ae2",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "ebee29a15cfaee109c1f1ac4598257f47afc423d9b5517f856619dd7a4ed400b",
+        "screenshot_sha256": "b6b2003ab2e1713f638bb2d9bda4158d13a97f9f33da845e76a7d24571d62fb2"
       },
       {
         "file": "docs/05_RAG_ARCHITECTURE.md",
@@ -189,12 +215,16 @@
         "nodes": 0,
         "edges": 0,
         "svg": "05-05_RAG_ARCHITECTURE-1.svg",
-        "screenshot": "05-05_RAG_ARCHITECTURE-1.png"
+        "screenshot": "05-05_RAG_ARCHITECTURE-1.png",
+        "source_sha256": "8b6f484959ead5a67be583238d96cd3ff9eb3eb18e11ecc2de7b28418aa5effb",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "092675bf157720aad607b8779f88c8e0e575e59eb7422e7d3e9daea7bfe5ff4b",
+        "screenshot_sha256": "3ff8093a07783ba1ec2e174dce7d0b0f9121627fe7dc164d702451e9fbf0f473"
       },
       {
         "file": "docs/11_PRODUCTION_RUNBOOK.md",
         "number": 1,
-        "line": 23,
+        "line": 24,
         "status": "passed",
         "parsed": true,
         "width": 451.203125,
@@ -202,12 +232,16 @@
         "nodes": 10,
         "edges": 10,
         "svg": "06-11_PRODUCTION_RUNBOOK-1.svg",
-        "screenshot": "06-11_PRODUCTION_RUNBOOK-1.png"
+        "screenshot": "06-11_PRODUCTION_RUNBOOK-1.png",
+        "source_sha256": "360ed81f7cab840980d91ce47ded75f032ac1a29139271b648a64b27502db1ed",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "995e0c4bc0779e1965b536d06bbf18385356873baef19e77488b4b35930786ce",
+        "screenshot_sha256": "eb1dc4577897983e46e821fe5a2fb300360d33fb1c8f0ffe5197d9fd48ff33b6"
       },
       {
         "file": "docs/11_PRODUCTION_RUNBOOK.md",
         "number": 2,
-        "line": 56,
+        "line": 57,
         "status": "passed",
         "parsed": true,
         "width": 1552,
@@ -215,12 +249,16 @@
         "nodes": 10,
         "edges": 9,
         "svg": "07-11_PRODUCTION_RUNBOOK-2.svg",
-        "screenshot": "07-11_PRODUCTION_RUNBOOK-2.png"
+        "screenshot": "07-11_PRODUCTION_RUNBOOK-2.png",
+        "source_sha256": "1bfbc8577f678d8e5918bf26d30b1005e584cd85738524cfd1f2eba96313adab",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "60b315a3980cba7e7379f32e90492452b8227c229feba6e5c4ca1dda612d612d",
+        "screenshot_sha256": "22d2e304947d0fb6b4f068a455d5332ac441544ca1b61498c46ce05e8cfbef87"
       },
       {
         "file": "docs/11_PRODUCTION_RUNBOOK.md",
         "number": 3,
-        "line": 131,
+        "line": 132,
         "status": "passed",
         "parsed": true,
         "width": 1552,
@@ -228,7 +266,11 @@
         "nodes": 9,
         "edges": 10,
         "svg": "08-11_PRODUCTION_RUNBOOK-3.svg",
-        "screenshot": "08-11_PRODUCTION_RUNBOOK-3.png"
+        "screenshot": "08-11_PRODUCTION_RUNBOOK-3.png",
+        "source_sha256": "add57eb9c0e691fcc87dcd527546c9ea1a8a8f6ec5efad7e2ffda087f202c539",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "6deec09c14a1f6268a154483ba5e6fe0f204bf311b6e123ef7afd292583d717f",
+        "screenshot_sha256": "ed2c2fc46bea6f226119d73d9034ad5bd980ac972bb528bc5b3490fa62065b3a"
       },
       {
         "file": "docs/AGENTS_GUIDE.md",
@@ -241,7 +283,11 @@
         "nodes": 10,
         "edges": 12,
         "svg": "09-AGENTS_GUIDE-1.svg",
-        "screenshot": "09-AGENTS_GUIDE-1.png"
+        "screenshot": "09-AGENTS_GUIDE-1.png",
+        "source_sha256": "de8c55405b3a74dc54b72328c659655cbd9f8010cde0bd5728b6f61f4b15c61b",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "57dc52599c6cc3efb4c723029f5b2655cc83a6164a3f4cb2adba7207dd2b97ac",
+        "screenshot_sha256": "dd2cb8221b3f93cc3190d457db01f7fa9036d5c6dda64f88b865accf23c917bf"
       },
       {
         "file": "docs/execution-event-contract.md",
@@ -254,7 +300,11 @@
         "nodes": 0,
         "edges": 0,
         "svg": "10-execution-event-contract-1.svg",
-        "screenshot": "10-execution-event-contract-1.png"
+        "screenshot": "10-execution-event-contract-1.png",
+        "source_sha256": "b42a4414eef0964d5c6a0ddc570620237df418203c662b9b7b3dab9193b53a8b",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "e9b108845efd7506bbcac8650d5b7686c7e23135bd2129c30712544f0726cdce",
+        "screenshot_sha256": "286703932a40f6316284fe40f8ce4b646f0c0a7af8cffcd68229bc8713c2b4fe"
       },
       {
         "file": "docs/execution-event-contract.md",
@@ -267,7 +317,11 @@
         "nodes": 8,
         "edges": 0,
         "svg": "11-execution-event-contract-2.svg",
-        "screenshot": "11-execution-event-contract-2.png"
+        "screenshot": "11-execution-event-contract-2.png",
+        "source_sha256": "59108c5c686a8f1a25d2bbf10588aaf00499dc99151db37a99d4f97f8d69f7ba",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "edf34b4de51a4673668b3f0e7472f4d847701e5d684185f06cfbbc1372dd35c9",
+        "screenshot_sha256": "a5bbb531fddc12f48e8b578e1c6b3c0339f6050569ec27cab86be3a0ba3a88b0"
       },
       {
         "file": "docs/HALLUCINATION_MITIGATION.md",
@@ -280,7 +334,11 @@
         "nodes": 13,
         "edges": 16,
         "svg": "12-HALLUCINATION_MITIGATION-1.svg",
-        "screenshot": "12-HALLUCINATION_MITIGATION-1.png"
+        "screenshot": "12-HALLUCINATION_MITIGATION-1.png",
+        "source_sha256": "599e6126b1282ea32c207919221c64a80266dd7cc84fbb2f001db1bde3774a3b",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "39d85670719e54fe6f9788a2a89be3755bd51e5f480867a8a8e5aa4fc26982c8",
+        "screenshot_sha256": "2d8199b1190edfc75a4b7f119b40225feb7a4782f24fe939de155077c551b954"
       },
       {
         "file": "docs/MODEL_SELECTION.md",
@@ -293,7 +351,11 @@
         "nodes": 11,
         "edges": 13,
         "svg": "13-MODEL_SELECTION-1.svg",
-        "screenshot": "13-MODEL_SELECTION-1.png"
+        "screenshot": "13-MODEL_SELECTION-1.png",
+        "source_sha256": "0f86fd62481bc21da96836e161cee08650e052a54db74b40906d1f21682b168a",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "170de98f1aa9a658c1c956a3d51824bd7f4fe03de5ebb1ee7826dc83830badf9",
+        "screenshot_sha256": "cbe572d8e4ad7c09ea763189e1a6b79e5fe89fb8e44491dbe8b47356190e8780"
       },
       {
         "file": "docs/PREDICTION_TRACK_RECORD.md",
@@ -306,7 +368,11 @@
         "nodes": 14,
         "edges": 11,
         "svg": "14-PREDICTION_TRACK_RECORD-1.svg",
-        "screenshot": "14-PREDICTION_TRACK_RECORD-1.png"
+        "screenshot": "14-PREDICTION_TRACK_RECORD-1.png",
+        "source_sha256": "a55b9c224ac83d0587020ae7bfea11e0d424c96037d35fef50972181773cbfea",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "57ec6fc3b1258bb82e3095ccb924a7f2d40afd33369c4c58989b535b9b5aee07",
+        "screenshot_sha256": "d496725947adcde930fe2e7c25e2a468fd99a6bd3d771d3a850ce0aaa7825e63"
       },
       {
         "file": "docs/rag-evaluation-guide.md",
@@ -319,7 +385,11 @@
         "nodes": 9,
         "edges": 9,
         "svg": "15-rag-evaluation-guide-1.svg",
-        "screenshot": "15-rag-evaluation-guide-1.png"
+        "screenshot": "15-rag-evaluation-guide-1.png",
+        "source_sha256": "15720be9b6b2148bdc4e36779c1df8430c1230e3052f2705e4de245e5c53899e",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "5b9fb056589c70415e481768746a5b79bf3b5f5090d85f32fcec1b0b7cf52a35",
+        "screenshot_sha256": "0df3b1d2134869a51a387ec15bb9d4c721abff3d38314dba7ded97fc2dd5a195"
       },
       {
         "file": "docs/REPORT_CHART_SPEC.md",
@@ -332,7 +402,11 @@
         "nodes": 11,
         "edges": 13,
         "svg": "16-REPORT_CHART_SPEC-1.svg",
-        "screenshot": "16-REPORT_CHART_SPEC-1.png"
+        "screenshot": "16-REPORT_CHART_SPEC-1.png",
+        "source_sha256": "3dc37db475c6b03684af283234e74fb081b7fc18caeaacf589c2072921694b18",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "2cce429262b0a28dad9db0a40332ac564754f648ce1412cc7c14e7302f7ca53d",
+        "screenshot_sha256": "9c850bd5e9fefba122aed5b8322d5ccf39abba018269e992605a974a9de729bb"
       },
       {
         "file": "docs/REPORT_CHART_SPEC.md",
@@ -345,9 +419,731 @@
         "nodes": 11,
         "edges": 12,
         "svg": "17-REPORT_CHART_SPEC-2.svg",
-        "screenshot": "17-REPORT_CHART_SPEC-2.png"
+        "screenshot": "17-REPORT_CHART_SPEC-2.png",
+        "source_sha256": "3115cc9e0b638d11c54e8db5536f59acd42e4ac6d1034d4c343ff37e6b7b0ccc",
+        "source_unchanged_from_rendered_revision": true,
+        "svg_sha256": "a13928753135f24eb71407d8b9c46dae403df5a7eb192cecaff2e862653c0f8f",
+        "screenshot_sha256": "4aa4a39e4ac1e69a90210ced4ff50953add0bd8ab87a4f7286eadac7bf3d2733"
       }
-    ]
+    ],
+    "revalidation": "17份已渲染原件及当前代码块SHA核对；图定义未变，未重复浏览器渲染"
   },
-  "production_test": false
+  "production_test": false,
+  "links": [
+    {
+      "source": "README.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "CONTRIBUTING.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/MODEL_SELECTION.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/MODEL_SELECTION.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/01_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/AGENTS_GUIDE.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/HALLUCINATION_MITIGATION.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/REPORT_CHART_SPEC.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/05_RAG_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/PREDICTION_TRACK_RECORD.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "DESIGN.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/DOCS_INDEX.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/reports/2026-11-07_agent_runtime_implementation.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/reports/2026-11-07_natural_response_compute/BEFORE.md",
+      "exists": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/reports/2026-11-08_research_recovery/LIVE_RESEARCH.md",
+      "exists": true
+    },
+    {
+      "source": "README_CN.md",
+      "target": "README.md",
+      "exists": true
+    },
+    {
+      "source": "README_CN.md",
+      "target": "docs/DOCS_INDEX.md",
+      "exists": true
+    },
+    {
+      "source": "README_CN.md",
+      "target": "CONTRIBUTING.md",
+      "exists": true
+    },
+    {
+      "source": "README_CN.md",
+      "target": "docs/MODEL_SELECTION.md",
+      "exists": true
+    },
+    {
+      "source": "README_CN.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "backend/config/settings.py",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": ".env.example",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": ".env.server.example",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "tests/agent_eval/reference/manifest.json",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "tests/agent_eval/README.md",
+      "exists": true
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "target": "docs/DOCS_INDEX.md",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Main.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Streaming.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/ChatChart.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Dashboard.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/RightPanel.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/TrackRecord.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/Welcome.dc.html",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/canvas.json",
+      "exists": true
+    },
+    {
+      "source": "DESIGN.md",
+      "target": "docs/design/2026-11-06_claude_agent_chat/source-manifest.json",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../DESIGN.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/01_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../tests/agent_eval/README.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "src/styles/tokens.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/REPORT_CHART_SPEC.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/README.md",
+      "target": "../docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "frontend/src/styles/tokens.md",
+      "target": "../index.css",
+      "exists": true
+    },
+    {
+      "source": "frontend/src/styles/tokens.md",
+      "target": "../../tailwind.config.js",
+      "exists": true
+    },
+    {
+      "source": "frontend/src/styles/tokens.md",
+      "target": "../../../DESIGN.md",
+      "exists": true
+    },
+    {
+      "source": "backend/analysis_worker/README.md",
+      "target": "../../docs/11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "AGENTS_GUIDE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "05_RAG_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "REPORT_CHART_SPEC.md",
+      "exists": true
+    },
+    {
+      "source": "docs/01_ARCHITECTURE.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/05_RAG_ARCHITECTURE.md",
+      "target": "reports/2026-11-07_agent_runtime_implementation.md",
+      "exists": true
+    },
+    {
+      "source": "docs/05_RAG_ARCHITECTURE.md",
+      "target": "reports/2026-11-07_agent_runtime_implementation.md",
+      "exists": true
+    },
+    {
+      "source": "docs/05_RAG_ARCHITECTURE.md",
+      "target": "rag-evaluation-guide.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "archive/2026-11-13_documentation_refresh/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-13_documentation_refresh/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "archive/2026-11-10_answer_completion/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_natural_response_compute/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_natural_response_compute/production-sec-replay.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m3_compute_library_complete_health.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_natural_response_compute/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_agent_runtime_implementation.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_natural_response_compute/production-protected-canary.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_natural_response_compute/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "reports/2026-11-07_agent_runtime_implementation.md",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m4_vectide_review_recovery.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m4_vectide_review_recovery_adjudication.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m3_compute_library_complete_health.json",
+      "exists": true
+    },
+    {
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "HALLUCINATION_MITIGATION.md",
+      "exists": true
+    },
+    {
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "MODEL_SELECTION.md",
+      "exists": true
+    },
+    {
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "PREDICTION_TRACK_RECORD.md",
+      "exists": true
+    },
+    {
+      "source": "docs/AGENTS_GUIDE.md",
+      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "../DESIGN.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "design/2026-11-06_claude_agent_chat/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "plans/2026-11-10_agent_runtime_agentic_rebuild.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "../tests/agent_eval/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "../tests/agent_eval/reference/manifest.json",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_agent_runtime_implementation.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_natural_response_compute/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_natural_response_compute/BEFORE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_page_design_alignment/PAGES_COMPARISON.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_chat_design_alignment/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-07_chat_design_alignment/RESULT_PROCESS_ICONS.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "../CONTRIBUTING.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "../frontend/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-13_documentation_refresh/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-11-13_documentation_refresh/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "reports/2026-11-13_ci_e2e/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "../README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "01_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "AGENTS_GUIDE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "05_RAG_ARCHITECTURE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "REPORT_CHART_SPEC.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "HALLUCINATION_MITIGATION.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "rag-evaluation-guide.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "MODEL_SELECTION.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "PREDICTION_TRACK_RECORD.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-11-07_agent-runtime-design-closeout/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-10-03-foundation-refactor/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-10-04-contract-quality-repair/RELEASE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-10-03-foundation-refactor/RELEASE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-10-04-independent-acceptance/ACCEPTANCE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-10-04-contract-quality-repair/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-10-03-foundation-refactor/NEWS_EVENT_QUALITY.md",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-07-production-quality-remediation/",
+      "exists": true
+    },
+    {
+      "source": "docs/DOCS_INDEX.md",
+      "target": "archive/2026-09-15-doc-reconcile/",
+      "exists": true
+    },
+    {
+      "source": "docs/execution-event-contract.md",
+      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "docs/HALLUCINATION_MITIGATION.md",
+      "target": "reports/2026-11-07_natural_response_compute/BEFORE.md",
+      "exists": true
+    },
+    {
+      "source": "docs/HALLUCINATION_MITIGATION.md",
+      "target": "archive/2026-11-13_documentation_refresh/LANGGRAPH_FLOW.md",
+      "exists": true
+    },
+    {
+      "source": "docs/HALLUCINATION_MITIGATION.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/HALLUCINATION_MITIGATION.md",
+      "target": "rag-evaluation-guide.md",
+      "exists": true
+    },
+    {
+      "source": "docs/HALLUCINATION_MITIGATION.md",
+      "target": "execution-event-contract.md",
+      "exists": true
+    },
+    {
+      "source": "docs/MODEL_SELECTION.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/MODEL_SELECTION.md",
+      "target": "../tests/agent_eval/results/m0_apikl_terra_capacity_vision_20261113.json",
+      "exists": true
+    },
+    {
+      "source": "docs/PREDICTION_TRACK_RECORD.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/rag-evaluation-guide.md",
+      "target": "archive/2026-10-03-foundation-refactor/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/rag-evaluation-guide.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/REPORT_CHART_SPEC.md",
+      "target": "reports/2026-11-07_chat_design_alignment/REAL_CHARTS.md",
+      "exists": true
+    },
+    {
+      "source": "docs/REPORT_CHART_SPEC.md",
+      "target": "11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "../../11_PRODUCTION_RUNBOOK.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "../../archive/2026-11-13_documentation_refresh/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "validation.json",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "mermaid/",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_documentation_refresh/README.md",
+      "target": "../2026-11-13_ci_e2e/README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/reports/2026-11-13_ci_e2e/README.md",
+      "target": "ci-proof.json",
+      "exists": true
+    }
+  ]
 }

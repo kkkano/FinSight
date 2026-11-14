@@ -59,6 +59,8 @@ FINSIGHT_AGENT_MAX_OUTPUT_TOKENS=16384
 
 上方 131072/16384 是此次显式运行预算，与评测配置一致；未实测供应商上下文极限，不当作模型官方规格。`config.py` 对未知模型的默认预算仍为 32768/8192；研究专属模型使用显式 runtime 设置，匹配该配置的系统选择沿用设置。配置预算、模型官方上限、返回 usage 和实测完整上下文窗口是四种不同事实。
 
+2026-11-13 的 M0 实际返回 prompt usage 为 101285 tokens，长输入请求完成；96×96、308 B 的四象限 PNG 的颜色识别 4/4 正确，因此本轮允许图像输入。该结果不证明完整 131072 上下文可用、金融图表 OCR 精度或供应商最大窗口；完整原件和 usage 见 [M0 实测记录](../tests/agent_eval/results/m0_apikl_terra_capacity_vision_20261113.json)。
+
 评测使用单独前缀 `FINSIGHT_EVAL_APIKL_API_BASE/MODEL/API_KEY/CONTEXT_WINDOW/MAX_OUTPUT`，由 `tests/agent_eval/run.py --provider apikl` 读取。评测选项不修改生产默认或冻结 US20 配置。发布清单固定 `model_provider=apikl`，validate/deploy/rollback 沿用清单；显式供应商不一致时拒绝，不能回退旧 Vectide 密钥。模型、端点与预算必须与完整质量报告一致后才能发布。
 
 ## 预算与失败

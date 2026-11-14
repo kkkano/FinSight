@@ -22,6 +22,8 @@
 - [本次文档审查](reports/2026-11-13_documentation_refresh/README.md)：当前规范清单、链接/UTF-8/Mermaid 检查和归档记录。
 - [2026-11-13 文档归档](archive/2026-11-13_documentation_refresh/README.md)：旧贡献/前端/Token/历史研究图说明的原路径、替代入口及原因。
 
+- [2026-11-13 CI E2E 收口](reports/2026-11-13_ci_e2e/README.md)：当前受控截图、真实图表原件与字节清单；旧日期截图保持原件，完整 CI 及线上结论分别记录。
+
 ## 建议阅读顺序
 
 1. [`../README.md`](../README.md)：产品能力、快速启动、当前路由、系统与部署拓扑。
