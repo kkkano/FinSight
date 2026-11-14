@@ -622,7 +622,19 @@ async def main(args):
                             os.getenv("FINSIGHT_EVAL_JUDGE_API_KEY", base.api_key),
                             context_window=int(os.getenv("FINSIGHT_EVAL_JUDGE_CONTEXT_WINDOW", str(judge_window))),
                             max_output=int(os.getenv("FINSIGHT_EVAL_JUDGE_MAX_OUTPUT", str(judge_output))))
-    head = subprocess.check_output(["git", "rev-parse", "--short=8", "HEAD"], cwd=REPO, text=True).strip()
+    source_repository = None
+    if getattr(args, "source_git_metadata", None):
+        metadata_path = Path(args.source_git_metadata)
+        source_repository = json.loads(metadata_path.read_text(encoding="utf-8"))
+        commit = source_repository["commit"]
+        if (source_repository["capture_method"] != "host_git_rev_parse"
+                or len(commit) != 40 or len(bytes.fromhex(commit)) != 20
+                or source_repository["runtime_sha256"][args.runtime] != runtime_digest(runtime_dir)):
+            raise ValueError("captured_source_repository_binding_invalid")
+        source_repository = source_repository | {"metadata_sha256": hashlib.sha256(metadata_path.read_bytes()).hexdigest()}
+        head = commit[:8]
+    else:
+        head = subprocess.check_output(["git", "rev-parse", "--short=8", "HEAD"], cwd=REPO, text=True).strip()
     args.run_id = time.strftime("%Y-%m-%d_%H%M%S") + "_" + head
     output = Path(args.output) if args.output else eval_dir / "results" / (args.run_id + ".json")
     if args.grade_report:
@@ -649,6 +661,9 @@ async def main(args):
                                  "analysis_worker_enabled": bool(evaluation_analysis_worker()),
                                  "retry_unstarted_connections": 1},
               "ready": False, "expected_cases": len(corpus["cases"]), "cost_estimate": sum_cost_estimates([])}
+    if source_repository is not None:
+        report["source_repository"] = source_repository
+        report["harness_config"]["source_repository_metadata_sha256"] = source_repository["metadata_sha256"]
     write_json(output, report)
     async def completed_cases():
         if args.jobs == 1:
@@ -723,6 +738,7 @@ def build_parser():
     parser.add_argument("--fixtures-root", default="fixtures", help="相对评测目录的录制根目录；不同录制版本不混用")
     parser.add_argument("--seed-tapes", help="录制时复用明确指定的历史归档；仅精确匹配工具及参数，回放不读取此目录")
     parser.add_argument("--grade-report", help="只补判已有结果中缺失的分数，不重新生成研究回答")
+    parser.add_argument("--source-git-metadata", help="无Git的冻结镜像使用已采集宿主Git提交；验证两实现源码摘要并保留声明来源")
     return parser
 
 

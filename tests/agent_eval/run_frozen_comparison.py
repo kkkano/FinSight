@@ -37,7 +37,7 @@ def environment():
 
 
 def implementation():
-    names = ["run_frozen_comparison.py", "run_frozen_eval.py", "frozen_corpus_provider.py",
+    names = ["run.py", "run_frozen_comparison.py", "run_frozen_eval.py", "frozen_corpus_provider.py", "environment_preflight.py", "offline_network_isolation.py",
              "frozen_offline_worker.py", "materialize.py", "run_paged_grading.py",
              "paged_judge.py", "grade_apikl_budgeted.py"]
     return {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in names}
@@ -49,6 +49,10 @@ def save(path, state):
 
 
 def main(args):
+    global SUFFIX
+    if not args.generation or any(not (character.isascii() and (character.isalnum() or character in "_-")) for character in args.generation):
+        raise ValueError("generation_must_be_finite_ascii_identifier")
+    SUFFIX = args.generation
     state_path = RESULTS / f"apikl_frozen_{args.phase}_execution_{SUFFIX}.json"
     binding = implementation()
     if state_path.exists():
@@ -61,6 +65,13 @@ def main(args):
         state = {"phase": args.phase, "status": "started", "pid": os.getpid(),
                  "implementation": binding, "stages": []}
     save(state_path, state)
+    if args.environment_manifest:
+        manifest_path = Path(args.environment_manifest)
+        checked = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if checked.get("passed") is not True or checked["parent"]["python_executable"] != sys.executable:
+            raise ValueError("complete_matching_environment_preflight_required")
+        state["environment_manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        save(state_path, state)
     commands = []
     if args.phase in {"pilot", "full"}:
         if args.phase == "full":
@@ -76,6 +87,8 @@ def main(args):
                 "--request-interval", "6.1", "--timeout", "180", "--model-protocol", "sse",
                 "--no-judge", "--judge-protocol", "tools", "--fixtures-root", CORPUS,
                 "--output", str(report_path(runtime, pilot=args.phase == "pilot"))]
+            if args.source_git_metadata:
+                command += ["--source-git-metadata", args.source_git_metadata]
             if args.phase == "pilot":
                 for case in PILOT_CASES:
                     command += ["--case", case]
@@ -101,6 +114,10 @@ def main(args):
         print(json.dumps(comparison, ensure_ascii=False), flush=True)
         return 0 if comparison["passed"] else 2
     env = environment()
+    if args.mount_manifest:
+        env["FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST"] = args.mount_manifest
+    if args.environment_manifest:
+        env["FINSIGHT_EVAL_ENVIRONMENT_MANIFEST"] = args.environment_manifest
     for name, command in commands:
         previous = next((stage for stage in reversed(state["stages"]) if stage["name"] == name), None)
         if previous and previous["status"] == "collected":
@@ -143,4 +160,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", required=True, choices=("pilot", "full", "grade", "compare"))
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--generation", default=SUFFIX)
+    parser.add_argument("--source-git-metadata")
+    parser.add_argument("--mount-manifest")
+    parser.add_argument("--environment-manifest")
     raise SystemExit(main(parser.parse_args()))

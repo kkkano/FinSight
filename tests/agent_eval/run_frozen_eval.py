@@ -140,7 +140,7 @@ def frozen_worker(case, subject, judge, args, eval_dir, shared_pacing=None):
 
 
 async def main(args):
-    os.environ["FINSIGHT_EVAL_FROZEN_CORPUS_DIR"] = str(ROOT / "tests/agent_eval/fixtures/apikl-frozen-provider-20261113")
+    os.environ["FINSIGHT_EVAL_FROZEN_CORPUS_DIR"] = str(ROOT / "tests/agent_eval" / args.fixtures_root)
     runner.run_case = frozen_run_case
     runner.run_case_in_process = frozen_worker
     result = await runner.main(args)
@@ -152,6 +152,14 @@ async def main(args):
         "provider_source_sha256": hashlib.sha256(Path(provider_module.__file__).read_bytes()).hexdigest(),
         "driver_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "measurement_scope": "same_frozen_document_and_producer_corpus; decision_layer_only; live_network_validated_separately"}
+    environment_path = os.getenv("FINSIGHT_EVAL_ENVIRONMENT_MANIFEST")
+    if environment_path:
+        preflight = json.loads(Path(environment_path).read_text(encoding="utf-8"))
+        if preflight.get("passed") is not True or preflight["parent"]["python_executable"] != sys.executable:
+            raise ValueError("measurement_environment_preflight_changed")
+        report["harness_config"]["environment_manifest_sha256"] = hashlib.sha256(Path(environment_path).read_bytes()).hexdigest()
+    if corpus().mount_manifest:
+        report["harness_config"]["corpus_mount_manifest_sha256"] = corpus().mount_manifest["mapping_manifest_sha256"]
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return result
 
