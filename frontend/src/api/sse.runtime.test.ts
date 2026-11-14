@@ -1,8 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseSSEStream } from './sse';
+import { parseSSEStream, withStreamGuards } from './sse';
 
 const response = (events: unknown[]) => new Response(events.map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join(''));
 describe('runtime SSE compatibility', () => {
+  it('dispatches the real save-failure error terminal with its runtime alias and metadata intact', async () => {
+    const onError = vi.fn(); const onDone = vi.fn();
+    const terminal = { schema_version: '2', type: 'error', runtime_type: 'delivery.persistence_unconfirmed',
+      run_id: 'save-failure-run', run_status: 'persistence_failed', persistence_status: 'failed',
+      error_code: 'conversation_persistence_failed', response: '已生成、未保存的原始正文。',
+      message: '回答已生成，但未保存成功', publishable: false };
+    const guarded = withStreamGuards({ onError, onDone });
+
+    await parseSSEStream(response([terminal]), guarded, { readTimeoutMs: 0 });
+    guarded.finish();
+
+    expect(onError).toHaveBeenCalledExactlyOnceWith(terminal.message, expect.objectContaining(terminal));
+    expect(onDone).not.toHaveBeenCalled();
+    expect(guarded.terminalState()).toBe('error');
+  });
   it('delivers answer completion and review events without claiming a terminal done', async () => {
     const onRuntimeEvent = vi.fn(); const onDone = vi.fn(); const onThinking = vi.fn();
     await parseSSEStream(response([

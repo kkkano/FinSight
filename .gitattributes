@@ -73,3 +73,7 @@ tests/agent_eval/test_paged_judge.py -text whitespace=cr-at-eol
 
 # M0实际测量收据保留原字节。
 tests/agent_eval/results/m0_apikl_terra_capacity_vision_20261113.json -text whitespace=cr-at-eol
+
+frontend/src/hooks/useChatStream.test.ts -text whitespace=cr-at-eol
+
+frontend/src/hooks/useChatStream.ts -text whitespace=cr-at-eol

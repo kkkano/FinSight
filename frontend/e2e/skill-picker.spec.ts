@@ -16,9 +16,8 @@ async function prepare(page: Page) {
     localStorage.setItem('finsight-session-id', sessionId);
   }, E2E_SESSION_ID);
   await installAuthenticatedSession(page);
-  await page.route('**/api/**', async (route) => {
+  await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    if (!pathname.startsWith('/api/')) return route.fallback();
     if (pathname === '/api/skills') {
       state.catalogueRequests += 1;
       return route.fulfill({ status: state.failCatalogue ? 503 : 200, contentType: 'application/json',

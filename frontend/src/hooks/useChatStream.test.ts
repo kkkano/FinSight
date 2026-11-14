@@ -269,6 +269,22 @@ describe('chat retry and recovery', () => {
     expect(answer.report).toBeUndefined();
   });
 
+  it.each([
+    { error_code: 'conversation_persistence_failed', run_status: 'persistence_failed', persistence_status: 'failed' },
+    { error_code: 'conversation_persistence_failed' },
+  ])('preserves the original answer and save failure for an error terminal %j', async (failure) => {
+    const content = '已生成、未保存的原始正文。';
+    const blocks = [{ id: 'answer', kind: 'text', content, revision: 0 }];
+    vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {
+      callbacks.onError?.('回答已生成，但未保存成功', { type: 'error', ...failure, response: content, blocks });
+    });
+
+    await useChatStream(useStore.getState().sessionId).send('生成 AAPL 深度投资报告，覆盖财报、估值和风险');
+
+    expect(useStore.getState().messages.at(-1)).toMatchObject({ content, blocks, isLoading: false,
+      runStatus: 'persistence_failed', answerStatus: 'partial', error: '回答已生成，但未保存成功。', canRetry: true });
+  });
+
   it('uses an error envelope response and artifact blocks without losing the received result', async () => {
     const blocks = [{ id: 'answer', kind: 'text', content: '部分研究结果', revision: 0 }];
     vi.spyOn(apiClient, 'sendMessageStream').mockImplementation(async (_request, callbacks) => {

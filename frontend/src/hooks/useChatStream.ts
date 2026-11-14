@@ -542,7 +542,9 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
             terminalHandlingPromise = (async () => {
               if (await recoverDelivery() || terminalClaimed) return;
               terminalClaimed = true;
-              const failureMessage = researchFailureMessage(meta);
+              const saveFailed = meta?.persistence_status === 'failed' || meta?.run_status === 'persistence_failed'
+                || meta?.error_code === 'conversation_persistence_failed';
+              const failureMessage = saveFailed ? '回答已生成，但未保存成功。' : researchFailureMessage(meta);
               serverSaved = meta?.persistence_status === 'saved';
               thinkingSteps = [...thinkingSteps, { stage: 'error', eventType: 'error', message: failureMessage,
                 timestamp: new Date().toISOString(), result: { status: 'error', error_code: meta?.error_code,
@@ -550,7 +552,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
               updateScopedMessage(aiMsgId, {
                 content: fullContent || failureMessage,
                 isLoading: false,
-                error: failureMessage, runStatus: String(meta?.run_status || 'failed'), answerStatus: fullContent ? 'partial' : 'unavailable', blocks: runtimeState.blocks,
+                error: failureMessage, runStatus: saveFailed ? 'persistence_failed' : String(meta?.run_status || 'failed'), answerStatus: fullContent ? 'partial' : 'unavailable', blocks: runtimeState.blocks,
                 thinking: thinkingSteps,
                 canRetry: true,
               }, true);

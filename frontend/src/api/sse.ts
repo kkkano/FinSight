@@ -167,20 +167,21 @@ export async function parseSSEStream(
         try {
           let data = JSON.parse(rawJson);
           opts.onEnvelope?.(data);
+          const terminalType = ['done', 'error', 'cancelled'].includes(data.type) ? data.type : null;
           const runtime = normalizeRuntimeEvent(data);
           if (runtime) {
             callbacks.onRuntimeEvent?.(runtime);
             if (!callbacks.onRuntimeEvent && runtime.type === 'content.delta') onToken?.(String(runtime.payload.delta ?? ''));
             // 每份正文只分发一次；原始推理不进入开发日志或持久thinking数组。
-            if (/^(content[.]|reasoning[.]|artifact[.]|snapshot[.]|review[.]|answer[.])/.test(runtime.type)) continue;
+            if (!terminalType && /^(content[.]|reasoning[.]|artifact[.]|snapshot[.]|review[.]|answer[.])/.test(runtime.type)) continue;
             const legacyType: Record<string, string> = {
               'tool.started': 'tool_start', 'tool.result': 'tool_end', 'tool.failed': 'step_error',
               'agent.started': 'agent_start', 'agent.finished': 'agent_done', 'agent.failed': 'agent_error',
               'run.completed': 'done', 'run.failed': 'error', 'run.cancelled': 'cancelled',
             };
             data = { ...data, ...runtime.payload, runtime_type: runtime.type,
-              type: legacyType[runtime.type] || runtime.type };
-            if (runtime.type.startsWith('activity.') || runtime.type.startsWith('skill.')) {
+              type: terminalType || legacyType[runtime.type] || runtime.type };
+            if (!terminalType && (runtime.type.startsWith('activity.') || runtime.type.startsWith('skill.'))) {
               data = { ...data, type: 'trace', visibility: 'user', stage: runtime.type };
             }
           }
