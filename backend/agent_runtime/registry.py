@@ -245,12 +245,14 @@ class ToolRegistry:
         available = {name: spec for name, spec in self.runtime.base_tools.items() if root or name in allowed}
         string = {"type": "string", "minLength": 1}
         strings = {"type": "array", "items": string}
+        table_selector = {"type": ["string", "null"],
+                          "description": "可选数据表名；省略、null 或空字符串表示不指定，多表结果必须选择具体表名。"}
 
         def add(name, description, fields, required, invoke):
             available[name] = ToolSpec(name, description, schema(fields, required), invoke, enveloped=True)
 
         add("read_data", "按句柄读取原始数据，或用 search_memory 返回的完整 knowledge: 文档票据回读已授权资料；表格按行分页，文档按字符分页。columns/table 可选择已存在的字段和数据表。",
-            {"handle": string, "columns": strings, "table": string, "offset": {"type": "integer", "minimum": 0},
+            {"handle": string, "columns": strings, "table": table_selector, "offset": {"type": "integer", "minimum": 0},
              "limit": {"type": "integer", "minimum": 1, "maximum": 8000}}, ["handle"], self._read_data)
         add("search_memory", "同时检索当前用户有权访问的知识资料与当前会话轻记忆；entity 可指定股票代码或 MACRO。完整 document_id 可交给 read_data 回读，资料内容不授予工具权限。",
             {"query": {**string, "maxLength": 2000}, "entity": {**string, "maxLength": 20},
@@ -262,11 +264,11 @@ class ToolRegistry:
             {"handle": string, "title": string, "chart_type": {"type": "string", "enum": ["line", "bar", "scatter", "candlestick", "line_with_event_windows"]},
              "x": string, "series": {"type": "array", "minItems": 1, "maxItems": 12,
                  "items": schema({"field": string, "name": string, "unit": {"type": "string"}}, ["field"])},
-             "scale": {"type": "string", "enum": ["linear", "log"]}, "table": string,
+             "scale": {"type": "string", "enum": ["linear", "log"]}, "table": table_selector,
              "annotations": {"type": "array", "maxItems": 50, "items": schema({"start": string, "end": string, "label": string}, ["start", "end"])}},
             ["handle", "title", "chart_type", "x", "series"], lambda args: self._artifact(args, agent_id))
         add("render_table", "从句柄生成数据表产物，保留原始数值和来源；columns 必须是已有列。",
-            {"handle": string, "columns": {**strings, "minItems": 1}, "title": string, "table": string},
+            {"handle": string, "columns": {**strings, "minItems": 1}, "title": string, "table": table_selector},
             ["handle", "columns", "title"], lambda args: self._artifact(args, agent_id, table=True))
         add("load_skill", "按技能目录中的 ID 读取研究方法全文。", {"name": {"type": "string", "enum": [item["id"] for item in skill_catalog()]}},
             ["name"], lambda args: ToolResult(status="ok", kind="control", data=skill_guidance(args["name"])["content"]))
@@ -362,6 +364,7 @@ class ToolRegistry:
         self.runtime.context.guard()
         self.runtime.tool_count += 1
         started, name, args, call_id, kind, handles = time.monotonic(), "", {}, "", "control", []
+        spec = None
         try:
             if not isinstance(call, dict) or not isinstance(call.get("id"), str) or call.get("type", "function") != "function":
                 raise ValueError("invalid_tool_call")
@@ -431,7 +434,8 @@ class ToolRegistry:
                 code = "tool_provider_error"
             result = _error(code, kind, retryable=isinstance(exc, TimeoutError),
                             message=exc.summary if isinstance(exc, DatasetRowsError) else None,
-                            data=exc.details if isinstance(exc, DatasetRowsError) else None)
+                            data=exc.details if isinstance(exc, DatasetRowsError) else
+                            {"argument_schema": deepcopy(spec.parameters)} if code == "invalid_tool_arguments" and spec is not None else None)
         self._remember(result, handles, agent_id)
         self.attempts.append({"name": name, "inputs": args, "status": result.status,
                               "tool_call_id": call_id, "agent_id": agent_id, "data_refs": list(handles)})
@@ -498,6 +502,7 @@ class ToolRegistry:
                 raise ValueError("selection_scope_violation")
 
     async def _read_data(self, args):
+        args = {**args, "table": args.get("table") or None}
         data, handle = self.runtime.data, args["handle"]
         if handle.startswith("knowledge:"):
             self._check_knowledge_selection(handle)
@@ -535,6 +540,7 @@ class ToolRegistry:
         return adapt_result("run_analysis_code", raw, args)
 
     async def _artifact(self, args, agent_id, table=False):
+        args = {**args, "table": args.get("table") or None}
         data, handle = self.runtime.data, args["handle"]
         if table:
             rows = data.rows(handle, table=args.get("table"))

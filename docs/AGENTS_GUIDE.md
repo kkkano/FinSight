@@ -100,7 +100,7 @@ flowchart TD
 
 `run_python` 只进入 `backend/analysis_worker/` 的 dispatcher/job。环境提供 `datasets`、`frames`、`get_frame`、`pd`、`np` 和 `finsight`。原始 datasets 保留原值，计算只增加衍生记录。
 
-`result` 支持有限数值 JSON 与 DataFrame；DataFrame 按行记录传输，索引需要显式 `reset_index()`。`valuation_scenarios` 的 `eps` 是单个正数，`multiples` 是列表；多个 EPS 假设分别计算后合并。计算失败的模型投影保留 `code_error` 中的类型、消息、行号，以便模型纠错；界面仍使用安全摘要，不展示原始日志或堆栈。
+`result` 支持有限数值 JSON 与 DataFrame；DataFrame 按行记录传输，索引需要显式 `reset_index()`。`valuation_scenarios` 的 `eps` 是单个正数，`multiples` 是列表；多个 EPS 假设分别计算后合并。计算失败的模型投影保留 `code_error` 中的类型、消息、行号；参数校验和数据表选择失败还提供真实参数 schema、可用表名与必填参数，供模型自行纠错。界面仍使用安全摘要，不展示原始日志或堆栈。`read_data/render_chart/render_table` 的可选 `table` 省略、null 或空串都表示未指定；有多张表时仍必须明确选择。
 
 `finsight` 提供 `drawdown_episodes`、`consecutive_declines`、`moving_averages`、`series_statistics`、`compare_series`、`financial_ratios(frame)`、`valuation_scenarios(eps, multiples, currency=...)`。日期、频率、已收盘条件、共同基准与阈值由明确参数决定；峰谷回撤和连续下跌不是同一指标。财务比率保留主体、单位、期间和衍生来源；估值情景明确标为假设。结果赋给 `result`；只 print 的日志不算计算产物。隔离计算缺配置、资源不足或执行失败时明确不可用，不在 Web 进程运行开放代码。资源合同见[运行手册](11_PRODUCTION_RUNBOOK.md)。
 

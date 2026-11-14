@@ -290,3 +290,51 @@ async def test_read_financial_rows_preserves_metadata_and_bounds_model_projectio
     assert metadata.data['rows'][0]['fact_metadata']['revenue'] == {'unit': 'USD', 'audit': 'x' * 20000}
     assert rt.data.records[ref] == original
     await rt.close()
+
+
+@pytest.mark.asyncio
+async def test_optional_table_selectors_render_the_same_original_values(tmp_path, monkeypatch):
+    from backend.tests.test_agent_runtime import execute, runtime
+    monkeypatch.setenv('FINSIGHT_ACTION_STORE', str(tmp_path / 'actions.sqlite'))
+    rt, _ = runtime(tmp_path, [])
+    rows = [{'eps_usd': eps, 'pe_20x_usd': eps * 20, 'pe_30x_usd': eps * 30} for eps in [3, 4, 5, 6, 7, 8]]
+    ref = rt.data.record('run_analysis_code', {}, rows)
+    original = deepcopy(rt.data.records[ref])
+    chart_ids, table_ids = [], []
+    for selector in [{}, {'table': None}, {'table': ''}]:
+        read = await execute(rt, 'read_data', {'handle': ref, **selector})
+        chart = await execute(rt, 'render_chart', {'handle': ref, 'title': '估值情景', 'chart_type': 'line',
+            'x': 'eps_usd', 'series': [{'field': 'pe_20x_usd'}, {'field': 'pe_30x_usd'}], **selector})
+        table = await execute(rt, 'render_table', {'handle': ref, 'title': '估值情景',
+            'columns': ['eps_usd', 'pe_20x_usd', 'pe_30x_usd'], **selector})
+        assert read.status == chart.status == table.status == 'ok'
+        assert chart.data['data']['rows'] == table.data['data']['rows'] == rows
+        chart_ids.append(chart.data['artifact_id'])
+        table_ids.append(table.data['artifact_id'])
+    assert len(set(chart_ids)) == len(set(table_ids)) == 1 and len(rt.data.artifacts) == 2
+    assert rt.data.records[ref] == original
+    assert rt.registry.attempts[-1]['inputs']['table'] == ''
+    await rt.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_multi_table_selection_and_invalid_chart_arguments_are_actionable(tmp_path, monkeypatch):
+    from backend.tests.test_agent_runtime import execute, runtime
+    from backend.agent_runtime.envelope import to_ui
+    monkeypatch.setenv('FINSIGHT_ACTION_STORE', str(tmp_path / 'actions.sqlite'))
+    rt, _ = runtime(tmp_path, [])
+    ref = rt.data.record('run_analysis_code', {}, {'first': [{'x': 1, 'y': 2}], 'second': [{'x': 1, 'y': 3}]})
+    args = {'handle': ref, 'title': '情景', 'chart_type': 'line', 'x': 'x', 'series': [{'field': 'y'}], 'table': ''}
+    missing = await execute(rt, 'render_chart', args)
+    assert missing.status == 'error' and missing.error.code == 'dataset_table_required'
+    assert missing.data['available_tables'] == ['first', 'second']
+    projection = rt.registry.model_text(missing, 2000)
+    assert 'available_tables' in projection and 'first' in projection and 'second' in projection
+    invalid = await execute(rt, 'render_chart', {**args, 'chart_type': 'unsupported'})
+    assert invalid.status == 'error' and invalid.error.code == 'invalid_tool_arguments'
+    assert invalid.data['argument_schema']['properties']['chart_type']['enum'][0] == 'line'
+    assert 'argument_schema' in rt.registry.model_text(invalid, 2000)
+    assert 'argument_schema' not in str(to_ui(invalid, name='render_chart'))
+    valid = await execute(rt, 'render_chart', {**args, 'table': 'second'})
+    assert valid.status == 'ok' and valid.data['data']['rows'] == [{'x': 1, 'y': 3}]
+    await rt.close()
