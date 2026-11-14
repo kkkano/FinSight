@@ -32,9 +32,13 @@ def sibling(name):
 paged = sibling("paged_judge")
 budgeted = sibling("grade_apikl_budgeted")
 frozen_module = sibling("frozen_corpus_provider")
+network = sibling("grading_transport")
 
 
 async def main(args):
+    reading_budget = getattr(args, "reading_token_budget", 600000)
+    if type(reading_budget) is not int or not 600000 <= reading_budget <= 1200000:
+        raise ValueError("invalid_independent_reading_budget")
     source, output = Path(args.source).resolve(), Path(args.output).resolve()
     if output.exists() and not args.resume:
         raise ValueError("existing_paged_grading_requires_resume")
@@ -65,14 +69,18 @@ async def main(args):
         shared_corpus = frozen_module.FrozenCorpus(fixture_base)
         if shared_corpus.identity != original["harness_config"]["frozen_provider"]["manifest_sha256"]:
             raise ValueError("measurement_shared_corpus_changed")
-    implementation = {"kind": "complete_evidence_readonly_paged_native_judge", "version": 1,
+    implementation = {"kind": "complete_evidence_readonly_paged_native_judge", "version": 2,
         "reader": Path(paged.__file__).relative_to(ROOT).as_posix(),
         "reader_sha256": hashlib.sha256(Path(paged.__file__).read_bytes()).hexdigest(),
         "transport": Path(budgeted.__file__).relative_to(ROOT).as_posix(),
         "transport_sha256": hashlib.sha256(Path(budgeted.__file__).read_bytes()).hexdigest(),
+        "connection_retry_transport": Path(network.__file__).relative_to(ROOT).as_posix(),
+        "connection_retry_sha256": hashlib.sha256(Path(network.__file__).read_bytes()).hexdigest(),
+        "maximum_connection_attempts": 3,
         "model": config.model, "native_submit_tool": "submit_score", "prompt_sha256": prompt_hash,
         "shared_account_quota": str(Path(args.shared_quota).resolve()), "rpm": 30, "tpm": 250000,
-        "minimum_request_interval_seconds": 10, "case_reading_token_budget": 600000,
+        "minimum_request_interval_seconds": 10, "case_reading_token_budget": reading_budget,
+        "answer_includes_delivered_artifacts": True,
         "context_window": config.context_window, "max_output": config.max_output,
         "artifact_root": str(runner.evaluation_artifact_root()),
         "original_subject_measurements_changed": False, "evidence_keyword_selection": False}
@@ -94,7 +102,8 @@ async def main(args):
                   trial=args.trial, actual_fixture_sha256_at_grading=current_digest,
                   graded_at=datetime.now(timezone.utc).isoformat())
     attempts = []
-    transport = budgeted.quota_transport_class(Path(args.shared_quota).resolve(), attempts)(config)
+    retry_events = []
+    transport = network.retrying_quota_transport_class(Path(args.shared_quota).resolve(), attempts, retry_events)(config)
     environment = {"FINSIGHT_AGENT_MODEL_CONCURRENCY": "2", "FINSIGHT_AGENT_RPM_LIMIT": "30",
         "FINSIGHT_AGENT_TPM_LIMIT": "250000", "FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS": "10",
         "FINSIGHT_AGENT_TOKEN_BUDGET": "160000"}
@@ -117,10 +126,12 @@ async def main(args):
             work = (runner.evaluation_artifact_root() / "_paged_judge" if os.getenv("FINSIGHT_EVAL_ARTIFACT_ROOT")
                     else ROOT / "tests/agent_eval/requests/paged_judge") / output.stem / case["id"]
             before = len(attempts)
+            retry_before = len(retry_events)
             if row.get("judge_error"):
                 row.setdefault("previous_judge_errors", []).append({"error": row["judge_error"], "details": row.get("judge_details")})
             try:
-                row["score"] = await paged.judge_with_pages(transport, case, row, records, work, corpus=shared_corpus)
+                row["score"] = await paged.judge_with_pages(transport, case, row, records, work,
+                                                          token_budget=reading_budget, corpus=shared_corpus)
                 row.pop("judge_error", None)
                 row.pop("judge_details", None)
             except Exception as exc:
@@ -129,6 +140,7 @@ async def main(args):
                 row["judge_details"] = {"exception_type": type(exc).__name__, "source_data_retained": True}
             row["paged_judge_artifacts"] = runner.evaluation_file_reference(work)
             row["judge_transport_attempts"] = deepcopy(attempts[before:])
+            row["judge_connection_retries"] = deepcopy(retry_events[retry_before:])
             report["groups"] = summarize(report["results"])
             report["ready"] = False if args.trial else runner.report_ready(report)
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -144,6 +156,8 @@ if __name__ == "__main__":
     parser.add_argument("--source", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--shared-quota", required=True)
+    parser.add_argument("--reading-token-budget", type=int, default=600000,
+                        help="独立证据阅读预算；750000为原600000加25%%余量")
     parser.add_argument("--trial", action="store_true")
     parser.add_argument("--case", action="append")
     parser.add_argument("--resume", action="store_true", help="只补失败项，成功评分不重跑；原失败输出保留")

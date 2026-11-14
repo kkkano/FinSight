@@ -179,7 +179,21 @@ class ReadOnlyEvidence:
         return response
 
 
-READ_SYSTEM = JUDGE_RUBRIC + """
+DELIVERY_GUIDANCE = """
+完整答复由正文与已交付的 artifacts 共同构成。真实前端会渲染其中的图表和数据表；
+正文引用“如图/表所示”有效，不要求再把附件中的每个数字复制进正文。
+可见输出包括正文、产物标题、表格列标签与数据、图例等；artifact_id、dataset_refs、
+source_refs 等传输元数据并不显示在正常答复中，不能仅因这些元数据含内部标识就扣分。
+若正文或实际可见标题、标签、数据写出不必要的内部标识，仍按量表扣分。
+必须核对产物的实际 data/spec 与原始证据、财期、单位及来源；空壳、错误数据、
+缺少用户要求的产物仍需扣分，不能仅因存在 artifact 就认定交付或正确。
+delivered_artifacts 是原始产物的真实结构清单与有界完整值，不是预设分数。
+较大产物只给描述符，其完整原件仍可在指定 evidence_path 回读；在阅读阶段
+核实需要的字段。最终判分时以实际正文、产物和已核实事实为准，不让概括笔记
+中的“正文没有表格/数字”覆盖明确存在的表格或图表数据。
+"""
+
+READ_SYSTEM = JUDGE_RUBRIC + DELIVERY_GUIDANCE + """
 你当前在只读证据阅读阶段。初始输入包含完整题目、原答案、全部证据索引；原始资料没有删减。
 只允许read_evidence和finish_reading。按真实结构path读取字段，支持数组/字典/字符串分页。
 view=json仅在原节点是有效JSON字符串时使用，decoded_path在解码后的树中定位；否则view=raw按字符分页。
@@ -191,7 +205,7 @@ view=json仅在原节点是有效JSON字符串时使用，decoded_path在解码�
 确认已核验题目要求、关键数字、口径、局限与引用后，调用finish_reading提交简短事实笔记。
 之后进入最终提交阶段，只允许同一submit_score契约；评分理由必须根据实际读取证据。
 """
-FINAL_SYSTEM = JUDGE_RUBRIC + "阅读阶段已结束。最后只调用submit_score提交五项整数分数与中文依据，不再调用其它工具。"
+FINAL_SYSTEM = JUDGE_RUBRIC + DELIVERY_GUIDANCE + "阅读阶段已结束。最后只调用submit_score提交五项整数分数与中文依据，不再调用其它工具。"
 READ_TOOL = {"type": "function", "function": {"name": "read_evidence", "description": "只读原始完整证据的结构路径与分页。",
     "parameters": {"type": "object", "properties": {
         "path": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "integer", "minimum": 0}]}},
@@ -256,6 +270,28 @@ def compact(messages, delivered_receipts=None):
     return copied
 
 
+def delivered_artifacts(answers, *, total_inline_bytes=12000, single_inline_bytes=4096):
+    """投影真实交付，不裁改原件或推定分数；大型数据保留精确回读路径。"""
+    result, used = [], 0
+    for turn_index, answer in enumerate(answers):
+        for artifact_index, artifact in enumerate(answer.get("artifacts", [])):
+            path = ["answers", turn_index, "artifacts", artifact_index]
+            size = len(encode(artifact).encode("utf-8"))
+            item = {"turn_index": turn_index, "evidence_path": path,
+                    "original_sha256": digest(artifact), "original_json_bytes": size}
+            if size <= single_inline_bytes and used + size <= total_inline_bytes:
+                item["complete_artifact"] = deepcopy(artifact)
+                used += size
+            else:
+                item["descriptor_only"] = True
+                if isinstance(artifact, dict):
+                    item["identity"] = {key: deepcopy(artifact[key]) for key in
+                        ("artifact_id", "id", "kind", "type", "title", "dataset_refs", "source_refs") if key in artifact}
+                    item["actual_fields"] = list(artifact)
+            result.append(item)
+    return result
+
+
 async def judge_with_pages(transport, case, row, records, work, *, maximum_rounds=24, token_budget=600000, corpus=None):
     if transport.config.model == row["model"]:
         raise ValueError("judge_must_differ_from_subject")
@@ -267,7 +303,8 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
     if corpus is not None:
         original["complete_shared_corpus_index"] = corpus.complete_index()
     reader = ReadOnlyEvidence(original, Path(work) / "original_payload.json")
-    initial = reader.index()
+    deliveries = delivered_artifacts(answers)
+    initial = {**reader.index(), "delivered_artifacts": deliveries}
     shared_instruction = "\nread_shared_corpus也仅访问同一完整冻结资料库：资料未由被测模型取到不代表库中不存在。完整文档目录可分页，search_documents是同Corpus标准全文检索，不是新网络查询。" if corpus is not None else ""
     messages = [{"role": "system", "content": READ_SYSTEM + shared_instruction}, {"role": "user", "content": encode(initial)}]
     reading_tools = [READ_TOOL, FINISH_TOOL] + ([CORPUS_TOOL] if corpus is not None else [])
@@ -379,7 +416,8 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
     messages = compact(messages, delivered_receipts)
     messages[0] = {"role": "system", "content": FINAL_SYSTEM}
     messages.append({"role": "user", "content": encode({"reading_closed": True, "facts_notes": notes,
-        "frozen_payload_sha256": reader.sha256, "read_receipts": reader.receipts, "submit_only": True})})
+        "frozen_payload_sha256": reader.sha256, "read_receipts": reader.receipts,
+        "delivered_artifacts": deliveries, "submit_only": True})})
     if spent + tokens(messages) + tokens([SCORE_TOOL]) + transport.config.max_output > token_budget:
         raise ValueError("paged_judge_final_budget_exhausted")
     text, calls, usage = await model_step(transport, messages, [SCORE_TOOL],
@@ -391,6 +429,7 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
     return {**score, "model": transport.config.model, "total": sum(score[key] for key in SCORE_FIELDS),
             "usage": usage, "original_payload_sha256": reader.sha256, "read_receipts": reader.receipts,
             "reading_rounds": len(transcript), "reading_tokens": spent,
+            "grading_version": 2, "reading_token_budget": token_budget,
             "reader_implementation_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "reading_prompt_sha256": hashlib.sha256(READ_SYSTEM.encode()).hexdigest(),
             "final_prompt_sha256": hashlib.sha256(FINAL_SYSTEM.encode()).hexdigest()}

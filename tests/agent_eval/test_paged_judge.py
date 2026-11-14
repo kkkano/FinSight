@@ -1,5 +1,6 @@
 """只读分页、完整原件绑定及最终提交合同；不作为真实模型质量评分。"""
 import asyncio
+from copy import deepcopy
 import importlib.util
 import json
 from pathlib import Path
@@ -119,3 +120,37 @@ def test_same_model_cannot_score_its_own_answer(tmp_path):
     row = {"model": transport.config.model, "turns": []}
     with pytest.raises(ValueError, match="judge_must_differ_from_subject"):
         asyncio.run(module.judge_with_pages(transport, {"id": "fixture"}, row, [], tmp_path))
+
+
+def test_delivered_table_values_remain_available_in_final_scoring(tmp_path):
+    table = {"artifact_id": "table-fixture", "kind": "table", "title": "季度指标",
+             "spec": {"columns": ["period_end", "revenue", "gross_margin_pct"]},
+             "data": {"rows": [{"period_end": "2026-09-26", "revenue": 16513000000,
+                                "gross_margin_pct": 42.97}]}, "source_refs": ["1"]}
+    row = {"model": "tested-model", "turns": [{"query": "列出指标", "terminal": {
+        "response": "指标如表所示。[1]", "artifacts": [table]}}]}
+    before = deepcopy(row)
+    transport = FixtureTransport()
+    score = asyncio.run(module.judge_with_pages(transport, {"id": "fixture"}, row,
+        [{"tool": "facts", "arguments": {}, "result": {"revenue": 16513000000}}], tmp_path))
+    final = json.loads(transport.calls[-1][0][-1]["content"])
+    assert final["delivered_artifacts"][0]["complete_artifact"] == table
+    assert final["delivered_artifacts"][0]["original_sha256"] == module.digest(table)
+    assert 'artifacts' in transport.calls[-1][0][0]["content"]
+    assert score["grading_version"] == 2 and row == before
+
+
+def test_large_artifact_keeps_exact_reference_and_does_not_invent_preview():
+    artifact = {"artifact_id": "large", "kind": "chart", "data": {"rows": [{"x": i, "y": i + 1} for i in range(5000)]}}
+    before = deepcopy(artifact)
+    manifest = module.delivered_artifacts([{"artifacts": [artifact]}], single_inline_bytes=100)
+    assert manifest[0]["descriptor_only"] is True and 'complete_artifact' not in manifest[0]
+    assert manifest[0]["evidence_path"] == ["answers", 0, "artifacts", 0]
+    assert manifest[0]["original_sha256"] == module.digest(artifact) and artifact == before
+
+
+def test_empty_table_is_not_replaced_with_positive_delivery_or_score():
+    artifact = {"kind": "table", "data": {"rows": []}}
+    manifest = module.delivered_artifacts([{"artifacts": [artifact]}])
+    assert manifest[0]["complete_artifact"]["data"]["rows"] == []
+    assert 'score' not in manifest[0] and 'correct' not in manifest[0]
