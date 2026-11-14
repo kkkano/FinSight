@@ -119,3 +119,20 @@ def test_resumed_phase_cannot_change_explicit_artifact_root(tmp_path, monkeypatc
     ])
     with pytest.raises(ValueError, match="artifact_root_changed_requires_new_measurement_generation"):
         comparison.main(args)
+
+
+def test_full_measurement_stops_when_confirmed_budget_boundary_still_fails_in_pilot(tmp_path, monkeypatch):
+    isolated(tmp_path, monkeypatch)
+    report = {"results": [{"id": case, "structure": {"completed": case != "valuation-03"}}
+                          for case in comparison.PILOT_CASES], "harness_config": {
+        "timeout_seconds": 300, "latency_policy": "report_only",
+        "frozen_provider": {"driver_source_sha256": "frozen-driver"}
+    }}
+    for runtime in ("current", "baseline"):
+        (tmp_path / f"m3_apikl_frozen_{runtime}_pilot_quality_priority.json").write_text(json.dumps(report))
+    args = comparison.build_parser().parse_args([
+        "--phase", "full", "--generation", "quality_priority", "--timeout", "300",
+        "--latency-policy", "report_only"
+    ])
+    with pytest.raises(ValueError, match="pilot_budget_finalization_boundary_failed_before_full"):
+        comparison.main(args)
