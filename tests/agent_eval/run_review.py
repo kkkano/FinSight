@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tests"))
 
-from agent_eval.run import evaluation_model, isolated_environment, write_json, runtime_digest
+from agent_eval.run import evaluation_model, evaluation_artifact_root, evaluation_file_reference, isolated_environment, write_json, runtime_digest, model_quota_configuration
 from agent_eval.eval_transport import observe_chunks
 
 
@@ -38,6 +38,7 @@ async def main(args):
     from backend.agent_runtime.envelope import ToolResult
     from backend.agent_runtime.loop import AgentRuntime
     from backend.agent_runtime.model import ModelTransport
+    from backend.agent_runtime.limits import LeaseLimiter
     from backend.agent_runtime.diagnostics import safe_code
     from backend.agent_runtime.verifier import review_answer
     from backend.services.run_context import RunContext
@@ -51,11 +52,17 @@ async def main(args):
     model = evaluation_model(base, args.provider)
     run_id = time.strftime("review-%Y%m%d-%H%M%S")
     output = REPO / args.output
+    review_timeout = args.review_timeout
+    work = evaluation_artifact_root() / run_id
+    shared_quota = Path(args.shared_quota).resolve() if args.shared_quota else None
     report = {"run_id": run_id, "provider": args.provider, "model": model.model, "synthetic": True,
+        "harness_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "dataset_sha256": hashlib.sha256(dataset_path.read_bytes()).hexdigest(),
         "runtime_sha256": runtime_digest(REPO / "backend/agent_runtime"),
-        "expected_variants": len(cases) * 2, "collection_status": "running", "rows": []}
-    work = REPO / "tmp/agent-eval" / run_id
+        "expected_variants": len(cases) * 2, "collection_status": "running", "rows": [],
+        "review_timeout_seconds": review_timeout, "context_budget_seconds": review_timeout + 5,
+        "artifact_root": str(evaluation_artifact_root()), "raw_artifacts": evaluation_file_reference(work),
+        "shared_quota": str(shared_quota) if shared_quota else None}
     work.mkdir(parents=True, exist_ok=True)
     class ObservedTransport(ModelTransport):
         def __init__(self, config):
@@ -73,16 +80,22 @@ async def main(args):
                 self.failures.append({"code": safe_code(getattr(exc, "code", "model_error")),
                                       "http_status": getattr(exc, "status", None)})
                 raise
-    with patch.dict(os.environ, isolated_environment(work)):
+    environment = isolated_environment(work)
+    if shared_quota:
+        environment.update(FINSIGHT_AGENT_MODEL_CONCURRENCY="2", FINSIGHT_AGENT_RPM_LIMIT="30",
+                           FINSIGHT_AGENT_TPM_LIMIT="250000", FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS="10")
+    with patch.dict(os.environ, environment):
+        report["model_quotas"] = model_quota_configuration()
         for case in cases:
             for variant in ("clean", "injected"):
                 events = []
                 async def emit(kind, payload, agent_id):
                     events.append({"type": kind, "payload": payload, "agent_id": agent_id})
-                context = RunContext.create(owner="review-eval", entry="review", budget_seconds=50)
+                context = RunContext.create(owner="review-eval", entry="review", budget_seconds=review_timeout + 5)
                 context.quota_checker = lambda _owner: None
                 runtime = AgentRuntime(context=context, session_id=run_id, query=case["query"],
-                    model=ObservedTransport(model), emit=emit, tools={})
+                    model=ObservedTransport(model), emit=emit, tools={},
+                    limiter=LeaseLimiter(shared_quota) if shared_quota else None)
                 for fixture in case["fixtures"]:
                     envelope = ToolResult.model_validate({key: value for key, value in fixture.items() if key != "handle"} | {
                         "sources": [{key: value for key, value in source.items() if key != "id"} for source in fixture["sources"]]})
@@ -90,7 +103,7 @@ async def main(args):
                 started = time.monotonic()
                 answer = case[variant]["answer"]
                 try:
-                    review = await review_answer(runtime, answer)
+                    review = await review_answer(runtime, answer, max_seconds=review_timeout)
                 finally:
                     await runtime.close()
                 # 这里只测已知注入片段是否被标注，语义检出由独立评审另行确认。
@@ -121,12 +134,18 @@ async def main(args):
     print(json.dumps(report["summary"]), flush=True)
 
 
-if __name__ == "__main__":
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", choices=("configured", "fallback", "stepfun", "moxuna", "vectide", "apikl"), default="moxuna")
     parser.add_argument("--case", action="append")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--stop-after-initial-failures", type=int, default=0)
+    parser.add_argument("--review-timeout", type=float, default=45, help="核查预算（秒），父上下文额外保留5秒")
+    parser.add_argument("--shared-quota", help="显式复用评测账户的SQLite配额库")
     parser.add_argument("--output", required=True)
+    return parser
+
+
+if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
-    asyncio.run(main(parser.parse_args()))
+    asyncio.run(main(build_parser().parse_args()))
