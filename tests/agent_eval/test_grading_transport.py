@@ -1,10 +1,14 @@
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
 
-from backend.agent_runtime.model import ModelProtocolError
-from .grading_transport import retrying_quota_transport_class
+from backend.agent_runtime.config import ModelConfig
+from backend.agent_runtime.limits import LeaseLimiter, TokenReservations
+from backend.agent_runtime.model import BudgetedModel, ModelProtocolError
+from backend.services.run_context import RunContext
+from .grading_transport import EvaluationBudgetedModel, retrying_quota_transport_class
 
 
 def fixture_factory(outcomes):
@@ -63,3 +67,31 @@ def test_connection_attempts_are_bounded():
     with pytest.raises(ModelProtocolError, match='model_connection_error'):
         asyncio.run(run())
     assert transport.count == 3
+
+
+def test_evaluation_relaxes_network_wait_without_changing_production_or_token_settlement(tmp_path, monkeypatch):
+    monkeypatch.setenv('FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS', '0')
+    received = []
+
+    class Target:
+        config = ModelConfig('test-model', 'https://test.invalid/v1', 'test-placeholder',
+                             context_window=131072, max_output=8192)
+
+        async def stream(self, messages, tools, **kwargs):
+            received.append(kwargs['timeout'])
+            yield {'choices': [{'finish_reason': 'stop'}],
+                   'usage': {'prompt_tokens': 10, 'completion_tokens': 5}}
+
+    async def run(model_class):
+        target = Target()
+        context = RunContext(owner='grading-test', entry='judge', deadline=time.monotonic() + 360)
+        context.quota_checker = lambda _owner: None
+        runtime = SimpleNamespace(context=context, budget=TokenReservations(160000),
+            limiter=LeaseLimiter(tmp_path / 'quota.sqlite'), model=target, model_duration_seconds={})
+        spec = SimpleNamespace(model=target, agent_id='judge', role='judge')
+        result = [chunk async for chunk in model_class(runtime, spec).stream([], [], timeout=240)]
+        assert result and runtime.budget.spent == 15 and runtime.budget.reserved == 0
+
+    asyncio.run(run(EvaluationBudgetedModel))
+    asyncio.run(run(BudgetedModel))
+    assert received == [240, 90]

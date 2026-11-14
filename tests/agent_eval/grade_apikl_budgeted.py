@@ -86,14 +86,14 @@ class WaitingLeaseLimiter(LeaseLimiter):
         return identity
 
 
-def quota_transport_class(shared_quota, attempts):
+def quota_transport_class(shared_quota, attempts, *, budgeted_model_class=BudgetedModel, context_seconds=180):
     class QuotaJudgeTransport:
         def __init__(self, config, *, client=None):
             self.config = config
             self.target = OriginalTransport(config, client=client)
 
         async def stream(self, messages, tools, **kwargs):
-            context = RunContext(owner="isolated-independent-judge", entry="judge", deadline=time.monotonic() + 180)
+            context = RunContext(owner="isolated-independent-judge", entry="judge", deadline=time.monotonic() + context_seconds)
             context.quota_checker = lambda _owner: None
             reservations = TokenReservations(int(os.getenv("FINSIGHT_AGENT_TOKEN_BUDGET", "160000")))
             events = []
@@ -106,7 +106,7 @@ def quota_transport_class(shared_quota, attempts):
             attempts.append(attempt)
             reported = set()
             try:
-                async for chunk in BudgetedModel(runtime, spec).stream(messages, tools, **kwargs):
+                async for chunk in budgeted_model_class(runtime, spec).stream(messages, tools, **kwargs):
                     if chunk.get("model"):
                         reported.add(chunk["model"])
                     if chunk.get("usage"):

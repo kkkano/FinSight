@@ -69,7 +69,7 @@ async def main(args):
         shared_corpus = frozen_module.FrozenCorpus(fixture_base)
         if shared_corpus.identity != original["harness_config"]["frozen_provider"]["manifest_sha256"]:
             raise ValueError("measurement_shared_corpus_changed")
-    implementation = {"kind": "complete_evidence_readonly_paged_native_judge", "version": 2,
+    implementation = {"kind": "complete_evidence_readonly_paged_native_judge", "version": 5,
         "reader": Path(paged.__file__).relative_to(ROOT).as_posix(),
         "reader_sha256": hashlib.sha256(Path(paged.__file__).read_bytes()).hexdigest(),
         "transport": Path(budgeted.__file__).relative_to(ROOT).as_posix(),
@@ -77,14 +77,41 @@ async def main(args):
         "connection_retry_transport": Path(network.__file__).relative_to(ROOT).as_posix(),
         "connection_retry_sha256": hashlib.sha256(Path(network.__file__).read_bytes()).hexdigest(),
         "maximum_connection_attempts": 3,
+        "per_request_timeout_seconds": 240, "request_context_seconds": 360,
+        "connection_retry_deadline_seconds": 360,
         "model": config.model, "native_submit_tool": "submit_score", "prompt_sha256": prompt_hash,
         "shared_account_quota": str(Path(args.shared_quota).resolve()), "rpm": 30, "tpm": 250000,
         "minimum_request_interval_seconds": 10, "case_reading_token_budget": reading_budget,
         "answer_includes_delivered_artifacts": True,
+        "reading_finalization_reserve": True,
+        "original_values_inline_when_context_fits": True, "retain_read_values_until_context_pressure": True,
         "context_window": config.context_window, "max_output": config.max_output,
         "artifact_root": str(runner.evaluation_artifact_root()),
         "original_subject_measurements_changed": False, "evidence_keyword_selection": False}
     report = deepcopy(original)
+    if getattr(args, "seed", None):
+        if args.resume or args.trial:
+            raise ValueError("seed_requires_new_formal_batch")
+        seed_path = Path(args.seed).resolve()
+        seed_raw = seed_path.read_bytes()
+        seed = json.loads(seed_raw)
+        if (seed.get("judge_prompt_sha256") != prompt_hash or
+                seed.get("raw_measurement_sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or
+                seed.get("judge_execution", {}).get("version") != 3 or
+                seed.get("judge") != original.get("judge")):
+            raise ValueError("seed_measurement_or_scoring_contract_changed")
+        retained = {}
+        by_id = {row["id"]: row for row in seed["results"]}
+        for row in report["results"]:
+            old = by_id[row["id"]]
+            if old.get("score") is not None:
+                if old["turns"] != row["turns"]:
+                    raise ValueError("seed_original_answer_changed")
+                row.update(deepcopy(old))
+                retained[row["id"]] = paged.digest(old["score"])
+        report["retained_score_provenance"] = {"source": str(seed_path),
+            "source_sha256": hashlib.sha256(seed_raw).hexdigest(), "score_sha256": retained,
+            "previous_execution": seed["judge_execution"], "resource_only_upgrade": True}
     if args.trial:
         report["results"] = [row for row in report["results"] if not args.case or row["id"] in args.case]
         if args.case and len(report["results"]) != len(set(args.case)):
@@ -161,4 +188,5 @@ if __name__ == "__main__":
     parser.add_argument("--trial", action="store_true")
     parser.add_argument("--case", action="append")
     parser.add_argument("--resume", action="store_true", help="只补失败项，成功评分不重跑；原失败输出保留")
+    parser.add_argument("--seed", help="只继承同原件、同量表 v3 有效分数，缺失项使用放宽的评分时限")
     raise SystemExit(asyncio.run(main(parser.parse_args())))

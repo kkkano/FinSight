@@ -235,7 +235,7 @@ async def model_step(transport, messages, tools, choice="auto"):
     if tokens(messages) + tokens(tools) + transport.config.max_output > transport.config.context_window:
         raise ValueError("paged_judge_context_exceeded")
     calls, content, usage, finish = {}, "", {}, None
-    async for chunk in transport.stream(messages, tools, tool_choice=choice, timeout=90):
+    async for chunk in transport.stream(messages, tools, tool_choice=choice, timeout=240):
         usage = chunk.get("usage") or usage
         for item in chunk.get("choices", []):
             finish = item.get("finish_reason") or finish
@@ -268,6 +268,14 @@ def compact(messages, delivered_receipts=None):
         copied[index]["content"] = encode({key: value for key, value in page.items() if key not in {"value", "items"}} | {
             "page_content_replaced_by_receipt": True, "reread_available": True})
     return copied
+
+
+def compact_for_context(messages, delivered_receipts, config):
+    """窗口足够时完整保留已读值；只有接近窗口才用既有可回读收据压缩。"""
+    reserve = config.max_output + 24000
+    if tokens(messages) + reserve <= config.context_window:
+        return messages
+    return compact(messages, delivered_receipts)
 
 
 def delivered_artifacts(answers, *, total_inline_bytes=12000, single_inline_bytes=4096):
@@ -305,6 +313,12 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
     reader = ReadOnlyEvidence(original, Path(work) / "original_payload.json")
     deliveries = delivered_artifacts(answers)
     initial = {**reader.index(), "delivered_artifacts": deliveries}
+    inline_originals = {"complete_original_recordings": original["recordings"],
+                        "complete_original_answers": original["answers"]}
+    inline_materialized = tokens(initial) + tokens(inline_originals) + 32000 <= transport.config.context_window
+    if inline_materialized:
+        initial.update(inline_originals)
+        initial["original_values_materialized"] = True
     shared_instruction = "\nread_shared_corpus也仅访问同一完整冻结资料库：资料未由被测模型取到不代表库中不存在。完整文档目录可分页，search_documents是同Corpus标准全文检索，不是新网络查询。" if corpus is not None else ""
     messages = [{"role": "system", "content": READ_SYSTEM + shared_instruction}, {"role": "user", "content": encode(initial)}]
     reading_tools = [READ_TOOL, FINISH_TOOL] + ([CORPUS_TOOL] if corpus is not None else [])
@@ -312,11 +326,22 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
     delivered_receipts = set()
     for round_index in range(maximum_rounds):
         reader.verify()
-        messages = compact(messages, delivered_receipts)
+        messages = compact_for_context(messages, delivered_receipts, transport.config)
         expected = tokens(messages) + tokens(reading_tools) + transport.config.max_output
-        if spent + expected + 20000 > token_budget:
+        final_reserve = (2 * (tokens(messages) + transport.config.max_output)
+                         + tokens(reader.receipts) + tokens(deliveries) + 20000)
+        closing = round_index >= maximum_rounds - 1 or spent + expected + final_reserve > token_budget
+        active_tools, choice = reading_tools, "auto"
+        if closing:
+            messages.append({"role": "user", "content":
+                "证据阅读阶段现在收尾。请调用 finish_reading，记录已经核实的关键事实、真实路径和仍未确认的事项。"
+                "不要继续扩展阅读范围，不把尚未核验解释为资料不存在；不预填分数。"})
+            active_tools = [FINISH_TOOL]
+            choice = {"type": "function", "function": {"name": "finish_reading"}}
+            expected = tokens(messages) + tokens(active_tools) + transport.config.max_output
+        if spent + expected > token_budget:
             raise ValueError("paged_judge_total_budget_exhausted")
-        text, calls, usage = await model_step(transport, messages, reading_tools)
+        text, calls, usage = await model_step(transport, messages, active_tools, choice)
         for message in messages:
             if message.get("role") != "tool":
                 continue
@@ -396,7 +421,7 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
             elif call["name"] == "finish_reading":
                 if len(calls) != 1:
                     answer = {"status": "error", "error": "finish_reading_requires_separate_reviewed_step"}
-                elif reader.payload["recordings"] and not reader.receipts:
+                elif reader.payload["recordings"] and not reader.receipts and not inline_materialized:
                     answer = {"status": "error", "error": "no_original_evidence_read"}
                 elif not isinstance(args.get("facts_notes"), str) or not args["facts_notes"].strip():
                     answer = {"status": "error", "error": "facts_notes_required"}
@@ -413,7 +438,7 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
             break
     if not ready:
         raise ValueError("paged_judge_reading_round_limit")
-    messages = compact(messages, delivered_receipts)
+    messages = compact_for_context(messages, delivered_receipts, transport.config)
     messages[0] = {"role": "system", "content": FINAL_SYSTEM}
     messages.append({"role": "user", "content": encode({"reading_closed": True, "facts_notes": notes,
         "frozen_payload_sha256": reader.sha256, "read_receipts": reader.receipts,
@@ -429,7 +454,8 @@ async def judge_with_pages(transport, case, row, records, work, *, maximum_round
     return {**score, "model": transport.config.model, "total": sum(score[key] for key in SCORE_FIELDS),
             "usage": usage, "original_payload_sha256": reader.sha256, "read_receipts": reader.receipts,
             "reading_rounds": len(transcript), "reading_tokens": spent,
-            "grading_version": 2, "reading_token_budget": token_budget,
+            "grading_version": 5, "reading_token_budget": token_budget,
+            "original_values_materialized_inline": inline_materialized,
             "reader_implementation_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "reading_prompt_sha256": hashlib.sha256(READ_SYSTEM.encode()).hexdigest(),
             "final_prompt_sha256": hashlib.sha256(FINAL_SYSTEM.encode()).hexdigest()}

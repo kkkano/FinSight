@@ -137,7 +137,7 @@ def test_delivered_table_values_remain_available_in_final_scoring(tmp_path):
     assert final["delivered_artifacts"][0]["complete_artifact"] == table
     assert final["delivered_artifacts"][0]["original_sha256"] == module.digest(table)
     assert 'artifacts' in transport.calls[-1][0][0]["content"]
-    assert score["grading_version"] == 2 and row == before
+    assert score["grading_version"] == 5 and row == before
 
 
 def test_large_artifact_keeps_exact_reference_and_does_not_invent_preview():
@@ -154,3 +154,29 @@ def test_empty_table_is_not_replaced_with_positive_delivery_or_score():
     manifest = module.delivered_artifacts([{"artifacts": [artifact]}])
     assert manifest[0]["complete_artifact"]["data"]["rows"] == []
     assert 'score' not in manifest[0] and 'correct' not in manifest[0]
+
+
+def test_last_reading_round_reserves_explicit_fact_notes_and_score_submission(tmp_path):
+    transport = FixtureTransport()
+    row = {"model": "tested-model", "turns": [{"query": "报价", "terminal": {"response": "42"}}]}
+    score = asyncio.run(module.judge_with_pages(transport, {"id": "fixture"}, row,
+        [{"tool": "quote", "arguments": {}, "result": {"price": 42}}], tmp_path, maximum_rounds=2))
+    assert score['total'] == 7
+    assert [tool['function']['name'] for tool in transport.calls[1][1]] == ['finish_reading']
+    assert transport.calls[1][2]['tool_choice']['function']['name'] == 'finish_reading'
+    assert [tool['function']['name'] for tool in transport.calls[2][1]] == ['submit_score']
+
+
+def test_original_values_are_inline_without_semantic_field_selection_and_old_pages_remain_when_window_fits(tmp_path):
+    transport = FixtureTransport()
+    row = {"model": "tested-model", "turns": [{"query": "报价", "terminal": {"response": "42"}}]}
+    records = [{"tool": "quote", "arguments": {}, "result": {"price": 42, "other": [1, 2, 3]}}]
+    result = asyncio.run(module.judge_with_pages(transport, {"id": "fixture"}, row, records, tmp_path))
+    initial = json.loads(transport.calls[0][0][1]["content"])
+    assert initial['complete_original_recordings'] == records
+    assert initial['complete_original_answers'][0]['answer'] == '42'
+    assert result['original_values_materialized_inline'] is True
+    messages = [{'role': 'tool', 'content': module.encode({'returned_page_sha256': 'h',
+        'receipt_id': f'r-{index}', 'value': index})} for index in range(8)]
+    retained = module.compact_for_context(messages, {f'r-{index}' for index in range(8)}, transport.config)
+    assert retained == messages and all('value' in json.loads(item['content']) for item in retained)
