@@ -63,6 +63,18 @@ def test_offline_network_guard_does_not_break_parallel_parent_asyncio_socket_wak
         worker.close()
 
 
+def test_offline_worker_logs_use_explicit_external_artifact_root(tmp_path, monkeypatch):
+    artifact_root = tmp_path / "external-artifacts"
+    monkeypatch.setenv("FINSIGHT_EVAL_ARTIFACT_ROOT", str(artifact_root))
+    worker = OfflineWorker(fixture(tmp_path))
+    try:
+        raw, _proof = worker.retrieve("get_stock_price", {"ticker": "ALPHA"})
+        assert raw == "ALPHA: 42, captured fixture only"
+        assert Path(worker.log.name).is_relative_to(artifact_root)
+    finally:
+        worker.close()
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="内核 seccomp 合同只在 Linux 验证；Windows 不宣称原生网络隔离")
 def test_linux_worker_denies_native_libc_libcurl_and_threads_but_preserves_parent_http_and_unix(tmp_path):
     class Handler(BaseHTTPRequestHandler):

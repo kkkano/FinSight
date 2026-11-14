@@ -180,7 +180,8 @@ def test_loading_skill_is_not_counted_as_research_data():
 
 
 @pytest.mark.parametrize("failure", ["model_timeout", "duplicate_terminal"])
-def test_model_or_terminal_protocol_regression_cannot_pass_comparison(failure):
+@pytest.mark.parametrize("policy", ["non_regression", "report_only"])
+def test_model_or_terminal_protocol_regression_cannot_pass_comparison(failure, policy):
     row = {"group": "facts", "score": {**SCORE, "total": 7}, "elapsed_seconds": 1,
            "structure": {"completed": True, "single_terminal_per_turn": True, "references_valid": True,
                          "artifacts_met": True, "no_actions_met": True, "tokens": 10, "rounds": 1, "tool_error_rate": 0},
@@ -189,6 +190,7 @@ def test_model_or_terminal_protocol_regression_cannot_pass_comparison(failure):
               "context_window": 131072, "max_output": 8192, "protocol": "tools"}, "cases_sha256": "same",
               "fixtures_sha256": "same", "judge_prompt_sha256": "same", "ready": True, "groups": summarize([row])}
     changed = deepcopy(row)
+    report["harness_config"]["latency_policy"] = policy
     if failure == "model_timeout":
         changed["model_call_outcomes"] = [{"model": "fixture-subject", "status": "failed", "error_code": "model_timeout", "received_chunks": 0}]
     else:
@@ -198,3 +200,61 @@ def test_model_or_terminal_protocol_regression_cannot_pass_comparison(failure):
     result = compare(report, after)
     expected = "facts:model_failure_rate" if failure == "model_timeout" else "facts:single_terminal_rate"
     assert result["passed"] is False and expected in result["regressions"]
+
+
+def latency_fixture(policy=None):
+    row = {"group": "facts", "score": {**SCORE, "total": 7}, "elapsed_seconds": 1,
+           "structure": {"completed": True, "single_terminal_per_turn": True, "references_valid": True,
+                         "artifacts_met": True, "no_actions_met": True, "tokens": 10, "rounds": 1, "tool_error_rate": 0},
+           "model_call_outcomes": [{"model": "fixture-subject", "status": "completed"}]}
+    report = {"mode": "replay", "harness_config": {}, "judge": {"model": "fixture-judge", "base_url": "https://fixture.invalid",
+              "context_window": 131072, "max_output": 8192, "protocol": "tools"}, "cases_sha256": "same",
+              "fixtures_sha256": "same", "judge_prompt_sha256": "same", "ready": True, "groups": summarize([row])}
+    if policy is not None:
+        report["harness_config"]["latency_policy"] = policy
+    return row, report
+
+
+def test_legacy_reports_keep_strict_latency_regression_gate():
+    row, before = latency_fixture()
+    changed = {**row, "elapsed_seconds": 10}
+    result = compare(before, {**before, "groups": summarize([changed])})
+    assert result["passed"] is False
+    assert "facts:median_seconds" in result["regressions"]
+    assert result["latency_policy"] == "non_regression"
+
+
+def test_quality_priority_keeps_latency_delta_visible_without_rejecting_slower_answer():
+    row, before = latency_fixture("report_only")
+    after = {**before, "groups": summarize([{**row, "elapsed_seconds": 100}])}
+    unchanged = deepcopy((before, after))
+    result = compare(before, after)
+    assert result["passed"] is True and result["deltas"]["facts"]["median_seconds"] == 99
+    assert result["latency_policy"] == "report_only"
+    assert (before, after) == unchanged
+
+
+@pytest.mark.parametrize("field", ["answered", "numbers", "limitations", "presentation", "no_internal_identifiers"])
+def test_quality_priority_cannot_hide_content_quality_regressions(field):
+    row, before = latency_fixture("report_only")
+    changed = deepcopy(row)
+    changed["score"][field] -= 1
+    changed["score"]["total"] -= 1
+    changed["elapsed_seconds"] = 100
+    result = compare(before, {**before, "groups": summarize([changed])})
+    assert result["passed"] is False and f"facts:{field}" in result["regressions"]
+    assert result["deltas"]["facts"]["median_seconds"] == 99
+
+
+def test_latency_policies_must_match_and_unknown_policy_cannot_disable_gate():
+    _, before = latency_fixture("report_only")
+    assert compare(before, {**before, "harness_config": {"latency_policy": "non_regression"}})["reason"] == "evaluation_latency_policy_differs"
+    invalid = {**before, "harness_config": {"latency_policy": "ignore_quality"}}
+    assert compare(invalid, invalid)["reason"] == "evaluation_latency_policy_invalid"
+
+
+def test_legacy_policy_defaults_to_explicit_non_regression_without_mutating_reports():
+    _, legacy = latency_fixture()
+    explicit = {**legacy, "harness_config": {"latency_policy": "non_regression"}}
+    assert compare(legacy, explicit)["passed"] is True
+    assert legacy["harness_config"] == {}

@@ -13,6 +13,10 @@ import sys
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from agent_eval.scoring import LATENCY_POLICIES
+from agent_eval.run import evaluation_artifact_root
+
 RESULTS = ROOT / "tests/agent_eval/results"
 SUFFIX = "20261113_isolated"
 CORPUS = "fixtures/apikl-frozen-provider-20261113"
@@ -39,13 +43,23 @@ def environment():
 def implementation():
     names = ["run.py", "run_frozen_comparison.py", "run_frozen_eval.py", "frozen_corpus_provider.py", "environment_preflight.py", "offline_network_isolation.py",
              "frozen_offline_worker.py", "materialize.py", "run_paged_grading.py",
-             "paged_judge.py", "grade_apikl_budgeted.py"]
+             "paged_judge.py", "grade_apikl_budgeted.py", "scoring.py"]
     return {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest() for name in names}
 
 
 def save(path, state):
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def check_phase_configuration(report, args):
+    configuration = report.get("harness_config", {})
+    if configuration.get("timeout_seconds", 180) != args.timeout:
+        raise ValueError("measurement_timeout_changed_requires_new_generation")
+    if configuration.get("latency_policy", "non_regression") != args.latency_policy:
+        raise ValueError("measurement_latency_policy_changed_requires_new_generation")
+    if configuration.get("artifact_root", str(evaluation_artifact_root())) != str(evaluation_artifact_root()):
+        raise ValueError("measurement_artifact_root_changed_requires_new_generation")
 
 
 def main(args):
@@ -61,9 +75,16 @@ def main(args):
         state = json.loads(state_path.read_text(encoding="utf-8"))
         if state["implementation"] != binding:
             raise ValueError("implementation_changed_requires_new_measurement_generation")
+        if state.get("timeout_seconds", 180) != args.timeout:
+            raise ValueError("timeout_changed_requires_new_measurement_generation")
+        if state.get("latency_policy", "non_regression") != args.latency_policy:
+            raise ValueError("latency_policy_changed_requires_new_measurement_generation")
+        if state.get("artifact_root", str(evaluation_artifact_root())) != str(evaluation_artifact_root()):
+            raise ValueError("artifact_root_changed_requires_new_measurement_generation")
     else:
         state = {"phase": args.phase, "status": "started", "pid": os.getpid(),
-                 "implementation": binding, "stages": []}
+                 "implementation": binding, "timeout_seconds": args.timeout,
+                 "latency_policy": args.latency_policy, "artifact_root": str(evaluation_artifact_root()), "stages": []}
     save(state_path, state)
     if args.environment_manifest:
         manifest_path = Path(args.environment_manifest)
@@ -81,10 +102,12 @@ def main(args):
                     raise ValueError("complete_both_pilots_required_before_full_measurement")
                 if pilot["harness_config"]["frozen_provider"]["driver_source_sha256"] != binding["run_frozen_eval.py"]:
                     raise ValueError("pilot_driver_changed")
+                check_phase_configuration(pilot, args)
         for runtime in ("current", "baseline"):
             command = [sys.executable, "-B", "-X", "utf8", "tests/agent_eval/run_frozen_eval.py",
                 "--provider", "apikl", "--runtime", runtime, "--mode", "replay", "--jobs", "2",
-                "--request-interval", "6.1", "--timeout", "180", "--model-protocol", "sse",
+                "--request-interval", "6.1", "--timeout", str(args.timeout), "--model-protocol", "sse",
+                "--latency-policy", args.latency_policy,
                 "--no-judge", "--judge-protocol", "tools", "--fixtures-root", CORPUS,
                 "--output", str(report_path(runtime, pilot=args.phase == "pilot"))]
             if args.source_git_metadata:
@@ -95,6 +118,7 @@ def main(args):
             commands.append((runtime, command))
     elif args.phase == "grade":
         for runtime in ("current", "baseline"):
+            check_phase_configuration(json.loads(report_path(runtime).read_text(encoding="utf-8")), args)
             command = [sys.executable, "-B", "-X", "utf8", "tests/agent_eval/run_paged_grading.py",
                 "--source", str(report_path(runtime)), "--output", str(report_path(runtime, graded=True)),
                 "--shared-quota", str(ROOT / "tmp/r261113/shared_judge_quota.sqlite")]
@@ -106,6 +130,8 @@ def main(args):
         from agent_eval.scoring import compare
         baseline = json.loads(report_path("baseline", graded=True).read_text(encoding="utf-8"))
         current = json.loads(report_path("current", graded=True).read_text(encoding="utf-8"))
+        check_phase_configuration(baseline, args)
+        check_phase_configuration(current, args)
         comparison = compare(baseline, current)
         state.update(status="passed" if comparison["passed"] else "failed", comparison=comparison,
             baseline_sha256=hashlib.sha256(report_path("baseline", graded=True).read_bytes()).hexdigest(),
@@ -114,6 +140,8 @@ def main(args):
         print(json.dumps(comparison, ensure_ascii=False), flush=True)
         return 0 if comparison["passed"] else 2
     env = environment()
+    if os.getenv("FINSIGHT_EVAL_ARTIFACT_ROOT", "").strip():
+        env["FINSIGHT_EVAL_ARTIFACT_ROOT"] = str(evaluation_artifact_root())
     if args.mount_manifest:
         env["FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST"] = args.mount_manifest
     if args.environment_manifest:
@@ -156,12 +184,19 @@ def main(args):
     return 0
 
 
-if __name__ == "__main__":
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", required=True, choices=("pilot", "full", "grade", "compare"))
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--generation", default=SUFFIX)
+    parser.add_argument("--timeout", type=float, default=180, help="双方每轮运行预算（秒）；变更须使用新代次")
+    parser.add_argument("--latency-policy", choices=LATENCY_POLICIES, default="non_regression",
+                        help="默认耗时不回退；report_only记录耗时差，但仅质量与证据决定通过")
     parser.add_argument("--source-git-metadata")
     parser.add_argument("--mount-manifest")
     parser.add_argument("--environment-manifest")
-    raise SystemExit(main(parser.parse_args()))
+    return parser
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(build_parser().parse_args()))

@@ -225,7 +225,7 @@ async def test_moxuna_main_starts_without_production_model_and_records_actual_me
     args = SimpleNamespace(runtime="current", provider="moxuna", model_protocol="sse", request_interval=2.5,
                            case=None, list=False, limit=None, context_window=limits[0], max_output=limits[1],
                            judge_protocol="external", output=str(output), grade_report=None,
-                           mode="replay", fixtures_root="fixtures", seed_tapes=None, jobs=1, baseline=None)
+                           mode="replay", fixtures_root="fixtures", seed_tapes=None, jobs=1, baseline=None, timeout=180)
     assert await runner.main(args) == 2  # 未导入外部评分，结果仍待判分。
     report_text = output.read_text(encoding="utf-8")
     report = json.loads(report_text)
@@ -233,6 +233,8 @@ async def test_moxuna_main_starts_without_production_model_and_records_actual_me
                 "context_window": limits[0] or 32768, "max_output": limits[1] or 4096}
     assert report["subject"] == report["harness_config"]["model_configuration"] == expected
     assert report["harness_config"]["model_protocol"] == "sse"
+    assert report["harness_config"]["timeout_seconds"] == 180
+    assert report["harness_config"]["timeout_scope"] == "per_turn"
     assert report["harness_config"]["model_quota_scope"] == "run_shared"
     assert report["harness_config"]["step5_cost_pricing"] is None
     assert report["judge"]["model"] == runner.EXTERNAL_JUDGE["model"]
@@ -885,6 +887,64 @@ def synthetic_measurement_report():
            "structure": {"completed": True, "single_terminal_per_turn": True, "references_valid": True,
                          "artifacts_met": True, "no_actions_met": True, "tokens": 10, "rounds": 1, "tool_error_rate": 0}}
     return {"expected_cases": 1, "results": [row], "judge": {"model": "fixture-judge", "protocol": "tools"}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("runtime", ["current", "baseline"])
+@pytest.mark.parametrize("external_artifacts", [False, True])
+async def test_eval_entry_switch_keeps_same_per_turn_budget_for_both_runtimes(tmp_path, monkeypatch, runtime, external_artifacts):
+    from backend.agent_runtime import service
+    from backend.agent_runtime.config import ModelConfig
+    from backend.services.run_context import run_budget_seconds
+
+    monkeypatch.setenv("LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS", "600")
+    assert run_budget_seconds("investment_report") == 600
+    workspace = tmp_path / "workspace"
+    monkeypatch.setattr(runner, "REPO", workspace)
+    if external_artifacts:
+        monkeypatch.setenv("FINSIGHT_EVAL_ARTIFACT_ROOT", str(tmp_path / "external-artifacts"))
+    args = SimpleNamespace(mode="replay", runtime=runtime, run_id="budget-fixture", timeout=300, no_judge=True)
+    case = {"id": "same-budget", "group": "concepts", "turns": ["协议问题一", "协议问题二"], "expects": {}}
+    seen = []
+
+    async def pipeline(**kwargs):
+        context = kwargs["run_context"]
+        original_deadline = context.deadline
+        context.select_entry("investment_report")
+        assert context.entry == "investment_report"
+        assert context.deadline == pytest.approx(original_deadline, abs=0.01)
+        context.select_entry("chat")
+        assert context.deadline == pytest.approx(original_deadline, abs=0.01)
+        seen.append(context.remaining_seconds)
+        yield {"type": "done", "response": "合成协议答案", "run_status": "completed"}
+
+    async def forbidden_send(*_args, **_kwargs):
+        raise AssertionError("预算边界验证不得联网")
+
+    monkeypatch.setattr(service, "run_agent_pipeline", pipeline)
+    monkeypatch.setattr(httpx.AsyncClient, "send", forbidden_send)
+    model = ModelConfig("fixture", "https://fixture.invalid/v1", "fixture-key")
+    result = await runner.run_case(case, model, None, args, workspace / "tests/agent_eval")
+    assert len(seen) == 2 and all(299 < seconds <= 300 for seconds in seen)
+    assert result["structure"]["completed"] is True
+    assert run_budget_seconds("investment_report") == 600
+    event_path = runner.resolve_evaluation_file(result["events_path"])
+    assert event_path.is_relative_to(runner.evaluation_artifact_root()) and event_path.is_file()
+    assert Path(result["events_path"]).is_absolute() is external_artifacts
+
+
+def test_external_artifact_references_cannot_escape_explicit_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "REPO", tmp_path / "workspace")
+    configured = tmp_path / "external-artifacts"
+    monkeypatch.setenv("FINSIGHT_EVAL_ARTIFACT_ROOT", str(configured))
+    path = configured / "case/events.json"
+    reference = runner.evaluation_file_reference(path)
+    assert Path(reference).is_absolute() and runner.resolve_evaluation_file(reference) == path
+    outside = tmp_path / "unrelated-file.json"
+    with pytest.raises(ValueError, match="evaluation_artifact_reference_outside_configured_root"):
+        runner.evaluation_file_reference(outside)
+    with pytest.raises(ValueError, match="evaluation_artifact_reference_outside_configured_root"):
+        runner.resolve_evaluation_file(str(outside))
 
 
 def test_measured_model_timeout_keeps_zero_score_and_reduced_completion_rate():

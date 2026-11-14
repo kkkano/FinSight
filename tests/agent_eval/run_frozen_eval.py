@@ -116,7 +116,7 @@ class FrozenTape(ToolTape):
 
 
 async def frozen_run_case(case, subject, judge, args, eval_dir, pacer=None):
-    location = ROOT / "tmp/agent-eval" / args.run_id / case["id"]
+    location = runner.evaluation_artifact_root() / args.run_id / case["id"]
     token = WORK.set(location)
     try:
         with patch.object(runner, "ToolTape", FrozenTape):
@@ -124,7 +124,7 @@ async def frozen_run_case(case, subject, judge, args, eval_dir, pacer=None):
         result["frozen_provider"] = {"provider": "frozen_corpus", "manifest_sha256": corpus().identity,
             "provider_source_sha256": hashlib.sha256(Path(provider_module.__file__).read_bytes()).hexdigest(),
             "driver_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            "actual_calls_path": (location / "frozen_provider_calls.json").relative_to(ROOT).as_posix(),
+            "actual_calls_path": runner.evaluation_file_reference(location / "frozen_provider_calls.json"),
             "network_access": False, "measurement_scope": "decision_quality_on_same_frozen_data"}
         calls_path = location / "frozen_provider_calls.json"
         result["frozen_provider"]["actual_calls_sha256"] = hashlib.sha256(calls_path.read_bytes()).hexdigest() if calls_path.exists() else None

@@ -27,7 +27,11 @@ class OfflineWorker:
 
     def _start(self):
         self.responses = Queue()
-        log_root = ROOT / "tmp/agent-eval-offline" / str(os.getpid())
+        if os.getenv("FINSIGHT_EVAL_ARTIFACT_ROOT", "").strip():
+            from agent_eval.run import evaluation_artifact_root
+            log_root = evaluation_artifact_root() / "_offline" / str(os.getpid())
+        else:
+            log_root = ROOT / "tmp/agent-eval-offline" / str(os.getpid())
         log_root.mkdir(parents=True, exist_ok=True)
         self.log = (log_root / (uuid.uuid4().hex + ".log")).open("w", encoding="utf-8")
         # 离线解析进程只需系统路径；不向它传递供应商密钥或用户凭据。

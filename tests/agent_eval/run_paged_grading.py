@@ -74,6 +74,7 @@ async def main(args):
         "shared_account_quota": str(Path(args.shared_quota).resolve()), "rpm": 30, "tpm": 250000,
         "minimum_request_interval_seconds": 10, "case_reading_token_budget": 600000,
         "context_window": config.context_window, "max_output": config.max_output,
+        "artifact_root": str(runner.evaluation_artifact_root()),
         "original_subject_measurements_changed": False, "evidence_keyword_selection": False}
     report = deepcopy(original)
     if args.trial:
@@ -104,7 +105,7 @@ async def main(args):
             case = cases[row["id"]]
             if shared_corpus is not None:
                 reference = row["frozen_provider"]
-                path = ROOT / reference["actual_calls_path"]
+                path = runner.resolve_evaluation_file(reference["actual_calls_path"])
                 if reference.get("actual_calls_sha256") is None:
                     records = []
                 elif hashlib.sha256(path.read_bytes()).hexdigest() != reference["actual_calls_sha256"]:
@@ -113,7 +114,8 @@ async def main(args):
                     records = json.loads(path.read_text(encoding="utf-8"))
             else:
                 records = ToolTape(fixture_base / case["id"], "replay", faults=case.get("tool_faults")).records()
-            work = ROOT / "tests/agent_eval/requests/paged_judge" / output.stem / case["id"]
+            work = (runner.evaluation_artifact_root() / "_paged_judge" if os.getenv("FINSIGHT_EVAL_ARTIFACT_ROOT")
+                    else ROOT / "tests/agent_eval/requests/paged_judge") / output.stem / case["id"]
             before = len(attempts)
             if row.get("judge_error"):
                 row.setdefault("previous_judge_errors", []).append({"error": row["judge_error"], "details": row.get("judge_details")})
@@ -125,7 +127,7 @@ async def main(args):
                 row["score"] = None
                 row["judge_error"] = getattr(exc, "code", str(exc))[:250].replace(config.api_key, "[REDACTED]")
                 row["judge_details"] = {"exception_type": type(exc).__name__, "source_data_retained": True}
-            row["paged_judge_artifacts"] = work.relative_to(ROOT).as_posix()
+            row["paged_judge_artifacts"] = runner.evaluation_file_reference(work)
             row["judge_transport_attempts"] = deepcopy(attempts[before:])
             report["groups"] = summarize(report["results"])
             report["ready"] = False if args.trial else runner.report_ready(report)

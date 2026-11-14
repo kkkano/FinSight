@@ -21,7 +21,7 @@ ROOT = REPO / "tests"
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(ROOT))
 
-from agent_eval.scoring import ContentScore, EXTERNAL_JUDGE, JUDGE_SYSTEM, SCORE_FIELDS, compare, judge_answer, judge_metadata, judge_prompt, structural_score, summarize
+from agent_eval.scoring import ContentScore, EXTERNAL_JUDGE, JUDGE_SYSTEM, SCORE_FIELDS, LATENCY_POLICIES, compare, judge_answer, judge_metadata, judge_prompt, structural_score, summarize
 from agent_eval.capture import install_capture_hooks
 from agent_eval.tapes import ToolTape
 from agent_eval.eval_transport import EvaluationLimiter, json_completions, observe_chunks, validate_temperature
@@ -267,6 +267,33 @@ async def no_archive(_context):
     """用量由结果文件归档，不接入生产数据库。"""
 
 
+def evaluation_artifact_root() -> Path:
+    configured = os.getenv("FINSIGHT_EVAL_ARTIFACT_ROOT", "").strip()
+    if not configured:
+        return REPO / "tmp/agent-eval"
+    root = Path(configured)
+    if not root.is_absolute():
+        raise ValueError("evaluation_artifact_root_requires_absolute_path")
+    return root.resolve()
+
+
+def evaluation_file_reference(path: Path) -> str:
+    path = Path(path).resolve()
+    if os.getenv("FINSIGHT_EVAL_ARTIFACT_ROOT", "").strip():
+        if not path.is_relative_to(evaluation_artifact_root()):
+            raise ValueError("evaluation_artifact_reference_outside_configured_root")
+        return path.as_posix()
+    if not path.is_relative_to(REPO.resolve()):
+        raise ValueError("evaluation_artifact_reference_outside_repository")
+    return path.relative_to(REPO.resolve()).as_posix()
+
+
+def resolve_evaluation_file(reference: str) -> Path:
+    path = (REPO / reference).resolve()
+    evaluation_file_reference(path)
+    return path
+
+
 def isolated_environment(work: Path) -> dict[str, str]:
     values = {
         "FINSIGHT_ARTIFACT_DIR": str(work / "artifacts"),
@@ -301,7 +328,7 @@ async def run_case(case, subject_config, judge_config, args, eval_dir, pacer=Non
     seed_path = getattr(args, "seed_tapes", None)
     tape = ToolTape(fixture_base / case["id"], args.mode, faults=case.get("tool_faults"),
                     seed_path=eval_dir / seed_path if seed_path else None)
-    work = REPO / "tmp" / "agent-eval" / args.run_id / case["id"]
+    work = evaluation_artifact_root() / args.run_id / case["id"]
     work.mkdir(parents=True, exist_ok=True)
     original_runtime = service.AgentRuntime
     runs, events, turns, histories, checkpoints = [], [], [], [], []
@@ -374,6 +401,7 @@ async def run_case(case, subject_config, judge_config, args, eval_dir, pacer=Non
              patch.object(service, "ModelTransport", lambda _config: model), \
              patch.object(service, "resolve_model", lambda: subject_config), \
              patch.object(RunContext, "archive_usage", no_archive), \
+             patch("backend.services.run_context.run_budget_seconds", lambda _entry: args.timeout), \
              patch("backend.services.watchlist_store.get_watchlist_store", lambda: watchlist):
             for index, query in enumerate(case["turns"]):
                 run_id = args.run_id + ":" + case["id"] + ":" + str(index)
@@ -431,7 +459,7 @@ async def run_case(case, subject_config, judge_config, args, eval_dir, pacer=Non
                          if not str(event.get("runtime_type", event.get("type", ""))).startswith("reasoning.")]
         write_json(work / "events.json", public_events)
         write_json(work / "model_usage.json", [entry["usage"] for entry in model_calls])
-        result["events_path"] = (work / "events.json").relative_to(REPO).as_posix()
+        result["events_path"] = evaluation_file_reference(work / "events.json")
         result["tool_recordings"] = len(tape.records())
         return result
 
@@ -650,6 +678,10 @@ async def main(args):
               "fixtures_root": args.fixtures_root,
               "seed_tapes": args.seed_tapes,
               "harness_config": {"request_interval_seconds": args.request_interval, "jobs": args.jobs,
+                                 "timeout_seconds": args.timeout,
+                                 "timeout_scope": "per_turn",
+                                 "artifact_root": str(evaluation_artifact_root()),
+                                 "latency_policy": getattr(args, "latency_policy", "non_regression"),
                                  "request_pacing_scope": "global" if args.request_interval else "unrestricted",
                                  "model_protocol": args.model_protocol, "upstream_stream": args.model_protocol == "sse",
                                  "model_configuration": {"model": subject.model, "base_url": subject.base_url,
@@ -723,6 +755,8 @@ def build_parser():
     parser.add_argument("--case", action="append")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--latency-policy", choices=LATENCY_POLICIES, default="non_regression",
+                        help="耗时验收策略；report_only只报告差值，质量门槛保持")
     parser.add_argument("--context-window", type=int)
     parser.add_argument("--max-output", type=int)
     parser.add_argument("--temperature", type=float, help="可选采样温度0到2；仅json-completions评测支持，默认不指定")

@@ -20,6 +20,7 @@ class ContentScore(BaseModel):
 
 
 SCORE_FIELDS = ("answered", "numbers", "limitations", "presentation", "no_internal_identifiers")
+LATENCY_POLICIES = ("non_regression", "report_only")
 EXTERNAL_JUDGE = {"model": "gpt-6.1-sol", "provider": "codex-native", "role": "verifier", "protocol": "external",
                   "base_url": None, "context_window": None, "max_output": None}
 
@@ -202,7 +203,18 @@ def compare(baseline: dict, current: dict) -> dict:
     """只比较相同题集与工具录制；缺少分组或分数不能被当成通过。"""
     if baseline.get("mode") != "replay" or current.get("mode") != "replay":
         return {"passed": False, "reason": "comparison_requires_replay", "deltas": {}}
-    if baseline.get("harness_config") != current.get("harness_config"):
+    before_config, after_config = baseline.get("harness_config"), current.get("harness_config")
+    before_policy = (before_config or {}).get("latency_policy", "non_regression")
+    after_policy = (after_config or {}).get("latency_policy", "non_regression")
+    if before_policy not in LATENCY_POLICIES or after_policy not in LATENCY_POLICIES:
+        return {"passed": False, "reason": "evaluation_latency_policy_invalid", "deltas": {}}
+    if before_policy != after_policy:
+        return {"passed": False, "reason": "evaluation_latency_policy_differs", "deltas": {}}
+    if before_config is not None:
+        before_config = {**before_config, "latency_policy": before_policy}
+    if after_config is not None:
+        after_config = {**after_config, "latency_policy": after_policy}
+    if before_config != after_config:
         return {"passed": False, "reason": "evaluation_scheduler_differs", "deltas": {}}
     if baseline.get("judge") != current.get("judge"):
         return {"passed": False, "reason": "judge_configuration_differs", "deltas": {}}
@@ -242,7 +254,8 @@ def compare(baseline: dict, current: dict) -> dict:
             if diff["model_failure_rate"] > 0:
                 regressions.append(group + ":model_failure_rate")
         diff["median_seconds"] = after["median_seconds"] - before["median_seconds"]
-        if diff["median_seconds"] > 0:
+        if before_policy == "non_regression" and diff["median_seconds"] > 0:
             regressions.append(group + ":median_seconds")
         deltas[group] = diff
-    return {"passed": not regressions, "regressions": regressions, "deltas": deltas}
+    return {"passed": not regressions, "regressions": regressions, "deltas": deltas,
+            "latency_policy": before_policy}
