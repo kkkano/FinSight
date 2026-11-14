@@ -6,7 +6,8 @@ from datetime import date, datetime, timezone
 import hashlib
 import inspect
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+import os
 import sqlite3
 import sys
 
@@ -116,6 +117,27 @@ class FrozenCorpus:
         self.database = self.folder / "corpus.sqlite"
         if file_sha(self.database) != self.manifest["database_sha256"]:
             raise ValueError("frozen_corpus_database_changed")
+        self.mount_manifest = None
+        mapping_path = os.getenv("FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST")
+        if mapping_path:
+            mapping = json.loads(Path(mapping_path).read_text(encoding="utf-8"))
+            if (mapping["corpus_manifest_sha256"] != self.identity
+                    or mapping["database_sha256"] != self.manifest["database_sha256"]
+                    or mapping["recorded_source_root"] != self.manifest["source_root"]):
+                raise ValueError("frozen_corpus_mount_binding_changed")
+            self.mount_manifest = mapping | {"mapping_manifest_sha256": file_sha(Path(mapping_path))}
+
+    def source_path(self, recorded):
+        if self.mount_manifest is None:
+            return Path(recorded)
+        mapping = self.mount_manifest
+        path_type = PureWindowsPath if PureWindowsPath(mapping["recorded_source_root"]).drive else PurePosixPath
+        relative = path_type(recorded).relative_to(path_type(mapping["recorded_source_root"]))
+        root = Path(mapping["mounted_source_root"]).resolve()
+        physical = root.joinpath(*relative.parts).resolve()
+        if not physical.is_relative_to(root):
+            raise ValueError("frozen_corpus_source_outside_mount")
+        return physical
 
     def query(self, sql, arguments=()):
         with sqlite3.connect("file:" + str(self.database) + "?mode=ro", uri=True) as connection:
@@ -127,9 +149,10 @@ class FrozenCorpus:
         if not found:
             return None
         path, sha = found[0]
-        if file_sha(Path(path)) != sha:
+        path = self.source_path(path)
+        if file_sha(path) != sha:
             raise ValueError("original_capture_changed")
-        return ToolTape(Path(path).parent, "replay")._read(Path(path))
+        return ToolTape(path.parent, "replay")._read(path)
 
     def search(self, query, top_k=10):
         wanted = list(dict.fromkeys(_tokenize(query)))
@@ -153,7 +176,7 @@ class FrozenCorpus:
         if type(index) is not int or not 0 <= index < len(self.manifest["records"]):
             raise ValueError("corpus_record_index_invalid")
         reference = self.manifest["records"][index]
-        path = Path(reference["path"])
+        path = self.source_path(reference["path"])
         if file_sha(path) != reference["sha256"]:
             raise ValueError("original_corpus_record_changed")
         return ToolTape(path.parent, "replay")._read(path)
@@ -171,7 +194,8 @@ class FrozenCorpus:
         if not found:
             return None
         path, index, sha = found[0]
-        record = ToolTape(Path(path).parent, "replay")._read(Path(path))
+        path = self.source_path(path)
+        record = ToolTape(path.parent, "replay")._read(path)
         item = record["producer_outputs"][index]
         if checksum(item) != sha:
             raise ValueError("producer_snapshot_changed")
@@ -179,7 +203,9 @@ class FrozenCorpus:
 
     def marker(self, provenance):
         return {"provider": "frozen_corpus", "corpus_manifest_sha256": self.identity,
-                "network_access": False, "data_boundary": self.manifest["boundary"], **provenance}
+                "network_access": False, "data_boundary": self.manifest["boundary"],
+                "source_mount_manifest_sha256": self.mount_manifest["mapping_manifest_sha256"] if self.mount_manifest else None,
+                **provenance}
 
     def retrieve(self, name, arguments, callback):
         if name == "search":
@@ -208,12 +234,13 @@ class FrozenCorpus:
             rows = [record for record in self.manifest["records"] if record["tool"] == name and str(record["arguments"].get("ticker", "")).upper() == wanted]
             rows.sort(key=lambda row: (row["recorded_at"], row["path"]))
             if rows:
-                sources = [Path(rows[0]["path"])]
+                sources = [self.source_path(rows[0]["path"])]
                 ticker_rows = [row for row in self.manifest["records"] if row["tool"] == name]
                 for row in sorted(ticker_rows, key=lambda row: (row["recorded_at"], row["path"])):
-                    record = ToolTape(Path(row["path"]).parent, "replay")._read(Path(row["path"]))
+                    source = self.source_path(row["path"])
+                    record = ToolTape(source.parent, "replay")._read(source)
                     if any(item.get("producer") == "requests.Response" and (item.get("arguments") or {}).get("url") == "https://www.sec.gov/files/company_tickers.json" for item in record.get("producer_outputs", [])):
-                        sources.append(Path(row["path"]))
+                        sources.append(source)
                         break
                 try:
                     snapshots = SecSnapshots(list(dict.fromkeys(sources)), date.fromisoformat(rows[0]["recorded_at"][:10]))

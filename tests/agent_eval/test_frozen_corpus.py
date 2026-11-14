@@ -1,6 +1,7 @@
 """冻结语料与生产者合同；synthetic fixtures不作为真实金融数据证据。"""
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -90,3 +91,25 @@ def test_no_network_fallback_and_fixed_database_identity_are_enforced(tmp_path):
         file.write(b"tampered")
     with pytest.raises(ValueError, match="frozen_corpus_database_changed"):
         module.FrozenCorpus(tmp_path / "corpus")
+
+
+def test_explicit_mount_mapping_retains_database_manifest_original_bytes_and_rejects_escape(tmp_path, monkeypatch):
+    source(tmp_path / "source" / "a", "get_stock_price", {"ticker": "ALPHA"}, {"price": 42}, [])
+    manifest = module.build_corpus(tmp_path / "source", tmp_path / "corpus")
+    shutil.copytree(tmp_path / "source", tmp_path / "mounted")
+    original_manifest = (tmp_path / "corpus/manifest.json").read_bytes()
+    original_database = (tmp_path / "corpus/corpus.sqlite").read_bytes()
+    mapping = {"recorded_source_root": manifest["source_root"], "mounted_source_root": str(tmp_path / "mounted"),
+               "corpus_manifest_sha256": module.file_sha(tmp_path / "corpus/manifest.json"),
+               "database_sha256": manifest["database_sha256"]}
+    path = tmp_path / "mount.json"
+    path.write_text(json.dumps(mapping), encoding="utf-8")
+    monkeypatch.setenv("FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST", str(path))
+    corpus = module.FrozenCorpus(tmp_path / "corpus")
+    record = corpus.exact("get_stock_price", {"ticker": "ALPHA"})
+    assert record["raw_output"] == {"price": 42}
+    assert corpus.original_record(0)["checksum"] == record["checksum"]
+    with pytest.raises(ValueError, match="outside_mount"):
+        corpus.source_path(str(tmp_path / "source/../../escape.json"))
+    assert (tmp_path / "corpus/manifest.json").read_bytes() == original_manifest
+    assert (tmp_path / "corpus/corpus.sqlite").read_bytes() == original_database
