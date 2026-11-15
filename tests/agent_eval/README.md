@@ -26,6 +26,8 @@
 
 2026-11-14 16:10 UTC 评分密钥返回 HTTP 429 `API_KEY_QUOTA_EXHAUSTED`，v5 中止于 current 37/60、baseline 47/60；未评题保留 `judge_error=model_http_429`，没有换评分模型补评。[部分配对汇总](results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json)只覆盖双方均已评的 37 题（current 6.14 vs baseline 5.30，18 更好 / 14 持平 / 5 更差），不满足部署门槛要求的 60 题完整评分。额度恢复后用同一命令 `--resume` 续评即可，已有分数不重判。
 
+同日改测 DeepSeek：`run_frozen_comparison.py --provider {apikl,xfmmda,chickener}` 选择被测端点，评分端点由 `run_paged_grading.py` 按声明的裁判模型与 base_url 精确匹配凭据（禁止跨端点借用）；`--parallel` 双方同时运行，`--merged` 让 grade 读取供应商故障补跑后的合并件（来源记录在 `retry_provenance`）。批次 `20261114_chickener_deepseek` 双方 60/60 已采集，独立评分因 chickener 余额耗尽中止于 current 5 / baseline 6，见[结构汇总](results/m3_chickener_collection_summary_20261114_chickener_deepseek.json)；充值后执行 `launch_measurement.py grade --provider chickener --generation 20261114_chickener_deepseek --merged --resume` 续评。
+
 ## 题集与评分
 
 `cases.json` 共 60 题：事实 6、估值 6、归因 6、新闻 5、统计/画图 6、比较 5、多轮 6、概念 4、故障 5、港/A 股 4、报告 4、写操作 3。每题保留原始 `turns`、自然语言 `must/must_not` 和结构化 `expects`。

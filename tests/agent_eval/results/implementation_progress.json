@@ -146,10 +146,10 @@
     "local_followup": "Effort tuple membership guards malformed JSON types; not included in already-deployed a147e695613e overlay."
   },
   "next_steps": [
-    "恢复 APIKL 额度或更换密钥后 --resume 补齐 v5 独立评分（current 23 题、baseline 13 题）",
-    "新密钥需重新 validate 发布清单后执行 deploy（带自动回滚）",
-    "部署后完成 48 项真实账号验收与持续观察",
-    "同步最终运行状态和有效文档"
+    "chickener 充值或提供新的可用密钥（含 gpt-6.1-sol 评分与 DeepSeek 被测/生产）",
+    "执行 launch_measurement.py grade --provider chickener --generation 20261114_chickener_deepseek --merged --resume 补齐 60/60 独立评分并 compare",
+    "门槛通过后用 chickener 清单 deploy（带自动回滚）；换密钥需重新 validate",
+    "部署后完成 48 项真实账号验收与持续观察"
   ],
   "latest_user_contract": {
     "production_runtime": "single implementation in backend/agent_runtime",
@@ -159,11 +159,30 @@
     "authorization": "user explicitly requires old implementation removal"
   },
   "latest_reported_at": "2026-11-13T10:23:13.574703+00:00",
-  "closeout_updated_at": "2026-11-14T16:15:19.907748+00:00",
+  "closeout_updated_at": "2026-11-15T03:23:40.520053+00:00",
   "release_blocker": {
-    "reason": "apikl_key_quota_exhausted_for_subject_and_judge",
-    "observed_at": "2026-11-14T16:10:00+00:00",
-    "effect": "candidate model_provider=apikl; production smoke would fail and roll back; quality_gate needs current 60/60",
-    "unblock": "restore APIKL quota or provide a new key, re-run validate, resume v5 grading, then deploy"
+    "reason": "all_model_endpoints_unavailable_for_eval_and_candidate",
+    "observed_at": "2026-11-15T03:23:40.520053+00:00",
+    "detail": {
+      "apikl": "429 API_KEY_QUOTA_EXHAUSTED",
+      "xfmmda": "401 Invalid token",
+      "vectide_eval_key": "weekly limit exceeded",
+      "chickener": "403 balance exhausted"
+    },
+    "effect": "candidate model_provider=chickener; production smoke would fail and roll back; quality_gate needs current 60/60",
+    "unblock": "top up chickener or provide a funded key, resume grading, compare, then deploy"
+  },
+  "deepseek_switch": {
+    "user_decision": "全切 DeepSeek 并上线（质量为主，预算波动不算失败）",
+    "xfmmda": "DeepSeek-V4.1-Flash：频繁 HTTP 403、随后整体超时，现 401 Invalid token；全量采集作废保留",
+    "chickener": "deepseek-v4.1-flash：tools/SSE/图片探针成功；2026-11-14 约 20:00 UTC 余额耗尽（HTTP 403 预扣费额度失败）",
+    "collection": "tests/agent_eval/results/m3_chickener_collection_summary_20261114_chickener_deepseek.json",
+    "graded": {
+      "current": 5,
+      "baseline": 6,
+      "required": 60
+    },
+    "candidate_release": "agentic-20261114-deepseek-chickener (prepared + validated, not deployed)",
+    "production_probe": "live api.llm.pm deepseek-v4.1-flash-1017 HTTP 200 (read-only, 2026-11-14)"
   }
 }

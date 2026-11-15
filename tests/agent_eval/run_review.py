@@ -48,7 +48,7 @@ async def main(args):
     cases = [case for case in dataset["cases"] if not args.case or case["id"] in args.case]
     if args.limit:
         cases = cases[:args.limit]
-    base = None if args.provider in {"stepfun", "moxuna", "vectide", "apikl"} else resolve_model()
+    base = None if args.provider in {"stepfun", "moxuna", "vectide", "apikl", "xfmmda"} else resolve_model()
     model = evaluation_model(base, args.provider)
     run_id = time.strftime("review-%Y%m%d-%H%M%S")
     output = REPO / args.output
@@ -136,7 +136,7 @@ async def main(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--provider", choices=("configured", "fallback", "stepfun", "moxuna", "vectide", "apikl"), default="moxuna")
+    parser.add_argument("--provider", choices=("configured", "fallback", "stepfun", "moxuna", "vectide", "apikl", "xfmmda"), default="moxuna")
     parser.add_argument("--case", action="append")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--stop-after-initial-failures", type=int, default=0)

@@ -19,23 +19,27 @@ from agent_eval.run import evaluation_artifact_root
 
 RESULTS = ROOT / "tests/agent_eval/results"
 SUFFIX = "20261113_isolated"
+PROVIDER = "apikl"
+# 受评模型与独立评分模型使用同一端点；评分模型固定，换端点必须使用新代次。
+JUDGE_MODELS = {"apikl": "gpt-6.1-sol", "xfmmda": "DeepSeek-V4.1-Flash", "chickener": "gpt-6.1-sol"}
 CORPUS = "fixtures/apikl-frozen-provider-20261113"
 PILOT_CASES = ["facts-02", "news-01", "statistics-01", "comparison-01", "concepts-01", "valuation-03"]
 
 
-def report_path(runtime, *, pilot=False, graded=False):
-    qualifier = "pilot" if pilot else "paged" if graded else "replay"
-    return RESULTS / f"m3_apikl_frozen_{runtime}_{qualifier}_{SUFFIX}.json"
+def report_path(runtime, *, pilot=False, graded=False, merged=False):
+    qualifier = "pilot" if pilot else "paged" if graded else "merged" if merged else "replay"
+    return RESULTS / f"m3_{PROVIDER}_frozen_{runtime}_{qualifier}_{SUFFIX}.json"
 
 
 def environment():
     values = dotenv_values(ROOT / ".env.runtime.local")
     env = dict(os.environ)
     env.update({key: value for key, value in values.items() if value is not None})
+    prefix = "FINSIGHT_EVAL_" + PROVIDER.upper() + "_"
     env.update(PYTHONIOENCODING="utf-8", FINSIGHT_AGENT_MIN_REQUEST_INTERVAL_SECONDS="10",
-        FINSIGHT_EVAL_JUDGE_MODEL="gpt-6.1-sol",
-        FINSIGHT_EVAL_JUDGE_API_BASE=values["FINSIGHT_EVAL_APIKL_API_BASE"],
-        FINSIGHT_EVAL_JUDGE_API_KEY=values["FINSIGHT_EVAL_APIKL_API_KEY"],
+        FINSIGHT_EVAL_JUDGE_MODEL=JUDGE_MODELS[PROVIDER],
+        FINSIGHT_EVAL_JUDGE_API_BASE=values[prefix + "API_BASE"],
+        FINSIGHT_EVAL_JUDGE_API_KEY=values[prefix + "API_KEY"],
         FINSIGHT_EVAL_JUDGE_CONTEXT_WINDOW="131072", FINSIGHT_EVAL_JUDGE_MAX_OUTPUT="8192")
     return env
 
@@ -62,12 +66,18 @@ def check_phase_configuration(report, args):
         raise ValueError("measurement_artifact_root_changed_requires_new_generation")
 
 
+def shared_quota_path():
+    name = "shared_judge_quota.sqlite" if PROVIDER == "apikl" else f"shared_judge_quota_{PROVIDER}.sqlite"
+    return ROOT / "tmp/r261113" / name
+
+
 def main(args):
-    global SUFFIX
+    global SUFFIX, PROVIDER
+    PROVIDER = args.provider
     if not args.generation or any(not (character.isascii() and (character.isalnum() or character in "_-")) for character in args.generation):
         raise ValueError("generation_must_be_finite_ascii_identifier")
     SUFFIX = args.generation
-    state_path = RESULTS / f"apikl_frozen_{args.phase}_execution_{SUFFIX}.json"
+    state_path = RESULTS / f"{PROVIDER}_frozen_{args.phase}_execution_{SUFFIX}.json"
     binding = implementation()
     if state_path.exists():
         if not args.resume:
@@ -108,7 +118,7 @@ def main(args):
                     raise ValueError("pilot_budget_finalization_boundary_failed_before_full")
         for runtime in ("current", "baseline"):
             command = [sys.executable, "-B", "-X", "utf8", "tests/agent_eval/run_frozen_eval.py",
-                "--provider", "apikl", "--runtime", runtime, "--mode", "replay", "--jobs", "2",
+                "--provider", PROVIDER, "--runtime", runtime, "--mode", "replay", "--jobs", "2",
                 "--request-interval", "6.1", "--timeout", str(args.timeout), "--model-protocol", "sse",
                 "--latency-policy", args.latency_policy,
                 "--no-judge", "--judge-protocol", "tools", "--fixtures-root", CORPUS,
@@ -121,10 +131,12 @@ def main(args):
             commands.append((runtime, command))
     elif args.phase == "grade":
         for runtime in ("current", "baseline"):
-            check_phase_configuration(json.loads(report_path(runtime).read_text(encoding="utf-8")), args)
+            # --merged：评分供应商故障补跑后的合并件（补跑来源记录在其 retry_provenance）
+            source = report_path(runtime, merged=args.merged)
+            check_phase_configuration(json.loads(source.read_text(encoding="utf-8")), args)
             command = [sys.executable, "-B", "-X", "utf8", "tests/agent_eval/run_paged_grading.py",
-                "--source", str(report_path(runtime)), "--output", str(report_path(runtime, graded=True)),
-                "--shared-quota", str(ROOT / "tmp/r261113/shared_judge_quota.sqlite")]
+                "--source", str(source), "--output", str(report_path(runtime, graded=True)),
+                "--shared-quota", str(shared_quota_path())]
             if args.resume and report_path(runtime, graded=True).exists():
                 command += ["--resume"]
             commands.append((runtime, command))
@@ -149,23 +161,35 @@ def main(args):
         env["FINSIGHT_EVAL_CORPUS_MOUNT_MANIFEST"] = args.mount_manifest
     if args.environment_manifest:
         env["FINSIGHT_EVAL_ENVIRONMENT_MANIFEST"] = args.environment_manifest
+    pending = []
     for name, command in commands:
         previous = next((stage for stage in reversed(state["stages"]) if stage["name"] == name), None)
         if previous and previous["status"] == "collected":
             continue
         if previous and args.phase != "grade":
             raise ValueError("incomplete_generation_requires_review_without_overwriting_partial_measurement")
+        pending.append((name, command))
+
+    def start(name, command):
         stage = {"name": name, "status": "running", "safe_command": command}
         state["stages"].append(stage)
         state.update(status=name, pid=os.getpid())
+        log = (RESULTS / f"{args.phase}_{name}_{SUFFIX}.log").open("a", encoding="utf-8")
+        process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+        stage["child_pid"] = process.pid
         save(state_path, state)
-        log_path = RESULTS / f"{args.phase}_{name}_{SUFFIX}.log"
-        with log_path.open("a", encoding="utf-8") as log:
-            process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
-            stage["child_pid"] = process.pid
-            save(state_path, state)
-            print("START", args.phase, name, process.pid, flush=True)
-            exit_code = process.wait()
+        print("START", args.phase, name, process.pid, flush=True)
+        return name, stage, process, log
+
+    # 并行只缩短墙钟时间：双方仍是独立进程、独立输出与同一冻结资料，完成判定逐方不变。
+    if args.parallel:
+        running = [start(name, command) for name, command in pending]
+    else:
+        running = None
+    for index, (name, command) in enumerate(pending):
+        name, stage, process, log = running[index] if running else start(name, command)
+        exit_code = process.wait()
+        log.close()
         output = report_path(name, pilot=args.phase == "pilot", graded=args.phase == "grade")
         report = json.loads(output.read_text(encoding="utf-8"))
         count = len(report["results"])
@@ -181,6 +205,11 @@ def main(args):
         if not complete:
             state["status"] = "incomplete_requires_review"
             save(state_path, state)
+            if running:
+                for _, other_stage, other, other_log in running[index + 1:]:
+                    other_stage["exit_code"] = other.wait()
+                    other_log.close()
+                save(state_path, state)
             return 1
     state["status"] = "collected_requires_quality_review"
     save(state_path, state)
@@ -190,8 +219,12 @@ def main(args):
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", required=True, choices=("pilot", "full", "grade", "compare"))
+    parser.add_argument("--merged", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--generation", default=SUFFIX)
+    parser.add_argument("--parallel", action="store_true", help="双方同时运行；各自输出与完成判定不变")
+    parser.add_argument("--provider", choices=tuple(JUDGE_MODELS), default="apikl",
+                        help="受评与独立评分端点；默认 APIKL 保持既有代次文件名")
     parser.add_argument("--timeout", type=float, default=180, help="双方每轮运行预算（秒）；变更须使用新代次")
     parser.add_argument("--latency-policy", choices=LATENCY_POLICIES, default="non_regression",
                         help="默认耗时不回退；report_only记录耗时差，但仅质量与证据决定通过")

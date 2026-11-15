@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-14T16:15:24.749788+00:00",
+  "updated_at": "2026-11-15T03:23:44.695147+00:00",
   "current_documents": 26,
   "utf8": [
     {
@@ -66,7 +66,7 @@
       "file": "docs/11_PRODUCTION_RUNBOOK.md",
       "valid": true,
       "replacement_character": false,
-      "sha256": "0330e685a944d5112d73ce292d83cfe423db700ca82dd2b969842c7935bf335e"
+      "sha256": "40592aa1f0460e218fe2cf58bd59763216c29a0f8315361613c119d3f825f216"
     },
     {
       "file": "docs/AGENTS.md",
@@ -156,10 +156,10 @@
       "file": "tests/agent_eval/README.md",
       "valid": true,
       "replacement_character": false,
-      "sha256": "03bbbdffaaa1e42315e65ade9398b4f1ad237e75f7d607c9c70aa65084e07843"
+      "sha256": "a4619f86a07c611e4159fdbf0047ab1217651de2f156a2b08dd452f5f08b9c47"
     }
   ],
-  "links_checked": 163,
+  "links_checked": 165,
   "missing_links": [],
   "mermaid": {
     "passed": 17,
@@ -748,6 +748,11 @@
     },
     {
       "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m3_chickener_collection_summary_20261114_chickener_deepseek.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
       "target": "../tests/agent_eval/results/m4_apikl_terra_review_20261113.json",
       "exists": true
     },
@@ -1274,6 +1279,11 @@
     {
       "source": "tests/agent_eval/README.md",
       "target": "results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m3_chickener_collection_summary_20261114_chickener_deepseek.json",
       "exists": true
     }
   ],

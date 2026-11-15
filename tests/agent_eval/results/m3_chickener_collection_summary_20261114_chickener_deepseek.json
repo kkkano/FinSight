@@ -1,0 +1,58 @@
+{
+  "at": "2026-11-15T03:23:10.365505+00:00",
+  "generation": "20261114_chickener_deepseek",
+  "sides": {
+    "current": {
+      "input": "m3_chickener_frozen_current_merged_20261114_chickener_deepseek.json",
+      "input_sha256": "b8b6b69e05300f5c7d921e3d6fce94168f36688051e680fe3fa63d8b871185f9",
+      "subject": {
+        "model": "deepseek-v4.1-flash",
+        "base_url": "https://chickener.top/v1"
+      },
+      "cases": 60,
+      "normal_terminal_cases": 36,
+      "artifacts_met_cases": 54,
+      "terminal_errors": {
+        "run_token_budget_exhausted": 25
+      },
+      "provider_error_cases_after_retry": [],
+      "retry_replaced": {
+        "valuation-04": "r1",
+        "comparison-03": "r1"
+      },
+      "elapsed_case_seconds_p50": 158.4215,
+      "tokens_per_case_p50": 125864.5
+    },
+    "baseline": {
+      "input": "m3_chickener_frozen_baseline_merged_20261114_chickener_deepseek.json",
+      "input_sha256": "ea3af0b30e80a24781f5ee5b92d0356be378cb1f5a5f58c71b987046c4864c8a",
+      "subject": {
+        "model": "deepseek-v4.1-flash",
+        "base_url": "https://chickener.top/v1"
+      },
+      "cases": 60,
+      "normal_terminal_cases": 41,
+      "artifacts_met_cases": 52,
+      "terminal_errors": {
+        "run_token_budget_exhausted": 19
+      },
+      "provider_error_cases_after_retry": [],
+      "retry_replaced": {
+        "multiturn-01": "r1"
+      },
+      "elapsed_case_seconds_p50": 140.546,
+      "tokens_per_case_p50": 74858.0
+    }
+  },
+  "independent_grading": {
+    "judge": "gpt-6.1-sol @ chickener",
+    "scored": {
+      "current": 5,
+      "baseline": 6
+    },
+    "required": 60,
+    "stopped_reason": "chickener_account_balance_exhausted (HTTP 403 预扣费额度失败)",
+    "quality_gate_decided": false
+  },
+  "budget_exhaustion_alone_is_answer_failure": false
+}

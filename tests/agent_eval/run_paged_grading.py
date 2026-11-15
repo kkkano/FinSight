@@ -35,6 +35,19 @@ frozen_module = sibling("frozen_corpus_provider")
 network = sibling("grading_transport")
 
 
+# 每个评测端点只允许其声明的独立评分模型；密钥按端点地址取自私有配置，不跨供应商借用。
+INDEPENDENT_JUDGES = {"APIKL": "gpt-6.1-sol", "XFMMDA": "DeepSeek-V4.1-Flash", "CHICKENER": "gpt-6.1-sol"}
+
+
+def independent_judge_key(settings, declared):
+    for provider, model in INDEPENDENT_JUDGES.items():
+        if declared["model"] == model and declared["base_url"] == settings.get("FINSIGHT_EVAL_" + provider + "_API_BASE"):
+            key = settings.get("FINSIGHT_EVAL_" + provider + "_API_KEY")
+            if key:
+                return key
+    raise ValueError("independent_judge_configuration_changed")
+
+
 async def main(args):
     reading_budget = getattr(args, "reading_token_budget", 600000)
     if type(reading_budget) is not int or not 600000 <= reading_budget <= 1200000:
@@ -57,10 +70,8 @@ async def main(args):
         raise ValueError("frozen_common_evidence_changed")
     settings = dotenv_values(ROOT / ".env.runtime.local")
     declared = original["judge"]
-    config = ModelConfig(declared["model"], declared["base_url"], settings["FINSIGHT_EVAL_APIKL_API_KEY"],
+    config = ModelConfig(declared["model"], declared["base_url"], independent_judge_key(settings, declared),
                          context_window=declared["context_window"], max_output=declared["max_output"])
-    if config.model != "gpt-6.1-sol" or config.base_url != settings["FINSIGHT_EVAL_APIKL_API_BASE"]:
-        raise ValueError("independent_judge_configuration_changed")
     prompt_hash = paged.digest({"reading": paged.READ_SYSTEM, "final": paged.FINAL_SYSTEM,
                                "read_tool": paged.READ_TOOL, "finish_tool": paged.FINISH_TOOL, "score_tool": paged.SCORE_TOOL,
                                "corpus_tool": paged.CORPUS_TOOL})

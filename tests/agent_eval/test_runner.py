@@ -26,7 +26,9 @@ def test_cli_defaults_to_current_and_exposes_only_current_and_baseline():
     assert set(runtime_option.choices) == {"current", "baseline"}
 
 
-@pytest.mark.parametrize("provider,model,window", [("vectide", "deepseek-v4.1-flash-1017", 1048576), ("apikl", "gpt-6-luna", 131072)])
+@pytest.mark.parametrize("provider,model,window", [("vectide", "deepseek-v4.1-flash-1017", 1048576), ("apikl", "gpt-6-luna", 131072),
+                                                     ("xfmmda", "DeepSeek-V4.1-Flash", 131072),
+                                                     ("chickener", "deepseek-v4.1-flash", 131072)])
 def test_isolated_provider_is_explicit_and_does_not_mutate_production(monkeypatch, provider, model, window):
     from backend.agent_runtime.config import ModelConfig
 
@@ -45,7 +47,7 @@ def test_isolated_provider_is_explicit_and_does_not_mutate_production(monkeypatc
 
 
 @pytest.mark.parametrize("missing", ["MODEL", "API_BASE", "API_KEY"])
-@pytest.mark.parametrize("provider", ["vectide", "apikl"])
+@pytest.mark.parametrize("provider", ["vectide", "apikl", "xfmmda", "chickener"])
 def test_isolated_provider_missing_configuration_cannot_borrow_production_credentials(monkeypatch, missing, provider):
     for name, value in {"MODEL": "deepseek-v4.1-flash-1017", "API_BASE": "https://vectide.invalid/v1",
                         "API_KEY": "fixture-key"}.items():
