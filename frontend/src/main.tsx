@@ -4,9 +4,9 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
-import './components/dashboard/Dashboard.module.css';
-import './components/welcome/Welcome.module.css';
-import './components/track-record/TrackRecord.module.css';
+import './components/dashboard/Dashboard.css';
+import './components/welcome/Welcome.css';
+import './components/track-record/TrackRecord.css';
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary.tsx'
 import { queryClient } from './queryClient.ts'

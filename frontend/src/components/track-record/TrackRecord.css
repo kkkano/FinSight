@@ -1,0 +1,16 @@
+/* 页面级全局样式：须以普通 CSS 引入，CSS Module 的副作用导入会在生产构建中被摇树删除。 */
+
+.track-record-page{height:100dvh;overflow:auto;background:var(--t-bg);padding:32px 28px 40px;color:var(--t-text)}
+.track-record-shell{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.track-record-header{display:flex;align-items:flex-end;flex-wrap:wrap;gap:16px}
+.track-record-header h1{font-size:24px;font-weight:600;letter-spacing:-.01em;margin:0}
+.track-record-header p{margin:6px 0 0;font-size:14px;line-height:1.6;color:var(--t-text-2);max-width:620px}
+.track-record-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.track-record-number{font-size:34px;font-weight:500;letter-spacing:-.02em;line-height:1.55}
+.track-record-cells{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.track-record-cell{border-radius:10px;padding:12px 14px}
+.track-record-cell strong{font-size:13px;font-weight:500}
+.track-record-cell .num{font-size:26px;font-weight:500}
+@media(max-width:767px){.track-record-page{padding:20px 16px 28px}.track-record-metrics{grid-template-columns:1fr}}
+.track-record-page{font-size:14px;line-height:1.6}
+.track-record-header > div:first-child{flex:1 1 420px}

@@ -179,8 +179,8 @@ export function WelcomePage() {
       </header>
       <div className="welcome-stage"><div className="welcome-columns">
         <section className="welcome-intro" aria-label="投资研究助手">
-          <div><h1 className="welcome-title">你只管问，<br /><span>剩下的交给 FinSight。</span></h1>
-            <p className="welcome-description">它会自己查行情、翻财报、写代码算账、画图给你看。每个数字都标着出处，数据不够就直说。</p></div>
+          <div><h1 className="welcome-title">有据可查的<br /><span>投资研究助手</span></h1>
+            <p className="welcome-description">FinSight 查行情、读财报、跑数据、画图表，每个数字都注明来源和时间；数据不足时会明确说明。</p></div>
           <div className="welcome-demo" aria-label="研究过程示例">
             <div className="flex items-center justify-between gap-3"><span className="design-tag" style={{ color: 'var(--t-amber)', background: 'var(--t-amber-soft)' }}>示例</span><div className="welcome-demo-question">半导体 ETF 连跌 5 周，历史上像哪次？</div></div>
             <div>{[
