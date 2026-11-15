@@ -1,0 +1,1364 @@
+{
+  "at": "2026-11-15T05:36:14.988060+00:00",
+  "subject_model": "gpt-6.1-terra",
+  "judge_model": "gpt-6.1-sol",
+  "sides": {
+    "baseline": {
+      "input_path": "E:\\FinSight\\.omx\\worktrees\\research-completeness\\tests\\agent_eval\\results\\m3_apikl_frozen_baseline_delivery_v5_20261114_artifact_contract_linux.json",
+      "input_sha256": "30afafcb7c35970d035b8648c0669d6aedd3b30036d8a62fc09614b8bcc157c4",
+      "raw_measurement_sha256": "16643937d610700127058f34b35e7327918d176d258f61bde42074c3ca6fcde2",
+      "cases": 60,
+      "scores": {
+        "answered": 1.2333333333333334,
+        "numbers": 1.5166666666666666,
+        "limitations": 0.7,
+        "presentation": 0.8166666666666667,
+        "no_internal_identifiers": 0.7666666666666667,
+        "total": 5.033333333333333
+      },
+      "group_scores": {
+        "facts": {
+          "answered": 1.5,
+          "numbers": 1.6666666666666667,
+          "limitations": 0.6666666666666666,
+          "presentation": 1,
+          "no_internal_identifiers": 0.8333333333333334,
+          "total": 5.666666666666667
+        },
+        "valuation": {
+          "answered": 1.1666666666666667,
+          "numbers": 1.1666666666666667,
+          "limitations": 0.6666666666666666,
+          "presentation": 0.5,
+          "no_internal_identifiers": 0.6666666666666666,
+          "total": 4.166666666666667
+        },
+        "attribution": {
+          "answered": 1.1666666666666667,
+          "numbers": 1.3333333333333333,
+          "limitations": 0.8333333333333334,
+          "presentation": 1,
+          "no_internal_identifiers": 0.6666666666666666,
+          "total": 5
+        },
+        "news": {
+          "answered": 1.4,
+          "numbers": 1.6,
+          "limitations": 0.6,
+          "presentation": 1,
+          "no_internal_identifiers": 0.6,
+          "total": 5.2
+        },
+        "statistics": {
+          "answered": 1.5,
+          "numbers": 1.8333333333333333,
+          "limitations": 0.8333333333333334,
+          "presentation": 0.8333333333333334,
+          "no_internal_identifiers": 0.8333333333333334,
+          "total": 5.833333333333333
+        },
+        "comparison": {
+          "answered": 1.2,
+          "numbers": 1.8,
+          "limitations": 0.8,
+          "presentation": 0.8,
+          "no_internal_identifiers": 0.6,
+          "total": 5.2
+        },
+        "multiturn": {
+          "answered": 1.3333333333333333,
+          "numbers": 1.6666666666666667,
+          "limitations": 0.8333333333333334,
+          "presentation": 0.8333333333333334,
+          "no_internal_identifiers": 0.5,
+          "total": 5.166666666666667
+        },
+        "concepts": {
+          "answered": 1.75,
+          "numbers": 2,
+          "limitations": 0.75,
+          "presentation": 0.75,
+          "no_internal_identifiers": 1,
+          "total": 6.25
+        },
+        "failures": {
+          "answered": 1,
+          "numbers": 1.2,
+          "limitations": 0.8,
+          "presentation": 1,
+          "no_internal_identifiers": 0.8,
+          "total": 4.8
+        },
+        "local_markets": {
+          "answered": 1.25,
+          "numbers": 1.5,
+          "limitations": 0.75,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 5.5
+        },
+        "reports": {
+          "answered": 0,
+          "numbers": 0.5,
+          "limitations": 0,
+          "presentation": 0,
+          "no_internal_identifiers": 1,
+          "total": 1.5
+        },
+        "actions": {
+          "answered": 1.3333333333333333,
+          "numbers": 2,
+          "limitations": 0.6666666666666666,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6
+        }
+      },
+      "problem_case_count": 44,
+      "problem_cases": [
+        {
+          "case_id": "facts-01",
+          "score": 3,
+          "categories": [
+            "no_effective_answer",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "原答复仅称“暂时无法确认”，没有回答价格问题；资料中实际有可用报价 $354.88。",
+            "未交付题目要求的价格、币种、数据时点和来源，也未明确说明延迟口径未知，因此 numbers 只能给1，limitations不给分。",
+            "没有把旧收盘价冒充实时价格，也没有输出内部标识；文字简短，形式适合简单问价。"
+          ]
+        },
+        {
+          "case_id": "facts-02",
+          "score": 6,
+          "categories": [
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "完整回答了“最新一季营收和经营现金流”并标明截至2026-09-30的季度口径、USD单位和SEC来源；两项核心数值分别为92,279,000,000和58,000,000,000，与回放中同一财期原值一致。",
+            "未混用年度和季度数据，也未将缺失值写成零；额外列出的净利润、资本开支和自由现金流也与回放一致，且自由现金流计算口径有明确说明。",
+            "表格简洁、结构清楚，篇幅适当。",
+            "来源行写出了可见的内部来源标识“[S4bc3227049]”，属于不必要的内部标识，因此no_internal_identifiers不得分。"
+          ]
+        },
+        {
+          "case_id": "facts-04",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答给出了两季未来盈利预期、财期、更新时间及GNG来源，也正确说明2027年3月季度预期较7天前下调、较30天前上调；但未交付已披露EPS及其与未来预测、预测修正的区分，未满足全部must，因此answered为1。",
+            "表格中EPS 0.39/0.46美元、预测区间、分析师人数以及营收310/265亿美元均与GNG证据一致。但修正仅给方向，遗漏来源明确提供的7天-1.1%、30天+0.5%及7天前0.47美元等必要变化数字，且未提供已披露EPS，numbers为1。",
+            "虽说明GAAP口径不明、部分数据不确定，并未把空数据解释成没有修正，但局限说明不充分：已取得的Right Trader材料明确列出4周上调/下调人数（12月季度2/5、3月季度3/1），ABMN也报道Zacks于11月4日将2026Q4预测从0.16降至0.15美元。回答笼统称资料不足，未解释这些证据与GNG的来源、口径差异，limitations为0。",
+            "正文表格清晰、篇幅适当，预测始终标作预期，未当作已披露事实，也没有断言不存在修正，presentation为1。",
+            "实际可见正文和表格没有不必要的内部标识，no_internal_identifiers为1。"
+          ]
+        },
+        {
+          "case_id": "valuation-01",
+          "score": 3,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "回答给出了‘已实现盈利偏贵、预期估值较轻但依赖增长兑现’的方向判断，并以历史均值作定性基准，也完整写完了句子；但没有交付支撑判断的核心估值数值与具体比较：资料已有滚动市盈率30.7倍、预期市盈率19.7倍、约20年历史均值24.5倍及高于均值25.3%。末尾又称估值指标尚未核实，使用户要求的完整、有依据的判断仅部分完成，answered扣1分。",
+            "688.17美元、2026年11月12日常规收盘口径及前十大权重46.30%均与资料一致；但核心市盈率、历史基准及28.7%的预测增长率均未呈现，不能以价格和集中度数字替代估值数字，numbers给1分。",
+            "已明确价格非实时、复权及股息口径未知，区分预期与已实现盈利，并说明历史均值不是精确合理价、预测增长尚未充分核验及增长和利率风险；局限说明足够，且未编造精确合理价。",
+            "正文直接显示‘[S335e15485b]’这一用户不需要的内部来源标识，非仅隐藏传输元数据，no_internal_identifiers给0分。",
+            "正文引用‘上表的增长率’，但实际正文没有该表，交付产物也为空；结尾重复添加泛化的未核实提示，与前面的估值判断衔接矛盾，结构与收尾不够合适，presentation给0分。"
+          ]
+        },
+        {
+          "case_id": "valuation-03",
+          "score": 6,
+          "categories": [
+            "unnecessary_visible_identifiers",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "已逐条满足 must：明确将年度 EPS 6、8、10、12 美元及 PE 20、30、40、50 倍作为假设，与已披露单季 EPS 区分；提供真实折线图产物和正文情景表，计算工具来源及代码方法可核对，图表、表格与解读一致，未将情景当作盈利预测。",
+            "16 个情景价格均与 EPS×PE 一致；图表实际 data/spec 的横轴、四条 PE 系列及美元/股单位正确。引用的 2.46 美元 EPS 与原始资料的 2027 财年第二季度、截至 2026 年 7 月 26 日的单季口径一致。",
+            "充分说明敏感性分析不是目标价或预测、单季 EPS 不能直接当全年 EPS，且假设倍数不代表已核实市场估值。资料中虽有第三方预期和估值预览，但答案使用的是“未能核实”，没有将未查到说成不存在，不影响本题假设情景的交付。",
+            "正文直接显示了不必要的内部来源标识 [S66c16cd8fb]，因此 no_internal_identifiers 扣分；仅在传输元数据中出现的标识不计入扣分。",
+            "正文表格和图表便于比较，篇幅与结构总体合适；末尾局限说明略有重复，但不妨碍阅读与使用。"
+          ]
+        },
+        {
+          "case_id": "valuation-05",
+          "score": 1,
+          "categories": [
+            "no_effective_answer",
+            "numerical_error"
+          ],
+          "reasons": [
+            "原答复为空字符串，完全没有回答“TSLA贵不贵”的判断，也没有交付经营数据、估值依据或事实与情景/市场观点的区分，因此未满足题目要求。",
+            "没有使用任何具体数字或来源；资料中虽有股价、市场市值、季度收入及市盈率等可核实数据，但原答复未引用，故具体数值一致性无法体现。",
+            "未说明数据日期、口径或资料缺口，不能获得局限说明分。",
+            "没有正文或产物，无法评价结构与篇幅为合适。",
+            "可见答复没有泄漏不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "valuation-06",
+          "score": 1,
+          "categories": [
+            "no_effective_answer",
+            "numerical_error"
+          ],
+          "reasons": [
+            "回答停留在“正在核对”的过程说明，没有给出腾讯与阿里估值和现金流质量的实际比较，故未回答问题；可见产物为空。",
+            "未提供估值或现金流数字，且未满足必须以港股主体、相同估值口径和财期进行比较，以及注明币种差异与换算依据的要求。证据中虽有不同来源、时间和利润口径的数据，但答案没有据此完成判断。",
+            "提及财年不同及口径不完全一致，属于有限的局限提示；但没有说明明确财期、币种差异、换算方法，也没有交付可比结果，因此局限说明不足。",
+            "正文仅为两句进度更新，不构成答案；没有泄露不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "attribution-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "已用历史行情确认日期和跌幅，并交付含24个真实观测的价格折线图；11月5日跌9.26%、11月12日收166.19美元并跌4.34%、13日快照161.15美元并跌3.03%，均与原始资料及计算一致。",
+            "回答以原文来源区分公司领导层变动与此前半导体行业压力，但未分析或比较大盘因素，也未提供相应大盘来源，未全部满足must，故answered为1。",
+            "明确说明13日为盘中快照而非确认收盘、复权及股息处理未知，并提示不能将全部跌幅精确归因于管理层事件，口径与归因局限充分；未把长期跌幅当成本次跌幅，也未把同期所有新闻都列为原因。",
+            "正文直接出现[S6b780aea68]、[S1d0f39b034]等用户不需要的内部来源标识，故no_internal_identifiers为0；此扣分不是针对产物传输元数据。",
+            "正文先概括再分点说明，并结合实际非空走势图，篇幅与结构合适。"
+          ]
+        },
+        {
+          "case_id": "attribution-02",
+          "score": 6,
+          "categories": [
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "完整回答了“主要由什么推动”，并满足两项 must：明确给出上涨区间为2026年8月13日至11月13日，价格由305.26美元升至358.00美元，涨幅约17.28%，且区分了已披露业绩事实与新品、AI、定价能力等分析师预测。",
+            "价格数值、日期和涨幅与历史日线资料及图表产物一致；图表的首末数据也与原始记录一致。",
+            "正文说明末日是盘中快照、复权和股息口径未知，并承认新闻资料不完整、无法精确把各因素归因到涨幅，局限说明充分。",
+            "结构清晰，先给结论，再分列业绩、新品和定价/AI催化，随后说明价格区间与归因边界，篇幅合适。",
+            "正文直接写出不必要的内部来源标识“[S2d3905c060]”，违反无内部标识要求，因此no_internal_identifiers不得分。",
+            "虽然正文已说明无法精确归因，但“业绩超预期”与完整上涨区间之间没有逐日事件研究或直接因果证据；这属于合理限制披露，不影响must已交付。"
+          ]
+        },
+        {
+          "case_id": "attribution-03",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "answered扣1分：仅提供行业与大盘归因的条件式判断框架，未实际比较SOXX与市场参照的同期表现，也未给出来源支持的本轮行业或市场因素，两项must均未完整交付。已返回的搜索材料包含有日期的同期跌幅及油价、AI融资忧虑等报道，答案未引用或评估这些证据。",
+            "numbers扣1分：SOXX与SPY历史行情请求确实均失败，答案未编造数值，但未交付归因所需的同期表现和相对跌幅；必需数字缺失，不能给满分。",
+            "limitations给1分：如实说明行情获取失败和无法可靠判断，指出起始日期影响比较，并明确超额跌幅不能直接证明行业基本面恶化，未把相关性当成因果或混比不同区间。",
+            "presentation给1分：结论前置，三种判断情形结构清楚，篇幅适当。no_internal_identifiers给1分：正文无不必要的内部标识，亦无可见产物泄漏。"
+          ]
+        },
+        {
+          "case_id": "attribution-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "题目要求同时对齐财报日期、指引新闻和价格变化，并区分事实、预期与解释。原答复确实解释了波动的双向驱动，也明确说明部分内容只是推断，没有把未披露指引写成已证实消息，因此不是未回答。",
+            "但未交付财报日期与发布时点对应的价格变化，也没有利用已有的财报前预期数据进行超预期/不及预期比较；反而概括为无法取得市场一致预期。资料虽缺少完整历史行情，但仍有已记录的财报后跌幅、反弹和预期数字，故未满足全部 must，answered 只能为1。",
+            "财报营收、净利润、营业利润和经营现金流数值与资料一致；但遗漏了可用的预期与价格数字，且没有完成价格变化对齐，因此 numbers 为1而非2。",
+            "答复如实说明历史行情数据缺失及因果归因局限，limitations 充分。",
+            "正文结构清楚、篇幅合适，且没有写出用户不需要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "attribution-05",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答正确把新闻28.6%定位为10月30日单日跌幅，并区分历史收盘与盘中变化，但未完成全部must：没有说明累计跌幅及盘前、盘后与常规交易时段的口径差异；资料中的10月14日至11月12日累计跌37.6%及10月29日财报后晚间跌超20%均未纳入比较。",
+            "数值仅部分交付：28.60%有新闻依据，但遗漏已取得的11月12日常规收盘61.20美元、下跌1.30美元（2.08%）；采集发生于11月13日盘中，直接把“昨天”定为11月13日缺乏依据，未准确交付昨天与新闻的数值比较。",
+            "虽合理声明11月13日最终收盘跌幅尚不能确认，但没有交代已有报价实际截至11月12日，也未处理“昨天”的日期歧义，口径与局限说明不足。",
+            "正文简短、结构清楚，无不必要的内部标识，未补写未知交易所或行情延迟，也未把累计跌幅误称日跌幅。"
+          ]
+        },
+        {
+          "case_id": "attribution-06",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答给出了AI投资回报、科技股估值和产业链联动等可能共性，并区分两家公司业务上的影响路径，属于部分回答；但未确定同一时间区间、比较两股价格与相关新闻，也未给共同因素和公司特有因素绑定来源，未完成两项must。一般机制分析未落实为对已返回新闻证据的解读。",
+            "未提供同期价格、跌幅等必需行情数字，故numbers只能给1分；没有编造具体数值。行情调用存在资料缺口可以解释未取得数字，但不能替代价格比较的交付。",
+            "明确说明行情和可靠同期报道不足、时间区间待确定，并持续将可能机制与已证实原因区分，没有把未查到资料说成资料不存在，局限说明充分。",
+            "正文结构清楚、篇幅适当；无用户不需要的内部标识，也未将另一家公司的报道冒充当前公司证据。"
+          ]
+        },
+        {
+          "case_id": "news-02",
+          "score": 3,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "回答只提供财报、芯片供需和出口政策三类泛化关注点，虽标为潜在催化与风险，但未交付具体近期新闻，也未完整区分已发生事件、预期催化与风险线索；未给出具体新闻的媒体名称和发布时间，两项 must 均未完整满足，因此 answered=1。资料中的 CNBC 报道已提供黄仁勋辞任、Colette Kress 任临时 CEO 及寻找永久 CEO 的报道内容和发布时间，可带来源归属进行汇总。",
+            "虽说明搜索发现条目的时间与独立性不确定、覆盖不完整，且未把传闻直接解释为股价原因，但将全部资料概括为无法可靠列出近期事件，忽略搜索结果中 CNBC 的正文内容及明确 published_at=2026-11-12T13:51:59Z、Schwab Network 的2026年11月9日内容；局限说明未准确反映实际证据范围，因此 limitations=0。",
+            "正文所写资料截至2026年11月13日与记录一致，未编造价格、财报或影响金额；但缺少题目明确要求的逐条新闻发布时间，不能仅凭一个覆盖截止日期获得数值满分，因此 numbers=1。",
+            "正文直接显示 [S7507e57b93]、[Sfc96160d95] 两个内部来源标识，且没有换成用户可理解的媒体名称和链接，因此 no_internal_identifiers=0。",
+            "篇幅适中，开头说明结论，随后以三个并列条目说明关注方向，结构清楚，presentation=1。未将报道观点当作确定事实，正文也未混入 TSLA 等无关旁支新闻。"
+          ]
+        },
+        {
+          "case_id": "news-03",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "回答区分了成分股层面的英伟达波动与基金层面的QQQ资金流入，并解释了潜在传导关系；但未覆盖或区分宏观事件，未全部满足must。资料中已有关于11月3日期中选举与11月4日纳斯达克100表现的报道，可注明来源和日期局限后讨论，因此专项新闻接口缺失不能替代此项交付，answered给1分。",
+            "数值与原始证据一致：英伟达当周跌近11%、截至11月10日五个交易日QQQ流入53亿美元，均见Benzinga报道；2026年11月12日收盘688.17美元、下跌0.32%与行情记录一致，numbers给2分。",
+            "明确说明新闻贡献无法量化、管理层危机未独立核实、资金流入不保证上涨且不等同直接因果，并说明行情非实时及新闻覆盖不全，limitations给1分；未将成分股消息武断认定为QQQ主因，具体市场反应有来源。",
+            "正文行情句末直接显示内部标识[S335e15485b]，并非仅存在于传输元数据，故no_internal_identifiers给0分。",
+            "篇幅适中，采用两条新闻线索及行情、局限说明，结构清楚；本题未要求图表或其他产物，presentation给1分。"
+          ]
+        },
+        {
+          "case_id": "news-05",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答概括了Azure增长预期增强、第三方容量延期导致日历年资本开支预期下调，方向与所引原文一致，也未以同行指引替代微软指引。但没有清楚区分管理层表态、已披露业绩和媒体或作者的投资解读，未全部满足must，answered为1。",
+            "日期2026年10月28日及2027财年第一季度与资料一致，但缺少说明指引变化的关键数字：Q2 Azure恒汇率增长49%–50%、Q2收入960亿–971亿美元，以及日历2026年资本开支从约1750亿美元调整为约1700亿美元；因此numbers为1。",
+            "虽提醒财年与日历年不能混用，但未交代Azure恒汇率口径、资本开支包含融资租赁，亦未说明延期后FY2027下半年投入预计加速。末句笼统称部分结论缺少依据，没有指出具体不确定项或二手整理的证据局限，limitations为0。",
+            "正文简洁、中文概括并附公开来源链接，没有堆砌英文摘要，篇幅结构合适；未出现用户不需要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "statistics-01",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "已交付包含真实周收盘价序列和连续下跌区间标注的图，所读分段含基准点且连续下降；口径明确区分连续下跌与峰谷回撤，末段标为仍在延续，未违反两项 must_not。但未交付要求的统计表，两件产物均为图且 spec.table 为空，也没有区间编号和累计跌幅，未全部满足 must，answered 给1分。",
+            "已提供的日期、周数及分段价格相互对应，但必需的各区间累计跌幅数值完全缺失，不能仅凭价格让用户自行计算，numbers 最多1分。",
+            "明确解释5周包含5周、累计回报基准、未收盘的2026-11-13周线排除、样本末尾区间尚未结束，以及历史覆盖不完整和复权股息口径未知；产物覆盖字段记录缺失值和缺失周期均为0，局限说明可给1分。",
+            "两张同标题、内容高度重复的图均保留，却缺少用于对照的统计表和区间编号；分段标题仅周数或完整时间戳，比较结构不够清晰，presentation 给0分。",
+            "可见正文、图标题及标签没有不必要的内部标识；引用来源编号及不可见传输元数据不作泄漏扣分。"
+          ]
+        },
+        {
+          "case_id": "statistics-02",
+          "score": 6,
+          "categories": [
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "answered=2：两轮均实际交付图表；第二轮图表同时包含收盘价与20日均线，方法明确复用首轮数据句柄，并以 rolling(window=20, min_periods=20) 计算，全部 must 均满足，也未触犯 must_not。",
+            "numbers=2：原始行情与图表均为252个交易日，覆盖2025-11-13至2026-11-13；首尾收盘价186.86与160.735一致，区间跌幅约-13.98%正确。第二轮首19个均线值为空，第20个观测起显示，首个有效日期2025-12-11，符合20日完整窗口。",
+            "limitations=1：正文和产物均明确说明缺少更早行情用于预热，前19个交易日无均线值；第一轮还说明数据未注明复权及股息处理方式，口径与局限充分。",
+            "presentation=1：正文简洁，图表标题、图例和单位清楚，第二轮对均线定义及起始日期的说明直接且结构合适。",
+            "no_internal_identifiers=0：可见正文写出了“[Sc92cd9e955]”“[S9a5a91299a]”等用户不需要的内部式来源标识。"
+          ]
+        },
+        {
+          "case_id": "statistics-04",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "已用计算方法基于252个日度收盘价计算累计高点、回撤并正确识别峰值489.88美元（2025-12-16）、谷值298.32美元（2026-07-29）及-39.10%，没有用单日跌幅替代最大回撤。",
+            "图表产物存在，阴影区间与正文日期和数值口径一致，数据和方法可核对；但题目要求的chart和table中实际没有交付表格，两个产物的spec.table均为null。",
+            "must明确要求恢复状态，正文只说部分结论无法确认，未报告谷底后是否恢复、恢复到何时或截至窗口末的恢复状态，因此未能完整回答。",
+            "正文说明了收盘价口径、统计窗口（2025-11-13至2026-11-13、252个观测值）及不代表盘中最大跌幅，局限说明充分。",
+            "正文未泄漏用户不需要的内部标识；结构简洁，且图表标题、标签和阴影区间与计算结果一致。"
+          ]
+        },
+        {
+          "case_id": "statistics-05",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "核心数值交付且与资料一致：上涨148天、下跌103天、持平0天，并给出251个可比较交易日、区间和首日基准处理。",
+            "未满足must中的全部要求：没有说明缺失观测如何处理，也未明确样本中是否存在缺失观测；因此只能判为部分回答。",
+            "数字与相邻收盘统计一致，未将样本行数误作涨跌天数，也未跨缺失观测补算。",
+            "说明了复权及股息口径未提供，整体篇幅和结构合适；正文中的来源引用属于正常引用，不构成不必要的内部标识泄漏。"
+          ]
+        },
+        {
+          "case_id": "comparison-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "回答概括了两只股票年初以来表现并交付了对比折线图，使用共同的2025-12-31基准和同一组观测日期；所以核心比较已完成。",
+            "正文给出的起止价格及累计涨幅与记录和图表末点吻合：AAPL 271.86至357.88美元、+31.64%；MSFT 483.62至524.28美元、+8.41%。但正文没有明确说明图线以收盘价为口径，产物的price_basis也标为unknown，故未满足“注明价格口径”的全部要求，answered不能给满分。",
+            "明确标注了行情日期，并说明末端行情为盘中而非确认收盘价，以及未明确复权/股息处理；这些是有用的时点与回报口径限制说明。",
+            "正文引用包含对用户无意义的内部来源标识[S…]，因此no_internal_identifiers扣分。",
+            "结构清楚、简洁，图表实际包含220个共同日期点且标题、系列名清晰；图表数据经核验与原始行情一致。"
+          ]
+        },
+        {
+          "case_id": "comparison-02",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已提供经营现金流、资本开支及统一按经营现金流减固定资产购置计算的现金流比较，并给出SEC来源和亿美元单位；但直接比较截至2026-09-26的苹果财季与截至2026-09-30的微软财季并排名，未严格交付must要求的相同财期比较，触及must_not，因此answered为1。",
+            "表内经营现金流、资本开支、净利润与录制资料一致；281.01−22.42＝258.59、580.00−393.67＝186.33亿美元，计算及单位换算正确，未补造资本开支。",
+            "明确说明计算口径与公司非GAAP自由现金流可能不同，披露季度截止日差异及单季收付款和投资时点局限，limitations为1；该提示不替代相同财期比较要求。",
+            "正文简洁，表格便于比较，来源链接清晰；可见内容没有不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "comparison-03",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "仅部分回答：确实用NVDA和AMD的财务证据支持了“NVDA利润能力更强、两者经营现金流低于净利润”的方向性结论，也分别给出两家SEC来源；但题目要求比较增长、利润或现金转化，正文没有实际列出任何营收、利润、利润率、现金流或增长率，无法让读者核验差异。",
+            "数字只能给部分分：正文完全没有具体数字；资料中可核验的最新季度数据显示，NVDA收入962.21亿美元、经营利润率约66.24%、经营现金流/净利润约40.34%，AMD收入133.77亿美元、经营利润率约21.17%、经营现金流/净利润约49.51%，这些关键数字均未交付。",
+            "口径限制说明充分：明确指出两家公司财季截止日不同、比较并非严格同步，并说明未比较估值；这不能替代题目要求的财务比较数字。",
+            "结构简洁、结论清楚、没有不必要的内部标识，也没有把未经核实的竞争观点写成事实。"
+          ]
+        },
+        {
+          "case_id": "comparison-04",
+          "score": 6,
+          "categories": [
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "完整回答了 TSLA 与 INTC 最近一年波动率和最大回撤的比较，并给出区间涨跌幅、波动率、最大回撤及峰谷日期。",
+            "满足 must：采用共同观测区间和一致的日线方法，明确说明 2025-11-13 至 2026-11-13、252 个共同观测日、日收益率标准差乘以 √252 的年化方式，以及基于价格路径的回撤计算。",
+            "满足样本与口径限制说明：指出不代表盘中高低点回撤、股息/复权处理不明确、末日可能早于收盘；未将方向预测当作已实现回撤，也未混用日线和周线。",
+            "数值与已核验资料一致，且折线图 artifact 实际覆盖两个系列各 252 个点，非空壳。",
+            "正文结构清晰，表格和方法说明适合该比较任务。",
+            "正文可见地包含 [Sde99dd256a]、[Sedfc52edcc] 等内部 source_id 标识，属于用户不需要的内部标识，因此 no_internal_identifiers 扣分。"
+          ]
+        },
+        {
+          "case_id": "comparison-05",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "回答了“不能直接排名、应先统一口径”的核心方向，但未完成第一项must要求的具体解释：未说明腾讯自然年度与苹果9月末财年的区别，未说明IFRS与US GAAP及非IFRS调整指标的区别，也未明确人民币与美元各对应哪家公司，因此answered仅给1分。第二项must的同口径限制基本遵守，没有强行进行跨币种金额排名。",
+            "本题是可比性概念题，并未强制要求具体财务金额；答案关于需统一期间、币种和自由现金流资本支出范围的原则正确，未编造数值或直接比较人民币与美元原始金额，numbers给2分。",
+            "虽然说明无法可靠判断现金流强弱，但口径局限解释不足；且笼统称腾讯已披露财报及财期尚未核实，没有反映录制资料已取得2025年报以及截至2026年6月30日业绩公告的事实，也未解释双方自由现金流定义的实际差别，limitations给0分。",
+            "正文存在两个无内容的标题，并引用未曾展示的“这两组数字”和“上述苹果季度数据”；末尾重复资料不足声明，结构明显残缺，presentation给0分。",
+            "正文仅使用用户所需股票代码和公司名称，没有泄漏内部工具、数据集或传输标识，no_internal_identifiers给1分。"
+          ]
+        },
+        {
+          "case_id": "multiturn-01",
+          "score": 5,
+          "categories": [
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "三条 must 均满足：各轮主体依次为 INTC、NVDA、AAPL，短句追问正确承接最近明确主体；末轮只取得并回答 AAPL 报价，没有继续查询或比较 INTC、NVDA，各轮来源未交叉污染。",
+            "已核实的 INTC 季度财务表、NVDA 财务数据及指引、AAPL 现金流及关税退款影响均与原始资料一致；末轮 354.88 美元、下跌 0.75 美元（0.21%）、2026年11月12日正常时段收盘的数值与口径准确。",
+            "充分说明未核实一致预期及财报后股价反应；末轮明确报价不是实时行情，并说明复权和股息口径未知，没有将历史快照冒充实时价格。",
+            "末轮正文两次直接显示内部来源标识 [S32b8995ffb]，属于用户不需要的内部标识，因此 no_internal_identifiers 扣分。",
+            "AAPL 财报答复设置“主要财务数据”栏目并说明比较期间和单位，却没有提供该栏目对应的营收、利润或每股收益数据表，且没有交付附件补足；末尾另有笼统重复的局限声明，结构存在明显空缺，因此 presentation 扣分。"
+          ]
+        },
+        {
+          "case_id": "multiturn-04",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "回答沿用了AAPL与MSFT及原先的公司整体单季比较口径，财期仍分别为截至2026年9月26日的苹果2026财年第四季度、截至9月30日的微软2027财年第一季度；但补充回答只给营收、毛利润和公式，没有交付用户要求的两家公司毛利率及比较，因此answered仅为1。",
+            "已列现金流、营收和毛利润的数值及亿美元换算与录制资料一致；但必需的毛利率数字缺失。现有数据可算得苹果约47.89%、微软约67.79%，差约19.91个百分点，答案未提供，故numbers为1。",
+            "说明了季度结束日期接近但财年编号不同，解释了简化自由现金流口径及局限，并明确披露计算未完成；限制说明充分，但不能代替毛利率比较交付。",
+            "第二轮正文实际显示了[S72186261a8]和[S0bcbfa59bc]两个内部来源标识，而非用户可直接使用的来源链接，因此no_internal_identifiers为0。",
+            "两轮正文篇幅适当，表格结构清楚，金额单位明确，未将毛利率与现金流单位混用，presentation为1。"
+          ]
+        },
+        {
+          "case_id": "multiturn-05",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "后续轮围绕原CNBC、NPR引用及同一事件开展核实，未另开无关研究，也未编造原文；但未完成原文与此前归因的对照。recordings[8].result.results[6]和[8]已返回同一NPR链接的导语、发布时间和实质访谈文字，明确报道黄仁勋离任及Kress接任；答复遗漏这些证据，笼统称无法确认两篇报道内容，因此answered仅1分。",
+            "虽然说明直接抓取失败、公告未核实及因果关系不确定，并撤回此前重点归因，但未区分“直接URL抓取失败”和“搜索已返回该原文内容”，对实际证据覆盖的局限说明不准确，limitations为0。",
+            "首轮正文直接显示[S864bbc0c89]、[S6b780aea68]等用户不需要的内部来源编号，故no_internal_identifiers为0；不是因产物传输元数据扣分。",
+            "首轮166.19美元、跌4.34%、161.15美元及相邻观测跌3.03%均与录制一致；已交付折线图24个日期及价格与历史数据相符，单位为美元，正文说明末点可能盘中及复权股息口径未知。后续核实不要求新增数字，未编造数值，numbers为2。",
+            "正文结构清楚、篇幅适当；首轮确有实际价格图表，后续答复简洁，无须另交产物，presentation为1。"
+          ]
+        },
+        {
+          "case_id": "multiturn-06",
+          "score": 4,
+          "categories": [
+            "no_effective_answer",
+            "numerical_requirements_incomplete",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "未完成题目要求：两轮都没有交付实际的 chart 产物，第二轮也没有可复用的原图或有效数据，因此未生成对数图，且无法证明仅改变轴尺度并保持数据区间一致。",
+            "资料明确显示唯一的 MSFT 1 年、日频请求返回空的 data/kline_data，并标记 market_data_unavailable；答案如实说明了数据不可用，没有编造价格或声称已完成，因此局限说明充分。",
+            "没有给出错误的具体行情数值；但题目要求图表及其数据，实际没有可核对的数值交付，因此 numbers 只能给部分分。",
+            "答案简洁、结构清楚，且未泄漏不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "concepts-03",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已正确解释最大回撤的高点至后续低点路径损失与波动率的收益率离散程度区别，但仅说两者不能互相替代，未交付must要求的“二者不能替代方向或收益预测”，因此answered为1。",
+            "虽说明统一观察区间、收益频率及年化方法，但未明确两项历史风险指标不能预测未来方向或收益，关键局限说明不充分，limitations为0。",
+            "示例中从120跌至90的回撤为(120-90)/120=25%，数字正确；概念解释准确且未编造行情数据，numbers为2。",
+            "未调用数据工具，也未把高波动等同必然下跌；正文无不必要的内部标识，篇幅简洁、结构清楚。"
+          ]
+        },
+        {
+          "case_id": "failures-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "已满足两项 must：主报价工具超时后实际进行了替代搜索并读取 MarketBeat 页面，保留真实部分证据及可访问来源；未编造价格，也未把超时解释为股票不存在。但用户所问的“现在多少钱”仍未核实，正文也明确承认当前报价未确认，故完整交付不足，answered 给1分。",
+            "358.68 美元、美东10:35及2026年11月13日19:10 UTC快照时间均与录制资料一致；但未取得可确认的当前报价这一必需数字，按规则 numbers 最多1分。",
+            "充分区分网页快照采集时间与报价时间，明确报价日期不确定，未将参考价格冒充实时价或当日收盘价，局限说明充分。",
+            "正文提供来源链接，篇幅与结构总体合适；末尾两段局限说明略有重复，但不影响理解。可见内容没有不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "failures-02",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "回答提供了英伟达管理层交接新闻及财报日程，并换用搜索和媒体原文取得对应主体资料；但初始新闻来源返回空结果后，正文未明确说明“本次该来源没有匹配资料”，未完成第一条must，因此answered仅给1分。",
+            "所述11月12日报道、11月17日公布第三季度业绩，与已核验报道一致；管理层变动等内容也有原文支持，题目不要求报价、财务数字或图表。",
+            "正文说明资料主要来自单一媒体、尚未核验公司原始公告且未取得更新实时新闻流，来源与时效局限交代充分；没有把空结果推断成近期没有事件，也没有用别家公司新闻替代。",
+            "篇幅适中、结构清晰且提供原文链接；可见正文无不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "failures-03",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "部分回答：给出了用户所问的营收和自由现金流，但没有完全遵守“核心财务源不可用时不可取得数字不作发布依据”的要求；应把数字明确限定为冻结资料中的第三方可核实值，而不是直接作为最新财务结论发布。",
+            "局限说明充分：明确说明无法取得微软原始财报、自由现金流为第三方统计且未表述为微软直接披露的非 GAAP 指标；但末尾又称财期和相关数字尚未核实，造成自相矛盾。",
+            "数字部分一致但口径不够严谨：923 亿美元、186 亿美元、经营现金流 580 亿美元减资本支出 394 亿美元及同比变化与资料一致；然而资料还显示可核实的是第三方/抓取内容，不能据此充当已核验的核心财务源，因此不能给满分。",
+            "表达简洁、结构清楚，直接回答了营收和自由现金流，并补充了来源与限制。",
+            "正文没有泄漏用户不需要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "failures-04",
+          "score": 3,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "回答提供了回撤公式、峰谷日期与价格、恢复日期，并交付回撤图的结构，但未满足全部 must：资料明确设置计算超时，录制中只有历史行情获取，没有后续实际计算成功的记录；答案仍把具体回撤作为已算出的结果，不能给完整回答分。",
+            "历史行情的覆盖日期、4121个观测值及美元单位有资料支持；但精确的−73.63%、峰谷和恢复日期缺少成功计算的录制依据，产物中的派生代码及结果声明不能替代成功执行证据，因此数值仅给部分分。",
+            "虽说明了收盘价口径以及复权、股息处理不明确，但没有明确告知计算超时、计算尚未完成。末句泛称部分结论无法确认，未指出哪些结论不可靠，不能充分披露本题关键局限。",
+            "正文直接显示[S81f5f5e916]、[S8f391d0dce]等用户无法理解或直接使用的内部来源标识；此项扣分不涉及产物传输元数据。",
+            "正文篇幅适中，分项呈现峰值、谷值、公式和恢复日期；图表标题与回撤百分比图例清晰，篇幅与结构合适。"
+          ]
+        },
+        {
+          "case_id": "failures-05",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答给出了核心业务增长、AI投入增加和现金流承压的定性判断，也交代了所引用报道的2026年第二季度财期，但未交付关键财务数据，未完成最近财报的定量评价。录制资料已包含腾讯官方第二季度业绩发布稿及第三季度公告日历，不能以笼统的尚未核实代替这些可得信息，因此answered仅1分。",
+            "报道日期及财期与资料一致，未编造财务金额；但遗漏资料已有的收入人民币2048亿元、同比增长11%，非IFRS归母净利润人民币684亿元、同比增长9%，自由现金流负人民币138亿元等必要数字，numbers仅1分。概括笔记中的收入204.8亿元存在单位换算错误，本评分以原始资料RMB204.8 billion为准。",
+            "明确说明第三方来源、最新财期确认缺口、财务金额和自由现金流口径尚未核实，并限制定量与估值结论，可获局限说明分；没有因本地公告源为空断言公司未披露。",
+            "替代来源仍用于腾讯控股主体的业务分析，未将美元ADR报价或美股SEC数据套用到0700.HK财报，也未出现币种误用。",
+            "正文篇幅适中、分段清楚且附来源链接；末段虽重复核实缺口，尚不影响整体可读性。可见答复没有不必要的内部标识，且无交付产物需另行核验。"
+          ]
+        },
+        {
+          "case_id": "local_markets-01",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "部分回答了“最近财报怎么样”：正确识别腾讯控股的港股代码0700.HK，并以2026年第二季度为财期，给出了与业绩会资料一致的收入、毛利和非国际财务报告准则利润及同比数据。",
+            "未满足must中的“取得本地公告证据”：引用的是StockAnalysis业绩会记录，资料中实际取得的本地市场文件只有2004年年报和招股书，未能提供近期腾讯或港交所公告；因此不能判为完整回答。",
+            "numbers给满：表内约2050亿元、1180亿元、760亿元、680亿元及+11%、+13%、+9%、+9%与录音中的人民币2050亿元、1180亿元、760亿元、680亿元及对应同比一致；“现金流承受压力”虽未量化，但不影响已列数字的准确性。",
+            "limitations给满：明确说明无法确认是否有比第二季度更新的财报，并承认尚未核实已披露财报及财期，避免把资料缺失说成不存在。",
+            "没有把0700.HK当成美股代码，也没有使用SEC CompanyFacts替代本地证据；正文无不必要的内部标识。",
+            "表格和分段结构清楚、篇幅合适。"
+          ]
+        },
+        {
+          "case_id": "local_markets-02",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "仅部分回答：给出了截至2026年6月30日季度的定性营收与现金流方向，但没有交付题目所需的具体营收、经营现金流和自由现金流数值。",
+            "未满足“使用阿里巴巴港股主体与本地披露路径”：答复主要引用FT转载公告，并明确称9988.HK及本地财报尚未核实；没有实际使用或引用HKEX本地披露结果。",
+            "未满足口径说明：虽说明金额为人民币并给出季度日期，但未说明9988港股交易币种为港币、89988为人民币柜台，也未明确财年口径（截至2026年3月31日的FY2026及该季度属于FY2027 Q1）。因此limitations为0。",
+            "数字结论方向与资料一致（营收和经营现金流同比增长、自由现金流流出扩大、云基础设施支出是披露原因），且未把港币股价与人民币现金流混用，也未混入其他公司；但因缺少关键具体数字，numbers只能给1分。",
+            "答复未泄漏用户不需要的内部标识，篇幅和段落结构基本合适。"
+          ]
+        },
+        {
+          "case_id": "local_markets-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "只部分回答了“怎么看”：确认了平安银行这一A股主体，也没有把代码误认成指数，且提出了银行应关注收入、净息差、资产质量、拨备和资本等维度。",
+            "未满足“使用本地公告”：正文只引用媒体报道，且明确称尚未与公司三季报原文核对；资料中已有本地公告/三季报，不能把已取得的官方数据说成未核实。",
+            "未说明银行指标口径与普通工业企业的差异，例如净息差、不良率、拨备覆盖率、资本充足率与工业企业毛利率、应收账款/存货周转和经营现金流指标的不同含义；但没有套用工业企业现金流模板。",
+            "正文中的营业收入、净利润、非息收入和净息差等已列数值与资料一致，但遗漏了资料中可用的关键资产质量和资本数据（不良贷款率1.05%、拨备覆盖率214.75%、核心一级资本充足率9.61%等），因此数值仅部分一致/完整。",
+            "结构清晰、限制披露充分，且未泄漏用户不需要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "reports-01",
+          "score": 1,
+          "categories": [
+            "no_effective_answer",
+            "numerical_error",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "未交付用户要求的 AAPL 深度投资报告：正文只有“我会先核对……”的计划性表述，且 delivered_artifacts 为空，因此没有结构完整、来源可核查的报告产物。",
+            "未按要求将事实、估值假设和风险判断分开，也没有保留草稿并明确核心资料缺口；资料虽包含最新财期和部分财务数值，但原答复没有实际使用或呈现。",
+            "没有交付任何数值分析或估值计算，故不能因资料中存在数字而给予 numbers 分。",
+            "仅一句话不构成合适的报告结构，presentation=0。",
+            "可见答复未写出不必要的内部标识，no_internal_identifiers=1；同时未声称报告可发布，也未抄写用户控制语句，但这不弥补核心交付缺失。"
+          ]
+        },
+        {
+          "case_id": "reports-02",
+          "score": 1,
+          "categories": [
+            "no_effective_answer",
+            "numerical_error",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "answered=0：仅说明“会”核对财报、估值和风险，没有交付用户要求的NVDA深度研报，也没有正文或report产物；财务、竞争、估值和未来风险均未实际覆盖。",
+            "limitations=0：未说明资料边界、财期、估值口径或已知字段缺失，不能把计划性表述视为充分的局限披露。",
+            "numbers=0：答案没有提供任何财务、价格、估值或计算数字；题目要求研报，资料中虽有可用的NVDA数字，但答案未交付，不能得分。",
+            "presentation=0：单句计划而非研报结构，缺少标题、章节、引用和可核验内容，不符合所要求的报告呈现。",
+            "no_internal_identifiers=1：可见答案未泄漏不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "reports-03",
+          "score": 2,
+          "categories": [
+            "no_effective_answer",
+            "numerical_requirements_incomplete",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "answered=0：答复只有“我会先核对”“正在交叉核对”的进度说明，未生成财报与估值研究报告，且已交付产物为空；未交付港股公告支持的对应财期、币种、财务分析及事实与情景区分，不能视为完成任何报告要求。",
+            "numbers=1：没有编造财务或估值数字，但也未交付研究所必需的收入、利润、现金流、估值指标或计算，按缺少必需数字的规则不能给满分。",
+            "limitations=0：虽提示部分估值网页存在内部不一致，但未说明已确认的股价接口不可用、港股财报资料缺口及其对报告和估值结论的影响，也未明确可核实的财期与口径，限制说明不足。",
+            "presentation=0：两段进度更新不能作为用户要求的研究报告，缺少适用的报告结构与实质内容，亦无报告附件。",
+            "no_internal_identifiers=1：可见正文没有不必要的内部标识；没有误用美国申报数据或将未知财务口径断言为已知。"
+          ]
+        },
+        {
+          "case_id": "reports-04",
+          "score": 2,
+          "categories": [
+            "no_effective_answer",
+            "numerical_requirements_incomplete",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "回答仅有两段工作进度，未交付比较报告或任何产物；没有按统一财期与口径呈现两家公司的现金流和资本开支比较，也没有实现报告表格、正文与来源的对应绑定，两项must均未完成，answered为0。",
+            "正文未提供经营现金流、资本开支、自由现金流等任何具体数字或计算结果。资料中已有相关季度数据及计算摘要，但均未交付给用户；没有可核对的错误数值，也不能据此获得数值完整一致分，numbers为1。",
+            "虽提及财年截止日不一致以及微软资本开支口径待核对，但没有说明实际比较期间、截止日期、资本开支定义、自由现金流公式及差异影响，尚不构成充分的口径与局限说明，limitations为0。",
+            "以“我会核对”“正在核对”的进度文字作为最终交付，缺少报告结构、比较表格及分析结论，不适合用户要求的比较报告，presentation为0。",
+            "可见正文没有不必要的内部标识；来源传输元数据不作为泄漏，no_internal_identifiers为1。"
+          ]
+        },
+        {
+          "case_id": "actions-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已交付绑定 AAPL 的结构化 watchlist.add 操作，满足操作对象要求；但结构化状态为 completed，正文却要求用户前往确认界面确认，确认与执行状态相互矛盾，未满足全部 must，answered 只能给1分。",
+            "limitations 扣分：未解释已完成状态与待确认提示的矛盾，也未说明实际执行状态无法从录制资料核实。录制为空，不能据此断言发生了未经结构化授权的用户数据修改。",
+            "本题不要求报价或财务数字，回答未编造数值，numbers 给2分。",
+            "正文简短、结构适合操作请求；可见正文没有不必要的内部标识，操作中的 action_id、payload_hash 等属于传输元数据，不扣泄漏分。sources 为空，没有将提议回执当作金融研究来源。"
+          ]
+        },
+        {
+          "case_id": "actions-02",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "answered=1：明确尊重“先别操作”，但未完成 must 中“解释考虑事项”的要求；actions 为空且没有改动自选。",
+            "limitations=1：清楚说明不会进行任何修改，符合不操作边界；此场景无需行情数据或额外口径说明。",
+            "no_internal_identifiers=1：面向用户的答复没有不必要的内部标识。",
+            "numbers=2：这是不要求数字的操作边界说明，没有编造或遗漏必需数值。",
+            "presentation=1：答复简洁清晰，篇幅适合该请求。"
+          ]
+        }
+      ],
+      "problem_categories": {
+        "no_effective_answer": 8,
+        "numerical_requirements_incomplete": 21,
+        "unnecessary_visible_identifiers": 14,
+        "key_requirements_missing": 30,
+        "required_artifact_missing": 8,
+        "numerical_error": 4
+      },
+      "full_score_cases": 15,
+      "normal_terminal_cases": 54,
+      "terminal_errors": {
+        "run_token_budget_exhausted": 6
+      },
+      "budget_stops": {},
+      "elapsed_case_seconds": {
+        "p50": 111.1465,
+        "p95": 232.55024999999992,
+        "maximum": 297.468
+      },
+      "tokens_per_case": {
+        "p50": 55203.5,
+        "maximum": 211581
+      },
+      "original_subject_measurements_repeated": false
+    },
+    "current": {
+      "input_path": "E:\\FinSight\\.omx\\worktrees\\research-completeness\\tests\\agent_eval\\results\\m3_apikl_frozen_current_delivery_v5_20261114_artifact_contract_linux.json",
+      "input_sha256": "747493410bc828d636fcc02ab6c691db746c67e3cf5859c159bbcb7c73603461",
+      "raw_measurement_sha256": "b9c6cc5d5fb418d0dc03b7ab4dace92b83ddac7fe147b3227371840de4d14ac2",
+      "cases": 60,
+      "scores": {
+        "answered": 1.4666666666666666,
+        "numbers": 1.7333333333333334,
+        "limitations": 0.9,
+        "presentation": 0.9833333333333333,
+        "no_internal_identifiers": 0.9666666666666667,
+        "total": 6.05
+      },
+      "group_scores": {
+        "facts": {
+          "answered": 1.6666666666666667,
+          "numbers": 1.8333333333333333,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6.5
+        },
+        "valuation": {
+          "answered": 1.5,
+          "numbers": 1.5,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 0.8333333333333334,
+          "total": 5.833333333333333
+        },
+        "attribution": {
+          "answered": 1.1666666666666667,
+          "numbers": 1.5,
+          "limitations": 0.8333333333333334,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 5.5
+        },
+        "news": {
+          "answered": 1.4,
+          "numbers": 2,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 0.8,
+          "total": 6.2
+        },
+        "statistics": {
+          "answered": 1.5,
+          "numbers": 2,
+          "limitations": 0.6666666666666666,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6.166666666666667
+        },
+        "comparison": {
+          "answered": 1.6,
+          "numbers": 2,
+          "limitations": 0.8,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6.4
+        },
+        "multiturn": {
+          "answered": 1.5,
+          "numbers": 1.6666666666666667,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6.166666666666667
+        },
+        "concepts": {
+          "answered": 1.75,
+          "numbers": 2,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6.75
+        },
+        "failures": {
+          "answered": 1.4,
+          "numbers": 1.6,
+          "limitations": 0.8,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 5.8
+        },
+        "local_markets": {
+          "answered": 1.25,
+          "numbers": 1.5,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 5.75
+        },
+        "reports": {
+          "answered": 1.25,
+          "numbers": 1.25,
+          "limitations": 0.75,
+          "presentation": 0.75,
+          "no_internal_identifiers": 1,
+          "total": 5
+        },
+        "actions": {
+          "answered": 1.6666666666666667,
+          "numbers": 2,
+          "limitations": 1,
+          "presentation": 1,
+          "no_internal_identifiers": 1,
+          "total": 6.666666666666667
+        }
+      },
+      "problem_case_count": 30,
+      "problem_cases": [
+        {
+          "case_id": "facts-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答交付了未来季度EPS共识、四周修正方向和次数，以及单家机构预测下调，并标明时期与来源；但未提及已披露EPS，未完成must要求的已披露EPS、未来预期、预期修正三者区分，因此answered为1。",
+            "所列2026年第四季度0.24美元及上修2次、下修5次，2027年第一季度0.21美元及上修3次、下修1次，以及Zacks将2027年第二季度预测从0.05美元降至0.00美元，均与原始证据一致；另一来源0.39和0.46美元也准确。但缺少必需的已披露EPS数字（所引The Right Trader已提供2026年第三季度0.20美元），numbers最多为1。",
+            "充分说明专用接口此次未返回结果、不同来源共识存在明显差异、不能混算，并区分单家机构观点与市场一致预期；没有把预测当作已披露事实，也没有把数据获取失败说成没有修正，limitations为1。",
+            "正文简洁、结构清楚、引用可追溯，无要求但未交付的图表；可见内容没有不必要的内部标识，presentation与no_internal_identifiers均为1。"
+          ]
+        },
+        {
+          "case_id": "facts-05",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "题目要求同时分开解释交易价格与基金层面的估值指标。答复清楚解释了交易价格、NAV及溢折价，但把“基金估值”基本收窄为NAV，遗漏了资料中可支持的组合层面市盈率等用于衡量持仓估值的指标，因此只能判为部分完成。",
+            "688.17美元、2026年11月12日常规交易收盘价与回放数据的价格、日期、美元单位和交易时段一致，且没有把该价格当作市盈率，也没有用单一成分股代表全基金。",
+            "答复明确说明未取得同日期且口径可确认的NAV，因此没有虚构溢折价计算；这一局限说明充分。",
+            "正文未出现用户不需要的内部标识，结构和篇幅适合。"
+          ]
+        },
+        {
+          "case_id": "valuation-03",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "已明确区分EPS/PE假设、情景计算与事实报价，并说明不是股价预测；图中12个EPS×PE结果及正文“6×30=180美元/股”均与数据一致，166.19美元收盘价及日期口径也一致。",
+            "未完整满足must：题目expects同时要求chart和table，但实际只有一个图表，spec.table为null，因此缺少表格产物；同时录制的actions为空、图表method为空，资料中没有通过计算工具生成情景数据的记录，不能认定已满足“通过计算工具产生情景数据”。",
+            "局限说明充分：指出EPS不是已确认财年或一致预期，盈利预期/修正未获取，并说明报价延迟未知及估值口径和市场因素限制。",
+            "没有将情景假设当作预测事实，也未发现杜撰或错误数字；图表展示的乘积均可由给定EPS和PE正确复核。",
+            "可见正文和图表标题、图例均为用户可理解内容，没有不必要的内部标识，结构和篇幅适合。"
+          ]
+        },
+        {
+          "case_id": "valuation-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答完整解释了DCF与PE衡量对象、企业价值与股权价值、资本开支确认、增长、折现率和股权激励等差异，也明确说明未使用最新微软数据及不应据此判断高估低估。",
+            "但题目明确要求以当前工具证据支持对MSFT的公司判断；已有当前资料包含截至2026-09-30的MSFT季度经营现金流、资本开支、自由现金流和净利润数据，原答没有引用任何工具证据，也没有据此给出公司判断，因此只能算部分回答。",
+            "原答未提供数值，故没有混淆两个口径数字，也没有在资料缺失时编造现金流预测；不过因未交付所要求的公司数据支持，数字项不能给满分。",
+            "对资本开支、增长及折现率假设的限制交代充分，且覆盖股权激励稀释和EV/股权价值口径限制。",
+            "结构清楚、篇幅合适；未泄漏用户不需要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "valuation-06",
+          "score": 3,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_error",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "题目要求比较港股主体的估值与现金流质量，并满足相同估值口径、相同财期及币种差异和换算依据。回答没有完成最终比较或排序，也没有提供阿里巴巴对应的可核对估值和现金流数字，因此只能算部分回答。",
+            "回答确实说明了资料不足、口径和持续性限制，且提出了应统一财期、币种和资本开支口径，局限说明充分。",
+            "回答中没有交付可用于比较的完整具体数值；资料中已有腾讯估值和现金流线索，但回答将其概括为尚未取得，故数值一致性不能给分。",
+            "表格结构清楚、篇幅合适。",
+            "正文使用了用户不需要的内部来源编号[19][21][32][33][39]，属于不必要的内部标识泄漏。"
+          ]
+        },
+        {
+          "case_id": "attribution-02",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答给出了有报道支持的评级上调、业绩支撑，并将折叠屏及AI换机周期标明为尚未兑现的预期，满足催化与推断区分要求。但未确认‘最近上涨’的具体区间与时点，约2%的上涨也没有标注发生日期，故answered仅为部分完成。原始报道已有11月11日相对前收348.51美元涨至355.63美元约2%、以及11月13日10:05美东时间358.58美元上涨1.04%的信息，可用于明确锚定上涨事件。",
+            "所列11月12日常规收盘354.88美元及报道约涨2%与资料一致，但没有交付必需的、与日期和区间对应的上涨数字；单个下跌日收盘不能替代上涨区间确认，numbers给1分。",
+            "如实说明历史行情及同期大盘对比未取得、不能量化各因素贡献，并提示未来预期与实际收入有别，口径与局限说明充分。",
+            "正文篇幅适当、分点清晰，引用正常；没有在可见正文泄漏不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "attribution-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答了财报后预期分歧可能放大波动，并区分财报事实、市场预期与解释性判断；但未提供具体价格变化及其与财报、指引新闻的时间对应，未完整交付第一项must，因此answered为1。",
+            "财报日期2026年10月21日、第三季度营业利润7.18亿美元和净利润7.87亿美元均与资料一致，营业利润环比增加、净利润环比减少的方向也正确；但缺少归因所需的价格变化数值，numbers最多为1。",
+            "明确披露历史行情及权威媒体检索失败、无法核实各交易日波幅和相对大盘影响，并说明第三方超预期结论冲突及新闻不足以证明因果，局限说明充分。",
+            "没有仅返回当前报价，也没有把第三方Cybertruck消息冒充公司已披露指引；正文中的数字引用属于来源引用，不是不必要的内部标识。",
+            "正文四段结构清晰、篇幅适当，事实、后续消息和数据限制分开表达。"
+          ]
+        },
+        {
+          "case_id": "attribution-05",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已核对11月13日新闻早盘58.17美元与日线58.75美元，并明确两者均相对11月12日前收61.20美元、差异来自取价时点，完成主要比较；但未明确解释每日与多日累计收益口径，以及盘前盘后与常规交易时段的差异，未全部交付must，answered扣1分。",
+            "新闻近5%的表述与原文一致；(58.17/61.20-1)约为-4.95%，日线收益约为-4.00%，数值与原始证据一致，没有将周跌幅当日跌幅。",
+            "明确说明11月13日日线价格尚不能确认为最终收盘、完整交易日指标核验失败，保留了关键资料局限，且未补写未知交易所或延迟。",
+            "正文简短、比较结构清晰，引用适当；可见内容没有不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "attribution-06",
+          "score": 3,
+          "categories": [
+            "no_effective_answer",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答仅要求用户补充时间区间，没有比较同一时间区间内MSFT与NVDA的价格和相关新闻，也没有给出共同因素、公司特有因素及其对应来源，两项must均未交付。",
+            "未提供任何可核对的价格、跌幅或同期表现数字；虽然没有编造数值，但缺少必需的量化比较，numbers只能给1分。",
+            "指出时间范围不明确是合理的，但未说明资料中两只股票历史行情不可用、新闻时间及验证不足等实际证据局限，口径与局限说明不充分。",
+            "正文简短清晰，作为澄清问题的篇幅与结构合适；没有暴露内部标识，也没有把另一家公司的报道冒充当前公司的证据。"
+          ]
+        },
+        {
+          "case_id": "news-02",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已区分CEO辞任等已发生事件、财报及继任进展等预期催化和独立调查风险，并将业务连续性明确归为公司预期；但未完整交付新闻发布时间：调查声明实际发表于2026年11月10日，正文未注明，[14]目录来源的11月12日日期也不能替代该条声明日期，因此answered不能给2分。",
+            "已核实CEO更替公告发表于11月12日，财报为11月17日下午公布2027财年第三季度业绩；回答所述日期、财期和人物安排与公告一致。题目不要求行情或财务数字，不因未提供这些数字扣分。",
+            "如实披露新闻及事件日历部分查询失败、离线快照和非实时性质，并说明调查结果、业务连续性及出口政策信息的核实边界，没有把未查到说成不存在。",
+            "篇幅适中、风险与催化结构清楚；没有将报道观点当作确定事实，没有混入与NVDA无关的旁支新闻。",
+            "实际可见正文没有不必要的内部标识；来源传输元数据中的内部字段不作为泄漏扣分。"
+          ]
+        },
+        {
+          "case_id": "news-03",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "回答给出了成分股层面的英伟达领导层消息、基金层面的ETF资金流线索及相关性依据，但未完整交付宏观事件层面的区分与分析。资料中已有11月9日至11日通胀偏热、加息预期和美联储官员表态等线索，正文仅泛称不能排除宏观数据与利率影响，没有说明具体事件及其对QQQ的传导关系，因此answered扣1分。",
+            "所列行情数字与原始证据一致：2026年11月12日常规收盘价688.16998美元，四舍五入为688.17美元，日涨跌幅-0.320116%对应下跌约0.32%；未将ETF总体流入金额冒充QQQ单独流入。",
+            "充分说明二手报道未独立核实、ETF消息仅取得标题摘要、流入金额和期间未核对，并区分相关性与已证实归因；也未把11月13日记录误作完整收盘。英伟达早盘下跌的表述有Astoria报道依据，未将该消息认定为QQQ涨跌的确定主因。",
+            "正文篇幅适中、结构清晰，无用户不需要的内部标识；本题未要求图表，缺少产物不另扣分。"
+          ]
+        },
+        {
+          "case_id": "news-05",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "unnecessary_visible_identifiers"
+          ],
+          "reasons": [
+            "answered扣1：回答覆盖Azure、资本开支和总收入指引，并结合管理层关于第三方产能延迟的解释，也区分了公司表态、已披露数字和二手报道；但题目问“指引变化”，答案未取得旧版Azure指引，无法给出具体修订幅度，只能说明新指引及实际值，因此属于部分回答。",
+            "numbers给2：49%–50%的Azure固定汇率增长指引、上一季48%实际增长、452亿美元资本开支、下一季超过500亿美元、960亿至971亿美元收入指引，以及二手报道中的1750亿降至1700亿美元、减少50亿美元，均与给定资料一致；财年、日历年和汇率口径也有区分。",
+            "limitations给1：明确说明新季度指引不等于对同一季度旧指引的上调，现有资料不足以核对旧版指引；同时将全年资本开支下调标为仅有二手报道、未获微软原始公告或独立来源核实。",
+            "presentation给1：先给结论，再按Azure、资本开支、总收入和补充报道分段，篇幅适中，未堆砌英文摘要，也未用同行指引替代微软指引。",
+            "no_internal_identifiers给0：正文直接显示[9]、[10]、[11]、[14]、[15]、[16]等内部来源编号，属于用户不需要的可见内部标识。"
+          ]
+        },
+        {
+          "case_id": "statistics-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "已交付历史价格图及两段区间标注，正文列出日期、连续下跌周数和累计跌幅；但未交付要求的统计表（图表配置中 table 为 null），也没有区间编号及其与统计表的对应，因此未全部满足 must。",
+            "两段已核验数据按每周最后交易日收盘取值均连续下降六周：2008 年从 6.43556 降至 5.27556，累计下跌约 18.02%；2025 年从 74.66 降至 52.54333，累计下跌约 29.62%。图中标注日期与正文一致。区间内个别日线上涨不影响连续周收盘下跌的判断，不能据此认定混淆峰谷回撤。",
+            "虽说明周收盘口径、数据覆盖起止及复权和股息处理未知，但未说明未收盘周是否剔除、缺失交易日或缺失周如何处理；产物 method 为空、limitations 为空，也未补足这些要求，因此 limitations 扣分。",
+            "正文简洁、结构清楚，图表有标题、美元单位和对数刻度说明，篇幅与呈现合适。正文及实际图表标题、系列名称未出现不必要的内部标识；传输元数据不作为泄漏扣分依据。"
+          ]
+        },
+        {
+          "case_id": "statistics-04",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "已给出最大回撤、峰谷日期及价格、未恢复状态，并交付含252个实际数据点的回撤折线图；方法、统计区间和图中标注一致。但录制仅有历史行情查询，未见计算工具执行记录，产物中的计算代码不足以核实已执行，未完全满足必须使用计算工具的要求；此外预期交付chart与table，实际仅有chart，图表的table字段是数据引用而非独立表格，因此answered为1。",
+            "原始峰值为2025-12-16的489.88美元，谷值为2026-07-29的298.32001美元，对应回撤-39.10345186576304%，正文39.10%及图中-39.10%均正确；恢复状态与后续价格一致，没有用单日跌幅替代最大回撤，numbers为2。",
+            "说明了日收盘价口径、不反映盘中高低点以及复权和含息口径不明，局限说明充分。",
+            "正文简洁，图表标题、百分比单位和峰谷区间标注明确，结构与篇幅合适。可见正文和图表没有不必要的内部标识，传输元数据中的标识不扣分。"
+          ]
+        },
+        {
+          "case_id": "statistics-05",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已交付上涨148天、下跌103天、持平0天；与252条收盘观测剔除首行后得到的251次相邻比较一致，没有将样本行数直接当作涨跌天数，也未发现跨缺失值补算。",
+            "answered扣分依据：未完成“说明缺失观测和首行的处理”这一must。虽将统计起点列为2025年11月14日，但未明确解释2025年11月13日首行缺少前收盘而不计入，也未说明缺失收盘时如何剔除受影响比较、不跨缺失补算。",
+            "limitations扣分依据：只说明收盘比较、币种及不含分红，未说明上述首行与缺失观测口径；另采集时间为2026年11月13日17:51 UTC，尚不足以支持正文“截至当日收盘”的确定表述。",
+            "正文两段直接提供结果与统计口径，篇幅结构合适；无用户不需要的可见内部标识。"
+          ]
+        },
+        {
+          "case_id": "comparison-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已实际交付两股对比表，包含年化波动率、最大回撤、峰谷日期、期末回撤及区间收益；两股采用相同区间的日线与统一计算定义，未混用日周线，也未把预测当作已实现回撤。但must要求的样本限制说明未充分交付，因此answered为1。",
+            "表中收益及回撤数值与已核验的原始价格一致：TSLA峰489.88、谷298.32001，对应最大回撤约-39.10%；INTC峰140.94、谷52.25，对应约-62.93%；首末价格亦支持-2.77%及63.91%的收益。没有发现具体数值与资料冲突；年化波动率未全量独立复算，不将其描述为已复算验证。",
+            "limitations扣分依据：原始采集时间为2026年11月13日17:50及17:57 UTC，尚在纽约常规交易时段，但答案将包含当日末行的整个样本称为日收盘价，未说明末日可能为未完成日线及其对收益、期末回撤和波动率的影响。虽说明复权及股息未知、历史不代表未来，仍不足以覆盖这一直接相关的样本限制；也未明确样本数量及具体年化系数。",
+            "正文结论、对比表与方法说明结构清晰，篇幅适当。可见内容没有不必要的内部标识；产物引用及传输元数据中的标识不作为泄漏扣分。"
+          ]
+        },
+        {
+          "case_id": "comparison-05",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "回答明确指出不能直接比较原始金额，解释了人民币与美元、IFRS与美国公认会计原则、业务结构及现金流定义的差别，也没有作缺乏同口径支持的具体业绩比较。",
+            "answered扣1分：must要求解释财年差异；答案仅笼统提出“对齐相近的报告期间”，没有说明腾讯以自然年为财年、苹果财年通常在9月末结束，同名财年及季度并不对应相同期间，因此未全部交付。",
+            "本题属于可比性概念问题，不强制要求当期财务数字；答案没有编造数字或直接比较人民币与美元金额，numbers给2分。",
+            "已明确说明未调取具体财报、未作当期数值判断，并提示利润调整、资本开支与自由现金流口径的局限，limitations给1分。",
+            "篇幅及分点结构适合问题，且可见内容未出现不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "multiturn-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "最终一轮确实针对 AAPL，给出了 2026 年 11 月 12 日常规收盘价 354.88 美元、变动 -0.75 美元和 -0.21%，并说明不是实时数据；但 AAPL 财报答复仍主动把 NVDA 作为比较对象，未完全遵守“历史公司不作为本轮必需比较对象”的要求，因此不能给完整回答分。",
+            "财务数字大多与已核实资料一致：INTC、NVDA 的核心营收、利润和现金流数字以及 AAPL 的营收、净利润、资本开支和自由现金流基本对应来源；但 AAPL 正文错误声称最新季度营收低于 2026 年 6 月季度，资料显示为 1144.77 亿美元对 1094.17 亿美元，且把经营现金流描述为与收入和利润同步增长，资料显示同比从 297.28 亿美元降至 281.01 亿美元；同时将季度流量混在年度报告口径下，故 numbers 只能部分得分。",
+            "答案提供了数据来源性质、财报公告原文未成功读取、媒体口径和价格非实时等限制说明，限制披露充分。",
+            "结构清晰，按公司和主题分段，篇幅适合；未见用户不需要的内部标识泄漏。"
+          ]
+        },
+        {
+          "case_id": "multiturn-06",
+          "score": 4,
+          "categories": [
+            "no_effective_answer",
+            "numerical_requirements_incomplete",
+            "required_artifact_missing"
+          ],
+          "reasons": [
+            "未交付任何图表产物，也未复用有效收盘价数据生成对数图；无法核验除轴尺度外主体与数据区间保持一致，两项 must 均未完成，故 answered=0。",
+            "历史行情返回错误且数据为空，备用指标查询存在资料缺口；答复明确说明未取得数据、无法绘图，未伪称已完成修改，局限说明充分。",
+            "未取得题目必需的最近一年逐日收盘价，numbers 只能给1分；没有编造价格或其他数值。",
+            "正文无不必要内部标识；篇幅和分段总体适当，虽然更正表述略有重复，但不影响理解。"
+          ]
+        },
+        {
+          "case_id": "concepts-03",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "已正确解释最大回撤是沿价格路径由高点至后续低点的最大损失，波动率是收益率的离散程度，并说明上涨和下跌均可提高波动率；但未明确指出两者不能替代方向或收益预测。末句仅提示未来风险不保证相同，未完整交付第二项 must，因此 answered 扣为1。",
+            "说明了观察区间、分红处理以及日度、月度和年化口径，并提示历史风险指标的预测局限，口径与局限说明充分。",
+            "本题为概念题，无必需数值；概念解释准确，未编造数字，numbers 为2。",
+            "正文先给核心区别，再给定义、例子与口径提示，篇幅和结构适合问题。未调用数据工具，未把高波动等同必然下跌，也未展示不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "failures-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "答案说明了主报价失败、历史行情不可用和离线限制，避免编造价格，也没有把超时说成股票不存在；因此未满足“完整回答”所需的替代核实交付，answered给1分。",
+            "答案建议改用券商或其他实时平台复核，属于说明缺口，但没有实际尝试或返回合适的替代来源；limitations给1分。",
+            "资料中成功取得的AAPL公司信息（来源为finnhub，但不含股价）未在答案中保留或引用；同时没有可供核对的股价数值，因此numbers只能给1分。",
+            "答案未泄漏用户不需要的内部标识，且篇幅和结构清楚合适。"
+          ]
+        },
+        {
+          "case_id": "failures-02",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "未满足全部必需项，因此answered给1：虽然成功换到对应NVDA新闻来源，但没有明确说明最初公司新闻接口返回空结果且本次无匹配资料，遗漏must第一项。",
+            "没有违反must_not：答案未把空结果推断成近期无事件，也未用别家公司新闻替代；新闻来自TipRanks和Yahoo Finance且对应NVDA。",
+            "numbers给2：报道的辞任消息和Colette Kress暂代CEO与引用来源一致；预计财报日期11月17日也与Yahoo Finance来源一致。",
+            "limitations给1：说明检索依赖离线冻结资料、并非实时，且官方公告与日历未能核验；但未交代最初新闻接口空结果这一具体限制。",
+            "presentation给1：简洁分点并说明核验状态，适合回答近期新闻查询。",
+            "no_internal_identifiers给1：正文没有泄漏不必要的内部标识；[7]和[2]作为来源引用编号可接受。"
+          ]
+        },
+        {
+          "case_id": "failures-04",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答给出了最大回撤定义、峰谷日期、价格及代入公式，属于部分回答；但唯一录制调用是成功获取历史行情，并无后续成功完成全序列最大回撤计算的记录，不能据此认定已满足“只在实际计算成功后给出具体回撤”的要求，answered不能给2分。",
+            "73.63%的代入算式与所列409.97及108.10在算术上相符，但读取的行情片段未核实答案指定日期的峰谷价格，也未验证全区间最小回撤及恢复日期，因此具体统计数字只能给部分分。概括笔记将“附近”观测认作指定日期不够严谨，不据此断言409.97错误。",
+            "答案充分区分了收盘价回撤、盘中跌幅与总回报口径，但未说明全区间计算尚无成功验证，反而以已完成统计的方式报告精确结果，计算状态的局限披露不足。题设列有分析超时故障，但实际录制只有行情获取成功，不能将其误称为已观察到的超时记录。",
+            "正文篇幅适中，结论、计算方法与口径说明清晰；没有可见的不必要内部标识，且题目未要求图表或附件。"
+          ]
+        },
+        {
+          "case_id": "local_markets-01",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "回答准确识别了腾讯控股这一港股主体，并直接回答了“最近财报怎么样”：概括为收入增长、利润和现金流承压，同时覆盖收入、利润、分部增长、资本开支和自由现金流等关键指标。",
+            "题目要求取得本地公告证据，但两次本地市场公告调用均为资料缺口；回答如实说明未能取得港交所原始财报，并明确数据来自媒体报道，因此只能判为部分完成，不能给answered=2。",
+            "财期和币种口径清楚：明确为2026年第二季度、金额为人民币；列出的2048亿元收入、560亿元利润、11%/0.7%增长、528亿元资本开支、负138亿元自由现金流及分部增速均与已核验媒体原文一致，0700.HK也未被当作美股代码。",
+            "资料限制说明充分，指出媒体来源和未与公司原始财报逐项核对的局限；下一次业绩日期也注明为第三方日历预计并以公司公告为准。",
+            "结构清晰、篇幅适中，使用要点和结论组织信息；没有产物要求，也没有泄漏用户不需要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "local_markets-02",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "answered扣分：回答了阿里巴巴9988.HK的营收和自由现金流，但未全部交付must。实际引用为Business Wire及BABA的SEC披露转载，未交付香港本地披露路径；虽说明财务金额为人民币，却未说明9988以港币交易，也未说明财年口径。",
+            "numbers扣分：已给营收2689.53亿元、同比9%，自由现金流流出446.70亿元及各项增长率均与资料一致，但缺少经营活动现金流及现金流同比比较。已核实的公司公告载有经营现金流229.45亿元、同比增长11%，以及上年同期自由现金流流出188.15亿元；缺失必需财务数字，故最多1分。",
+            "limitations得分：明确限定为本次最近可核实季度，说明未能提取经营现金流及核对自由现金流定义，且未将自由现金流为负等同于经营现金流为负，也未把未查到更新说成不存在。",
+            "presentation得分：先给结论，再列季度数字与限制，篇幅和结构适当；题目未要求图表。",
+            "no_internal_identifiers得分：可见正文无不必要内部标识；未混入其他公司财报，也未将港币股价与人民币现金流混为同一单位。"
+          ]
+        },
+        {
+          "case_id": "local_markets-04",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答正确识别了000001.SZ为平安银行，并围绕净息差、资产质量、拨备、资本等银行核心指标给出阅读框架；也明确说明未核对最新财报，局限披露充分。",
+            "未满足“使用本地公告”：资料中已有平安银行2026年第三季度巨潮资讯公告，但答案没有引用或使用该公告。",
+            "未明确说明银行与普通工业企业的口径差异，例如银行资产负债表中的贷款、存款和利息净收入，以及银行经营现金流不宜按工业企业自由现金流模板解读，因此必需项未全部交付。",
+            "没有把代码误认成指数，也没有套用不适合银行的工业企业现金流模板。",
+            "净息差定义表述不准确：答案将其说成生息资产收益率与付息负债成本之差，更接近净利差；按银行财报口径，净息差通常应结合净利息收入与平均生息资产理解。因此概念数字/口径一致性只能部分认可。",
+            "结构清晰、篇幅适当，无不必要的内部标识。"
+          ]
+        },
+        {
+          "case_id": "reports-01",
+          "score": 5,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "正文覆盖财报、估值框架及风险，事实、定性估值情景与风险判断分开，且来源引用可对应苹果公告、SEC数据和行情来源；但delivered_artifacts为空，未交付must要求的报告产物或草稿产物，估值部分亦仅有定性框架，故answered为1。",
+            "已核验的季度收入1,144.77亿美元、净利润307.11亿美元、经营现金流281.01亿美元、自由现金流258.59亿美元及354.88美元收盘价等均与原始资料一致，财期及单位换算正确；但缺少估值所需的盈利预测等关键数字，也未交付可核验的定量估值计算，按缺少必需数字的规则numbers最多1分。",
+            "明确披露盈利预测、风险披露及资本配置资料的查询缺口，说明关税退款的一次性影响、单季现金流季节性及净债务口径限制，并将结论限定为阶段性研究；未把未取得资料表述为不存在，也未声称可发布，limitations为1。",
+            "正文未出现不必要的内部标识，也未抄入用户控制语句；正常来源引用编号不构成内部标识泄漏。",
+            "正文层次清楚，财务指标与风险使用表格呈现，篇幅与深度报告场景相称，presentation为1。"
+          ]
+        },
+        {
+          "case_id": "reports-02",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "报告始终以 NVDA 为主体，AMD 仅作竞争背景、TSMC 仅作供应链背景；没有三家公司等权比较，也没有借竞品数据支持 NVDA 数字，符合范围要求。",
+            "但深度研报仅部分完成：财务部分主要交付单季度收入，缺少利润、毛利率、现金流及增长分析；估值部分只有方法框架，没有实际估值数字或计算，且没有交付预期的 report 产物。风险与竞争的定性讨论不能替代这些内容，因此 answered 不能给满分。",
+            "正文的截至 2026 年 7 月 26 日季度收入 962 亿美元与证据一致，未发现竞品数字混用；但缺少研报所需的其他财务与估值数字，numbers 只能给 1 分。",
+            "虽然明确说明研究时点、币种及一致预期缺失，也避免编造目标价，但资料限制描述不充分准确：声称仅取得标题和链接、未取得同比及毛利率数值，而已读取的检索文本实际包含收入同比 106%、毛利率 75.0% 等数据；又称市值等输入尚未取得，而公司信息调用已返回市值与股数。将已取得但未利用的数据一并描述为缺失，不能获得 limitations 分。",
+            "正文有清楚的章节、表格和情景结构，篇幅适合研报阅读，presentation 给 1 分。可见的 [11]、[34] 等属于与来源列表对应的引用编号，不应仅凭编号形式认定泄漏内部标识；正文未显示不必要的内部句柄、哈希或数据集标识，no_internal_identifiers 给 1 分。"
+          ]
+        },
+        {
+          "case_id": "reports-03",
+          "score": 4,
+          "categories": [
+            "key_requirements_missing",
+            "numerical_requirements_incomplete"
+          ],
+          "reasons": [
+            "回答提供了腾讯业务逻辑、部分财务摘要与现金流讨论，但未交付要求的报告产物，也没有股价、估值倍数、估值计算或比较；未形成基于可核验港股公告的完整财报与估值研究，故answered仅为1。",
+            "收入2048亿元、利润560亿元、资本开支同比增加176%及自由现金流约负138亿元与所引资料摘要相符，且使用人民币；但缺少必需的估值数字与完整公告核验，numbers最多为1。此外，正文以[60]支持2026年第三季度公告索引，该来源实际标题和URL属于2025年第三季度，存在财期引用错误。",
+            "明确说明最新股价、完整报表及利润口径未取得，未把未知利润口径当成归母或非IFRS利润，也未强行计算市盈率；事实、条件情景和主要限制基本区分清楚，limitations为1。未见误用美国申报数据作为腾讯财报。",
+            "正文虽有标题和数据表，但在“资本开支可能持续压制”处直接截断，情景分析及整篇报告未完成，presentation为0。",
+            "可见正文未泄漏不必要的内部技术标识；数字式来源引用属于引用标记，不据此扣分，no_internal_identifiers为1。"
+          ]
+        },
+        {
+          "case_id": "actions-02",
+          "score": 6,
+          "categories": [
+            "key_requirements_missing"
+          ],
+          "reasons": [
+            "答复明确表示暂不把 NVDA 加入自选，也没有执行操作，满足尊重“先别操作”的要求。",
+            "未解释用户可以考虑的事项，未满足 must 中“能够解释考虑事项但不修改自选”，因此只能评为部分回答。",
+            "题目不要求报价或财务数字，答复没有编造数字，数值项一致。",
+            "没有需要披露的数据局限；简短回应没有误称查询或操作结果，口径充分。",
+            "答复简洁清楚、篇幅合适，且未泄漏不必要的内部标识。"
+          ]
+        }
+      ],
+      "problem_categories": {
+        "key_requirements_missing": 28,
+        "numerical_requirements_incomplete": 14,
+        "required_artifact_missing": 4,
+        "numerical_error": 1,
+        "unnecessary_visible_identifiers": 2,
+        "no_effective_answer": 2
+      },
+      "full_score_cases": 30,
+      "normal_terminal_cases": 60,
+      "terminal_errors": {},
+      "budget_stops": {
+        "deadline": 1
+      },
+      "elapsed_case_seconds": {
+        "p50": 114.101,
+        "p95": 317.69739999999985,
+        "maximum": 568.239
+      },
+      "tokens_per_case": {
+        "p50": 75659.0,
+        "maximum": 378844
+      },
+      "original_subject_measurements_repeated": false
+    }
+  },
+  "paired": {
+    "current_better": 31,
+    "tie": 24,
+    "baseline_better": 5
+  },
+  "mean_total_difference": 1.0166666666666666,
+  "budget_exhaustion_alone_is_answer_failure": false
+}

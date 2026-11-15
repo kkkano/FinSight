@@ -1,6 +1,6 @@
 # FinSight 生产发布 Runbook
 
-更新：2026-11-14。本文区分当前源码、发布候选和实际生产观测；本轮模型质量、48 项验收、发布及观察的完成状态只维护在首表，并链接对应证据。
+更新：2026-11-15。本文区分当前源码、发布候选和实际生产观测；本轮模型质量、48 项验收、发布及观察的完成状态只维护在首表，并链接对应证据。
 
 ## 本次恢复与发布状态（2026-11-14）
 
@@ -8,20 +8,21 @@
 
 | 范围 | 当前事实 |
 |---|---|
-| 当前源码 | 业务源码基线 `913da509`；评分工具 `d9ab11a4`，本表所在文档收口提交随后 push；实际生产仍在旧发布 |
-| 研究模型 | APIKL `https://apikl.ai/v1`、`gpt-6.1-terra`；原生 tools/SSE 与小 PNG 探针成功，凭据只在安全配置。**2026-11-14 16:10 UTC 起该密钥对 `gpt-6.1-terra` 与 `gpt-6.1-sol` 均返回 HTTP 429 `API_KEY_QUOTA_EXHAUSTED`**；同时 Vectide 返回周额度耗尽。用户随后选择全切 DeepSeek：xfmmda（`DeepSeek-V4.1-Flash`）频繁 HTTP 403 后整体超时，现返回 401 Invalid token；改用 chickener `https://chickener.top/v1`、`deepseek-v4.1-flash`（tools/SSE/图片探针成功）。**2026-11-14 约 20:00 UTC 起 chickener 账户余额耗尽（HTTP 403 预扣费额度失败）**。线上生产当前仍用旧发布自带的 `api.llm.pm` `deepseek-v4.1-flash-1017`，同日只读探针 HTTP 200，未受影响 |
-| 发布阻塞 | 新候选清单 `agentic-20261114-deepseek-chickener`（`model_provider=chickener`）已 prepare 并远端 `validate`，未切换。部署会把生产研究模型切到余额已耗尽的 chickener 密钥，`production_smoke` 必然失败并回滚；`quality_gate` 另要求 current 60/60 独立评分。充值或换密钥（需重新 `validate`）并补齐评分前不执行 deploy |
+| 当前源码 | 业务运行时与 `913da509` 一致（`backend/agent_runtime` 摘要 `8918fb94…` 与评测、发布一致）；评测多端点与发布显式回归确认随本文档提交 push |
+| 研究模型 | **生产 2026-11-14 起为 APIKL `https://apikl.ai/v1`、`gpt-6.1-terra`**（用户新提供的 GPT 密钥；原密钥 429 耗尽），部署后容器内探针 HTTP 200，图片输入开启，context 131072 / max_output 16384。DeepSeek 评估：xfmmda 403 后 401 失效、chickener 余额耗尽；APIKL DeepSeek 密钥（`deepseek-flash`/`deepseek-v4-pro`）可用，但新运行时在 DeepSeek 下预算耗尽时不收束答案（chickener 批次 current 21/60 无答复、baseline 3/60），用户据此选择 terra 上线。凭据只在私密配置与服务器安全环境 |
+| 发布阻塞 | 无。gpt-6.1-terra 新运行时已上线（当前为修复版 `agentic-20261115-terra-persistfix-e`，见“当前已部署”）。严格比较的 3 项子指标回归经用户逐项确认后以 `--accept-regression` 精确放行（多/少一项均拒绝），其余门槛（60/60、runtime 摘要、模型配置一致、生产冒烟、自动回滚）不变 |
+| 上线后修复 | 线上验收 A3（`0700.HK 最近财报怎么样`）发现研究终态保存失败：`fetch_url_content` 把港股公告 PDF 原始字节当 HTML 返回，含 NUL 的工具输出写入 PostgreSQL jsonb 被拒（`unsupported Unicode escape sequence`），整轮回答丢失。修复：入库前递归移除 NUL（`jsonb_text`，覆盖 research_runs/conversation_messages/conversation_threads）；PDF 用 pypdf 抽取正文，其他二进制返回空。改动不在 `backend/agent_runtime`，运行时摘要仍为评测所用 `8918fb94…`。真实 PostgreSQL 16 集成测试与真实腾讯业绩 PDF 抽取验证通过；修复后线上 A3 终态 `done/saved` |
 | 运行预算 | context 131072 / max_output 16384 / 本轮 token 160000；研究与 brief 300 秒、报告 600 秒，核查最多 90 秒，必要追加/修订最多 120 秒；M0 实测 101285 输入 tokens，不声明供应商最大窗口 |
-| M3 质量 | `20261114_artifact_contract_linux` 双方原始回放各 60/60 已完整采集并保留：当前 60 个正常终态、基线 54 个正常终态及 6 个预算错误终态；独立 Sol 正式评分 v5 因评分密钥额度耗尽中止于 current 37/60、baseline 47/60（其余为 429，未补评）。[部分配对汇总](../tests/agent_eval/results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json)：双方均已评的 37 题 current 均分 6.14 vs baseline 5.30（满分 7），current 更好 18 / 持平 14 / 更差 5（facts-05、valuation-04、attribution-02、attribution-06、comparison-04）；产物达标 current 56/60、baseline 52/60。部分结果方向明确但不满足 60 题门槛，质量门槛未正式判定。评分将实际正文及产物共同核验，并保留窗口内原始值；研究原件没有重抽。时间及合理预算波动单列统计，不自动记为回答失败。DeepSeek 批次 `20261114_chickener_deepseek` 用同一冻结资料与镜像双方各 60/60 采集完成；HTTP 520 的 3 题按“任一方故障取并集、双方同补”规则补跑后无供应商错误。[结构汇总](../tests/agent_eval/results/m3_chickener_collection_summary_20261114_chickener_deepseek.json)：正常终态 current 36 / baseline 41，其余为 token 预算终态（25 / 19）；产物达标 54 / 52；单题 tokens 中位 125865 / 74858。独立 Sol 评分仅完成 current 5、baseline 6 题即因 chickener 余额耗尽中止，DeepSeek 质量门槛未判定 |
+| M3 质量 | `20261114_artifact_contract_linux`（gpt-6.1-terra，同一冻结资料）双方 60/60 采集，独立 Sol v5 评分 60/60 完成（换 GPT 新密钥 `--resume` 续评，已有分数不重判）。[完整汇总](../tests/agent_eval/results/m3_quality_summary_v5_20261114_artifact_contract_linux.json)：current 均分 **6.05 vs baseline 5.03**（满分 7），满分题 30 / 15，正常终态 60 / 54，更好 31 / 持平 24 / 更差 5（facts-05、valuation-04、attribution-02、attribution-06、comparison-04）；reports 组 baseline 0/4 完成、current 4/4（5/4/4/7 vs 1/1/2/2）。严格比较回归 3 项：`statistics:limitations`（statistics-01 局限分 -1，总分 5>4）、`multiturn:model_failure_rate`（2 次供应商超时后重试成功）、`reports:model_failure_rate`（3 次结果不确定调用，题目均优于基线），[验收记录](../tests/agent_eval/results/m3_acceptance_v5_20261114_artifact_contract_linux.json)含用户确认依据。DeepSeek 批次见 [chickener 结构汇总](../tests/agent_eval/results/m3_chickener_collection_summary_20261114_chickener_deepseek.json)，未上线 |
 | M4 核查 | 旧源码/45 秒预算的 [Terra 24 条合成配对](../tests/agent_eval/results/m4_apikl_terra_review_20261113.json)已完成，[独立 Sol](../tests/agent_eval/results/m4_apikl_terra_adjudication_20261113.json)检出 12/12、误报 0/12、不可用 0/24；当前源码的 90 秒新批次仍待完成，旧非盲评结果不当作新源验收 |
 | 最新本地后端 | image `2e7f4536a7639f6c309cf042a6509d537226585558eb9892196633501c9d85e6`，source `3845bbf00f905b0a79ab1e38c870f501be2ad7d3574e809a59d26e8a4ef93fb4`；265 源文件、146 生产依赖、27 冻结文件与 184 退役排除核验通过 |
 | 最新本地前端 | image `b10d5da1…`，build `agentic-20261114t060323z-c8929a-882c2a91e5`；包含真实保存失败的 SSE 终态修复 |
 | 最新本地 compute | job `3cf08121…` / `agentic-dataframe-20261114`，支持 DataFrame records；dispatcher `e955027f…` 代码不变。真实 Docker 合成作业验证值、嵌套类型、非有限与大小拒绝及无残留 |
-| 发布清单 | 同一最终候选镜像已重新绑定 `agentic-20261114-terra-quality-acceptance`，canonical SHA-256 `c1fab4d88d62cd53293761d06c4a8ba2ecf60ab07bb2038d3a4f0a1917d90330`；2026-11-14 13:46 UTC 远端预验证成功，服务未切换。旧 `artifact-contract` 验证与回滚快照完整保留；重绑仅修复 D 盘部署观测路径 |
+| 发布清单 | 最终 `agentic-20261115-terra-persistfix-e`，canonical SHA-256 `239fdd7425a0d024e3c9e510cc7ab2f7458fda68b937b4179556d7027c4225b0`，base `agentic-20261114-terra-apikl-final`。上一版 `agentic-20261114-terra-apikl-final`（`1de88f87…`）复用 `terra-quality-acceptance` 镜像。DeepSeek 候选仅 validate 未切换 |
 | 自动验证 | [CI 43574089889](https://github.com/kkkano/FinSight/actions/runs/43574089889) 对应 `913da509`，全 8 阶段成功：后端 2341 passed / 45 skipped、前端单测 563 passed、E2E 119 直接通过 / 3 重试后通过；[安全收据](reports/2026-11-13_ci_e2e/ci-proof-913da509.json)。重试日志为 Playwright 连接错误，不写成 0 flaky。评分工具提交 `d9ab11a4` 的 [CI 43601915852](https://github.com/kkkano/FinSight/actions/runs/43601915852) 同样 8 阶段成功：后端 2372 passed / 45 skipped、前端单测 563 passed、E2E 119 直接通过 / 3 重试后通过；[安全收据](reports/2026-11-13_ci_e2e/ci-proof-d9ab11a4.json) |
-| 当前已部署 | backend `step5-api-20261111-a147e695613e`；frontend/watchdog `agent-20261110-2a5de207900b`；compute `python-20261107-a0b8e1d70e82`，新运行时尚未切换 |
+| 当前已部署 | **`agentic-20261115-terra-persistfix-e`（2026-11-15 部署，`deployed_healthy`）**，backend image `f5072148…`（source `b944bd91…`），frontend `b10d5da1`、compute job `3cf08121`、dispatcher `e955027f` 不变；立即回滚点为 `agentic-20261114-terra-apikl-final`（backend `2e7f4536`），更早为 `step5-api-20261111-a147e695613e`。`persistfix-c` 首次部署在服务检查阶段失败并已自动回滚（当时未记录原因，现 deploy 失败会写入服务器状态 `failure`），同一镜像的 `persistfix-e` 部署通过全部检查 |
 | 容量 | 2026-11-14 13:40 UTC 只读盘点约 5.82 GiB 可用、健康正常；后续预验证确认足够容量。该快照只表示当时状态，切换前仍需 fresh inventory |
-| 48 项验收 | B7/C1/C2/C6/C7/F3 为明确受控证据，C3 使用不支持工具的受控 ASGI fixture，不能冒充真实供应商能力失败；其余 41 项待正式部署后真实账号采集与逐项审阅。32 项采集器离线自检通过，当前新候选线上通过数为 0 |
+| 48 项验收 | B7/C1/C2/C6/C7/F3 为明确受控证据，C3 使用不支持工具的受控 ASGI fixture，不能冒充真实供应商能力失败；其余 41 项需真实账号采集与逐项审阅。2026-11-15 在 `persistfix-e` 上用普通 QA 账号完成核心 15 项（A1–A8、B1–B5、C4、C5）真实浏览器采集，证据在 `D:/FinSightArtifacts/research-completeness/acceptance_live/agentic-20261115-terra-persistfix-e/`：14 项机器检查通过、全部终态 `saved`；C5（运行中停止）页面正确显示“已停止，保留已生成内容”且取消接口返回成功，失败仅因采集器在停止后收不到被前端主动断开的流终态。C4 断线重连及 B3 第二轮、B4 第一轮出现 token 预算耗尽且无答复（与 DeepSeek 批次同源的预算收束缺陷）。采集器修复：QA 客户端显式 User-Agent（Cloudflare 1010 拒绝 Python-urllib）、浏览器屏蔽 Service Worker、识别前端实际 API 源 `api.finsight-ai.chat`。逐项独立审阅与其余 33 项尚未执行，故不声明 48 项通过 |
 | 登录与观察 | 2026-11-14 13:41 UTC 普通 GitHub 用户自动刷新、欢迎页返回 Today 及真实 profile 200 验证通过，未发研究请求。新发布保存/恢复及持续观察尚待执行；未满 24 小时不宣称观察完成 |
 
 ```mermaid

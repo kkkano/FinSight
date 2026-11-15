@@ -28,6 +28,8 @@
 
 同日改测 DeepSeek：`run_frozen_comparison.py --provider {apikl,xfmmda,chickener}` 选择被测端点，评分端点由 `run_paged_grading.py` 按声明的裁判模型与 base_url 精确匹配凭据（禁止跨端点借用）；`--parallel` 双方同时运行，`--merged` 让 grade 读取供应商故障补跑后的合并件（来源记录在 `retry_provenance`）。批次 `20261114_chickener_deepseek` 双方 60/60 已采集，独立评分因 chickener 余额耗尽中止于 current 5 / baseline 6，见[结构汇总](results/m3_chickener_collection_summary_20261114_chickener_deepseek.json)；充值后执行 `launch_measurement.py grade --provider chickener --generation 20261114_chickener_deepseek --merged --resume` 续评。
 
+**最终结论（2026-11-15）**：换 GPT 新密钥后 v5 以 `--resume` 补齐双方 60/60 独立评分（已有分数不重判），[完整汇总](results/m3_quality_summary_v5_20261114_artifact_contract_linux.json) current 6.05 vs baseline 5.03，更好 31 / 持平 24 / 更差 5。严格比较余 3 项子指标回归（`statistics:limitations`、`multiturn:model_failure_rate`、`reports:model_failure_rate`），所涉题目总分均不低于基线，经用户逐项确认后用发布脚本 `--accept-regression` 精确放行，见[验收记录](results/m3_acceptance_v5_20261114_artifact_contract_linux.json)。新增端点 `apiklds`（APIKL DeepSeek 被测，评分仍按 base_url 精确取 `apikl` 评分凭据）；其试跑在 pilot 预算收束检查失败（current valuation-03 预算耗尽无答复），与 chickener 批次 current 21/60 无答复一致，DeepSeek 未上线。
+
 ## 题集与评分
 
 `cases.json` 共 60 题：事实 6、估值 6、归因 6、新闻 5、统计/画图 6、比较 5、多轮 6、概念 4、故障 5、港/A 股 4、报告 4、写操作 3。每题保留原始 `turns`、自然语言 `must/must_not` 和结构化 `expects`。

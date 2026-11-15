@@ -19,6 +19,7 @@ from backend.services.conversation_store import (
     _locked_thread,
     _merge_messages,
     _write_thread,
+    jsonb_text,
 )
 from backend.services.database import create_core_engine, is_production_mode, resolve_core_postgres_dsn
 
@@ -180,7 +181,7 @@ class PostgresResearchRunStore:
             "INSERT INTO conversation_messages (user_id,session_id,message_id,run_id,role,payload) "
             "VALUES (:owner,:sid,:message_id,:run_id,:role,CAST(:payload AS jsonb)) " + on_conflict
         ), {"owner": owner, "sid": row["session_id"], "message_id": message["id"], "run_id": row["run_id"],
-            "role": message["role"], "payload": json.dumps(message, ensure_ascii=False, default=str)})
+            "role": message["role"], "payload": jsonb_text(message)})
         existing = conn.execute(text(
             "SELECT payload FROM conversation_messages WHERE user_id=:owner AND session_id=:sid AND message_id=:message_id"
         ), {"owner": owner, "sid": row["session_id"], "message_id": message["id"]}).scalar_one()
@@ -305,7 +306,7 @@ class PostgresResearchRunStore:
             "UPDATE research_runs SET status=:status,final_payload=CAST(:payload AS jsonb),"
             "completed_at=now(),updated_at=now() WHERE user_id=:owner AND run_id=:run_id AND status='running'"
         ), {"owner": owner, "run_id": row["run_id"], "status": status,
-            "payload": json.dumps(payload, ensure_ascii=False, default=str)})
+            "payload": jsonb_text(payload)})
         return payload
 
 

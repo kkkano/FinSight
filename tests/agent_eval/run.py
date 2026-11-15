@@ -87,7 +87,7 @@ def evaluation_model(base, provider: str):
         from backend.agent_runtime.config import ModelConfig
         return ModelConfig(STEP5_MODEL, STEPFUN_BASE, key, endpoint_name="stepfun-official",
                            context_window=1000000, max_output=4096, effort="low")
-    if provider in {"vectide", "apikl", "xfmmda", "chickener"}:
+    if provider in {"vectide", "apikl", "apiklds", "xfmmda", "chickener"}:
         prefix = "FINSIGHT_EVAL_" + provider.upper() + "_"
         fields = {name: os.getenv(prefix + name, "").strip()
                   for name in ("MODEL", "API_BASE", "API_KEY")}
@@ -634,7 +634,7 @@ async def main(args):
         return 0
     if args.limit:
         cases = cases[:args.limit]
-    base = evaluation_model(None if args.provider in {"stepfun", "moxuna", "vectide", "apikl", "xfmmda", "chickener"} else resolve_model(), args.provider)
+    base = evaluation_model(None if args.provider in {"stepfun", "moxuna", "vectide", "apikl", "apiklds", "xfmmda", "chickener"} else resolve_model(), args.provider)
     subject = ModelConfig(base.model, base.base_url, base.api_key, context_window=args.context_window or base.context_window,
                           max_output=args.max_output or base.max_output, effort=base.effort)
     if args.judge_protocol == "external":
@@ -747,7 +747,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime", choices=("current", "baseline"), default="current",
                         help="current 使用当前唯一运行时；baseline 使用不可修改的M1原运行时快照")
-    parser.add_argument("--provider", choices=("configured", "fallback", "stepfun", "moxuna", "vectide", "apikl", "xfmmda", "chickener"), default="configured",
+    parser.add_argument("--provider", choices=("configured", "fallback", "stepfun", "moxuna", "vectide", "apikl", "apiklds", "xfmmda", "chickener"), default="configured",
                         help="显式选择默认配置或独立评测端点；APIKL/Vectide/Xfmmda/Chickener/Moxuna均使用各自环境变量")
     parser.add_argument("--mode", choices=("record", "replay"), default="replay")
     parser.add_argument("--jobs", type=int, choices=(1, 2, 3, 4), default=1, help="独立评测进程数；默认串行")

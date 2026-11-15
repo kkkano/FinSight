@@ -170,3 +170,15 @@ def test_missing_rls_owner_cannot_read_messages_for_non_superuser(stores):
         assert conn.execute(text("SELECT count(*) FROM research_runs")).scalar_one() == 0
         conn.execute(text("SELECT set_config('app.current_user_id','bob',true)"))
         assert conn.execute(text("SELECT count(*) FROM conversation_messages")).scalar_one() == 0
+
+
+def test_terminal_with_nul_in_tool_output_is_saved_instead_of_failing(stores):
+    # 港股公告 PDF 二进制片段会把 NUL 带进工具输出；jsonb 拒收会让整轮回答丢失
+    runs, conversations, _engine = stores
+    begin(runs)
+    nul = chr(0)
+    done = runs.finish("run-1", {"type": "done", "response": "腾讯财报摘要", "publishable": True, "answer_status": "answered",
+                                 "sources": [{"snippet": "%PDF" + nul + "binary"}],
+                                 "blocks": [{"type": "text", "text": "正文" + nul}]}, user_id="alice")
+    assert done["persistence_status"] == "saved"
+    assert conversations.get("public:alice:thread", "alice")["messages"][1]["content"] == "腾讯财报摘要"

@@ -1,0 +1,5196 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "max_overrun_ratio": 0.25,
+    "expected_cases": 60,
+    "version": "resource-tolerance-v1"
+  },
+  "policy_basis": "用户允许合理预算波动；25%是明确记录的独立验收默认值，不增加实际预算或费用。",
+  "implementation_sha256": "6a6284e000c8a5bfaddc2c8a7b36f7255f412ec85e225774efd85e20a1e72940",
+  "inputs": {
+    "baseline": {
+      "path": "tests\\agent_eval\\results\\m3_apikl_frozen_baseline_delivery_v5_20261114_artifact_contract_linux.json",
+      "sha256": "30afafcb7c35970d035b8648c0669d6aedd3b30036d8a62fc09614b8bcc157c4",
+      "kind": "file_bytes"
+    },
+    "current": {
+      "path": "tests\\agent_eval\\results\\m3_apikl_frozen_current_delivery_v5_20261114_artifact_contract_linux.json",
+      "sha256": "747493410bc828d636fcc02ab6c691db746c67e3cf5859c159bbcb7c73603461",
+      "kind": "file_bytes"
+    }
+  },
+  "raw_strict_comparison": {
+    "passed": false,
+    "regressions": [
+      "statistics:limitations",
+      "multiturn:model_failure_rate",
+      "reports:model_failure_rate"
+    ],
+    "deltas": {
+      "facts": {
+        "answered": 0.16666666666666674,
+        "numbers": 0.16666666666666652,
+        "limitations": 0.33333333333333337,
+        "presentation": 0,
+        "no_internal_identifiers": 0.16666666666666663,
+        "total": 0.833333333333333,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 40.63499999999999
+      },
+      "valuation": {
+        "answered": 0.33333333333333326,
+        "numbers": 0.33333333333333326,
+        "limitations": 0.33333333333333337,
+        "presentation": 0.5,
+        "no_internal_identifiers": 0.16666666666666674,
+        "total": 1.666666666666666,
+        "completed_rate": 0.33333333333333337,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0.0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -29.060499999999976
+      },
+      "attribution": {
+        "answered": 0.0,
+        "numbers": 0.16666666666666674,
+        "limitations": 0.0,
+        "presentation": 0,
+        "no_internal_identifiers": 0.33333333333333337,
+        "total": 0.5,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 41.9905
+      },
+      "news": {
+        "answered": 0.0,
+        "numbers": 0.3999999999999999,
+        "limitations": 0.4,
+        "presentation": 0,
+        "no_internal_identifiers": 0.20000000000000007,
+        "total": 1.0,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 20.307999999999993
+      },
+      "statistics": {
+        "answered": 0.0,
+        "numbers": 0.16666666666666674,
+        "limitations": -0.16666666666666674,
+        "presentation": 0.16666666666666663,
+        "no_internal_identifiers": 0.16666666666666663,
+        "total": 0.3333333333333339,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0.0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -22.139499999999998
+      },
+      "comparison": {
+        "answered": 0.40000000000000013,
+        "numbers": 0.19999999999999996,
+        "limitations": 0.0,
+        "presentation": 0.19999999999999996,
+        "no_internal_identifiers": 0.4,
+        "total": 1.2000000000000002,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -4.915000000000006
+      },
+      "multiturn": {
+        "answered": 0.16666666666666674,
+        "numbers": 0.0,
+        "limitations": 0.16666666666666663,
+        "presentation": 0.16666666666666663,
+        "no_internal_identifiers": 0.5,
+        "total": 1.0,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0.0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.01904761904761905,
+        "median_seconds": 163.936
+      },
+      "concepts": {
+        "answered": 0.0,
+        "numbers": 0,
+        "limitations": 0.25,
+        "presentation": 0.25,
+        "no_internal_identifiers": 0,
+        "total": 0.5,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -10.668999999999997
+      },
+      "failures": {
+        "answered": 0.3999999999999999,
+        "numbers": 0.40000000000000013,
+        "limitations": 0.0,
+        "presentation": 0,
+        "no_internal_identifiers": 0.19999999999999996,
+        "total": 1.0,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 5.123999999999995
+      },
+      "local_markets": {
+        "answered": 0.0,
+        "numbers": 0.0,
+        "limitations": 0.25,
+        "presentation": 0,
+        "no_internal_identifiers": 0,
+        "total": 0.25,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -35.829499999999996
+      },
+      "reports": {
+        "answered": 1.25,
+        "numbers": 0.75,
+        "limitations": 0.75,
+        "presentation": 0.75,
+        "no_internal_identifiers": 0,
+        "total": 3.5,
+        "completed_rate": 1,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 1,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.01631701631701632,
+        "median_seconds": 45.58749999999998
+      },
+      "actions": {
+        "answered": 0.3333333333333335,
+        "numbers": 0,
+        "limitations": 0.33333333333333337,
+        "presentation": 0,
+        "no_internal_identifiers": 0,
+        "total": 0.666666666666667,
+        "completed_rate": 0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 2.276
+      }
+    },
+    "latency_policy": "report_only"
+  },
+  "passed": false,
+  "integrity_errors": [],
+  "adjusted_metrics": {
+    "baseline": {
+      "facts": {
+        "cases": 6,
+        "model_calls": 24,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "valuation": {
+        "cases": 6,
+        "model_calls": 43,
+        "raw_completed_cases": 4,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 4,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "attribution": {
+        "cases": 6,
+        "model_calls": 22,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "news": {
+        "cases": 5,
+        "model_calls": 24,
+        "raw_completed_cases": 5,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 5,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "statistics": {
+        "cases": 6,
+        "model_calls": 35,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "comparison": {
+        "cases": 5,
+        "model_calls": 30,
+        "raw_completed_cases": 5,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 5,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "multiturn": {
+        "cases": 6,
+        "model_calls": 57,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "concepts": {
+        "cases": 4,
+        "model_calls": 5,
+        "raw_completed_cases": 4,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 4,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "failures": {
+        "cases": 5,
+        "model_calls": 29,
+        "raw_completed_cases": 5,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 5,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "local_markets": {
+        "cases": 4,
+        "model_calls": 29,
+        "raw_completed_cases": 4,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 4,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "reports": {
+        "cases": 4,
+        "model_calls": 33,
+        "raw_completed_cases": 0,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 0,
+        "raw_failed_model_calls": 2,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 2
+      },
+      "actions": {
+        "cases": 3,
+        "model_calls": 5,
+        "raw_completed_cases": 3,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 3,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      }
+    },
+    "current": {
+      "facts": {
+        "cases": 6,
+        "model_calls": 32,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "valuation": {
+        "cases": 6,
+        "model_calls": 35,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "attribution": {
+        "cases": 6,
+        "model_calls": 32,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "news": {
+        "cases": 5,
+        "model_calls": 29,
+        "raw_completed_cases": 5,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 5,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "statistics": {
+        "cases": 6,
+        "model_calls": 43,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "comparison": {
+        "cases": 5,
+        "model_calls": 28,
+        "raw_completed_cases": 5,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 5,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "multiturn": {
+        "cases": 6,
+        "model_calls": 105,
+        "raw_completed_cases": 6,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 6,
+        "raw_failed_model_calls": 2,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 2
+      },
+      "concepts": {
+        "cases": 4,
+        "model_calls": 4,
+        "raw_completed_cases": 4,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 4,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "failures": {
+        "cases": 5,
+        "model_calls": 29,
+        "raw_completed_cases": 5,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 5,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "local_markets": {
+        "cases": 4,
+        "model_calls": 21,
+        "raw_completed_cases": 4,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 4,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      },
+      "reports": {
+        "cases": 4,
+        "model_calls": 39,
+        "raw_completed_cases": 4,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 4,
+        "raw_failed_model_calls": 3,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 3
+      },
+      "actions": {
+        "cases": 3,
+        "model_calls": 5,
+        "raw_completed_cases": 3,
+        "accepted_budget_terminal_cases": 0,
+        "accepted_delivery_cases": 3,
+        "raw_failed_model_calls": 0,
+        "ignored_budget_model_calls": 0,
+        "adjusted_failed_model_calls": 0
+      }
+    }
+  },
+  "case_audits": {
+    "baseline": [
+      {
+        "case_id": "facts-01",
+        "group": "facts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 50.0,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.16666666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            25615
+          ],
+          "per_turn_token_ratios": [
+            0.16009375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-02",
+        "group": "facts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 39.978,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.13326000000000002,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            18496
+          ],
+          "per_turn_token_ratios": [
+            0.1156
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-03",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 53.815,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.17938333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            32062
+          ],
+          "per_turn_token_ratios": [
+            0.2003875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-04",
+        "group": "facts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 169.824,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.56608,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            103917
+          ],
+          "per_turn_token_ratios": [
+            0.64948125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-05",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 87.064,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.2902133333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            33489
+          ],
+          "per_turn_token_ratios": [
+            0.20930625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-06",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 76.627,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.25542333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            40165
+          ],
+          "per_turn_token_ratios": [
+            0.25103125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-01",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 132.163,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.44054333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            72376
+          ],
+          "per_turn_token_ratios": [
+            0.45235
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-02",
+        "group": "valuation",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 172.882,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5762733333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            137099
+          ],
+          "per_turn_token_ratios": [
+            0.85686875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-03",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 140.03,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.46676666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            77218
+          ],
+          "per_turn_token_ratios": [
+            0.4826125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-04",
+        "group": "valuation",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 56.756,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.18918666666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            37518
+          ],
+          "per_turn_token_ratios": [
+            0.2344875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-05",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "run_token_budget_exhausted"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 165.265,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5508833333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            101988
+          ],
+          "per_turn_token_ratios": [
+            0.637425
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": false,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-06",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "run_token_budget_exhausted"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 231.181,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.7706033333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            127947
+          ],
+          "per_turn_token_ratios": [
+            0.79966875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": false,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-01",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 86.526,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.28842,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            59336
+          ],
+          "per_turn_token_ratios": [
+            0.37085
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-02",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 70.285,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.23428333333333332,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            54002
+          ],
+          "per_turn_token_ratios": [
+            0.3375125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-03",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 58.938,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.19646,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            21236
+          ],
+          "per_turn_token_ratios": [
+            0.132725
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-04",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 59.744,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.19914666666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            35273
+          ],
+          "per_turn_token_ratios": [
+            0.22045625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-05",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 145.764,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.48588000000000003,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            84103
+          ],
+          "per_turn_token_ratios": [
+            0.52564375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-06",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 45.55,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.15183333333333332,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            21755
+          ],
+          "per_turn_token_ratios": [
+            0.13596875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-01",
+        "group": "news",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 78.432,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.26144,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            48019
+          ],
+          "per_turn_token_ratios": [
+            0.30011875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-02",
+        "group": "news",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 84.058,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.28019333333333335,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            40140
+          ],
+          "per_turn_token_ratios": [
+            0.250875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-03",
+        "group": "news",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 60.824,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.20274666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            33616
+          ],
+          "per_turn_token_ratios": [
+            0.2101
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-04",
+        "group": "news",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 75.728,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.25242666666666663,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            83522
+          ],
+          "per_turn_token_ratios": [
+            0.5220125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-05",
+        "group": "news",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 178.596,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.59532,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            133427
+          ],
+          "per_turn_token_ratios": [
+            0.83391875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-01",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 155.161,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5172033333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            71417
+          ],
+          "per_turn_token_ratios": [
+            0.44635625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-02",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 157.386,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.26231,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            36485,
+            39622
+          ],
+          "per_turn_token_ratios": [
+            0.22803125,
+            0.2476375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-03",
+        "group": "statistics",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 51.068,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.17022666666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            26788
+          ],
+          "per_turn_token_ratios": [
+            0.167425
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-04",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 126.642,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.42213999999999996,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            56405
+          ],
+          "per_turn_token_ratios": [
+            0.35253125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-05",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 93.447,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.31149,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            37359
+          ],
+          "per_turn_token_ratios": [
+            0.23349375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-06",
+        "group": "statistics",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 148.361,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4945366666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            81600
+          ],
+          "per_turn_token_ratios": [
+            0.51
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-01",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 106.607,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.35535666666666665,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            51027
+          ],
+          "per_turn_token_ratios": [
+            0.31891875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-02",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 41.308,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.13769333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            33625
+          ],
+          "per_turn_token_ratios": [
+            0.21015625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-03",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 212.087,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.7069566666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            142810
+          ],
+          "per_turn_token_ratios": [
+            0.8925625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-04",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 115.686,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.38562,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            53500
+          ],
+          "per_turn_token_ratios": [
+            0.334375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-05",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 212.169,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.70723,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            102057
+          ],
+          "per_turn_token_ratios": [
+            0.63785625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-01",
+        "group": "multiturn",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          [],
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 280.794,
+          "turn_count": 4,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.23399499999999998,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            34332,
+            69200,
+            79252,
+            28797
+          ],
+          "per_turn_token_ratios": [
+            0.214575,
+            0.4325,
+            0.495325,
+            0.17998125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-02",
+        "group": "multiturn",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 120.467,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.20077833333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            36945,
+            41997
+          ],
+          "per_turn_token_ratios": [
+            0.23090625,
+            0.26248125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-03",
+        "group": "multiturn",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 297.468,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.49578000000000005,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            102338,
+            65146
+          ],
+          "per_turn_token_ratios": [
+            0.6396125,
+            0.4071625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-04",
+        "group": "multiturn",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 187.216,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.3120266666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            34429,
+            94631
+          ],
+          "per_turn_token_ratios": [
+            0.21518125,
+            0.59144375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-05",
+        "group": "multiturn",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 163.622,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.27270333333333335,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            56108,
+            36020
+          ],
+          "per_turn_token_ratios": [
+            0.350675,
+            0.225125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-06",
+        "group": "multiturn",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 54.443,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.09073833333333332,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            17455,
+            17668
+          ],
+          "per_turn_token_ratios": [
+            0.10909375,
+            0.110425
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-01",
+        "group": "concepts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 35.44,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.11813333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            8540
+          ],
+          "per_turn_token_ratios": [
+            0.053375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-02",
+        "group": "concepts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 12.723,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.04241,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            8632
+          ],
+          "per_turn_token_ratios": [
+            0.05395
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-03",
+        "group": "concepts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 51.386,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.17128666666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            8536
+          ],
+          "per_turn_token_ratios": [
+            0.05335
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-04",
+        "group": "concepts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 21.189,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.07063,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            16750
+          ],
+          "per_turn_token_ratios": [
+            0.1046875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-01",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 100.93,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.33643333333333336,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            50741
+          ],
+          "per_turn_token_ratios": [
+            0.31713125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-02",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 146.893,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4896433333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            69883
+          ],
+          "per_turn_token_ratios": [
+            0.43676875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-03",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 82.019,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.2733966666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            79651
+          ],
+          "per_turn_token_ratios": [
+            0.49781875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-04",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 133.393,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.44464333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            47521
+          ],
+          "per_turn_token_ratios": [
+            0.29700625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-05",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 127.041,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.42347,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            99492
+          ],
+          "per_turn_token_ratios": [
+            0.621825
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-01",
+        "group": "local_markets",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 191.164,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.6372133333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            94900
+          ],
+          "per_turn_token_ratios": [
+            0.593125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-02",
+        "group": "local_markets",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 140.332,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4677733333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            142495
+          ],
+          "per_turn_token_ratios": [
+            0.89059375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-03",
+        "group": "local_markets",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 171.603,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.57201,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            97834
+          ],
+          "per_turn_token_ratios": [
+            0.6114625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-04",
+        "group": "local_markets",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 134.869,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4495633333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            53982
+          ],
+          "per_turn_token_ratios": [
+            0.3373875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "reports-01",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "run_token_budget_exhausted"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 80.315,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.26771666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            58749
+          ],
+          "per_turn_token_ratios": [
+            0.36718125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": false,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "reports-02",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "run_token_budget_exhausted"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 126.196,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4206533333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            52651
+          ],
+          "per_turn_token_ratios": [
+            0.32906875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": false,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          6
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "reports-03",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "run_token_budget_exhausted"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 258.566,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.8618866666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            101524
+          ],
+          "per_turn_token_ratios": [
+            0.634525
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": false,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          9
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "reports-04",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "run_token_budget_exhausted"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 214.832,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.7161066666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            109233
+          ],
+          "per_turn_token_ratios": [
+            0.68270625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": false,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "actions-01",
+        "group": "actions",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 18.399,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.06133,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            16812
+          ],
+          "per_turn_token_ratios": [
+            0.105075
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "actions-02",
+        "group": "actions",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 41.292,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.13764,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            8309
+          ],
+          "per_turn_token_ratios": [
+            0.05193125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "actions-03",
+        "group": "actions",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 19.748,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.06582666666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            16705
+          ],
+          "per_turn_token_ratios": [
+            0.10440625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      }
+    ],
+    "current": [
+      {
+        "case_id": "facts-01",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 100.26,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.3342,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            31170
+          ],
+          "per_turn_token_ratios": [
+            0.1948125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-02",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 111.452,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.37150666666666665,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            62529
+          ],
+          "per_turn_token_ratios": [
+            0.39080625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-03",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 92.705,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.30901666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            79982
+          ],
+          "per_turn_token_ratios": [
+            0.4998875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-04",
+        "group": "facts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 174.142,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5804733333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            57052
+          ],
+          "per_turn_token_ratios": [
+            0.356575
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-05",
+        "group": "facts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 50.85,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.1695,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            47525
+          ],
+          "per_turn_token_ratios": [
+            0.29703125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "facts-06",
+        "group": "facts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 114.217,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.3807233333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            53175
+          ],
+          "per_turn_token_ratios": [
+            0.33234375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-01",
+        "group": "valuation",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 123.384,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.41128,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            122552
+          ],
+          "per_turn_token_ratios": [
+            0.76595
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-02",
+        "group": "valuation",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 187.101,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.62367,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            109573
+          ],
+          "per_turn_token_ratios": [
+            0.68483125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-03",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 103.48,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.34493333333333337,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            59480
+          ],
+          "per_turn_token_ratios": [
+            0.37175
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-04",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 30.822,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.10274,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9941
+          ],
+          "per_turn_token_ratios": [
+            0.06213125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-05",
+        "group": "valuation",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 123.79,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.41263333333333335,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            65503
+          ],
+          "per_turn_token_ratios": [
+            0.40939375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "valuation-06",
+        "group": "valuation",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 171.975,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5732499999999999,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            139114
+          ],
+          "per_turn_token_ratios": [
+            0.8694625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-01",
+        "group": "attribution",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 155.107,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5170233333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            120556
+          ],
+          "per_turn_token_ratios": [
+            0.753475
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-02",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 81.993,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.27331,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            63147
+          ],
+          "per_turn_token_ratios": [
+            0.39466875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-03",
+        "group": "attribution",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 107.118,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.35706,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            122339
+          ],
+          "per_turn_token_ratios": [
+            0.76461875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-04",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 165.94,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5531333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            84802
+          ],
+          "per_turn_token_ratios": [
+            0.5300125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-05",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 106.892,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.35630666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            78683
+          ],
+          "per_turn_token_ratios": [
+            0.49176875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "attribution-06",
+        "group": "attribution",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 42.171,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.14057,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9352
+          ],
+          "per_turn_token_ratios": [
+            0.05845
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-01",
+        "group": "news",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 98.74,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.32913333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            69162
+          ],
+          "per_turn_token_ratios": [
+            0.4322625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-02",
+        "group": "news",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 94.766,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.3158866666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            84795
+          ],
+          "per_turn_token_ratios": [
+            0.52996875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-03",
+        "group": "news",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 122.595,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.40865,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            66396
+          ],
+          "per_turn_token_ratios": [
+            0.414975
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-04",
+        "group": "news",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 90.714,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.30238,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            74986
+          ],
+          "per_turn_token_ratios": [
+            0.4686625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "news-05",
+        "group": "news",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 216.188,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.7206266666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            143066
+          ],
+          "per_turn_token_ratios": [
+            0.8941625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-01",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 97.015,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.32338333333333336,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            74093
+          ],
+          "per_turn_token_ratios": [
+            0.46308125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-02",
+        "group": "statistics",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 222.588,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.37098,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            79795,
+            125394
+          ],
+          "per_turn_token_ratios": [
+            0.49871875,
+            0.7837125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-03",
+        "group": "statistics",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 101.332,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.3377733333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            54286
+          ],
+          "per_turn_token_ratios": [
+            0.3392875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-04",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 104.306,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.34768666666666664,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            101253
+          ],
+          "per_turn_token_ratios": [
+            0.63283125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-05",
+        "group": "statistics",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 126.418,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.42139333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            60899
+          ],
+          "per_turn_token_ratios": [
+            0.38061875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "statistics-06",
+        "group": "statistics",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 197.037,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.65679,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            131281
+          ],
+          "per_turn_token_ratios": [
+            0.82050625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-01",
+        "group": "comparison",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 93.726,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.31242,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            129257
+          ],
+          "per_turn_token_ratios": [
+            0.80785625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-02",
+        "group": "comparison",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 181.041,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.60347,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            74031
+          ],
+          "per_turn_token_ratios": [
+            0.46269375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-03",
+        "group": "comparison",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 110.771,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.36923666666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            105099
+          ],
+          "per_turn_token_ratios": [
+            0.65686875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-04",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 158.131,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.5271033333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            107344
+          ],
+          "per_turn_token_ratios": [
+            0.6709
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "comparison-05",
+        "group": "comparison",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 27.076,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.09025333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9698
+          ],
+          "per_turn_token_ratios": [
+            0.0606125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-01",
+        "group": "multiturn",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          [],
+          [
+            "review_timeout"
+          ],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 568.239,
+          "turn_count": 4,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4735325,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            115063,
+            130173,
+            89692,
+            43916
+          ],
+          "per_turn_token_ratios": [
+            0.71914375,
+            0.81358125,
+            0.560575,
+            0.274475
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          22
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [
+          "model_timeout"
+        ],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "multiturn-02",
+        "group": "multiturn",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 275.534,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4592233333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            74655,
+            93538
+          ],
+          "per_turn_token_ratios": [
+            0.46659375,
+            0.5846125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-03",
+        "group": "multiturn",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 281.376,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.46896,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            136359,
+            89073
+          ],
+          "per_turn_token_ratios": [
+            0.85224375,
+            0.55670625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-04",
+        "group": "multiturn",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 363.419,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.6056983333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            108545,
+            69420
+          ],
+          "per_turn_token_ratios": [
+            0.67840625,
+            0.433875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "multiturn-05",
+        "group": "multiturn",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          [],
+          [
+            "review_timeout"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 315.291,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.525485,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            100842,
+            100554
+          ],
+          "per_turn_token_ratios": [
+            0.6302625,
+            0.6284625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          13
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [
+          "model_timeout"
+        ],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "multiturn-06",
+        "group": "multiturn",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [],
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 413.446,
+          "turn_count": 2,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.6890766666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            78886,
+            76401
+          ],
+          "per_turn_token_ratios": [
+            0.4930375,
+            0.47750625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-01",
+        "group": "concepts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 13.996,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.04665333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9493
+          ],
+          "per_turn_token_ratios": [
+            0.05933125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-02",
+        "group": "concepts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 21.295,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.07098333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9549
+          ],
+          "per_turn_token_ratios": [
+            0.05968125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-03",
+        "group": "concepts",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 9.571,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.03190333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9527
+          ],
+          "per_turn_token_ratios": [
+            0.05954375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "concepts-04",
+        "group": "concepts",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 21.468,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.07156,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9524
+          ],
+          "per_turn_token_ratios": [
+            0.059525
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-01",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 67.318,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.22439333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            42781
+          ],
+          "per_turn_token_ratios": [
+            0.26738125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-02",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 132.165,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.44055,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            70158
+          ],
+          "per_turn_token_ratios": [
+            0.4384875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-03",
+        "group": "failures",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 137.089,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.45696333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            89386
+          ],
+          "per_turn_token_ratios": [
+            0.5586625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-04",
+        "group": "failures",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 132.607,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.4420233333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            61553
+          ],
+          "per_turn_token_ratios": [
+            0.38470625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "failures-05",
+        "group": "failures",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 113.985,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.37995,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            76332
+          ],
+          "per_turn_token_ratios": [
+            0.477075
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-01",
+        "group": "local_markets",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 95.009,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.3166966666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            66496
+          ],
+          "per_turn_token_ratios": [
+            0.4156
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-02",
+        "group": "local_markets",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 186.921,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.62307,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            111973
+          ],
+          "per_turn_token_ratios": [
+            0.69983125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-03",
+        "group": "local_markets",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 145.267,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.48422333333333334,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            95562
+          ],
+          "per_turn_token_ratios": [
+            0.5972625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "local_markets-04",
+        "group": "local_markets",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 18.045,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.06015000000000001,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9711
+          ],
+          "per_turn_token_ratios": [
+            0.06069375
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "reports-01",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 206.997,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.68999,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            113259
+          ],
+          "per_turn_token_ratios": [
+            0.70786875
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          7
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "reports-02",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 245.133,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.81711,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            100800
+          ],
+          "per_turn_token_ratios": [
+            0.63
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "reports-03",
+        "group": "reports",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          [
+            "deadline"
+          ]
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 225.206,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.7506866666666666,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            125573
+          ],
+          "per_turn_token_ratios": [
+            0.78483125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          9
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "reports-04",
+        "group": "reports",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 187.033,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.6234433333333332,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            99217
+          ],
+          "per_turn_token_ratios": [
+            0.62010625
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [
+          7
+        ],
+        "requires_operational_review": true,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [
+          "budget_attribution_uncertain"
+        ],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 1
+      },
+      {
+        "case_id": "actions-01",
+        "group": "actions",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 14.945,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.04981666666666667,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            18668
+          ],
+          "per_turn_token_ratios": [
+            0.116675
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "actions-02",
+        "group": "actions",
+        "valid_delivery": false,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 22.024,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.07341333333333333,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            9272
+          ],
+          "per_turn_token_ratios": [
+            0.05795
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      },
+      {
+        "case_id": "actions-03",
+        "group": "actions",
+        "valid_delivery": true,
+        "budget_reasons_by_turn": [
+          []
+        ],
+        "resources": {
+          "measurement_complete": true,
+          "time_scope": "case_aggregate_only",
+          "elapsed_seconds": 30.258,
+          "turn_count": 1,
+          "per_turn_time_budget_seconds": 300.0,
+          "case_time_ratio": 0.10085999999999999,
+          "per_turn_token_budget": 160000,
+          "per_turn_tokens": [
+            18677
+          ],
+          "per_turn_token_ratios": [
+            0.11673125
+          ],
+          "within_tolerance": true
+        },
+        "raw_completed": true,
+        "accepted_budget_terminal": false,
+        "ignored_budget_outcome_indices": [],
+        "budget_attributions": [],
+        "operational_uncertain": [],
+        "requires_operational_review": false,
+        "uncertain_transport_error_codes": [],
+        "non_budget_transport_error_codes": [],
+        "resource_review_reasons": [],
+        "non_budget_failure_indices": [],
+        "model_outcomes_mapped_to_turns": true,
+        "raw_failed_model_calls": 0
+      }
+    ]
+  },
+  "ignored_resource_regressions": [],
+  "operational_uncertain": [
+    {
+      "runtime": "baseline",
+      "case_id": "reports-02",
+      "outcome_indices": [
+        6
+      ]
+    },
+    {
+      "runtime": "baseline",
+      "case_id": "reports-03",
+      "outcome_indices": [
+        9
+      ]
+    },
+    {
+      "runtime": "current",
+      "case_id": "multiturn-01",
+      "outcome_indices": [
+        22
+      ],
+      "transport_error_codes": [
+        "model_timeout"
+      ]
+    },
+    {
+      "runtime": "current",
+      "case_id": "multiturn-05",
+      "outcome_indices": [
+        13
+      ],
+      "transport_error_codes": [
+        "model_timeout"
+      ]
+    },
+    {
+      "runtime": "current",
+      "case_id": "reports-01",
+      "outcome_indices": [
+        7
+      ]
+    },
+    {
+      "runtime": "current",
+      "case_id": "reports-03",
+      "outcome_indices": [
+        9
+      ]
+    },
+    {
+      "runtime": "current",
+      "case_id": "reports-04",
+      "outcome_indices": [
+        7
+      ]
+    }
+  ],
+  "original_reports_modified": false,
+  "status": "rejected",
+  "acceptance_comparison": {
+    "passed": false,
+    "regressions": [
+      "statistics:limitations",
+      "multiturn:model_failure_rate",
+      "reports:model_failure_rate"
+    ],
+    "deltas": {
+      "facts": {
+        "answered": 0.16666666666666674,
+        "numbers": 0.16666666666666652,
+        "limitations": 0.33333333333333337,
+        "presentation": 0,
+        "no_internal_identifiers": 0.16666666666666663,
+        "total": 0.833333333333333,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 40.63499999999999
+      },
+      "valuation": {
+        "answered": 0.33333333333333326,
+        "numbers": 0.33333333333333326,
+        "limitations": 0.33333333333333337,
+        "presentation": 0.5,
+        "no_internal_identifiers": 0.16666666666666674,
+        "total": 1.666666666666666,
+        "completed_rate": 0.33333333333333337,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0.0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -29.060499999999976
+      },
+      "attribution": {
+        "answered": 0.0,
+        "numbers": 0.16666666666666674,
+        "limitations": 0.0,
+        "presentation": 0,
+        "no_internal_identifiers": 0.33333333333333337,
+        "total": 0.5,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 41.9905
+      },
+      "news": {
+        "answered": 0.0,
+        "numbers": 0.3999999999999999,
+        "limitations": 0.4,
+        "presentation": 0,
+        "no_internal_identifiers": 0.20000000000000007,
+        "total": 1.0,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 20.307999999999993
+      },
+      "statistics": {
+        "answered": 0.0,
+        "numbers": 0.16666666666666674,
+        "limitations": -0.16666666666666674,
+        "presentation": 0.16666666666666663,
+        "no_internal_identifiers": 0.16666666666666663,
+        "total": 0.3333333333333339,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0.0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -22.139499999999998
+      },
+      "comparison": {
+        "answered": 0.40000000000000013,
+        "numbers": 0.19999999999999996,
+        "limitations": 0.0,
+        "presentation": 0.19999999999999996,
+        "no_internal_identifiers": 0.4,
+        "total": 1.2000000000000002,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -4.915000000000006
+      },
+      "multiturn": {
+        "answered": 0.16666666666666674,
+        "numbers": 0.0,
+        "limitations": 0.16666666666666663,
+        "presentation": 0.16666666666666663,
+        "no_internal_identifiers": 0.5,
+        "total": 1.0,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0.0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.01904761904761905,
+        "median_seconds": 163.936
+      },
+      "concepts": {
+        "answered": 0.0,
+        "numbers": 0,
+        "limitations": 0.25,
+        "presentation": 0.25,
+        "no_internal_identifiers": 0,
+        "total": 0.5,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -10.668999999999997
+      },
+      "failures": {
+        "answered": 0.3999999999999999,
+        "numbers": 0.40000000000000013,
+        "limitations": 0.0,
+        "presentation": 0,
+        "no_internal_identifiers": 0.19999999999999996,
+        "total": 1.0,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 5.123999999999995
+      },
+      "local_markets": {
+        "answered": 0.0,
+        "numbers": 0.0,
+        "limitations": 0.25,
+        "presentation": 0,
+        "no_internal_identifiers": 0,
+        "total": 0.25,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": -35.829499999999996
+      },
+      "reports": {
+        "answered": 1.25,
+        "numbers": 0.75,
+        "limitations": 0.75,
+        "presentation": 0.75,
+        "no_internal_identifiers": 0,
+        "total": 3.5,
+        "completed_rate": 1.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 1,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.01631701631701632,
+        "median_seconds": 45.58749999999998
+      },
+      "actions": {
+        "answered": 0.3333333333333335,
+        "numbers": 0,
+        "limitations": 0.33333333333333337,
+        "presentation": 0,
+        "no_internal_identifiers": 0,
+        "total": 0.666666666666667,
+        "completed_rate": 0.0,
+        "references_valid_rate": 0,
+        "artifacts_met_rate": 0,
+        "no_actions_met_rate": 0,
+        "single_terminal_rate": 0,
+        "model_failure_rate": 0.0,
+        "median_seconds": 2.276
+      }
+    },
+    "latency_policy": "report_only"
+  },
+  "quality_regressions": [
+    "statistics:limitations"
+  ],
+  "unresolved_operational_regressions": [
+    "multiturn:model_failure_rate",
+    "reports:model_failure_rate"
+  ],
+  "critical_budget_delivery_cases": [
+    "multiturn-01",
+    "reports-03"
+  ],
+  "non_budget_protocol_failure_cases": [],
+  "resource_reviews": [
+    {
+      "case_id": "multiturn-01",
+      "reasons": [
+        "budget_attribution_uncertain"
+      ]
+    },
+    {
+      "case_id": "multiturn-05",
+      "reasons": [
+        "budget_attribution_uncertain"
+      ]
+    },
+    {
+      "case_id": "reports-01",
+      "reasons": [
+        "budget_attribution_uncertain"
+      ]
+    },
+    {
+      "case_id": "reports-03",
+      "reasons": [
+        "budget_attribution_uncertain"
+      ]
+    },
+    {
+      "case_id": "reports-04",
+      "reasons": [
+        "budget_attribution_uncertain"
+      ]
+    }
+  ],
+  "requires_manual_review": false,
+  "user_accepted_regressions": {
+    "items": [
+      "multiturn:model_failure_rate",
+      "reports:model_failure_rate",
+      "statistics:limitations"
+    ],
+    "decided_at": "2026-11-14",
+    "basis": "所涉题目 current 总分均不低于 baseline（statistics-01 5>4；multiturn-01 5=5、multiturn-05 7>4；reports 5/4/4/7 vs 1/1/2/2）；model_failure_rate 来自已重试成功的供应商超时/不确定结果"
+  }
+}

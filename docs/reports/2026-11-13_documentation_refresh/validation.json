@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-15T03:23:44.695147+00:00",
+  "updated_at": "2026-11-15T07:23:51.423646+00:00",
   "current_documents": 26,
   "utf8": [
     {
@@ -66,7 +66,7 @@
       "file": "docs/11_PRODUCTION_RUNBOOK.md",
       "valid": true,
       "replacement_character": false,
-      "sha256": "40592aa1f0460e218fe2cf58bd59763216c29a0f8315361613c119d3f825f216"
+      "sha256": "caaa35da48d825f16cbadd5ee189f09bff1fa6db26a59d4de066254306292452"
     },
     {
       "file": "docs/AGENTS.md",
@@ -156,10 +156,10 @@
       "file": "tests/agent_eval/README.md",
       "valid": true,
       "replacement_character": false,
-      "sha256": "a4619f86a07c611e4159fdbf0047ab1217651de2f156a2b08dd452f5f08b9c47"
+      "sha256": "6138a19f88ef7438b6f52159cc3220e3217fdce3e79c4a2de492408498ab088c"
     }
   ],
-  "links_checked": 165,
+  "links_checked": 168,
   "missing_links": [],
   "mermaid": {
     "passed": 17,
@@ -743,7 +743,12 @@
     },
     {
       "source": "docs/11_PRODUCTION_RUNBOOK.md",
-      "target": "../tests/agent_eval/results/m3_quality_partial_summary_v5_20261114_artifact_contract_linux.json",
+      "target": "../tests/agent_eval/results/m3_quality_summary_v5_20261114_artifact_contract_linux.json",
+      "exists": true
+    },
+    {
+      "source": "docs/11_PRODUCTION_RUNBOOK.md",
+      "target": "../tests/agent_eval/results/m3_acceptance_v5_20261114_artifact_contract_linux.json",
       "exists": true
     },
     {
@@ -1284,6 +1289,16 @@
     {
       "source": "tests/agent_eval/README.md",
       "target": "results/m3_chickener_collection_summary_20261114_chickener_deepseek.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m3_quality_summary_v5_20261114_artifact_contract_linux.json",
+      "exists": true
+    },
+    {
+      "source": "tests/agent_eval/README.md",
+      "target": "results/m3_acceptance_v5_20261114_artifact_contract_linux.json",
       "exists": true
     }
   ],

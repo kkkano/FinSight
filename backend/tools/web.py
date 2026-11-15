@@ -9,6 +9,34 @@ from backend.security.ssrf import is_safe_url
 logger = logging.getLogger(__name__)
 
 
+def _pdf_document(url: str, final_url: str, body: bytes, max_length: int) -> Optional[dict[str, Any]]:
+    """公告/财报常以 PDF 发布；抽取正文而不是把二进制当 HTML 交给模型。"""
+    import io
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(body))
+    parts: list[str] = []
+    size = 0
+    for page in reader.pages:
+        text = (page.extract_text() or "").replace("\x00", "")
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        if lines:
+            parts.append("\n".join(lines))
+            size += len(parts[-1])
+        if size >= max_length:
+            break
+    text = "\n".join(parts)
+    if not text.strip():
+        logger.info(f"[fetch_url_content] PDF 无可抽取文本: {url}")
+        return None
+    if len(text) > max_length:
+        text = text[:max_length] + "..."
+    parsed = urlparse(final_url)
+    metadata_title = str((reader.metadata or {}).get("/Title") or "").strip()
+    return {"url": url, "final_url": final_url, "title": metadata_title or parsed.path.rsplit("/", 1)[-1] or parsed.netloc,
+            "source": parsed.netloc, "description": "", "content": text}
+
+
 def fetch_url_document(url: str, max_length: int = 5000) -> Optional[dict[str, Any]]:
     """Fetch a safe URL and return normalized page metadata plus readable text."""
     try:
@@ -26,6 +54,15 @@ def fetch_url_document(url: str, max_length: int = 5000) -> Optional[dict[str, A
             logger.info(f"[fetch_url_content] Blocked unsafe redirect: {response.url}")
             return None
         response.raise_for_status()
+
+        content_type = str(response.headers.get("Content-Type") or "").lower()
+        body = response.content or b""
+        if "application/pdf" in content_type or body[:5] == b"%PDF-":
+            return _pdf_document(url, str(response.url or url), body, max_length)
+        if content_type and not any(kind in content_type for kind in ("html", "xml", "text", "json")):
+            # 图片/压缩包等二进制不能作为正文；返回空让工具如实报告不可读
+            logger.info(f"[fetch_url_content] 非文本内容 {content_type}: {url}")
+            return None
 
         soup = BeautifulSoup(response.text, "html.parser")
         title = ""

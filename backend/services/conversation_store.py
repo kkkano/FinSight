@@ -14,6 +14,21 @@ _STORE_LOCK = Lock()
 _STORE_SINGLETON: "PostgresConversationStore | UnavailableConversationStore | None" = None
 
 
+def _strip_nul(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {(_strip_nul(key) if isinstance(key, str) else key): _strip_nul(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_strip_nul(item) for item in value]
+    return value
+
+
+def jsonb_text(value: Any) -> str:
+    """PostgreSQL jsonb 拒绝 NUL 字符（如工具读到的二进制 PDF 片段）；入库前递归移除 NUL，避免整轮回答保存失败。"""
+    return json.dumps(_strip_nul(value), ensure_ascii=False, default=lambda item: str(item).replace("\x00", ""))
+
+
 def _sanitize_message(item: Any) -> dict[str, Any] | None:
     if not isinstance(item, dict):
         return None
@@ -201,7 +216,7 @@ def _write_thread(
         f"version=version+1,updated_at=now() WHERE user_id=:owner AND session_id=:sid RETURNING {_THREAD_COLUMNS}"
     ), {
         "owner": owner, "sid": sid, "title": title,
-        "messages": json.dumps(messages, ensure_ascii=False), "count": len(messages),
+        "messages": jsonb_text(messages), "count": len(messages),
         "preview": _derive_preview(messages), "pinned": bool(data.get("pinned", current.get("pinned", False))),
         "archived": bool(data.get("archived", current.get("archived", False))),
     }).mappings().one()

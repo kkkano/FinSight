@@ -26,3 +26,12 @@ def test_declared_judge_uses_only_its_own_endpoint_key(model, base, key):
 def test_judge_cannot_borrow_another_provider_credentials(declared):
     with pytest.raises(ValueError, match="^independent_judge_configuration_changed$"):
         grading.independent_judge_key(SETTINGS, declared)
+
+
+def test_same_base_subject_key_is_never_used_for_judge():
+    # APIKL DeepSeek 被测与 APIKL Sol 评分共用 base_url，评分只能取 apikl 评分凭据
+    settings = {**SETTINGS, "FINSIGHT_EVAL_APIKLDS_API_BASE": "https://apikl.invalid/v1",
+                "FINSIGHT_EVAL_APIKLDS_API_KEY": "apiklds-subject-key"}
+    assert grading.independent_judge_key(settings, {"model": "gpt-6.1-sol", "base_url": "https://apikl.invalid/v1"}) == "apikl-key"
+    with pytest.raises(ValueError, match="^independent_judge_configuration_changed$"):
+        grading.independent_judge_key(settings, {"model": "deepseek-flash", "base_url": "https://apikl.invalid/v1"})

@@ -21,7 +21,8 @@ RESULTS = ROOT / "tests/agent_eval/results"
 SUFFIX = "20261113_isolated"
 PROVIDER = "apikl"
 # 受评模型与独立评分模型使用同一端点；评分模型固定，换端点必须使用新代次。
-JUDGE_MODELS = {"apikl": "gpt-6.1-sol", "xfmmda": "DeepSeek-V4.1-Flash", "chickener": "gpt-6.1-sol"}
+# apiklds：APIKL DeepSeek 被测；评分仍由 apikl 凭据的 gpt-6.1-sol 按 base_url 精确解析
+JUDGE_MODELS = {"apikl": "gpt-6.1-sol", "apiklds": "gpt-6.1-sol", "xfmmda": "DeepSeek-V4.1-Flash", "chickener": "gpt-6.1-sol"}
 CORPUS = "fixtures/apikl-frozen-provider-20261113"
 PILOT_CASES = ["facts-02", "news-01", "statistics-01", "comparison-01", "concepts-01", "valuation-03"]
 
